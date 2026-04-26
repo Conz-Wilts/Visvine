@@ -1,0 +1,301 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import WelcomeStep from '@/components/onboarding/steps/WelcomeStep';
+import PhotoBasicsStep from '@/components/onboarding/steps/PhotoBasicsStep';
+import AboutStep from '@/components/onboarding/steps/AboutStep';
+import ExperienceStep from '@/components/onboarding/steps/ExperienceStep';
+import SkillsStep from '@/components/onboarding/steps/SkillsStep';
+import ConnectStep from '@/components/onboarding/steps/ConnectStep';
+import DoneStep from '@/components/onboarding/steps/DoneStep';
+import StepProgress from '@/components/onboarding/StepProgress';
+
+export interface OnboardingData {
+  // Step 1: Photo & Basics
+  imageUrl: string | null;
+  subtitle: string;
+  location: string;
+  pronouns: string;
+  // Step 2: About
+  bio: string;
+  openToWork: boolean;
+  // Step 3: Experience
+  workExperience: ExperienceEntry[];
+  education: EducationEntry[];
+  // Step 4: Skills
+  tags: string[];
+  // Step 5: Connect
+  linkedinUrl: string;
+  twitterUrl: string;
+  website: string;
+  phone: string;
+}
+
+export interface ExperienceEntry {
+  id?: string;
+  title: string;
+  company: string;
+  location?: string;
+  startDate: string;
+  endDate?: string;
+  current: boolean;
+  description?: string;
+  isNew?: boolean;
+}
+
+export interface EducationEntry {
+  id?: string;
+  school: string;
+  degree?: string;
+  fieldOfStudy?: string;
+  startYear?: string;
+  endYear?: string;
+  description?: string;
+  isNew?: boolean;
+}
+
+interface Props {
+  person: {
+    id: string;
+    name: string;
+    imageUrl?: string | null;
+    subtitle?: string | null;
+    bio?: string | null;
+    location?: string | null;
+    pronouns?: string | null;
+    openToWork: boolean;
+    tags: string[];
+    linkedinUrl?: string | null;
+    twitterUrl?: string | null;
+    website?: string | null;
+    phone?: string | null;
+    workExperience: Array<{
+      id: string;
+      title: string;
+      company: string;
+      location?: string | null;
+      startDate: string;
+      endDate?: string | null;
+      current: boolean;
+      description?: string | null;
+    }>;
+    education: Array<{
+      id: string;
+      school: string;
+      degree?: string | null;
+      fieldOfStudy?: string | null;
+      startYear?: number | null;
+      endYear?: number | null;
+      description?: string | null;
+    }>;
+  };
+  userName: string;
+}
+
+const TOTAL_STEPS = 5;
+
+export default function OnboardingWizard({ person, userName }: Props) {
+  const router = useRouter();
+  const [step, setStep] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
+
+  const [data, setData] = useState<OnboardingData>({
+    imageUrl: person.imageUrl ?? null,
+    subtitle: person.subtitle ?? '',
+    location: person.location ?? '',
+    pronouns: person.pronouns ?? '',
+    bio: person.bio ?? '',
+    openToWork: person.openToWork,
+    workExperience: person.workExperience.map((w) => ({
+      id: w.id,
+      title: w.title,
+      company: w.company,
+      location: w.location ?? undefined,
+      startDate: w.startDate,
+      endDate: w.endDate ?? undefined,
+      current: w.current,
+      description: w.description ?? undefined,
+    })),
+    education: person.education.map((e) => ({
+      id: e.id,
+      school: e.school,
+      degree: e.degree ?? undefined,
+      fieldOfStudy: e.fieldOfStudy ?? undefined,
+      startYear: e.startYear?.toString(),
+      endYear: e.endYear?.toString(),
+      description: e.description ?? undefined,
+    })),
+    tags: person.tags,
+    linkedinUrl: person.linkedinUrl ?? '',
+    twitterUrl: person.twitterUrl ?? '',
+    website: person.website ?? '',
+    phone: person.phone ?? '',
+  });
+
+  const updateData = (partial: Partial<OnboardingData>) => {
+    setData((prev) => ({ ...prev, ...partial }));
+  };
+
+  const saveStep = async (stepData: Partial<OnboardingData>) => {
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {};
+
+      // Map fields based on what's changed
+      if (stepData.subtitle !== undefined) payload.subtitle = stepData.subtitle || null;
+      if (stepData.location !== undefined) payload.location = stepData.location || null;
+      if (stepData.pronouns !== undefined) payload.pronouns = stepData.pronouns || null;
+      if (stepData.bio !== undefined) payload.bio = stepData.bio || null;
+      if (stepData.openToWork !== undefined) payload.openToWork = stepData.openToWork;
+      if (stepData.tags !== undefined) payload.tags = stepData.tags;
+      if (stepData.linkedinUrl !== undefined) payload.linkedinUrl = stepData.linkedinUrl || null;
+      if (stepData.twitterUrl !== undefined) payload.twitterUrl = stepData.twitterUrl || null;
+      if (stepData.website !== undefined) payload.website = stepData.website || null;
+      if (stepData.phone !== undefined) payload.phone = stepData.phone || null;
+      if (stepData.imageUrl !== undefined) payload.imageUrl = stepData.imageUrl;
+
+      // New experience entries
+      if (stepData.workExperience) {
+        const newExp = stepData.workExperience.filter((e) => e.isNew);
+        if (newExp.length > 0) payload.newExperience = newExp;
+      }
+
+      // New education entries
+      if (stepData.education) {
+        const newEdu = stepData.education.filter((e) => e.isNew);
+        if (newEdu.length > 0) payload.newEducation = newEdu;
+      }
+
+      if (Object.keys(payload).length > 0) {
+        await fetch('/api/onboarding', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const next = async (stepData?: Partial<OnboardingData>) => {
+    if (stepData) {
+      updateData(stepData);
+      await saveStep(stepData);
+    }
+    setDirection('forward');
+    setStep((s) => s + 1);
+  };
+
+  const back = () => {
+    setDirection('back');
+    setStep((s) => Math.max(0, s - 1));
+  };
+
+  const skipAll = async () => {
+    await fetch('/api/onboarding', { method: 'POST' });
+    router.push('/directory');
+  };
+
+  const complete = async () => {
+    await fetch('/api/onboarding', { method: 'POST' });
+  };
+
+  const firstName = userName.split(' ')[0];
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg">
+        {step > 0 && step < 6 && (
+          <StepProgress current={step} total={TOTAL_STEPS} />
+        )}
+
+        <div
+          className="bg-white rounded-2xl shadow-lg overflow-hidden"
+          key={step}
+          style={{
+            animation: `${direction === 'forward' ? 'slideInRight' : 'slideInLeft'} 300ms ease-out`,
+          }}
+        >
+          {step === 0 && (
+            <WelcomeStep
+              firstName={firstName}
+              imageUrl={data.imageUrl}
+              onStart={() => next()}
+              onSkip={skipAll}
+            />
+          )}
+          {step === 1 && (
+            <PhotoBasicsStep
+              data={data}
+              personId={person.id}
+              onNext={(d) => next(d)}
+              onBack={back}
+              saving={saving}
+            />
+          )}
+          {step === 2 && (
+            <AboutStep
+              data={data}
+              onNext={(d) => next(d)}
+              onBack={back}
+              saving={saving}
+            />
+          )}
+          {step === 3 && (
+            <ExperienceStep
+              data={data}
+              onNext={(d) => next(d)}
+              onBack={back}
+              saving={saving}
+            />
+          )}
+          {step === 4 && (
+            <SkillsStep
+              data={data}
+              onNext={(d) => next(d)}
+              onBack={back}
+              saving={saving}
+            />
+          )}
+          {step === 5 && (
+            <ConnectStep
+              data={data}
+              onNext={(d) => next(d)}
+              onBack={back}
+              saving={saving}
+            />
+          )}
+          {step === 6 && (
+            <DoneStep
+              data={data}
+              personName={userName}
+              onComplete={complete}
+            />
+          )}
+        </div>
+      </div>
+
+      <style jsx global>{`
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(30px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-30px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes checkmark {
+          0% { stroke-dashoffset: 50; }
+          100% { stroke-dashoffset: 0; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(0); }
+          to { transform: scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}

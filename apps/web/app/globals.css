@@ -1,0 +1,300 @@
+@import url('https://fonts.googleapis.com/css2?family=Open+Sauce+One:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* Enable class-based dark mode via .dark on <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── ABC Ginto Rounded — local font faces ─── */
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Hairline-Trial.woff2') format('woff2');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Thin-Trial.woff2') format('woff2');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Light-Trial.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Regular-Trial.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Medium-Trial.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+/* Bold covers semibold (600) and bold (700) — no dedicated 600-weight file */
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Bold-Trial.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Black-Trial.woff2') format('woff2');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'ABC Ginto Rounded';
+  src: url('/fonts/ABCGintoRounded-Ultra-Trial.woff2') format('woff2');
+  font-weight: 950;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  /* Visvine Brand Colors */
+  --color-brand-black: #111827;
+  --color-brand-grey: #6B7280;
+  --color-brand-white: #F9FAFB;
+  --color-brand-light-bg: #eaf9ec;
+  --color-brand-green: #78d870;
+  --color-brand-dark-green: #2f7a3e;
+  --color-brand-bg: #F5F7F5;
+  --shadow-soft: 0 8px 24px rgba(0,0,0,0.06);
+  --font-ginto: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-open-sauce: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* ── Semantic surface tokens (runtime-swapped by ThemeContext) ── */
+  --color-surface-1: var(--surface-1, #ffffff);        /* main card / panel bg */
+  --color-surface-2: var(--surface-2, #f9fafb);        /* secondary surface */
+  --color-surface-3: var(--surface-3, #f3f4f6);        /* hover / tertiary */
+  --color-border-subtle: var(--border-subtle, #f3f4f6); /* hairline borders */
+  --color-border-default: var(--border-default, #e5e7eb);/* standard borders */
+  --color-text-primary: var(--text-primary, #111827);
+  --color-text-secondary: var(--text-secondary, #374151);
+  --color-text-muted: var(--text-muted, #6b7280);
+}
+
+/* Explicit font-family utility classes — use CSS vars so CommunityDesignContext can override */
+.font-ginto {
+  font-family: var(--font-main) !important;
+}
+.font-open-sauce {
+  font-family: var(--font-utility) !important;
+}
+
+/* smooth text + subtle link styling */
+html, body {
+  height: 100%;
+  font-family: var(--font-utility);
+  accent-color: var(--theme-accent-color, #78d870);
+}
+
+:root {
+  --font-main: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-utility: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light;
+  --shimmer-base: #f0f0f0;
+  --shimmer-highlight: #e8e8e8;
+}
+
+.dark {
+  color-scheme: dark;
+  --shimmer-base: #374151;
+  --shimmer-highlight: #4b5563;
+}
+a { 
+  color: rgb(55 65 81); /* text-gray-700 */
+  transition: color 0.15s ease-in-out;
+}
+a:hover { 
+  color: rgb(17 24 39); /* text-gray-900 */
+}
+
+/* Profile shimmer animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  [style*="animation: shimmer"] {
+    animation: none !important;
+  }
+}
+
+/* scroll padding for sticky tab bar + navbar */
+html {
+  scroll-padding-top: 128px;
+}
+
+/* Chat Interface Styles */
+
+textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+textarea::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 3px;
+}
+
+textarea::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+textarea::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Date & Time Picker Styling */
+input[type="date"],
+input[type="time"] {
+  position: relative;
+  color-scheme: light;
+  accent-color: var(--theme-accent-color, #78d870);
+}
+
+/* Calendar icon styling */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 6px;
+  margin-left: 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+  background: transparent;
+  filter: brightness(0) saturate(100%) invert(71%) sepia(0%) saturate(1%) hue-rotate(154deg) brightness(90%) contrast(87%);
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="time"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  background-color: var(--color-brand-light-bg, #eaf9ec);
+  filter: var(--theme-picker-filter-hover, brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%));
+}
+
+input[type="date"]:focus::-webkit-calendar-picker-indicator,
+input[type="time"]:focus::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  background-color: var(--color-brand-light-bg, #eaf9ec);
+  filter: var(--theme-picker-filter-hover, brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%));
+}
+
+/* Date field styling */
+input[type="date"]::-webkit-datetime-edit,
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0;
+  font-family: inherit;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="time"]::-webkit-datetime-edit-text {
+  color: #b4b4b4;
+  padding: 0 3px;
+  font-weight: 500;
+}
+
+/* Individual date/time field styling */
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field,
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field {
+  color: #000000;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+input[type="date"]::-webkit-datetime-edit-month-field:focus,
+input[type="date"]::-webkit-datetime-edit-day-field:focus,
+input[type="date"]::-webkit-datetime-edit-year-field:focus,
+input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+  background-color: var(--color-brand-light-bg, #eaf9ec);
+  color: var(--color-brand-green, #78d870);
+  outline: none;
+}
+
+/* AM/PM field */
+input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: var(--color-brand-green, #78d870);
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background-color: var(--color-brand-light-bg, #eaf9ec);
+}
+
+input[type="time"]::-webkit-datetime-edit-ampm-field:focus {
+  background-color: var(--color-brand-green, #78d870);
+  color: #F9FAFB;
+  outline: none;
+}
+
+/* Remove default clear button */
+input[type="date"]::-webkit-clear-button,
+input[type="time"]::-webkit-clear-button {
+  display: none;
+}
+
+/* Firefox date/time picker styling */
+input[type="date"]::-moz-calendar-picker-indicator,
+input[type="time"]::-moz-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.5;
+}
+
+input[type="date"]:hover::-moz-calendar-picker-indicator,
+input[type="time"]:hover::-moz-calendar-picker-indicator {
+  opacity: 1;
+  background-color: var(--color-brand-light-bg, #eaf9ec);
+}
+
+/* Additional webkit styling for better calendar appearance */
+input[type="date"]::-webkit-inner-spin-button,
+input[type="time"]::-webkit-inner-spin-button {
+  display: none;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:active,
+input[type="time"]::-webkit-calendar-picker-indicator:active {
+  background-color: var(--color-brand-green, #78d870);
+}

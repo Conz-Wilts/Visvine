@@ -1,0 +1,29 @@
+import { redirect } from 'next/navigation';
+import { getSession } from '@/lib/session';
+import prisma from '@/lib/prisma';
+import OnboardingWizard from './OnboardingWizard';
+
+export const dynamic = 'force-dynamic';
+
+export default async function OnboardingPage() {
+  const session = await getSession();
+  if (!session) redirect('/signin');
+
+  const person = await prisma.person.findUnique({
+    where: { userId: session.userId },
+    include: {
+      workExperience: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
+      education: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
+    },
+  });
+
+  if (!person) redirect('/directory');
+  if (person.hasOnboarded) redirect('/directory');
+
+  return (
+    <OnboardingWizard
+      person={JSON.parse(JSON.stringify(person))}
+      userName={session.name}
+    />
+  );
+}

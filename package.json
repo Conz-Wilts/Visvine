@@ -1,0 +1,40 @@
+{
+  "name": "visvine",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n 'proxy,web' -c 'blue,green' --kill-others=false 'pnpm db:proxy' 'pnpm web:dev:only'",
+    "build": "pnpm --filter @visvine/web build",
+    "start": "pnpm --filter @visvine/web start",
+    "lint": "turbo lint",
+    "test": "pnpm --filter @visvine/web test",
+    "web:dev": "concurrently -k -n 'proxy,web' -c 'blue,green' --kill-others=false 'pnpm db:proxy' 'pnpm web:dev:only'",
+    "web:dev:only": "pnpm --filter @visvine/web dev",
+    "web:build": "pnpm --filter @visvine/web build",
+    "web:start": "pnpm --filter @visvine/web start",
+    "mobile:dev": "bash scripts/start-mobile-dev.sh",
+    "mobile:start": "pnpm --filter @visvine/mobile start",
+    "mobile:android": "pnpm --filter @visvine/mobile android",
+    "mobile:ios": "pnpm --filter @visvine/mobile ios",
+    "db:proxy": "bash scripts/start-cloud-sql-proxy.sh",
+    "db:test": "bash scripts/test-db-connection.sh",
+    "db:create": "bash scripts/create-db-if-missing.sh",
+    "db:migrate": "pnpm --filter @visvine/web db:push",
+    "db:seed": "pnpm --filter @visvine/web db:seed",
+    "prisma:generate": "pnpm --filter @visvine/web prisma:generate",
+    "prisma:studio": "pnpm --filter @visvine/web prisma:studio",
+    "typecheck": "turbo typecheck",
+    "clean": "turbo clean && find . -name '.next' -type d -not -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null; find . -name 'dist' -type d -not -path '*/node_modules/*' -exec rm -rf {} + 2>/dev/null; true"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@visvine/config",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    "./tsconfig/base.json": "./tsconfig/base.json",
+    "./tsconfig/nextjs.json": "./tsconfig/nextjs.json",
+    "./tsconfig/react-native.json": "./tsconfig/react-native.json"
+  }
+}

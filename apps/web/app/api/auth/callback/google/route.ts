@@ -1,0 +1,229 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createSession, COOKIE_NAME, MAX_AGE } from "@/lib/session";
+import { generateClaimToken } from "@/lib/crm/claimService";
+import prisma from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
+
+type SessionableUser = {
+  id: string;
+  name: string;
+  email: string;
+  image: string | null;
+};
+
+async function buildSessionResponse(
+  user: SessionableUser,
+  callbackUrl: string,
+  appUrl: string,
+  _req: NextRequest
+) {
+  // Fetch associated Person record if it exists
+  let person = await prisma.person.findUnique({
+    where: { userId: user.id },
+  });
+
+  // If no Person record exists, create one automatically
+  if (!person) {
+    // Generate a unique person ID based on email
+    const emailPrefix = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+    const personId = `person:${emailPrefix}`;
+
+    try {
+      person = await prisma.person.create({
+        data: {
+          id: personId,
+          userId: user.id,
+          name: user.name,
+          imageUrl: user.image,
+        },
+      });
+    } catch (e) {
+      // If ID already exists, find a unique one
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        let suffix = 1;
+        let uniqueId = `person:${emailPrefix}-${suffix}`;
+        while (true) {
+          try {
+            person = await prisma.person.create({
+              data: {
+                id: uniqueId,
+                userId: user.id,
+                name: user.name,
+                imageUrl: user.image,
+              },
+            });
+            break;
+          } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+              suffix++;
+              uniqueId = `person:${emailPrefix}-${suffix}`;
+            } else {
+              throw err;
+            }
+          }
+        }
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  const token = await createSession({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    personId: person.id,
+  });
+
+  // Redirect new users to onboarding
+  const redirectUrl = person.hasOnboarded ? callbackUrl : '/onboarding';
+  const response = NextResponse.redirect(new URL(redirectUrl, appUrl));
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: MAX_AGE,
+    path: "/",
+  });
+  return response;
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
+  const callbackUrl = state ? decodeURIComponent(state) : "/directory";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const redirectUri = `${appUrl}/api/auth/callback/google`;
+
+  if (!code) {
+    return NextResponse.redirect(new URL("/signin?error=no_code", req.url));
+  }
+
+  // Step 1: Exchange code for tokens
+  const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    return NextResponse.redirect(
+      new URL("/signin?error=token_exchange", req.url)
+    );
+  }
+
+  const tokens = await tokenRes.json();
+  if (!tokens.access_token) {
+    return NextResponse.redirect(
+      new URL("/signin?error=token_exchange", req.url)
+    );
+  }
+
+  // Step 2: Get Google profile
+  const userRes = await fetch(
+    "https://www.googleapis.com/oauth2/v2/userinfo",
+    { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+  );
+
+  if (!userRes.ok) {
+    return NextResponse.redirect(new URL("/signin?error=userinfo", req.url));
+  }
+
+  const googleUser = await userRes.json();
+  if (!googleUser.email) {
+    return NextResponse.redirect(new URL("/signin?error=no_email", req.url));
+  }
+
+  const googleId: string = googleUser.id;
+  const googleName: string = googleUser.name ?? googleUser.email;
+  const googlePicture: string = googleUser.picture ?? "";
+
+  // Step 3: Look up by Google ID first (fastest path — handles returning users)
+  let user = await prisma.user.findUnique({ where: { googleId } });
+
+  if (user) {
+    if (user.isActive) {
+      // Returning active user — refresh name/picture and sign in
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name: googleName, image: googlePicture || user.image },
+      });
+      return await buildSessionResponse(user, callbackUrl, appUrl, req);
+    }
+    // googleId is linked to a shadow — unusual state; fall through to claim flow
+  }
+
+  // Step 4: Look up by email
+  const userByEmail = await prisma.user.findUnique({
+    where: { email: googleUser.email },
+  });
+
+  if (!userByEmail) {
+    // Step 5: Brand new user — create active account
+    let newUser: SessionableUser;
+    try {
+      newUser = await prisma.user.create({
+        data: {
+          email: googleUser.email,
+          name: googleName,
+          image: googlePicture,
+          googleId,
+          oauthProvider: "google",
+          emailVerified: true,
+          isActive: true,
+        },
+      });
+    } catch (e) {
+      // Race condition: another request created the same email between our lookup and create
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
+        newUser = (await prisma.user.findUniqueOrThrow({
+          where: { email: googleUser.email },
+        })) as SessionableUser;
+      } else {
+        throw e;
+      }
+    }
+    return await buildSessionResponse(newUser, callbackUrl, appUrl, req);
+  }
+
+  // Step 6: Email matched a shadow profile — initiate claim flow
+  if (!userByEmail.isActive) {
+    const claimToken = await generateClaimToken(
+      userByEmail.id,
+      userByEmail.email,
+      googleId,
+      googleName,
+      googlePicture
+    );
+    const claimUrl = new URL("/claim", appUrl);
+    claimUrl.searchParams.set("token", claimToken);
+    claimUrl.searchParams.set("callbackUrl", callbackUrl);
+    return NextResponse.redirect(claimUrl);
+  }
+
+  // Step 7: Active user found by email — link Google ID if not yet linked
+  if (!userByEmail.googleId) {
+    await prisma.user.update({
+      where: { id: userByEmail.id },
+      data: {
+        googleId,
+        oauthProvider: "google",
+        name: googleName,
+        image: googlePicture || userByEmail.image,
+      },
+    });
+  }
+
+  return await buildSessionResponse(userByEmail, callbackUrl, appUrl, req);
+}

@@ -1,0 +1,33 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
+import { handleMessagingError } from '@/lib/messages/http';
+import { assertConversationMembership, getConversationMemberIds, leaveConversation } from '@/lib/messages/service';
+import { publishToUsers } from '@/lib/messages/realtime';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ conversationId: string }> },
+) {
+  try {
+    const user = await getApiMessagingUser();
+
+    if (!user) {
+      return unauthorizedResponse();
+    }
+
+    const { conversationId } = await params;
+    await assertConversationMembership(user.id, conversationId);
+    const memberIdsBeforeLeave = await getConversationMemberIds(conversationId);
+
+    await leaveConversation(user.id, conversationId);
+
+    publishToUsers(memberIdsBeforeLeave, {
+      type: 'conversation.updated',
+      conversationId,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleMessagingError(error);
+  }
+}

@@ -1,0 +1,1060 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { useHeader } from '@/lib/contexts/HeaderContext';
+import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useMessageHeights } from '@/hooks/useMessageHeights';
+import type {
+  ConversationSummary,
+  RealtimeEvent,
+  SerializedMessage,
+  SerializedReplyTo,
+} from '@/lib/messages/types';
+import NewChatModal from './NewChatModal';
+import MessageComposer from './MessageComposer';
+import MessageBubble, { formatChatTimestamp, mergeMessages } from './MessageBubble';
+import Avatar from '@/components/ui/Avatar';
+import { SidebarTabSelector, formatDateLabel, type MessageTab } from './messagesTabs';
+
+interface MessagesClientProps {
+  currentUser: {
+    id: string;
+    name: string;
+    image: string | null;
+  };
+  initialConversationId?: string;
+}
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function MessagesClient({ currentUser, initialConversationId }: MessagesClientProps) {
+  const router = useRouter();
+  const { setHeaderContent } = useHeader();
+  const communityCtx = useCommunity();
+
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConversation, setActiveConversation] = useState<ConversationSummary | null>(null);
+  const [messages, setMessages] = useState<SerializedMessage[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(initialConversationId ?? null);
+  const [conversationSearch, setConversationSearch] = useState('');
+  const [messageSearch, setMessageSearch] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [messageCursor, setMessageCursor] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [isMobile, setIsMobile] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<MessageTab>('direct');
+  const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
+  const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const [newMessagesPending, setNewMessagesPending] = useState(0);
+  const [announce, setAnnounce] = useState('');
+
+  const sidebarSearchRef = useRef<HTMLInputElement>(null);
+  const selectedConversationRef = useRef<string | null>(selectedConversationId);
+  const typingTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const stopTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasTypingSignalRef = useRef(false);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Virtuoso: first item index for prepending older messages without scroll jump
+  const INITIAL_FIRST_INDEX = 100000;
+  const [firstItemIndex, setFirstItemIndex] = useState(INITIAL_FIRST_INDEX);
+
+  // Pretext-powered height calculation for virtualized message list
+  const { getItemHeight } = useMessageHeights(messages, messagesContainerRef, isMobile);
+
+  const selectedConversation = useMemo(() => {
+    if (!selectedConversationId) return null;
+    return activeConversation ?? conversations.find((c) => c.id === selectedConversationId) ?? null;
+  }, [activeConversation, conversations, selectedConversationId]);
+
+  const typingLabel = useMemo(() => {
+    const names = Object.values(typingUsers);
+    if (names.length === 0) return null;
+    if (names.length === 1) return `${names[0]} is typing…`;
+    return `${names.length} people are typing…`;
+  }, [typingUsers]);
+
+  const sendTypingState = useCallback(async (conversationId: string, isTyping: boolean) => {
+    try {
+      await fetch(`/api/messages/conversations/${conversationId}/typing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTyping }),
+      });
+      hasTypingSignalRef.current = isTyping;
+    } catch { /* best-effort */ }
+  }, []);
+
+  const clearTypingSignal = useCallback((conversationId: string | null) => {
+    if (hasTypingSignalRef.current && conversationId) {
+      void sendTypingState(conversationId, false);
+    }
+    if (stopTypingTimeoutRef.current) {
+      clearTimeout(stopTypingTimeoutRef.current);
+      stopTypingTimeoutRef.current = null;
+    }
+  }, [sendTypingState]);
+
+  const markConversationRead = useCallback(async (conversationId: string) => {
+    try {
+      await fetch(`/api/messages/conversations/${conversationId}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    } catch { /* best-effort */ }
+  }, []);
+
+  const fetchConversations = useCallback(async (query?: string, preserveSelection = true) => {
+    try {
+      const params = new URLSearchParams();
+      if (query?.trim()) params.set('query', query.trim());
+      const response = await fetch(`/api/messages/conversations?${params.toString()}`, { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to load conversations');
+      const payload = await response.json();
+      const nextConversations: ConversationSummary[] = payload.conversations ?? [];
+      setConversations(nextConversations);
+      const currentId = selectedConversationRef.current;
+      if (preserveSelection && currentId && !nextConversations.some((c) => c.id === currentId)) {
+        setSelectedConversationId(null);
+        selectedConversationRef.current = null;
+        setActiveConversation(null);
+        setMessages([]);
+        router.push('/messages');
+      }
+    } catch (fetchError) {
+      setError((fetchError as Error).message || 'Failed to load conversations.');
+    } finally {
+      setConversationsLoading(false);
+    }
+  }, [router]);
+
+  const loadMessages = useCallback(async (
+    conversationId: string,
+    options?: { cursor?: string | null; prepend?: boolean; query?: string },
+  ) => {
+    const isPrepend = Boolean(options?.prepend);
+    try {
+      setError(null);
+      if (isPrepend) setLoadingOlderMessages(true);
+      else setMessagesLoading(true);
+      const params = new URLSearchParams();
+      params.set('limit', '30');
+      if (options?.cursor) params.set('cursor', options.cursor);
+      if (options?.query?.trim()) params.set('query', options.query.trim());
+      const response = await fetch(`/api/messages/conversations/${conversationId}/messages?${params.toString()}`, { cache: 'no-store' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Failed to load messages');
+      }
+      const payload = await response.json();
+      const nextMessages: SerializedMessage[] = (payload.messages ?? []).map((m: SerializedMessage) => ({
+        ...m,
+        isOwn: m.sender.id === currentUser.id,
+      }));
+      if (isPrepend) {
+        setMessages((prev) => {
+          const merged = mergeMessages([...nextMessages, ...prev]);
+          return merged;
+        });
+        // Adjust firstItemIndex to prevent scroll jump
+        setFirstItemIndex((prev) => prev - nextMessages.length);
+      } else {
+        setMessages(nextMessages);
+        setFirstItemIndex(INITIAL_FIRST_INDEX);
+      }
+      setActiveConversation(payload.conversation ?? null);
+      setMessageCursor(payload.nextCursor ?? null);
+      setHasMoreMessages(Boolean(payload.hasMore));
+    } catch (loadError) {
+      setError((loadError as Error).message || 'Failed to load messages.');
+    } finally {
+      setMessagesLoading(false);
+      setLoadingOlderMessages(false);
+    }
+  }, [currentUser.id]);
+
+  // Header: inject nothing for messages page — sidebar is self-contained
+  useEffect(() => {
+    setHeaderContent(null);
+    return () => setHeaderContent(null);
+  }, [setHeaderContent]);
+
+  useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
+  useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth < 768);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Presence heartbeat every 30s while tab open
+  useEffect(() => {
+    const beat = () => { void fetch('/api/presence/heartbeat', { method: 'POST' }).catch(() => {}); };
+    beat();
+    const iv = setInterval(beat, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') beat(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
+  // Web push subscription (best-effort; only if VAPID configured server-side)
+  useEffect(() => {
+    (async () => {
+      if (typeof window === 'undefined') return;
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+      try {
+        const res = await fetch('/api/push/subscribe');
+        const { publicKey } = await res.json();
+        if (!publicKey) return;
+        const permission = Notification.permission === 'default'
+          ? await Notification.requestPermission()
+          : Notification.permission;
+        if (permission !== 'granted') return;
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        const existing = await reg.pushManager.getSubscription();
+        const sub = existing ?? await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: publicKey,
+        });
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sub.toJSON()),
+        });
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        sidebarSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => void fetchConversations(conversationSearch), 200);
+    return () => clearTimeout(t);
+  }, [conversationSearch, fetchConversations]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      setMessages([]);
+      setMessageCursor(null);
+      setHasMoreMessages(false);
+      setMessageSearch('');
+      setTypingUsers({});
+      setReplyTo(null);
+      return;
+    }
+    void loadMessages(selectedConversationId);
+    void markConversationRead(selectedConversationId);
+  }, [selectedConversationId, loadMessages, markConversationRead]);
+
+  // Set unread divider anchor on first message load for a conversation
+  useEffect(() => {
+    if (!selectedConversationId || messages.length === 0) return;
+    setUnreadMarker((prev) => {
+      if (prev !== null) return prev; // already set for this convo
+      const conv = conversations.find((c) => c.id === selectedConversationId);
+      const unread = conv?.unreadCount ?? 0;
+      if (unread > 0 && messages.length >= unread) {
+        return messages[messages.length - unread].id;
+      }
+      return null;
+    });
+  }, [selectedConversationId, messages, conversations]);
+
+  // Clear marker when switching convo
+  useEffect(() => { setUnreadMarker(null); }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    const t = setTimeout(() => void loadMessages(selectedConversationId, { query: messageSearch }), 250);
+    return () => clearTimeout(t);
+  }, [messageSearch, selectedConversationId, loadMessages]);
+
+  // Realtime SSE
+  useEffect(() => {
+    const typingTimers = typingTimersRef.current;
+    const source = new EventSource('/api/messages/stream');
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as RealtimeEvent;
+        if (payload.type === 'message.new') {
+          const normalized: SerializedMessage = { ...payload.message, isOwn: payload.message.sender.id === currentUser.id };
+          if (payload.conversationId === selectedConversationRef.current) {
+            setMessages((prev) => prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]);
+            // Report delivered immediately
+            if (!normalized.isOwn) {
+              void fetch(`/api/messages/conversations/${payload.conversationId}/messages/${normalized.id}/delivery`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: 'delivered' }),
+              }).catch(() => {});
+            }
+            // Smart auto-scroll: only if user is near bottom, else show pill
+            if (atBottomRef.current || normalized.isOwn) {
+              requestAnimationFrame(() => {
+                virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+              });
+              if (!normalized.isOwn) void markConversationRead(payload.conversationId);
+            } else {
+              setNewMessagesPending((n) => n + 1);
+              setAnnounce(`${normalized.sender.name}: ${normalized.text.slice(0, 80)}`);
+            }
+          }
+          void fetchConversations(conversationSearch);
+        }
+        if (payload.type === 'message.updated') {
+          if (payload.conversationId === selectedConversationRef.current) {
+            const updated = { ...payload.message, isOwn: payload.message.sender.id === currentUser.id };
+            setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m));
+          }
+        }
+        if (payload.type === 'message.deleted') {
+          if (payload.conversationId === selectedConversationRef.current) {
+            setMessages((prev) => prev.map((m) =>
+              m.id === payload.messageId ? { ...m, deletedAt: new Date().toISOString(), text: '' } : m,
+            ));
+          }
+        }
+        if (payload.type === 'reaction.added' || payload.type === 'reaction.removed') {
+          if (payload.conversationId === selectedConversationRef.current) {
+            setMessages((prev) => prev.map((m) => {
+              if (m.id !== payload.messageId) return m;
+              const reactions = [...(m.reactions ?? [])];
+              const existing = reactions.find((r) => r.emoji === payload.emoji);
+              if (payload.type === 'reaction.added') {
+                if (existing) {
+                  existing.count++;
+                  if (payload.userId === currentUser.id) existing.reacted = true;
+                } else {
+                  reactions.push({ emoji: payload.emoji, count: 1, reacted: payload.userId === currentUser.id });
+                }
+              } else {
+                if (existing) {
+                  existing.count--;
+                  if (payload.userId === currentUser.id) existing.reacted = false;
+                  if (existing.count <= 0) {
+                    const idx = reactions.indexOf(existing);
+                    reactions.splice(idx, 1);
+                  }
+                }
+              }
+              return { ...m, reactions };
+            }));
+          }
+        }
+        if (payload.type === 'conversation.updated') void fetchConversations(conversationSearch);
+        if (payload.type === 'typing') {
+          if (payload.userId === currentUser.id || payload.conversationId !== selectedConversationRef.current) return;
+          if (!payload.isTyping) {
+            setTypingUsers((prev) => { const next = { ...prev }; delete next[payload.userId]; return next; });
+            const t = typingTimers.get(payload.userId);
+            if (t) { clearTimeout(t); typingTimers.delete(payload.userId); }
+            return;
+          }
+          setTypingUsers((prev) => ({ ...prev, [payload.userId]: payload.userName }));
+          const existing = typingTimers.get(payload.userId);
+          if (existing) clearTimeout(existing);
+          typingTimers.set(payload.userId, setTimeout(() => {
+            setTypingUsers((prev) => { const next = { ...prev }; delete next[payload.userId]; return next; });
+            typingTimers.delete(payload.userId);
+          }, 2500));
+        }
+      } catch { /* ignore malformed */ }
+    };
+    source.onerror = () => {};
+    return () => { source.close(); typingTimers.forEach(clearTimeout); typingTimers.clear(); };
+  }, [conversationSearch, currentUser.id, fetchConversations, markConversationRead]);
+
+  // Typing composer side-effect
+  const handleComposerTyping = useCallback(() => {
+    if (!selectedConversationId) return;
+    if (!hasTypingSignalRef.current) void sendTypingState(selectedConversationId, true);
+    if (stopTypingTimeoutRef.current) clearTimeout(stopTypingTimeoutRef.current);
+    stopTypingTimeoutRef.current = setTimeout(() => void sendTypingState(selectedConversationId, false), 1400);
+  }, [selectedConversationId, sendTypingState]);
+
+  // ─── Action handlers ────────────────────────────────────────────────────────
+
+  const handleSelectConversation = (id: string) => {
+    clearTypingSignal(selectedConversationRef.current);
+    setSelectedConversationId(id);
+    selectedConversationRef.current = id;
+    setActiveConversation(conversations.find((c) => c.id === id) ?? null);
+    setReplyTo(null);
+    router.push(`/messages/${id}`);
+  };
+
+  const handleBackToList = () => {
+    clearTypingSignal(selectedConversationRef.current);
+    setSelectedConversationId(null);
+    selectedConversationRef.current = null;
+    setMessages([]);
+    setActiveConversation(null);
+    setTypingUsers({});
+    setReplyTo(null);
+    router.push('/messages');
+  };
+
+  const handleLoadOlder = useCallback(async () => {
+    if (!selectedConversationId || !hasMoreMessages || !messageCursor || loadingOlderMessages) return;
+    await loadMessages(selectedConversationId, { cursor: messageCursor, prepend: true, query: messageSearch });
+  }, [selectedConversationId, hasMoreMessages, messageCursor, loadingOlderMessages, loadMessages, messageSearch]);
+
+  const handleSendMessage = async (payload: {
+    text: string;
+    imageUrls?: string[];
+    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
+    replyToId?: string;
+  }) => {
+    if (!selectedConversationId) return;
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimistic: SerializedMessage = {
+      id: tempId,
+      text: payload.text,
+      attachmentUrl: null,
+      createdAt: new Date().toISOString(),
+      sender: { id: currentUser.id, name: currentUser.name, image: currentUser.image },
+      isOwn: true,
+      readByCount: 0,
+      recipientCount: Math.max((selectedConversation?.participants.length ?? 1) - 1, 0),
+      isFullyReadByRecipients: false,
+      images: payload.imageUrls?.map((url, i) => ({ id: `temp-img-${i}`, imageUrl: url, position: i })),
+      reactions: [],
+      replyTo: replyTo,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setReplyTo(null);
+    clearTypingSignal(selectedConversationId);
+
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+    });
+
+    try {
+      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const respPayload = await response.json();
+      if (!response.ok) throw new Error(respPayload.error ?? 'Failed to send message');
+      const sent: SerializedMessage = { ...respPayload.message, isOwn: respPayload.message.sender.id === currentUser.id };
+      setMessages((prev) => prev.map((m) => m.id === tempId ? sent : m));
+      await fetchConversations(conversationSearch);
+    } catch (sendError) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setError((sendError as Error).message || 'Unable to send message.');
+    }
+  };
+
+  const handleReaction = async (messageId: string, emoji: string) => {
+    if (!selectedConversationId) return;
+    try {
+      await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}/reactions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+    } catch { /* best-effort */ }
+  };
+
+  const handleEdit = async (messageId: string, text: string) => {
+    if (!selectedConversationId) return;
+    try {
+      const res = await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (res.ok) {
+        const { message } = await res.json();
+        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...message, isOwn: true } : m));
+      }
+    } catch { /* best-effort */ }
+  };
+
+  const handleDelete = async (messageId: string) => {
+    if (!selectedConversationId || !window.confirm('Delete this message?')) return;
+    try {
+      await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}`, {
+        method: 'DELETE',
+      });
+      setMessages((prev) => prev.map((m) =>
+        m.id === messageId ? { ...m, deletedAt: new Date().toISOString(), text: '' } : m,
+      ));
+    } catch { /* best-effort */ }
+  };
+
+  const handleScrollToMessage = (messageId: string) => {
+    const idx = messages.findIndex((m) => m.id === messageId);
+    if (idx >= 0) {
+      virtuosoRef.current?.scrollToIndex({ index: idx, behavior: 'smooth', align: 'center' });
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!selectedConversationId || !window.confirm('Leave this group chat?')) return;
+    try {
+      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/leave`, { method: 'POST' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Failed to leave group');
+      }
+      handleBackToList();
+      await fetchConversations(conversationSearch, false);
+    } catch (e) { setError((e as Error).message || 'Unable to leave group.'); }
+  };
+
+  const handleRenameGroup = async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const nextName = window.prompt('Enter a new group name', selectedConversation.name);
+    if (!nextName?.trim()) return;
+    try {
+      const response = await fetch(`/api/messages/conversations/${selectedConversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nextName.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Failed to rename group');
+      await fetchConversations(conversationSearch);
+      setActiveConversation(payload.conversation);
+    } catch (e) { setError((e as Error).message || 'Unable to rename group.'); }
+  };
+
+  const handleRemoveMember = async (memberUserId: string) => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const target = selectedConversation.participants.find((p) => p.id === memberUserId);
+    if (!target || !window.confirm(`Remove ${target.name} from the group?`)) return;
+    try {
+      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/members/${memberUserId}`, { method: 'DELETE' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error ?? 'Failed to remove member');
+      await fetchConversations(conversationSearch);
+      await loadMessages(selectedConversationId, { query: messageSearch });
+    } catch (e) { setError((e as Error).message || 'Unable to remove member.'); }
+  };
+
+  // ─── Derived data ───────────────────────────────────────────────────────────
+
+  const filteredConversations = useMemo(() => conversations.filter((c) => {
+    if (activeTab === 'direct') return c.type === 'DM';
+    if (activeTab === 'private') return c.type === 'GROUP';
+    return false;
+  }), [conversations, activeTab]);
+
+  const tabCounts = useMemo<Record<MessageTab, number>>(() => ({
+    direct: conversations.filter((c) => c.type === 'DM' && c.unreadCount > 0).length,
+    private: conversations.filter((c) => c.type === 'GROUP' && c.unreadCount > 0).length,
+    discussions: 0,
+  }), [conversations]);
+
+  const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
+  const showSidebar = !isMobile || !selectedConversationId;
+  const showConversation = !isMobile || Boolean(selectedConversationId);
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="flex h-[calc(100dvh-56px)] w-full">
+    <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden">
+
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {showSidebar && (
+        <aside className="flex w-96 shrink-0 flex-col bg-surface-1 border-r border-border-subtle">
+
+          {/* Sidebar header */}
+          <div className="flex items-center justify-between px-6 pt-6 pb-4">
+            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Messages</h1>
+            <button
+              type="button"
+              onClick={() => setShowNewChatModal(true)}
+              className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              New Chat
+            </button>
+          </div>
+
+          {/* Search bar */}
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-2 rounded-xl bg-surface-3 px-3 py-2.5">
+              <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input
+                ref={sidebarSearchRef}
+                value={conversationSearch}
+                onChange={(e) => setConversationSearch(e.target.value)}
+                placeholder="Search conversations…"
+                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              {conversationSearch && (
+                <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tab selector */}
+          <div className="px-4 pb-3">
+            <SidebarTabSelector activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
+          </div>
+
+          {/* Conversation list */}
+          <div className="flex-1 overflow-y-auto">
+            {conversationsLoading && (
+              <div className="space-y-1 px-3 py-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-xl p-3">
+                    <div className="h-10 w-10 animate-pulse rounded-full bg-surface-3 shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
+                      <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!conversationsLoading && filteredConversations.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-3">
+                  <svg className="h-7 w-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-text-secondary">No conversations yet</p>
+                <p className="mt-1 text-xs text-text-muted">Start by clicking &quot;New Chat&quot; above.</p>
+              </div>
+            )}
+
+            {!conversationsLoading && filteredConversations.length > 0 && (
+              <div className="px-2 py-1">
+                {filteredConversations.map((conversation) => {
+                  const isActive = selectedConversationId === conversation.id;
+                  return (
+                    <button
+                      key={conversation.id}
+                      type="button"
+                      onClick={() => handleSelectConversation(conversation.id)}
+                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-150 ${
+                        isActive
+                          ? 'bg-brand-green/10 ring-1 ring-brand-green/20'
+                          : 'hover:bg-surface-2'
+                      }`}
+                    >
+                      <div className="relative shrink-0">
+                        <Avatar name={conversation.name} />
+                        {conversation.unreadCount > 0 && !isActive && (
+                          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
+                            {conversation.name}
+                          </p>
+                          <span className="shrink-0 text-[11px] text-text-muted">
+                            {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between gap-2">
+                          <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
+                            {conversation.lastMessage?.text ?? 'No messages yet'}
+                          </p>
+                          {conversation.unreadCount > 0 && !isActive && (
+                            <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                              {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
+
+      {/* ── Conversation panel ───────────────────────────────────────────── */}
+      {showConversation && (
+        <section className="flex min-w-0 flex-1 flex-col bg-white overflow-hidden">
+
+          {/* Empty state */}
+          {!selectedConversation && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-3">
+                <svg className="h-10 w-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-semibold text-text-primary">No conversation selected</p>
+                <p className="mt-1 text-sm text-text-muted">Pick a chat from the list or start a new one.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNewChatModal(true)}
+                className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                </svg>
+                Start a new chat
+              </button>
+            </div>
+          )}
+
+          {selectedConversation && (
+            <>
+              {/* Conversation header */}
+              <header className="flex items-center justify-between gap-3 border-b border-border-subtle bg-surface-1 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  {isMobile && (
+                    <button
+                      type="button"
+                      onClick={handleBackToList}
+                      className="mr-1 rounded-lg p-1.5 text-text-muted hover:bg-surface-3"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                    </button>
+                  )}
+                  <Avatar name={selectedConversation.name} size="lg" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-text-primary">{selectedConversation.name}</p>
+                    <p className="truncate text-xs text-text-muted">
+                      {selectedConversation.participants.map((p) => p.name).join(', ')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageSearch((v) => !v)}
+                    className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-brand-green/10 text-brand-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                    title="Search in conversation"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                    </svg>
+                  </button>
+
+                  {selectedConversation.type === 'GROUP' && isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMembersModal(true)}
+                        className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
+                        title="Add members"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRenameGroup}
+                        className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
+                        title="Rename group"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+
+                  {selectedConversation.type === 'GROUP' && (
+                    <button
+                      type="button"
+                      onClick={handleLeaveGroup}
+                      className="rounded-lg p-2 text-text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                      title="Leave group"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </header>
+
+              {/* Member chips for group admins */}
+              {selectedConversation.type === 'GROUP' && isAdmin && (
+                <div className="flex flex-wrap gap-1.5 border-b border-border-subtle bg-surface-2 px-4 py-2">
+                  {selectedConversation.participants
+                    .filter((p) => p.id !== currentUser.id)
+                    .map((p) => (
+                      <div key={p.id} className="flex items-center gap-1 rounded-full bg-surface-1 border border-border-default px-2.5 py-1 text-xs text-text-secondary shadow-sm">
+                        <span>{p.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMember(p.id)}
+                          className="ml-0.5 rounded-full p-0.5 text-text-muted hover:bg-surface-3 hover:text-text-secondary"
+                          aria-label={`Remove ${p.name}`}
+                        >
+                          <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+
+              {/* In-conversation search */}
+              {showMessageSearch && (
+                <div className="border-b border-border-subtle px-4 py-2.5">
+                  <div className="flex items-center gap-2 rounded-xl bg-surface-3 px-3 py-2">
+                    <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                      value={messageSearch}
+                      onChange={(e) => setMessageSearch(e.target.value)}
+                      placeholder="Search in this conversation…"
+                      autoFocus
+                      className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+                    />
+                    {messageSearch && (
+                      <button type="button" onClick={() => setMessageSearch('')} className="text-text-muted hover:text-text-secondary">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Messages area with Virtuoso */}
+              <div ref={messagesContainerRef} className="flex-1 overflow-hidden bg-white dark:bg-surface-2">
+                {messagesLoading && (
+                  <div className="space-y-3 p-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-14 animate-pulse rounded-2xl bg-surface-1/60" />
+                    ))}
+                  </div>
+                )}
+
+                {!messagesLoading && messages.length === 0 && (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="rounded-2xl bg-surface-1 px-5 py-4 text-center text-sm text-text-muted shadow-sm">
+                      <p className="font-medium text-text-secondary">No messages yet</p>
+                      <p className="mt-0.5 text-xs text-text-muted">Say hello to start the conversation!</p>
+                    </div>
+                  </div>
+                )}
+
+                {!messagesLoading && messages.length > 0 && (
+                  <Virtuoso
+                    ref={virtuosoRef}
+                    data={messages}
+                    firstItemIndex={firstItemIndex}
+                    initialTopMostItemIndex={messages.length - 1}
+                    defaultItemHeight={60}
+                    computeItemKey={(_index, message) => message.id}
+                    increaseViewportBy={{ top: 200, bottom: 200 }}
+                    scrollSeekConfiguration={{
+                      enter: (velocity) => Math.abs(velocity) > 800,
+                      exit: (velocity) => Math.abs(velocity) < 100,
+                    }}
+                    followOutput="smooth"
+                    atBottomStateChange={(bottom) => {
+                      atBottomRef.current = bottom;
+                      setAtBottom(bottom);
+                      if (bottom) setNewMessagesPending(0);
+                    }}
+                    startReached={() => {
+                      if (hasMoreMessages && !loadingOlderMessages) {
+                        void handleLoadOlder();
+                      }
+                    }}
+                    itemContent={(_index, message) => {
+                      const adjustedIdx = _index - firstItemIndex;
+                      const prevMsg = messages[adjustedIdx - 1];
+                      const isFirstInGroup = !prevMsg || prevMsg.sender.id !== message.sender.id;
+                      const prevDay = prevMsg ? new Date(prevMsg.createdAt).toDateString() : null;
+                      const thisDay = new Date(message.createdAt).toDateString();
+                      const showDateSeparator = prevDay !== thisDay;
+                      const showUnreadDivider = unreadMarker === message.id;
+                      return (
+                        <div className={isFirstInGroup ? 'mt-2' : ''} data-message-id={message.id}>
+                          {showDateSeparator && (
+                            <div className="my-3 flex items-center gap-3 px-5">
+                              <div className="h-px flex-1 bg-border-subtle" />
+                              <span className="rounded-full bg-surface-2 px-3 py-0.5 text-[11px] font-medium text-text-muted">
+                                {formatDateLabel(message.createdAt)}
+                              </span>
+                              <div className="h-px flex-1 bg-border-subtle" />
+                            </div>
+                          )}
+                          {showUnreadDivider && (
+                            <div className="my-2 flex items-center gap-3 px-5">
+                              <div className="h-px flex-1 bg-red-500/50" />
+                              <span className="text-[11px] font-semibold uppercase tracking-wide text-red-500">
+                                New
+                              </span>
+                              <div className="h-px flex-1 bg-red-500/50" />
+                            </div>
+                          )}
+                          <MessageBubble
+                            message={message}
+                            currentUserId={currentUser.id}
+                            isLastInGroup={isFirstInGroup}
+                            onReply={(r) => setReplyTo(r)}
+                            onReaction={handleReaction}
+                            onEdit={handleEdit}
+                            onDelete={handleDelete}
+                            onScrollToMessage={handleScrollToMessage}
+                          />
+                        </div>
+                      );
+                    }}
+                    style={{ height: '100%' }}
+                    className="px-0 py-2"
+                    components={{
+                      Header: () => (
+                        hasMoreMessages ? (
+                          <div className="flex justify-center py-3">
+                            {loadingOlderMessages ? (
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => void handleLoadOlder()}
+                                className="rounded-full border border-border-subtle bg-surface-1 px-4 py-1.5 text-xs font-medium text-text-secondary shadow-sm hover:bg-surface-2"
+                              >
+                                Load earlier messages
+                              </button>
+                            )}
+                          </div>
+                        ) : null
+                      ),
+                      ScrollSeekPlaceholder: ({ height, index }) => {
+                        // During fast scrolling, render lightweight placeholder at pretext height
+                        const adjustedIndex = index - firstItemIndex;
+                        const msg = messages[adjustedIndex];
+                        const h = msg ? getItemHeight(adjustedIndex) : (height || 60);
+                        return (
+                          <div className="px-3 py-0.75" style={{ height: h }}>
+                            <div className={`flex items-end gap-2 ${msg?.isOwn ? 'justify-end' : 'justify-start'}`}>
+                              {!msg?.isOwn && <div className="h-8 w-8 rounded-full bg-surface-1/40 shrink-0" />}
+                              <div
+                                className={`rounded-2xl bg-surface-1/40 ${msg?.isOwn ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
+                                style={{ width: '60%', height: Math.max(h - 12, 20) }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      },
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* New-messages pill */}
+              {newMessagesPending > 0 && !atBottom && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+                    setNewMessagesPending(0);
+                  }}
+                  className="pointer-events-auto absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-lg hover:opacity-90"
+                >
+                  ↓ {newMessagesPending} new message{newMessagesPending > 1 ? 's' : ''}
+                </button>
+              )}
+
+              {/* Accessibility: announce incoming messages */}
+              <div role="status" aria-live="polite" className="sr-only">{announce}</div>
+
+              {/* Composer */}
+              <MessageComposer
+                onSend={handleSendMessage}
+                replyTo={replyTo}
+                onCancelReply={() => setReplyTo(null)}
+                communityId={communityCtx?.currentCommunity?.id}
+                typingLabel={typingLabel}
+                onTyping={handleComposerTyping}
+                conversationId={selectedConversationId}
+              />
+            </>
+          )}
+        </section>
+      )}
+
+      </div>
+
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      <NewChatModal
+        isOpen={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
+        onConversationSelected={(conversationId) => {
+          setShowNewChatModal(false);
+          void fetchConversations(conversationSearch).then(() => handleSelectConversation(conversationId));
+        }}
+      />
+
+      <NewChatModal
+        isOpen={showAddMembersModal}
+        mode="addMembers"
+        existingMemberIds={selectedConversation?.participants.map((p) => p.id) ?? []}
+        addMembersConversationId={selectedConversationId ?? undefined}
+        onClose={() => setShowAddMembersModal(false)}
+        onConversationSelected={(conversationId) => {
+          setShowAddMembersModal(false);
+          void fetchConversations(conversationSearch);
+          void loadMessages(conversationId, { query: messageSearch });
+        }}
+        onMembersUpdated={() => {
+          if (selectedConversationId) {
+            void fetchConversations(conversationSearch);
+            void loadMessages(selectedConversationId, { query: messageSearch });
+          }
+        }}
+      />
+
+      {/* Toast error */}
+      {error && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
