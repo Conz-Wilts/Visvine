@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as d3Force from 'd3-force';
-import { NodeTypeConfig, getNodeTypeConfig } from '@/lib/types';
-import { CARD_DIMENSIONS } from './utils/constants';
+import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig } from '@/lib/types';
+import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS as P } from './utils/constants';
 import { drawLinks } from './renderers/LinkRenderer';
 import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
@@ -26,6 +26,8 @@ export interface SimNode {
   fx?: number | null;
   fy?: number | null;
   index?: number;
+  spawnTime?: number;
+  spawnIndex?: number;
   [key: string]: unknown;
 }
 
@@ -55,8 +57,9 @@ const CustomForceGraph: React.FC<{
   onNodeHover?: (node: SimNode | null) => void;
   savedPositionsRef?: React.MutableRefObject<Map<string, { x: number; y: number }>>;
   nodeTypes?: NodeTypeConfig[];
+  communityAliases?: CommunityAlias[];
   onRerunLayout?: () => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, onRerunLayout }) => {
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -76,6 +79,8 @@ const CustomForceGraph: React.FC<{
   // D3 force simulation
   const simulationRef = useRef<d3Force.Simulation<SimNode, SimLink> | null>(null);
   const simRafRef = useRef<number | null>(null);
+  const ticksRef = useRef(0);
+  const fitToScreenRef = useRef<((animate?: boolean) => void) | null>(null);
 
   // Use refs for values that change frequently during interactions to avoid React re-renders
   const transformRef = useRef<Transform>({ x: 0, y: 0, k: 1 });
@@ -132,9 +137,9 @@ const CustomForceGraph: React.FC<{
     return nodes.find(node => {
       if (typeof node.x !== 'number' || typeof node.y !== 'number') return false;
 
-      const isHexagon = node.type === 'Organization' || node.type === 'Startup';
+      const shape = getNodeTypeConfig(node.type, nodeTypes).shape;
 
-      if (isHexagon) {
+      if (shape === 'hexagon') {
         const hexRadius = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.75;
         return isPointInHexagon(graphPos.x, graphPos.y, node.x, node.y, hexRadius);
       } else {
@@ -148,7 +153,7 @@ const CustomForceGraph: React.FC<{
         );
       }
     });
-  }, [nodes, screenToGraph, isPointInHexagon]);
+  }, [nodes, nodeTypes, screenToGraph, isPointInHexagon]);
 
   /* --------------------------------------------------------------------------
      RENDERING
@@ -177,7 +182,14 @@ const CustomForceGraph: React.FC<{
     if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
 
     const typeConfig = getNodeTypeConfig(node.type, nodeTypes);
-    const borderColor = typeConfig.color;
+    // Alias colour overrides base type colour, matching how the directory card
+    // resolves colour. Without this, Founder/Investor/Government nodes in the
+    // graph view fall back to the base type colour and lose their distinction.
+    const nodeAlias = (node as { alias?: string | null }).alias;
+    const aliasConfig = nodeAlias
+      ? (communityAliases ?? []).find(a => a.name === nodeAlias && a.nodeType === node.type)
+      : undefined;
+    const borderColor = aliasConfig?.color ?? typeConfig.color;
     const shape = typeConfig.shape;
 
     const borderWidth = isFocused ? CARD_DIMENSIONS.BORDER_WIDTH * 1.6 : CARD_DIMENSIONS.BORDER_WIDTH;
@@ -190,7 +202,7 @@ const CustomForceGraph: React.FC<{
     } else {
       drawRectangleNode(ctx, node, node.x, node.y, simplified, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     }
-  }, [nodeTypes, getCanvasTheme]);
+  }, [nodeTypes, communityAliases, getCanvasTheme]);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -204,6 +216,13 @@ const CustomForceGraph: React.FC<{
     const { width, height } = canvas;
 
     ctx.clearRect(0, 0, width, height);
+
+    // Suppress draws until the initial fitToScreen has placed the camera; otherwise
+    // links flash at the canvas top-left while the simulation is still seeded near origin.
+    if (!hasInitialFitRef.current) {
+      return;
+    }
+
     ctx.save();
     ctx.scale(dpr, dpr);
     ctx.translate(transform.x, transform.y);
@@ -247,6 +266,7 @@ const CustomForceGraph: React.FC<{
     }
 
     // Draw Nodes with viewport culling
+    const renderNow = performance.now();
     nodes.forEach(node => {
       if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
 
@@ -261,8 +281,12 @@ const CustomForceGraph: React.FC<{
 
       const shouldDim = !isFocused && !isConnected && (isInDimmedSet || currentFocusNodeId != null);
 
+      const stagger = (node.spawnIndex ?? 0) * P.fadeInStaggerMs;
+      const elapsed = renderNow - (node.spawnTime ?? renderNow) - stagger;
+      const fadeAlpha = Math.max(0, Math.min(1, elapsed / P.fadeInDurationMs));
+
       ctx.save();
-      ctx.globalAlpha = shouldDim ? 0.15 : 1;
+      ctx.globalAlpha = (shouldDim ? 0.15 : 1) * fadeAlpha;
       drawNodeCard(ctx, node, false, isFocused, isConnected, shouldDim);
       ctx.restore();
     });
@@ -304,7 +328,21 @@ const CustomForceGraph: React.FC<{
       if (!sim) return;
 
       sim.tick();
-      scheduleRender();
+      ticksRef.current += 1;
+
+      // First mount of a new graph: keep canvas blank for the first few ticks
+      // so the camera is correct before the burst becomes visible. After the
+      // initial fit, render every tick (sim relax during drag also lands here).
+      if (hasInitialFitRef.current) {
+        scheduleRender();
+      } else if (
+        ticksRef.current === P.ticksBeforeReveal &&
+        fitToScreenRef.current
+      ) {
+        fitToScreenRef.current(false);
+      } else if (ticksRef.current > P.ticksBeforeReveal) {
+        scheduleRender();
+      }
 
       if (sim.alpha() > sim.alphaMin()) {
         simRafRef.current = requestAnimationFrame(loop);
@@ -343,6 +381,7 @@ const CustomForceGraph: React.FC<{
     setIsLayoutReady(false);
     setIsInitialFitComplete(false);
     hasInitialFitRef.current = false;
+    ticksRef.current = 0;
 
     if (simRafRef.current !== null) {
       cancelAnimationFrame(simRafRef.current);
@@ -350,32 +389,21 @@ const CustomForceGraph: React.FC<{
     }
     simulationRef.current?.stop();
 
-    // Pre-compute graph topology
+    // Pre-compute connected node set so isolated nodes get pushed to a periphery ring.
     const connectedIds = new Set<string>();
-    const degreeMap = new Map<string, number>();
     links.forEach(link => {
       const src = String(typeof link.source === 'string' ? link.source : (link.source as SimNode).id);
       const tgt = String(typeof link.target === 'string' ? link.target : (link.target as SimNode).id);
       connectedIds.add(src);
       connectedIds.add(tgt);
-      degreeMap.set(src, (degreeMap.get(src) || 0) + 1);
-      degreeMap.set(tgt, (degreeMap.get(tgt) || 0) + 1);
     });
 
-    // Force parameters
-    const avgDegree = (links.length * 2) / Math.max(nodes.length, 1);
-    const chargeStrength = -3500 - avgDegree * 400;
-    const linkDistance = Math.max(600, Math.min(900, 650 + links.length * 1.2));
-
-    const circularRadius = Math.sqrt(
-      Math.pow(CARD_DIMENSIONS.WIDTH / 2, 2) + Math.pow(CARD_DIMENSIONS.HEIGHT / 2, 2)
-    );
-
-    // Grid-accelerated rectangular collision force
-    const GAP = 160;
+    // Card-aware rectangular collision (Obsidian dots don't need this; cards do).
+    // Charge does most of the spacing work — rectCollide just guarantees no overlap.
+    const GAP = P.rectCollideGap;
     const HALF_W = CARD_DIMENSIONS.WIDTH / 2 + GAP / 2;
     const HALF_H = CARD_DIMENSIONS.HEIGHT / 2 + GAP / 2;
-    const RECT_STRENGTH = 0.55;
+    const RECT_STRENGTH = P.rectCollideStrength;
     const RECT_ITERATIONS = 8;
     const CELL_SIZE = Math.max(HALF_W, HALF_H) * 2.5;
 
@@ -438,88 +466,35 @@ const CustomForceGraph: React.FC<{
       return force;
     }
 
-    // Edge-node repulsion force
-    function forceEdgeNodeRepulsion() {
-      let nodeArray: SimNode[] = [];
-      const EDGE_REPULSION_STRENGTH = 0.4;
-      const EDGE_REPULSION_DIST = CARD_DIMENSIONS.HEIGHT * 1.5;
-
-      function force(alpha: number) {
-        for (let li = 0; li < links.length; li++) {
-          const link = links[li];
-          const src = typeof link.source === 'string' ? null : link.source as SimNode;
-          const tgt = typeof link.target === 'string' ? null : link.target as SimNode;
-          if (!src || !tgt) continue;
-          if (typeof src.x !== 'number' || typeof src.y !== 'number') continue;
-          if (typeof tgt.x !== 'number' || typeof tgt.y !== 'number') continue;
-
-          const mx = (src.x + tgt.x) / 2;
-          const my = (src.y + tgt.y) / 2;
-
-          const edx = tgt.x - src.x;
-          const edy = tgt.y - src.y;
-          const elen = Math.sqrt(edx * edx + edy * edy);
-          if (elen < 1) continue;
-
-          const px = -edy / elen;
-          const py = edx / elen;
-
-          for (let ni = 0; ni < nodeArray.length; ni++) {
-            const n = nodeArray[ni];
-            if (n === src || n === tgt) continue;
-            if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
-
-            const dnx = n.x - mx;
-            const dny = n.y - my;
-            const dist = Math.sqrt(dnx * dnx + dny * dny);
-            if (dist > EDGE_REPULSION_DIST || dist < 1) continue;
-
-            const side = dnx * px + dny * py;
-            const sign = side >= 0 ? 1 : -1;
-
-            const proj = (dnx * edx + dny * edy) / elen;
-            if (Math.abs(proj) > elen * 0.6) continue;
-
-            const strength = EDGE_REPULSION_STRENGTH * (1 - dist / EDGE_REPULSION_DIST) * alpha;
-            n.vx = (n.vx || 0) + px * sign * strength * 50;
-            n.vy = (n.vy || 0) + py * sign * strength * 50;
-          }
-        }
-      }
-
-      force.initialize = (n: SimNode[]) => { nodeArray = n; };
-      return force;
-    }
-
-    // Build simulation
+    // Obsidian-tuned simulation. centerStrength maps to forceX/forceY (soft pull
+    // toward origin), repelStrength to forceManyBody, linkStrength + linkDistance
+    // to forceLink — same shape as the Obsidian Forces panel, scaled for card geometry.
     const sim = d3Force
       .forceSimulation<SimNode>(nodes)
+      .alpha(P.alpha)
+      .alphaDecay(P.alphaDecay)
+      .alphaMin(P.alphaMin)
+      .velocityDecay(P.velocityDecay)
       .force('link',
         d3Force.forceLink<SimNode, SimLink>(links)
           .id(d => String(d.id))
-          .distance(linkDistance)
-          .strength(link => {
-            const srcId = String(typeof link.source === 'string' ? link.source : (link.source as SimNode).id);
-            const tgtId = String(typeof link.target === 'string' ? link.target : (link.target as SimNode).id);
-            const srcDeg = degreeMap.get(srcId) || 1;
-            const tgtDeg = degreeMap.get(tgtId) || 1;
-            return 1 / Math.min(srcDeg, tgtDeg);
-          })
+          .distance(P.linkDistance)
+          .strength(P.linkStrength)
       )
       .force('charge',
         d3Force.forceManyBody<SimNode>()
-          .strength(chargeStrength)
-          .distanceMin(80)
-          .distanceMax(2000)
+          .strength(P.chargeStrength)
+          .distanceMin(P.chargeDistanceMin)
+          .distanceMax(P.chargeDistanceMax)
       )
-      .force('center', d3Force.forceCenter(0, 0).strength(0.03))
+      .force('x', d3Force.forceX<SimNode>(0).strength(P.centerStrength))
+      .force('y', d3Force.forceY<SimNode>(0).strength(P.centerStrength))
       .force('rectCollide', forceRectCollide())
-      .force('edgeRepulsion', forceEdgeNodeRepulsion())
-      .force('collision', d3Force.forceCollide<SimNode>(circularRadius * 0.6).strength(0.5).iterations(2))
-      .force('isolatedCenter',
+      .force('isolatedRing',
         d3Force.forceRadial<SimNode>(
-          d => connectedIds.has(String(d.id)) ? 0 : circularRadius * 2.2, 0, 0
-        ).strength(d => connectedIds.has(String(d.id)) ? 0 : 0.3)
+          d => connectedIds.has(String(d.id)) ? 0 : P.linkDistance * P.isolatedRingMultiplier,
+          0, 0
+        ).strength(d => connectedIds.has(String(d.id)) ? 0 : P.isolatedRingStrength)
       )
       .stop();
 
@@ -765,6 +740,12 @@ const CustomForceGraph: React.FC<{
     requestAnimationFrame(animateFrame);
   }, [nodes, scheduleRender]);
 
+  // Keep fitToScreenRef pointing at the latest fitToScreen so startSimLoop
+  // (defined earlier) can call it without a circular useCallback dependency.
+  useEffect(() => {
+    fitToScreenRef.current = fitToScreen;
+  }, [fitToScreen]);
+
   // Canvas resize with high-DPI support
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -926,23 +907,12 @@ const CustomForceGraph: React.FC<{
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`w-full h-full ${cursorClass} transition-opacity duration-500`}
+        className={`w-full h-full ${cursorClass}`}
         style={{
           touchAction: 'none',
           display: 'block',
-          opacity: isInitialFitComplete ? 1 : 0
         }}
       />
-      {/* Loading overlay */}
-      {!isInitialFitComplete && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-brand-bg pointer-events-none">
-          <div className="relative w-16 h-16">
-            <div className="absolute inset-0 rounded-full border-4 border-surface-3" />
-            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-green animate-spin" />
-          </div>
-          <p className="text-sm text-text-muted font-medium">Laying out graph…</p>
-        </div>
-      )}
       {/* Re-run Layout button */}
       {onRerunLayout && (
         <button

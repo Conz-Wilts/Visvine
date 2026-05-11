@@ -26,6 +26,7 @@
 .DS_Store
 Thumbs.db
 .claude/
+CLAUDE.md
 .idea/
 *.swp
 *.swo
@@ -37,11 +38,14 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.log
+.logs/
 
 # env files (can opt-in for committing if needed)
 .env*
 !.env.example
 !**/.env.example
+!.env.*.example
+!**/.env.*.example
 
 # vercel
 .vercel

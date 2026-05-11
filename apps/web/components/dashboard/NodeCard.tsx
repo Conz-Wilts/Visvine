@@ -54,7 +54,7 @@ export default function NodeCard({ item, onClick, nodeTypes, communityAliases }:
           />
         </div>
       ) : (
-        <div className="h-[180px] shrink-0 flex items-center justify-center group-hover:brightness-105 transition-all" style={getHeaderBgStyle(item.type, nodeTypes)}>
+        <div className="h-[180px] shrink-0 flex items-center justify-center group-hover:brightness-105 transition-all" style={getHeaderBgStyle(typeColor)}>
           <span className="text-2xl font-bold text-white drop-shadow-sm">
             {getInitials(displayName)}
           </span>

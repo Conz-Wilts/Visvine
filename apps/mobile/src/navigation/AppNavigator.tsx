@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import TabNavigator from './TabNavigator';
 import LoginScreen from '../screens/Auth/LoginScreen';
+import DevLoginScreen from '../screens/Auth/DevLoginScreen';
 import ProfileScreen from '../screens/Profile/ProfileScreen';
 import EditProfileScreen from '../screens/Profile/EditProfileScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
@@ -14,6 +15,7 @@ import Loading from '../components/Loading';
 export type AppStackParamList = {
   Main: undefined;
   Login: undefined;
+  DevLogin: undefined;
   Profile: undefined;
   EditProfile: undefined;
   Settings: undefined;
@@ -79,7 +81,10 @@ export default function AppNavigator() {
             />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="DevLogin" component={DevLoginScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

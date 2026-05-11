@@ -2,10 +2,10 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { GraphData, NBNode, NodeTypeConfig } from '@/lib/types';
+import { GraphData, NBNode, NodeTypeConfig, CommunityAlias } from '@/lib/types';
 import GraphDataTables from './GraphDataTables';
 import NodeDetailsSidebar from './NodeDetailsSidebar';
-import { CARD_DIMENSIONS } from './utils/constants';
+import { OBSIDIAN_PHYSICS } from './utils/constants';
 import { fetchNodeProfile } from '@/hooks/useNodeProfile';
 import { prefetchProfile } from '@/hooks/useProfile';
 import { type SimNode, type SimLink } from './CustomForceGraph';
@@ -31,6 +31,7 @@ interface GraphWithTableProps {
   savedPositionsRef?: React.MutableRefObject<Map<string, { x: number; y: number }>>;
   graphDataHashRef?: React.MutableRefObject<string>;
   nodeTypes?: NodeTypeConfig[];
+  communityAliases?: CommunityAlias[];
 }
 
 // Re-export types for consumers that import from this file
@@ -49,7 +50,8 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   dimmedNodeIds,
   savedPositionsRef: savedPositionsRefProp,
   graphDataHashRef: graphDataHashRefProp,
-  nodeTypes
+  nodeTypes,
+  communityAliases
 }) => {
   const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
 
@@ -109,7 +111,8 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       .map(link => ({ ...link, source: String(link.source), target: String(link.target) }));
   }, [graphData.links, graphData.nodes]);
 
-  // Seed nodes with saved positions or a circular jitter around the origin.
+  // Obsidian-style seed: tight central scatter so nodes "burst" outward as
+  // the simulation runs. Saved positions still take precedence for stable layouts.
   const simNodes = useMemo<SimNode[]>(() => {
     const structureChanged = graphDataHash !== graphDataHashRef.current;
     if (structureChanged) {
@@ -117,18 +120,21 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       savedPositionsRef.current.clear();
     }
 
-    const n = Math.max(graphData.nodes.length, 1);
-    const seedRadius = Math.max(400, (n * CARD_DIMENSIONS.WIDTH * 1.5) / (2 * Math.PI));
-
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     return graphData.nodes.map((node, index) => {
       const savedPos = savedPositionsRef.current.get(node.id);
       if (savedPos) {
-        return { ...node, x: savedPos.x, y: savedPos.y };
+        return { ...node, x: savedPos.x, y: savedPos.y, spawnTime: now, spawnIndex: index };
       }
-      const angle = (index / n) * 2 * Math.PI;
-      const jitter = (index % 3) * (seedRadius * 0.15);
-      const r = seedRadius + jitter;
-      return { ...node, x: r * Math.cos(angle), y: r * Math.sin(angle) };
+      const angle = Math.random() * 2 * Math.PI;
+      const r = Math.random() * OBSIDIAN_PHYSICS.seedRadius;
+      return {
+        ...node,
+        x: r * Math.cos(angle),
+        y: r * Math.sin(angle),
+        spawnTime: now,
+        spawnIndex: index,
+      };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [graphData.nodes, graphDataHash]);
@@ -166,13 +172,17 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
           <CustomForceGraph
             nodes={simNodes}
             links={simLinks}
-            focusNodeId={focusNodeId}
+            // Click-selection drives focus highlight too; falls back to the external
+            // focus prop (search/url) when nothing is clicked.
+            focusNodeId={selectedNode?.id ?? focusNodeId ?? null}
             dimmedNodeIds={dimmedNodeIds}
-            autoZoomToFocus={true}
+            // Only auto-zoom for external focus, not on every click.
+            autoZoomToFocus={selectedNode == null && focusNodeId != null}
             onNodeClick={handleNodeClick}
             onNodeHover={handleNodeHover}
             savedPositionsRef={savedPositionsRef}
             nodeTypes={nodeTypes}
+            communityAliases={communityAliases}
             onRerunLayout={() => {
               savedPositionsRef.current.clear();
               graphDataHashRef.current = '';

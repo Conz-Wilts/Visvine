@@ -100,61 +100,61 @@ const nodes = [
 
   // ── Events ──
   {
-    id: 'event:au-tech-week-2025', type: 'event', name: 'Australian Tech Week 2025',
+    id: 'event:au-tech-week-2025', type: 'Event', name: 'Australian Tech Week 2025',
     subtitle: 'Australia\'s premier week-long tech festival', location: 'Sydney, NSW',
     url: 'https://australiantechweek.com', tags: ['Conference', 'Tech', 'Networking', 'Innovation'],
     metadata: { date: '2025-10-20', endDate: '2025-10-24', time: '9:00 AM AEST', capacity: 5000, ticketPrice: 'Varies', format: 'In-person', status: 'past' },
   },
   {
-    id: 'event:sxsw-sydney-2025', type: 'event', name: 'SXSW Sydney 2025',
+    id: 'event:sxsw-sydney-2025', type: 'Event', name: 'SXSW Sydney 2025',
     subtitle: 'Where technology, creativity and culture collide', location: 'ICC Sydney, Darling Harbour',
     url: 'https://sxswsydney.com', tags: ['Conference', 'Culture', 'Music', 'Tech', 'Film'],
     metadata: { date: '2025-10-13', endDate: '2025-10-19', time: '10:00 AM AEST', capacity: 10000, ticketPrice: '$499', format: 'In-person', status: 'past' },
   },
   {
-    id: 'event:startup-grind-melb-mar26', type: 'event', name: 'Startup Grind Melbourne',
+    id: 'event:startup-grind-melb-mar26', type: 'Event', name: 'Startup Grind Melbourne',
     subtitle: 'Fireside chat with Jack Zhang on scaling globally', location: 'RMIT Storey Hall, Melbourne',
     url: 'https://startupgrind.com/melbourne', tags: ['Meetup', 'Fireside Chat', 'Startups'],
     metadata: { date: '2026-03-19', time: '6:00 PM AEST', capacity: 200, ticketPrice: 'Free', format: 'In-person', status: 'past' },
   },
   {
-    id: 'event:blackbird-demo-day-w26', type: 'event', name: 'Blackbird Giants Demo Day W26',
+    id: 'event:blackbird-demo-day-w26', type: 'Event', name: 'Blackbird Giants Demo Day W26',
     subtitle: 'Blackbird\'s Winter 2026 cohort pitch event', location: 'Carriageworks, Sydney',
     url: 'https://blackbird.vc/giants', tags: ['Demo Day', 'Startups', 'Pitch', 'VC'],
     metadata: { date: '2026-04-10', time: '10:00 AM AEST', capacity: 400, ticketPrice: 'Invite Only', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:au-founders-dinner-may26', type: 'event', name: 'Australian Founders Dinner',
+    id: 'event:au-founders-dinner-may26', type: 'Event', name: 'Australian Founders Dinner',
     subtitle: 'An intimate dinner for Australia\'s top founders', location: 'Quay Restaurant, Sydney',
     url: null, tags: ['Networking', 'Founders', 'Dinner'],
     metadata: { date: '2026-05-15', time: '7:00 PM AEST', capacity: 50, ticketPrice: 'By invitation', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:fintech-summit-syd-jun26', type: 'event', name: 'Sydney Fintech Summit 2026',
+    id: 'event:fintech-summit-syd-jun26', type: 'Event', name: 'Sydney Fintech Summit 2026',
     subtitle: 'The future of finance and digital payments in APAC', location: 'Stone & Chalk, Sydney',
     url: 'https://lu.ma/syd-fintech-26', tags: ['Fintech', 'Payments', 'Conference', 'APAC'],
     metadata: { date: '2026-06-11', endDate: '2026-06-12', time: '9:00 AM AEST', capacity: 600, ticketPrice: '$199', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:ai-hackathon-melb-jul26', type: 'event', name: 'Melbourne AI Hackathon',
+    id: 'event:ai-hackathon-melb-jul26', type: 'Event', name: 'Melbourne AI Hackathon',
     subtitle: '48-hour hackathon building with Australian AI models', location: 'Melbourne Connect, Carlton',
     url: 'https://lu.ma/melb-ai-hack', tags: ['Hackathon', 'AI', 'ML', 'Builders'],
     metadata: { date: '2026-07-18', endDate: '2026-07-19', time: '9:00 AM AEST', capacity: 150, ticketPrice: 'Free', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:deep-tech-forum-aug26', type: 'event', name: 'Deep Tech Forum Sydney',
+    id: 'event:deep-tech-forum-aug26', type: 'Event', name: 'Deep Tech Forum Sydney',
     subtitle: 'Commercialising Australia\'s world-class research', location: 'Cicada Innovations, Eveleigh',
     url: 'https://lu.ma/deep-tech-syd', tags: ['Deep Tech', 'Science', 'Research', 'Commercialisation'],
     metadata: { date: '2026-08-20', time: '9:00 AM AEST', capacity: 300, ticketPrice: '$149', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:agri-tech-perth-sep26', type: 'event', name: 'AgriTech Perth Conference',
+    id: 'event:agri-tech-perth-sep26', type: 'Event', name: 'AgriTech Perth Conference',
     subtitle: 'Technology transforming Australian agriculture', location: 'Perth Convention Centre',
     url: 'https://lu.ma/agritech-perth', tags: ['AgriTech', 'FoodTech', 'Farming', 'Climate'],
     metadata: { date: '2026-09-10', endDate: '2026-09-11', time: '8:30 AM AWST', capacity: 250, ticketPrice: '$129', format: 'In-person', status: 'upcoming' },
   },
   {
-    id: 'event:climate-tech-adelaide-oct26', type: 'event', name: 'Climate Tech Adelaide',
+    id: 'event:climate-tech-adelaide-oct26', type: 'Event', name: 'Climate Tech Adelaide',
     subtitle: 'Accelerating Australia\'s clean energy transition', location: 'Adelaide Convention Centre',
     url: 'https://lu.ma/climate-adelaide', tags: ['Climate', 'Clean Energy', 'Deep Tech', 'Impact'],
     metadata: { date: '2026-10-08', time: '9:00 AM ACST', capacity: 200, ticketPrice: '$99', format: 'In-person', status: 'upcoming' },
@@ -573,12 +573,23 @@ async function run() {
         ['tech', 'startups', 'innovation', 'venture-capital', 'deep-tech', 'fintech', 'agritech'],
         30,
         JSON.stringify([
-          { name: 'Person', color: '#2563eb', shape: 'rectangle', icon: '👤' },
-          { name: 'Organization', color: '#9333ea', shape: 'hexagon', icon: '🏢' },
-          { name: 'Event', color: '#ef4444', shape: 'rectangle', icon: '📅' },
-          { name: 'Group', color: '#0ea5e9', shape: 'rectangle', icon: '👥' },
+          { name: 'Person',       color: '#2563eb', shape: 'rectangle', icon: '👤' },
+          { name: 'Organization', color: '#9333ea', shape: 'rectangle', icon: '🏢' },
+          { name: 'Event',        color: '#ef4444', shape: 'rectangle', icon: '📅' },
+          { name: 'Group',        color: '#0ea5e9', shape: 'rectangle', icon: '👥' },
+          { name: 'Community',    color: '#10b981', shape: 'hexagon',   icon: '🌐' },
+          { name: 'Resource',     color: '#f59e0b', shape: 'rectangle', icon: '📦' },
         ]),
-        JSON.stringify([]),
+        JSON.stringify([
+          { name: 'Founder',          color: '#16a34a', nodeType: 'Person' },
+          { name: 'Ecosystem Leader', color: '#7c3aed', nodeType: 'Person' },
+          { name: 'Investor',         color: '#f59e0b', nodeType: 'Person' },
+          { name: 'Accelerator',      color: '#0ea5e9', nodeType: 'Group'  },
+          { name: 'Incubator',        color: '#db2777', nodeType: 'Group'  },
+          { name: 'Coworking',        color: '#06b6d4', nodeType: 'Group'  },
+          { name: 'Fund',             color: '#f59e0b', nodeType: 'Group'  },
+          { name: 'Government',       color: '#4f46e5', nodeType: 'Group'  },
+        ]),
         JSON.stringify({ enablePrivateColumns: true, enableCommunityColumns: true }),
       ]
     );
@@ -618,7 +629,7 @@ async function run() {
         `INSERT INTO nodes (id, type, name, alias, subtitle, location, url, tags, metadata, community_id, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
          ON CONFLICT (id) DO UPDATE SET
-           name = EXCLUDED.name, alias = EXCLUDED.alias, subtitle = EXCLUDED.subtitle,
+           type = EXCLUDED.type, name = EXCLUDED.name, alias = EXCLUDED.alias, subtitle = EXCLUDED.subtitle,
            location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags,
            metadata = EXCLUDED.metadata, updated_at = NOW()`,
         [

@@ -6,6 +6,14 @@ import { NBNode } from '@/lib/types';
 import { drawWrappedText, roundRect } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
+import { getInitials } from '@/lib/avatarUtils';
+
+// Append two-char hex alpha (0-255) onto a 6-digit hex colour. Falls back to the
+// colour itself if it isn't a recognisable hex string.
+function withAlpha(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
 
 /**
  * Draw a rectangle-shaped node card on canvas
@@ -131,12 +139,25 @@ export function drawRectangleNode(
 
     ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
   } else {
-    // Draw gradient placeholder if no image
-    const headerGradient = ctx.createLinearGradient(0, headerY, 0, headerY + headerHeight);
-    headerGradient.addColorStop(0, placeholderStart);
-    headerGradient.addColorStop(1, placeholderEnd);
+    // Coloured placeholder + initials when there's no image — matches the directory
+    // card style so the graph view stays visually consistent with the card grid.
+    void placeholderStart; void placeholderEnd; // intentionally unused; theme-grey replaced
+    const headerGradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
+    headerGradient.addColorStop(0, withAlpha(borderColor, 0.8));
+    headerGradient.addColorStop(1, borderColor);
     ctx.fillStyle = headerGradient;
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
+
+    // Initials centred in the placeholder area
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 22px Inter, system-ui, -apple-system';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      getInitials(node.name ?? ''),
+      headerX + headerWidth / 2,
+      headerY + headerHeight / 2
+    );
   }
 
   ctx.restore();

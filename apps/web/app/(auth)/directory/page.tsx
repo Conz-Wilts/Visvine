@@ -350,6 +350,7 @@ export default function DashboardPage() {
           savedPositionsRef={savedPositionsRef}
           graphDataHashRef={graphDataHashRef}
           nodeTypes={community?.nodeTypes}
+          communityAliases={community?.communityAliases as import('@/lib/types').CommunityAlias[] | undefined}
         />
       </div>
 

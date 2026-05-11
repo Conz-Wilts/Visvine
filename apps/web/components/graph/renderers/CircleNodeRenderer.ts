@@ -7,6 +7,12 @@ import type { CanvasTheme } from './RectangleNodeRenderer';
 import { drawWrappedText } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
+import { getInitials } from '@/lib/avatarUtils';
+
+function withAlpha(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
 
 /**
  * Draw a circle-shaped node on canvas
@@ -119,10 +125,11 @@ export function drawCircleNode(
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // Draw gradient placeholder if no image
+    // Coloured placeholder + initials when there's no image
+    void placeholderStart; void placeholderEnd;
     const gradient = ctx.createRadialGradient(innerCenterX, innerCenterY, 0, innerCenterX, innerCenterY, innerRadius);
-    gradient.addColorStop(0, placeholderStart);
-    gradient.addColorStop(1, placeholderEnd);
+    gradient.addColorStop(0, withAlpha(borderColor, 0.8));
+    gradient.addColorStop(1, borderColor);
     ctx.fillStyle = gradient;
 
     ctx.beginPath();
@@ -134,6 +141,18 @@ export function drawCircleNode(
     ctx.beginPath();
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(innerRadius * 0.7)}px Inter, system-ui, -apple-system`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      getInitials(node.name ?? ''),
+      innerCenterX,
+      innerCenterY
+    );
+    ctx.restore();
   }
 
   // Content layout

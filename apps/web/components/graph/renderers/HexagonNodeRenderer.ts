@@ -7,6 +7,12 @@ import type { CanvasTheme } from './RectangleNodeRenderer';
 import { drawWrappedText, roundRect, drawHexagon } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
+import { getInitials } from '@/lib/avatarUtils';
+
+function withAlpha(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
 
 /**
  * Draw a hexagon-shaped node on canvas
@@ -119,13 +125,13 @@ export function drawHexagonNode(
     roundRect(ctx, imageX, imageY, imageSize, imageSize, squareRadius);
     ctx.stroke();
   } else {
-    // Draw gradient placeholder if no image
-    const imageGradient = ctx.createLinearGradient(imageX, imageY, imageX, imageY + imageSize);
-    imageGradient.addColorStop(0, placeholderStart);
-    imageGradient.addColorStop(1, placeholderEnd);
+    // Coloured placeholder + initials when there's no image
+    void placeholderStart; void placeholderEnd;
+    const imageGradient = ctx.createLinearGradient(imageX, imageY, imageX + imageSize, imageY + imageSize);
+    imageGradient.addColorStop(0, withAlpha(borderColor, 0.8));
+    imageGradient.addColorStop(1, borderColor);
     ctx.fillStyle = imageGradient;
 
-    // Draw rounded square
     roundRect(ctx, imageX, imageY, imageSize, imageSize, squareRadius);
     ctx.fill();
 
@@ -133,6 +139,18 @@ export function drawHexagonNode(
     ctx.lineWidth = borderWidth * 0.6;
     roundRect(ctx, imageX, imageY, imageSize, imageSize, squareRadius);
     ctx.stroke();
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `700 ${Math.round(imageSize * 0.4)}px Inter, system-ui, -apple-system`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      getInitials(node.name ?? ''),
+      imageX + imageSize / 2,
+      imageY + imageSize / 2
+    );
+    ctx.restore();
   }
 
   // Content layout

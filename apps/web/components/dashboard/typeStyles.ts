@@ -11,13 +11,10 @@ export const getTypeColor = (
 ): string => getNodeTypeConfig(type, communityNodeTypes).color;
 
 /**
- * Header background style for node cards — uses the type colour directly.
- * Returns a style object so callers can spread it onto a div.
+ * Header background style for node cards.
+ * Pass the already-resolved colour (alias-aware) so the header can't drift
+ * from a border/badge using the same colour elsewhere on the card.
  */
-export const getHeaderBgStyle = (
-  type: NodeType | string,
-  communityNodeTypes?: NodeTypeConfig[]
-): CSSProperties => {
-  const color = getTypeColor(type, communityNodeTypes);
-  return { background: `linear-gradient(135deg, ${color}cc 0%, ${color} 100%)` };
-};
+export const getHeaderBgStyle = (color: string): CSSProperties => ({
+  background: `linear-gradient(135deg, ${color}cc 0%, ${color} 100%)`,
+});

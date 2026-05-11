@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession, COOKIE_NAME } from "@/lib/session";
+import { isDevAuthEnabled } from "@/lib/dev-auth";
 
-const PUBLIC_PATHS = ["/signin", "/waitlist", "/api/auth", "/claim", "/api/media"];
+const PUBLIC_PATHS = [
+  "/signin",
+  "/waitlist",
+  "/api/auth",
+  "/claim",
+  "/api/media",
+  ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
+];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

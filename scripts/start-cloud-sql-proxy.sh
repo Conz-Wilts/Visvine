@@ -53,11 +53,13 @@ DB_HOST="${DB_HOST:-127.0.0.1}"
 # ---------------------------------------------------------------------------
 PROXY_BIN=""
 for candidate in \
+  "$HOME/bin/cloud-sql-proxy.exe" \
   "$HOME/bin/cloud-sql-proxy" \
   "/usr/local/bin/cloud-sql-proxy" \
+  "$(which cloud-sql-proxy.exe 2>/dev/null || true)" \
   "$(which cloud-sql-proxy 2>/dev/null || true)"
 do
-  if [[ -x "$candidate" ]]; then
+  if [[ -n "$candidate" && -f "$candidate" ]]; then
     PROXY_BIN="$candidate"
     break
   fi
@@ -74,11 +76,11 @@ if [[ -z "$PROXY_BIN" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Check if port is already in use
+# Check if port is already in use (portable: bash /dev/tcp, no lsof needed)
 # ---------------------------------------------------------------------------
-if lsof -i :"$DB_PORT" > /dev/null 2>&1; then
+if (exec 3<>/dev/tcp/"$DB_HOST"/"$DB_PORT") 2>/dev/null; then
+  exec 3>&- 3<&-
   echo "✓ Cloud SQL Proxy already running on $DB_HOST:$DB_PORT"
-  lsof -i :"$DB_PORT" | grep LISTEN
   echo ""
   echo "Proxy is running. Press Ctrl+C to stop monitoring."
   # Keep the script running so concurrently doesn't exit

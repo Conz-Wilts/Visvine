@@ -275,13 +275,17 @@ export interface DirectoryItem {
   similarity?: number
 }
 
-// Fixed node types — these 5 are the only types across all communities.
-// Communities customise aliases within each type, not the types themselves.
+// Canonical node types and their default colours/shapes. A community can override
+// these via `nodeTypes`, but every type listed here resolves to a non-grey colour
+// even before a community config has loaded. This is what prevents the
+// "everything is grey on first paint" race condition.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
-  { name: 'Community', color: '#78d870', shape: 'circle'    },
-  { name: 'Person',    color: '#2563eb', shape: 'rectangle' },
-  { name: 'Resource',  color: '#f59e0b', shape: 'rectangle' },
-  { name: 'Event',     color: '#9333ea', shape: 'rectangle' },
+  { name: 'Community',    color: '#10b981', shape: 'hexagon'   },
+  { name: 'Person',       color: '#2563eb', shape: 'rectangle' },
+  { name: 'Organization', color: '#9333ea', shape: 'rectangle' },
+  { name: 'Event',        color: '#ef4444', shape: 'rectangle' },
+  { name: 'Group',        color: '#0ea5e9', shape: 'rectangle' },
+  { name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
 // Legacy color mapping (deprecated - use community.nodeTypes instead)

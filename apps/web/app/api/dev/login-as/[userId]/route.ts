@@ -1,0 +1,49 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createSession, COOKIE_NAME, MAX_AGE } from "@/lib/session";
+import { isDevAuthEnabled, devAuthDisabledResponse } from "@/lib/dev-auth";
+import prisma from "@/lib/prisma";
+
+function sanitizeCallbackUrl(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  if (!isDevAuthEnabled()) return devAuthDisabledResponse();
+
+  const { userId } = await params;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { person: true },
+  });
+  if (!user) {
+    return new Response(JSON.stringify({ error: "user not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const token = await createSession({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    personId: user.person?.id ?? null,
+  });
+
+  const callbackUrl = sanitizeCallbackUrl(req.nextUrl.searchParams.get("callbackUrl"));
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const response = NextResponse.redirect(new URL(callbackUrl, appUrl));
+  response.cookies.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: MAX_AGE,
+    path: "/",
+  });
+  return response;
+}

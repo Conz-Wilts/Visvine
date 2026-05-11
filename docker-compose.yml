@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: visvine-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: visvine
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - visvine_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d visvine"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  visvine_postgres_data:
+    name: visvine_postgres_data

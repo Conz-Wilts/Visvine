@@ -11,16 +11,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { useAuth } from '../../contexts/AuthContext';
+import type { AppStackParamList } from '../../navigation/AppNavigator';
 
 // Required: tells the in-app browser to close itself when the deep link fires
 WebBrowser.maybeCompleteAuthSession();
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+const DEV_AUTH_ENABLED = process.env.EXPO_PUBLIC_DEV_AUTH === 'true';
 
 export default function LoginScreen() {
   const { handleDeepLink } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [isSigningIn, setIsSigningIn] = React.useState(false);
 
   // Generate a random state for CSRF protection
@@ -102,6 +107,16 @@ export default function LoginScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {DEV_AUTH_ENABLED && (
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => navigation.navigate('DevLogin')}
+            >
+              <Ionicons name="construct-outline" size={20} color={colors.brand.darkGreen} />
+              <Text style={styles.devButtonText}>Dev login (skip Google)</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.footer}>
@@ -171,6 +186,23 @@ const styles = StyleSheet.create({
   googleButtonText: {
     color: colors.background.primary,
     fontSize: 16,
+    fontWeight: '600',
+  },
+  devButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.brand.lightBg,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.brand.darkGreen,
+  },
+  devButtonText: {
+    color: colors.brand.darkGreen,
+    fontSize: 14,
     fontWeight: '600',
   },
   footer: {
