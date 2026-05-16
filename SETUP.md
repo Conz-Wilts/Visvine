@@ -249,7 +249,139 @@ worth doing the first time and then forgetting about:
 
 ---
 
-## 6. Gotchas
+## 6. Sharing a dev database between teammates (pg_dump + GCS)
+
+`pnpm db:seed` reseeds 1000 fake users locally, but **does not generate
+embeddings** — `Node.embedding` stays NULL, so semantic search is dead
+until someone runs `embed:backfill` (which costs OpenAI calls). Rather
+than every dev paying that cost on every fresh setup, the team can share
+one fixture snapshot via a private GCS bucket.
+
+One person (the "fixture maintainer", whoever holds `OPENAI_API_KEY`)
+seeds + backfills + publishes; everyone else pulls.
+
+### 6a. Provision the bucket (one-time)
+
+```bash
+PROJECT=visvine-platform
+BUCKET=visvine-dev-fixtures
+REGION=us-central1
+
+gcloud storage buckets create gs://$BUCKET \
+  --project=$PROJECT \
+  --location=$REGION \
+  --uniform-bucket-level-access \
+  --soft-delete-duration=7d
+
+# Maintainers (read + write):
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member="user:cwiltshire@visvine.com" \
+  --role="roles/storage.objectAdmin"
+
+# Other devs (read only — pulls the fixture, can't overwrite it):
+gcloud storage buckets add-iam-policy-binding gs://$BUCKET \
+  --member="domain:visvine.com" \
+  --role="roles/storage.objectViewer"
+```
+
+Adjust the second binding to a list of individual users or a Google
+group if `domain:` is too broad for your taste.
+
+### 6b. Maintainer workflow — publishing a new fixture
+
+Run when seed.ts changes meaningfully, schema migrations land, or
+embeddings drift. Cadence is up to you; once a sprint is plenty.
+
+```powershell
+# 1. Make sure apps/web/.env has OPENAI_API_KEY uncommented and set.
+#    (The other GCS_* values aren't needed for db:publish — only ADC.)
+gcloud auth application-default login   # if you haven't recently
+
+# 2. Reset and reseed the local DB
+pnpm db:fresh                            # ~5s; faker rows, NULL embeddings
+
+# 3. Backfill embeddings (OpenAI API calls, ~$0.01 for 1000 nodes)
+pnpm embed:backfill                      # ~30s
+
+# 4. Dump + upload (refuses unless GCS_DUMP_BUCKET is set in apps/web/.env)
+pnpm db:publish
+
+# Output should end with:
+#   versioned: gs://visvine-dev-fixtures/seed-mig20260414-20260516-0357.dump
+#   latest:    gs://visvine-dev-fixtures/seed-latest.dump
+```
+
+Tell the team in Slack that there's a new fixture. They run `pnpm db:restore`
+at their leisure.
+
+### 6c. Consumer workflow — pulling the fixture
+
+**First-time onboarding** (replaces the `pnpm setup` step from §1):
+```powershell
+git clone … && cd Visvine
+Copy-Item apps/web/.env.example apps/web/.env
+# In apps/web/.env, uncomment:  GCS_DUMP_BUCKET=visvine-dev-fixtures
+gcloud auth application-default login
+
+pnpm setup:fixture        # install → docker → migrate → restore from GCS
+pnpm dev
+```
+
+**Refreshing later** (when maintainer publishes a new fixture):
+```powershell
+pnpm db:restore           # downloads seed-latest.dump, drops+restores+pushes
+```
+
+Both flows skip the OpenAI step entirely — the embeddings ride along in
+the dump.
+
+### 6d. How filenames and `latest` work
+
+Each publish creates two GCS objects:
+- `seed-mig<MIGTS>-<UTCTIME>.dump` — immutable, archived per dump
+- `seed-latest.dump` — overwritten on every publish; pointer to whatever
+  was published most recently
+
+`MIGTS` is the timestamp prefix of the newest folder in
+`apps/web/prisma/migrations/`. It binds the dump's schema to a known
+migration so future tooling can refuse a restore if local migrations
+are ahead of the dump.
+
+To pin a specific version:
+```powershell
+pnpm db:restore -- --version=seed-mig20260414-20260512-0902.dump
+```
+
+### 6e. Schema drift
+
+`db:restore` runs `prisma db push` after restoring the dump. This handles
+**additive** schema drift (a new column landed in `schema.prisma` after
+the dump was taken — `db push` adds it, NULL for restored rows).
+**Destructive** drift (a column was removed) needs `--accept-data-loss`
+on `db push`, which the script doesn't pass. If you're shipping a
+destructive migration, re-publish the fixture in the same PR.
+
+### 6f. Costs
+
+| | |
+|---|---|
+| Bucket storage | ~10 MB per dump × keep history → ~$0.0002/month each |
+| Egress (devs pulling) | $0 within same region; pennies cross-region |
+| OpenAI embeddings (maintainer only, on publish) | ~$0.0001 per node, ~$0.01 per 1000 |
+
+Practically zero. The OpenAI bill is the only line item.
+
+### 6g. Why not a shared Cloud SQL dev instance?
+
+That was option 3 in the design discussion. It's faster to start with
+but harder to recover from: any dev running `pnpm db:fresh` blows away
+everyone's work. The fixture-bucket model gives each dev a private
+Postgres they can `db:fresh` freely; the shared piece is the dump
+artifact, which is immutable per-version.
+
+---
+
+## 7. Gotchas
 
 - **The legacy `apps/web/migrations/` folder is historical.** Only
   `create_match_nodes_function.sql` is auto-applied. Don't add new

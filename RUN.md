@@ -52,10 +52,22 @@ pnpm db:down      # stop container, keep volume
 pnpm db:logs      # tail Postgres logs
 pnpm db:psql      # psql into the container
 pnpm db:migrate   # prisma db push (apply schema.prisma)
-pnpm db:seed      # re-run the seed
+pnpm db:seed      # re-run the seed (faker rows, NO embeddings)
 pnpm db:fresh     # drop + push + seed (volume preserved)
 pnpm db:reset     # destroy volume entirely, then setup (prompts)
+
+# Shared fixtures via GCS (skips the OpenAI embedding regen):
+pnpm db:restore   # pull seed-latest.dump from GCS, restore locally
+pnpm db:dump      # local-only snapshot to tmp/fixtures/
+pnpm db:publish   # maintainer-only: dump + upload as new latest
+pnpm setup:fixture  # fresh-clone equivalent of `pnpm setup`, using GCS
 ```
+
+`db:restore` / `db:publish` need `GCS_DUMP_BUCKET` set in `apps/web/.env`
+and `gcloud auth application-default login`. See **SETUP.md §6** for the
+bucket provisioning + maintainer playbook. The team-shared fixture is
+the only way to get OpenAI-generated embeddings into your local DB
+without spending your own API quota.
 
 ---
 
