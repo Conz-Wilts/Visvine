@@ -63,3 +63,8 @@ apps/web/public/images/nodes/
 # migration files
 supabase_data_dump.sql
 *.dump.sql
+
+# Local dev fixtures (pg_dump output before/after GCS round-trip).
+# See SETUP.md §7.
+tmp/fixtures/
+*.dump

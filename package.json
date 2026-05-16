@@ -37,7 +37,11 @@
     "mobile:android": "pnpm --filter @visvine/mobile android",
     "mobile:ios": "pnpm --filter @visvine/mobile ios",
     "db:proxy:cloud": "bash scripts/start-cloud-sql-proxy.sh",
+    "db:dump": "node scripts/db-dump.mjs",
+    "db:publish": "node scripts/db-publish.mjs",
+    "db:restore": "node scripts/db-restore.mjs",
     "embed:backfill": "pnpm --filter @visvine/web embed:backfill",
+    "setup:fixture": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:restore",
     "clean": "turbo clean"
   },
   "devDependencies": {
