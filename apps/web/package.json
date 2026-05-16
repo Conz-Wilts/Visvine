@@ -14,7 +14,8 @@
     "prisma:studio": "pnpm dlx prisma@7.4.0 studio",
     "db:push": "pnpm dlx prisma@7.4.0 db push && node scripts/apply-sql-functions.mjs",
     "db:fresh": "node ../../scripts/guard-local-db.mjs && pnpm dlx prisma@7.4.0 db push --force-reset --accept-data-loss && node scripts/apply-sql-functions.mjs && tsx prisma/seed.ts",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "embed:backfill": "tsx scripts/embed-backfill.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",

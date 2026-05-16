@@ -37,6 +37,7 @@
     "mobile:android": "pnpm --filter @visvine/mobile android",
     "mobile:ios": "pnpm --filter @visvine/mobile ios",
     "db:proxy:cloud": "bash scripts/start-cloud-sql-proxy.sh",
+    "embed:backfill": "pnpm --filter @visvine/web embed:backfill",
     "clean": "turbo clean"
   },
   "devDependencies": {
