@@ -4,16 +4,15 @@ Both database modes still work. They share TCP port `127.0.0.1:5432`, so only
 one can be active at a time. Pick a mode, set up the right `.env`, then run
 the matching commands.
 
-| Mode | Backed by | Started by | `apps/web/.env` template |
+| Mode | Backed by | Started by | Source of `apps/web/.env` |
 |---|---|---|---|
-| **Dev** | Local Postgres in Docker (seeded, throwaway) | `pnpm dev` | `apps/web/.env.example` (= `apps/web/.env.development.example`) |
-| **Prod** | Cloud SQL Postgres via the Cloud SQL Auth Proxy | `pnpm dev:cloud` (proxy + Next in one terminal) | `apps/web/.env.production.example` |
+| **Dev** | Local Postgres in Docker (seeded, throwaway) | `pnpm dev` | Top half of `apps/web/.env.example` (dev defaults, uncommented) |
+| **Prod** | Cloud SQL Postgres via the Cloud SQL Auth Proxy | `pnpm dev:cloud` (proxy + Next in one terminal) | Bottom half of `apps/web/.env.example` — uncomment + fill in real values |
 
-> `apps/web/.env.example` and `apps/web/.env.development.example` are
-> identical — same for the mobile pair. `.env.example` is the historical name
-> the README/`pnpm setup` copy from; `.env.development.example` exists for
-> visual symmetry with `.env.production.example`. Either file is a valid dev
-> template; keep them in sync if you edit one.
+> There is one template per app (`apps/web/.env.example`,
+> `apps/mobile/.env.example`). The dev defaults are uncommented at the top;
+> the production / Cloud SQL block is commented out at the bottom. Switching
+> modes is a matter of which block is active in your local `apps/web/.env`.
 
 > Production credentials live in Google Secret Manager. Pull values from there
 > when filling out `.env`; never commit a `.env` with real secrets.
@@ -74,17 +73,25 @@ read-only IAM identity unless you're consciously doing a write.
    ```powershell
    gcloud auth application-default login
    ```
-3. Copy the prod template and fill in real values:
+3. Switch `apps/web/.env` to prod mode:
    ```powershell
    # Back up your dev .env first so you can switch back later
    Copy-Item apps/web/.env apps/web/.env.dev-backup -Force
 
-   Copy-Item apps/web/.env.production.example apps/web/.env -Force
-   # Then edit apps/web/.env and paste in:
-   #   CLOUD_SQL_CONNECTION_NAME, DATABASE_URL (or DB_HOST/USER/...)
-   #   AUTH_SECRET (must match prod), SUPER_ADMIN_EMAILS
-   #   GOOGLE_CLIENT_ID/SECRET, GCS_*, OPENAI_API_KEY
+   # Easiest path: start from the template and edit it.
+   Copy-Item apps/web/.env.example apps/web/.env -Force
    ```
+   Then edit `apps/web/.env`:
+   - At the top, flip `NODE_ENV=production` and `ENABLE_DEV_AUTH=false`.
+   - Comment out the dev `DATABASE_URL`.
+   - Uncomment the **Production / Cloud SQL** block at the bottom and paste in
+     real values pulled from Secret Manager: `CLOUD_SQL_CONNECTION_NAME`,
+     `DATABASE_URL` (or `DB_HOST`/`USER`/...), `AUTH_SECRET` (must match prod),
+     `SUPER_ADMIN_EMAILS`, `GOOGLE_CLIENT_ID`/`SECRET`, `GCS_*`,
+     `OPENAI_API_KEY`.
+
+   Once you've done this once, save the filled-in file as
+   `apps/web/.env.prod-backup` so future switches are a single `Copy-Item`.
 
 ### Starting prod mode
 

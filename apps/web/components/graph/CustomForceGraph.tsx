@@ -93,7 +93,7 @@ const CustomForceGraph: React.FC<{
 
   const [isLayoutReady, setIsLayoutReady] = useState(false);
   const isLayoutReadyRef = useRef(false);
-  const [isInitialFitComplete, setIsInitialFitComplete] = useState(false);
+  const [, setIsInitialFitComplete] = useState(false);
   const [cursorStyle, setCursorStyle] = useState<'grab' | 'grabbing' | 'move' | 'pointer'>('grab');
 
   /* --------------------------------------------------------------------------

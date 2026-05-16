@@ -2,6 +2,9 @@
 
 Multi-tenant graph visualization platform. Next.js web app + React Native (Expo) mobile, backed by Postgres with pgvector.
 
+> For dev-vs-prod database setup (Docker locally, Cloud SQL in production),
+> see [SETUP.md](./SETUP.md).
+
 ## Prerequisites
 
 - Node.js ≥ 20

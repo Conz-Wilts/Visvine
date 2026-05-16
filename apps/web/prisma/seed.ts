@@ -11,9 +11,14 @@
  * that takes (prisma, ctx) and import + invoke it from `main()` below.
  */
 
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import { faker } from "@faker-js/faker";
 import seedrandom from "seedrandom";
+
+assertLocalTarget();
 
 const SEED = 42;
 faker.seed(SEED);
@@ -25,7 +30,40 @@ const BA_M = 2; // edges per new node — controls hub concentration
 const COMMUNITY_ID = "community:local-dev";
 const COMMUNITY_NAME = "Local Dev Community";
 
-const prisma = new PrismaClient();
+const connectionString =
+  process.env.DIRECT_DATABASE_URL ||
+  process.env.DATABASE_URL ||
+  (process.env.DB_HOST
+    ? `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASSWORD ?? "")}@${process.env.DB_HOST}:${process.env.DB_PORT ?? 5432}/${process.env.DB_NAME}`
+    : null);
+if (!connectionString) throw new Error("seed: no DATABASE_URL resolved");
+const pool = new Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
+function assertLocalTarget() {
+  // Belt-and-braces: scripts/guard-local-db.mjs already runs ahead of this
+  // via the db:fresh script, but seed.ts can also be invoked directly
+  // (`pnpm db:seed`, `tsx prisma/seed.ts`), so we re-check here.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("seed: refusing to run with NODE_ENV=production");
+  }
+  if (process.env.CLOUD_SQL_CONNECTION_NAME) {
+    throw new Error(
+      "seed: CLOUD_SQL_CONNECTION_NAME is set — env looks pointed at prod via Cloud SQL Auth Proxy",
+    );
+  }
+  const url =
+    process.env.DIRECT_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    (process.env.DB_HOST ? `postgresql://x:x@${process.env.DB_HOST}/${process.env.DB_NAME ?? ""}` : null);
+  if (!url) throw new Error("seed: no DATABASE_URL resolved");
+  const host = new URL(url).hostname;
+  const LOCAL = new Set(["127.0.0.1", "localhost", "::1", "postgres", "visvine-postgres"]);
+  if (!LOCAL.has(host)) {
+    throw new Error(`seed: refusing — DATABASE_URL host "${host}" is not local`);
+  }
+}
 
 interface SeededUser {
   id: string;
