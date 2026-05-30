@@ -25,7 +25,7 @@ import retrofit2.http.Query
 
 /**
  * The complete client → backend contract: the 12 ApiService methods across the
- * ~9 distinct routes documented in docs/native-migration. The backend is the
+ * ~9 distinct routes exposed by the web backend. The backend is the
  * source of truth and is unchanged by this migration.
  */
 interface VisvineApi {

@@ -49,7 +49,7 @@ tunnel (and add the tunnel callback to the OAuth client — see the repo README)
 ```
 Visvine/
 ├── Core/            AppConfig, KillSwitch (remote gate)
-├── Models/          Codable wire models (mirror docs/native-migration/api-contract.md)
+├── Models/          Codable wire models (mirror the web API server-truth shapes)
 ├── Networking/      APIClient (URLSession), MediaURL, APIResult
 ├── Storage/         KeychainTokenStore, PreferencesStore (UserDefaults)
 ├── Realtime/        MessageStream (URLSession.bytes SSE → /api/messages/stream)

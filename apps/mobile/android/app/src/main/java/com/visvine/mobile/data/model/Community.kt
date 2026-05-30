@@ -2,7 +2,7 @@ package com.visvine.mobile.data.model
 
 import kotlinx.serialization.Serializable
 
-/** Tenant community — mirrors docs/native-migration/api-contract.md `Community`. */
+/** Tenant community — mirrors the web API's `Community` DTO (server truth). */
 @Serializable
 data class Community(
     val id: String,

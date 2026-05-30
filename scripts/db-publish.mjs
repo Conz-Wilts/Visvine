@@ -21,7 +21,7 @@ loadDotenv(join(REPO_ROOT, "apps", "web", ".env"));
 const bucket = process.env.GCS_DUMP_BUCKET;
 if (!bucket) {
   console.error("db-publish: GCS_DUMP_BUCKET is not set in apps/web/.env.");
-  console.error("  See SETUP.md §7 for bucket provisioning.");
+  console.error("  See docs/SETUP.md §6 for bucket provisioning.");
   process.exit(1);
 }
 

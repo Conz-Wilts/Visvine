@@ -1,6 +1,6 @@
 import Foundation
 
-/// Tenant community — mirrors docs/native-migration/api-contract.md `Community`.
+/// Tenant community — mirrors the web API's `Community` DTO (server truth).
 struct Community: Codable, Identifiable, Equatable {
     let id: String
     let name: String

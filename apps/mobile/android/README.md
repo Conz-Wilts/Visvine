@@ -58,7 +58,7 @@ app/src/main/java/com/visvine/mobile/
 ├── core/            AppConfig, KillSwitch (remote gate)
 ├── auth/            AuthManager (session+deep-link), OAuthLauncher (Custom Tabs)
 ├── data/
-│   ├── model/       @Serializable wire models (mirror docs/native-migration/api-contract.md)
+│   ├── model/       @Serializable wire models (mirror the web API server-truth shapes)
 │   ├── remote/      Retrofit VisvineApi, AuthInterceptor, MediaUrl, ApiResult
 │   ├── local/       TokenStore (Keystore), PreferencesStore (DataStore)
 │   ├── realtime/    MessageStream (OkHttp SSE → /api/messages/stream)
@@ -76,7 +76,7 @@ app/src/main/java/com/visvine/mobile/
 ## Notes
 
 - **Realtime** is foreground-only (SSE). Background delivery needs push
-  (APNs/FCM) — an explicit follow-on (see `docs/native-migration`).
+  (APNs/FCM) — an explicit follow-on.
 - **Kill-switch** (`core/KillSwitch.kt`) is wired into the root UI from day one
   but inert until a remote source is connected (its `refresh()` is the seam).
 - App icons are vector adaptive icons (no binary assets committed).

@@ -17,12 +17,13 @@ the screens line up 1:1 across platforms and with the old RN app:
 - **4 app-scoped stores** (was: React Contexts): Auth, Community, Theme, Search.
 - **API contract**: the same ~9 backend routes the RN `ApiService` called, with
   the `{data,error}` envelope, `resolveMediaUrl` rules, and OAuth deep-link flow
-  ported faithfully. [`docs/native-migration/api-contract.md`](../../docs/native-migration/api-contract.md)
-  is the canonical contract reference (server-truth shapes + drift register).
+  ported faithfully. The canonical contract is server truth — the web route
+  handlers under `apps/web/app/api/**` and the DTO types in `apps/web/lib/`.
 - **Foreground real-time messaging** via SSE (`/api/messages/stream`,
   header-authed). Push (background) and offline remain explicit follow-ons.
 
-This is a **thin client**: all business logic stays server-side in `apps/web`.
+This is a **thin client**: all business logic stays server-side in `apps/web`,
+which remains the source of truth for the API contract.
 
 ## Getting started
 
@@ -45,8 +46,3 @@ Both apps default to a local dev backend and offer a "Dev login" path
 For a physical device or real Google OAuth, point the backend origin at your LAN
 IP / a Cloudflare tunnel and register `<origin>/api/auth/callback/google-mobile`
 + the `visvine://` scheme with the OAuth client (see the repo root README).
-
-## Migration
-
-The native rebuild strategy and phased plan live in
-[`docs/native-migration/`](../../docs/native-migration/README.md).

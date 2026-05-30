@@ -65,6 +65,6 @@ supabase_data_dump.sql
 *.dump.sql
 
 # Local dev fixtures (pg_dump output before/after GCS round-trip).
-# See SETUP.md §7.
+# See docs/SETUP.md §6.
 tmp/fixtures/
 *.dump
