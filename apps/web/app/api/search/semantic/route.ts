@@ -6,7 +6,8 @@ import type { SemanticSearchResult } from '@/lib/types';
 import { parseQuery } from '@/lib/ai/queryParser';
 import { logger } from '@/lib/logger';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const hasOpenAI = !!process.env.OPENAI_API_KEY;
+const openai = hasOpenAI ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 interface Candidate {
     id: string;
@@ -52,7 +53,7 @@ function candidateDigest(c: Candidate): string {
 interface RerankItem { id: string; score: number; explanation: string }
 
 async function rerank(query: string, candidates: Candidate[]): Promise<Map<string, RerankItem>> {
-    if (candidates.length === 0) return new Map();
+    if (candidates.length === 0 || !openai) return new Map();
 
     const listing = candidates
         .slice(0, RERANK_INPUT_LIMIT)
@@ -114,36 +115,53 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Query is required and must be a string' }, { status: 400 });
         }
 
-        const parsed = await parseQuery(query);
+        // Without OpenAI we fall back to keyword-only search (per CLAUDE.md).
+        // parseQuery and embeddings both require OPENAI_API_KEY.
+        const keywordOnlyParse = (): Awaited<ReturnType<typeof parseQuery>> =>
+            ({ filters: {}, semantic_terms: [query] });
+        const parsed = hasOpenAI
+            ? await parseQuery(query).catch(err => {
+                logger.error('api.search.semantic.parse_failed', { err });
+                return keywordOnlyParse();
+            })
+            : keywordOnlyParse();
 
         // Build enriched embedding input — include original query + expanded terms
-        const embedInput = [query, ...(parsed.semantic_terms ?? [])].join(' \n ');
-        const embeddingResponse = await openai.embeddings.create({
-            model: 'text-embedding-3-small',
-            input: embedInput,
-        });
-        const queryEmbedding = embeddingResponse.data[0].embedding;
-        const embeddingStr = `[${queryEmbedding.join(',')}]`;
+        let embeddingStr: string | null = null;
+        if (openai) {
+            try {
+                const embedInput = [query, ...(parsed.semantic_terms ?? [])].join(' \n ');
+                const embeddingResponse = await openai.embeddings.create({
+                    model: 'text-embedding-3-small',
+                    input: embedInput,
+                });
+                embeddingStr = `[${embeddingResponse.data[0].embedding.join(',')}]`;
+            } catch (err) {
+                logger.error('api.search.semantic.embedding_failed', { err });
+                embeddingStr = null;
+            }
+        }
 
         const typeFilter = parsed.filters.type ?? null;
         const locationFilter = parsed.filters.location ?? null;
         const nameFilter = parsed.filters.name ?? null;
         const community = communityId ?? null;
 
-        // --- Vector search (primary recall) ---
-        // Use Prisma.sql-style parameterization via tagged template with conditional clauses
-        const vectorRows = await prisma.$queryRaw<Array<Omit<Candidate, 'vectorScore' | 'keywordScore'> & { similarity: number }>>`
-            SELECT id, name, type, alias, subtitle, location, url, image_url AS "imageUrl", tags, metadata,
-                1 - (embedding <=> ${embeddingStr}::vector) AS similarity
-            FROM nodes
-            WHERE embedding IS NOT NULL
-                AND (${community}::text IS NULL OR community_id = ${community})
-                AND (${typeFilter}::text IS NULL OR LOWER(type) = LOWER(${typeFilter}))
-                AND (${locationFilter}::text IS NULL OR location ILIKE '%' || ${locationFilter} || '%')
-                AND (${nameFilter}::text IS NULL OR name ILIKE '%' || ${nameFilter} || '%')
-            ORDER BY embedding <=> ${embeddingStr}::vector
-            LIMIT ${VECTOR_LIMIT}
-        `;
+        // --- Vector search (primary recall) — only when we have an embedding ---
+        const vectorRows = embeddingStr
+            ? await prisma.$queryRaw<Array<Omit<Candidate, 'vectorScore' | 'keywordScore'> & { similarity: number }>>`
+                SELECT id, name, type, alias, subtitle, location, url, image_url AS "imageUrl", tags, metadata,
+                    1 - (embedding <=> ${embeddingStr}::vector) AS similarity
+                FROM nodes
+                WHERE embedding IS NOT NULL
+                    AND (${community}::text IS NULL OR community_id = ${community})
+                    AND (${typeFilter}::text IS NULL OR LOWER(type) = LOWER(${typeFilter}))
+                    AND (${locationFilter}::text IS NULL OR location ILIKE '%' || ${locationFilter} || '%')
+                    AND (${nameFilter}::text IS NULL OR name ILIKE '%' || ${nameFilter} || '%')
+                ORDER BY embedding <=> ${embeddingStr}::vector
+                LIMIT ${VECTOR_LIMIT}
+            `
+            : [];
 
         // --- Keyword search (secondary recall for literal matches) ---
         const keywordTerms = [query, ...(parsed.semantic_terms ?? [])]
@@ -234,6 +252,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ results });
     } catch (error) {
         logger.error('api.search.semantic.failed', { err: error });
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        return NextResponse.json({ error: 'Search failed' }, { status: 500 });
     }
 }

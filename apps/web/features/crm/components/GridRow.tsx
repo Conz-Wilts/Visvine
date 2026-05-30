@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { MemberRow } from "@/lib/crm/memberService";
 import { ColumnDef } from "../utils/buildColumns";
 import { GridCell } from "./GridCell";
@@ -14,7 +15,7 @@ interface GridRowProps {
   rowIndex: number;
 }
 
-export function GridRow({
+function GridRowImpl({
   member,
   columns,
   communityId,
@@ -93,3 +94,7 @@ export function GridRow({
     </tr>
   );
 }
+
+// Memoized so unrelated grid state changes (e.g. editing a different row) don't
+// re-render every row. Row-local state still comes from the useCrmGrid context.
+export const GridRow = memo(GridRowImpl);

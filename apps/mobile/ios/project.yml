@@ -1,0 +1,56 @@
+# XcodeGen project definition — "Xcode project as code".
+# Run `xcodegen generate` (brew install xcodegen) to materialise Visvine.xcodeproj.
+name: Visvine
+options:
+  bundleIdPrefix: com.visvine
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  Visvine:
+    type: application
+    platform: iOS
+    sources:
+      - path: Visvine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.visvine.mobile
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Visvine/Info.plist
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_EMIT_LOC_STRINGS: YES
+
+  VisvineTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: VisvineTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.visvine.mobile.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Visvine
+
+schemes:
+  Visvine:
+    build:
+      targets:
+        Visvine: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - VisvineTests

@@ -267,10 +267,6 @@ export interface DirectoryItem {
   phone?: string
   pronouns?: string
   openToWork?: boolean
-  experience?: string
-  education?: string
-  certifications?: string
-  languages?: string
   explanation?: string
   similarity?: number
 }
@@ -288,15 +284,8 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
-// Legacy color mapping (deprecated - use community.nodeTypes instead)
-export const NODE_COLORS: Record<string, string> = {
-  People: '#2563eb',
-  Startup: '#16a34a',
-  Investor: '#f59e0b',
-  Event: '#ef4444',
-  Organization: '#9333ea',
-  Group: '#0ea5e9'
-};
+// (NODE_COLORS removed — all type→colour resolution goes through the
+// case-insensitive getNodeTypeConfig/getTypeColor canonical helpers.)
 
 /**
  * Get node type configuration for a specific type within a community

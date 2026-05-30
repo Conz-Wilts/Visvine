@@ -13,11 +13,11 @@ export async function GET(request: NextRequest) {
     const communityId = searchParams.get('communityId');
 
     if (type === 'event' && communityId) {
-      // Search events (nodes with type='Event') in the community
+      // Search events (nodes with type='event') in the community
       const events = await prisma.node.findMany({
         where: {
           communityId,
-          type: 'Event',
+          type: 'event',
           ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
         },
         select: {

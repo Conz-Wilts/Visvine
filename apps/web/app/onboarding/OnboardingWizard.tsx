@@ -5,54 +5,23 @@ import { useRouter } from 'next/navigation';
 import WelcomeStep from '@/components/onboarding/steps/WelcomeStep';
 import PhotoBasicsStep from '@/components/onboarding/steps/PhotoBasicsStep';
 import AboutStep from '@/components/onboarding/steps/AboutStep';
-import ExperienceStep from '@/components/onboarding/steps/ExperienceStep';
 import SkillsStep from '@/components/onboarding/steps/SkillsStep';
 import ConnectStep from '@/components/onboarding/steps/ConnectStep';
 import DoneStep from '@/components/onboarding/steps/DoneStep';
 import StepProgress from '@/components/onboarding/StepProgress';
 
 export interface OnboardingData {
-  // Step 1: Photo & Basics
   imageUrl: string | null;
   subtitle: string;
   location: string;
   pronouns: string;
-  // Step 2: About
   bio: string;
   openToWork: boolean;
-  // Step 3: Experience
-  workExperience: ExperienceEntry[];
-  education: EducationEntry[];
-  // Step 4: Skills
   tags: string[];
-  // Step 5: Connect
   linkedinUrl: string;
   twitterUrl: string;
   website: string;
   phone: string;
-}
-
-export interface ExperienceEntry {
-  id?: string;
-  title: string;
-  company: string;
-  location?: string;
-  startDate: string;
-  endDate?: string;
-  current: boolean;
-  description?: string;
-  isNew?: boolean;
-}
-
-export interface EducationEntry {
-  id?: string;
-  school: string;
-  degree?: string;
-  fieldOfStudy?: string;
-  startYear?: string;
-  endYear?: string;
-  description?: string;
-  isNew?: boolean;
 }
 
 interface Props {
@@ -70,30 +39,11 @@ interface Props {
     twitterUrl?: string | null;
     website?: string | null;
     phone?: string | null;
-    workExperience: Array<{
-      id: string;
-      title: string;
-      company: string;
-      location?: string | null;
-      startDate: string;
-      endDate?: string | null;
-      current: boolean;
-      description?: string | null;
-    }>;
-    education: Array<{
-      id: string;
-      school: string;
-      degree?: string | null;
-      fieldOfStudy?: string | null;
-      startYear?: number | null;
-      endYear?: number | null;
-      description?: string | null;
-    }>;
   };
   userName: string;
 }
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 4;
 
 export default function OnboardingWizard({ person, userName }: Props) {
   const router = useRouter();
@@ -108,25 +58,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
     pronouns: person.pronouns ?? '',
     bio: person.bio ?? '',
     openToWork: person.openToWork,
-    workExperience: person.workExperience.map((w) => ({
-      id: w.id,
-      title: w.title,
-      company: w.company,
-      location: w.location ?? undefined,
-      startDate: w.startDate,
-      endDate: w.endDate ?? undefined,
-      current: w.current,
-      description: w.description ?? undefined,
-    })),
-    education: person.education.map((e) => ({
-      id: e.id,
-      school: e.school,
-      degree: e.degree ?? undefined,
-      fieldOfStudy: e.fieldOfStudy ?? undefined,
-      startYear: e.startYear?.toString(),
-      endYear: e.endYear?.toString(),
-      description: e.description ?? undefined,
-    })),
     tags: person.tags,
     linkedinUrl: person.linkedinUrl ?? '',
     twitterUrl: person.twitterUrl ?? '',
@@ -143,7 +74,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
     try {
       const payload: Record<string, unknown> = {};
 
-      // Map fields based on what's changed
       if (stepData.subtitle !== undefined) payload.subtitle = stepData.subtitle || null;
       if (stepData.location !== undefined) payload.location = stepData.location || null;
       if (stepData.pronouns !== undefined) payload.pronouns = stepData.pronouns || null;
@@ -155,18 +85,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
       if (stepData.website !== undefined) payload.website = stepData.website || null;
       if (stepData.phone !== undefined) payload.phone = stepData.phone || null;
       if (stepData.imageUrl !== undefined) payload.imageUrl = stepData.imageUrl;
-
-      // New experience entries
-      if (stepData.workExperience) {
-        const newExp = stepData.workExperience.filter((e) => e.isNew);
-        if (newExp.length > 0) payload.newExperience = newExp;
-      }
-
-      // New education entries
-      if (stepData.education) {
-        const newEdu = stepData.education.filter((e) => e.isNew);
-        if (newEdu.length > 0) payload.newEducation = newEdu;
-      }
 
       if (Object.keys(payload).length > 0) {
         await fetch('/api/onboarding', {
@@ -208,7 +126,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {step > 0 && step < 6 && (
+        {step > 0 && step < 5 && (
           <StepProgress current={step} total={TOTAL_STEPS} />
         )}
 
@@ -245,14 +163,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
             />
           )}
           {step === 3 && (
-            <ExperienceStep
-              data={data}
-              onNext={(d) => next(d)}
-              onBack={back}
-              saving={saving}
-            />
-          )}
-          {step === 4 && (
             <SkillsStep
               data={data}
               onNext={(d) => next(d)}
@@ -260,7 +170,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
               saving={saving}
             />
           )}
-          {step === 5 && (
+          {step === 4 && (
             <ConnectStep
               data={data}
               onNext={(d) => next(d)}
@@ -268,7 +178,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
               saving={saving}
             />
           )}
-          {step === 6 && (
+          {step === 5 && (
             <DoneStep
               data={data}
               personName={userName}

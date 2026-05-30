@@ -5,10 +5,6 @@ import { getSession, isSuperAdmin } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { embedNodes } from '@/lib/ai/embeddings';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function POST(request: Request) {
   try {
     const session = await getSession();
@@ -19,6 +15,9 @@ export async function POST(request: Request) {
     const url = new URL(request.url);
     const force = url.searchParams.get('force') === '1';
 
+    // Constructed here (not at module load) so importing this route doesn't throw
+    // when OPENAI_API_KEY is unset — e.g. during `next build` page-data collection.
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const { processed, total, errors } = await embedNodes(prisma, openai, { force });
 
     if (total === 0) {

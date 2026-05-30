@@ -191,19 +191,19 @@ export default function CreateModal() {
       subtitle = personData.subtitle.trim();
       location = personData.location.trim();
       tags = personData.tags.split(',').map(t => t.trim()).filter(Boolean);
-      type = 'People';
+      type = 'person';
     } else if (selectedType === 'resource') {
       name = resourceData.name.trim();
       subtitle = resourceData.subtitle.trim();
       location = resourceData.location.trim();
       tags = resourceData.tags.split(',').map(t => t.trim()).filter(Boolean);
-      type = 'Resource';
+      type = 'resource';
     } else if (selectedType === 'event') {
       name = eventData.name.trim();
       subtitle = eventData.subtitle.trim();
       location = eventData.location.trim();
       tags = eventData.tags.split(',').map(t => t.trim()).filter(Boolean);
-      type = 'Event';
+      type = 'event';
     }
 
     const baseId = generateNodeId(type, name);

@@ -1,6 +1,6 @@
 # Visvine
 
-Multi-tenant graph visualization platform. Next.js web app + React Native (Expo) mobile, backed by Postgres with pgvector.
+Multi-tenant graph visualization platform. Next.js web app + native iOS (SwiftUI) & Android (Jetpack Compose) mobile apps, backed by Postgres with pgvector.
 
 > For dev-vs-prod database setup (Docker locally, Cloud SQL in production),
 > see [SETUP.md](./SETUP.md).
@@ -19,9 +19,8 @@ That's it. No gcloud, no Cloud SQL Auth Proxy, no Google OAuth setup needed for 
 git clone <repo-url>
 cd Visvine
 
-# Copy env templates (Windows PowerShell: Copy-Item)
+# Copy env template (Windows PowerShell: Copy-Item)
 cp apps/web/.env.example apps/web/.env
-cp apps/mobile/.env.example apps/mobile/.env
 
 # Brings up the docker Postgres, pushes schema, generates client, seeds data.
 pnpm setup
@@ -35,13 +34,17 @@ pnpm dev              # ensures Postgres container is up, then starts Next.js
                       # then http://localhost:3000/dev/login to pick a seeded user
 ```
 
-To run the mobile app in a second terminal:
+To run a native mobile app against the local backend (the web server must be running):
 
 ```bash
-pnpm mobile:ios       # or mobile:android / mobile:start
+# iOS (macOS + Xcode): generate the project, then build/run in Xcode
+cd apps/mobile/ios && xcodegen generate && open Visvine.xcodeproj
+
+# Android (Android Studio or CLI): materialise the Gradle wrapper, then install
+cd apps/mobile/android && gradle wrapper && ./gradlew :app:installDebug
 ```
 
-The mobile login screen has a "Dev login (skip Google)" button that lists the same seeded users.
+The mobile login screen has a "Dev login (skip Google)" button that lists the same seeded users. See `apps/mobile/README.md` for per-platform details.
 
 ## Commands
 
@@ -58,53 +61,44 @@ pnpm db:down            # stop container (data preserved in named volume)
 pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # prisma db push (sync schema)
-pnpm db:seed            # run the generative seed
+pnpm db:seed            # seed the local-dev community + anchor users
+pnpm db:nz              # load the NZ startup ecosystem demo content
 pnpm db:fresh           # drop tables + push + seed (volume preserved)
 pnpm db:reset           # destroy volume + rebuild + push + seed (prompts)
 
 pnpm prisma:studio      # open Prisma Studio
 pnpm prisma:generate    # regenerate Prisma client
 
-pnpm mobile:dev         # Expo dev server
-pnpm mobile:ios         # iOS simulator
-pnpm mobile:android     # Android emulator
-
 pnpm db:proxy:cloud     # start Cloud SQL Auth Proxy (prod debugging only — see below)
 ```
 
+The native mobile apps build with their own toolchains (Gradle / Xcode), not
+pnpm — see `apps/mobile/README.md`.
+
 ## Seed
 
-`pnpm db:seed` produces a deterministic CRM/social graph (fixed random seed):
-
-- 1000 users by default — set `SEED_USER_COUNT` to override
-- Power-law (Barabási–Albert) connection distribution
-- ~30% of users have DM conversations, ~5% are in groups
-- Messages spread over 16 months, with a few in the last 7 days
-- Edge cases baked in: zero connections, mutual blocks, pending invites, soft-deleted users, unicode/emoji names, very long names, hub user with many connections, self-link, orphan Person
+`pnpm db:seed` creates the minimal local-dev scaffolding: a single
+`local-dev` community with two anchor users for the `/dev/login` pickers.
+Demo content (the NZ startup ecosystem — organizations, events, resources)
+loads separately via `pnpm db:nz`.
 
 Anchor users (always present, listed in the dev login pickers):
 
-| email                    | role        | notes |
-|--------------------------|-------------|-------|
-| `admin@local.dev`        | admin       | also super admin via env |
-| `moderator@local.dev`    | moderator   | |
-| `alice@local.dev`        | member      | mutual block with `blocked@` |
-| `bob@local.dev`          | member      | |
-| `hub@local.dev`          | member      | many connections |
-| `isolated@local.dev`     | member      | zero connections |
-| `blocked@local.dev`      | member      | mutual block with alice |
-| `pending@local.dev`      | member      | pending invite from admin |
-| `unicode@local.dev`      | member      | name `李明 🌸 Тест` |
-
-To add a saved bug-repro scenario, see the comment block at the bottom of `apps/web/prisma/seed.ts`.
+| email               | role   | notes |
+|---------------------|--------|-------|
+| `admin@local.dev`   | admin  | also super admin via env |
+| `member@local.dev`  | member | |
 
 ## Multi-machine
 
-Travels via git: schema, migrations, seed, docker-compose.yml, .env.example, scripts. Stays machine-local: docker volume `visvine_postgres_data`, `apps/web/.env`, `apps/mobile/.env`. Nothing you click through and create lives across machines — if it matters, codify it in the seed.
+Travels via git: schema, migrations, seed, docker-compose.yml, .env.example, scripts, and the native app sources. Stays machine-local: docker volume `visvine_postgres_data`, `apps/web/.env`, and generated mobile build artifacts (`apps/mobile/ios/Visvine.xcodeproj`, `apps/mobile/android/.gradle`). Nothing you click through and create lives across machines — if it matters, codify it in the seed.
 
 ## Mobile
 
-Default daily-driver: simulator/emulator (reaches localhost directly).
+The mobile apps are fully native — Kotlin/Jetpack Compose (`apps/mobile/android`)
+and Swift/SwiftUI (`apps/mobile/ios`). Default daily-driver: simulator/emulator,
+which reaches the dev backend at `http://localhost:3000` (iOS) /
+`http://10.0.2.2:3000` (Android) directly.
 
 For testing on a physical phone, the cleanest option is a Cloudflare tunnel — the dev auth bypass already removes the Google-OAuth-needs-HTTPS reason, but the phone still can't reach `localhost`:
 
@@ -113,7 +107,11 @@ brew install cloudflared        # Mac; on Windows use the official installer
 cloudflared tunnel --url http://localhost:3000
 ```
 
-Then set the tunnel URL as `EXPO_PUBLIC_API_URL` in `apps/mobile/.env`.
+Then point the app's API base at the tunnel URL: `visvine.apiBaseUrl` (Android
+Gradle property) or `VisvineApiBaseURL` (iOS `Info.plist`). For real Google
+OAuth, also set `NEXT_PUBLIC_APP_URL` (web) to the tunnel and register
+`<tunnel>/api/auth/callback/google-mobile` + the `visvine://` scheme with the
+OAuth client. See `apps/mobile/README.md`.
 
 ## Production debugging escape hatch
 

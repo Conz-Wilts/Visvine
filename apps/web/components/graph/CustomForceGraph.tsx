@@ -9,6 +9,9 @@ import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
 import { drawCircleNode } from './renderers/CircleNodeRenderer';
 import { preloadImages, loadImage } from './utils/imageCache';
+import { createRectCollideForce } from './utils/forceRectCollide';
+import { isPointInHexagon } from './utils/hitTest';
+import { useLayoutPersistence } from './hooks/useLayoutPersistence';
 
 /* ============================================================================
    SHARED TYPES (re-exported for consumers)
@@ -59,7 +62,14 @@ const CustomForceGraph: React.FC<{
   nodeTypes?: NodeTypeConfig[];
   communityAliases?: CommunityAlias[];
   onRerunLayout?: () => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout }) => {
+  /** When false, the incoming node positions are a restored layout — freeze the
+   *  simulation and apply `initialTransform` instead of running a cold burst. */
+  coldStart?: boolean;
+  initialTransform?: Transform | null;
+  /** Called (debounced) when the layout settles, a node is dragged, or the user
+   *  pans/zooms — so the parent can persist positions + camera transform. */
+  onPersistLayout?: (positions: Record<string, { x: number; y: number }>, transform: Transform) => void;
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, onPersistLayout }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -81,6 +91,14 @@ const CustomForceGraph: React.FC<{
   const simRafRef = useRef<number | null>(null);
   const ticksRef = useRef(0);
   const fitToScreenRef = useRef<((animate?: boolean) => void) | null>(null);
+
+  // Layout persistence: cold/drag → persist on settle; restore → don't persist
+  // back; pan/zoom → debounced. (See ./hooks/useLayoutPersistence.)
+  const { markDirty, markRestored, flushOnSettle, schedulePersist } = useLayoutPersistence(onPersistLayout);
+  const coldStartRef = useRef(coldStart);
+  coldStartRef.current = coldStart;
+  const initialTransformRef = useRef(initialTransform);
+  initialTransformRef.current = initialTransform;
 
   // Use refs for values that change frequently during interactions to avoid React re-renders
   const transformRef = useRef<Transform>({ x: 0, y: 0, k: 1 });
@@ -108,30 +126,6 @@ const CustomForceGraph: React.FC<{
     };
   }, []);
 
-  const isPointInHexagon = useCallback((px: number, py: number, cx: number, cy: number, radius: number): boolean => {
-    const vertices: Array<{ x: number; y: number }> = [];
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i - Math.PI / 3;
-      vertices.push({
-        x: cx + radius * Math.cos(angle),
-        y: cy + radius * Math.sin(angle)
-      });
-    }
-
-    let inside = false;
-    for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
-      const xi = vertices[i].x;
-      const yi = vertices[i].y;
-      const xj = vertices[j].x;
-      const yj = vertices[j].y;
-
-      const intersect = ((yi > py) !== (yj > py)) &&
-        (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }, []);
-
   const findNodeAt = useCallback((screenX: number, screenY: number) => {
     const graphPos = screenToGraph(screenX, screenY);
     return nodes.find(node => {
@@ -153,7 +147,7 @@ const CustomForceGraph: React.FC<{
         );
       }
     });
-  }, [nodes, nodeTypes, screenToGraph, isPointInHexagon]);
+  }, [nodes, nodeTypes, screenToGraph]);
 
   /* --------------------------------------------------------------------------
      RENDERING
@@ -314,6 +308,21 @@ const CustomForceGraph: React.FC<{
   }, [scheduleRender]);
 
   /* --------------------------------------------------------------------------
+     LAYOUT PERSISTENCE
+     -------------------------------------------------------------------------- */
+
+  const collectPositions = useCallback((): Record<string, { x: number; y: number }> => {
+    const positions: Record<string, { x: number; y: number }> = {};
+    const source = simulationRef.current?.nodes() ?? nodes;
+    source.forEach(node => {
+      if (typeof node.x === 'number' && typeof node.y === 'number') {
+        positions[node.id] = { x: node.x, y: node.y };
+      }
+    });
+    return positions;
+  }, [nodes]);
+
+  /* --------------------------------------------------------------------------
      FORCE SIMULATION — live, RAF-driven
      -------------------------------------------------------------------------- */
 
@@ -348,20 +357,22 @@ const CustomForceGraph: React.FC<{
         simRafRef.current = requestAnimationFrame(loop);
       } else {
         simRafRef.current = null;
-        if (savedPositionsRef) {
-          sim.nodes().forEach(node => {
-            if (typeof node.x === 'number' && typeof node.y === 'number') {
-              savedPositionsRef.current.set(node.id, { x: node.x, y: node.y });
-            }
-          });
-        }
+        const positions: Record<string, { x: number; y: number }> = {};
+        sim.nodes().forEach(node => {
+          if (typeof node.x === 'number' && typeof node.y === 'number') {
+            positions[node.id] = { x: node.x, y: node.y };
+            savedPositionsRef?.current.set(node.id, { x: node.x, y: node.y });
+          }
+        });
         isLayoutReadyRef.current = true;
         setIsLayoutReady(true);
+        // Persist a freshly computed (or just-dragged) layout, but never a frozen restore.
+        flushOnSettle(positions, transformRef.current);
       }
     };
 
     simRafRef.current = requestAnimationFrame(loop);
-  }, [scheduleRender, savedPositionsRef]);
+  }, [scheduleRender, savedPositionsRef, flushOnSettle]);
 
   // Initialise / reinitialise simulation when nodes or links change
   useEffect(() => {
@@ -401,70 +412,15 @@ const CustomForceGraph: React.FC<{
     // Card-aware rectangular collision (Obsidian dots don't need this; cards do).
     // Charge does most of the spacing work — rectCollide just guarantees no overlap.
     const GAP = P.rectCollideGap;
-    const HALF_W = CARD_DIMENSIONS.WIDTH / 2 + GAP / 2;
-    const HALF_H = CARD_DIMENSIONS.HEIGHT / 2 + GAP / 2;
-    const RECT_STRENGTH = P.rectCollideStrength;
-    const RECT_ITERATIONS = 8;
-    const CELL_SIZE = Math.max(HALF_W, HALF_H) * 2.5;
-
-    function forceRectCollide() {
-      let nodeArray: SimNode[] = [];
-
-      function force() {
-        for (let iter = 0; iter < RECT_ITERATIONS; iter++) {
-          const grid = new Map<string, SimNode[]>();
-          for (let i = 0; i < nodeArray.length; i++) {
-            const node = nodeArray[i];
-            if (typeof node.x !== 'number' || typeof node.y !== 'number') continue;
-            const key = `${Math.floor(node.x / CELL_SIZE)},${Math.floor(node.y / CELL_SIZE)}`;
-            const cell = grid.get(key);
-            if (cell) cell.push(node); else grid.set(key, [node]);
-          }
-
-          for (let i = 0; i < nodeArray.length; i++) {
-            const a = nodeArray[i];
-            if (typeof a.x !== 'number' || typeof a.y !== 'number') continue;
-            const gx = Math.floor(a.x / CELL_SIZE);
-            const gy = Math.floor(a.y / CELL_SIZE);
-
-            for (let ox = -1; ox <= 1; ox++) {
-              for (let oy = -1; oy <= 1; oy++) {
-                const cell = grid.get(`${gx + ox},${gy + oy}`);
-                if (!cell) continue;
-                for (let ci = 0; ci < cell.length; ci++) {
-                  const b = cell[ci];
-                  if (b === a || (b.index !== undefined && a.index !== undefined && b.index <= a.index)) continue;
-                  if (typeof b.x !== 'number' || typeof b.y !== 'number') continue;
-
-                  const dx = b.x - a.x;
-                  const dy = b.y - a.y;
-                  const overlapX = HALF_W * 2 - Math.abs(dx);
-                  const overlapY = HALF_H * 2 - Math.abs(dy);
-                  if (overlapX <= 0 || overlapY <= 0) continue;
-
-                  let pushX = 0, pushY = 0;
-                  if (overlapX < overlapY) {
-                    pushX = (overlapX / 2) * RECT_STRENGTH * Math.sign(dx || 1);
-                  } else {
-                    pushY = (overlapY / 2) * RECT_STRENGTH * Math.sign(dy || 1);
-                  }
-
-                  a.x! -= pushX; a.y! -= pushY;
-                  b.x! += pushX; b.y! += pushY;
-                  if (a.vx !== undefined) a.vx -= pushX * 0.3;
-                  if (a.vy !== undefined) a.vy -= pushY * 0.3;
-                  if (b.vx !== undefined) b.vx += pushX * 0.3;
-                  if (b.vy !== undefined) b.vy += pushY * 0.3;
-                }
-              }
-            }
-          }
-        }
-      }
-
-      force.initialize = (n: SimNode[]) => { nodeArray = n; };
-      return force;
-    }
+    const RECT_HALF_W = CARD_DIMENSIONS.WIDTH / 2 + GAP / 2;
+    const RECT_HALF_H = CARD_DIMENSIONS.HEIGHT / 2 + GAP / 2;
+    const rectCollide = createRectCollideForce<SimNode>({
+      halfW: RECT_HALF_W,
+      halfH: RECT_HALF_H,
+      strength: P.rectCollideStrength,
+      iterations: 8,
+      cellSize: Math.max(RECT_HALF_W, RECT_HALF_H) * 2.5,
+    });
 
     // Obsidian-tuned simulation. centerStrength maps to forceX/forceY (soft pull
     // toward origin), repelStrength to forceManyBody, linkStrength + linkDistance
@@ -489,7 +445,7 @@ const CustomForceGraph: React.FC<{
       )
       .force('x', d3Force.forceX<SimNode>(0).strength(P.centerStrength))
       .force('y', d3Force.forceY<SimNode>(0).strength(P.centerStrength))
-      .force('rectCollide', forceRectCollide())
+      .force('rectCollide', rectCollide)
       .force('isolatedRing',
         d3Force.forceRadial<SimNode>(
           d => connectedIds.has(String(d.id)) ? 0 : P.linkDistance * P.isolatedRingMultiplier,
@@ -499,6 +455,23 @@ const CustomForceGraph: React.FC<{
       .stop();
 
     simulationRef.current = sim;
+
+    if (coldStartRef.current === false) {
+      // Restored layout: freeze the simulation so the seeded positions stay put,
+      // and apply the saved camera transform instead of auto-fitting. The RAF loop
+      // settles on its first tick (alpha 0) and renders immediately.
+      sim.alpha(0);
+      if (initialTransformRef.current) {
+        transformRef.current = { ...initialTransformRef.current };
+      }
+      hasInitialFitRef.current = true;
+      setIsInitialFitComplete(true);
+      markRestored();
+    } else {
+      // Cold run: persist the computed layout once it settles.
+      markDirty();
+    }
+
     startSimLoop();
 
     return () => {
@@ -508,7 +481,7 @@ const CustomForceGraph: React.FC<{
         simRafRef.current = null;
       }
     };
-  }, [nodes, links, startSimLoop]);
+  }, [nodes, links, startSimLoop, markDirty, markRestored]);
 
   // Preload images for nodes and trigger re-render when loaded
   useEffect(() => {
@@ -558,6 +531,8 @@ const CustomForceGraph: React.FC<{
       };
       node.fx = node.x;
       node.fy = node.y;
+      // A user drag changes the layout — persist it when the sim re-settles.
+      markDirty();
       simulationRef.current?.alphaTarget(0.3).restart();
       startSimLoop();
     } else {
@@ -565,7 +540,7 @@ const CustomForceGraph: React.FC<{
       setCursorStyle('grabbing');
       dragStartRef.current = { x: e.clientX, y: e.clientY };
     }
-  }, [findNodeAt, screenToGraph, startSimLoop]);
+  }, [findNodeAt, screenToGraph, startSimLoop, markDirty]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -590,6 +565,7 @@ const CustomForceGraph: React.FC<{
         x: prev.x + dx,
         y: prev.y + dy
       }));
+      if (isLayoutReadyRef.current) schedulePersist(collectPositions, () => transformRef.current);
 
       dragStartRef.current = { x: e.clientX, y: e.clientY };
     } else {
@@ -606,7 +582,7 @@ const CustomForceGraph: React.FC<{
         onNodeHover?.(null);
       }
     }
-  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover]);
+  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -811,6 +787,7 @@ const CustomForceGraph: React.FC<{
           k: newK
         };
       });
+      if (isLayoutReadyRef.current) schedulePersist(collectPositions, () => transformRef.current);
     };
 
     canvas.addEventListener('wheel', handleNativeWheel, { passive: false });
@@ -818,7 +795,7 @@ const CustomForceGraph: React.FC<{
     return () => {
       canvas.removeEventListener('wheel', handleNativeWheel);
     };
-  }, [updateTransform]);
+  }, [updateTransform, schedulePersist, collectPositions]);
 
   // Auto-zoom to focused node with smooth animation
   useEffect(() => {

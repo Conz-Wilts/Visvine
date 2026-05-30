@@ -4,8 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus, Pencil, ChevronDown, ChevronUp, Palette,
 } from 'lucide-react';
-import type { WorkExperience } from '@/lib/profileTypes';
-import { formatDateRange, PROFICIENCY_LABELS } from '@/lib/profileTypes';
 import { PALETTES, type ThemePalette } from '@/lib/profileTheme';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -205,60 +203,6 @@ export function StatChip({
   );
 }
 
-// ─── Experience timeline item ───────────────────────────────────────────────
-
-export function ExperienceItem({
-  exp, isOwner, theme, onEdit, isLast,
-}: {
-  exp: WorkExperience;
-  isOwner: boolean;
-  theme: ThemePalette;
-  onEdit: () => void;
-  isLast: boolean;
-}) {
-  return (
-    <div className="flex gap-4 group">
-      <div className="flex flex-col items-center flex-shrink-0 w-4">
-        <div
-          className="w-3 h-3 rounded-full mt-0.5 ring-2 ring-surface-1 flex-shrink-0"
-          style={{ background: theme.base }}
-        />
-        {!isLast && <div className="w-px flex-1 mt-1" style={{ background: theme.light }} />}
-      </div>
-
-      <div className={`flex-1 min-w-0 pb-5`}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-text-primary leading-snug">{exp.title}</p>
-            <p className="text-sm text-text-secondary mt-0.5">
-              {exp.company}{exp.location ? ` · ${exp.location}` : ''}
-            </p>
-            <span
-              className="inline-block mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full"
-              style={{ background: theme.light, color: theme.dark }}
-            >
-              {formatDateRange(exp.startDate, exp.endDate, exp.current)}
-            </span>
-            {exp.description && (
-              <p className="text-sm text-text-muted mt-2 leading-relaxed whitespace-pre-line">
-                {exp.description}
-              </p>
-            )}
-          </div>
-          {isOwner && (
-            <button
-              onClick={onEdit}
-              className="flex-shrink-0 p-1.5 rounded-lg text-text-muted opacity-0 group-hover:opacity-100 hover:bg-surface-2 transition-all"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Skills pill cloud ──────────────────────────────────────────────────────
 
 export function SkillsPillCloud({ tags, theme }: { tags: string[]; theme: ThemePalette }) {
@@ -330,5 +274,3 @@ export function BioText({ bio }: { bio: string }) {
   );
 }
 
-// Re-export PROFICIENCY_LABELS for convenience
-export { PROFICIENCY_LABELS };

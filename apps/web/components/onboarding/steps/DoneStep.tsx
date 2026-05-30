@@ -17,8 +17,6 @@ function computeCompletion(data: OnboardingData): number {
     !!data.subtitle,
     !!data.bio,
     !!data.location,
-    data.workExperience.length > 0,
-    data.education.length > 0,
     data.tags.length > 0,
     !!(data.website || data.linkedinUrl || data.phone),
   ];

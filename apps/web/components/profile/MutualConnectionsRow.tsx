@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
+import { getInitials } from '@/lib/avatarUtils';
 
 export interface MutualConnection {
   id: string;
@@ -12,12 +13,6 @@ export interface MutualConnection {
 
 interface MutualConnectionsRowProps {
   mutualConnections: MutualConnection[];
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 export default function MutualConnectionsRow({ mutualConnections }: MutualConnectionsRowProps) {

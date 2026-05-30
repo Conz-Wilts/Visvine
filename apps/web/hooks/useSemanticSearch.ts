@@ -9,6 +9,7 @@ export function useSemanticSearch() {
   const [semanticResults, setSemanticResults] = useState<SemanticSearchResult[]>([]);
   const [isSemanticSearch, setIsSemanticSearch] = useState(false);
   const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticError, setSemanticError] = useState<string | null>(null);
 
   // Sort semantic results by similarity score (highest first)
   const sortedSemanticResults = useMemo(() =>
@@ -21,12 +22,13 @@ export function useSemanticSearch() {
     if (!trimmed) {
       setIsSemanticSearch(false);
       setSemanticResults([]);
+      setSemanticError(null);
       return;
     }
 
-    // Trigger semantic search
     setIsSemanticSearch(true);
     setSemanticLoading(true);
+    setSemanticError(null);
 
     try {
       const response = await fetch('/api/search/semantic', {
@@ -36,14 +38,18 @@ export function useSemanticSearch() {
       });
 
       if (!response.ok) {
-        throw new Error('Search failed');
+        const body = await response.json().catch(() => null) as { error?: string } | null;
+        const message = body?.error || `Search failed (${response.status})`;
+        throw new Error(message);
       }
 
       const data = await response.json();
       setSemanticResults(data.results || []);
     } catch (error) {
-      console.error('Semantic search failed:', error);
+      const message = error instanceof Error ? error.message : 'Search failed';
+      console.error('Semantic search failed:', message);
       setSemanticResults([]);
+      setSemanticError(message);
     } finally {
       setSemanticLoading(false);
     }
@@ -52,6 +58,7 @@ export function useSemanticSearch() {
   const clearSemanticSearch = useCallback(() => {
     setIsSemanticSearch(false);
     setSemanticResults([]);
+    setSemanticError(null);
   }, []);
 
   return {
@@ -59,6 +66,7 @@ export function useSemanticSearch() {
     sortedSemanticResults,
     isSemanticSearch,
     semanticLoading,
+    semanticError,
     performSemanticSearch,
     clearSemanticSearch
   };

@@ -140,17 +140,9 @@ export async function getSignedUrl(
 
 // ---------------------------------------------------------------------------
 // Build a URL for media images.
-// Routes through /api/media proxy so the GCS bucket stays private.
-// If a CDN base URL is configured, use that instead (CDN should sit in front
-// of the /api/media proxy for edge caching).
+// Routes through /api/media proxy so the GCS bucket stays private (or the CDN,
+// if GCS_CDN_BASE_URL is set). The actual rule lives in the client-safe
+// mediaUrl module so server and client stay in lockstep — this is a thin
+// server-side alias kept for the existing `@/lib/gcs` import sites.
 // ---------------------------------------------------------------------------
-export function getMediaUrl(objectPath: string): string {
-  const cdnBase = process.env.GCS_CDN_BASE_URL;
-  if (cdnBase) {
-    return `${cdnBase.replace(/\/$/, '')}/${objectPath}`;
-  }
-  return `/api/media/${objectPath}`;
-}
-
-// Re-export normalizeImageUrl from the client-safe mediaUrl module
-export { normalizeImageUrl } from './mediaUrl';
+export { getMediaProxyUrl as getMediaUrl, normalizeImageUrl } from './mediaUrl';

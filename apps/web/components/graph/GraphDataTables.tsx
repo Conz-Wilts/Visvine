@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { GraphData, NODE_COLORS } from '@/lib/types';
+import { GraphData } from '@/lib/types';
+import { getTypeColor } from '@/components/dashboard/typeStyles';
 
 interface GraphDataTablesProps {
   graphData: GraphData;
@@ -47,7 +48,7 @@ const NodesTable: React.FC<TableProps> = ({ graphData }) => (
               <td className="px-4 py-2 text-sm">
                 <span
                   className="inline-block w-3 h-3 rounded-full mr-2"
-                  style={{ backgroundColor: NODE_COLORS[node.type] }}
+                  style={{ backgroundColor: getTypeColor(node.type) }}
                 />
                 {node.type}
               </td>

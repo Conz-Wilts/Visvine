@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
+import { getInitials } from '@/lib/avatarUtils';
 
 interface ProfileAvatarProps {
   name: string;
@@ -18,12 +19,6 @@ const SIZE_CLASSES = {
   md: { dim: 'w-20 h-20', text: 'text-xl' },
   lg: { dim: 'w-44 h-44', text: 'text-4xl' },
 };
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
-}
 
 export default function ProfileAvatar({
   name,

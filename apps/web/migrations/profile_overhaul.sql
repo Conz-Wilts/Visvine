@@ -1,5 +1,11 @@
 -- Profile Overhaul Migration
 -- Adds extended profile fields to people table and creates new relational tables
+--
+-- NOTE (superseded): the four relational tables further down were later
+-- removed from schema.prisma. The live, Prisma-mapped tables were
+-- work_experience / education / certifications / profile_languages; to drop
+-- them from an existing DB, run remove_moderator_and_profile_subentities.sql.
+-- The `ALTER TABLE people …` columns immediately below are still in use.
 
 -- 1. Extend people table with new optional columns
 ALTER TABLE people

@@ -6,11 +6,48 @@ import { GridHeaderRow } from "./GridHeaderRow";
 import { GridRow } from "./GridRow";
 import { useCrmGrid } from "../hooks/useCrmGrid";
 import { Users, Upload } from "lucide-react";
+import { Skeleton } from "@/components/ui";
 
 interface GridTableProps {
   columns: ColumnDef[];
   communityId: string;
   canManage: boolean;
+}
+
+function GridSkeleton({ columns }: { columns: ColumnDef[] }) {
+  const colCount = Math.max(4, columns.length);
+  return (
+    <div className="overflow-x-auto" role="status" aria-label="Loading members">
+      <table className="min-w-full table-auto">
+        <thead>
+          <tr className="border-b border-gray-200">
+            {Array.from({ length: colCount }).map((_, i) => (
+              <th key={i} className="px-4 py-3 text-left">
+                <Skeleton className="h-3 w-20 bg-gray-200" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 10 }).map((_, rowIdx) => (
+            <tr key={rowIdx} className="border-b border-gray-100">
+              <td className="px-4 py-4">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-8 w-8 rounded-full bg-gray-200" />
+                  <Skeleton className="h-3.5 w-32 bg-gray-200" />
+                </div>
+              </td>
+              {Array.from({ length: colCount - 1 }).map((_, i) => (
+                <td key={i} className="px-4 py-4">
+                  <Skeleton className="h-3 w-24 bg-gray-200" />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function GridTable({ columns, communityId, canManage }: GridTableProps) {
@@ -39,11 +76,7 @@ export function GridTable({ columns, communityId, canManage }: GridTableProps) {
   );
 
   if (state.loading && state.members.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-20 text-sm text-gray-400" role="status">
-        <span className="animate-pulse">Loading members...</span>
-      </div>
-    );
+    return <GridSkeleton columns={columns} />;
   }
 
   if (state.error) {

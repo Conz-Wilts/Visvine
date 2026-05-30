@@ -50,17 +50,18 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// Keyed by lowercase-canonical node type (see app/api/data/nodes write guard).
 const NODE_TYPE_COLORS: Record<string, string> = {
-  Person: '#6366f1',
-  Organization: '#0ea5e9',
-  Event: '#f59e0b',
-  Group: '#10b981',
-  Startup: '#8b5cf6',
-  Investor: '#ec4899',
+  person: '#6366f1',
+  organization: '#0ea5e9',
+  event: '#f59e0b',
+  group: '#10b981',
+  startup: '#8b5cf6',
+  investor: '#ec4899',
 };
 
 function getTypeColor(type: string): string {
-  return NODE_TYPE_COLORS[type] ?? '#94a3b8';
+  return NODE_TYPE_COLORS[type.toLowerCase()] ?? '#94a3b8';
 }
 
 export default function AnalyticsPanel({ communityId }: { communityId: string }) {

@@ -8,17 +8,12 @@ import type { NBNode } from '@/lib/types';
 import { useEventDetails } from '@/hooks/useEventDetails';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { formatEventDateShort, getEventStatus, formatEventTime } from '@/lib/eventUtils';
+import { getInitials } from '@/lib/avatarUtils';
 
 interface EventFullProfileProps {
   nodeId: string;
   node?: NBNode;
   onClose: () => void;
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 function formatDayTime(startAt: string, endAt?: string) {

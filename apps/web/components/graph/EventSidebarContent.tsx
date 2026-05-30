@@ -4,22 +4,15 @@ import React from 'react';
 import {
   MapPin, Mail, Users, Copy, ExternalLink, ChevronRight, CheckCircle2,
 } from 'lucide-react';
-import type { NBNode, NBLink } from '@/lib/types';
+import type { NBNode } from '@/lib/types';
 import type { ThemePalette } from '@/lib/profileTheme';
 import { useEventDetails } from '@/hooks/useEventDetails';
 import { formatEventDateShort, getEventStatus, formatEventTime } from '@/lib/eventUtils';
+import { getInitials } from '@/lib/avatarUtils';
 
 interface EventSidebarContentProps {
   displayNode: NBNode;
-  allLinks: NBLink[];
-  allNodes: NBNode[];
   theme: ThemePalette;
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 function formatDayTime(startAt: string, endAt?: string) {

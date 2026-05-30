@@ -1,157 +1,52 @@
-# Visvine Mobile
+# Visvine Mobile (Native)
 
-React Native mobile app for Visvine community platform, built with Expo.
+Visvine's mobile clients are **fully native** apps that talk to the unchanged
+`@visvine/web` backend over HTTPS (Bearer-token JWT). The previous Expo / React
+Native app has been fully migrated and removed.
 
-## Features
+| Platform | Stack | Folder |
+|---|---|---|
+| **Android** | Kotlin · Jetpack Compose · Hilt · Retrofit/OkHttp | [`android/`](./android) |
+| **iOS** | Swift · SwiftUI · Observation · URLSession | [`ios/`](./ios) |
 
-- **Messaging** - Real-time conversations with community members
-- **Events** - Browse and RSVP to community events
-- **Directory** - Grid view of community members with filtering
-- **Profile** - View and edit your profile information
+Both follow the same architecture — **MVVM + a thin repository/data layer** — so
+the screens line up 1:1 across platforms and with the old RN app:
 
-## Tech Stack
+- **11 screens**: Login, DevLogin, Directory, FullProfile, Events list/detail,
+  Conversations list/thread, Profile, EditProfile, Settings.
+- **4 app-scoped stores** (was: React Contexts): Auth, Community, Theme, Search.
+- **API contract**: the same ~9 backend routes the RN `ApiService` called, with
+  the `{data,error}` envelope, `resolveMediaUrl` rules, and OAuth deep-link flow
+  ported faithfully. [`docs/native-migration/api-contract.md`](../../docs/native-migration/api-contract.md)
+  is the canonical contract reference (server-truth shapes + drift register).
+- **Foreground real-time messaging** via SSE (`/api/messages/stream`,
+  header-authed). Push (background) and offline remain explicit follow-ons.
 
-- **Expo SDK 53** - React Native framework
-- **React Navigation** - Tab and stack navigation
-- **TypeScript** - Type safety
-- **Shared Packages** - Uses monorepo packages for shared types
+This is a **thin client**: all business logic stays server-side in `apps/web`.
 
-## Project Structure
+## Getting started
 
-```
-apps/mobile/
-├── App.tsx                    # App entry point with providers
-├── app.json                   # Expo configuration
-├── package.json               # Dependencies
-├── tsconfig.json              # TypeScript config
-├── src/
-│   ├── components/            # Shared UI components
-│   │   ├── Button.tsx
-│   │   ├── Card.tsx
-│   │   ├── Loading.tsx
-│   │   └── EmptyState.tsx
-│   ├── contexts/              # React contexts
-│   │   ├── AuthContext.tsx    # Authentication state
-│   │   └── CommunityContext.tsx # Community selection
-│   ├── hooks/                 # Custom hooks
-│   │   └── useApi.ts          # API request hooks
-│   ├── navigation/            # Navigation setup
-│   │   ├── AppNavigator.tsx   # Root navigator
-│   │   ├── TabNavigator.tsx   # Bottom tab navigation
-│   │   ├── MessagesStack.tsx  # Messages flow
-│   │   ├── EventsStack.tsx   # Events flow
-│   │   └── ProfileStack.tsx   # Profile flow
-│   ├── screens/               # Screen components
-│   │   ├── Auth/
-│   │   │   └── LoginScreen.tsx
-│   │   ├── Messaging/
-│   │   │   ├── ConversationsListScreen.tsx
-│   │   │   └── ConversationScreen.tsx
-│   │   ├── Events/
-│   │   │   ├── EventsListScreen.tsx
-│   │   │   └── EventDetailScreen.tsx
-│   │   ├── Directory/
-│   │   │   └── DirectoryScreen.tsx
-│   │   └── Profile/
-│   │       ├── ProfileScreen.tsx
-│   │       └── EditProfileScreen.tsx
-│   ├── services/              # API services
-│   │   └── api.ts             # Centralized API client
-│   ├── theme/                 # Theme and styling
-│   │   ├── colors.ts          # Visvine brand colors
-│   │   └── index.ts
-│   └── types/                 # TypeScript types
-│       └── index.ts           # Mobile-specific types
-└── .env.example               # Environment template
-```
+- **Android** — see [`android/README.md`](./android/README.md)
+  (`gradle wrapper` once, then `./gradlew :app:installDebug`).
+- **iOS** — see [`ios/README.md`](./ios/README.md)
+  (`xcodegen generate`, then build in Xcode).
 
-## Getting Started
+## Backend & config
 
-### Prerequisites
+Both apps default to a local dev backend and offer a "Dev login" path
+(no Google OAuth) when enabled:
 
-- Node.js 20+
-- pnpm 9+
-- Expo CLI
+| Concern | Android | iOS |
+|---|---|---|
+| Backend origin | `visvine.apiBaseUrl` (Gradle, default `http://10.0.2.2:3000`) | `VisvineApiBaseURL` (Info.plist, default `http://localhost:3000`) |
+| Dev login | `visvine.devAuthEnabled` | `VisvineDevAuthEnabled` |
+| Google client id | `visvine.googleClientId` | `VisvineGoogleClientID` |
 
-### Installation
+For a physical device or real Google OAuth, point the backend origin at your LAN
+IP / a Cloudflare tunnel and register `<origin>/api/auth/callback/google-mobile`
++ the `visvine://` scheme with the OAuth client (see the repo root README).
 
-```bash
-# From monorepo root
-pnpm install
-```
+## Migration
 
-### Development
-
-```bash
-# Start Expo dev server
-pnpm mobile:dev
-
-# Or from this directory
-pnpm start
-
-# Platform-specific
-pnpm mobile:android
-pnpm mobile:ios
-```
-
-### Environment Setup
-
-1. Copy `.env.example` to `.env`
-2. Set `EXPO_PUBLIC_API_URL` to your backend URL
-
-```env
-EXPO_PUBLIC_API_URL=http://localhost:3000
-```
-
-## API Integration
-
-The app connects to the Visvine monolith backend. API calls are centralized in `src/services/api.ts`.
-
-### Authentication
-
-Currently uses session-based auth via the web backend. OAuth integration (Google) is planned.
-
-### Communities
-
-Users can switch between communities via the Directory screen's community picker.
-
-## Navigation
-
-- **Bottom Tabs**: Messages, Events, Directory, Profile
-- **Stack Navigators**: Each tab has its own stack for detail screens
-
-## Brand Colors
-
-```typescript
-brand: {
-  green: '#78d870',
-  darkGreen: '#2f7a3e',
-  black: '#111827',
-  grey: '#6B7280',
-  white: '#F9FAFB',
-  lightBg: '#eaf9ec',
-  bg: '#F5F7F5',
-}
-```
-
-## Adding New Features
-
-1. Create screen in appropriate `src/screens/` subfolder
-2. Add navigation types to stack param lists
-3. Update navigator file to include new screen
-4. Add API methods to `src/services/api.ts` as needed
-
-## Shared Packages
-
-The app uses monorepo shared packages:
-
-- `@visvine/types` - Type definitions
-
-## Future Enhancements
-
-- [ ] Push notifications
-- [ ] Real-time messaging (WebSocket)
-- [ ] Offline support
-- [ ] Image upload for profile
-- [ ] Deep linking
-- [ ] Biometric auth
+The native rebuild strategy and phased plan live in
+[`docs/native-migration/`](../../docs/native-migration/README.md).

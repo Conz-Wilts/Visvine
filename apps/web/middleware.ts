@@ -4,7 +4,6 @@ import { isDevAuthEnabled } from "@/lib/dev-auth";
 
 const PUBLIC_PATHS = [
   "/signin",
-  "/waitlist",
   "/api/auth",
   "/claim",
   "/api/media",

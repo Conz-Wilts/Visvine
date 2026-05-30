@@ -1,5 +1,7 @@
 "use client";
 
+import { COMMUNITY_ROLES } from "@/lib/crm/roles";
+
 import { useState } from "react";
 import { X, Tag, Shield, Trash2 } from "lucide-react";
 import { FieldDefinition } from "@/lib/schemas/crm";
@@ -121,7 +123,7 @@ export function BulkActionsBar({
         </button>
         {showRolePicker && (
           <div className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-            {(["admin", "moderator", "member"] as const).map((role) => (
+            {COMMUNITY_ROLES.map((role) => (
               <button
                 key={role}
                 onClick={() => bulkAction({ action: "change_role", role })}

@@ -1,4 +1,5 @@
 import { FieldDefinition } from "@/lib/schemas/crm";
+import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 
 export type ColumnLayer = "public" | "private";
 
@@ -17,8 +18,7 @@ export function buildColumns(
   currentUserRole: string
 ): ColumnDef[] {
   const canEditPublic = currentUserRole === "admin";
-  const canEditPrivate =
-    currentUserRole === "admin" || currentUserRole === "moderator";
+  const canEditPrivate = currentUserRole === "admin";
 
   const publicColumns: ColumnDef[] = [
     {
@@ -64,7 +64,7 @@ export function buildColumns(
       type: "select",
       layer: "private",
       editable: canEditPublic,
-      options: ["admin", "moderator", "member"],
+      options: [...COMMUNITY_ROLES],
     },
   ];
 

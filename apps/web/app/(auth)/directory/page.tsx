@@ -1,24 +1,33 @@
 'use client';
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import ChatInterface from '@/components/chat/ChatInterface';
 import SearchAndFilters from '@/components/dashboard/SearchAndFilters';
 import NodeGrid from '@/components/dashboard/NodeGrid';
 import CrmDirectoryTable from '@/components/crm/CrmDirectoryTable';
-import GraphWithTable from '@/components/graph/GraphWithTable';
 import NodeDetailsSidebar from '@/components/graph/NodeDetailsSidebar';
 import FullProfileOverlay from '@/components/profile/FullProfileOverlay';
-import { useCommunityGraphData } from '@/hooks/useCommunityGraphData';
+import { useDirectoryNodes } from '@/hooks/useDirectoryNodes';
+import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import { useSemanticSearch } from '@/hooks/useSemanticSearch';
-import { filterGraphByNodeIds, findBestMatchingNodeId } from '@/lib/graphUtils';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
-import type { GraphData, NBNode } from '@/lib/types';
+import type { NBNode, CommunityAlias } from '@/lib/types';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { Pencil } from 'lucide-react';
+
+// The graph view pulls in d3-force + the canvas renderer. Defer the whole thing
+// until the user opens the graph, so grid/table users never download it.
+const DirectoryGraphView = dynamic(() => import('@/components/dashboard/DirectoryGraphView'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading graph…</div>
+  ),
+});
 
 type DirectoryView = 'grid' | 'table' | 'graph';
 type SortOrder = 'az' | 'za';
@@ -27,7 +36,7 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentView, setCurrentView] = useState<DirectoryView>('grid');
   const [graphChatValue, setGraphChatValue] = useState('');
-  const [focusedNodeId, setFocusedNodeId] = useState<string | null>(null);
+  const [graphEverOpened, setGraphEverOpened] = useState(false);
   const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
   const [fullProfileNodeId, setFullProfileNodeId] = useState<string | null>(null);
   const [fullProfileInitialNode, setFullProfileInitialNode] = useState<NBNode | null>(null);
@@ -40,7 +49,7 @@ export default function DashboardPage() {
   const savedFilterTypesRef = useRef<Set<string> | null>(null);
   const { setHeaderContent } = useHeader();
 
-  const { graphData, loading, error, community, refresh } = useCommunityGraphData();
+  const { nodes, loading, error, community, refresh } = useDirectoryNodes();
   const { isAdmin } = useCommunity();
   const isGraphView = currentView === 'graph';
 
@@ -58,12 +67,10 @@ export default function DashboardPage() {
     sortedSemanticResults,
     isSemanticSearch,
     semanticLoading,
+    semanticError,
     performSemanticSearch,
     clearSemanticSearch,
   } = useSemanticSearch();
-
-  const savedPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
-  const graphDataHashRef = useRef<string>('');
 
   useEffect(() => { setGraphChatValue(searchTerm); }, [searchTerm]);
 
@@ -72,17 +79,18 @@ export default function DashboardPage() {
     const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
     const configured = new Set(configuredTypes.map(t => t.name));
     // Also include any types that appear in data but aren't in config
-    graphData.nodes.forEach(n => configured.add(n.type));
+    nodes.forEach(n => configured.add(n.type));
     return Array.from(configured).sort();
-  }, [graphData.nodes, community?.nodeTypes]);
+  }, [nodes, community?.nodeTypes]);
 
   const presentTags = useMemo(() => {
     const tags = new Set<string>();
-    graphData.nodes.forEach(n => (n.tags ?? []).forEach(t => tags.add(t)));
+    nodes.forEach(n => (n.tags ?? []).forEach(t => tags.add(t)));
     return Array.from(tags).sort();
-  }, [graphData.nodes]);
+  }, [nodes]);
 
   const handleViewChange = useCallback((next: DirectoryView) => {
+    if (next === 'graph') setGraphEverOpened(true);
     if (next === 'table' && currentView !== 'table') {
       // Entering table: save current selection, clamp to single type
       savedFilterTypesRef.current = new Set(filterTypes);
@@ -104,7 +112,7 @@ export default function DashboardPage() {
   }, [currentView, filterTypes, presentTypes]);
 
   const items = useMemo<DirectoryItem[]>(() =>
-    graphData.nodes.map(node => ({
+    nodes.map(node => ({
       id: node.id, name: node.name, type: node.type,
       alias: node.alias,
       subtitle: node.subtitle, location: node.location,
@@ -119,14 +127,10 @@ export default function DashboardPage() {
       phone: node.metadata?.phone as string | undefined,
       pronouns: node.metadata?.pronouns as string | undefined,
       openToWork: node.metadata?.openToWork as boolean | undefined,
-      experience: node.metadata?.experience as string | undefined,
-      education: node.metadata?.education as string | undefined,
-      certifications: node.metadata?.certifications as string | undefined,
-      languages: node.metadata?.languages as string | undefined,
     })),
-  [graphData.nodes]);
+  [nodes]);
 
-  const { filteredItems: searchFilteredItems, normalizedSearch } = useDashboardSearch(items, searchTerm);
+  const { filteredItems: searchFilteredItems } = useDashboardSearch(items, searchTerm);
 
   // Apply type + alias + tag filters then sort
   const filteredItems = useMemo(() => {
@@ -141,67 +145,32 @@ export default function DashboardPage() {
     );
   }, [searchFilteredItems, filterTypes, filterAliases, filterTags, sortOrder]);
 
-  const filteredGraphData = useMemo<GraphData>(() => {
-    if (graphData.nodes.length === 0) return { nodes: [], links: [] };
-
-    if (isSemanticSearch && currentView === 'graph' && !semanticLoading) {
-      if (sortedSemanticResults.length > 0) {
-        const matchedNodeIds = new Set(sortedSemanticResults.map(r => r.id));
-        return {
-          nodes: graphData.nodes.filter(n => matchedNodeIds.has(n.id)),
-          links: graphData.links.filter(l => {
-            const s = typeof l.source === 'string' ? l.source : l.source.id;
-            const t = typeof l.target === 'string' ? l.target : l.target.id;
-            return matchedNodeIds.has(s) && matchedNodeIds.has(t);
-          }),
-        };
-      }
-      return { nodes: [], links: [] };
-    }
-
-    if (currentView === 'graph') return graphData;
-
-    const allowedIds = new Set(filteredItems.map(i => i.id));
-    if (allowedIds.size === graphData.nodes.length && normalizedSearch.length === 0) return graphData;
-    return filterGraphByNodeIds(graphData, allowedIds);
-  }, [graphData, filteredItems, normalizedSearch, currentView, isSemanticSearch, sortedSemanticResults, semanticLoading]);
-
-  const dimmedNodeIds = useMemo<Set<string>>(() => {
-    if (currentView !== 'graph' || !normalizedSearch || isSemanticSearch) return new Set();
-    const ids = new Set<string>();
-    graphData.nodes.forEach(node => {
-      const matches =
-        node.name.toLowerCase().includes(normalizedSearch) ||
-        (node.subtitle || '').toLowerCase().includes(normalizedSearch) ||
-        (node.location || '').toLowerCase().includes(normalizedSearch) ||
-        (node.tags || []).some(t => t.toLowerCase().includes(normalizedSearch));
-      if (!matches) ids.add(node.id);
-    });
-    return ids;
-  }, [graphData, normalizedSearch, currentView, isSemanticSearch]);
-
   const handleItemClick = useCallback((item: DirectoryItem) => {
     if (selectedNode?.id === item.id) return;
-    const node = graphData.nodes.find(n => n.id === item.id);
+    const node = nodes.find(n => n.id === item.id);
     if (node) setSelectedNode(node);
-  }, [graphData.nodes, selectedNode]);
-
-  const focusNodeFromInput = useCallback((rawValue: string) => {
-    const trimmed = rawValue.trim();
-    if (!trimmed) { setFocusedNodeId(null); return; }
-    const nodes = currentView === 'graph' ? graphData.nodes : filteredGraphData.nodes;
-    setFocusedNodeId(findBestMatchingNodeId(nodes, trimmed));
-  }, [graphData.nodes, filteredGraphData.nodes, currentView]);
+  }, [nodes, selectedNode]);
 
   const handleGraphChatChange = useCallback((value: string) => {
     setGraphChatValue(value);
     setSearchTerm(value);
-    if (!isSemanticSearch) focusNodeFromInput(value);
-    if (!value.trim() && isSemanticSearch) { clearSemanticSearch(); setFocusedNodeId(null); }
-  }, [focusNodeFromInput, isSemanticSearch, clearSemanticSearch]);
+    if (!value.trim() && isSemanticSearch) clearSemanticSearch();
+  }, [isSemanticSearch, clearSemanticSearch]);
 
   const handleGraphChatSubmit = useCallback((value: string) => performSemanticSearch(value, community?.id), [performSemanticSearch, community?.id]);
   const handleGridTableSearchSubmit = useCallback((value: string) => performSemanticSearch(value, community?.id), [performSemanticSearch, community?.id]);
+
+  const handleClearSemantic = useCallback(() => {
+    clearSemanticSearch();
+    setSearchTerm('');
+    setGraphChatValue('');
+  }, [clearSemanticSearch]);
+
+  // Admin edits invalidate both the directory list and the (separate) graph cache.
+  const handleDataChanged = useCallback(() => {
+    refresh();
+    clearGraphCache(community?.id);
+  }, [refresh, community?.id]);
 
   useEffect(() => {
     setHeaderContent(
@@ -216,7 +185,7 @@ export default function DashboardPage() {
         </div>
         {isSemanticSearch && (
           <button
-            onClick={() => { clearSemanticSearch(); setSearchTerm(''); setGraphChatValue(''); }}
+            onClick={handleClearSemantic}
             className="flex h-8 items-center gap-2 rounded-full px-3 bg-surface-3 text-text-secondary text-xs font-semibold hover:bg-surface-3 transition-all shadow-sm shrink-0"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -230,7 +199,7 @@ export default function DashboardPage() {
     return () => setHeaderContent(null);
   }, [isGraphView, graphChatValue, searchTerm, isSemanticSearch,
       handleGraphChatChange, handleGraphChatSubmit, handleGridTableSearchSubmit,
-      clearSemanticSearch, setHeaderContent]);
+      handleClearSemantic, setHeaderContent]);
 
   return (
     <div
@@ -260,12 +229,12 @@ export default function DashboardPage() {
                 return {
                   value: t,
                   label: t,
-                  count: graphData.nodes.filter(n => n.type === t).length,
+                  count: nodes.filter(n => n.type === t).length,
                   subOptions: aliases.length > 0 ? aliases.map(a => ({
                     value: a.name,
                     label: a.name,
                     color: a.color,
-                    count: graphData.nodes.filter(n => n.type === t && n.alias === a.name).length,
+                    count: nodes.filter(n => n.type === t && n.alias === a.name).length,
                   })) : undefined,
                 };
               })}
@@ -280,7 +249,7 @@ export default function DashboardPage() {
               options={presentTags.map(t => ({
                 value: t,
                 label: t,
-                count: graphData.nodes.filter(n => (n.tags ?? []).includes(t)).length,
+                count: nodes.filter(n => (n.tags ?? []).includes(t)).length,
               }))}
               selected={filterTags}
               onChange={setFilterTags}
@@ -335,70 +304,20 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ── Graph canvas — fills full container when active ── */}
-      <div
-        className={`overflow-hidden rounded-xl ${isGraphView ? 'absolute inset-0' : 'absolute inset-0 px-6 pt-[100px]'}`}
-        style={{ visibility: isGraphView ? 'visible' : 'hidden', pointerEvents: isGraphView ? 'auto' : 'none' }}
-      >
-        <GraphWithTable
-          activeTab="graph"
-          dataOverride={filteredGraphData}
-          loadingOverride={loading}
-          errorOverride={error}
-          focusNodeId={focusedNodeId}
-          dimmedNodeIds={dimmedNodeIds}
-          savedPositionsRef={savedPositionsRef}
-          graphDataHashRef={graphDataHashRef}
-          nodeTypes={community?.nodeTypes}
-          communityAliases={community?.communityAliases as import('@/lib/types').CommunityAlias[] | undefined}
-        />
-      </div>
-
-      {/* ── Graph overlays ── */}
-      {isGraphView && isSemanticSearch && !semanticLoading && sortedSemanticResults.length > 0 && (
-        <div className="absolute top-[88px] left-4 z-20 bg-surface-1 rounded-lg shadow-lg p-4 border border-border-default max-w-xs">
-          <h3 className="font-semibold text-sm text-text-primary mb-2">🔍 Debug Info</h3>
-          <div className="text-xs text-text-muted space-y-1">
-            <p>Semantic results: <strong>{sortedSemanticResults.length}</strong></p>
-            <p>Filtered nodes: <strong>{filteredGraphData.nodes.length}</strong></p>
-            <p>Filtered links: <strong>{filteredGraphData.links.length}</strong></p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-brand-green hover:underline">View matched nodes</summary>
-              <ul className="mt-1 ml-2 space-y-0.5">
-                {sortedSemanticResults.slice(0, 5).map(r => (
-                  <li key={r.id} className="text-text-secondary">• {r.name}</li>
-                ))}
-                {sortedSemanticResults.length > 5 && (
-                  <li className="text-gray-500">...and {sortedSemanticResults.length - 5} more</li>
-                )}
-              </ul>
-            </details>
-          </div>
-        </div>
-      )}
-
-      {isGraphView && isSemanticSearch && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          {semanticLoading ? (
-            <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-border-default flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-green" />
-              <p className="text-text-muted">Searching...</p>
-            </div>
-          ) : sortedSemanticResults.length === 0 ? (
-            <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-border-default max-w-md text-center">
-              <p className="text-lg font-medium text-text-primary mb-2">No results found</p>
-              <p className="text-sm text-text-muted mb-4">
-                This usually means your nodes don&apos;t have embeddings yet.<br />
-                Run: <code className="bg-surface-3 px-2 py-1 rounded text-xs text-text-primary">node populate-embeddings.mjs</code>
-              </p>
-              <button
-                onClick={() => { clearSemanticSearch(); setSearchTerm(''); }}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg hover:opacity-90 transition-all"
-              >
-                Clear search
-              </button>
-            </div>
-          ) : null}
+      {/* ── Graph canvas — lazily mounted on first open, then kept warm ── */}
+      {graphEverOpened && (
+        <div
+          className={`overflow-hidden rounded-xl ${isGraphView ? 'absolute inset-0' : 'absolute inset-0 px-6 pt-[100px]'}`}
+          style={{ visibility: isGraphView ? 'visible' : 'hidden', pointerEvents: isGraphView ? 'auto' : 'none' }}
+        >
+          <DirectoryGraphView
+            searchTerm={searchTerm}
+            isSemanticSearch={isSemanticSearch}
+            sortedSemanticResults={sortedSemanticResults}
+            semanticLoading={semanticLoading}
+            semanticError={semanticError}
+            onClearSemantic={handleClearSemantic}
+          />
         </div>
       )}
 
@@ -417,7 +336,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-text-primary">Semantic Search Results</h2>
                 <button
-                  onClick={() => { clearSemanticSearch(); setSearchTerm(''); }}
+                  onClick={handleClearSemantic}
                   className="text-sm text-text-muted hover:text-text-primary"
                 >
                   Clear search
@@ -432,7 +351,14 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {isSemanticSearch && !semanticLoading && semanticResults.length === 0 && (
+            {isSemanticSearch && !semanticLoading && semanticError && (
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                <p className="font-medium">Search failed</p>
+                <p className="mt-1 text-xs opacity-80">{semanticError}</p>
+              </div>
+            )}
+
+            {isSemanticSearch && !semanticLoading && !semanticError && semanticResults.length === 0 && (
               <div className="text-center py-12">
                 <p className="text-lg text-text-secondary">No results found</p>
                 <p className="mt-2 text-sm text-text-muted">Try adjusting your search query</p>
@@ -451,7 +377,7 @@ export default function DashboardPage() {
                   loading={loading}
                   onCardClick={handleItemClick}
                   nodeTypes={community?.nodeTypes}
-                  communityAliases={community?.communityAliases as import('@/lib/types').CommunityAlias[] | undefined}
+                  communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
                 />
               ) : (
                 <CrmDirectoryTable
@@ -465,12 +391,12 @@ export default function DashboardPage() {
                   loading={loading}
                   onRowClick={handleItemClick}
                   nodeTypes={community?.nodeTypes}
-                  communityAliases={community?.communityAliases as import('@/lib/types').CommunityAlias[] | undefined}
+                  communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
                   communityId={community?.id}
                   isAdmin={isAdmin}
                   editMode={editMode}
                   activeType={filterTypes.size === 1 ? [...filterTypes][0] : (presentTypes[0] ?? 'person')}
-                  onDataChanged={refresh}
+                  onDataChanged={handleDataChanged}
                 />
               )
             )}
@@ -481,8 +407,6 @@ export default function DashboardPage() {
 
       <NodeDetailsSidebar
         node={selectedNode}
-        allLinks={graphData.links}
-        allNodes={graphData.nodes}
         onClose={() => setSelectedNode(null)}
         onExpandToFullPage={(node) => {
           setFullProfileNodeId(node.id);
@@ -495,29 +419,6 @@ export default function DashboardPage() {
       <FullProfileOverlay
         nodeId={fullProfileNodeId}
         initialNode={fullProfileInitialNode ?? undefined}
-        initialConnections={fullProfileNodeId ? graphData.links
-          .filter(l => {
-            const src = typeof l.source === 'string' ? l.source : l.source.id;
-            const tgt = typeof l.target === 'string' ? l.target : l.target.id;
-            return src === fullProfileNodeId || tgt === fullProfileNodeId;
-          })
-          .map(l => {
-            const src = typeof l.source === 'string' ? l.source : l.source.id;
-            const tgt = typeof l.target === 'string' ? l.target : l.target.id;
-            const relatedId = src === fullProfileNodeId ? tgt : src;
-            const related = graphData.nodes.find(n => n.id === relatedId);
-            return related ? {
-              id: related.id,
-              name: related.name,
-              type: related.type,
-              image_url: related.image_url,
-              subtitle: related.subtitle,
-              relationship: l.relationship,
-              since: l.since,
-            } : null;
-          })
-          .filter(Boolean) as import('@/hooks/useNodeProfile').ProfileConnection[]
-        : []}
         onClose={() => { setFullProfileNodeId(null); setFullProfileInitialNode(null); }}
       />
     </div>

@@ -5,8 +5,13 @@ import { revalidateTag } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
+import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 
 type RouteContext = { params: Promise<{ communityId: string }> };
+
+// Thrown inside a serializable transaction to abort a role change / removal that
+// would strip the community's last admin; mapped to a 409 by the caller.
+class LastAdminError extends Error {}
 
 const BulkActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -18,7 +23,7 @@ const BulkActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("change_role"),
     user_ids: z.array(z.string().min(1)).min(1).max(200),
-    role: z.enum(["admin", "moderator", "member"]),
+    role: z.enum(COMMUNITY_ROLES),
   }),
   z.object({
     action: z.literal("remove"),
@@ -124,31 +129,39 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       },
     });
   } else if (data.action === "change_role") {
-    // Protect last admin
-    if (data.role !== "admin") {
-      const adminCount = await prisma.userCommunity.count({
-        where: { communityId, role: "admin" },
-      });
-      const adminsBeingDemoted = await prisma.userCommunity.count({
-        where: {
-          communityId,
-          userId: { in: data.user_ids },
-          role: "admin",
+    // Last-admin protection + the mutation must be atomic: two concurrent
+    // demotes can otherwise each pass the guard against the same snapshot and
+    // together strip every admin. Serializable isolation turns that into a
+    // serialization failure rather than a lost invariant.
+    try {
+      affected = await prisma.$transaction(
+        async (tx) => {
+          if (data.role !== "admin") {
+            const adminCount = await tx.userCommunity.count({
+              where: { communityId, role: "admin" },
+            });
+            const adminsBeingDemoted = await tx.userCommunity.count({
+              where: { communityId, userId: { in: data.user_ids }, role: "admin" },
+            });
+            if (adminCount - adminsBeingDemoted < 1) throw new LastAdminError();
+          }
+          const result = await tx.userCommunity.updateMany({
+            where: { communityId, userId: { in: data.user_ids } },
+            data: { role: data.role },
+          });
+          return result.count;
         },
-      });
-      if (adminCount - adminsBeingDemoted < 1) {
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+    } catch (e) {
+      if (e instanceof LastAdminError) {
         return NextResponse.json(
           { error: "last_admin_protected", message: "Cannot demote the last admin." },
           { status: 409 }
         );
       }
+      throw e;
     }
-
-    const result = await prisma.userCommunity.updateMany({
-      where: { communityId, userId: { in: data.user_ids } },
-      data: { role: data.role },
-    });
-    affected = result.count;
 
     await prisma.auditLog.create({
       data: {
@@ -163,28 +176,33 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       },
     });
   } else if (data.action === "remove") {
-    // Protect last admin
-    const adminCount = await prisma.userCommunity.count({
-      where: { communityId, role: "admin" },
-    });
-    const adminsBeingRemoved = await prisma.userCommunity.count({
-      where: {
-        communityId,
-        userId: { in: data.user_ids },
-        role: "admin",
-      },
-    });
-    if (adminCount - adminsBeingRemoved < 1) {
-      return NextResponse.json(
-        { error: "last_admin_protected", message: "Cannot remove the last admin." },
-        { status: 409 }
+    // Atomic last-admin guard (see change_role above).
+    try {
+      affected = await prisma.$transaction(
+        async (tx) => {
+          const adminCount = await tx.userCommunity.count({
+            where: { communityId, role: "admin" },
+          });
+          const adminsBeingRemoved = await tx.userCommunity.count({
+            where: { communityId, userId: { in: data.user_ids }, role: "admin" },
+          });
+          if (adminCount - adminsBeingRemoved < 1) throw new LastAdminError();
+          const result = await tx.userCommunity.deleteMany({
+            where: { communityId, userId: { in: data.user_ids } },
+          });
+          return result.count;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
+    } catch (e) {
+      if (e instanceof LastAdminError) {
+        return NextResponse.json(
+          { error: "last_admin_protected", message: "Cannot remove the last admin." },
+          { status: 409 }
+        );
+      }
+      throw e;
     }
-
-    const result = await prisma.userCommunity.deleteMany({
-      where: { communityId, userId: { in: data.user_ids } },
-    });
-    affected = result.count;
 
     await prisma.auditLog.create({
       data: {

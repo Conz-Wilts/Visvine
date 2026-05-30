@@ -4,11 +4,10 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**", ".expo/**"],
+      "outputs": [".next/**", "dist/**"],
       "env": [
         "NODE_ENV",
         "NEXT_PUBLIC_*",
-        "EXPO_PUBLIC_*",
         "OPENAI_API_KEY",
         "SUPABASE_*"
       ]

@@ -11,10 +11,6 @@ export default async function OnboardingPage() {
 
   const person = await prisma.person.findUnique({
     where: { userId: session.userId },
-    include: {
-      workExperience: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-      education: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-    },
   });
 
   if (!person) redirect('/directory');

@@ -27,8 +27,24 @@ model Community {
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]
+  graphLayout      GraphLayout?
 
   @@map("communities")
+}
+
+/// Persisted force-directed graph layout for a community's directory graph view.
+/// Stored once per community (a shared canonical layout) so reopening the graph
+/// restores saved node positions + camera transform instead of re-running the
+/// expensive simulation from scratch.
+model GraphLayout {
+  communityId String    @id @map("community_id")
+  hash        String // signature of node ids + link count; layout is reused only while this matches
+  transform   Json      @default("{}") // { x, y, k } camera transform
+  positions   Json      @default("{}") // { [nodeId]: { x, y } }
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@map("graph_layouts")
 }
 
 model Node {
@@ -430,96 +446,27 @@ model MessageLinkPreview {
 }
 
 model Person {
-  id             String            @id
-  userId         String?           @unique @map("user_id")
-  name           String
-  subtitle       String?
-  bio            String?
-  location       String?
-  website        String?           @map("website")
-  linkedinUrl    String?           @map("linkedin_url")
-  twitterUrl     String?           @map("twitter_url")
-  phone          String?
-  pronouns       String?
-  openToWork     Boolean           @default(false) @map("open_to_work")
-  imageUrl       String?           @map("image_url")
-  tags           String[]          @default([])
-  metadata       Json              @default("{}")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
-  hasOnboarded   Boolean           @default(false) @map("has_onboarded")
-  certifications Certification[]
-  education      Education[]
-  user           User?             @relation(fields: [userId], references: [id])
-  languages      ProfileLanguage[]
-  workExperience WorkExperience[]
+  id           String   @id
+  userId       String?  @unique @map("user_id")
+  name         String
+  subtitle     String?
+  bio          String?
+  location     String?
+  website      String?  @map("website")
+  linkedinUrl  String?  @map("linkedin_url")
+  twitterUrl   String?  @map("twitter_url")
+  phone        String?
+  pronouns     String?
+  openToWork   Boolean  @default(false) @map("open_to_work")
+  imageUrl     String?  @map("image_url")
+  tags         String[] @default([])
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  hasOnboarded Boolean  @default(false) @map("has_onboarded")
+  user         User?    @relation(fields: [userId], references: [id])
 
   @@map("persons")
-}
-
-model WorkExperience {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  personId    String   @map("person_id")
-  title       String
-  company     String
-  location    String?
-  startDate   String   @map("start_date")
-  endDate     String?  @map("end_date")
-  current     Boolean  @default(false)
-  description String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  @@index([personId])
-  @@map("work_experience")
-}
-
-model Education {
-  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  personId     String   @map("person_id")
-  school       String
-  degree       String?
-  fieldOfStudy String?  @map("field_of_study")
-  startYear    Int?     @map("start_year")
-  endYear      Int?     @map("end_year")
-  description  String?
-  sortOrder    Int      @default(0) @map("sort_order")
-  createdAt    DateTime @default(now()) @map("created_at")
-  person       Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  @@index([personId])
-  @@map("education")
-}
-
-model Certification {
-  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  personId      String   @map("person_id")
-  name          String
-  issuingOrg    String   @map("issuing_org")
-  issueDate     String?  @map("issue_date")
-  expiryDate    String?  @map("expiry_date")
-  credentialId  String?  @map("credential_id")
-  credentialUrl String?  @map("credential_url")
-  sortOrder     Int      @default(0) @map("sort_order")
-  createdAt     DateTime @default(now()) @map("created_at")
-  person        Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  @@index([personId])
-  @@map("certifications")
-}
-
-model ProfileLanguage {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  personId    String   @map("person_id")
-  language    String
-  proficiency String   @default("conversational")
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
-
-  @@index([personId])
-  @@map("profile_languages")
 }
 
 model Resource {

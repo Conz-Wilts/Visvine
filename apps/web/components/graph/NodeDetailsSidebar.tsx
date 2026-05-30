@@ -3,31 +3,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Maximize2, MapPin, ExternalLink, Linkedin, Twitter,
-  Phone, Mail, Briefcase, GraduationCap, Award, Globe2,
+  Phone, Mail, Globe2,
   Wrench, Users, Building2, Calendar, ChevronDown, ChevronUp,
 } from 'lucide-react';
-import { NBNode, NBLink } from '@/lib/types';
+import { NBNode } from '@/lib/types';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useProfileCache } from '@/lib/contexts/ProfileContext';
 import { getNodeTypeConfig } from '@/lib/types';
 import { useProfile } from '@/hooks/useProfile';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
-import { formatDateRange, PROFICIENCY_LABELS } from '@/lib/profileTypes';
 import EventSidebarContent from './EventSidebarContent';
+import { getInitials } from '@/lib/avatarUtils';
+
+/** Stable dedupe-by-id (the /api/nodes/[id] payload can repeat a connection). */
+function dedupeById<T extends { id: string }>(items: T[] | undefined | null): T[] {
+  if (!items) return [];
+  const seen = new Set<string>();
+  return items.filter((c) => {
+    if (seen.has(c.id)) return false;
+    seen.add(c.id);
+    return true;
+  });
+}
 
 interface NodeDetailsSidebarProps {
   node: NBNode | null;
-  allLinks: NBLink[];
-  allNodes: NBNode[];
   onClose: () => void;
   onExpandToFullPage?: (node: NBNode) => void;
-}
-
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
 }
 
 function memberSinceYear(iso: string | undefined) {
@@ -90,34 +93,16 @@ function BioText({ bio }: { bio: string }) {
 
 function NonPersonContent({
   displayNode,
-  allLinks,
-  allNodes,
   theme,
 }: {
   displayNode: NBNode;
-  allLinks: NBLink[];
-  allNodes: NBNode[];
   theme: ThemePalette;
 }) {
-  const relationships = allLinks.filter(link => {
-    const src = typeof link.source === 'string' ? link.source : link.source.id;
-    const tgt = typeof link.target === 'string' ? link.target : link.target.id;
-    return src === displayNode.id || tgt === displayNode.id;
-  });
-
-  const connectedNodes = Array.from(
-    new Map(
-      relationships
-        .map(link => {
-          const src = typeof link.source === 'string' ? link.source : link.source.id;
-          const tgt = typeof link.target === 'string' ? link.target : link.target.id;
-          const relId = src === displayNode.id ? tgt : src;
-          return allNodes.find(n => n.id === relId);
-        })
-        .filter(Boolean)
-        .map(n => [n!.id, n!])
-    ).values()
-  );
+  // Connections are fetched on demand per-node (cached + deduped) rather than
+  // sliced from the full community link set — so the grid/table views never
+  // need to load links just to populate this sidebar.
+  const { data: nodeData } = useNodeProfile(displayNode.id);
+  const connectedNodes = useMemo(() => dedupeById(nodeData?.connections), [nodeData?.connections]);
 
   const bio = displayNode.metadata?.bio as string | undefined;
   const displayTags = (displayNode.tags ?? []).filter(
@@ -197,15 +182,7 @@ function PersonProfileContent({
 
   const connectionCount = nodeData?.connectionCount ?? 0;
   const communityCount = nodeData?.communityCount ?? 1;
-  const connections = useMemo(() => {
-    const raw = nodeData?.connections ?? [];
-    const seen = new Set<string>();
-    return raw.filter(c => {
-      if (seen.has(c.id)) return false;
-      seen.add(c.id);
-      return true;
-    });
-  }, [nodeData?.connections]);
+  const connections = useMemo(() => dedupeById(nodeData?.connections), [nodeData?.connections]);
   const hasContact = !!(profile?.email || profile?.phone || profile?.website || profile?.linkedinUrl || profile?.twitterUrl);
 
   // Show skeleton only for body sections, not the whole panel
@@ -307,108 +284,6 @@ function PersonProfileContent({
         </SectionCard>
       )}
 
-      {/* Experience */}
-      {profile && profile.workExperience.length > 0 && (
-        <SectionCard>
-          <SectionHeader icon={<Briefcase className="w-3.5 h-3.5" />} title="Experience" />
-          <div className="px-4 pb-4">
-            {profile.workExperience.map((exp, i) => (
-              <div key={exp.id} className="flex gap-3 group">
-                {/* Timeline spine */}
-                <div className="flex flex-col items-center flex-shrink-0 w-3.5">
-                  <div className="w-2.5 h-2.5 rounded-full mt-0.5 ring-2 ring-surface-1 flex-shrink-0" style={{ background: theme.base }} />
-                  {i < profile.workExperience.length - 1 && (
-                    <div className="w-px flex-1 mt-1" style={{ background: theme.light }} />
-                  )}
-                </div>
-                <div className={`flex-1 min-w-0 ${i < profile.workExperience.length - 1 ? 'pb-4' : ''}`}>
-                  <p className="text-sm font-semibold text-text-primary leading-snug">{exp.title}</p>
-                  <p className="text-sm text-text-secondary mt-0.5">
-                    {exp.company}{exp.location ? ` · ${exp.location}` : ''}
-                  </p>
-                  <span
-                    className="inline-block mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full"
-                    style={{ background: theme.light, color: theme.dark }}
-                  >
-                    {formatDateRange(exp.startDate, exp.endDate, exp.current)}
-                  </span>
-                  {exp.description && (
-                    <p className="text-xs text-text-muted mt-1.5 leading-relaxed">{exp.description}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Education */}
-      {profile && profile.education.length > 0 && (
-        <SectionCard>
-          <SectionHeader icon={<GraduationCap className="w-3.5 h-3.5" />} title="Education" />
-          <div className="px-4 pb-4 space-y-4">
-            {profile.education.map((edu, i) => (
-              <div key={edu.id}>
-                {i > 0 && <div className="border-t border-border-subtle mb-4" />}
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: theme.light }}>
-                    <GraduationCap className="w-3.5 h-3.5" style={{ color: theme.base }} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-text-primary">{edu.school}</p>
-                    {(edu.degree || edu.fieldOfStudy) && (
-                      <p className="text-sm text-text-secondary">
-                        {[edu.degree, edu.fieldOfStudy].filter(Boolean).join(', ')}
-                      </p>
-                    )}
-                    {(edu.startYear || edu.endYear) && (
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full" style={{ background: theme.light, color: theme.dark }}>
-                        {edu.startYear && edu.endYear
-                          ? `${edu.startYear} – ${edu.endYear}`
-                          : edu.startYear ? `From ${edu.startYear}` : `Until ${edu.endYear}`}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* Certifications */}
-      {profile && profile.certifications.length > 0 && (
-        <SectionCard>
-          <SectionHeader icon={<Award className="w-3.5 h-3.5" />} title="Certifications" />
-          <div className="px-4 pb-4 space-y-4">
-            {profile.certifications.map((cert, i) => (
-              <div key={cert.id}>
-                {i > 0 && <div className="border-t border-border-subtle mb-4" />}
-                <div className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: theme.light }}>
-                    <Award className="w-3.5 h-3.5" style={{ color: theme.base }} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-text-primary">{cert.name}</p>
-                    <p className="text-sm text-text-secondary">{cert.issuingOrg}</p>
-                    {cert.issueDate && (
-                      <span className="inline-block mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full" style={{ background: theme.light, color: theme.dark }}>
-                        Issued {cert.issueDate}{cert.expiryDate ? ` · Expires ${cert.expiryDate}` : ''}
-                      </span>
-                    )}
-                    {cert.credentialUrl && (
-                      <a href={cert.credentialUrl} target="_blank" rel="noopener noreferrer" className="mt-1.5 flex items-center gap-1 text-xs font-medium hover:underline w-fit" style={{ color: theme.dark }}>
-                        <ExternalLink className="w-3 h-3" /> Show credential
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
       {/* Connections strip */}
       {connections.length > 0 && (
         <SectionCard>
@@ -477,21 +352,6 @@ function PersonProfileContent({
         </SectionCard>
       )}
 
-      {/* Languages */}
-      {profile && profile.languages.length > 0 && (
-        <SectionCard>
-          <SectionHeader icon={<Globe2 className="w-3.5 h-3.5" />} title="Languages" />
-          <div className="px-4 pb-4 space-y-2">
-            {profile.languages.map(lang => (
-              <div key={lang.id} className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: theme.base }} />
-                <span className="text-sm font-medium text-text-primary">{lang.language}</span>
-                <span className="text-xs text-text-muted">{PROFICIENCY_LABELS[lang.proficiency] ?? lang.proficiency}</span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-      )}
     </div>
   );
 }
@@ -500,8 +360,6 @@ function PersonProfileContent({
 
 const NodeDetailsSidebar: React.FC<NodeDetailsSidebarProps> = ({
   node,
-  allLinks,
-  allNodes,
   onClose,
   onExpandToFullPage,
 }) => {
@@ -687,8 +545,8 @@ const NodeDetailsSidebar: React.FC<NodeDetailsSidebarProps> = ({
             {isPerson
               ? <PersonProfileContent nodeId={displayNode.id} theme={theme} />
               : (displayNode.id.startsWith('event:') || displayNode.type?.toLowerCase() === 'event')
-                ? <EventSidebarContent displayNode={displayNode} allLinks={allLinks} allNodes={allNodes} theme={theme} />
-                : <NonPersonContent displayNode={displayNode} allLinks={allLinks} allNodes={allNodes} theme={theme} />
+                ? <EventSidebarContent displayNode={displayNode} theme={theme} />
+                : <NonPersonContent displayNode={displayNode} theme={theme} />
             }
           </div>
         </div>

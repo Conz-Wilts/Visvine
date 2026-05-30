@@ -4,8 +4,24 @@ import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export default async function DevLoginPage() {
+function sanitizeCallbackUrl(raw: string | string[] | undefined): string {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return "/";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/";
+  return value;
+}
+
+export default async function DevLoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackUrl?: string | string[] }>;
+}) {
   if (!isDevAuthEnabled()) notFound();
+
+  const { callbackUrl: rawCallback } = await searchParams;
+  const callbackUrl = sanitizeCallbackUrl(rawCallback);
+  const loginAsQuery =
+    callbackUrl === "/" ? "" : `?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 
   const users = await prisma.user.findMany({
     where: { email: { endsWith: "@local.dev" } },
@@ -35,7 +51,7 @@ export default async function DevLoginPage() {
             const role = u.userCommunities[0]?.role ?? "member";
             return (
               <li key={u.id} style={styles.item}>
-                <form action={`/api/dev/login-as/${u.id}`} method="POST">
+                <form action={`/api/dev/login-as/${u.id}${loginAsQuery}`} method="POST">
                   <button type="submit" style={styles.button}>
                     <span style={styles.name}>{u.name}</span>
                     <span style={styles.meta}>

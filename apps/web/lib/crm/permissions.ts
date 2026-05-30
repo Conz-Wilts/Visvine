@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/session";
+import type { CommunityRole } from "@/lib/crm/roles";
 
 export type CrmAction =
   | "view_crm"
@@ -8,39 +9,32 @@ export type CrmAction =
   | "manage_members"
   | "configure_fields";
 
-const ROLE_RANK: Record<string, number> = {
-  admin: 2,
-  moderator: 1,
-  member: 0,
-};
-
-const REQUIRED_RANK: Record<CrmAction, number> = {
-  view_crm: 1,        // moderator+
-  edit_public: 2,     // admin only
-  edit_private: 1,    // moderator+
-  manage_members: 2,  // admin only
-  configure_fields: 2,// admin only
-};
+/**
+ * Whether a community role may perform a CRM action.
+ *
+ * Every current CRM action requires `admin` (the `moderator` role was removed;
+ * any legacy/unknown role resolves to least privilege). Kept as a single named
+ * predicate so the policy has one home if finer-grained roles return.
+ */
+export function roleCan(role: string, _action: CrmAction): boolean {
+  return role === "admin";
+}
 
 export class PermissionError extends Error {
   action: CrmAction;
-  requiredRole: string;
+  requiredRole: CommunityRole;
 
   constructor(action: CrmAction) {
-    const requiredRole = Object.entries(ROLE_RANK).find(
-      ([, rank]) => rank === REQUIRED_RANK[action]
-    )?.[0] ?? "admin";
-    super(`Insufficient role for action: ${action}. Required: ${requiredRole}`);
+    super(`Insufficient role for action: ${action}. Required: admin`);
     this.action = action;
-    this.requiredRole = requiredRole;
+    this.requiredRole = "admin";
   }
 }
 
 /**
  * Asserts the actor has sufficient role in the community to perform the action.
- * Super-admins bypass all checks.
- * Throws PermissionError (→ 403) on failure.
- * Returns the membership row on success.
+ * Super-admins bypass all checks. Throws PermissionError (→ 403) on failure.
+ * Returns the membership row on success (null for super-admins).
  */
 export async function assertCrmPermission(
   actorId: string,
@@ -48,7 +42,7 @@ export async function assertCrmPermission(
   communityId: string,
   action: CrmAction
 ) {
-  // Super-admins have unrestricted access
+  // Super-admins have unrestricted access.
   if (isSuperAdmin(actorEmail)) {
     return null;
   }
@@ -57,12 +51,7 @@ export async function assertCrmPermission(
     where: { userId_communityId: { userId: actorId, communityId } },
   });
 
-  if (!membership) {
-    throw new PermissionError(action);
-  }
-
-  const rank = ROLE_RANK[membership.role] ?? 0;
-  if (rank < REQUIRED_RANK[action]) {
+  if (!membership || !roleCan(membership.role, action)) {
     throw new PermissionError(action);
   }
 

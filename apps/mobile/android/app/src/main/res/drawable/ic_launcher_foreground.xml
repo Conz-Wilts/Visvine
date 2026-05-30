@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple node-graph glyph echoing the web "git-network" logo. -->
+    <group android:translateX="22" android:translateY="22">
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="4"
+            android:strokeLineCap="round"
+            android:pathData="M32,16 L16,44 M32,16 L48,44" />
+        <path android:fillColor="#FFFFFF" android:pathData="M32,16m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+        <path android:fillColor="#FFFFFF" android:pathData="M16,48m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+        <path android:fillColor="#FFFFFF" android:pathData="M48,48m-9,0a9,9 0,1 1,18 0a9,9 0,1 1,-18 0" />
+    </group>
+</vector>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
 import { Lock, Globe, Clock, Plus, X, Loader2, Upload, User, Share2 } from 'lucide-react';
 import { uploadCroppedImage, validateImageFile } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
@@ -10,7 +11,7 @@ import type { NodeTypeConfig, CommunityAlias } from '@/lib/types';
 import { getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import { getInitials } from '@/components/dashboard/utils';
-import { Badge, LoadingText, EmptyState } from '@/components/ui';
+import { Badge, EmptyState, Skeleton } from '@/components/ui';
 import { useCrmColumns, prvKey, comKey, CrmColumnType } from '@/hooks/useCrmColumns';
 import AddColumnModal from './AddColumnModal';
 import RequestUpgradePrompt from './RequestUpgradePrompt';
@@ -18,6 +19,100 @@ import CellEditor from './CellEditor';
 import { getProfileColumns, renderProfileCell } from './profileColumns';
 
 const UPGRADE_THRESHOLD = 3;
+
+function DirectoryTableSkeleton({ extraColumns = 4 }: { extraColumns?: number }) {
+  // Always render at least name + type + a few extras so the skeleton looks like the real table
+  const colCount = Math.max(4, 2 + extraColumns);
+  return (
+    <div className="w-full bg-surface-1 border border-border-subtle rounded-lg overflow-hidden">
+      <div className="overflow-x-auto w-full">
+        <table className="w-full divide-y divide-border-subtle">
+          <thead className="bg-surface-2">
+            <tr>
+              {Array.from({ length: colCount }).map((_, i) => (
+                <th key={i} className="px-6 py-3 text-left">
+                  <Skeleton className="h-3 w-20" />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-surface-1 divide-y divide-border-subtle">
+            {Array.from({ length: 8 }).map((_, rowIdx) => (
+              <tr key={rowIdx}>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                    <Skeleton className="h-3.5 w-32" />
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                </td>
+                {Array.from({ length: colCount - 2 }).map((_, i) => (
+                  <td key={i} className="px-6 py-4 whitespace-nowrap">
+                    <Skeleton className="h-3 w-24" />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Virtualized table scaffolding ──────────────────────────────────────────────
+// Per-row context so the (stable) custom components can style/handle each row
+// without re-creating component identities on every render.
+interface RowContext {
+  editMode: boolean;
+  isEditable: (id: string) => boolean;
+  isMember: (id: string) => boolean;
+  onRowClick?: (item: DirectoryItem) => void;
+}
+
+type CtxProp = { context?: RowContext };
+
+// react-virtuoso types each `TableComponents` slot with its own internal prop
+// shapes (item/context + data-index plumbing) that these hand-written components
+// don't structurally satisfy (verified: a `satisfies` check fails even with a
+// single @types/react in the tree — it isn't a duplicate-types issue). The
+// per-component param types above keep each body type-safe; only the assembled
+// map is cast.
+const tableComponents = {
+  Scroller: React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'> & CtxProp>(
+    function Scroller({ context: _context, ...props }, ref) {
+      return <div ref={ref} {...props} className="overflow-x-auto w-full" />;
+    }
+  ),
+  Table: ({ context: _context, style, ...props }: React.ComponentPropsWithoutRef<'table'> & CtxProp) => (
+    <table {...props} style={{ ...style, tableLayout: 'auto' }} className="w-full divide-y divide-border-subtle" />
+  ),
+  TableHead: React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'thead'> & CtxProp>(
+    function TableHead({ context: _context, ...props }, ref) {
+      return <thead {...props} ref={ref} className="bg-surface-2" />;
+    }
+  ),
+  TableBody: React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'tbody'> & CtxProp>(
+    function TableBody({ context: _context, ...props }, ref) {
+      return <tbody {...props} ref={ref} className="bg-surface-1 divide-y divide-border-subtle" />;
+    }
+  ),
+  TableRow: ({ item, context, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item: DirectoryItem } & CtxProp) => {
+    const ctx = context!;
+    const editable = ctx.isEditable(item.id);
+    const isMemberRow = ctx.isMember(item.id);
+    return (
+      <tr
+        {...props}
+        style={{ ...style, opacity: ctx.editMode && isMemberRow ? 0.5 : 1 }}
+        className={`transition-colors duration-150 group ${ctx.editMode ? (editable ? 'cursor-default' : 'cursor-default opacity-60') : 'hover:bg-surface-2 cursor-pointer'}`}
+        onClick={ctx.editMode ? undefined : () => ctx.onRowClick?.(item)}
+      />
+    );
+  },
+} as unknown as TableComponents<DirectoryItem, RowContext>;
 
 interface CrmDirectoryTableProps {
   items: DirectoryItem[];
@@ -223,25 +318,6 @@ export default function CrmDirectoryTable({
       setUploadingId(null);
     }
   };
-  // For fade-in animation
-  const [visibleCount, setVisibleCount] = useState(0);
-  const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const prevIdsKeyRef = useRef('');
-
-  // Stagger rows in on new data (matches original NodeTable behaviour)
-  useEffect(() => {
-    const idsKey = items.map(i => i.id).join(',');
-    if (idsKey === prevIdsKeyRef.current) return;
-    prevIdsKeyRef.current = idsKey;
-    timeoutsRef.current.forEach(clearTimeout);
-    timeoutsRef.current = [];
-    setVisibleCount(0);
-    items.forEach((_, i) => {
-      const t = setTimeout(() => setVisibleCount(i + 1), i * 40);
-      timeoutsRef.current.push(t);
-    });
-    return () => { timeoutsRef.current.forEach(clearTimeout); prevIdsKeyRef.current = ''; };
-  }, [items]);
 
   // Upgrade prompt: first private column exceeding threshold that hasn't been dismissed
   const upgradeCandidate = useMemo(() => {
@@ -285,7 +361,290 @@ export default function CrmDirectoryTable({
 
   const profileColumns = useMemo(() => getProfileColumns(activeType), [activeType]);
 
-  if (loading || columnsLoading) return <LoadingText text="Loading directory…" />;
+  // Stable per-row context for the virtualized rows.
+  const rowContext = useMemo<RowContext>(() => ({
+    editMode,
+    isEditable: (id: string) => {
+      if (!isAdmin || !editMode) return false;
+      const an = adminNodes.get(id);
+      return !!an && !an.isMember;
+    },
+    isMember: (id: string) => adminNodes.get(id)?.isMember ?? false,
+    onRowClick,
+  }), [editMode, isAdmin, adminNodes, onRowClick]);
+
+  // ── Header (rendered once, sticky) ─────────────────────────────────────────
+  const renderHeader = useCallback(() => (
+    <tr>
+      {/* Standard columns */}
+      <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">Name</th>
+      <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">Type</th>
+      {profileColumns.map(col => (
+        <th key={col.key} className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">
+          <div className="flex items-center gap-1.5">
+            <User className="w-3 h-3 text-emerald-400" />
+            <span>{col.label}</span>
+          </div>
+        </th>
+      ))}
+
+      {/* CRM columns */}
+      {crmColumns.map(col => (
+        <th key={col.key} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">
+          <div className="flex items-center gap-1.5">
+            {col.source === 'private' && <Lock className="w-3 h-3 text-blue-400" />}
+            {col.source === 'community' && <Globe className="w-3 h-3 text-purple-400" />}
+            {col.source === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
+            <span className={col.source === 'pending' ? 'opacity-50' : ''}>{col.label}</span>
+            {col.source === 'private' && (
+              <button
+                onClick={() => removePrivateColumn(col.id)}
+                className="ml-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-red-500 transition-colors"
+                title="Remove column"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </th>
+      ))}
+
+      {/* Add column button */}
+      <th className="px-3 py-3 text-left bg-surface-2">
+        <button
+          onClick={() => openAddModal()}
+          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-text-muted rounded-lg border border-dashed border-border-default hover:border-brand-green hover:text-brand-green hover:bg-brand-green/5 transition-colors whitespace-nowrap"
+        >
+          <Plus className="w-3 h-3" /> Add column
+        </button>
+      </th>
+    </tr>
+  ), [profileColumns, crmColumns, removePrivateColumn, openAddModal]);
+
+  // ── Row cells ──────────────────────────────────────────────────────────────
+  const renderCells = (item: DirectoryItem) => {
+    const editable = isEditable(item.id);
+    const adminNode = adminNodes.get(item.id);
+    const isMemberRow = adminNode?.isMember ?? false;
+    const imgSrc = imageOverrides.get(item.id) ?? item.image_url;
+
+    return (
+      <>
+        {/* Name + photo */}
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="flex items-center gap-3">
+            {/* Photo — clickable in edit mode */}
+            <div
+              className={`relative flex-shrink-0 h-10 w-10 rounded-xl overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
+              onClick={editable ? e => triggerImageUpload(item.id, e) : undefined}
+            >
+              {imgSrc ? (
+                <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="h-10 w-10 object-cover" />
+              ) : (
+                <div className="h-10 w-10 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
+                  {getInitials(item.name)}
+                </div>
+              )}
+              {editable && (
+                uploadingId === item.id ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity">
+                    <Upload className="w-3.5 h-3.5 text-white" />
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Name — inline editable */}
+            <div className="min-w-0">
+              {editable && profileCell?.nodeId === item.id && profileCell.field === 'name' ? (
+                <input
+                  autoFocus
+                  value={profileCell.value}
+                  onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
+                  onBlur={saveProfileCell}
+                  onKeyDown={handleProfileKeyDown}
+                  disabled={profileSaving}
+                  className="text-sm font-medium text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
+                />
+              ) : (
+                <div
+                  className={`text-sm font-medium text-text-primary truncate ${editable ? 'hover:bg-brand-green/10 rounded px-1 -mx-1 cursor-text' : ''}`}
+                  onClick={editable ? e => openProfileCell(item.id, 'name', item.name, e) : undefined}
+                >
+                  {item.name}
+                </div>
+              )}
+            </div>
+          </div>
+        </td>
+
+        {/* Type / Alias — editable for admin */}
+        <td className="px-6 py-4 whitespace-nowrap relative">
+          {editable && !isMemberRow && aliasEditNodeId === item.id ? (
+            <div className="absolute z-20 top-full left-4 mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-lg py-1 min-w-[140px]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Person (no alias) */}
+              {(() => {
+                const currentAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
+                return (
+                  <>
+                    <button
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${!currentAlias ? 'font-semibold' : ''}`}
+                      onClick={() => saveAlias(item.id, null)}
+                    >
+                      <Badge variant="type-pill" color={getNodeTypeConfig('Person', nodeTypes).color}>Person</Badge>
+                    </button>
+                    {personAliases.map(a => (
+                      <button
+                        key={a.name}
+                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${currentAlias === a.name ? 'font-semibold' : ''}`}
+                        onClick={() => saveAlias(item.id, a.name)}
+                      >
+                        <Badge variant="type-pill" color={a.color}>{a.name}</Badge>
+                      </button>
+                    ))}
+                  </>
+                );
+              })()}
+            </div>
+          ) : null}
+          {(() => {
+            const displayAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
+            const aliasConfig = displayAlias ? (communityAliases ?? []).find(a => a.name === displayAlias && a.nodeType === item.type) : undefined;
+            const color = aliasConfig?.color ?? getNodeTypeConfig(item.type, nodeTypes).color;
+            return (
+              <div
+                className={editable && !isMemberRow ? 'cursor-pointer hover:opacity-80' : ''}
+                onClick={editable && !isMemberRow ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
+              >
+                <Badge variant="type-pill" color={color}>{displayAlias ?? item.type}</Badge>
+              </div>
+            );
+          })()}
+        </td>
+
+        {/* Type-specific profile columns (Global Public layer) */}
+        {profileColumns.map(col => {
+          const isToggle = col.key === 'openToWork';
+          const isEditableField = editable && !isMemberRow && !isToggle;
+          const isToggleable = editable && !isMemberRow && isToggle;
+          const editField = col.key as string;
+          const currentVal = col.key === 'tags'
+            ? item.tags?.join(', ') ?? ''
+            : (item[col.key] as string) ?? '';
+          return (
+            <td
+              key={col.key}
+              className={`px-6 py-4 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
+              onClick={
+                isToggleable
+                  ? async (e) => {
+                      e.stopPropagation();
+                      if (!communityId) return;
+                      await fetch(`/api/communities/${communityId}/admin/profiles`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nodeId: item.id, fields: { openToWork: !item.openToWork } }),
+                      });
+                    }
+                  : isEditableField
+                    ? e => openProfileCell(item.id, editField, currentVal, e)
+                    : undefined
+              }
+              title={isMemberRow ? `Managed by ${item.name}` : undefined}
+            >
+              {isEditableField && profileCell?.nodeId === item.id && profileCell.field === editField ? (
+                <input
+                  autoFocus
+                  value={profileCell.value}
+                  onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
+                  onBlur={saveProfileCell}
+                  onKeyDown={handleProfileKeyDown}
+                  disabled={profileSaving}
+                  placeholder={col.key === 'tags' ? 'tag1, tag2' : undefined}
+                  className="text-sm text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
+                />
+              ) : (
+                <div className={isEditableField ? 'hover:bg-brand-green/10 rounded px-1 -mx-1' : ''}>
+                  {renderProfileCell(item, col)}
+                </div>
+              )}
+            </td>
+          );
+        })}
+
+        {/* CRM cells */}
+        {crmColumns.map(col => {
+          const isCrmEditing = editingCell?.nodeId === item.id && editingCell?.key === col.key;
+          const isPending = col.source === 'pending';
+          const currentValue = getCellValue(item.id, col.key);
+          const contributor = col.source === 'community'
+            ? valueMap.contributors[item.id]?.[col.key.replace('com__', '')]
+            : null;
+
+          return (
+            <td
+              key={col.key}
+              className="px-4 py-4 whitespace-nowrap"
+              onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
+            >
+              {isCrmEditing ? (
+                <CellEditor
+                  value={currentValue}
+                  type={col.type}
+                  options={col.options}
+                  onSave={value => handleCellSave(item.id, col.key, value)}
+                  onCancel={() => setEditingCell(null)}
+                />
+              ) : isPending ? (
+                <span className="text-xs text-text-muted italic">Pending…</span>
+              ) : (
+                <div
+                  className="group/cell flex items-center gap-1.5 min-w-[100px] max-w-[200px]"
+                  title={contributor ? `Last updated by ${contributor.name}` : undefined}
+                >
+                  {currentValue ? (
+                    <>
+                      <span className="text-sm text-text-primary truncate">{currentValue}</span>
+                      {col.source === 'private' && communityId && (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            shareValueWithCommunity(item.id, col.key.replace('prv__', ''), col.label, col.type, currentValue, communityId);
+                          }}
+                          className="opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-purple-500 transition-all shrink-0"
+                          title="Share with community"
+                        >
+                          <Share2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-text-muted opacity-0 group-hover/cell:opacity-100 transition-opacity">
+                      {isAuthenticated ? 'Click to add' : '—'}
+                    </span>
+                  )}
+                  {!currentValue && isAuthenticated && (
+                    <Plus className="w-3 h-3 text-text-muted opacity-0 group-hover/cell:opacity-60 transition-opacity shrink-0" />
+                  )}
+                </div>
+              )}
+            </td>
+          );
+        })}
+
+        {/* Empty add-column spacer */}
+        <td className="px-3 py-4" />
+      </>
+    );
+  };
+
+  if (loading || columnsLoading) return <DirectoryTableSkeleton extraColumns={profileColumns.length + crmColumns.length} />;
   if (items.length === 0) return <EmptyState title="No entries" description="No entries found. Try adjusting your filters." />;
 
   return (
@@ -303,292 +662,17 @@ export default function CrmDirectoryTable({
         />
       )}
 
-      {/* Table */}
+      {/* Table — only on-screen rows are mounted (window-scrolled virtualization) */}
       <div className="w-full bg-surface-1 border border-border-subtle rounded-lg overflow-hidden">
-        <div className="overflow-x-auto w-full">
-          <table className="w-full divide-y divide-border-subtle" style={{ tableLayout: 'auto' }}>
-            <thead className="bg-surface-2">
-              <tr>
-                {/* Standard columns */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap">Type</th>
-                {profileColumns.map(col => (
-                  <th key={col.key} className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-emerald-400" />
-                      <span>{col.label}</span>
-                    </div>
-                  </th>
-                ))}
-
-                {/* CRM columns */}
-                {crmColumns.map(col => (
-                  <th key={col.key} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap">
-                    <div className="flex items-center gap-1.5">
-                      {col.source === 'private' && <Lock className="w-3 h-3 text-blue-400" />}
-                      {col.source === 'community' && <Globe className="w-3 h-3 text-purple-400" />}
-                      {col.source === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
-                      <span className={col.source === 'pending' ? 'opacity-50' : ''}>{col.label}</span>
-                      {col.source === 'private' && (
-                        <button
-                          onClick={() => removePrivateColumn(col.id)}
-                          className="ml-1 opacity-0 group-hover:opacity-100 p-0.5 rounded hover:text-red-500 transition-colors"
-                          title="Remove column"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                    </div>
-                  </th>
-                ))}
-
-                {/* Add column button */}
-                <th className="px-3 py-3 text-left">
-                  <button
-                    onClick={() => openAddModal()}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-text-muted rounded-lg border border-dashed border-border-default hover:border-brand-green hover:text-brand-green hover:bg-brand-green/5 transition-colors whitespace-nowrap"
-                  >
-                    <Plus className="w-3 h-3" /> Add column
-                  </button>
-                </th>
-
-              </tr>
-            </thead>
-
-            <tbody className="bg-surface-1 divide-y divide-border-subtle">
-              {items.map((item, i) => {
-                const editable = isEditable(item.id);
-                const adminNode = adminNodes.get(item.id);
-                const isMemberRow = adminNode?.isMember ?? false;
-                const imgSrc = imageOverrides.get(item.id) ?? item.image_url;
-
-                return (
-                <tr
-                  key={item.id}
-                  className={`transition-colors duration-150 group ${editMode ? (editable ? 'cursor-default' : 'cursor-default opacity-60') : 'hover:bg-surface-2 cursor-pointer'}`}
-                  onClick={editMode ? undefined : () => onRowClick?.(item)}
-                  style={{
-                    opacity: i < visibleCount ? (editMode && isMemberRow ? 0.5 : 1) : 0,
-                    transform: i < visibleCount ? 'translateX(0)' : 'translateX(32px)',
-                    transition: 'opacity 0.3s ease-out, transform 0.3s ease-out',
-                  }}
-                >
-                  {/* Name + photo */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      {/* Photo — clickable in edit mode */}
-                      <div
-                        className={`relative flex-shrink-0 h-10 w-10 rounded-xl overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
-                        onClick={editable ? e => triggerImageUpload(item.id, e) : undefined}
-                      >
-                        {imgSrc ? (
-                          <img src={imgSrc} alt={item.name} className="h-10 w-10 object-cover" />
-                        ) : (
-                          <div className="h-10 w-10 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
-                            {getInitials(item.name)}
-                          </div>
-                        )}
-                        {editable && (
-                          uploadingId === item.id ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                              <Loader2 className="w-4 h-4 text-white animate-spin" />
-                            </div>
-                          ) : (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity">
-                              <Upload className="w-3.5 h-3.5 text-white" />
-                            </div>
-                          )
-                        )}
-                      </div>
-
-                      {/* Name — inline editable */}
-                      <div className="min-w-0">
-                        {editable && profileCell?.nodeId === item.id && profileCell.field === 'name' ? (
-                          <input
-                            autoFocus
-                            value={profileCell.value}
-                            onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                            onBlur={saveProfileCell}
-                            onKeyDown={handleProfileKeyDown}
-                            disabled={profileSaving}
-                            className="text-sm font-medium text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
-                          />
-                        ) : (
-                          <div
-                            className={`text-sm font-medium text-text-primary truncate ${editable ? 'hover:bg-brand-green/10 rounded px-1 -mx-1 cursor-text' : ''}`}
-                            onClick={editable ? e => openProfileCell(item.id, 'name', item.name, e) : undefined}
-                          >
-                            {item.name}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Type / Alias — editable for admin */}
-                  <td className="px-6 py-4 whitespace-nowrap relative">
-                    {editable && !isMemberRow && aliasEditNodeId === item.id ? (
-                      <div className="absolute z-20 top-full left-4 mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-lg py-1 min-w-[140px]"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        {/* Person (no alias) */}
-                        {(() => {
-                          const currentAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-                          return (
-                            <>
-                              <button
-                                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${!currentAlias ? 'font-semibold' : ''}`}
-                                onClick={() => saveAlias(item.id, null)}
-                              >
-                                <Badge variant="type-pill" color={getNodeTypeConfig('Person', nodeTypes).color}>Person</Badge>
-                              </button>
-                              {personAliases.map(a => (
-                                <button
-                                  key={a.name}
-                                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${currentAlias === a.name ? 'font-semibold' : ''}`}
-                                  onClick={() => saveAlias(item.id, a.name)}
-                                >
-                                  <Badge variant="type-pill" color={a.color}>{a.name}</Badge>
-                                </button>
-                              ))}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    ) : null}
-                    {(() => {
-                      const displayAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-                      const aliasConfig = displayAlias ? (communityAliases ?? []).find(a => a.name === displayAlias && a.nodeType === item.type) : undefined;
-                      const color = aliasConfig?.color ?? getNodeTypeConfig(item.type, nodeTypes).color;
-                      return (
-                        <div
-                          className={editable && !isMemberRow ? 'cursor-pointer hover:opacity-80' : ''}
-                          onClick={editable && !isMemberRow ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
-                        >
-                          <Badge variant="type-pill" color={color}>{displayAlias ?? item.type}</Badge>
-                        </div>
-                      );
-                    })()}
-                  </td>
-
-                  {/* Type-specific profile columns (Global Public layer) */}
-                  {profileColumns.map(col => {
-                    const isToggle = col.key === 'openToWork';
-                    const isEditableField = editable && !isMemberRow && !isToggle;
-                    const isToggleable = editable && !isMemberRow && isToggle;
-                    const editField = col.key as string;
-                    const currentVal = col.key === 'tags'
-                      ? item.tags?.join(', ') ?? ''
-                      : (item[col.key] as string) ?? '';
-                    return (
-                      <td
-                        key={col.key}
-                        className={`px-6 py-4 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
-                        onClick={
-                          isToggleable
-                            ? async (e) => {
-                                e.stopPropagation();
-                                if (!communityId) return;
-                                await fetch(`/api/communities/${communityId}/admin/profiles`, {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ nodeId: item.id, fields: { openToWork: !item.openToWork } }),
-                                });
-                              }
-                            : isEditableField
-                              ? e => openProfileCell(item.id, editField, currentVal, e)
-                              : undefined
-                        }
-                        title={isMemberRow ? `Managed by ${item.name}` : undefined}
-                      >
-                        {isEditableField && profileCell?.nodeId === item.id && profileCell.field === editField ? (
-                          <input
-                            autoFocus
-                            value={profileCell.value}
-                            onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                            onBlur={saveProfileCell}
-                            onKeyDown={handleProfileKeyDown}
-                            disabled={profileSaving}
-                            placeholder={col.key === 'tags' ? 'tag1, tag2' : undefined}
-                            className="text-sm text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
-                          />
-                        ) : (
-                          <div className={isEditableField ? 'hover:bg-brand-green/10 rounded px-1 -mx-1' : ''}>
-                            {renderProfileCell(item, col)}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-
-                  {/* CRM cells */}
-                  {crmColumns.map(col => {
-                    const isCrmEditing = editingCell?.nodeId === item.id && editingCell?.key === col.key;
-                    const isPending = col.source === 'pending';
-                    const currentValue = getCellValue(item.id, col.key);
-                    const contributor = col.source === 'community'
-                      ? valueMap.contributors[item.id]?.[col.key.replace('com__', '')]
-                      : null;
-
-                    return (
-                      <td
-                        key={col.key}
-                        className="px-4 py-4 whitespace-nowrap"
-                        onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
-                      >
-                        {isCrmEditing ? (
-                          <CellEditor
-                            value={currentValue}
-                            type={col.type}
-                            options={col.options}
-                            onSave={value => handleCellSave(item.id, col.key, value)}
-                            onCancel={() => setEditingCell(null)}
-                          />
-                        ) : isPending ? (
-                          <span className="text-xs text-text-muted italic">Pending…</span>
-                        ) : (
-                          <div
-                            className="group/cell flex items-center gap-1.5 min-w-[100px] max-w-[200px]"
-                            title={contributor ? `Last updated by ${contributor.name}` : undefined}
-                          >
-                            {currentValue ? (
-                              <>
-                                <span className="text-sm text-text-primary truncate">{currentValue}</span>
-                                {col.source === 'private' && communityId && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      shareValueWithCommunity(item.id, col.key.replace('prv__', ''), col.label, col.type, currentValue, communityId);
-                                    }}
-                                    className="opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-purple-500 transition-all shrink-0"
-                                    title="Share with community"
-                                  >
-                                    <Share2 className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </>
-                            ) : (
-                              <span className="text-xs text-text-muted opacity-0 group-hover/cell:opacity-100 transition-opacity">
-                                {isAuthenticated ? 'Click to add' : '—'}
-                              </span>
-                            )}
-                            {!currentValue && isAuthenticated && (
-                              <Plus className="w-3 h-3 text-text-muted opacity-0 group-hover/cell:opacity-60 transition-opacity shrink-0" />
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-
-                  {/* Empty add-column spacer */}
-                  <td className="px-3 py-4" />
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <TableVirtuoso
+          useWindowScroll
+          data={items}
+          context={rowContext}
+          components={tableComponents}
+          computeItemKey={(_, item) => item.id}
+          fixedHeaderContent={renderHeader}
+          itemContent={(_, item) => renderCells(item)}
+        />
 
         {/* Column remove bar — shows on hover for private columns */}
         {privateColumns.length > 0 && (

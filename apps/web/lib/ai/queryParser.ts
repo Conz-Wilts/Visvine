@@ -1,9 +1,17 @@
 import OpenAI from 'openai';
 import type { ParsedQuery } from '@/lib/types';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazily construct the client so importing this module doesn't throw when
+// OPENAI_API_KEY is unset (e.g. during `next build` page-data collection, or
+// in the keyword-only fallback path). The OpenAI SDK throws in its constructor
+// when no key is available, so we only build it when parseQuery is actually run.
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+    if (!openaiClient) {
+        openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    }
+    return openaiClient;
+}
 
 const SYSTEM_PROMPT = `You expand and structure search queries for a professional network of people, startups, investors, organizations, events, and groups.
 
@@ -35,7 +43,7 @@ export async function parseQuery(query: string): Promise<ParsedQuery> {
         throw new Error('Query is required and must be a string');
     }
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
             { role: 'system', content: SYSTEM_PROMPT },

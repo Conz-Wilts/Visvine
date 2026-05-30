@@ -24,7 +24,6 @@ git clone <repo>
 cd Visvine
 
 Copy-Item apps/web/.env.example    apps/web/.env
-Copy-Item apps/mobile/.env.example apps/mobile/.env
 
 pnpm setup
 ```
@@ -128,6 +127,12 @@ material** — only `create_match_nodes_function.sql` is applied
 automatically by `apply-sql-functions.mjs`. The rest of the SQL in that
 folder is historical; their tables are now owned by `schema.prisma`.
 
+One exception: one-shot **data** cleanups live here too and must be run by
+hand against any long-lived DB. `remove_moderator_and_profile_subentities.sql`
+collapses stale `moderator` rows to `member` and drops the removed profile
+sub-entity tables — apply it (`psql "$DATABASE_URL" -f …`) *before*
+`prisma db push` so push sees no destructive drift.
+
 ### 2c. Service account for the deployed app
 
 ```bash
@@ -175,8 +180,10 @@ script (run in CI or as a pre-commit hook) will fail the build if a real
 |---|---|---|
 | `apps/web/.env.example` | ✅ template | Single template covering both modes. Dev defaults are uncommented; the production / Cloud SQL block at the bottom is commented out — uncomment and fill in real values to switch modes. |
 | `apps/web/.env` | ❌ gitignored | **Your active** config. Edit it (or swap from a backup) when switching between dev (Docker) and prod-debug (Cloud SQL). |
-| `apps/mobile/.env.example` | ✅ template | Expo equivalent — dev defaults at the top, production-overrides notes at the bottom. |
-| `apps/mobile/.env` | ❌ gitignored | Active mobile config. |
+
+The native mobile apps don't use `.env` files — their config lives in Gradle
+properties (`apps/mobile/android/gradle.properties`) and `Info.plist`
+(`apps/mobile/ios/Visvine/Info.plist`). See `apps/mobile/README.md`.
 
 ### Switching local app between dev DB and prod DB
 
@@ -359,7 +366,10 @@ pnpm db:restore -- --version=seed-mig20260414-20260512-0902.dump
 the dump was taken — `db push` adds it, NULL for restored rows).
 **Destructive** drift (a column was removed) needs `--accept-data-loss`
 on `db push`, which the script doesn't pass. If you're shipping a
-destructive migration, re-publish the fixture in the same PR.
+destructive migration, re-publish the fixture in the same PR. (Example: the
+removal of the `moderator` role and the profile sub-entity tables — pair it
+with `apps/web/migrations/remove_moderator_and_profile_subentities.sql` and a
+fresh `pnpm db:publish`.)
 
 ### 6f. Costs
 

@@ -182,8 +182,6 @@ export default function EventsPage() {
 
       <NodeDetailsSidebar
         node={selectedNode}
-        allLinks={[]}
-        allNodes={[]}
         onClose={() => setSelectedNode(null)}
         onExpandToFullPage={(node) => {
           setFullProfileNodeId(node.id);

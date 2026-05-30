@@ -18,15 +18,6 @@ test("admin can edit public fields and private fields", () => {
   assert.ok(!emailCol?.editable, "email should never be editable");
 });
 
-test("moderator cannot edit public fields but can edit private fields", () => {
-  const cols = buildColumns(sampleFields, "moderator");
-  const nameCol = cols.find((c) => c.key === "name");
-  const leadCol = cols.find((c) => c.key === "lead_status");
-
-  assert.ok(!nameCol?.editable, "moderator should not edit name");
-  assert.ok(leadCol?.editable, "moderator should edit lead_status");
-});
-
 test("member cannot edit anything", () => {
   const cols = buildColumns(sampleFields, "member");
   for (const col of cols) {

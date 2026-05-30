@@ -298,7 +298,7 @@ export default function NodesTable({ communityId }: NodesTableProps) {
   };
 
   const createEmptyRow = (): Partial<NBNode> => ({
-    type: 'Person',
+    type: 'person',
     name: '',
     subtitle: '',
     location: '',

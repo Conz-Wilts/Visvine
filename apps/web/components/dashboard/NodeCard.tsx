@@ -1,3 +1,4 @@
+import React from 'react'
 import { DirectoryItem } from './types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
@@ -13,7 +14,7 @@ interface DirectoryCardProps {
   communityAliases?: CommunityAlias[]
 }
 
-export default function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardProps) {
+function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardProps) {
   const { getCached, version } = useProfileCache()
   const isPerson = item.id?.startsWith('person:')
   void version // subscribe for reactivity when any profile is updated
@@ -29,19 +30,18 @@ export default function NodeCard({ item, onClick, nodeTypes, communityAliases }:
     : undefined
   const typeColor = aliasConfig?.color ?? baseTypeColor
 
+  // Glow colors exposed as CSS vars so the hover state is pure CSS (no JS
+  // mouse handlers writing inline styles on every hover).
+  const cardStyle = {
+    borderColor: typeColor,
+    '--card-glow': `${typeColor}55`,
+    '--card-glow-strong': `${typeColor}99`,
+  } as React.CSSProperties
+
   return (
     <div
-      className="bg-surface-1 rounded-xl overflow-hidden transition-all duration-200 cursor-pointer group flex flex-col h-[360px] w-full"
-      style={{
-        border: `4px solid ${typeColor}`,
-        boxShadow: `0 0 12px 2px ${typeColor}55`,
-      }}
-      onMouseEnter={e => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 0 20px 4px ${typeColor}99`;
-      }}
-      onMouseLeave={e => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow = `0 0 12px 2px ${typeColor}55`;
-      }}
+      className="bg-surface-1 rounded-xl overflow-hidden cursor-pointer group flex flex-col h-[360px] w-full border-4 transition-shadow duration-200 [box-shadow:0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_0_20px_4px_var(--card-glow-strong)]"
+      style={cardStyle}
       onClick={() => onClick?.(item)}
     >
       {/* Fixed-height header */}
@@ -50,6 +50,8 @@ export default function NodeCard({ item, onClick, nodeTypes, communityAliases }:
           <img
             src={displayImageUrl}
             alt={displayName}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </div>
@@ -91,3 +93,5 @@ export default function NodeCard({ item, onClick, nodeTypes, communityAliases }:
     </div>
   )
 }
+
+export default React.memo(NodeCard)

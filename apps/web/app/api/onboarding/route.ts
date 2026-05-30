@@ -24,38 +24,15 @@ const OnboardingPatchSchema = z.object({
   openToWork: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   imageUrl: z.string().optional(),
-  newExperience: z.array(z.object({
-    title: z.string().min(1),
-    company: z.string().min(1),
-    location: z.string().optional(),
-    startDate: z.string().min(1),
-    endDate: z.string().optional(),
-    current: z.boolean().optional(),
-    description: z.string().optional(),
-  })).optional(),
-  newEducation: z.array(z.object({
-    school: z.string().min(1),
-    degree: z.string().optional(),
-    fieldOfStudy: z.string().optional(),
-    startYear: z.string().optional(),
-    endYear: z.string().optional(),
-    description: z.string().optional(),
-  })).optional(),
 });
 
 async function getPersonForSession() {
   const session = await getSession();
   if (!session) return null;
 
-  const person = await prisma.person.findUnique({
+  return prisma.person.findUnique({
     where: { userId: session.userId },
-    include: {
-      workExperience: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-      education: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-    },
   });
-
-  return person;
 }
 
 export async function GET() {
@@ -80,10 +57,8 @@ export async function PATCH(req: NextRequest) {
   const {
     subtitle, bio, location, website, linkedinUrl, twitterUrl,
     phone, pronouns, openToWork, tags, imageUrl,
-    newExperience, newEducation,
   } = parsed.data;
 
-  // Update person fields
   const updated = await prisma.person.update({
     where: { id: person.id },
     data: {
@@ -103,7 +78,6 @@ export async function PATCH(req: NextRequest) {
 
   logger.info('api.onboarding.person.updated', { id: person.id, imageUrl });
 
-  // Sync shared fields to Node record (create if doesn't exist)
   const nodeUpdate: Record<string, unknown> = {};
   if (subtitle !== undefined) nodeUpdate.subtitle = subtitle;
   if (location !== undefined) nodeUpdate.location = location;
@@ -129,45 +103,6 @@ export async function PATCH(req: NextRequest) {
     });
     logger.info('api.onboarding.node.upserted', { id: person.id, imageUrl: nodeUpdate.imageUrl });
     revalidateTag('graph-data-v2');
-  }
-
-  // Create new experience entries
-  if (newExperience && Array.isArray(newExperience)) {
-    for (const exp of newExperience) {
-      if (exp.title && exp.company && exp.startDate) {
-        await prisma.workExperience.create({
-          data: {
-            personId: person.id,
-            title: exp.title,
-            company: exp.company,
-            location: exp.location,
-            startDate: exp.startDate,
-            endDate: exp.endDate,
-            current: !!exp.current,
-            description: exp.description,
-          },
-        });
-      }
-    }
-  }
-
-  // Create new education entries
-  if (newEducation && Array.isArray(newEducation)) {
-    for (const edu of newEducation) {
-      if (edu.school) {
-        await prisma.education.create({
-          data: {
-            personId: person.id,
-            school: edu.school,
-            degree: edu.degree,
-            fieldOfStudy: edu.fieldOfStudy,
-            startYear: edu.startYear ? parseInt(edu.startYear) : null,
-            endYear: edu.endYear ? parseInt(edu.endYear) : null,
-            description: edu.description,
-          },
-        });
-      }
-    }
   }
 
   return NextResponse.json(updated);

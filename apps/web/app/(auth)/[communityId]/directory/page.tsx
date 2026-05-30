@@ -17,7 +17,7 @@ export default async function DirectoryPage({ params }: DirectoryPageProps) {
     redirect(`/signin?callbackUrl=/${communityId}/directory`);
   }
 
-  // Check view_crm permission — only admin/moderator can see this page
+  // Check view_crm permission — only admins can see this page
   let currentUserRole = "member";
   try {
     const membership = await assertCrmPermission(
@@ -52,7 +52,7 @@ export default async function DirectoryPage({ params }: DirectoryPageProps) {
         </h1>
         <p className="text-sm text-gray-500 mt-1 hidden sm:block">
           Manage and view all members. Private CRM fields are visible only to
-          admins and moderators.
+          admins.
         </p>
       </div>
 

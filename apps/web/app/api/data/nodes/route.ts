@@ -81,7 +81,10 @@ export async function POST(request: NextRequest) {
     const row = await prisma.node.create({
       data: {
         id: node.id,
-        type: node.type,
+        // Node type is stored lowercase-canonical (eventRepo and mention lookups
+        // filter on exact lowercase, e.g. type='event'); rendering resolves it
+        // case-insensitively via getNodeTypeConfig.
+        type: node.type.toLowerCase(),
         name: node.name,
         subtitle: node.subtitle ?? null,
         location: node.location ?? null,
@@ -129,7 +132,7 @@ export async function PUT(request: NextRequest) {
     // request body so we don't accidentally null out fields that were stripped by
     // JSON.stringify (undefined values are omitted by JSON.stringify).
     const data: Record<string, unknown> = {
-      type: node.type,
+      type: node.type.toLowerCase(),
       name: node.name,
       tags: node.tags ?? [],
       metadata: (node.metadata as object) ?? {},

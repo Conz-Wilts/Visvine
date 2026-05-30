@@ -1,6 +1,6 @@
 /**
  * Profile API — full profile data for a person node
- * GET  /api/profile/[personId]  → full profile with experience, education, certs, languages
+ * GET  /api/profile/[personId]  → full profile for a person node
  * PATCH /api/profile/[personId] → update basic person fields (owner only)
  */
 
@@ -21,10 +21,6 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   const person = await prisma.person.findUnique({
     where: { id: personId },
     include: {
-      workExperience: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-      education: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-      certifications: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
-      languages: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
       user: { select: { id: true } },
     },
   });

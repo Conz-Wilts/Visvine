@@ -5,7 +5,7 @@
 
 import prisma from './prisma';
 import { Prisma } from '@prisma/client';
-import { revalidateTag } from 'next/cache';
+import { revalidateTag, unstable_cache } from 'next/cache';
 import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPStatus } from './types';
 import { normalizeImageUrl } from './mediaUrl';
 import { logger } from './logger';
@@ -69,108 +69,127 @@ function nodeRowToNBEvent(row: {
 
 // ─── Graph data ───────────────────────────────────────────────────────────────
 
+/**
+ * Fetch a community's nodes (with person-profile enrichment) — WITHOUT links.
+ *
+ * This is the payload the directory grid/table views actually render. Keeping it
+ * separate from links means those views never pay to load (or serialize) the edge
+ * set. The graph view composes this with links via {@link getCommunityGraphData}.
+ */
+async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
+  const nodeRows = await prisma.node.findMany({
+    where: { communityId },
+    select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true },
+  });
+
+  // Person.imageUrl is authoritative for profile photos (stays in sync with GCS uploads).
+  // Node.imageUrl can be stale if old local-path images were never migrated to GCS.
+  // Fetch person-type nodes to overlay profile data (image, bio, links).
+  const personNodeIds = nodeRows.filter(n => n.id.startsWith('person:')).map(n => n.id);
+  const personDataMap = new Map<string, {
+    imageUrl: string | null;
+    bio: string | null;
+    website: string | null;
+    linkedinUrl: string | null;
+    twitterUrl: string | null;
+    phone: string | null;
+    pronouns: string | null;
+    openToWork: boolean;
+  }>();
+  if (personNodeIds.length > 0) {
+    const personRows = await prisma.person.findMany({
+      where: { id: { in: personNodeIds } },
+      select: {
+        id: true, imageUrl: true, bio: true, website: true,
+        linkedinUrl: true, twitterUrl: true, phone: true,
+        pronouns: true, openToWork: true,
+      },
+    });
+    for (const p of personRows) {
+      personDataMap.set(p.id, {
+        imageUrl: p.imageUrl,
+        bio: p.bio,
+        website: p.website,
+        linkedinUrl: p.linkedinUrl,
+        twitterUrl: p.twitterUrl,
+        phone: p.phone,
+        pronouns: p.pronouns,
+        openToWork: p.openToWork,
+      });
+    }
+  }
+
+  return nodeRows.map(row => {
+    const base = nodeRowToNBNode(row);
+    const personData = personDataMap.get(row.id);
+    if (personData) {
+      base.image_url = normalizeImageUrl(personData.imageUrl) ?? undefined;
+      base.metadata = {
+        ...base.metadata,
+        bio: personData.bio,
+        website: personData.website,
+        linkedinUrl: personData.linkedinUrl,
+        twitterUrl: personData.twitterUrl,
+        phone: personData.phone,
+        pronouns: personData.pronouns,
+        openToWork: personData.openToWork,
+      };
+    }
+    return base;
+  });
+}
+
+async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
+  const linkRows = await prisma.link.findMany({
+    where: { communityId },
+    select: { sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true },
+  });
+  return linkRows.map(l => ({
+    source: l.sourceId,
+    target: l.targetId,
+    relationship: l.relationship,
+    since: l.since ?? undefined,
+    metadata: (l.metadata as Record<string, unknown>) ?? {},
+    community_id: l.communityId ?? undefined,
+  }));
+}
+
+/**
+ * Nodes-only data source for the directory grid/table. Cached under the shared
+ * `graph-data-v2` tag, which every node/profile write already revalidates.
+ */
+export async function getCommunityNodes(communityId: string): Promise<NBNode[]> {
+  try {
+    return await unstable_cache(
+      () => fetchCommunityNodes(communityId),
+      ['community-nodes', communityId],
+      { tags: ['graph-data-v2'] },
+    )();
+  } catch (err) {
+    logger.error('eventRepo.getCommunityNodes.failed', { err });
+    return [];
+  }
+}
+
+export async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
+  try {
+    return await unstable_cache(
+      () => fetchCommunityLinks(communityId),
+      ['community-links', communityId],
+      { tags: ['graph-data-v2'] },
+    )();
+  } catch (err) {
+    logger.error('eventRepo.getCommunityLinks.failed', { err });
+    return [];
+  }
+}
+
 export async function getCommunityGraphData(communityId: string): Promise<GraphData> {
   try {
-    const [nodeRows, linkRows] = await Promise.all([
-      prisma.node.findMany({
-        where: { communityId },
-        select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true },
-      }),
-      prisma.link.findMany({
-        where: { communityId },
-        select: { sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true },
-      }),
+    const [nodes, links] = await Promise.all([
+      getCommunityNodes(communityId),
+      getCommunityLinks(communityId),
     ]);
-
-    // Person.imageUrl is authoritative for profile photos (stays in sync with GCS uploads).
-    // Node.imageUrl can be stale if old local-path images were never migrated to GCS.
-    // Fetch person-type nodes to overlay profile data (image, bio, links, experience, etc.)
-    const personNodeIds = nodeRows.filter(n => n.id.startsWith('person:')).map(n => n.id);
-    const personDataMap = new Map<string, {
-      imageUrl: string | null;
-      bio: string | null;
-      website: string | null;
-      linkedinUrl: string | null;
-      twitterUrl: string | null;
-      phone: string | null;
-      pronouns: string | null;
-      openToWork: boolean;
-      experience: string | null;
-      education: string | null;
-      certifications: string | null;
-      languages: string | null;
-    }>();
-    if (personNodeIds.length > 0) {
-      const personRows = await prisma.person.findMany({
-        where: { id: { in: personNodeIds } },
-        select: {
-          id: true, imageUrl: true, bio: true, website: true,
-          linkedinUrl: true, twitterUrl: true, phone: true,
-          pronouns: true, openToWork: true,
-          workExperience: { select: { title: true, company: true }, orderBy: { sortOrder: 'asc' } },
-          education: { select: { school: true, degree: true, fieldOfStudy: true }, orderBy: { sortOrder: 'asc' } },
-          certifications: { select: { name: true, issuingOrg: true }, orderBy: { sortOrder: 'asc' } },
-          languages: { select: { language: true, proficiency: true }, orderBy: { sortOrder: 'asc' } },
-        },
-      });
-      for (const p of personRows) {
-        personDataMap.set(p.id, {
-          imageUrl: p.imageUrl,
-          bio: p.bio,
-          website: p.website,
-          linkedinUrl: p.linkedinUrl,
-          twitterUrl: p.twitterUrl,
-          phone: p.phone,
-          pronouns: p.pronouns,
-          openToWork: p.openToWork,
-          experience: p.workExperience.length > 0
-            ? p.workExperience.map(w => `${w.title} at ${w.company}`).join(', ')
-            : null,
-          education: p.education.length > 0
-            ? p.education.map(e => [e.degree, e.fieldOfStudy, e.school].filter(Boolean).join(', ')).join('; ')
-            : null,
-          certifications: p.certifications.length > 0
-            ? p.certifications.map(c => `${c.name} (${c.issuingOrg})`).join(', ')
-            : null,
-          languages: p.languages.length > 0
-            ? p.languages.map(l => l.language).join(', ')
-            : null,
-        });
-      }
-    }
-
-    const nodes: NBNode[] = nodeRows.map(row => {
-      const base = nodeRowToNBNode(row);
-      const personData = personDataMap.get(row.id);
-      if (personData) {
-        base.image_url = normalizeImageUrl(personData.imageUrl) ?? undefined;
-        base.metadata = {
-          ...base.metadata,
-          bio: personData.bio,
-          website: personData.website,
-          linkedinUrl: personData.linkedinUrl,
-          twitterUrl: personData.twitterUrl,
-          phone: personData.phone,
-          pronouns: personData.pronouns,
-          openToWork: personData.openToWork,
-          experience: personData.experience,
-          education: personData.education,
-          certifications: personData.certifications,
-          languages: personData.languages,
-        };
-      }
-      return base;
-    });
-
-    const links: NBLink[] = linkRows.map(l => ({
-      source: l.sourceId,
-      target: l.targetId,
-      relationship: l.relationship,
-      since: l.since ?? undefined,
-      metadata: (l.metadata as Record<string, unknown>) ?? {},
-      community_id: l.communityId ?? undefined,
-    }));
-
     return { nodes, links };
   } catch (err) {
     logger.error('eventRepo.getCommunityGraphData.failed', { err });
