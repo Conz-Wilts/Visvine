@@ -92,6 +92,17 @@ const CustomForceGraph: React.FC<{
   const ticksRef = useRef(0);
   const fitToScreenRef = useRef<((animate?: boolean) => void) | null>(null);
 
+  // Drives the staggered fade-in when a saved layout is restored (the frozen
+  // simulation only renders one frame, so the fade needs its own render pump).
+  const introRafRef = useRef<number | null>(null);
+  // Resolved once on mount; honoured by the fade so reduced-motion users get an
+  // instant, static graph.
+  const reduceMotionRef = useRef(
+    typeof window !== 'undefined' &&
+    !!window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+
   // Layout persistence: cold/drag → persist on settle; restore → don't persist
   // back; pan/zoom → debounced. (See ./hooks/useLayoutPersistence.)
   const { markDirty, markRestored, flushOnSettle, schedulePersist } = useLayoutPersistence(onPersistLayout);
@@ -277,10 +288,16 @@ const CustomForceGraph: React.FC<{
 
       const stagger = (node.spawnIndex ?? 0) * P.fadeInStaggerMs;
       const elapsed = renderNow - (node.spawnTime ?? renderNow) - stagger;
-      const fadeAlpha = Math.max(0, Math.min(1, elapsed / P.fadeInDurationMs));
+      const fadeAlpha = reduceMotionRef.current
+        ? 1
+        : Math.max(0, Math.min(1, elapsed / P.fadeInDurationMs));
 
       ctx.save();
       ctx.globalAlpha = (shouldDim ? 0.15 : 1) * fadeAlpha;
+      // Ease each node up into place as it fades in. Purely a draw-time offset —
+      // node.x/node.y (and the persisted layout) are never touched.
+      const rise = (1 - fadeAlpha) * P.fadeInRiseY;
+      if (rise) ctx.translate(0, rise);
       drawNodeCard(ctx, node, false, isFocused, isConnected, shouldDim);
       ctx.restore();
     });
@@ -374,6 +391,25 @@ const CustomForceGraph: React.FC<{
     simRafRef.current = requestAnimationFrame(loop);
   }, [scheduleRender, savedPositionsRef, flushOnSettle]);
 
+  // Pump renders for the duration of the staggered fade-in. Used when a saved
+  // layout is restored: the simulation is frozen (alpha 0) and would otherwise
+  // render a single frame, freezing the fade mid-way. Moves nothing — positions
+  // stay exactly on the restored layout.
+  const playFadeIn = useCallback((startNow: number, count: number) => {
+    if (introRafRef.current !== null) cancelAnimationFrame(introRafRef.current);
+    const total = P.fadeInDurationMs + count * P.fadeInStaggerMs + 50;
+    const frame = (now: number) => {
+      scheduleRender();
+      if (now - startNow < total) {
+        introRafRef.current = requestAnimationFrame(frame);
+      } else {
+        introRafRef.current = null;
+        scheduleRender();
+      }
+    };
+    introRafRef.current = requestAnimationFrame(frame);
+  }, [scheduleRender]);
+
   // Initialise / reinitialise simulation when nodes or links change
   useEffect(() => {
     if (nodes.length === 0) {
@@ -456,23 +492,38 @@ const CustomForceGraph: React.FC<{
 
     simulationRef.current = sim;
 
+    // Stamp a fresh fade-in window so nodes cascade in from when the canvas
+    // actually mounts — not from when the parent first built the node list, which
+    // may have been seconds earlier behind a loading spinner (which would leave
+    // the fade already elapsed, popping the graph in flat).
+    const introStart = typeof performance !== 'undefined' ? performance.now() : 0;
+    nodes.forEach((node, i) => { node.spawnTime = introStart; node.spawnIndex = i; });
+
     if (coldStartRef.current === false) {
       // Restored layout: freeze the simulation so the seeded positions stay put,
-      // and apply the saved camera transform instead of auto-fitting. The RAF loop
-      // settles on its first tick (alpha 0) and renders immediately.
+      // and apply the saved camera transform instead of auto-fitting.
       sim.alpha(0);
       if (initialTransformRef.current) {
         transformRef.current = { ...initialTransformRef.current };
       }
       hasInitialFitRef.current = true;
       setIsInitialFitComplete(true);
+      isLayoutReadyRef.current = true;
+      setIsLayoutReady(true);
       markRestored();
+      // The frozen sim won't tick, so drive the staggered fade-in ourselves —
+      // nodes rise + fade into their restored positions one by one.
+      if (reduceMotionRef.current) {
+        scheduleRender();
+      } else {
+        playFadeIn(introStart, nodes.length);
+      }
     } else {
-      // Cold run: persist the computed layout once it settles.
+      // Cold run: the live simulation renders every tick, so the fade rides along
+      // with the burst. Persist the computed layout once it settles.
       markDirty();
+      startSimLoop();
     }
-
-    startSimLoop();
 
     return () => {
       sim.stop();
@@ -480,8 +531,12 @@ const CustomForceGraph: React.FC<{
         cancelAnimationFrame(simRafRef.current);
         simRafRef.current = null;
       }
+      if (introRafRef.current !== null) {
+        cancelAnimationFrame(introRafRef.current);
+        introRafRef.current = null;
+      }
     };
-  }, [nodes, links, startSimLoop, markDirty, markRestored]);
+  }, [nodes, links, startSimLoop, markDirty, markRestored, playFadeIn, scheduleRender]);
 
   // Preload images for nodes and trigger re-render when loaded
   useEffect(() => {

@@ -35,6 +35,10 @@ export const OBSIDIAN_PHYSICS = {
   seedRadius: 90,
   fadeInDurationMs: 700,
   fadeInStaggerMs: 8,
+  // Each node eases up by this many graph-units as it fades in, so nodes "rise"
+  // into place. Applied visually in the canvas transform only — node positions
+  // (and the persisted layout) are never moved.
+  fadeInRiseY: 26,
   isolatedRingMultiplier: 2.6,
   isolatedRingStrength: 0.3,
   ticksBeforeReveal: 6,

@@ -1,4 +1,6 @@
-import React from 'react'
+'use client'
+
+import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { VirtuosoGrid, type GridComponents } from 'react-virtuoso'
 import NodeCard from './NodeCard'
 import type { DirectoryItem } from './types'
@@ -10,6 +12,19 @@ const GRID_STYLE: React.CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fill, 260px)',
   gap: '24px',
   justifyContent: 'space-evenly',
+}
+
+// useLayoutEffect on the client so the entrance state is set before paint (no
+// flash); useEffect on the server to avoid React's SSR warning.
+const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
+// Delay between consecutive cards in a reveal cascade.
+const STAGGER_STEP_MS = 45
+
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' &&
+    !!window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
 function NodeCardSkeleton() {
@@ -26,6 +41,77 @@ function NodeCardSkeleton() {
           <Skeleton className="flex-1 h-8 rounded-full" />
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Coordinates the staggered "rise" reveal across cards.
+ *
+ * VirtuosoGrid only mounts the cards in (or near) the viewport, so we can't use
+ * the absolute list index for the stagger delay — a card at index 200 revealed
+ * by scrolling would sit invisible for seconds. Instead we stagger by the order
+ * in which cards mount *within a single animation frame*: the first screenful
+ * cascades 0,1,2,…, and a later batch revealed by scrolling starts its own short
+ * cascade from 0. Each id animates at most once; scrolling back to an
+ * already-revealed card shows it instantly.
+ */
+function createRevealCoordinator() {
+  const revealed = new Set<string>()
+  let batch = 0
+  let scheduled = false
+  return {
+    /** Returns the stagger order for a freshly-revealed card, or null if it has
+     *  already been revealed (and should appear instantly). */
+    claim(id: string): number | null {
+      if (revealed.has(id)) return null
+      revealed.add(id)
+      const order = batch++
+      if (!scheduled) {
+        scheduled = true
+        requestAnimationFrame(() => { batch = 0; scheduled = false })
+      }
+      return order
+    },
+    reset() {
+      revealed.clear()
+      batch = 0
+      scheduled = false
+    },
+  }
+}
+
+type RevealCoordinator = ReturnType<typeof createRevealCoordinator>
+
+// Wraps a card and plays the rise-in animation the first time it appears.
+function RevealCard({ id, coordinator, children }: {
+  id: string
+  coordinator: RevealCoordinator
+  children: React.ReactNode
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useIsoLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const order = coordinator.claim(id)
+    if (order === null || prefersReducedMotion()) {
+      el.style.opacity = '1'
+      return
+    }
+    el.style.animationDelay = `${order * STAGGER_STEP_MS}ms`
+    el.classList.add('card-rise')
+    // `card-rise` uses `animation-fill-mode: both` to hold full opacity at the
+    // end; pin it inline before dropping the class so the card stays visible.
+    const done = () => { el.style.opacity = '1'; el.classList.remove('card-rise') }
+    el.addEventListener('animationend', done, { once: true })
+    return () => el.removeEventListener('animationend', done)
+    // Claim exactly once per mount — id/coordinator are stable for a mounted card.
+  }, [])
+
+  return (
+    <div ref={ref} style={{ opacity: 0 }}>
+      {children}
     </div>
   )
 }
@@ -60,6 +146,21 @@ interface DirectoryGridProps {
 }
 
 export default function NodeGrid({ items, loading = false, onCardClick, nodeTypes, communityAliases }: DirectoryGridProps) {
+  // One coordinator per mounted grid, reset whenever the result set changes so a
+  // filter/search re-runs the cascade (mirrors the previous id-keyed behaviour).
+  const coordinatorRef = useRef<RevealCoordinator | null>(null)
+  if (!coordinatorRef.current) coordinatorRef.current = createRevealCoordinator()
+  const coordinator = coordinatorRef.current
+
+  const idSignature = useMemo(() => items.map(i => i.id).join(','), [items])
+  const prevSignatureRef = useRef<string | null>(null)
+  // Derive-during-render reset so the coordinator is cleared before the new
+  // cards' layout effects run (child effects fire before parent effects).
+  if (idSignature !== prevSignatureRef.current) {
+    prevSignatureRef.current = idSignature
+    coordinator.reset()
+  }
+
   if (loading) return (
     <div style={GRID_STYLE} className="w-full">
       {Array.from({ length: 12 }).map((_, i) => <NodeCardSkeleton key={i} />)}
@@ -79,7 +180,9 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
       components={gridComponents}
       computeItemKey={(_, item) => item.id}
       itemContent={(_, item) => (
-        <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} communityAliases={communityAliases} />
+        <RevealCard id={item.id} coordinator={coordinator}>
+          <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} communityAliases={communityAliases} />
+        </RevealCard>
       )}
     />
   )
