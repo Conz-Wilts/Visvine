@@ -74,10 +74,11 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   const savedPositionsRef = savedPositionsRefProp || localSavedPositionsRef;
   const graphDataHashRef = graphDataHashRefProp || localGraphDataHashRef;
 
-  // Set when the user explicitly re-runs the layout — makes us ignore the saved
-  // server seed and recompute from scratch (then persist the fresh result).
-  const ignoreServerSeedRef = useRef(false);
-  const [rerunNonce, setRerunNonce] = useState(0);
+  // Tracks the structure hash the user explicitly re-ran the layout for — makes
+  // us ignore the saved server seed and recompute from scratch (then persist the
+  // fresh result). Cleared naturally once the structure changes, which re-enables
+  // a fresh server seed.
+  const [recomputedHash, setRecomputedHash] = useState<string | null>(null);
 
   // Handle node clicks - just set the node directly, sidebar handles the transition
   const handleNodeClick = useCallback((node: NBNode) => {
@@ -115,17 +116,11 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
 
   // The saved layout is only reusable while it describes the current structure.
   const serverSeed = useMemo(
-    () => {
-      // `rerunNonce` is read only to retrigger this memo when the user clicks
-      // "Re-run layout" (which flips ignoreServerSeedRef and bumps rerunNonce).
-      // A ref mutation alone can't retrigger a memo, so without this coldStart
-      // would stay false and the canvas would re-freeze the saved layout.
-      void rerunNonce;
-      return (initialLayout && initialLayout.hash === graphDataHash && !ignoreServerSeedRef.current)
+    () =>
+      (initialLayout && initialLayout.hash === graphDataHash && recomputedHash !== graphDataHash)
         ? initialLayout
-        : null;
-    },
-    [initialLayout, graphDataHash, rerunNonce],
+        : null,
+    [initialLayout, graphDataHash, recomputedHash],
   );
   // Cold start = no reusable saved layout → run the full simulation.
   const coldStart = serverSeed === null;
@@ -174,7 +169,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData.nodes, graphDataHash, serverSeed, rerunNonce]);
+  }, [graphData.nodes, graphDataHash, serverSeed, recomputedHash]);
 
   // Wrap the canvas's geometry callback to stamp it with the current structure
   // hash before handing it to the persistence layer.
@@ -207,7 +202,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // Graph view
   if (activeTab === 'graph') {
     return (
-      <div className="relative h-full w-full bg-brand-bg">
+      <div className="relative h-full w-full bg-white">
         {error && (
           <div className="absolute top-4 left-1/2 z-10 -translate-x-1/2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-red-700">
             {error}
@@ -233,10 +228,9 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             initialTransform={serverSeed?.transform ?? null}
             onPersistLayout={handlePersistLayout}
             onRerunLayout={() => {
-              ignoreServerSeedRef.current = true;
+              setRecomputedHash(graphDataHash);
               savedPositionsRef.current.clear();
               graphDataHashRef.current = '';
-              setRerunNonce(n => n + 1);
             }}
           />
         </div>

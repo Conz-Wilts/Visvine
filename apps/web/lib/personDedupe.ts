@@ -20,7 +20,10 @@ export function findMatchingPerson(
   nodes: NBNode[],
   input: PersonMatchInput
 ): NBNode | null {
-  const personNodes = nodes.filter((n) => n.type === 'People');
+  // Identify person nodes by their `person:` id prefix rather than a type-string
+  // compare: node types are stored lowercase-canonical ('person'), but the prefix
+  // convention is stable across any historical casing ('People'/'people').
+  const personNodes = nodes.filter((n) => n.id.startsWith('person:'));
 
   // Try email match first (case-insensitive)
   if (input.email) {
@@ -87,7 +90,7 @@ export function createPersonNode(input: {
 
   return {
     id,
-    type: 'People',
+    type: 'person',
     name: input.name,
     subtitle,
     tags: input.companyName ? [input.companyName] : [],

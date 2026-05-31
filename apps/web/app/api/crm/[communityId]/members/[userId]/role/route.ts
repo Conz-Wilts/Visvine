@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { RolePatchSchema } from "@/lib/schemas/crm";
+import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
 import prisma from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ communityId: string; userId: string }> };
@@ -26,28 +27,27 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   const { role } = body.data;
 
-  // Protect last admin
-  if (role !== "admin") {
-    const target = await prisma.userCommunity.findUnique({
-      where: { userId_communityId: { userId, communityId } },
-    });
-    if (target?.role === "admin") {
-      const adminCount = await prisma.userCommunity.count({
-        where: { communityId, role: "admin" },
-      });
-      if (adminCount <= 1) {
-        return NextResponse.json(
-          { error: "last_admin_protected", message: "Cannot demote the last admin." },
-          { status: 409 }
-        );
-      }
+  // Protect last admin atomically: demotions to a non-admin role are guarded;
+  // promotions to admin leave the headcount safe so the guard is skipped.
+  let updated;
+  try {
+    updated = await guardLastAdminThenMutate(
+      { communityId, userIds: [userId], guard: role !== "admin" },
+      (tx) =>
+        tx.userCommunity.update({
+          where: { userId_communityId: { userId, communityId } },
+          data: { role },
+        })
+    );
+  } catch (e) {
+    if (e instanceof LastAdminError) {
+      return NextResponse.json(
+        { error: "last_admin_protected", message: "Cannot demote the last admin." },
+        { status: 409 }
+      );
     }
+    throw e;
   }
-
-  const updated = await prisma.userCommunity.update({
-    where: { userId_communityId: { userId, communityId } },
-    data: { role },
-  });
 
   await prisma.auditLog.create({
     data: {

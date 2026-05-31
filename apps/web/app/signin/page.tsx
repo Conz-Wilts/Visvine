@@ -48,7 +48,7 @@ export default async function SignInPage({
         {/* Auth */}
         <div className="mt-8 w-full flex flex-col gap-3">
           <a
-            href={`/api/auth/signin/google?callbackUrl=${cb}&real=1`}
+            href={`/api/auth/signin/google?callbackUrl=${cb}`}
             className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-medium text-gray-700 shadow-sm"
           >
             <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">

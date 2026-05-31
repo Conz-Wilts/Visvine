@@ -7,7 +7,7 @@ import { slugify } from '@/lib/eventUtils';
 import type { CommunityAlias } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
-import { usePersonSearch, type PersonSearchResult } from '@/hooks/usePersonSearch';
+import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
 import MatchPanel from './MatchPanel';
 import {
   TYPE_OPTIONS,
@@ -28,6 +28,23 @@ function generateNodeId(type: string, name: string): string {
 function generateCommunityId(name: string): string {
   return slugify(name);
 }
+
+// Fallback avatars for the finder panel, shown when a match has no image.
+const PERSON_FINDER_ICON = (
+  <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
+const RESOURCE_FINDER_ICON = (
+  <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+  </svg>
+);
+const EVENT_FINDER_ICON = (
+  <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
 
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
@@ -51,10 +68,13 @@ export default function CreateModal() {
   const nameRef = useRef<HTMLInputElement | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Cross-community person search
-  const { results: matchResults, loading: matchLoading } = usePersonSearch(personData.name, personData.email);
+  // Cross-community finder — one search per addable node type. Inactive types
+  // have an empty name, so their hook short-circuits without fetching.
+  const personSearch = useNodeSearch(personData.name, 'person', personData.email);
+  const resourceSearch = useNodeSearch(resourceData.name, 'resource');
+  const eventSearch = useNodeSearch(eventData.name, 'event');
 
-  const handleMatchSelect = (r: PersonSearchResult) => {
+  const handleMatchSelect = (r: NodeSearchResult) => {
     if (personData.imagePreview && personData.imagePreview.startsWith('blob:')) {
       URL.revokeObjectURL(personData.imagePreview);
     }
@@ -66,6 +86,24 @@ export default function CreateModal() {
       tags: (r.tags || []).join(', '),
       imageBlob: null,
       imagePreview: r.image_url || null,
+    });
+  };
+
+  const handleResourceMatch = (r: NodeSearchResult) => {
+    setResourceData({
+      name: r.name,
+      subtitle: r.subtitle || '',
+      location: r.location || '',
+      tags: (r.tags || []).join(', '),
+    });
+  };
+
+  const handleEventMatch = (r: NodeSearchResult) => {
+    setEventData({
+      name: r.name,
+      subtitle: r.subtitle || '',
+      location: r.location || '',
+      tags: (r.tags || []).join(', '),
     });
   };
 
@@ -345,7 +383,9 @@ export default function CreateModal() {
         {/* Panel */}
         <div
           className={`relative w-full rounded-2xl border border-border-subtle bg-surface-1 shadow-2xl ${
-            step === 1 && selectedType === 'person' ? 'max-w-3xl' : 'max-w-sm'
+            step === 1 && (selectedType === 'person' || selectedType === 'resource' || selectedType === 'event')
+              ? 'max-w-3xl'
+              : 'max-w-sm'
           }`}
           style={{ animation: 'modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both' }}
         >
@@ -399,18 +439,53 @@ export default function CreateModal() {
                 {/* Match panel — right */}
                 <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
                   <MatchPanel
-                    results={matchResults}
-                    loading={matchLoading}
+                    results={personSearch.results}
+                    loading={personSearch.loading}
                     onSelect={handleMatchSelect}
+                    title="Existing People"
+                    emptyHint="Type a name or email to find existing people across communities."
+                    fallbackIcon={PERSON_FINDER_ICON}
                   />
                 </div>
               </div>
             )}
             {step === 1 && selectedType === 'resource' && (
-              <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} />
+              <div className="flex gap-6">
+                {/* Form — left */}
+                <div className="flex-1 min-w-0">
+                  <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} />
+                </div>
+                {/* Match panel — right */}
+                <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
+                  <MatchPanel
+                    results={resourceSearch.results}
+                    loading={resourceSearch.loading}
+                    onSelect={handleResourceMatch}
+                    title="Existing Resources"
+                    emptyHint="Type a name to find existing resources across communities."
+                    fallbackIcon={RESOURCE_FINDER_ICON}
+                  />
+                </div>
+              </div>
             )}
             {step === 1 && selectedType === 'event' && (
-              <EventForm data={eventData} onChange={setEventData} nameRef={nameRef} />
+              <div className="flex gap-6">
+                {/* Form — left */}
+                <div className="flex-1 min-w-0">
+                  <EventForm data={eventData} onChange={setEventData} nameRef={nameRef} />
+                </div>
+                {/* Match panel — right */}
+                <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
+                  <MatchPanel
+                    results={eventSearch.results}
+                    loading={eventSearch.loading}
+                    onSelect={handleEventMatch}
+                    title="Existing Events"
+                    emptyHint="Type a name to find existing events across communities."
+                    fallbackIcon={EVENT_FINDER_ICON}
+                  />
+                </div>
+              </div>
             )}
             {step === 1 && selectedType === 'community' && (
               <CommunityForm data={communityData} onChange={setCommunityData} nameRef={nameRef} />

@@ -1,26 +1,29 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface FullProfileContextValue {
-  /** Currently open profile node ID, or null */
-  openNodeId: string | null;
-  /** Open the full-screen profile overlay for a node */
+  /**
+   * Open the full-screen profile for a node. This navigates to the node's own
+   * page (`/directory/<nodeId>`) rather than opening an overlay, so full-screen
+   * profiles have their own shareable URL and don't sit on top of /directory.
+   */
   openProfile: (nodeId: string) => void;
-  /** Close the overlay */
-  closeProfile: () => void;
 }
 
 const FullProfileContext = createContext<FullProfileContextValue | null>(null);
 
 export function FullProfileProvider({ children }: { children: React.ReactNode }) {
-  const [openNodeId, setOpenNodeId] = useState<string | null>(null);
+  const router = useRouter();
 
-  const openProfile = useCallback((nodeId: string) => setOpenNodeId(nodeId), []);
-  const closeProfile = useCallback(() => setOpenNodeId(null), []);
+  const openProfile = useCallback(
+    (nodeId: string) => router.push(`/directory/${encodeURIComponent(nodeId)}`),
+    [router]
+  );
 
   return (
-    <FullProfileContext.Provider value={{ openNodeId, openProfile, closeProfile }}>
+    <FullProfileContext.Provider value={{ openProfile }}>
       {children}
     </FullProfileContext.Provider>
   );

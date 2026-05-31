@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 import type { SemanticSearchResult } from '@/lib/types';
 import { parseQuery } from '@/lib/ai/queryParser';
+import { getOpenAI } from '@/lib/ai/openai';
 import { logger } from '@/lib/logger';
-
-const hasOpenAI = !!process.env.OPENAI_API_KEY;
-const openai = hasOpenAI ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
 
 interface Candidate {
     id: string;
@@ -53,6 +50,7 @@ function candidateDigest(c: Candidate): string {
 interface RerankItem { id: string; score: number; explanation: string }
 
 async function rerank(query: string, candidates: Candidate[]): Promise<Map<string, RerankItem>> {
+    const openai = getOpenAI();
     if (candidates.length === 0 || !openai) return new Map();
 
     const listing = candidates
@@ -117,9 +115,10 @@ export async function POST(request: NextRequest) {
 
         // Without OpenAI we fall back to keyword-only search (per CLAUDE.md).
         // parseQuery and embeddings both require OPENAI_API_KEY.
+        const openai = getOpenAI();
         const keywordOnlyParse = (): Awaited<ReturnType<typeof parseQuery>> =>
             ({ filters: {}, semantic_terms: [query] });
-        const parsed = hasOpenAI
+        const parsed = openai
             ? await parseQuery(query).catch(err => {
                 logger.error('api.search.semantic.parse_failed', { err });
                 return keywordOnlyParse();

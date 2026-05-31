@@ -2,12 +2,12 @@
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import ChatInterface from '@/components/chat/ChatInterface';
 import SearchAndFilters from '@/components/dashboard/SearchAndFilters';
 import NodeGrid from '@/components/dashboard/NodeGrid';
 import CrmDirectoryTable from '@/components/crm/CrmDirectoryTable';
 import NodeDetailsSidebar from '@/components/graph/NodeDetailsSidebar';
-import FullProfileOverlay from '@/components/profile/FullProfileOverlay';
 import { useDirectoryNodes } from '@/hooks/useDirectoryNodes';
 import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
@@ -15,7 +15,7 @@ import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import { useSemanticSearch } from '@/hooks/useSemanticSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
-import type { NBNode, CommunityAlias } from '@/lib/types';
+import type { NBNode, CommunityAlias, SemanticSearchResult } from '@/lib/types';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { Pencil } from 'lucide-react';
@@ -32,14 +32,53 @@ const DirectoryGraphView = dynamic(() => import('@/components/dashboard/Director
 type DirectoryView = 'grid' | 'table' | 'graph';
 type SortOrder = 'az' | 'za';
 
+// Maps a directory node into the full DirectoryItem shape the grid/table consume.
+function toDirectoryItem(node: NBNode): DirectoryItem {
+  return {
+    id: node.id, name: node.name, type: node.type,
+    alias: node.alias,
+    subtitle: node.subtitle, location: node.location,
+    url: node.url,
+    bio: node.metadata?.bio as string | undefined,
+    tags: node.tags, image_url: node.image_url,
+    company_name: node.metadata?.company_name as string | undefined,
+    company_image_url: node.metadata?.company_image_url as string | undefined,
+    website: node.metadata?.website as string | undefined,
+    linkedinUrl: node.metadata?.linkedinUrl as string | undefined,
+    twitterUrl: node.metadata?.twitterUrl as string | undefined,
+    phone: node.metadata?.phone as string | undefined,
+    pronouns: node.metadata?.pronouns as string | undefined,
+    openToWork: node.metadata?.openToWork as boolean | undefined,
+  };
+}
+
+// Semantic results carry a smaller payload; the grid only needs the card fields.
+function semanticResultToGridItem(r: SemanticSearchResult): DirectoryItem {
+  return {
+    id: r.id, name: r.name, type: r.type, alias: r.alias,
+    subtitle: r.subtitle, location: r.location, tags: r.tags,
+    company_name: r.metadata?.company_name as string | undefined,
+    company_image_url: r.metadata?.company_image_url as string | undefined,
+  };
+}
+
+// Table rows additionally surface the match explanation + similarity score.
+function semanticResultToTableItem(r: SemanticSearchResult): DirectoryItem {
+  return {
+    id: r.id, name: r.name, type: r.type, alias: r.alias,
+    subtitle: r.subtitle, location: r.location, url: r.url,
+    bio: r.metadata?.bio as string | undefined,
+    tags: r.tags,
+    explanation: r.explanation, similarity: r.similarity,
+  };
+}
+
 export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentView, setCurrentView] = useState<DirectoryView>('grid');
   const [graphChatValue, setGraphChatValue] = useState('');
   const [graphEverOpened, setGraphEverOpened] = useState(false);
   const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
-  const [fullProfileNodeId, setFullProfileNodeId] = useState<string | null>(null);
-  const [fullProfileInitialNode, setFullProfileInitialNode] = useState<NBNode | null>(null);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
@@ -47,7 +86,8 @@ export default function DashboardPage() {
   const [editMode, setEditMode] = useState(false);
   // Saves multi-type selection when entering table view so it can be restored on exit
   const savedFilterTypesRef = useRef<Set<string> | null>(null);
-  const { setHeaderContent } = useHeader();
+  const { setHeaderContent, setHeaderRight } = useHeader();
+  const router = useRouter();
 
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
   const { isAdmin } = useCommunity();
@@ -74,13 +114,19 @@ export default function DashboardPage() {
 
   useEffect(() => { setGraphChatValue(searchTerm); }, [searchTerm]);
 
-  // Always show all configured types (even those with zero nodes)
+  // Always show all configured types (even those with zero nodes).
+  // Stored node.type casing ('person') can differ from the configured name
+  // ('Person'); canonicalize by lowercase so the two collapse into a single
+  // entry (preferring the configured casing) instead of showing duplicates.
   const presentTypes = useMemo(() => {
     const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
-    const configured = new Set(configuredTypes.map(t => t.name));
-    // Also include any types that appear in data but aren't in config
-    nodes.forEach(n => configured.add(n.type));
-    return Array.from(configured).sort();
+    const byLower = new Map<string, string>();
+    for (const t of configuredTypes) byLower.set(t.name.toLowerCase(), t.name);
+    nodes.forEach(n => {
+      const key = n.type.toLowerCase();
+      if (!byLower.has(key)) byLower.set(key, n.type);
+    });
+    return Array.from(byLower.values()).sort();
   }, [nodes, community?.nodeTypes]);
 
   const presentTags = useMemo(() => {
@@ -112,22 +158,7 @@ export default function DashboardPage() {
   }, [currentView, filterTypes, presentTypes]);
 
   const items = useMemo<DirectoryItem[]>(() =>
-    nodes.map(node => ({
-      id: node.id, name: node.name, type: node.type,
-      alias: node.alias,
-      subtitle: node.subtitle, location: node.location,
-      url: node.url,
-      bio: node.metadata?.bio as string | undefined,
-      tags: node.tags, image_url: node.image_url,
-      company_name: node.metadata?.company_name as string | undefined,
-      company_image_url: node.metadata?.company_image_url as string | undefined,
-      website: node.metadata?.website as string | undefined,
-      linkedinUrl: node.metadata?.linkedinUrl as string | undefined,
-      twitterUrl: node.metadata?.twitterUrl as string | undefined,
-      phone: node.metadata?.phone as string | undefined,
-      pronouns: node.metadata?.pronouns as string | undefined,
-      openToWork: node.metadata?.openToWork as boolean | undefined,
-    })),
+    nodes.map(toDirectoryItem),
   [nodes]);
 
   const { filteredItems: searchFilteredItems } = useDashboardSearch(items, searchTerm);
@@ -135,7 +166,12 @@ export default function DashboardPage() {
   // Apply type + alias + tag filters then sort
   const filteredItems = useMemo(() => {
     let result = searchFilteredItems;
-    if (filterTypes.size > 0) result = result.filter(i => filterTypes.has(i.type));
+    if (filterTypes.size > 0) {
+      // Compare case-insensitively: filterTypes holds canonical names ('Person')
+      // while stored item.type may be lowercase ('person').
+      const wanted = new Set([...filterTypes].map(t => t.toLowerCase()));
+      result = result.filter(i => wanted.has(i.type.toLowerCase()));
+    }
     if (filterAliases.size > 0) result = result.filter(i => i.alias != null && filterAliases.has(i.alias));
     if (filterTags.size > 0) result = result.filter(i => (i.tags ?? []).some(t => filterTags.has(t)));
     return [...result].sort((a, b) =>
@@ -201,6 +237,14 @@ export default function DashboardPage() {
       handleGraphChatChange, handleGraphChatSubmit, handleGridTableSearchSubmit,
       handleClearSemantic, setHeaderContent]);
 
+  // View toggle lives in the navbar, to the left of the profile icon.
+  useEffect(() => {
+    setHeaderRight(
+      <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} />
+    );
+    return () => setHeaderRight(null);
+  }, [currentView, handleViewChange, setHeaderRight]);
+
   return (
     <div
       className="relative w-full"
@@ -215,7 +259,6 @@ export default function DashboardPage() {
         <>
           <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-0">
             <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
-            <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} />
           </div>
 
           <div className="flex items-center gap-3 px-6 pt-3 pb-1">
@@ -229,12 +272,12 @@ export default function DashboardPage() {
                 return {
                   value: t,
                   label: t,
-                  count: nodes.filter(n => n.type === t).length,
+                  count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase()).length,
                   subOptions: aliases.length > 0 ? aliases.map(a => ({
                     value: a.name,
                     label: a.name,
                     color: a.color,
-                    count: nodes.filter(n => n.type === t && n.alias === a.name).length,
+                    count: nodes.filter(n => n.type.toLowerCase() === t.toLowerCase() && n.alias === a.name).length,
                   })) : undefined,
                 };
               })}
@@ -295,13 +338,6 @@ export default function DashboardPage() {
             )}
           </div>
         </>
-      )}
-
-      {/* ── View toggle overlaid on graph ── */}
-      {isGraphView && (
-        <div className="absolute top-6 right-6 z-20">
-          <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} />
-        </div>
       )}
 
       {/* ── Graph canvas — lazily mounted on first open, then kept warm ── */}
@@ -368,12 +404,7 @@ export default function DashboardPage() {
             {!semanticLoading && (
               currentView === 'grid' ? (
                 <NodeGrid
-                  items={isSemanticSearch ? sortedSemanticResults.map(r => ({
-                    id: r.id, name: r.name, type: r.type, alias: r.alias,
-                    subtitle: r.subtitle, location: r.location, tags: r.tags,
-                    company_name: r.metadata?.company_name as string | undefined,
-                    company_image_url: r.metadata?.company_image_url as string | undefined,
-                  })) : filteredItems}
+                  items={isSemanticSearch ? sortedSemanticResults.map(semanticResultToGridItem) : filteredItems}
                   loading={loading}
                   onCardClick={handleItemClick}
                   nodeTypes={community?.nodeTypes}
@@ -381,13 +412,7 @@ export default function DashboardPage() {
                 />
               ) : (
                 <CrmDirectoryTable
-                  items={isSemanticSearch ? sortedSemanticResults.map(r => ({
-                    id: r.id, name: r.name, type: r.type, alias: r.alias,
-                    subtitle: r.subtitle, location: r.location, url: r.url,
-                    bio: r.metadata?.bio as string | undefined,
-                    tags: r.tags,
-                    explanation: r.explanation, similarity: r.similarity,
-                  })) : filteredItems}
+                  items={isSemanticSearch ? sortedSemanticResults.map(semanticResultToTableItem) : filteredItems}
                   loading={loading}
                   onRowClick={handleItemClick}
                   nodeTypes={community?.nodeTypes}
@@ -409,17 +434,10 @@ export default function DashboardPage() {
         node={selectedNode}
         onClose={() => setSelectedNode(null)}
         onExpandToFullPage={(node) => {
-          setFullProfileNodeId(node.id);
-          setFullProfileInitialNode(node);
-          // Delay sidebar close so overlay slides in first (seamless transition)
-          setTimeout(() => setSelectedNode(null), 150);
+          // Full-screen profile is its own page (own URL), not an overlay on
+          // /directory. The sidebar peek stays here; expanding navigates away.
+          router.push(`/directory/${encodeURIComponent(node.id)}`);
         }}
-      />
-
-      <FullProfileOverlay
-        nodeId={fullProfileNodeId}
-        initialNode={fullProfileInitialNode ?? undefined}
-        onClose={() => { setFullProfileNodeId(null); setFullProfileInitialNode(null); }}
       />
     </div>
   );

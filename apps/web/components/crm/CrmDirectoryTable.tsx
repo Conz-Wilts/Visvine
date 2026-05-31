@@ -2,21 +2,19 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
-import { Lock, Globe, Clock, Plus, X, Loader2, Upload, User, Share2 } from 'lucide-react';
+import { Lock, Globe, Clock, Plus, X, User } from 'lucide-react';
 import { uploadCroppedImage, validateImageFile } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
 import type { AdminProfileNode } from '@/app/api/communities/[communityId]/admin/profiles/route';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types';
-import { getNodeTypeConfig } from '@/lib/types';
-import { getTypeColor } from '@/components/dashboard/typeStyles';
-import { getInitials } from '@/components/dashboard/utils';
-import { Badge, EmptyState, Skeleton } from '@/components/ui';
+import { EmptyState, Skeleton } from '@/components/ui';
 import { useCrmColumns, prvKey, comKey, CrmColumnType } from '@/hooks/useCrmColumns';
+import { patchAdminProfile } from '@/lib/crm/adminProfileApi';
 import AddColumnModal from './AddColumnModal';
 import RequestUpgradePrompt from './RequestUpgradePrompt';
-import CellEditor from './CellEditor';
-import { getProfileColumns, renderProfileCell } from './profileColumns';
+import DirectoryRowCells from './DirectoryRowCells';
+import { getProfileColumns } from './profileColumns';
 
 const UPGRADE_THRESHOLD = 3;
 
@@ -192,11 +190,11 @@ export default function CrmDirectoryTable({
       .catch(() => {});
   }, [isAdmin, communityId]);
 
-  const isEditable = (nodeId: string) => {
+  const isEditable = useCallback((nodeId: string) => {
     if (!isAdmin || !editMode) return false;
     const an = adminNodes.get(nodeId);
     return !!an && !an.isMember;
-  };
+  }, [isAdmin, editMode, adminNodes]);
 
   const openProfileCell = (nodeId: string, field: string, current: string, e: React.MouseEvent) => {
     if (!isEditable(nodeId)) return;
@@ -212,11 +210,7 @@ export default function CrmDirectoryTable({
       ? { tags: value.split(',').map(t => t.trim()).filter(Boolean) }
       : { [field]: value };
     try {
-      const res = await fetch(`/api/communities/${communityId}/admin/profiles`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId, fields }),
-      });
+      const res = await patchAdminProfile(communityId, nodeId, fields);
       if (res.ok) {
         const data = await res.json();
         setAdminNodes(prev => {
@@ -232,11 +226,8 @@ export default function CrmDirectoryTable({
           });
           return next;
         });
-        // Update the items array for person-specific fields displayed via metadata
-        if (data.person) {
-          // Force a refresh by updating the item in-place via the onRowClick pattern
-          // The graph cache will be invalidated server-side (revalidateTag)
-        }
+        // Reflect person-field edits in the underlying items/graph.
+        onDataChanged?.();
       }
     } finally {
       setProfileSaving(false);
@@ -254,11 +245,7 @@ export default function CrmDirectoryTable({
     setAliasEditNodeId(null);
     setAliasOverrides(prev => new Map(prev).set(nodeId, alias));
     try {
-      const res = await fetch(`/api/communities/${communityId}/admin/profiles`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId, fields: { alias } }),
-      });
+      const res = await patchAdminProfile(communityId, nodeId, { alias });
       if (res.ok) {
         setAdminNodes(prev => {
           const next = new Map(prev);
@@ -307,16 +294,20 @@ export default function CrmDirectoryTable({
     try {
       const url = await uploadCroppedImage('card', nodeId, blob, tableCropperState.file.name);
       setImageOverrides(prev => new Map(prev).set(nodeId, url));
-      await fetch(`/api/communities/${communityId}/admin/profiles`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId, fields: { imageUrl: url } }),
-      });
+      await patchAdminProfile(communityId, nodeId, { imageUrl: url });
       setTableCropperState(null);
       onDataChanged?.();
     } finally {
       setUploadingId(null);
     }
+  };
+
+  const toggleOpenToWork = async (item: DirectoryItem) => {
+    if (!communityId) return;
+    try {
+      const res = await patchAdminProfile(communityId, item.id, { openToWork: !item.openToWork });
+      if (res.ok) onDataChanged?.();
+    } catch { /* ignore */ }
   };
 
   // Upgrade prompt: first private column exceeding threshold that hasn't been dismissed
@@ -364,14 +355,10 @@ export default function CrmDirectoryTable({
   // Stable per-row context for the virtualized rows.
   const rowContext = useMemo<RowContext>(() => ({
     editMode,
-    isEditable: (id: string) => {
-      if (!isAdmin || !editMode) return false;
-      const an = adminNodes.get(id);
-      return !!an && !an.isMember;
-    },
+    isEditable,
     isMember: (id: string) => adminNodes.get(id)?.isMember ?? false,
     onRowClick,
-  }), [editMode, isAdmin, adminNodes, onRowClick]);
+  }), [editMode, isEditable, adminNodes, onRowClick]);
 
   // ── Header (rendered once, sticky) ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
@@ -422,227 +409,44 @@ export default function CrmDirectoryTable({
   ), [profileColumns, crmColumns, removePrivateColumn, openAddModal]);
 
   // ── Row cells ──────────────────────────────────────────────────────────────
-  const renderCells = (item: DirectoryItem) => {
-    const editable = isEditable(item.id);
-    const adminNode = adminNodes.get(item.id);
-    const isMemberRow = adminNode?.isMember ?? false;
-    const imgSrc = imageOverrides.get(item.id) ?? item.image_url;
-
-    return (
-      <>
-        {/* Name + photo */}
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="flex items-center gap-3">
-            {/* Photo — clickable in edit mode */}
-            <div
-              className={`relative flex-shrink-0 h-10 w-10 rounded-xl overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
-              onClick={editable ? e => triggerImageUpload(item.id, e) : undefined}
-            >
-              {imgSrc ? (
-                <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="h-10 w-10 object-cover" />
-              ) : (
-                <div className="h-10 w-10 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
-                  {getInitials(item.name)}
-                </div>
-              )}
-              {editable && (
-                uploadingId === item.id ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                    <Loader2 className="w-4 h-4 text-white animate-spin" />
-                  </div>
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity">
-                    <Upload className="w-3.5 h-3.5 text-white" />
-                  </div>
-                )
-              )}
-            </div>
-
-            {/* Name — inline editable */}
-            <div className="min-w-0">
-              {editable && profileCell?.nodeId === item.id && profileCell.field === 'name' ? (
-                <input
-                  autoFocus
-                  value={profileCell.value}
-                  onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                  onBlur={saveProfileCell}
-                  onKeyDown={handleProfileKeyDown}
-                  disabled={profileSaving}
-                  className="text-sm font-medium text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
-                />
-              ) : (
-                <div
-                  className={`text-sm font-medium text-text-primary truncate ${editable ? 'hover:bg-brand-green/10 rounded px-1 -mx-1 cursor-text' : ''}`}
-                  onClick={editable ? e => openProfileCell(item.id, 'name', item.name, e) : undefined}
-                >
-                  {item.name}
-                </div>
-              )}
-            </div>
-          </div>
-        </td>
-
-        {/* Type / Alias — editable for admin */}
-        <td className="px-6 py-4 whitespace-nowrap relative">
-          {editable && !isMemberRow && aliasEditNodeId === item.id ? (
-            <div className="absolute z-20 top-full left-4 mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-lg py-1 min-w-[140px]"
-              onClick={e => e.stopPropagation()}
-            >
-              {/* Person (no alias) */}
-              {(() => {
-                const currentAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-                return (
-                  <>
-                    <button
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${!currentAlias ? 'font-semibold' : ''}`}
-                      onClick={() => saveAlias(item.id, null)}
-                    >
-                      <Badge variant="type-pill" color={getNodeTypeConfig('Person', nodeTypes).color}>Person</Badge>
-                    </button>
-                    {personAliases.map(a => (
-                      <button
-                        key={a.name}
-                        className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${currentAlias === a.name ? 'font-semibold' : ''}`}
-                        onClick={() => saveAlias(item.id, a.name)}
-                      >
-                        <Badge variant="type-pill" color={a.color}>{a.name}</Badge>
-                      </button>
-                    ))}
-                  </>
-                );
-              })()}
-            </div>
-          ) : null}
-          {(() => {
-            const displayAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-            const aliasConfig = displayAlias ? (communityAliases ?? []).find(a => a.name === displayAlias && a.nodeType === item.type) : undefined;
-            const color = aliasConfig?.color ?? getNodeTypeConfig(item.type, nodeTypes).color;
-            return (
-              <div
-                className={editable && !isMemberRow ? 'cursor-pointer hover:opacity-80' : ''}
-                onClick={editable && !isMemberRow ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
-              >
-                <Badge variant="type-pill" color={color}>{displayAlias ?? item.type}</Badge>
-              </div>
-            );
-          })()}
-        </td>
-
-        {/* Type-specific profile columns (Global Public layer) */}
-        {profileColumns.map(col => {
-          const isToggle = col.key === 'openToWork';
-          const isEditableField = editable && !isMemberRow && !isToggle;
-          const isToggleable = editable && !isMemberRow && isToggle;
-          const editField = col.key as string;
-          const currentVal = col.key === 'tags'
-            ? item.tags?.join(', ') ?? ''
-            : (item[col.key] as string) ?? '';
-          return (
-            <td
-              key={col.key}
-              className={`px-6 py-4 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
-              onClick={
-                isToggleable
-                  ? async (e) => {
-                      e.stopPropagation();
-                      if (!communityId) return;
-                      await fetch(`/api/communities/${communityId}/admin/profiles`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ nodeId: item.id, fields: { openToWork: !item.openToWork } }),
-                      });
-                    }
-                  : isEditableField
-                    ? e => openProfileCell(item.id, editField, currentVal, e)
-                    : undefined
-              }
-              title={isMemberRow ? `Managed by ${item.name}` : undefined}
-            >
-              {isEditableField && profileCell?.nodeId === item.id && profileCell.field === editField ? (
-                <input
-                  autoFocus
-                  value={profileCell.value}
-                  onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                  onBlur={saveProfileCell}
-                  onKeyDown={handleProfileKeyDown}
-                  disabled={profileSaving}
-                  placeholder={col.key === 'tags' ? 'tag1, tag2' : undefined}
-                  className="text-sm text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
-                />
-              ) : (
-                <div className={isEditableField ? 'hover:bg-brand-green/10 rounded px-1 -mx-1' : ''}>
-                  {renderProfileCell(item, col)}
-                </div>
-              )}
-            </td>
-          );
-        })}
-
-        {/* CRM cells */}
-        {crmColumns.map(col => {
-          const isCrmEditing = editingCell?.nodeId === item.id && editingCell?.key === col.key;
-          const isPending = col.source === 'pending';
-          const currentValue = getCellValue(item.id, col.key);
-          const contributor = col.source === 'community'
-            ? valueMap.contributors[item.id]?.[col.key.replace('com__', '')]
-            : null;
-
-          return (
-            <td
-              key={col.key}
-              className="px-4 py-4 whitespace-nowrap"
-              onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
-            >
-              {isCrmEditing ? (
-                <CellEditor
-                  value={currentValue}
-                  type={col.type}
-                  options={col.options}
-                  onSave={value => handleCellSave(item.id, col.key, value)}
-                  onCancel={() => setEditingCell(null)}
-                />
-              ) : isPending ? (
-                <span className="text-xs text-text-muted italic">Pending…</span>
-              ) : (
-                <div
-                  className="group/cell flex items-center gap-1.5 min-w-[100px] max-w-[200px]"
-                  title={contributor ? `Last updated by ${contributor.name}` : undefined}
-                >
-                  {currentValue ? (
-                    <>
-                      <span className="text-sm text-text-primary truncate">{currentValue}</span>
-                      {col.source === 'private' && communityId && (
-                        <button
-                          onClick={e => {
-                            e.stopPropagation();
-                            shareValueWithCommunity(item.id, col.key.replace('prv__', ''), col.label, col.type, currentValue, communityId);
-                          }}
-                          className="opacity-0 group-hover/cell:opacity-60 hover:!opacity-100 p-0.5 rounded hover:text-purple-500 transition-all shrink-0"
-                          title="Share with community"
-                        >
-                          <Share2 className="w-3 h-3" />
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-text-muted opacity-0 group-hover/cell:opacity-100 transition-opacity">
-                      {isAuthenticated ? 'Click to add' : '—'}
-                    </span>
-                  )}
-                  {!currentValue && isAuthenticated && (
-                    <Plus className="w-3 h-3 text-text-muted opacity-0 group-hover/cell:opacity-60 transition-opacity shrink-0" />
-                  )}
-                </div>
-              )}
-            </td>
-          );
-        })}
-
-        {/* Empty add-column spacer */}
-        <td className="px-3 py-4" />
-      </>
-    );
-  };
+  // The row body lives in DirectoryRowCells (memoized); this thin closure wires
+  // it to the table's local state/handlers.
+  const renderCells = (item: DirectoryItem) => (
+    <DirectoryRowCells
+      item={item}
+      profileCell={profileCell}
+      profileSaving={profileSaving}
+      editingCell={editingCell}
+      adminNodes={adminNodes}
+      imageOverrides={imageOverrides}
+      aliasOverrides={aliasOverrides}
+      aliasEditNodeId={aliasEditNodeId}
+      uploadingId={uploadingId}
+      valueMap={valueMap}
+      crmColumns={crmColumns}
+      profileColumns={profileColumns}
+      personAliases={personAliases}
+      communityAliases={communityAliases}
+      nodeTypes={nodeTypes}
+      communityId={communityId}
+      isAuthenticated={isAuthenticated}
+      editMode={editMode}
+      isEditable={isEditable}
+      triggerImageUpload={triggerImageUpload}
+      openProfileCell={openProfileCell}
+      saveProfileCell={saveProfileCell}
+      handleProfileKeyDown={handleProfileKeyDown}
+      setProfileCell={setProfileCell}
+      setAliasEditNodeId={setAliasEditNodeId}
+      saveAlias={saveAlias}
+      toggleOpenToWork={toggleOpenToWork}
+      handleCellClick={handleCellClick}
+      handleCellSave={handleCellSave}
+      setEditingCell={setEditingCell}
+      getCellValue={getCellValue}
+      shareValueWithCommunity={shareValueWithCommunity}
+    />
+  );
 
   if (loading || columnsLoading) return <DirectoryTableSkeleton extraColumns={profileColumns.length + crmColumns.length} />;
   if (items.length === 0) return <EmptyState title="No entries" description="No entries found. Try adjusting your filters." />;

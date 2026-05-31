@@ -10,8 +10,6 @@ type Transform = { x: number; y: number; k: number };
  * scattered across the canvas component:
  *  - markDirty()      — a cold run or a node drag changed the layout; the next
  *                       sim settle should persist it.
- *  - markRestored()   — the current positions are a frozen restore; do NOT
- *                       persist them straight back.
  *  - flushOnSettle()  — call when the sim settles; persists once iff the layout
  *                       was dirtied, then clears the flag.
  *  - schedulePersist()— debounced persist for camera-only changes (pan/zoom)
@@ -34,7 +32,6 @@ export function useLayoutPersistence(
   }, []);
 
   const markDirty = useCallback(() => { persistOnSettleRef.current = true; }, []);
-  const markRestored = useCallback(() => { persistOnSettleRef.current = false; }, []);
 
   const flushOnSettle = useCallback((positions: Positions, transform: Transform) => {
     if (persistOnSettleRef.current && onPersistRef.current) {
@@ -55,5 +52,5 @@ export function useLayoutPersistence(
     [],
   );
 
-  return { markDirty, markRestored, flushOnSettle, schedulePersist };
+  return { markDirty, flushOnSettle, schedulePersist };
 }

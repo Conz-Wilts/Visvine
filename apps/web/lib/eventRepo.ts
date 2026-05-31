@@ -10,12 +10,6 @@ import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPSt
 import { normalizeImageUrl } from './mediaUrl';
 import { logger } from './logger';
 
-// ─── Type helpers ────────────────────────────────────────────────────────────
-
-export function entityTypeFromNodeType(_nodeType: string): string {
-  return 'nodes';
-}
-
 // ─── Node converter ──────────────────────────────────────────────────────────
 
 function nodeRowToNBNode(row: {
@@ -277,10 +271,12 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
       metadata: meta as object,
     },
   });
+  revalidateTag('graph-data-v2');
 }
 
 export async function deleteEvent(communityId: string, eventId: string): Promise<void> {
-  await prisma.node.delete({ where: { id: eventId } });
+  await prisma.node.deleteMany({ where: { id: eventId, communityId, type: 'event' } });
+  revalidateTag('graph-data-v2');
 }
 
 export async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
@@ -354,7 +350,7 @@ export async function updateCommunityGraphData(communityId: string, graphData: G
       for (let i = 0; i < graphData.nodes.length; i += CHUNK_SIZE) {
         const batch = graphData.nodes.slice(i, i + CHUNK_SIZE);
         const values = batch.map((n) => Prisma.sql`(
-          ${n.id}, ${n.type}, ${n.name}, ${communityId},
+          ${n.id}, ${n.type.toLowerCase()}, ${n.name}, ${communityId},
           ${n.subtitle ?? null}, ${n.location ?? null}, ${n.url ?? null},
           ${n.image_url ?? null}, ${n.tags ?? []}::text[], ${JSON.stringify(n.metadata ?? {})}::jsonb
         )`);

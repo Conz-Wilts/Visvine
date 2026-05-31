@@ -1,29 +1,16 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Loads apps/web/.env (cwd-independent) and refuses to run against any
+// non-local host — same env resolution + refusal the destructive db:* scripts use.
+import '../../../scripts/guard-local-db.mjs';
+import 'dotenv/config';
 import pg from 'pg';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '..', '.env');
-const env = Object.fromEntries(
-  fs.readFileSync(envPath, 'utf8').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'))
-    .map(l => { const i = l.indexOf('='); if (i < 0) return null;
-      let v = l.slice(i + 1).trim();
-      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
-      return [l.slice(0, i).trim(), v];
-    }).filter(Boolean)
-);
-
-const connectionString = env.DIRECT_DATABASE_URL || env.DATABASE_URL ||
-  (env.DB_HOST ? `postgresql://${env.DB_USER}:${encodeURIComponent(env.DB_PASSWORD ?? '')}@${env.DB_HOST}:${env.DB_PORT ?? 5432}/${env.DB_NAME}` : null);
+const connectionString =
+  process.env.DIRECT_DATABASE_URL ??
+  process.env.DATABASE_URL ??
+  (process.env.DB_HOST
+    ? `postgresql://${process.env.DB_USER}:${encodeURIComponent(process.env.DB_PASSWORD ?? '')}@${process.env.DB_HOST}:${process.env.DB_PORT ?? 5432}/${process.env.DB_NAME}`
+    : null);
 if (!connectionString) throw new Error('add-nz-ecosystem: no DATABASE_URL or DB_HOST resolved from apps/web/.env');
-
-// Safety: refuse to run against anything that isn't local.
-const dbHost = new URL(connectionString).hostname;
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', 'postgres', 'visvine-postgres']);
-if (!LOCAL_HOSTS.has(dbHost)) {
-  throw new Error(`add-nz-ecosystem: refusing — DATABASE_URL host "${dbHost}" is not local`);
-}
 
 const pool = new pg.Pool({ connectionString });
 

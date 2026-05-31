@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { getMember } from "@/lib/crm/memberService";
+import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 
@@ -41,25 +42,25 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     throw e;
   }
 
-  // Protect last admin
-  if (userId !== session.userId) {
-    const adminCount = await prisma.userCommunity.count({
-      where: { communityId, role: "admin" },
-    });
-    const targetMembership = await prisma.userCommunity.findUnique({
-      where: { userId_communityId: { userId, communityId } },
-    });
-    if (targetMembership?.role === "admin" && adminCount <= 1) {
+  // Protect last admin atomically. Self-removal skips the guard (an admin may
+  // always leave); removing another member enforces the invariant.
+  try {
+    await guardLastAdminThenMutate(
+      { communityId, userIds: [userId], guard: userId !== session.userId },
+      (tx) =>
+        tx.userCommunity.delete({
+          where: { userId_communityId: { userId, communityId } },
+        })
+    );
+  } catch (e) {
+    if (e instanceof LastAdminError) {
       return NextResponse.json(
         { error: "last_admin_protected", message: "Cannot remove the last admin from a community." },
         { status: 409 }
       );
     }
+    throw e;
   }
-
-  await prisma.userCommunity.delete({
-    where: { userId_communityId: { userId, communityId } },
-  });
 
   revalidateTag(`crm-list-${communityId}`);
 

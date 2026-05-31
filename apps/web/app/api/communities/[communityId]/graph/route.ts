@@ -28,7 +28,9 @@ export async function GET(
       { nodes, links },
       {
         headers: {
-          // No server cache — always fresh. Client handles short-lived caching.
+          // Server-side freshness is governed by the 'graph-data-v2' cache tag
+          // (revalidated on every node/link/event write). no-store only prevents
+          // downstream HTTP/CDN caching of this response.
           'Cache-Control': 'no-store',
         },
       }

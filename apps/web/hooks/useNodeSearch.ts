@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useDebounce } from './useDebounce';
 
-export interface PersonSearchResult {
+export interface NodeSearchResult {
   id: string;
   name: string;
   subtitle: string | null;
@@ -16,13 +16,17 @@ export interface PersonSearchResult {
 }
 
 /**
- * Fuzzy search People nodes across all communities.
- * Debounces input by 300ms, deduplicates cross-community matches.
+ * Fuzzy-search nodes of a given type across all communities, so you can find an
+ * existing entry to re-add to the current community instead of recreating it.
+ * Debounces input by 300ms and deduplicates cross-community matches.
+ *
+ * `email` is only meaningful for `person` (people store an email in metadata);
+ * pass it to also match on email. Other types match by name only.
  */
-export function usePersonSearch(name: string, email: string) {
+export function useNodeSearch(name: string, type: string, email = '') {
   const debouncedName = useDebounce(name.trim(), 300);
   const debouncedEmail = useDebounce(email.trim(), 300);
-  const [results, setResults] = useState<PersonSearchResult[]>([]);
+  const [results, setResults] = useState<NodeSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,31 +45,30 @@ export function usePersonSearch(name: string, email: string) {
       setLoading(true);
 
       try {
-        const fetches: Promise<PersonSearchResult[]>[] = [];
-
-        const doFetch = async (field: string, query: string): Promise<PersonSearchResult[]> => {
-          const res = await fetch(`/api/nodes/search?q=${encodeURIComponent(query)}&field=${field}`, {
-            signal: controller.signal,
-          });
+        const doFetch = async (field: string, query: string): Promise<NodeSearchResult[]> => {
+          const res = await fetch(
+            `/api/nodes/search?q=${encodeURIComponent(query)}&field=${field}&type=${encodeURIComponent(type)}`,
+            { signal: controller.signal },
+          );
           if (!res.ok) {
-            console.error(`Person search ${field} failed:`, res.status, await res.text().catch(() => ''));
+            console.error(`Node search ${field} failed:`, res.status, await res.text().catch(() => ''));
             return [];
           }
           const d = await res.json();
           return d.results ?? [];
         };
 
+        const fetches: Promise<NodeSearchResult[]>[] = [];
         if (nameQuery) fetches.push(doFetch('name', nameQuery));
         if (emailQuery) fetches.push(doFetch('email', emailQuery));
 
         const allResults = (await Promise.all(fetches)).flat();
 
         // Deduplicate: prefer entry with most filled fields
-        const deduped = deduplicateResults(allResults);
-        setResults(deduped);
+        setResults(deduplicateResults(allResults));
       } catch (e) {
         if ((e as Error).name !== 'AbortError') {
-          console.error('Person search error:', e);
+          console.error('Node search error:', e);
           setResults([]);
         }
       } finally {
@@ -75,17 +78,23 @@ export function usePersonSearch(name: string, email: string) {
 
     search();
     return () => controller.abort();
-  }, [debouncedName, debouncedEmail]);
+  }, [debouncedName, debouncedEmail, type]);
 
   return { results, loading };
 }
 
-function deduplicateResults(results: PersonSearchResult[]): PersonSearchResult[] {
-  const map = new Map<string, PersonSearchResult>();
+function deduplicateResults(results: NodeSearchResult[]): NodeSearchResult[] {
+  const map = new Map<string, NodeSearchResult>();
 
   for (const r of results) {
     const email = (r.metadata?.email as string)?.toLowerCase() ?? '';
-    const key = `${r.name.toLowerCase()}|${email}`;
+    // People come from two fetches (name + email) and may exist in several
+    // communities, so collapse the same person by name+email. Types without an
+    // email (resource, event) are keyed by node identity instead, so distinct
+    // cross-community entries that share a name are all kept rather than merged.
+    const key = email
+      ? `${r.name.toLowerCase()}|${email}`
+      : `${r.id}|${r.community_id ?? ''}`;
 
     const existing = map.get(key);
     if (!existing || fieldCount(r) > fieldCount(existing)) {
@@ -96,7 +105,7 @@ function deduplicateResults(results: PersonSearchResult[]): PersonSearchResult[]
   return Array.from(map.values());
 }
 
-function fieldCount(r: PersonSearchResult): number {
+function fieldCount(r: NodeSearchResult): number {
   let count = 0;
   if (r.subtitle) count++;
   if (r.location) count++;

@@ -8,3 +8,12 @@
  */
 export const COMMUNITY_ROLES = ["admin", "member"] as const;
 export type CommunityRole = (typeof COMMUNITY_ROLES)[number];
+
+/**
+ * Whether a community role may manage CRM data. Admin-only (the `moderator`
+ * role was removed; any legacy/unknown role resolves to least privilege).
+ * Pure and dependency-free so it is unit-testable without a DB pool.
+ */
+export function canManageCrm(role: string): boolean {
+  return role === "admin";
+}

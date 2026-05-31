@@ -5,7 +5,12 @@
 -- removed from schema.prisma. The live, Prisma-mapped tables were
 -- work_experience / education / certifications / profile_languages; to drop
 -- them from an existing DB, run remove_moderator_and_profile_subentities.sql.
--- The `ALTER TABLE people …` columns immediately below are still in use.
+--
+-- Also note: this legacy hand-SQL predates Person's `@@map("persons")` and
+-- targets a `people` table. That is NOT what `prisma db push` applies — the
+-- Prisma source-of-truth maps Person to `persons`, so push produces `persons`,
+-- not `people`. The `ALTER TABLE people …` columns immediately below therefore
+-- only ever touched this legacy table, not the live `persons` table.
 
 -- 1. Extend people table with new optional columns
 ALTER TABLE people

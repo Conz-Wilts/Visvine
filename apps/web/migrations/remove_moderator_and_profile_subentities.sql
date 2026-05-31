@@ -21,6 +21,8 @@ UPDATE user_communities SET role = 'member' WHERE role = 'moderator';
 -- 2. Drop the now-orphaned profile sub-entity tables. IF EXISTS keeps this
 --    safe to re-run; CASCADE clears their person_id foreign keys.
 DROP TABLE IF EXISTS work_experience CASCADE;
+-- Also cover the plural name any DB provisioned by the orphaned profile_overhaul.sql.
+DROP TABLE IF EXISTS work_experiences CASCADE;
 DROP TABLE IF EXISTS education CASCADE;
 DROP TABLE IF EXISTS certifications CASCADE;
 DROP TABLE IF EXISTS profile_languages CASCADE;

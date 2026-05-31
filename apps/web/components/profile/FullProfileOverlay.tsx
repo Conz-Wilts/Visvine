@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import type { NBNode } from '@/lib/types';
+import { getInitials } from '@/lib/avatarUtils';
 import { useNodeProfile, type ProfileConnection } from '@/hooks/useNodeProfile';
 import ProfilePageContent from './ProfilePageContent';
 import ProfileHero from './ProfileHero';
@@ -151,10 +152,7 @@ export default function FullProfileOverlay({
                           </h3>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {connections.slice(0, 6).map((conn) => {
-                              const words = conn.name.trim().split(/\s+/);
-                              const initials = words.length === 1
-                                ? words[0].substring(0, 2).toUpperCase()
-                                : (words[0][0] + words[words.length - 1][0]).toUpperCase();
+                              const initials = getInitials(conn.name);
                               return (
                                 <div key={conn.id} className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors cursor-pointer">
                                   {conn.image_url

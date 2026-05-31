@@ -1,20 +1,33 @@
 'use client';
 
-import type { PersonSearchResult } from '@/hooks/usePersonSearch';
+import type { ReactNode } from 'react';
+import type { NodeSearchResult } from '@/hooks/useNodeSearch';
+
+const DEFAULT_FALLBACK_ICON = (
+  <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+  </svg>
+);
 
 export default function MatchPanel({
   results,
   loading,
   onSelect,
+  title,
+  emptyHint,
+  fallbackIcon = DEFAULT_FALLBACK_ICON,
 }: {
-  results: PersonSearchResult[];
+  results: NodeSearchResult[];
   loading: boolean;
-  onSelect: (result: PersonSearchResult) => void;
+  onSelect: (result: NodeSearchResult) => void;
+  title: string;
+  emptyHint: string;
+  fallbackIcon?: ReactNode;
 }) {
   return (
     <div className="flex flex-col h-full min-h-0">
       <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider px-1 mb-2">
-        Existing People
+        {title}
       </h3>
 
       {loading && (
@@ -26,7 +39,7 @@ export default function MatchPanel({
 
       {!loading && results.length === 0 && (
         <p className="text-xs text-text-muted px-1 py-3">
-          Type a name or email to find existing people across communities.
+          {emptyHint}
         </p>
       )}
 
@@ -45,9 +58,7 @@ export default function MatchPanel({
                 {r.image_url ? (
                   <img src={r.image_url} alt="" className="w-full h-full object-cover" />
                 ) : (
-                  <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
+                  fallbackIcon
                 )}
               </div>
 

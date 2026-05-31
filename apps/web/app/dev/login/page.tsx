@@ -1,15 +1,9 @@
 import { notFound } from "next/navigation";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
+import { safeRelativePath } from "@/lib/redirects";
 import prisma from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
-
-function sanitizeCallbackUrl(raw: string | string[] | undefined): string {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return "/";
-  if (!value.startsWith("/") || value.startsWith("//")) return "/";
-  return value;
-}
 
 export default async function DevLoginPage({
   searchParams,
@@ -19,7 +13,7 @@ export default async function DevLoginPage({
   if (!isDevAuthEnabled()) notFound();
 
   const { callbackUrl: rawCallback } = await searchParams;
-  const callbackUrl = sanitizeCallbackUrl(rawCallback);
+  const callbackUrl = safeRelativePath(rawCallback);
   const loginAsQuery =
     callbackUrl === "/" ? "" : `?callbackUrl=${encodeURIComponent(callbackUrl)}`;
 

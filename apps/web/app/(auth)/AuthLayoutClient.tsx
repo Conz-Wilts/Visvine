@@ -11,28 +11,29 @@ import { CreateModalProvider } from "@/lib/contexts/CreateModalContext";
 import CreateModal from "@/components/create/CreateModal";
 import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext";
 import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
-import GlobalFullProfileOverlay from "@/components/profile/GlobalFullProfileOverlay";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { backgroundStyle } = useCommunityDesign();
   const { expanded } = useSidebar();
   return (
-    <div className="flex flex-col min-h-screen bg-brand-bg" style={backgroundStyle}>
+    <div className="flex flex-col min-h-screen bg-white" style={backgroundStyle}>
       <Navbar />
 
       {/* Sidebar floats fixed over content — shadow not clipped */}
       <Sidebar />
 
-      {/* Main content: pl clears sidebar + 24px gap */}
+      {/* Main content: pl = sidebar's 24px left inset + sidebar width + a matching 24px gap,
+          so the space between sidebar and content equals the inset on the sidebar's left.
+          Collapsed: 24 + 64 + 24 = 112. Expanded: 24 + 200 + 24 = 248. */}
       <main
         className="flex-1 pt-4 pr-6 pb-6 mt-20"
         style={{
-          paddingLeft: expanded ? 230 : 114,
+          paddingLeft: expanded ? 248 : 112,
           transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
         }}
       >
-        <div className="bg-surface-1 rounded-2xl overflow-hidden border border-border-subtle" style={{ minHeight: 'calc(100vh - 5rem - 3rem)', boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)' }}>
+        <div style={{ minHeight: 'calc(100vh - 5rem - 3rem)' }}>
           {children}
         </div>
       </main>
@@ -56,7 +57,6 @@ export default function AuthLayoutClient({ children }: { children: React.ReactNo
               <CreateModalProvider>
                 <AuthLayoutInner>
                   {children}
-                  <GlobalFullProfileOverlay />
                 </AuthLayoutInner>
               </CreateModalProvider>
               </SidebarProvider>

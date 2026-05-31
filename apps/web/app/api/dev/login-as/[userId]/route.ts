@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, COOKIE_NAME, MAX_AGE } from "@/lib/session";
 import { isDevAuthEnabled, devAuthDisabledResponse } from "@/lib/dev-auth";
+import { safeRelativePath } from "@/lib/redirects";
 import prisma from "@/lib/prisma";
-
-function sanitizeCallbackUrl(raw: string | null): string {
-  if (!raw) return "/";
-  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
 
 export async function POST(
   req: NextRequest,
@@ -35,7 +30,7 @@ export async function POST(
     personId: user.person?.id ?? null,
   });
 
-  const callbackUrl = sanitizeCallbackUrl(req.nextUrl.searchParams.get("callbackUrl"));
+  const callbackUrl = safeRelativePath(req.nextUrl.searchParams.get("callbackUrl"));
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const response = NextResponse.redirect(new URL(callbackUrl, appUrl));
   response.cookies.set(COOKIE_NAME, token, {

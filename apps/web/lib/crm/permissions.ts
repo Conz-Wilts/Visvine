@@ -1,6 +1,6 @@
 import prisma from "@/lib/prisma";
 import { isSuperAdmin } from "@/lib/session";
-import type { CommunityRole } from "@/lib/crm/roles";
+import { canManageCrm, type CommunityRole } from "@/lib/crm/roles";
 
 export type CrmAction =
   | "view_crm"
@@ -8,17 +8,6 @@ export type CrmAction =
   | "edit_private"
   | "manage_members"
   | "configure_fields";
-
-/**
- * Whether a community role may perform a CRM action.
- *
- * Every current CRM action requires `admin` (the `moderator` role was removed;
- * any legacy/unknown role resolves to least privilege). Kept as a single named
- * predicate so the policy has one home if finer-grained roles return.
- */
-export function roleCan(role: string, _action: CrmAction): boolean {
-  return role === "admin";
-}
 
 export class PermissionError extends Error {
   action: CrmAction;
@@ -51,7 +40,7 @@ export async function assertCrmPermission(
     where: { userId_communityId: { userId: actorId, communityId } },
   });
 
-  if (!membership || !roleCan(membership.role, action)) {
+  if (!membership || !canManageCrm(membership.role)) {
     throw new PermissionError(action);
   }
 

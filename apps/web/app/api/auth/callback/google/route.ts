@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, COOKIE_NAME, MAX_AGE } from "@/lib/session";
 import { generateClaimToken } from "@/lib/crm/claimService";
+import { safeRelativePath } from "@/lib/redirects";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -93,7 +94,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const code = searchParams.get("code");
   const state = searchParams.get("state");
-  const callbackUrl = state ? decodeURIComponent(state) : "/directory";
+  // `state` is reflected back from the OAuth request, so guard it as a
+  // relative path before using it as a redirect target (avoids open redirect).
+  const callbackUrl = state ? safeRelativePath(decodeURIComponent(state)) : "/directory";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const redirectUri = `${appUrl}/api/auth/callback/google`;
 

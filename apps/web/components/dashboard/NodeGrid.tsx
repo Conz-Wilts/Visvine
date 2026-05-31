@@ -6,6 +6,7 @@ import NodeCard from './NodeCard'
 import type { DirectoryItem } from './types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
 import { EmptyState, Skeleton } from '@/components/ui'
+import { prefersReducedMotion } from '@/lib/motion'
 
 const GRID_STYLE: React.CSSProperties = {
   display: 'grid',
@@ -20,12 +21,6 @@ const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : use
 
 // Delay between consecutive cards in a reveal cascade.
 const STAGGER_STEP_MS = 45
-
-function prefersReducedMotion() {
-  return typeof window !== 'undefined' &&
-    !!window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
 
 function NodeCardSkeleton() {
   return (

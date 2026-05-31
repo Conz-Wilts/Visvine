@@ -6,12 +6,9 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { COMMUNITY_ROLES } from "@/lib/crm/roles";
+import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
 
 type RouteContext = { params: Promise<{ communityId: string }> };
-
-// Thrown inside a serializable transaction to abort a role change / removal that
-// would strip the community's last admin; mapped to a 409 by the caller.
-class LastAdminError extends Error {}
 
 const BulkActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -129,29 +126,18 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       },
     });
   } else if (data.action === "change_role") {
-    // Last-admin protection + the mutation must be atomic: two concurrent
-    // demotes can otherwise each pass the guard against the same snapshot and
-    // together strip every admin. Serializable isolation turns that into a
-    // serialization failure rather than a lost invariant.
+    // Demotions to a non-admin role are guarded against stripping the last
+    // admin; promotions to admin leave the headcount safe so skip the guard.
     try {
-      affected = await prisma.$transaction(
+      affected = await guardLastAdminThenMutate(
+        { communityId, userIds: data.user_ids, guard: data.role !== "admin" },
         async (tx) => {
-          if (data.role !== "admin") {
-            const adminCount = await tx.userCommunity.count({
-              where: { communityId, role: "admin" },
-            });
-            const adminsBeingDemoted = await tx.userCommunity.count({
-              where: { communityId, userId: { in: data.user_ids }, role: "admin" },
-            });
-            if (adminCount - adminsBeingDemoted < 1) throw new LastAdminError();
-          }
           const result = await tx.userCommunity.updateMany({
             where: { communityId, userId: { in: data.user_ids } },
             data: { role: data.role },
           });
           return result.count;
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        }
       );
     } catch (e) {
       if (e instanceof LastAdminError) {
@@ -178,21 +164,14 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
   } else if (data.action === "remove") {
     // Atomic last-admin guard (see change_role above).
     try {
-      affected = await prisma.$transaction(
+      affected = await guardLastAdminThenMutate(
+        { communityId, userIds: data.user_ids, guard: true },
         async (tx) => {
-          const adminCount = await tx.userCommunity.count({
-            where: { communityId, role: "admin" },
-          });
-          const adminsBeingRemoved = await tx.userCommunity.count({
-            where: { communityId, userId: { in: data.user_ids }, role: "admin" },
-          });
-          if (adminCount - adminsBeingRemoved < 1) throw new LastAdminError();
           const result = await tx.userCommunity.deleteMany({
             where: { communityId, userId: { in: data.user_ids } },
           });
           return result.count;
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+        }
       );
     } catch (e) {
       if (e instanceof LastAdminError) {

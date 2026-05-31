@@ -5,15 +5,9 @@ import {
   Plus, Pencil, ChevronDown, ChevronUp, Palette,
 } from 'lucide-react';
 import { PALETTES, type ThemePalette } from '@/lib/profileTheme';
+import { getInitials } from '@/lib/avatarUtils';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-export function initials(name: string) {
-  const words = name.trim().split(/\s+/);
-  return words.length === 1
-    ? words[0].substring(0, 2).toUpperCase()
-    : (words[0][0] + words[words.length - 1][0]).toUpperCase();
-}
 
 export function memberSinceYear(iso: string | undefined) {
   if (!iso) return null;
@@ -240,7 +234,7 @@ export function ConnectionAvatar({
           <img src={conn.image_url} alt={conn.name} className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full bg-surface-3 flex items-center justify-center">
-            <span className="text-[11px] font-bold text-text-muted">{initials(conn.name)}</span>
+            <span className="text-[11px] font-bold text-text-muted">{getInitials(conn.name)}</span>
           </div>
         )}
       </div>

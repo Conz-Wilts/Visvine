@@ -12,6 +12,7 @@ import { preloadImages, loadImage } from './utils/imageCache';
 import { createRectCollideForce } from './utils/forceRectCollide';
 import { isPointInHexagon } from './utils/hitTest';
 import { useLayoutPersistence } from './hooks/useLayoutPersistence';
+import { prefersReducedMotion } from '@/lib/motion';
 
 /* ============================================================================
    SHARED TYPES (re-exported for consumers)
@@ -97,15 +98,11 @@ const CustomForceGraph: React.FC<{
   const introRafRef = useRef<number | null>(null);
   // Resolved once on mount; honoured by the fade so reduced-motion users get an
   // instant, static graph.
-  const reduceMotionRef = useRef(
-    typeof window !== 'undefined' &&
-    !!window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
+  const reduceMotionRef = useRef(prefersReducedMotion());
 
   // Layout persistence: cold/drag → persist on settle; restore → don't persist
   // back; pan/zoom → debounced. (See ./hooks/useLayoutPersistence.)
-  const { markDirty, markRestored, flushOnSettle, schedulePersist } = useLayoutPersistence(onPersistLayout);
+  const { markDirty, flushOnSettle, schedulePersist } = useLayoutPersistence(onPersistLayout);
   const coldStartRef = useRef(coldStart);
   coldStartRef.current = coldStart;
   const initialTransformRef = useRef(initialTransform);
@@ -374,13 +371,10 @@ const CustomForceGraph: React.FC<{
         simRafRef.current = requestAnimationFrame(loop);
       } else {
         simRafRef.current = null;
-        const positions: Record<string, { x: number; y: number }> = {};
-        sim.nodes().forEach(node => {
-          if (typeof node.x === 'number' && typeof node.y === 'number') {
-            positions[node.id] = { x: node.x, y: node.y };
-            savedPositionsRef?.current.set(node.id, { x: node.x, y: node.y });
-          }
-        });
+        // collectPositions falls back to sim.nodes(), so at settle time this map
+        // is identical to the inline scrape it replaces.
+        const positions = collectPositions();
+        Object.entries(positions).forEach(([id, p]) => savedPositionsRef?.current.set(id, p));
         isLayoutReadyRef.current = true;
         setIsLayoutReady(true);
         // Persist a freshly computed (or just-dragged) layout, but never a frozen restore.
@@ -389,7 +383,7 @@ const CustomForceGraph: React.FC<{
     };
 
     simRafRef.current = requestAnimationFrame(loop);
-  }, [scheduleRender, savedPositionsRef, flushOnSettle]);
+  }, [scheduleRender, savedPositionsRef, flushOnSettle, collectPositions]);
 
   // Pump renders for the duration of the staggered fade-in. Used when a saved
   // layout is restored: the simulation is frozen (alpha 0) and would otherwise
@@ -510,7 +504,6 @@ const CustomForceGraph: React.FC<{
       setIsInitialFitComplete(true);
       isLayoutReadyRef.current = true;
       setIsLayoutReady(true);
-      markRestored();
       // The frozen sim won't tick, so drive the staggered fade-in ourselves —
       // nodes rise + fade into their restored positions one by one.
       if (reduceMotionRef.current) {
@@ -536,7 +529,7 @@ const CustomForceGraph: React.FC<{
         introRafRef.current = null;
       }
     };
-  }, [nodes, links, startSimLoop, markDirty, markRestored, playFadeIn, scheduleRender]);
+  }, [nodes, links, startSimLoop, markDirty, playFadeIn, scheduleRender]);
 
   // Preload images for nodes and trigger re-render when loaded
   useEffect(() => {
@@ -713,6 +706,27 @@ const CustomForceGraph: React.FC<{
     }
   }, [focusNodeId, dimmedNodeIds, scheduleRender]);
 
+  // Eased (cubic-out) tween of the camera transform toward `target` over
+  // `duration` ms, scheduling a render each frame. Shared by fitToScreen's
+  // animate branch and the auto-zoom-to-focus effect (previously byte-identical).
+  const animateTransform = useCallback((target: Transform, duration: number = 600) => {
+    const startTransform = { ...transformRef.current };
+    const startTime = performance.now();
+    const animateFrame = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      transformRef.current = {
+        x: startTransform.x + (target.x - startTransform.x) * eased,
+        y: startTransform.y + (target.y - startTransform.y) * eased,
+        k: startTransform.k + (target.k - startTransform.k) * eased
+      };
+      scheduleRender();
+      if (progress < 1) requestAnimationFrame(animateFrame);
+    };
+    requestAnimationFrame(animateFrame);
+  }, [scheduleRender]);
+
   const fitToScreen = useCallback((animate: boolean = false) => {
     const canvas = canvasRef.current;
     if (!canvas || nodes.length === 0) return;
@@ -753,23 +767,8 @@ const CustomForceGraph: React.FC<{
       return;
     }
 
-    const startTransform = { ...transformRef.current };
-    const duration = 600;
-    const startTime = performance.now();
-    const animateFrame = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      transformRef.current = {
-        x: startTransform.x + (targetX - startTransform.x) * eased,
-        y: startTransform.y + (targetY - startTransform.y) * eased,
-        k: startTransform.k + (targetZoom - startTransform.k) * eased
-      };
-      scheduleRender();
-      if (progress < 1) requestAnimationFrame(animateFrame);
-    };
-    requestAnimationFrame(animateFrame);
-  }, [nodes, scheduleRender]);
+    animateTransform({ x: targetX, y: targetY, k: targetZoom });
+  }, [nodes, scheduleRender, animateTransform]);
 
   // Keep fitToScreenRef pointing at the latest fitToScreen so startSimLoop
   // (defined earlier) can call it without a circular useCallback dependency.
@@ -876,30 +875,8 @@ const CustomForceGraph: React.FC<{
     const targetX = width / 2 - focusedNode.x * targetZoom;
     const targetY = height / 2 - focusedNode.y * targetZoom;
 
-    const startTransform = { ...transformRef.current };
-    const duration = 600;
-    const startTime = performance.now();
-
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      const eased = 1 - Math.pow(1 - progress, 3);
-
-      transformRef.current = {
-        x: startTransform.x + (targetX - startTransform.x) * eased,
-        y: startTransform.y + (targetY - startTransform.y) * eased,
-        k: startTransform.k + (targetZoom - startTransform.k) * eased
-      };
-      scheduleRender();
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-
-    requestAnimationFrame(animate);
-  }, [focusNodeId, nodes, autoZoomToFocus, scheduleRender]);
+    animateTransform({ x: targetX, y: targetY, k: targetZoom });
+  }, [focusNodeId, nodes, autoZoomToFocus, animateTransform]);
 
   // Auto-fit to show entire graph on initial load or when search is cleared
   useEffect(() => {

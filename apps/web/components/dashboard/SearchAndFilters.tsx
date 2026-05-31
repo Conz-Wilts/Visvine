@@ -93,7 +93,7 @@ export default function SearchAndFilters({ currentView, onViewChange }: SearchAn
           key={id}
           ref={el => { buttonRefs.current[i] = el }}
           onClick={() => onViewChange(id)}
-          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ${
+          className={`relative z-10 flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ${
             currentView === id ? 'text-white' : 'text-text-muted hover:text-text-secondary'
           }`}
         >

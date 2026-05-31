@@ -20,10 +20,11 @@ import MyInsightsSection from './MyInsightsSection';
 import { getPalette, hexToPalette } from '@/lib/profileTheme';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { getNodeTypeConfig } from '@/lib/types';
+import { getInitials } from '@/lib/avatarUtils';
 import {
   Card, CardHeader, EmptyPrompt, EmptyState,
   StatChip, SkillsPillCloud,
-  ConnectionAvatar, BioText, initials, memberSinceYear,
+  ConnectionAvatar, BioText, memberSinceYear,
 } from './ProfilePrimitives';
 
 type ModalState =
@@ -97,7 +98,7 @@ export default function ProfilePageContent({ nodeId }: { nodeId: string }) {
                   className="w-full h-full flex items-center justify-center text-3xl font-bold text-white"
                   style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}
                 >
-                  {initials(profile.name)}
+                  {getInitials(profile.name)}
                 </div>
               )}
             </div>

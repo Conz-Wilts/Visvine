@@ -121,29 +121,6 @@ export default function DirectoryGraphView({
         onPersistLayout={handlePersistLayout}
       />
 
-      {/* ── Semantic search debug panel ── */}
-      {isSemanticSearch && !semanticLoading && sortedSemanticResults.length > 0 && (
-        <div className="absolute top-[88px] left-4 z-20 bg-surface-1 rounded-lg shadow-lg p-4 border border-border-default max-w-xs">
-          <h3 className="font-semibold text-sm text-text-primary mb-2">🔍 Debug Info</h3>
-          <div className="text-xs text-text-muted space-y-1">
-            <p>Semantic results: <strong>{sortedSemanticResults.length}</strong></p>
-            <p>Filtered nodes: <strong>{filteredGraphData.nodes.length}</strong></p>
-            <p>Filtered links: <strong>{filteredGraphData.links.length}</strong></p>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-brand-green hover:underline">View matched nodes</summary>
-              <ul className="mt-1 ml-2 space-y-0.5">
-                {sortedSemanticResults.slice(0, 5).map(r => (
-                  <li key={r.id} className="text-text-secondary">• {r.name}</li>
-                ))}
-                {sortedSemanticResults.length > 5 && (
-                  <li className="text-gray-500">...and {sortedSemanticResults.length - 5} more</li>
-                )}
-              </ul>
-            </details>
-          </div>
-        </div>
-      )}
-
       {/* ── Semantic search status overlay ── */}
       {isSemanticSearch && (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
@@ -167,8 +144,7 @@ export default function DirectoryGraphView({
             <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-border-default max-w-md text-center">
               <p className="text-lg font-medium text-text-primary mb-2">No results found</p>
               <p className="text-sm text-text-muted mb-4">
-                This usually means your nodes don&apos;t have embeddings yet.<br />
-                Run: <code className="bg-surface-3 px-2 py-1 rounded text-xs text-text-primary">node populate-embeddings.mjs</code>
+                No matching results. Try a different search.
               </p>
               <button
                 onClick={onClearSemantic}
