@@ -578,7 +578,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] w-full">
+    <div className="flex h-[calc(100dvh-56px)] w-full px-6">
     <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}

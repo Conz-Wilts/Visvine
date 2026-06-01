@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { aliasesForType } from '@/lib/types';
 import type { ColumnConfig } from './EditableDataTable';
 
 interface TypeSelectDropdownProps<T> {
@@ -59,7 +60,7 @@ export default function TypeSelectDropdown<T extends Record<string, unknown>>({
     <div ref={dropdownRef} className="relative">
       <div className="absolute z-50 top-0 left-0 w-64 bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-y-auto py-1">
         {types.map(type => {
-          const typeAliases = aliases.filter(a => a.nodeType === type);
+          const typeAliases = aliasesForType(aliases, type);
           const isSelected = currentType === type && !currentAlias;
 
           return (

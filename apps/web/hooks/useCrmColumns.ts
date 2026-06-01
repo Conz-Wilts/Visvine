@@ -100,26 +100,34 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
 
   const loadValues = useCallback(async (ids: string[]) => {
     if (!communityId || ids.length === 0) return;
-    const qs = ids.map(id => `node_ids[]=${encodeURIComponent(id)}`).join('&');
 
     const fetches: Promise<void>[] = [];
 
-    // Community values (public)
+    // Community values (public). POST so the id list rides in the body — a GET
+    // with one node_ids[] param per node overflows URL/header limits at scale.
     fetches.push(
-      fetch(`/api/crm/community-values?community_id=${communityId}&${qs}`)
+      fetch('/api/crm/community-values', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ community_id: communityId, node_ids: ids }),
+      })
         .then(r => r.json())
         .then(d => {
           const raw: Record<string, Record<string, { value: string | null; contributedBy: { id: string; name: string; image: string | null } | null }>> = d.values || {};
           setValueMap(prev => {
             const nextValues = { ...prev.values };
             const nextContributors = { ...prev.contributors };
+            // Clone each touched node's maps (don't mutate in place) so row
+            // memoization can detect the change by per-node object identity.
             for (const [nodeId, cols] of Object.entries(raw)) {
-              nextValues[nodeId] = nextValues[nodeId] || {};
-              nextContributors[nodeId] = nextContributors[nodeId] || {};
+              const mergedValues = { ...(nextValues[nodeId] || {}) };
+              const mergedContributors = { ...(nextContributors[nodeId] || {}) };
               for (const [colKey, entry] of Object.entries(cols)) {
-                nextValues[nodeId][comKey(colKey)] = entry.value;
-                nextContributors[nodeId][colKey] = entry.contributedBy;
+                mergedValues[comKey(colKey)] = entry.value;
+                mergedContributors[colKey] = entry.contributedBy;
               }
+              nextValues[nodeId] = mergedValues;
+              nextContributors[nodeId] = mergedContributors;
             }
             return { values: nextValues, contributors: nextContributors };
           });
@@ -130,7 +138,11 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
     // Private values
     if (isAuthenticated) {
       fetches.push(
-        fetch(`/api/crm/private-values?${qs}`)
+        fetch('/api/crm/private-values', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ node_ids: ids }),
+        })
           .then(r => r.json())
           .then(d => {
             const raw: Record<string, Record<string, string | null>> = d.values || {};
@@ -139,11 +151,12 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
             setValueMap(prev => {
               const nextValues = { ...prev.values };
               for (const [nodeId, cols] of Object.entries(raw)) {
-                nextValues[nodeId] = nextValues[nodeId] || {};
+                const merged = { ...(nextValues[nodeId] || {}) };
                 for (const [columnId, value] of Object.entries(cols)) {
-                  nextValues[nodeId][prvKey(columnId)] = value;
+                  merged[prvKey(columnId)] = value;
                   if (value) counts[columnId] = (counts[columnId] || 0) + 1;
                 }
+                nextValues[nodeId] = merged;
               }
               return { ...prev, values: nextValues };
             });

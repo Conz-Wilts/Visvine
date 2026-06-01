@@ -64,8 +64,8 @@ export default function EventFullProfile({ nodeId, node: initialNode, onClose }:
 
   return (
     <div
-      className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden"
-      style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)', minHeight: 'calc(100vh - 4rem)' }}
+      className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden shadow-float"
+      style={{ minHeight: 'calc(100vh - 4rem)' }}
     >
       {/* Top bar */}
       <div className="sticky top-0 z-20 bg-surface-1 border-b border-border-subtle flex items-center justify-between px-5 h-12">

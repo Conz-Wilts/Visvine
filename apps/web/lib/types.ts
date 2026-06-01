@@ -311,6 +311,33 @@ export function getNodeTypeConfig(
 }
 
 /**
+ * Community aliases scoped to a base node type. Matching is case-insensitive
+ * because stored node `type` values aren't consistently cased — the canonical
+ * way to relate an alias to a node type across the app.
+ */
+export function aliasesForType(
+  aliases: CommunityAlias[] | undefined,
+  type: string | null | undefined,
+): CommunityAlias[] {
+  if (!type) return [];
+  const t = type.toLowerCase();
+  return (aliases ?? []).filter((a) => a.nodeType.toLowerCase() === t);
+}
+
+/**
+ * Find the alias with a given name for a node type (case-insensitive on type).
+ * Returns undefined when name is empty or no alias matches.
+ */
+export function findAlias(
+  aliases: CommunityAlias[] | undefined,
+  name: string | null | undefined,
+  type: string,
+): CommunityAlias | undefined {
+  if (!name) return undefined;
+  return aliasesForType(aliases, type).find((a) => a.name === name);
+}
+
+/**
  * Get all available node types for a community
  */
 export function getNodeTypes(communityNodeTypes?: NodeTypeConfig[]): string[] {

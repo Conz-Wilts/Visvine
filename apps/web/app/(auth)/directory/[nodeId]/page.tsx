@@ -25,7 +25,7 @@ const DEMO_COMMUNITY_ID = 'intro-demo';
 function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const router = useRouter();
   return (
-    <div className="w-full">
+    <div className="w-full px-6">
       <div className="px-6 pt-4 pb-2">
         <button
           onClick={() => router.back()}
@@ -83,7 +83,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   }));
 
   return (
-    <div className="w-full">
+    <div className="w-full px-6">
       <div className="px-6 pt-4 pb-2">
         <button
           onClick={() => router.back()}

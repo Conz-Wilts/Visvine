@@ -31,6 +31,29 @@ if (!community?.id || !Array.isArray(nodes) || !Array.isArray(links)) {
 }
 const COMM = community.id;
 
+// The research data models portfolio companies / the VC firm as custom node
+// types ("Startup"/"Investor"). The app's alias model wants a canonical base
+// type plus a community-specific alias label (mirrors Blackbird), so collapse
+// the custom types onto base types and carry the label across as the alias.
+const TYPE_REMAP = {
+  Investor:     { type: 'organization', alias: 'Investor' },
+  Startup:      { type: 'organization', alias: 'Startup'  },
+  Person:       { type: 'person',       alias: null },
+  Organization: { type: 'organization', alias: null },
+};
+
+// Base node types shown in the Types & Aliases console.
+const NODE_TYPES = [
+  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'hexagon' },
+  { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
+];
+
+// `nodeType` matching is case-insensitive across the app; use canonical names.
+const COMMUNITY_ALIASES = [
+  { name: 'Investor', color: '#0ea5e9', nodeType: 'Organization' },
+  { name: 'Startup',  color: '#f59e0b', nodeType: 'Organization' },
+];
+
 const pool = new pg.Pool({ connectionString });
 const client = await pool.connect();
 try {
@@ -39,18 +62,19 @@ try {
   // 1. Community
   console.log('--- Upserting community ---');
   await client.query(
-    `INSERT INTO communities (id, name, description, location, tags, node_types, country, emoji, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, NOW())
+    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, NOW())
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
-       country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       community_aliases = EXCLUDED.community_aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
     [
       community.id,
       community.name,
       community.description ?? null,
       community.location ?? null,
       community.tags ?? [],
-      JSON.stringify(community.nodeTypes ?? []),
+      JSON.stringify(NODE_TYPES),
+      JSON.stringify(COMMUNITY_ALIASES),
       community.country ?? 'NZ',
       community.emoji ?? null,
     ]
@@ -60,6 +84,7 @@ try {
   // 2. Nodes
   console.log(`\n--- Upserting ${nodes.length} nodes ---`);
   for (const n of nodes) {
+    const m = TYPE_REMAP[n.type] ?? { type: String(n.type).toLowerCase(), alias: null };
     await client.query(
       `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, NOW(), NOW())
@@ -67,8 +92,8 @@ try {
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata,
          community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [
-        n.id, n.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
-        n.tags ?? [], JSON.stringify(n.metadata ?? {}), COMM, n.alias ?? null,
+        n.id, m.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
+        n.tags ?? [], JSON.stringify(n.metadata ?? {}), COMM, n.alias ?? m.alias,
       ]
     );
   }

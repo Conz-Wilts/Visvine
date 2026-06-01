@@ -175,7 +175,7 @@ export default function SettingsPage() {
   const { theme, isDark } = useTheme();
 
   return (
-    <div className="flex min-h-full">
+    <div className="flex min-h-full px-6">
       {/* ── Sidebar nav ── */}
       <nav className="w-56 flex-shrink-0 border-r border-border-subtle pt-8 pb-6 px-3 hidden sm:flex flex-col gap-1">
         <p className="text-[10px] font-semibold uppercase tracking-widest text-text-muted px-3 mb-2">

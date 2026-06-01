@@ -164,6 +164,10 @@ a:hover {
 /* scroll padding for sticky tab bar + navbar */
 html {
   scroll-padding-top: 128px;
+  /* Always reserve the scrollbar gutter. Graph mode sets body overflow:hidden,
+     which removes the vertical scrollbar; without a reserved gutter the viewport
+     widens by the scrollbar width and the fixed top bar shifts right. */
+  scrollbar-gutter: stable;
 }
 
 /* Chat Interface Styles */

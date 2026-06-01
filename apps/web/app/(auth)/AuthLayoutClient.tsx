@@ -23,13 +23,15 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Sidebar floats fixed over content — shadow not clipped */}
       <Sidebar />
 
-      {/* Main content: pl = sidebar's 24px left inset + sidebar width + a matching 24px gap,
-          so the space between sidebar and content equals the inset on the sidebar's left.
-          Collapsed: 24 + 64 + 24 = 112. Expanded: 24 + 200 + 24 = 248. */}
+      {/* Main content: pl = sidebar's 24px left inset + sidebar width ONLY.
+          The shell does NOT add the gutter — each page supplies its own 24px
+          horizontal padding (px-6), which lands the content 24px to the right of
+          the sidebar (matching the sidebar's own left inset) and 24px from the
+          right edge. Collapsed: 24 + 64 = 88. Expanded: 24 + 200 = 224. */}
       <main
-        className="flex-1 pt-4 pr-6 pb-6 mt-20"
+        className="flex-1 pt-4 pb-6 mt-20"
         style={{
-          paddingLeft: expanded ? 248 : 112,
+          paddingLeft: expanded ? 224 : 88,
           transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
         }}
       >

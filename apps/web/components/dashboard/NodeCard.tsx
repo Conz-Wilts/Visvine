@@ -2,7 +2,7 @@ import React from 'react'
 import { DirectoryItem } from './types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
-import { getNodeTypeConfig } from '@/lib/types'
+import { getNodeTypeConfig, findAlias } from '@/lib/types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
 import Badge from '@/components/ui/Badge'
 import { useProfileCache } from '@/lib/contexts/ProfileContext'
@@ -25,9 +25,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
   const displayImageUrl = cached?.imageUrl ?? item.image_url
 
   const baseTypeColor = getNodeTypeConfig(item.type, nodeTypes).color
-  const aliasConfig = item.alias
-    ? (communityAliases ?? []).find(a => a.name === item.alias && a.nodeType === item.type)
-    : undefined
+  const aliasConfig = findAlias(communityAliases, item.alias, item.type)
   const typeColor = aliasConfig?.color ?? baseTypeColor
 
   // Glow colors exposed as CSS vars so the hover state is pure CSS (no JS
@@ -40,7 +38,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
 
   return (
     <div
-      className="bg-surface-1 rounded-xl overflow-hidden cursor-pointer group flex flex-col h-[360px] w-full border-4 transition-shadow duration-200 [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_10px_24px_rgba(0,0,0,0.12),0_0_20px_4px_var(--card-glow-strong)]"
+      className="bg-surface-1 rounded-2xl overflow-hidden cursor-pointer group flex flex-col h-[360px] w-full border-4 transition-shadow duration-200 [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_10px_24px_rgba(0,0,0,0.12),0_0_20px_4px_var(--card-glow-strong)]"
       style={cardStyle}
       onClick={() => onClick?.(item)}
     >

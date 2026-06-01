@@ -5,7 +5,7 @@ import { Loader2, Upload, Plus, Share2 } from 'lucide-react';
 import type { AdminProfileNode } from '@/app/api/communities/[communityId]/admin/profiles/route';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types';
-import { getNodeTypeConfig } from '@/lib/types';
+import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import { getInitials } from '@/components/dashboard/utils';
 import { Badge } from '@/components/ui';
@@ -23,34 +23,16 @@ interface CrmColumn {
   source: 'community' | 'pending' | 'private';
 }
 
-interface DirectoryRowCellsProps {
-  item: DirectoryItem;
-  // State
-  profileCell: { nodeId: string; field: string; value: string } | null;
-  profileSaving: boolean;
-  editingCell: { nodeId: string; key: string } | null;
-  adminNodes: Map<string, AdminProfileNode>;
-  imageOverrides: Map<string, string>;
-  aliasOverrides: Map<string, string | null>;
-  aliasEditNodeId: string | null;
-  uploadingId: string | null;
-  valueMap: CrmValueMap;
-  crmColumns: CrmColumn[];
-  profileColumns: ProfileColumn[];
-  personAliases: CommunityAlias[];
-  communityAliases?: CommunityAlias[];
-  nodeTypes?: NodeTypeConfig[];
-  communityId: string | null | undefined;
-  isAuthenticated: boolean;
-  editMode: boolean;
-  // Derived
+// Every function a row needs, bundled into one object with a stable identity
+// (built once via useMemo in the parent). Passing them as a single reference
+// lets arePropsEqual compare them with one identity check instead of ~14, and
+// removes the "add a handler, forget to compare it" drift footgun.
+interface RowHandlers {
   isEditable: (id: string) => boolean;
-  // Handlers
   triggerImageUpload: (nodeId: string, e: React.MouseEvent) => void;
-  openProfileCell: (nodeId: string, field: string, current: string, e: React.MouseEvent) => void;
-  saveProfileCell: () => void;
-  handleProfileKeyDown: (e: React.KeyboardEvent) => void;
-  setProfileCell: React.Dispatch<React.SetStateAction<{ nodeId: string; field: string; value: string } | null>>;
+  openProfileCell: (nodeId: string, field: string, e: React.MouseEvent) => void;
+  commitProfileCell: (nodeId: string, field: string, value: string) => Promise<void>;
+  closeProfileCell: () => void;
   setAliasEditNodeId: React.Dispatch<React.SetStateAction<string | null>>;
   saveAlias: (nodeId: string, alias: string | null) => void;
   toggleOpenToWork: (item: DirectoryItem) => void;
@@ -68,11 +50,34 @@ interface DirectoryRowCellsProps {
   ) => void;
 }
 
+interface DirectoryRowCellsProps {
+  item: DirectoryItem;
+  // Per-row state slices (compared by per-node identity in arePropsEqual)
+  profileCell: { nodeId: string; field: string } | null;
+  editingCell: { nodeId: string; key: string } | null;
+  adminNodes: Map<string, AdminProfileNode>;
+  imageOverrides: Map<string, string>;
+  aliasOverrides: Map<string, string | null>;
+  aliasEditNodeId: string | null;
+  uploadingId: string | null;
+  valueMap: CrmValueMap;
+  // Table-wide config (identity-stable unless it truly changes)
+  crmColumns: CrmColumn[];
+  profileColumns: ProfileColumn[];
+  personAliases: CommunityAlias[];
+  communityAliases?: CommunityAlias[];
+  nodeTypes?: NodeTypeConfig[];
+  communityId: string | null | undefined;
+  isAuthenticated: boolean;
+  editMode: boolean;
+  // Stable handler bundle
+  handlers: RowHandlers;
+}
+
 // Memoized row body extracted from CrmDirectoryTable's renderCells closure.
 function DirectoryRowCells({
   item,
   profileCell,
-  profileSaving,
   editingCell,
   adminNodes,
   imageOverrides,
@@ -88,21 +93,13 @@ function DirectoryRowCells({
   communityId,
   isAuthenticated,
   editMode,
-  isEditable,
-  triggerImageUpload,
-  openProfileCell,
-  saveProfileCell,
-  handleProfileKeyDown,
-  setProfileCell,
-  setAliasEditNodeId,
-  saveAlias,
-  toggleOpenToWork,
-  handleCellClick,
-  handleCellSave,
-  setEditingCell,
-  getCellValue,
-  shareValueWithCommunity,
+  handlers,
 }: DirectoryRowCellsProps) {
+  const {
+    isEditable, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
+    saveAlias, setAliasEditNodeId, toggleOpenToWork, handleCellClick, handleCellSave,
+    setEditingCell, getCellValue, shareValueWithCommunity,
+  } = handlers;
   const editable = isEditable(item.id);
   const adminNode = adminNodes.get(item.id);
   const isMemberRow = adminNode?.isMember ?? false;
@@ -111,7 +108,7 @@ function DirectoryRowCells({
   return (
     <>
       {/* Name + photo */}
-      <td className="px-6 py-4 whitespace-nowrap">
+      <td className="px-6 py-4 whitespace-nowrap group-hover:rounded-l-xl">
         <div className="flex items-center gap-3">
           {/* Photo — clickable in edit mode */}
           <div
@@ -141,19 +138,17 @@ function DirectoryRowCells({
           {/* Name — inline editable */}
           <div className="min-w-0">
             {editable && profileCell?.nodeId === item.id && profileCell.field === 'name' ? (
-              <input
-                autoFocus
-                value={profileCell.value}
-                onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                onBlur={saveProfileCell}
-                onKeyDown={handleProfileKeyDown}
-                disabled={profileSaving}
+              <CellEditor
+                value={item.name}
+                type="text"
+                onSave={value => commitProfileCell(item.id, 'name', value)}
+                onCancel={closeProfileCell}
                 className="text-sm font-medium text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
               />
             ) : (
               <div
                 className={`text-sm font-medium text-text-primary truncate ${editable ? 'hover:bg-brand-green/10 rounded px-1 -mx-1 cursor-text' : ''}`}
-                onClick={editable ? e => openProfileCell(item.id, 'name', item.name, e) : undefined}
+                onClick={editable ? e => openProfileCell(item.id, 'name', e) : undefined}
               >
                 {item.name}
               </div>
@@ -195,7 +190,7 @@ function DirectoryRowCells({
         ) : null}
         {(() => {
           const displayAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-          const aliasConfig = displayAlias ? (communityAliases ?? []).find(a => a.name === displayAlias && a.nodeType === item.type) : undefined;
+          const aliasConfig = findAlias(communityAliases, displayAlias, item.type);
           const color = aliasConfig?.color ?? getNodeTypeConfig(item.type, nodeTypes).color;
           return (
             <div
@@ -225,20 +220,18 @@ function DirectoryRowCells({
               isToggleable
                 ? e => { e.stopPropagation(); toggleOpenToWork(item); }
                 : isEditableField
-                  ? e => openProfileCell(item.id, editField, currentVal, e)
+                  ? e => openProfileCell(item.id, editField, e)
                   : undefined
             }
             title={isMemberRow ? `Managed by ${item.name}` : undefined}
           >
             {isEditableField && profileCell?.nodeId === item.id && profileCell.field === editField ? (
-              <input
-                autoFocus
-                value={profileCell.value}
-                onChange={e => setProfileCell(p => p ? { ...p, value: e.target.value } : p)}
-                onBlur={saveProfileCell}
-                onKeyDown={handleProfileKeyDown}
-                disabled={profileSaving}
+              <CellEditor
+                value={currentVal}
+                type="text"
                 placeholder={col.key === 'tags' ? 'tag1, tag2' : undefined}
+                onSave={value => commitProfileCell(item.id, editField, value)}
+                onCancel={closeProfileCell}
                 className="text-sm text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
               />
             ) : (
@@ -262,7 +255,7 @@ function DirectoryRowCells({
         return (
           <td
             key={col.key}
-            className="px-4 py-4 whitespace-nowrap"
+            className="px-6 py-4 whitespace-nowrap"
             onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
           >
             {isCrmEditing ? (
@@ -311,9 +304,68 @@ function DirectoryRowCells({
       })}
 
       {/* Empty add-column spacer */}
-      <td className="px-3 py-4" />
+      <td className="px-3 py-4 group-hover:rounded-r-xl" />
     </>
   );
 }
 
-export default React.memo(DirectoryRowCells);
+// Per-row equality check. The parent (`CrmDirectoryTable`) holds table-wide
+// state (valueMap, adminNodes, image/alias overrides, the edited cell, …) that
+// changes on every interaction; a shallow comparison would re-render *every*
+// mounted row on each keystroke or hover. Instead we compare only the slices
+// that affect THIS row (keyed by item.id), relying on the parent's setters
+// preserving per-node object identity for untouched rows. All handlers travel
+// in one stable useMemo'd bundle, so a single identity check covers them all.
+function arePropsEqual(prev: DirectoryRowCellsProps, next: DirectoryRowCellsProps): boolean {
+  const id = next.item.id;
+
+  if (prev.item !== next.item) return false;
+
+  // Per-row data
+  if (prev.valueMap.values[id] !== next.valueMap.values[id]) return false;
+  if (prev.valueMap.contributors[id] !== next.valueMap.contributors[id]) return false;
+  if (prev.adminNodes.get(id) !== next.adminNodes.get(id)) return false;
+  if (prev.imageOverrides.get(id) !== next.imageOverrides.get(id)) return false;
+  if (prev.aliasOverrides.has(id) !== next.aliasOverrides.has(id)) return false;
+  if (prev.aliasOverrides.get(id) !== next.aliasOverrides.get(id)) return false;
+
+  // Row-targeted single-value selections
+  if ((prev.aliasEditNodeId === id) !== (next.aliasEditNodeId === id)) return false;
+  if ((prev.uploadingId === id) !== (next.uploadingId === id)) return false;
+
+  // Profile cell editor — re-render only when the OPEN cell for this row
+  // changes (open / close / switch field). The CellEditor keeps its own draft,
+  // so keystrokes stay local and never reach the row.
+  const prevPC = prev.profileCell?.nodeId === id ? prev.profileCell : null;
+  const nextPC = next.profileCell?.nodeId === id ? next.profileCell : null;
+  if (prevPC !== nextPC) {
+    if (!prevPC || !nextPC) return false;
+    if (prevPC.field !== nextPC.field) return false;
+  }
+
+  // CRM cell editor — only matters when it targets this row
+  const prevEC = prev.editingCell?.nodeId === id ? prev.editingCell : null;
+  const nextEC = next.editingCell?.nodeId === id ? next.editingCell : null;
+  if (prevEC !== nextEC) {
+    if (!prevEC || !nextEC) return false;
+    if (prevEC.key !== nextEC.key) return false;
+  }
+
+  // Table-wide slices (identity-stable across renders unless they truly change)
+  if (
+    prev.crmColumns !== next.crmColumns ||
+    prev.profileColumns !== next.profileColumns ||
+    prev.personAliases !== next.personAliases ||
+    prev.communityAliases !== next.communityAliases ||
+    prev.nodeTypes !== next.nodeTypes ||
+    prev.communityId !== next.communityId ||
+    prev.isAuthenticated !== next.isAuthenticated ||
+    prev.editMode !== next.editMode
+  ) return false;
+
+  // All handlers travel in one stable, useMemo'd bundle — a single identity
+  // check covers every one of them.
+  return prev.handlers === next.handlers;
+}
+
+export default React.memo(DirectoryRowCells, arePropsEqual);

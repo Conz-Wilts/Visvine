@@ -5,10 +5,13 @@
  */
 
 import { NBNode } from '@/lib/types';
+import { OBSIDIAN_PHYSICS as P } from '../utils/constants';
 
 interface SimNode extends NBNode {
   x?: number;
   y?: number;
+  spawnTime?: number;
+  spawnIndex?: number;
 }
 
 interface SimLink {
@@ -28,7 +31,9 @@ export function drawLinks(
   links: SimLink[],
   nodes: SimNode[],
   transform: Transform,
-  focusNodeId: string | null
+  focusNodeId: string | null,
+  now: number,
+  reduceMotion: boolean
 ): void {
   // Detect parallel edges between the same pair of endpoints; those get a small
   // curve offset so they don't render on top of each other.
@@ -59,6 +64,22 @@ export function drawLinks(
       (String(source.id) === String(focusNodeId) || String(target.id) === String(focusNodeId));
     const linkDimmed = focusNodeId != null && !isFocusLink;
 
+    // Fade each link in alongside its later-appearing endpoint, mirroring the
+    // node fade in CustomForceGraph (same duration/stagger constants). Skip the
+    // tween entirely for reduced-motion users.
+    const fadeAlpha = reduceMotion
+      ? 1
+      : (() => {
+          const stagger = Math.max(source.spawnIndex ?? 0, target.spawnIndex ?? 0) * P.fadeInStaggerMs;
+          const spawnTime = Math.max(source.spawnTime ?? now, target.spawnTime ?? now);
+          const elapsed = now - spawnTime - stagger;
+          return Math.max(0, Math.min(1, elapsed / P.fadeInDurationMs));
+        })();
+    if (fadeAlpha <= 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+
     ctx.strokeStyle = isFocusLink
       ? 'rgba(17,24,39,0.9)'
       : (linkDimmed ? 'rgba(17,24,39,0.05)' : 'rgba(17,24,39,0.18)');
@@ -83,5 +104,6 @@ export function drawLinks(
     }
 
     ctx.stroke();
+    ctx.restore();
   });
 }

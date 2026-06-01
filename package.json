@@ -27,6 +27,7 @@
     "db:seed": "pnpm --filter @visvine/web db:seed",
     "db:nz": "node apps/web/scripts/add-nz-ecosystem.mjs",
     "db:blackbird": "node apps/web/scripts/add-blackbird-ventures.mjs",
+    "db:icehouse": "node apps/web/scripts/add-icehouse-ventures.mjs",
     "db:reset": "node scripts/guard-local-db.mjs && node scripts/db-reset.mjs",
     "db:fresh": "pnpm --filter @visvine/web db:fresh",
     "db:check": "node scripts/db-check.mjs",

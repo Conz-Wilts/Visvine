@@ -343,7 +343,7 @@ export default function DashboardPage() {
       {/* ── Graph canvas — lazily mounted on first open, then kept warm ── */}
       {graphEverOpened && (
         <div
-          className={`overflow-hidden rounded-xl ${isGraphView ? 'absolute inset-0' : 'absolute inset-0 px-6 pt-[100px]'}`}
+          className={`overflow-hidden rounded-xl ${isGraphView ? 'absolute inset-0 px-6' : 'absolute inset-0 px-6 pt-[100px]'}`}
           style={{ visibility: isGraphView ? 'visible' : 'hidden', pointerEvents: isGraphView ? 'auto' : 'none' }}
         >
           <DirectoryGraphView

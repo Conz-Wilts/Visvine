@@ -46,11 +46,12 @@ const NODE_TYPES = [
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
-// nodeType is matched case-sensitively against the node's stored `type`
-// (lowercase) in DirectoryRowCells.tsx, so keep these lowercase.
+// `nodeType` ties an alias to a base node type. Matching is case-insensitive
+// everywhere (Types & Aliases console, directory cells, node cards), so we use
+// the canonical capitalized base-type names here.
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#9333ea', nodeType: 'organization' },
-  { name: 'Founder', color: '#2563eb', nodeType: 'person' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Organization' },
+  { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
 ];
 
 const SECTOR_OPTIONS = [
@@ -96,22 +97,6 @@ function normLinkedin(u) {
   s = s.replace(/^https?:\/\//, '').replace(/^www\./, '');
   s = s.split('?')[0].replace(/\/+$/, '');
   return s || null;
-}
-
-function domainFromUrl(u) {
-  if (!u) return null;
-  try {
-    const h = new URL(String(u).startsWith('http') ? u : 'https://' + u).hostname;
-    return h.replace(/^www\./, '') || null;
-  } catch {
-    return null;
-  }
-}
-
-function logoFor(c) {
-  if (c.logoUrl && /^https?:\/\//.test(c.logoUrl)) return c.logoUrl;
-  const d = domainFromUrl(c.website);
-  return d ? 'https://logo.clearbit.com/' + d : null;
 }
 
 // Ordered most-specific → most-generic. Matched on word boundaries against the
@@ -368,7 +353,7 @@ try {
        ON CONFLICT (id) DO UPDATE SET type = 'organization', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
          metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
-      [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, logoFor(c), JSON.stringify(metadata), COMM],
+      [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
     );
   }
   console.log(`  ✓ ${orgs.length} companies`);

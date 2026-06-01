@@ -92,7 +92,7 @@ export default function FullProfileOverlay({
 
         {/* Person nodes → new profile design */}
         {isPerson && nodeId ? (
-          <div className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)', minHeight: 'calc(100vh - 4rem)' }}>
+          <div className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden shadow-float" style={{ minHeight: 'calc(100vh - 4rem)' }}>
             <button
               onClick={handleClose}
               className="absolute top-4 right-4 z-10 p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"

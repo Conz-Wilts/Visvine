@@ -2,12 +2,13 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { TableVirtuoso, type TableComponents } from 'react-virtuoso';
-import { Lock, Globe, Clock, Plus, X, User } from 'lucide-react';
+import { Lock, Plus, X } from 'lucide-react';
 import { uploadCroppedImage, validateImageFile } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
 import type { AdminProfileNode } from '@/app/api/communities/[communityId]/admin/profiles/route';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types';
+import { aliasesForType } from '@/lib/types';
 import { EmptyState, Skeleton } from '@/components/ui';
 import { useCrmColumns, prvKey, comKey, CrmColumnType } from '@/hooks/useCrmColumns';
 import { patchAdminProfile } from '@/lib/crm/adminProfileApi';
@@ -68,6 +69,9 @@ interface RowContext {
   isEditable: (id: string) => boolean;
   isMember: (id: string) => boolean;
   onRowClick?: (item: DirectoryItem) => void;
+  // Explicit per-column widths (px) for the fixed-layout <colgroup>. Length and
+  // order must match the header/row cells: Name, Type, …profile, …crm, spacer.
+  columnWidths: number[];
 }
 
 type CtxProp = { context?: RowContext };
@@ -81,12 +85,33 @@ type CtxProp = { context?: RowContext };
 const tableComponents = {
   Scroller: React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<'div'> & CtxProp>(
     function Scroller({ context: _context, ...props }, ref) {
-      return <div ref={ref} {...props} className="overflow-x-auto w-full" />;
+      // overflow-y-hidden is deliberate: with `useWindowScroll`, vertical
+      // scrolling belongs to the page. Setting only overflow-x would make the
+      // browser compute overflow-y to `auto` too (CSS overflow spec), adding a
+      // second, unwanted vertical scrollbar inside the table.
+      return <div ref={ref} {...props} className="overflow-x-auto overflow-y-hidden w-full" />;
     }
   ),
-  Table: ({ context: _context, style, ...props }: React.ComponentPropsWithoutRef<'table'> & CtxProp) => (
-    <table {...props} style={{ ...style, tableLayout: 'auto' }} className="w-full divide-y divide-border-subtle" />
-  ),
+  Table: ({ context, style, children, ...props }: React.ComponentPropsWithoutRef<'table'> & CtxProp) => {
+    // Fixed layout: the browser sizes columns from the <colgroup> once instead
+    // of re-measuring every cell as rows mount/unmount during virtual scroll.
+    const widths = context?.columnWidths ?? [];
+    const minWidth = widths.reduce((sum, w) => sum + w, 0);
+    return (
+      <table
+        {...props}
+        style={{ ...style, tableLayout: 'fixed', minWidth: minWidth || undefined, borderCollapse: 'separate', borderSpacing: 0 }}
+        className="w-full divide-y divide-border-subtle"
+      >
+        {widths.length > 0 && (
+          <colgroup>
+            {widths.map((w, i) => <col key={i} style={{ width: w }} />)}
+          </colgroup>
+        )}
+        {children}
+      </table>
+    );
+  },
   TableHead: React.forwardRef<HTMLTableSectionElement, React.ComponentPropsWithoutRef<'thead'> & CtxProp>(
     function TableHead({ context: _context, ...props }, ref) {
       return <thead {...props} ref={ref} className="bg-surface-2" />;
@@ -105,7 +130,7 @@ const tableComponents = {
       <tr
         {...props}
         style={{ ...style, opacity: ctx.editMode && isMemberRow ? 0.5 : 1 }}
-        className={`transition-colors duration-150 group ${ctx.editMode ? (editable ? 'cursor-default' : 'cursor-default opacity-60') : 'hover:bg-surface-2 cursor-pointer'}`}
+        className={`group relative transition-[transform,box-shadow,background-color] duration-150 ease-out ${ctx.editMode ? (editable ? 'cursor-default' : 'cursor-default opacity-60') : 'cursor-pointer hover:bg-surface-2 hover:shadow-[0_2px_10px_rgba(0,0,0,0.06)] motion-safe:hover:-translate-y-px'}`}
         onClick={ctx.editMode ? undefined : () => ctx.onRowClick?.(item)}
       />
     );
@@ -162,9 +187,9 @@ export default function CrmDirectoryTable({
   const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(new Set());
   const [adminNodes, setAdminNodes] = useState<Map<string, AdminProfileNode>>(new Map());
 
-  // Profile inline editing state
-  const [profileCell, setProfileCell] = useState<{ nodeId: string; field: string; value: string } | null>(null);
-  const [profileSaving, setProfileSaving] = useState(false);
+  // Profile inline editing state — tracks only WHICH cell is open; the editor
+  // (CellEditor) owns the draft value locally, so typing never re-renders rows.
+  const [profileCell, setProfileCell] = useState<{ nodeId: string; field: string } | null>(null);
   const [aliasEditNodeId, setAliasEditNodeId] = useState<string | null>(null);
   const profileFileRef = useRef<HTMLInputElement>(null);
   const profileFileTarget = useRef<string | null>(null);
@@ -196,16 +221,18 @@ export default function CrmDirectoryTable({
     return !!an && !an.isMember;
   }, [isAdmin, editMode, adminNodes]);
 
-  const openProfileCell = (nodeId: string, field: string, current: string, e: React.MouseEvent) => {
+  const openProfileCell = useCallback((nodeId: string, field: string, e: React.MouseEvent) => {
     if (!isEditable(nodeId)) return;
     e.stopPropagation();
-    setProfileCell({ nodeId, field, value: current });
-  };
+    setProfileCell({ nodeId, field });
+  }, [isEditable]);
 
-  const saveProfileCell = async () => {
-    if (!profileCell || !communityId) return;
-    const { nodeId, field, value } = profileCell;
-    setProfileSaving(true);
+  const closeProfileCell = useCallback(() => setProfileCell(null), []);
+
+  // Commit a profile-cell edit. The value comes from the editor's local draft,
+  // not parent state, so this stays identity-stable while the user types.
+  const commitProfileCell = useCallback(async (nodeId: string, field: string, value: string) => {
+    if (!communityId) return;
     const fields: Record<string, unknown> = field === 'tags'
       ? { tags: value.split(',').map(t => t.trim()).filter(Boolean) }
       : { [field]: value };
@@ -230,17 +257,11 @@ export default function CrmDirectoryTable({
         onDataChanged?.();
       }
     } finally {
-      setProfileSaving(false);
       setProfileCell(null);
     }
-  };
+  }, [communityId, onDataChanged]);
 
-  const handleProfileKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); saveProfileCell(); }
-    if (e.key === 'Escape') { e.preventDefault(); setProfileCell(null); }
-  };
-
-  const saveAlias = async (nodeId: string, alias: string | null) => {
+  const saveAlias = useCallback(async (nodeId: string, alias: string | null) => {
     if (!communityId) return;
     setAliasEditNodeId(null);
     setAliasOverrides(prev => new Map(prev).set(nodeId, alias));
@@ -255,12 +276,10 @@ export default function CrmDirectoryTable({
         });
       }
     } catch { /* ignore */ }
-  };
+  }, [communityId]);
 
   // Person aliases for the type dropdown
-  const personAliases = useMemo(() =>
-    (communityAliases ?? []).filter(a => a.nodeType === 'Person'),
-  [communityAliases]);
+  const personAliases = useMemo(() => aliasesForType(communityAliases, 'Person'), [communityAliases]);
 
   // Close alias dropdown on outside click
   useEffect(() => {
@@ -270,12 +289,12 @@ export default function CrmDirectoryTable({
     return () => document.removeEventListener('click', handler);
   }, [aliasEditNodeId]);
 
-  const triggerImageUpload = (nodeId: string, e: React.MouseEvent) => {
+  const triggerImageUpload = useCallback((nodeId: string, e: React.MouseEvent) => {
     if (!isEditable(nodeId)) return;
     e.stopPropagation();
     profileFileTarget.current = nodeId;
     profileFileRef.current?.click();
-  };
+  }, [isEditable]);
 
   const handleProfileFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,13 +321,13 @@ export default function CrmDirectoryTable({
     }
   };
 
-  const toggleOpenToWork = async (item: DirectoryItem) => {
+  const toggleOpenToWork = useCallback(async (item: DirectoryItem) => {
     if (!communityId) return;
     try {
       const res = await patchAdminProfile(communityId, item.id, { openToWork: !item.openToWork });
       if (res.ok) onDataChanged?.();
     } catch { /* ignore */ }
-  };
+  }, [communityId, onDataChanged]);
 
   // Upgrade prompt: first private column exceeding threshold that hasn't been dismissed
   const upgradeCandidate = useMemo(() => {
@@ -322,12 +341,12 @@ export default function CrmDirectoryTable({
     setShowAddModal(true);
   }, []);
 
-  const handleCellClick = (nodeId: string, key: string, e: React.MouseEvent) => {
+  const handleCellClick = useCallback((nodeId: string, key: string, e: React.MouseEvent) => {
     e.stopPropagation(); // don't trigger row click / sidebar
     setEditingCell({ nodeId, key });
-  };
+  }, []);
 
-  const handleCellSave = async (nodeId: string, key: string, value: string) => {
+  const handleCellSave = useCallback(async (nodeId: string, key: string, value: string) => {
     setEditingCell(null);
     if (key.startsWith('prv__')) {
       const columnId = key.replace('prv__', '');
@@ -337,11 +356,15 @@ export default function CrmDirectoryTable({
       const col = communityColumns.find(c => c.columnKey === columnKey);
       if (col) await saveCommunityValue(nodeId, col.id, columnKey, value);
     }
-  };
+  }, [savePrivateValue, communityColumns, saveCommunityValue]);
 
-  const getCellValue = (nodeId: string, key: string): string => {
-    return (valueMap.values[nodeId]?.[key] as string) || '';
-  };
+  // Read cell values through a ref so getCellValue keeps a stable identity even
+  // as valueMap changes on each edit — otherwise it would defeat row memoization.
+  const valueMapRef = useRef(valueMap);
+  valueMapRef.current = valueMap;
+  const getCellValue = useCallback((nodeId: string, key: string): string => {
+    return (valueMapRef.current.values[nodeId]?.[key] as string) || '';
+  }, []);
 
   // All CRM column definitions in display order
   const crmColumns = useMemo(() => [
@@ -352,13 +375,48 @@ export default function CrmDirectoryTable({
 
   const profileColumns = useMemo(() => getProfileColumns(activeType), [activeType]);
 
+  // Fixed-layout column widths (px), in render order: Name, Type, profile cols,
+  // CRM cols, then the add-column spacer. `tags` gets extra room since it wraps.
+  const columnWidths = useMemo(() => {
+    const widths = [260, 150];
+    for (const col of profileColumns) widths.push(col.key === 'tags' ? 240 : 190);
+    for (let i = 0; i < crmColumns.length; i++) widths.push(190);
+    widths.push(130);
+    return widths;
+  }, [profileColumns, crmColumns]);
+
   // Stable per-row context for the virtualized rows.
   const rowContext = useMemo<RowContext>(() => ({
     editMode,
     isEditable,
     isMember: (id: string) => adminNodes.get(id)?.isMember ?? false,
     onRowClick,
-  }), [editMode, isEditable, adminNodes, onRowClick]);
+    columnWidths,
+  }), [editMode, isEditable, adminNodes, onRowClick, columnWidths]);
+
+  // Every function a row needs, bundled into one identity-stable object so the
+  // row's arePropsEqual can compare it with a single reference check. Nothing
+  // here depends on per-keystroke state, so the bundle stays stable while a
+  // user types in a cell.
+  const rowHandlers = useMemo(() => ({
+    isEditable,
+    triggerImageUpload,
+    openProfileCell,
+    commitProfileCell,
+    closeProfileCell,
+    setAliasEditNodeId,
+    saveAlias,
+    toggleOpenToWork,
+    handleCellClick,
+    handleCellSave,
+    setEditingCell,
+    getCellValue,
+    shareValueWithCommunity,
+  }), [
+    isEditable, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
+    saveAlias, toggleOpenToWork, handleCellClick, handleCellSave, getCellValue,
+    shareValueWithCommunity,
+  ]);
 
   // ── Header (rendered once, sticky) ─────────────────────────────────────────
   const renderHeader = useCallback(() => (
@@ -368,20 +426,14 @@ export default function CrmDirectoryTable({
       <th className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">Type</th>
       {profileColumns.map(col => (
         <th key={col.key} className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">
-          <div className="flex items-center gap-1.5">
-            <User className="w-3 h-3 text-emerald-400" />
-            <span>{col.label}</span>
-          </div>
+          {col.label}
         </th>
       ))}
 
       {/* CRM columns */}
       {crmColumns.map(col => (
-        <th key={col.key} className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">
+        <th key={col.key} className="px-6 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2">
           <div className="flex items-center gap-1.5">
-            {col.source === 'private' && <Lock className="w-3 h-3 text-blue-400" />}
-            {col.source === 'community' && <Globe className="w-3 h-3 text-purple-400" />}
-            {col.source === 'pending' && <Clock className="w-3 h-3 text-amber-400" />}
             <span className={col.source === 'pending' ? 'opacity-50' : ''}>{col.label}</span>
             {col.source === 'private' && (
               <button
@@ -415,7 +467,6 @@ export default function CrmDirectoryTable({
     <DirectoryRowCells
       item={item}
       profileCell={profileCell}
-      profileSaving={profileSaving}
       editingCell={editingCell}
       adminNodes={adminNodes}
       imageOverrides={imageOverrides}
@@ -431,20 +482,7 @@ export default function CrmDirectoryTable({
       communityId={communityId}
       isAuthenticated={isAuthenticated}
       editMode={editMode}
-      isEditable={isEditable}
-      triggerImageUpload={triggerImageUpload}
-      openProfileCell={openProfileCell}
-      saveProfileCell={saveProfileCell}
-      handleProfileKeyDown={handleProfileKeyDown}
-      setProfileCell={setProfileCell}
-      setAliasEditNodeId={setAliasEditNodeId}
-      saveAlias={saveAlias}
-      toggleOpenToWork={toggleOpenToWork}
-      handleCellClick={handleCellClick}
-      handleCellSave={handleCellSave}
-      setEditingCell={setEditingCell}
-      getCellValue={getCellValue}
-      shareValueWithCommunity={shareValueWithCommunity}
+      handlers={rowHandlers}
     />
   );
 
@@ -476,6 +514,9 @@ export default function CrmDirectoryTable({
           computeItemKey={(_, item) => item.id}
           fixedHeaderContent={renderHeader}
           itemContent={(_, item) => renderCells(item)}
+          // Render ~600px of rows above/below the viewport so fast scrolling
+          // doesn't reveal blank gaps before the next rows mount.
+          increaseViewportBy={{ top: 600, bottom: 600 }}
         />
 
         {/* Column remove bar — shows on hover for private columns */}

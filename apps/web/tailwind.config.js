@@ -24,6 +24,7 @@ module.exports = {
       },
       boxShadow: {
         'soft': '0 8px 24px rgba(0,0,0,0.06)',
+        'float': '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
       },
     },
   },

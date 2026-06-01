@@ -5,6 +5,7 @@ import { useCreateModal, type CreateableType } from '@/lib/contexts/CreateModalC
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { slugify } from '@/lib/eventUtils';
 import type { CommunityAlias } from '@/lib/types';
+import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
@@ -109,11 +110,11 @@ export default function CreateModal() {
 
   // Aliases from current community, filtered to the selected node type
   const allAliases = (currentCommunity?.communityAliases as CommunityAlias[] | undefined) ?? [];
-  const nodeTypeName = selectedType === 'person' ? 'People'
+  const nodeTypeName = selectedType === 'person' ? 'Person'
     : selectedType === 'resource' ? 'Resource'
     : selectedType === 'event' ? 'Event'
     : null;
-  const aliases = nodeTypeName ? allAliases.filter(a => a.nodeType === nodeTypeName) : [];
+  const aliases = aliasesForType(allAliases, nodeTypeName);
   const hasAliases = aliases.length > 0;
 
   const reset = useCallback(() => {

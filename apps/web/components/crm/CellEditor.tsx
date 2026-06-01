@@ -8,9 +8,16 @@ interface CellEditorProps {
   options?: string[] | null;
   onSave: (value: string) => Promise<void>;
   onCancel: () => void;
+  // Override the input styling (e.g. profile cells use a borderless underline
+  // instead of the boxed CRM look). Defaults preserve the original appearance.
+  className?: string;
+  placeholder?: string;
 }
 
-export default function CellEditor({ value: initialValue, type, options, onSave, onCancel }: CellEditorProps) {
+const DEFAULT_INPUT_CLASS =
+  'w-full px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none';
+
+export default function CellEditor({ value: initialValue, type, options, onSave, onCancel, className, placeholder }: CellEditorProps) {
   const [value, setValue] = useState(initialValue);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(null);
@@ -38,7 +45,7 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
         onChange={e => setValue(e.target.value)}
         onBlur={handleSave}
         disabled={saving}
-        className="w-full px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none"
+        className={className ?? DEFAULT_INPUT_CLASS}
       >
         <option value="">—</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -53,7 +60,7 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
         type="date" value={value}
         onChange={e => setValue(e.target.value)}
         onBlur={handleSave} onKeyDown={handleKey} disabled={saving}
-        className="w-full px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none"
+        className={className ?? DEFAULT_INPUT_CLASS}
       />
     );
   }
@@ -63,9 +70,10 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
       ref={ref as React.RefObject<HTMLInputElement>}
       type={type === 'url' ? 'url' : 'text'}
       value={value}
+      placeholder={placeholder}
       onChange={e => setValue(e.target.value)}
       onBlur={handleSave} onKeyDown={handleKey} disabled={saving}
-      className="w-full px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none min-w-[120px]"
+      className={className ?? `${DEFAULT_INPUT_CLASS} min-w-[120px]`}
     />
   );
 }

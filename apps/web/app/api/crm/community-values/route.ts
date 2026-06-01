@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import prisma from '@/lib/prisma';
 
-// GET /api/crm/community-values?community_id=X&node_ids[]=A
-export async function GET(req: NextRequest) {
-  const communityId = req.nextUrl.searchParams.get('community_id');
-  const nodeIds = req.nextUrl.searchParams.getAll('node_ids[]');
+type CommunityValueMap = Record<string, Record<string, { value: string | null; contributedBy: { id: string; name: string; image: string | null } | null }>>;
 
-  if (!communityId) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
-
+async function buildCommunityValues(communityId: string, nodeIds: string[]): Promise<CommunityValueMap> {
   const values = await prisma.communityColumnValue.findMany({
     where: {
       communityId,
@@ -20,7 +16,7 @@ export async function GET(req: NextRequest) {
   });
 
   // Shape: { [nodeId]: { [columnKey]: { value, contributedBy } } }
-  const shaped: Record<string, Record<string, { value: string | null; contributedBy: { id: string; name: string; image: string | null } | null }>> = {};
+  const shaped: CommunityValueMap = {};
   for (const v of values) {
     if (!shaped[v.nodeId]) shaped[v.nodeId] = {};
     shaped[v.nodeId][v.columnKey] = {
@@ -28,8 +24,42 @@ export async function GET(req: NextRequest) {
       contributedBy: v.contributedBy,
     };
   }
+  return shaped;
+}
 
-  return NextResponse.json({ values: shaped });
+// GET /api/crm/community-values?community_id=X&node_ids[]=A
+// Requires an authenticated session (symmetric with POST/PUT and the
+// private-values route). No per-community membership gate: communities are
+// publicly browsable, so the community directory layer is readable by any
+// signed-in user.
+export async function GET(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const communityId = req.nextUrl.searchParams.get('community_id');
+  const nodeIds = req.nextUrl.searchParams.getAll('node_ids[]');
+
+  if (!communityId) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
+
+  return NextResponse.json({ values: await buildCommunityValues(communityId, nodeIds) });
+}
+
+// POST /api/crm/community-values  body: { community_id, node_ids: string[] }
+// Same read as GET, but the id list rides in the body so fetching values for
+// many nodes at once never blows past URL/header length limits.
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const communityId: unknown = body?.community_id;
+  const nodeIds: string[] = Array.isArray(body?.node_ids) ? body.node_ids : [];
+
+  if (typeof communityId !== 'string' || !communityId) {
+    return NextResponse.json({ error: 'community_id required' }, { status: 400 });
+  }
+
+  return NextResponse.json({ values: await buildCommunityValues(communityId, nodeIds) });
 }
 
 // PUT /api/crm/community-values

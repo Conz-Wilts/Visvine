@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as d3Force from 'd3-force';
-import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig } from '@/lib/types';
+import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig, findAlias } from '@/lib/types';
 import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS as P } from './utils/constants';
 import { drawLinks } from './renderers/LinkRenderer';
 import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
@@ -51,6 +51,10 @@ export interface Transform {
    FORCE GRAPH CANVAS COMPONENT
    ============================================================================ */
 
+// Pointer travel (in screen px) below which a press counts as a click, not a
+// drag. Used both to start a drag and to fire onNodeClick — keep them in sync.
+const DRAG_THRESHOLD = 5;
+
 const CustomForceGraph: React.FC<{
   nodes: SimNode[];
   links: SimLink[];
@@ -81,6 +85,11 @@ const CustomForceGraph: React.FC<{
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const dragNodeRef = useRef<SimNode | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
+  // True once a press-on-node has moved past the click threshold and become a
+  // real drag. Until then the node is NOT pinned and the simulation is NOT
+  // reheated — so a plain click/hold leaves neighbours still instead of
+  // vibrating around the reheated, stationary node.
+  const dragStartedRef = useRef(false);
   const hasInitialFitRef = useRef(false);
   const prevFocusNodeIdRef = useRef<string | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -188,9 +197,7 @@ const CustomForceGraph: React.FC<{
     // resolves colour. Without this, Founder/Investor/Government nodes in the
     // graph view fall back to the base type colour and lose their distinction.
     const nodeAlias = (node as { alias?: string | null }).alias;
-    const aliasConfig = nodeAlias
-      ? (communityAliases ?? []).find(a => a.name === nodeAlias && a.nodeType === node.type)
-      : undefined;
+    const aliasConfig = findAlias(communityAliases, nodeAlias, node.type);
     const borderColor = aliasConfig?.color ?? typeConfig.color;
     const shape = typeConfig.shape;
 
@@ -259,16 +266,17 @@ const CustomForceGraph: React.FC<{
       }
     }
 
+    const renderNow = performance.now();
+
     // Draw Links
     const allNodesDimmed = nodes.length > 0 && nodes.every(n => currentDimmedNodeIds.has(String(n.id)));
     const shouldDrawLinks = (!currentFocusNodeId && !allNodesDimmed) || focusNodeExists;
 
     if (shouldDrawLinks) {
-      drawLinks(ctx, links, nodes, transform, currentFocusNodeId);
+      drawLinks(ctx, links, nodes, transform, currentFocusNodeId, renderNow, reduceMotionRef.current);
     }
 
     // Draw Nodes with viewport culling
-    const renderNow = performance.now();
     nodes.forEach(node => {
       if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
 
@@ -430,6 +438,18 @@ const CustomForceGraph: React.FC<{
     }
     simulationRef.current?.stop();
 
+    // d3-force's forceLink mutates each link.source/target from an id-string into
+    // a node-object reference and never re-resolves an endpoint that is already an
+    // object (see d3-force/src/link.js initialize()). On a re-layout the nodes array
+    // is regenerated but the links array is reused, so its endpoints still point at
+    // the old (now discarded) node objects whose positions are frozen — links would
+    // render fixed while the new nodes move. Reset endpoints back to ids here so d3
+    // re-binds them against the current node objects.
+    links.forEach(link => {
+      if (link.source && typeof link.source === 'object') link.source = String((link.source as SimNode).id);
+      if (link.target && typeof link.target === 'object') link.target = String((link.target as SimNode).id);
+    });
+
     // Pre-compute connected node set so isolated nodes get pushed to a periphery ring.
     const connectedIds = new Set<string>();
     links.forEach(link => {
@@ -569,7 +589,11 @@ const CustomForceGraph: React.FC<{
     mouseDownNodeRef.current = node || null;
 
     if (node && typeof node.x === 'number' && typeof node.y === 'number') {
+      // Mark this as a drag candidate only. Pinning the node and reheating the
+      // simulation is deferred to handleMouseMove (once the pointer moves past
+      // DRAG_THRESHOLD) so a plain click/hold doesn't make neighbours vibrate.
       isDraggingRef.current = true;
+      dragStartedRef.current = false;
       setCursorStyle('move');
       dragNodeRef.current = node;
       const graphPos = screenToGraph(x, y);
@@ -577,24 +601,38 @@ const CustomForceGraph: React.FC<{
         x: graphPos.x - node.x,
         y: graphPos.y - node.y
       };
-      node.fx = node.x;
-      node.fy = node.y;
-      // A user drag changes the layout — persist it when the sim re-settles.
-      markDirty();
-      simulationRef.current?.alphaTarget(0.3).restart();
-      startSimLoop();
     } else {
       isPanningRef.current = true;
       setCursorStyle('grabbing');
       dragStartRef.current = { x: e.clientX, y: e.clientY };
     }
-  }, [findNodeAt, screenToGraph, startSimLoop, markDirty]);
+  }, [findNodeAt, screenToGraph]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     if (isDraggingRef.current && dragNodeRef.current && dragOffsetRef.current) {
+      // Defer the actual drag (pinning the node + reheating the simulation)
+      // until the pointer has moved past the click threshold. Reheating on a
+      // stationary press is what made nearby nodes vibrate.
+      if (!dragStartedRef.current) {
+        const downPos = mouseDownPosRef.current;
+        if (downPos) {
+          const ddx = e.clientX - downPos.x;
+          const ddy = e.clientY - downPos.y;
+          if (Math.sqrt(ddx * ddx + ddy * ddy) < DRAG_THRESHOLD) return;
+        }
+        dragStartedRef.current = true;
+        const node = dragNodeRef.current;
+        node.fx = node.x;
+        node.fy = node.y;
+        // A user drag changes the layout — persist it when the sim re-settles.
+        markDirty();
+        simulationRef.current?.alphaTarget(0.3).restart();
+        startSimLoop();
+      }
+
       const rect = canvas.getBoundingClientRect();
       const graphPos = screenToGraph(e.clientX - rect.left, e.clientY - rect.top);
 
@@ -630,7 +668,7 @@ const CustomForceGraph: React.FC<{
         onNodeHover?.(null);
       }
     }
-  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions]);
+  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions, markDirty, startSimLoop]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -641,8 +679,7 @@ const CustomForceGraph: React.FC<{
       const dy = e.clientY - mouseDownPosRef.current.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      const CLICK_THRESHOLD = 5;
-      if (distance < CLICK_THRESHOLD) {
+      if (distance < DRAG_THRESHOLD) {
         const rect = canvas.getBoundingClientRect();
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
@@ -654,7 +691,9 @@ const CustomForceGraph: React.FC<{
       }
     }
 
-    if (isDraggingRef.current && dragNodeRef.current) {
+    // Only release/relax if a real drag actually started. A plain click never
+    // pinned the node or reheated the sim, so there's nothing to undo.
+    if (isDraggingRef.current && dragNodeRef.current && dragStartedRef.current) {
       const node = dragNodeRef.current;
       node.fx = null;
       node.fy = null;
@@ -663,6 +702,7 @@ const CustomForceGraph: React.FC<{
     }
 
     isDraggingRef.current = false;
+    dragStartedRef.current = false;
     isPanningRef.current = false;
     dragNodeRef.current = null;
     dragStartRef.current = null;

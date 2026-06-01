@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { DEFAULT_NODE_TYPES } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -474,7 +474,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
               key={liveType.name}
               typeName={liveType.name}
               typeColor={liveType.color}
-              aliases={aliases.filter(a => a.nodeType === liveType.name)}
+              aliases={aliasesForType(aliases, liveType.name)}
               allAliases={aliases}
               onAddAlias={handleAddAlias}
               onRemoveAlias={handleRemoveAlias}

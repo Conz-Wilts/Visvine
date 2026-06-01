@@ -45,14 +45,14 @@ export default function CommunitySelector({
         onClick={() => setIsOpen(!isOpen)}
         className={
           iconOnly
-            ? "w-12 h-12 rounded-xl flex items-center justify-center border border-border-default bg-surface-1 hover:bg-surface-2 transition"
-            : "flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-text-secondary border border-border-default rounded-full bg-surface-1 hover:bg-surface-2 shadow-sm transition"
+            ? "w-12 h-12 rounded-2xl flex items-center justify-center border border-border-subtle bg-surface-1 hover:bg-surface-2 transition shadow-float"
+            : "flex items-center gap-2 h-16 px-4 text-sm font-medium text-text-secondary border border-border-subtle rounded-2xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
         }
       >
         {currentCommunity ? (
-          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="sm" />
+          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="sm" className="!w-10 !h-10 !text-sm" />
         ) : (
-          <div className="w-6 h-6 rounded-full bg-surface-3 flex-shrink-0" />
+          <div className="w-10 h-10 rounded-full bg-surface-3 flex-shrink-0" />
         )}
         {!iconOnly && (
           <>
@@ -79,7 +79,7 @@ export default function CommunitySelector({
                 placeholder="Search communities..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-border-default rounded-full bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-default transition"
+                className="w-full px-3 py-2 text-sm border border-border-default rounded-xl bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-default transition"
                 autoFocus
               />
             </div>

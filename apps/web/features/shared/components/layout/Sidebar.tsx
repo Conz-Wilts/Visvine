@@ -110,13 +110,12 @@ export default function Sidebar() {
       onMouseLeave={() => setExpanded(false)}
     >
       <div
-        className="flex flex-col bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden"
+        className="flex flex-col bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden shadow-float"
         style={{
           width: expanded ? EXPANDED_W : COLLAPSED_W,
           paddingTop: 16,
           paddingBottom: 16,
           gap: 8,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08)',
           transform: entered ? 'translateX(0)' : 'translateX(-60px)',
           opacity: entered ? 1 : 0,
           transition: 'width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out',
