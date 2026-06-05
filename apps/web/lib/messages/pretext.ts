@@ -36,6 +36,11 @@ const DELETED_MESSAGE_HEIGHT = 40; // fixed height for deleted messages
 const BUBBLE_MAX_WIDTH_MOBILE = 0.78;
 const BUBBLE_MAX_WIDTH_DESKTOP = 0.65;
 
+// The thread renders as a centered column (max-w-3xl = 768px) with px-4 (16px each side)
+// in MessagesClient. The container the ResizeObserver measures is the full-width panel, so
+// clamp the effective width to the column's content box so wrap estimates stay accurate.
+const THREAD_CONTENT_MAX_WIDTH = 768 - 32;
+
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
 const preparedCache = new Map<string, PreparedText>();
@@ -83,7 +88,9 @@ export function calculateMessageHeight(
   }
 
   const maxWidthFraction = isMobile ? BUBBLE_MAX_WIDTH_MOBILE : BUBBLE_MAX_WIDTH_DESKTOP;
-  const maxBubbleWidth = containerWidth * maxWidthFraction;
+  // Clamp to the centered column width on desktop (the column is narrower than the panel).
+  const effectiveWidth = isMobile ? containerWidth : Math.min(containerWidth, THREAD_CONTENT_MAX_WIDTH);
+  const maxBubbleWidth = effectiveWidth * maxWidthFraction;
   const textMaxWidth = maxBubbleWidth - BUBBLE_PADDING_X;
 
   let height = 0;

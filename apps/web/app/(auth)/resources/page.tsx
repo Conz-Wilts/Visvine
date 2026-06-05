@@ -504,7 +504,7 @@ export default function ResourcesPage() {
       {/* ── Page header ────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3 px-6 pt-6 pb-3">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Resources</h1>
+          <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto">Resources</h1>
           <button
             type="button"
             onClick={() => setShowUpload(true)}

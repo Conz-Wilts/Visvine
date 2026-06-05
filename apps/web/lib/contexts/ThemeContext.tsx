@@ -166,8 +166,8 @@ function applyAll(theme: ColorTheme, isDark: boolean) {
     root.style.setProperty('--surface-1', '#ffffff');
     root.style.setProperty('--surface-2', '#f9fafb');
     root.style.setProperty('--surface-3', '#f3f4f6');
-    root.style.setProperty('--border-subtle', '#f3f4f6');
-    root.style.setProperty('--border-default', '#e5e7eb');
+    root.style.setProperty('--border-subtle', '#e5e7eb');
+    root.style.setProperty('--border-default', '#d1d5db');
     root.style.setProperty('--text-primary', '#111827');
     root.style.setProperty('--text-secondary', '#374151');
     root.style.setProperty('--text-muted', '#6b7280');

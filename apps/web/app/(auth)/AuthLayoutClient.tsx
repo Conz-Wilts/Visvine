@@ -17,7 +17,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { backgroundStyle } = useCommunityDesign();
   const { expanded } = useSidebar();
   return (
-    <div className="flex flex-col min-h-screen bg-white" style={backgroundStyle}>
+    <div className="flex flex-col min-h-screen bg-brand-bg" style={backgroundStyle}>
       <Navbar />
 
       {/* Sidebar floats fixed over content — shadow not clipped */}

@@ -80,8 +80,8 @@
   --color-surface-1: var(--surface-1, #ffffff);        /* main card / panel bg */
   --color-surface-2: var(--surface-2, #f9fafb);        /* secondary surface */
   --color-surface-3: var(--surface-3, #f3f4f6);        /* hover / tertiary */
-  --color-border-subtle: var(--border-subtle, #f3f4f6); /* hairline borders */
-  --color-border-default: var(--border-default, #e5e7eb);/* standard borders */
+  --color-border-subtle: var(--border-subtle, #e5e7eb); /* hairline borders */
+  --color-border-default: var(--border-default, #d1d5db);/* standard borders */
   --color-text-primary: var(--text-primary, #111827);
   --color-text-secondary: var(--text-secondary, #374151);
   --color-text-muted: var(--text-muted, #6b7280);

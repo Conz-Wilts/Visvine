@@ -26,18 +26,19 @@ export default function CommunitiesPage() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
         {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
-          <div>
-            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto mb-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-4 mb-10">
+          <div className="hidden sm:block" />
+          <div className="text-center sm:col-start-2">
+            <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto mb-2">
               My Communities
             </h1>
-            <p className="text-text-muted text-base max-w-2xl">
+            <p className="text-text-muted text-base max-w-2xl mx-auto">
               Communities you're part of. Switch between them to view their networks.
             </p>
           </div>
           <Link
             href="/discover"
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-center sm:justify-self-end"
             style={{ color: '#ffffff' }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

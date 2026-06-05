@@ -154,8 +154,8 @@ export default function FeedPage() {
     <div className="w-full py-8">
       <div className="w-full max-w-2xl mx-auto px-4">
         {/* Page header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-text-primary">Feed</h1>
+        <div className="mb-6 text-center">
+          <h1 className="text-3xl font-bold text-text-primary">Feed</h1>
           <p className="text-sm text-text-muted mt-1">
             Stay up to date with your community
           </p>

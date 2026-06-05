@@ -167,7 +167,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   };
 
   return (
-    <form onSubmit={handleSave} className="max-w-lg space-y-5">
+    <form onSubmit={handleSave} className="w-full space-y-5">
       <div>
         <label className="block text-sm font-medium text-text-primary mb-2">Community Image</label>
         <div className="flex justify-start">

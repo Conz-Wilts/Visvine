@@ -379,11 +379,12 @@ export default function IntrosPage() {
   };
 
   return (
-    <div className="p-6 md:p-8 min-h-screen bg-zinc-50 dark:bg-zinc-950 space-y-6">
+    <div className="p-6 md:p-8 min-h-screen bg-zinc-50 dark:bg-zinc-950 space-y-6 max-w-3xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Intro Requests</h1>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div />
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">Intro Requests</h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">
             Browsing as <span className="font-medium text-zinc-700 dark:text-zinc-300">{nodeName}</span>
             {isDemo && (
@@ -393,16 +394,18 @@ export default function IntrosPage() {
             )}
           </p>
         </div>
-        {isDemo && !seedDone && (
-          <button
-            onClick={handleSeed}
-            disabled={seeding}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors self-start"
-          >
-            {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Seed demo data
-          </button>
-        )}
+        <div className="justify-self-end">
+          {isDemo && !seedDone && (
+            <button
+              onClick={handleSeed}
+              disabled={seeding}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              Seed demo data
+            </button>
+          )}
+        </div>
       </div>
 
       {isDemo && (

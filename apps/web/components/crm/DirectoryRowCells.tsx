@@ -108,17 +108,17 @@ function DirectoryRowCells({
   return (
     <>
       {/* Name + photo */}
-      <td className="px-6 py-4 whitespace-nowrap group-hover:rounded-l-xl">
+      <td className="px-4 py-2.5 whitespace-nowrap">
         <div className="flex items-center gap-3">
           {/* Photo — clickable in edit mode */}
           <div
-            className={`relative flex-shrink-0 h-10 w-10 rounded-xl overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
+            className={`relative flex-shrink-0 h-8 w-8 rounded-full overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
             onClick={editable ? e => triggerImageUpload(item.id, e) : undefined}
           >
             {imgSrc ? (
-              <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="h-10 w-10 object-cover" />
+              <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="h-8 w-8 object-cover" />
             ) : (
-              <div className="h-10 w-10 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
+              <div className="h-8 w-8 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
                 {getInitials(item.name)}
               </div>
             )}
@@ -158,7 +158,7 @@ function DirectoryRowCells({
       </td>
 
       {/* Type / Alias — editable for admin */}
-      <td className="px-6 py-4 whitespace-nowrap relative">
+      <td className="px-4 py-2.5 whitespace-nowrap relative">
         {editable && !isMemberRow && aliasEditNodeId === item.id ? (
           <div className="absolute z-20 top-full left-4 mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-lg py-1 min-w-[140px]"
             onClick={e => e.stopPropagation()}
@@ -215,7 +215,7 @@ function DirectoryRowCells({
         return (
           <td
             key={col.key}
-            className={`px-6 py-4 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
+            className={`px-4 py-2.5 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
             onClick={
               isToggleable
                 ? e => { e.stopPropagation(); toggleOpenToWork(item); }
@@ -255,7 +255,7 @@ function DirectoryRowCells({
         return (
           <td
             key={col.key}
-            className="px-6 py-4 whitespace-nowrap"
+            className="px-4 py-2.5 whitespace-nowrap"
             onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
           >
             {isCrmEditing ? (
@@ -304,7 +304,7 @@ function DirectoryRowCells({
       })}
 
       {/* Empty add-column spacer */}
-      <td className="px-3 py-4 group-hover:rounded-r-xl" />
+      <td className="px-4 py-2.5" />
     </>
   );
 }

@@ -331,7 +331,7 @@ export default function MessageComposer({
 
   return (
     <footer
-      className={`relative border-t border-border-subtle bg-white px-4 py-3 ${isDragging ? 'bg-brand-green/5' : ''}`}
+      className={`relative border-t border-border-subtle px-4 py-3 ${isDragging ? 'bg-brand-green/5' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node)) return;
@@ -448,7 +448,7 @@ export default function MessageComposer({
         )}
 
         {/* Slack-style composer: bordered box with textarea + toolbar row below */}
-        <div className="rounded-3xl border border-border-default bg-white focus-within:border-text-muted transition-colors shadow-sm">
+        <div className="rounded-3xl border border-border-default bg-surface-1 focus-within:border-text-muted transition-colors shadow-sm">
           {/* Textarea */}
           <textarea
             ref={textareaRef}

@@ -25,7 +25,7 @@ export default function UserMenu() {
   }, []);
 
   if (isPending) {
-    return <div className="w-16 h-16 rounded-3xl bg-surface-3 animate-pulse shrink-0" />;
+    return <div className="w-12 h-12 rounded-2xl bg-surface-3 animate-pulse shrink-0" />;
   }
 
   if (!session) return null;
@@ -47,11 +47,11 @@ export default function UserMenu() {
       {/* Avatar button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-16 h-16 rounded-3xl overflow-hidden border-[3px] border-brand-green hover:border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+        className="w-12 h-12 rounded-2xl overflow-hidden border-2 border-brand-green hover:border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
         aria-label="Account menu"
       >
         {user.image ? (
-          <Image src={user.image} alt={user.name ?? "Profile"} width={44} height={44} className="w-full h-full object-cover" />
+          <Image src={user.image} alt={user.name ?? "Profile"} width={48} height={48} className="w-full h-full object-cover" />
         ) : (
           <span className="w-full h-full flex items-center justify-center bg-brand-green text-white text-xs font-semibold">
             {initials}

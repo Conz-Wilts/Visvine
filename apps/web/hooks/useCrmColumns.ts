@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSession } from '@/lib/auth-client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -60,7 +60,22 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
   const [valueMap, setValueMap] = useState<CrmValueMap>({ values: {}, contributors: {} });
   const [columnsLoading, setColumnsLoading] = useState(false);
-  const [privateValueCounts, setPrivateValueCounts] = useState<Record<string, number>>({});
+
+  // Derived (not stored) so it always reflects the currently-loaded window: the
+  // value cache is evicted as you scroll, and accumulating a separate counter
+  // would double-count rows that get evicted and later re-loaded.
+  const privateValueCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const cols of Object.values(valueMap.values)) {
+      for (const [key, value] of Object.entries(cols)) {
+        if (value && key.startsWith('prv__')) {
+          const columnId = key.slice('prv__'.length);
+          counts[columnId] = (counts[columnId] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }, [valueMap]);
 
   // ── Load column definitions ────────────────────────────────────────────────
 
@@ -98,8 +113,16 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
 
   // ── Load values ────────────────────────────────────────────────────────────
 
-  const loadValues = useCallback(async (ids: string[]) => {
-    if (!communityId || ids.length === 0) return;
+  const loadValues = useCallback(async (ids: string[], signal?: AbortSignal): Promise<boolean> => {
+    if (!communityId || ids.length === 0) return true;
+
+    // Track whether any request genuinely failed (vs. was aborted). The caller
+    // only records ids as loaded on a clean success, so real failures retry on
+    // the next change while aborts are silently ignored.
+    let failed = false;
+    const onErr = (err: unknown) => {
+      if ((err as { name?: string })?.name !== 'AbortError') failed = true;
+    };
 
     const fetches: Promise<void>[] = [];
 
@@ -110,6 +133,7 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ community_id: communityId, node_ids: ids }),
+        signal,
       })
         .then(r => r.json())
         .then(d => {
@@ -132,7 +156,7 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
             return { values: nextValues, contributors: nextContributors };
           });
         })
-        .catch(() => {})
+        .catch(onErr)
     );
 
     // Private values
@@ -142,39 +166,82 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ node_ids: ids }),
+          signal,
         })
           .then(r => r.json())
           .then(d => {
             const raw: Record<string, Record<string, string | null>> = d.values || {};
-            // Count filled values per column for upgrade prompt
-            const counts: Record<string, number> = {};
             setValueMap(prev => {
               const nextValues = { ...prev.values };
               for (const [nodeId, cols] of Object.entries(raw)) {
                 const merged = { ...(nextValues[nodeId] || {}) };
                 for (const [columnId, value] of Object.entries(cols)) {
                   merged[prvKey(columnId)] = value;
-                  if (value) counts[columnId] = (counts[columnId] || 0) + 1;
                 }
                 nextValues[nodeId] = merged;
               }
               return { ...prev, values: nextValues };
             });
-            setPrivateValueCounts(counts);
           })
-          .catch(() => {})
+          .catch(onErr)
       );
     }
 
     await Promise.all(fetches);
+    return !failed;
   }, [communityId, isAuthenticated]);
 
   useEffect(() => { loadColumns(); }, [loadColumns]);
 
+  // Node ids whose values we've already fetched. Filtering / searching / sorting
+  // the table feeds new id arrays that are subsets or reorders of what's already
+  // loaded, so we only ever fetch the ids we haven't seen — those interactions
+  // cost zero network/CPU after the first load.
+  const loadedIdsRef = useRef<Set<string>>(new Set());
+
+  // The value namespace is scoped per-community and per-auth-state; drop the
+  // cache when either changes so the new context reloads from scratch.
   useEffect(() => {
-    if (nodeIds.length > 0) loadValues(nodeIds);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodeIds.join(','), loadValues]);
+    loadedIdsRef.current = new Set();
+    setValueMap({ values: {}, contributors: {} });
+  }, [communityId, isAuthenticated]);
+
+  // `nodeIds` is the *window* of rows around the viewport (caller-supplied).
+  // Load values for any window rows we don't have yet, and evict values for
+  // rows that have scrolled out of the window — so memory stays bounded no
+  // matter how far the user scrolls. Evicted rows re-fetch when scrolled back.
+  useEffect(() => {
+    const windowSet = new Set(nodeIds);
+    const missing = nodeIds.filter(id => !loadedIdsRef.current.has(id));
+    const stale = [...loadedIdsRef.current].filter(id => !windowSet.has(id));
+    if (missing.length === 0 && stale.length === 0) return;
+    const controller = new AbortController();
+    // Debounce to scroll-settle: fast scrolling keeps clearing this timeout, so
+    // we neither fetch nor evict per row, and we abort any in-flight load.
+    const t = setTimeout(async () => {
+      if (stale.length > 0) {
+        for (const id of stale) loadedIdsRef.current.delete(id);
+        // Rebuild keeping only window rows; kept rows retain their object
+        // identity so mounted rows don't re-render on eviction.
+        setValueMap(prev => {
+          const values: CrmValueMap['values'] = {};
+          const contributors: CrmValueMap['contributors'] = {};
+          for (const id of windowSet) {
+            if (prev.values[id]) values[id] = prev.values[id];
+            if (prev.contributors[id]) contributors[id] = prev.contributors[id];
+          }
+          return { values, contributors };
+        });
+      }
+      if (missing.length > 0) {
+        const ok = await loadValues(missing, controller.signal);
+        if (ok && !controller.signal.aborted) {
+          for (const id of missing) loadedIdsRef.current.add(id);
+        }
+      }
+    }, 200);
+    return () => { clearTimeout(t); controller.abort(); };
+  }, [nodeIds, loadValues]);
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -224,12 +291,12 @@ export function useCrmColumns({ communityId, nodeIds }: UseCrmColumnsOptions) {
       body: JSON.stringify({ node_id: nodeId, column_id: columnId, value }),
     });
     if (!res.ok) throw new Error('Failed to save');
-    // Optimistic update
+    // Optimistic update (privateValueCounts is derived from valueMap, so it
+    // updates automatically).
     setValueMap(prev => ({
       ...prev,
       values: { ...prev.values, [nodeId]: { ...(prev.values[nodeId] || {}), [prvKey(columnId)]: value } },
     }));
-    setPrivateValueCounts(prev => ({ ...prev, [columnId]: (prev[columnId] || 0) + (value ? 1 : 0) }));
   }, []);
 
   const saveCommunityValue = useCallback(async (nodeId: string, columnId: string, columnKey: string, value: string) => {

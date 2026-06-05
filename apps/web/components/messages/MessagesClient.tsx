@@ -54,6 +54,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
   const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const atBottomRef = useRef(true);
   const [newMessagesPending, setNewMessagesPending] = useState(0);
   const [announce, setAnnounce] = useState('');
@@ -574,77 +575,96 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
   const showSidebar = !isMobile || !selectedConversationId;
   const showConversation = !isMobile || Boolean(selectedConversationId);
+  // Collapse the sidebar to an avatar rail while the message window is hovered (desktop only,
+  // and only when a conversation is open so there's a message window to hover).
+  const isSidebarCollapsed = sidebarCollapsed && !isMobile && Boolean(selectedConversationId);
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-[calc(100dvh-56px)] w-full px-6">
-    <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden">
+    <div className="flex h-[calc(100dvh-56px)] w-full flex-col px-6">
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* ── Page header — centered title, consistent with other pages ───── */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-6 pb-4">
+        <div />
+        <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto text-center">Messages</h1>
+        <div className="justify-self-end">
+          <button
+            type="button"
+            onClick={() => setShowNewChatModal(true)}
+            className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+            </svg>
+            New Chat
+          </button>
+        </div>
+      </div>
+
+      {/* ── Two-pane interface (sits on the page background, no white panel) ── */}
+      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+
+      {/* ── Sidebar (collapses to an avatar rail while the message window is hovered) ── */}
       {showSidebar && (
-        <aside className="flex w-96 shrink-0 flex-col bg-surface-1 border-r border-border-subtle">
-
-          {/* Sidebar header */}
-          <div className="flex items-center justify-between px-6 pt-6 pb-4">
-            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Messages</h1>
-            <button
-              type="button"
-              onClick={() => setShowNewChatModal(true)}
-              className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              New Chat
-            </button>
-          </div>
+        <aside
+          onMouseEnter={() => setSidebarCollapsed(false)}
+          className={`flex shrink-0 flex-col overflow-hidden border-r border-border-subtle transition-[width] duration-300 ease-out ${
+            isSidebarCollapsed ? 'w-16' : 'w-96'
+          }`}
+        >
 
           {/* Search bar */}
-          <div className="px-4 pb-3">
-            <div className="flex items-center gap-2 rounded-xl bg-surface-3 px-3 py-2.5">
-              <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-              </svg>
-              <input
-                ref={sidebarSearchRef}
-                value={conversationSearch}
-                onChange={(e) => setConversationSearch(e.target.value)}
-                placeholder="Search conversations…"
-                className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              {conversationSearch && (
-                <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
+          {!isSidebarCollapsed && (
+            <div className="px-4 pt-2 pb-3">
+              <div className="flex items-center gap-2 rounded-xl bg-surface-3 px-3 py-2.5">
+                <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                </svg>
+                <input
+                  ref={sidebarSearchRef}
+                  value={conversationSearch}
+                  onChange={(e) => setConversationSearch(e.target.value)}
+                  placeholder="Search conversations…"
+                  className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+                />
+                {conversationSearch && (
+                  <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Tab selector */}
-          <div className="px-4 pb-3">
-            <SidebarTabSelector activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="px-4 pb-3">
+              <SidebarTabSelector activeTab={activeTab} onTabChange={setActiveTab} counts={tabCounts} />
+            </div>
+          )}
 
           {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${isSidebarCollapsed ? 'pt-2' : ''}`}>
             {conversationsLoading && (
               <div className="space-y-1 px-3 py-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-xl p-3">
+                  <div key={i} className={`flex items-center gap-3 rounded-xl p-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
                     <div className="h-10 w-10 animate-pulse rounded-full bg-surface-3 shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
-                      <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
-                    </div>
+                    {!isSidebarCollapsed && (
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
+                        <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             )}
 
-            {!conversationsLoading && filteredConversations.length === 0 && (
+            {!conversationsLoading && filteredConversations.length === 0 && !isSidebarCollapsed && (
               <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
                 <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-3">
                   <svg className="h-7 w-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -665,7 +685,10 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                       key={conversation.id}
                       type="button"
                       onClick={() => handleSelectConversation(conversation.id)}
-                      className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all duration-150 ${
+                      title={isSidebarCollapsed ? conversation.name : undefined}
+                      className={`group flex w-full items-center rounded-xl text-left transition-all duration-150 ${
+                        isSidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-3'
+                      } ${
                         isActive
                           ? 'bg-brand-green/10 ring-1 ring-brand-green/20'
                           : 'hover:bg-surface-2'
@@ -677,26 +700,28 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                           <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
                         )}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
-                            {conversation.name}
-                          </p>
-                          <span className="shrink-0 text-[11px] text-text-muted">
-                            {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
-                          </span>
-                        </div>
-                        <div className="mt-0.5 flex items-center justify-between gap-2">
-                          <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
-                            {conversation.lastMessage?.text ?? 'No messages yet'}
-                          </p>
-                          {conversation.unreadCount > 0 && !isActive && (
-                            <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                              {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                      {!isSidebarCollapsed && (
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
+                              {conversation.name}
+                            </p>
+                            <span className="shrink-0 text-[11px] text-text-muted">
+                              {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
                             </span>
-                          )}
+                          </div>
+                          <div className="mt-0.5 flex items-center justify-between gap-2">
+                            <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
+                              {conversation.lastMessage?.text ?? 'No messages yet'}
+                            </p>
+                            {conversation.unreadCount > 0 && !isActive && (
+                              <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </button>
                   );
                 })}
@@ -708,7 +733,10 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* ── Conversation panel ───────────────────────────────────────────── */}
       {showConversation && (
-        <section className="flex min-w-0 flex-1 flex-col bg-white overflow-hidden">
+        <section
+          onMouseEnter={() => setSidebarCollapsed(true)}
+          className="flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
 
           {/* Empty state */}
           {!selectedConversation && (
@@ -738,7 +766,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
           {selectedConversation && (
             <>
               {/* Conversation header */}
-              <header className="flex items-center justify-between gap-3 border-b border-border-subtle bg-surface-1 px-4 py-3">
+              <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
                 <div className="flex min-w-0 items-center gap-3">
                   {isMobile && (
                     <button
@@ -861,7 +889,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
               )}
 
               {/* Messages area with Virtuoso */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-hidden bg-white dark:bg-surface-2">
+              <div ref={messagesContainerRef} className="flex-1 overflow-hidden">
                 {messagesLoading && (
                   <div className="space-y-3 p-4">
                     {Array.from({ length: 5 }).map((_, i) => (
@@ -912,9 +940,9 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                       const showDateSeparator = prevDay !== thisDay;
                       const showUnreadDivider = unreadMarker === message.id;
                       return (
-                        <div className={isFirstInGroup ? 'mt-2' : ''} data-message-id={message.id}>
+                        <div className={`mx-auto w-full max-w-3xl px-4 ${isFirstInGroup ? 'mt-2' : ''}`} data-message-id={message.id}>
                           {showDateSeparator && (
-                            <div className="my-3 flex items-center gap-3 px-5">
+                            <div className="my-3 flex items-center gap-3 px-2">
                               <div className="h-px flex-1 bg-border-subtle" />
                               <span className="rounded-full bg-surface-2 px-3 py-0.5 text-[11px] font-medium text-text-muted">
                                 {formatDateLabel(message.createdAt)}
@@ -923,7 +951,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                             </div>
                           )}
                           {showUnreadDivider && (
-                            <div className="my-2 flex items-center gap-3 px-5">
+                            <div className="my-2 flex items-center gap-3 px-2">
                               <div className="h-px flex-1 bg-red-500/50" />
                               <span className="text-[11px] font-semibold uppercase tracking-wide text-red-500">
                                 New
@@ -970,7 +998,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                         const msg = messages[adjustedIndex];
                         const h = msg ? getItemHeight(adjustedIndex) : (height || 60);
                         return (
-                          <div className="px-3 py-0.75" style={{ height: h }}>
+                          <div className="mx-auto w-full max-w-3xl px-4 py-0.75" style={{ height: h }}>
                             <div className={`flex items-end gap-2 ${msg?.isOwn ? 'justify-end' : 'justify-start'}`}>
                               {!msg?.isOwn && <div className="h-8 w-8 rounded-full bg-surface-1/40 shrink-0" />}
                               <div

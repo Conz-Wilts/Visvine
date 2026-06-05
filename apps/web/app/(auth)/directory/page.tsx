@@ -257,11 +257,11 @@ export default function DashboardPage() {
       {/* ── Non-graph header: title + filters + view toggle ── */}
       {!isGraphView && (
         <>
-          <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-0">
-            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
+          <div className="flex items-center justify-center gap-4 px-6 pt-6 pb-0 text-center">
+            <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
           </div>
 
-          <div className="flex items-center gap-3 px-6 pt-3 pb-1">
+          <div className="flex items-center justify-center gap-3 px-6 pt-6 pb-1">
             <FilterDropdown
               label="Type"
               singleSelect={currentView === 'table'}

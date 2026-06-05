@@ -213,7 +213,7 @@ export default function CommunityDesignPanel({ community, onSaved }: Props) {
   }
 
   return (
-    <div className="space-y-8 max-w-2xl py-2">
+    <div className="space-y-8">
       {/* Background Section */}
       <section>
         <h3 className="text-lg font-semibold text-text-primary mb-4">Background</h3>

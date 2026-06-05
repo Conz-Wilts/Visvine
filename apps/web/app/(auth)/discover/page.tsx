@@ -191,11 +191,11 @@ export default function DiscoverPage() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
 
         {/* Page header */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto mb-2">
+        <div className="mb-10 text-center">
+          <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto mb-2">
             Discover Communities
           </h1>
-          <p className="text-text-muted text-base max-w-2xl">
+          <p className="text-text-muted text-base max-w-2xl mx-auto">
             Find and join ecosystems that matter to you. Connect with like-minded individuals and grow together.
           </p>
         </div>

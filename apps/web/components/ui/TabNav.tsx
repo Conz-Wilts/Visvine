@@ -10,6 +10,8 @@ interface TabNavProps<T extends string = string> {
   activeTab: T;
   onTabChange: (id: T) => void;
   className?: string;
+  /** Horizontally center the tabs (defaults to left-aligned). */
+  center?: boolean;
 }
 
 export default function TabNav<T extends string = string>({
@@ -17,10 +19,11 @@ export default function TabNav<T extends string = string>({
   activeTab,
   onTabChange,
   className = '',
+  center = false,
 }: TabNavProps<T>) {
   return (
-    <div className={`border-b border-gray-200 ${className}`}>
-      <nav className="-mb-px flex space-x-8">
+    <div className={`border-b border-border-subtle ${className}`}>
+      <nav className={`-mb-px flex space-x-8 ${center ? 'justify-center' : ''}`}>
         {tabs.map(({ id, label }) => (
           <button
             key={id}

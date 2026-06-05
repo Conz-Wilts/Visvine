@@ -30,8 +30,8 @@ export default function ChatInterface({
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   const baseButtonClasses = `
-    w-10
-    h-10
+    w-8
+    h-8
     bg-brand-green
     hover:bg-brand-green
     disabled:bg-gray-300
@@ -47,7 +47,7 @@ export default function ChatInterface({
 
   const renderedButtonIcon = buttonIcon ?? (
     <svg
-      className="w-5 h-5 text-white"
+      className="w-4 h-4 text-white"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -121,7 +121,7 @@ export default function ChatInterface({
   return (
     <div className={`w-full max-w-3xl mx-auto ${className}`}>
       <form onSubmit={handleSubmit} className="relative">
-        <div className="bg-surface-1 border border-border-subtle rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[64px] flex flex-col justify-center shadow-float">
+        <div className="bg-surface-1 border border-border-default rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[48px] flex flex-col justify-center shadow-float">
           <textarea
             ref={textareaRef}
             value={message}

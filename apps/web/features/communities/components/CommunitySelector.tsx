@@ -8,12 +8,8 @@ import CommunityAvatar from '@/components/community/CommunityAvatar';
 
 export default function CommunitySelector({
   iconOnly = false,
-  canManage = false,
-  pendingCount = 0,
 }: {
   iconOnly?: boolean;
-  canManage?: boolean;
-  pendingCount?: number;
 }) {
   const { currentCommunity, joinedCommunities, setCurrentCommunity } = useCommunity();
   const [isOpen, setIsOpen] = useState(false);
@@ -46,13 +42,13 @@ export default function CommunitySelector({
         className={
           iconOnly
             ? "w-12 h-12 rounded-2xl flex items-center justify-center border border-border-subtle bg-surface-1 hover:bg-surface-2 transition shadow-float"
-            : "flex items-center gap-2 h-16 px-4 text-sm font-medium text-text-secondary border border-border-subtle rounded-2xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
+            : "flex items-center gap-2 h-12 px-3 text-sm font-medium text-text-secondary border border-border-default rounded-2xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
         }
       >
         {currentCommunity ? (
-          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="sm" className="!w-10 !h-10 !text-sm" />
+          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="sm" className="!w-8 !h-8 !text-sm" />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-surface-3 flex-shrink-0" />
+          <div className="w-8 h-8 rounded-full bg-surface-3 flex-shrink-0" />
         )}
         {!iconOnly && (
           <>
@@ -133,24 +129,6 @@ export default function CommunitySelector({
 
             {/* Footer */}
             <div className="p-2 border-t border-border-subtle bg-surface-2">
-              {canManage && (
-                <Link
-                  href="/admin"
-                  className="flex items-center gap-2.5 w-full px-3 py-2 text-sm text-text-secondary hover:text-text-primary font-medium hover:bg-surface-3 rounded-md transition"
-                  onClick={() => setIsOpen(false)}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="flex-1 text-left">Community Management</span>
-                  {pendingCount > 0 && (
-                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold">
-                      {pendingCount > 99 ? '99+' : pendingCount}
-                    </span>
-                  )}
-                </Link>
-              )}
               <Link
                 href="/communities"
                 className="block w-full px-3 py-2 text-sm text-center text-text-secondary hover:text-text-primary font-medium hover:bg-surface-3 rounded-md transition"

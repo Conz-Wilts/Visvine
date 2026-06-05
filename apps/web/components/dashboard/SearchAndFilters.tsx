@@ -75,11 +75,11 @@ export default function SearchAndFilters({ currentView, onViewChange }: SearchAn
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center gap-1 rounded-3xl border border-border-subtle bg-surface-1 p-1 h-16 shadow-float"
+      className="relative flex items-center gap-1 rounded-2xl border border-border-default bg-surface-1 p-1 h-12 shadow-float"
     >
       {pillStyle && (
         <span
-          className="absolute top-1 bottom-1 rounded-[20px] bg-brand-green shadow-sm"
+          className="absolute top-1 bottom-1 rounded-xl bg-brand-green shadow-sm"
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
@@ -93,7 +93,7 @@ export default function SearchAndFilters({ currentView, onViewChange }: SearchAn
           key={id}
           ref={el => { buttonRefs.current[i] = el }}
           onClick={() => onViewChange(id)}
-          className={`relative z-10 flex h-14 items-center gap-1.5 rounded-[20px] px-3 text-xs font-semibold transition-colors duration-200 ${
+          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors duration-200 ${
             currentView === id ? 'text-white' : 'text-text-muted hover:text-text-secondary'
           }`}
         >

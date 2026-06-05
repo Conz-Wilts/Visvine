@@ -142,10 +142,13 @@ export default function EventsPage() {
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
-      {/* Header row: title left, view switcher right */}
-      <div className="flex items-center justify-between gap-4 px-6 pt-6 pb-0">
-        <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto">Events</h1>
-        <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+      {/* Header row: centered title, view switcher right */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pt-6 pb-0">
+        <div />
+        <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto text-center">Events</h1>
+        <div className="justify-self-end">
+          <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+        </div>
       </div>
 
       {/* Filters row */}

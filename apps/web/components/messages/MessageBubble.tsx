@@ -238,38 +238,38 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
     setIsEditing(false);
   };
 
+  const isOwn = message.isOwn;
+
   if (isDeleted) {
     return (
-      <div className="flex items-start gap-2.5 px-5 py-1">
-        <div className="mt-0.5 h-9 w-9 shrink-0" />
-        <div className="italic text-sm text-text-muted">This message was deleted</div>
+      <div className={`flex px-2 py-0.75 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+        <div className="rounded-2xl px-3.5 py-2 text-sm italic text-text-muted">This message was deleted</div>
       </div>
     );
   }
 
   return (
     <div
-      className="group relative flex items-start gap-2.5 rounded-lg px-5 py-1.5 hover:bg-surface-2/50 transition-colors"
+      className={`group relative flex w-full items-start gap-2 px-2 py-0.75 ${isOwn ? 'justify-end' : 'justify-start'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false); }}
     >
-      {/* Avatar — show for first in group, spacer for continuation */}
-      {isLastInGroup ? (
-        <div className="mt-0.5 shrink-0">
-          <Avatar name={message.sender.name} imageUrl={message.sender.image} size="md" />
-        </div>
-      ) : (
-        <div className="w-9 shrink-0" />
+      {/* Incoming avatar — show for first in group, spacer for continuation */}
+      {!isOwn && (
+        isLastInGroup ? (
+          <div className="shrink-0">
+            <Avatar name={message.sender.name} imageUrl={message.sender.image} size="md" />
+          </div>
+        ) : (
+          <div className="w-9 shrink-0" />
+        )
       )}
 
-      <div className="relative min-w-0 flex-1">
-        {/* Name + timestamp header (Slack style) */}
-        {isLastInGroup && (
-          <div className="mb-0.5 flex items-baseline gap-2">
-            <span className="text-[15px] font-bold text-text-primary">{message.sender.name}</span>
-            <span className="text-xs text-text-muted">{formatChatTimestamp(message.createdAt)}</span>
-            {isEdited && <span className="text-xs text-text-muted italic">(edited)</span>}
-          </div>
+      {/* Bubble column (max 65% desktop / 78% mobile, matching pretext.ts) */}
+      <div className={`relative flex min-w-0 max-w-[78%] flex-col sm:max-w-[65%] ${isOwn ? 'items-end' : 'items-start'}`}>
+        {/* Sender name (incoming, first in group) */}
+        {!isOwn && isLastInGroup && (
+          <span className="mb-0.5 px-1 text-xs font-semibold text-text-secondary">{message.sender.name}</span>
         )}
 
         {/* Reply preview */}
@@ -277,7 +277,7 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
           <button
             type="button"
             onClick={() => onScrollToMessage?.(message.replyTo!.id)}
-            className="mb-1 flex items-center gap-2 rounded-md border-l-[3px] border-brand-green bg-surface-3/50 px-3 py-1.5 text-left"
+            className="mb-1 flex w-full items-center gap-2 rounded-md border-l-[3px] border-brand-green bg-surface-3/50 px-3 py-1.5 text-left"
           >
             <div className="min-w-0">
               <p className="text-xs font-semibold text-brand-green">{message.replyTo.senderName}</p>
@@ -286,9 +286,9 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
           </button>
         )}
 
-        {/* Message text or edit mode */}
+        {/* Bubble: message text or edit mode */}
         {isEditing ? (
-          <div className="space-y-2 rounded-lg border border-brand-green/30 bg-surface-3/30 px-3 py-2">
+          <div className="w-full space-y-2 rounded-2xl border border-brand-green/30 bg-surface-3/30 px-3 py-2">
             <textarea
               ref={editRef}
               value={editText}
@@ -306,51 +306,62 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
             </div>
           </div>
         ) : (
-          <div className="text-[15px] leading-relaxed text-text-primary [&_p]:whitespace-pre-wrap">
-            <MarkdownMessage text={message.text} />
+          <div
+            className={`max-w-full rounded-2xl px-3.5 py-2.5 ${
+              isOwn
+                ? 'rounded-br-sm bg-brand-green text-white'
+                : 'rounded-bl-sm bg-surface-1 text-text-primary shadow-sm'
+            }`}
+          >
+            {message.text && (
+              <div className="text-[15px] leading-relaxed [&_a]:underline [&_p]:whitespace-pre-wrap">
+                <MarkdownMessage text={message.text} />
+              </div>
+            )}
+
+            {/* Images */}
+            <MessageImageGrid images={message.images} />
+
+            {/* Link previews */}
+            {message.linkPreviews?.map((lp) => (
+              <LinkPreviewCard key={lp.url} preview={lp} />
+            ))}
           </div>
         )}
 
-        {/* Inline timestamp for continuation messages */}
-        {!isLastInGroup && !isEditing && (
-          <span className="ml-1 hidden text-[11px] text-text-muted group-hover:inline">
-            {formatChatTimestamp(message.createdAt)}
-          </span>
-        )}
+        {/* Timestamp + delivery ticks below bubble, aligned to message side */}
+        {!isEditing && (
+          <div className={`mt-0.5 flex items-center gap-1.5 px-1 text-[11px] text-text-muted ${isOwn ? 'flex-row-reverse' : ''}`}>
+            <span>{formatChatTimestamp(message.createdAt)}</span>
+            {isEdited && <span className="italic">(edited)</span>}
 
-        {/* Images */}
-        <MessageImageGrid images={message.images} />
-
-        {/* Link previews */}
-        {message.linkPreviews?.map((lp) => (
-          <LinkPreviewCard key={lp.url} preview={lp} />
-        ))}
-
-        {/* Delivery ticks (own messages, last in group) */}
-        {message.isOwn && !isDeleted && isLastInGroup && message.recipientCount > 0 && (
-          <span className="ml-2 inline-flex items-center align-middle text-[11px]" title={
-            message.isFullyReadByRecipients ? 'Read by everyone' : message.readByCount > 0 ? `Read by ${message.readByCount}` : 'Sent'
-          }>
-            {message.isFullyReadByRecipients ? (
-              <span className="text-blue-500">✓✓</span>
-            ) : message.readByCount > 0 ? (
-              <span className="text-text-muted">✓✓</span>
-            ) : (
-              <span className="text-text-muted">✓</span>
+            {/* Delivery ticks (own messages, last in group) */}
+            {isOwn && isLastInGroup && message.recipientCount > 0 && (
+              <span title={
+                message.isFullyReadByRecipients ? 'Read by everyone' : message.readByCount > 0 ? `Read by ${message.readByCount}` : 'Sent'
+              }>
+                {message.isFullyReadByRecipients ? (
+                  <span className="text-blue-500">✓✓</span>
+                ) : message.readByCount > 0 ? (
+                  <span className="text-text-muted">✓✓</span>
+                ) : (
+                  <span className="text-text-muted">✓</span>
+                )}
+              </span>
             )}
-          </span>
-        )}
 
-        {/* Pinned indicator */}
-        {message.pinnedAt && (
-          <span className="ml-2 inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-            📌 Pinned
-          </span>
+            {/* Pinned indicator */}
+            {message.pinnedAt && (
+              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                📌 Pinned
+              </span>
+            )}
+          </div>
         )}
 
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
+          <div className={`mt-1 flex flex-wrap gap-1 ${isOwn ? 'justify-end' : ''}`}>
             {message.reactions.map((r) => (
               <button
                 key={r.emoji}
@@ -370,9 +381,9 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
         )}
       </div>
 
-      {/* Hover actions toolbar — top-right like Slack */}
+      {/* Hover actions toolbar — floats on the inner side of the bubble */}
       {showActions && !isEditing && (
-        <div className="absolute -top-3 right-5 z-10 flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-md">
+        <div className={`absolute -top-3 z-10 flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-md ${isOwn ? 'left-4' : 'right-4'}`}>
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}
@@ -399,7 +410,7 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
               <Pencil className="h-4 w-4" />
             </button>
           )}
-          {message.isOwn && (
+          {isOwn && (
             <button
               type="button"
               onClick={() => onDelete(message.id)}
@@ -414,7 +425,7 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
 
       {/* Emoji picker popup */}
       {showEmojiPicker && (
-        <div className="absolute -top-12 right-5 z-20">
+        <div className={`absolute -top-12 z-20 ${isOwn ? 'left-4' : 'right-4'}`}>
           <EmojiPicker
             onSelect={(emoji) => onReaction(message.id, emoji)}
             onClose={() => setShowEmojiPicker(false)}

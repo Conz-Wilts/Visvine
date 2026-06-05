@@ -9,7 +9,7 @@ interface PageHeaderProps {
 
 export default function PageHeader({ title, description, className, titleClassName }: PageHeaderProps) {
   return (
-    <div className={clsx('mb-8', className)}>
+    <div className={clsx('mb-8 text-center', className)}>
       <h1 className={clsx('text-3xl font-bold text-gray-900 mb-2', titleClassName)}>
         {title}
       </h1>
