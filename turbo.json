@@ -9,7 +9,8 @@
         "NODE_ENV",
         "NEXT_PUBLIC_*",
         "OPENAI_API_KEY",
-        "SUPABASE_*"
+        "SUPABASE_*",
+        "RESEND_API_KEY"
       ]
     },
     "dev": {

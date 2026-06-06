@@ -20,7 +20,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const handleSignOut = async () => {
     await signOutClient();
-    router.push("/signin");
+    router.push("/");
     router.refresh();
   };
 

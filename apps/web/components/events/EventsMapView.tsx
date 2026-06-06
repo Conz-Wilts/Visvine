@@ -6,7 +6,7 @@
  * Virtual events shown in a separate list
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type MouseEvent } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { formatEventDate, formatEventTime, isEventPast } from '@/lib/eventUtils';
@@ -133,7 +133,7 @@ export default function EventsMapView({ events }: EventsMapViewProps) {
                   } ${isPastEvent ? 'opacity-50' : ''}`}
                   onClick={() => setSelectedEventId(selectedEventId === event.id ? null : event.id)}
                 >
-                  <Link href={`/events/${event.id}`} onClick={e => e.stopPropagation()}>
+                  <Link href={`/events/${event.id}`} onClick={(e: MouseEvent) => e.stopPropagation()}>
                     <h4 className="font-semibold text-brand-black truncate hover:text-brand-green transition-colors">{event.title}</h4>
                   </Link>
                   <p className="text-sm text-brand-grey mt-1">

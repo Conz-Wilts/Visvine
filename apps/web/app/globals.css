@@ -7,35 +7,35 @@
 /* ─── ABC Ginto Rounded — local font faces ─── */
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Hairline-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Hairline.woff2') format('woff2');
   font-weight: 100;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Thin-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Thin.woff2') format('woff2');
   font-weight: 200;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Light-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Light.woff2') format('woff2');
   font-weight: 300;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Regular-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Medium-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Medium.woff2') format('woff2');
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -43,21 +43,21 @@
 /* Bold covers semibold (600) and bold (700) — no dedicated 600-weight file */
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Bold-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Bold.woff2') format('woff2');
   font-weight: 600 700;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Black-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Black.woff2') format('woff2');
   font-weight: 900;
   font-style: normal;
   font-display: swap;
 }
 @font-face {
   font-family: 'ABC Ginto Rounded';
-  src: url('/fonts/ABCGintoRounded-Ultra-Trial.woff2') format('woff2');
+  src: url('/fonts/Visvine-Ultra.woff2') format('woff2');
   font-weight: 950;
   font-style: normal;
   font-display: swap;
@@ -313,4 +313,93 @@ input[type="time"]::-webkit-inner-spin-button {
 input[type="date"]::-webkit-calendar-picker-indicator:active,
 input[type="time"]::-webkit-calendar-picker-indicator:active {
   background-color: var(--color-brand-green, #78d870);
+}
+
+/* ─── Blog typography (marketing /blog) ───
+   Shared by the live TipTap editor and the read-only static render so both
+   look identical. Left-aligned long-form reading column. Ported from the
+   launch-site. */
+.blog-prose {
+  color: #404040;
+  font-size: 1.125rem;
+  line-height: 1.75;
+  text-align: left;
+}
+
+/* clear floated images so they don't spill past the article */
+.blog-prose::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.blog-prose p {
+  margin: 1.15rem 0;
+}
+
+.blog-prose h2 {
+  color: #000;
+  font-size: 1.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 2.25rem 0 0.75rem;
+}
+
+.blog-prose h3 {
+  color: #000;
+  font-size: 1.4rem;
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 1.75rem 0 0.6rem;
+}
+
+.blog-prose a {
+  color: var(--color-brand-green, #78d870);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.blog-prose ul,
+.blog-prose ol {
+  margin: 1.15rem 0;
+  padding-left: 1.5rem;
+}
+
+.blog-prose ul {
+  list-style: disc;
+}
+
+.blog-prose ol {
+  list-style: decimal;
+}
+
+.blog-prose li {
+  margin: 0.35rem 0;
+}
+
+.blog-prose blockquote {
+  border-left: 3px solid var(--color-brand-green, #78d870);
+  color: #525252;
+  font-style: italic;
+  margin: 1.5rem 0;
+  padding-left: 1.1rem;
+}
+
+.blog-prose img.blog-img,
+.blog-prose .blog-img-wrapper img {
+  border-radius: 0.5rem;
+  height: auto;
+  max-width: 100%;
+}
+
+/* default (non-floated) images render as a centered block */
+.blog-prose > img.blog-img {
+  display: block;
+  margin: 1.5rem auto;
+}
+
+.blog-img-wrapper[data-selected="true"] img {
+  outline: 2px solid var(--color-brand-green, #78d870);
+  outline-offset: 2px;
 }

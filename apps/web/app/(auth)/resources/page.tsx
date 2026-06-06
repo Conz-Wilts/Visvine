@@ -352,7 +352,7 @@ function ResourceDetailDrawer({
                       key={`${displayResource.id}-${changeKey}`}
                       resourceId={displayResource.id}
                       fileUrl={displayResource.fileUrl}
-                      onCellSelect={(ref, val) => { setSelectedCell(ref); setSelectedCellValue(val); }}
+                      onCellSelect={(ref: string, val: string) => { setSelectedCell(ref); setSelectedCellValue(val); }}
                       selectedCell={selectedCell}
                     />
                   </div>

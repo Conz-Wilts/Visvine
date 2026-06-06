@@ -992,7 +992,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
                           </div>
                         ) : null
                       ),
-                      ScrollSeekPlaceholder: ({ height, index }) => {
+                      ScrollSeekPlaceholder: ({ height, index }: { height: number; index: number }) => {
                         // During fast scrolling, render lightweight placeholder at pretext height
                         const adjustedIndex = index - firstItemIndex;
                         const msg = messages[adjustedIndex];
