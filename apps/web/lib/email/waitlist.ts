@@ -1,5 +1,4 @@
 import React from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { resend } from "@/lib/email/resend";
 import { EMAIL_CONFIG } from "@/lib/email/email-constants";
 import { WaitlistConfirmation } from "@/emails/WaitlistConfirmation";
@@ -12,8 +11,12 @@ import { WaitlistConfirmation } from "@/emails/WaitlistConfirmation";
  * `@react-email/render` package, which this app does not install, so every send
  * would throw. Passing `html:` sidesteps that dependency entirely. React escapes
  * `firstName`, so untrusted input can't inject markup here.
+ *
+ * react-dom/server is dynamically imported to avoid Turbopack's static-analysis
+ * ban on top-level imports of that module in App Router server code.
  */
-function renderWaitlistConfirmationHtml(firstName: string): string {
+async function renderWaitlistConfirmationHtml(firstName: string): Promise<string> {
+  const { renderToStaticMarkup } = await import("react-dom/server");
   const body = renderToStaticMarkup(
     React.createElement(WaitlistConfirmation, { firstName }),
   );
@@ -48,7 +51,7 @@ export async function sendWaitlistConfirmation(
       from: EMAIL_CONFIG.FROM,
       to: email,
       subject: EMAIL_CONFIG.SUBJECT,
-      html: renderWaitlistConfirmationHtml(firstName),
+      html: await renderWaitlistConfirmationHtml(firstName),
     });
     if (error) {
       console.error(`Resend rejected confirmation email to ${email}:`, error);
