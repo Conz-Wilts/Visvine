@@ -48,7 +48,7 @@ jobs:
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
             --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest \
-            --set-env-vars=NEXT_PUBLIC_APP_URL=https://YOUR-CLOUD-RUN-URL,SUPER_ADMIN_EMAILS=cwnz2004@gmail.com,ENABLE_DEV_AUTH=false,VAPID_SUBJECT=mailto:hello@visvine.com \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine-web-612301752988.australia-southeast1.run.app,SUPER_ADMIN_EMAILS=cwnz2004@gmail.com,ENABLE_DEV_AUTH=false,VAPID_SUBJECT=mailto:hello@visvine.com \
             --min-instances=0 \
             --max-instances=10 \
             --memory=1Gi \
