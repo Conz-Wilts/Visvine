@@ -1,0 +1,58 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT: visvine-platform
+  REGION: australia-southeast1
+  REGISTRY: australia-southeast1-docker.pkg.dev
+  IMAGE: australia-southeast1-docker.pkg.dev/visvine-platform/visvine/web
+  SERVICE: visvine-web
+  SQL_INSTANCE: visvine-platform:australia-southeast1:visvine-pgdata
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
+            --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
+            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://YOUR-CLOUD-RUN-URL,SUPER_ADMIN_EMAILS=cwnz2004@gmail.com,ENABLE_DEV_AUTH=false,VAPID_SUBJECT=mailto:hello@visvine.com \
+            --min-instances=0 \
+            --max-instances=10 \
+            --memory=1Gi \
+            --cpu=1 \
+            --port=3080 \
+            --allow-unauthenticated \
+            --project=${{ env.PROJECT }}

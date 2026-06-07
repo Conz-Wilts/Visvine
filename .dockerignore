@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+apps/mobile
+**/.env
+**/.env.local
+**/.env.prod-backup
+**/.env.dev-backup
+!**/.env.example
+screenshots/
+tmp/
