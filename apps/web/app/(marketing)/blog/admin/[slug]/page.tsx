@@ -13,7 +13,7 @@ export default async function BlogAdminEdit({ params }: Props) {
   const { slug } = await params;
   const session = await getSession();
   if (!isSuperAdmin(session?.email)) {
-    redirect("/signin?callbackUrl=/blog/admin");
+    redirect("/?signin=1&callbackUrl=/blog/admin");
   }
 
   const post = await prisma.blogPost.findUnique({

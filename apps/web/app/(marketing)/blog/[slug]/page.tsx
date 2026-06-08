@@ -52,13 +52,10 @@ export default async function BlogPost({ params }: Props) {
       </Link>
 
       <header className="mt-8 sm:mt-10">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+        <p className="text-xs uppercase tracking-[0.18em]" style={{ color: BRAND }}>
           Through The Visvine #{post.number}
         </p>
-        <h1
-          className="mt-2 text-3xl font-semibold tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
-          style={{ color: BRAND }}
-        >
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight leading-[1.05] text-black sm:text-4xl md:text-5xl">
           {post.title}
         </h1>
         <div className="mt-4 flex items-center gap-3">

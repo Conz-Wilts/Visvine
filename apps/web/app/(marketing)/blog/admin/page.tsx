@@ -18,7 +18,7 @@ export default async function BlogAdmin() {
   // only super admins may view it; everyone else is sent to sign in.
   const session = await getSession();
   if (!isSuperAdmin(session?.email)) {
-    redirect("/signin?callbackUrl=/blog/admin");
+    redirect("/?signin=1&callbackUrl=/blog/admin");
   }
 
   // Admin list — every post, drafts included, most recently edited first.

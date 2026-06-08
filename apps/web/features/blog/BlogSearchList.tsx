@@ -46,19 +46,16 @@ export default function BlogSearchList({ posts, isAdmin = false }: { posts: Post
           {filtered.map((post) => (
             <li key={post.id}>
               <Link
-                href={isAdmin ? `/blog/admin/${post.slug}` : `/blog/${post.slug}`}
+                href={`/blog/${post.slug}`}
                 className="group block rounded-2xl border border-neutral-200 bg-white p-6 transition-all hover:border-neutral-300 hover:shadow-sm sm:p-8"
               >
-                <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+                <p className="text-xs uppercase tracking-[0.18em]" style={{ color: BRAND }}>
                   Through The Visvine #{post.number}
                   {post.publishedAt
                     ? ` · ${formatBlogDate(new Date(post.publishedAt))}`
                     : ""}
                 </p>
-                <h2
-                  className="mt-2 text-2xl font-semibold tracking-tight leading-[1.1] transition group-hover:opacity-75 sm:text-3xl"
-                  style={{ color: BRAND }}
-                >
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight leading-[1.1] text-black transition group-hover:opacity-75 sm:text-3xl">
                   {post.title}
                 </h2>
                 {post.excerpt && (
