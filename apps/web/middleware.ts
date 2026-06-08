@@ -7,7 +7,6 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/claim",
   "/api/media",
-  "/email-logo.png",
   // Marketing / pre-auth surfaces (the bare "/" home is already public below).
   // NOTE: "/blog" is a startsWith prefix, so it also matches "/blog/admin" —
   // that page and draft visibility on "/blog/[slug]" self-gate via isSuperAdmin.
