@@ -14,7 +14,7 @@ type Post = {
   publishedAt: string | null;
 };
 
-export default function BlogSearchList({ posts }: { posts: Post[] }) {
+export default function BlogSearchList({ posts, isAdmin = false }: { posts: Post[]; isAdmin?: boolean }) {
   const [query, setQuery] = useState("");
 
   const filtered = query.trim()
@@ -46,7 +46,7 @@ export default function BlogSearchList({ posts }: { posts: Post[] }) {
           {filtered.map((post) => (
             <li key={post.id}>
               <Link
-                href={`/blog/${post.slug}`}
+                href={isAdmin ? `/blog/admin/${post.slug}` : `/blog/${post.slug}`}
                 className="group block rounded-2xl border border-neutral-200 bg-white p-6 transition-all hover:border-neutral-300 hover:shadow-sm sm:p-8"
               >
                 <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">

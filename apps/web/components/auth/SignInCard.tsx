@@ -37,7 +37,7 @@ export default function SignInCard({
             <line x1="10" y1="10" x2="17" y2="15" stroke="white" strokeWidth="1.2" opacity="0.5" />
           </svg>
         </span>
-        <span className="font-bold text-lg text-gray-900 tracking-tight">Visvine</span>
+        <span className="font-medium text-lg text-[#78d870] tracking-tight">Visvine</span>
       </span>
 
       {/* Heading */}
