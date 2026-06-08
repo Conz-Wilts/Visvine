@@ -9,6 +9,7 @@ import { ResizableImage, STARTER_KIT_CONFIG } from "@/lib/blog/tiptap";
 import ResizableImageView from "@/features/blog/ResizableImageView";
 import AdminBar from "@/features/blog/AdminBar";
 import { BRAND } from "@/lib/brand";
+import { formatBlogDate } from "@/lib/blog/dates";
 
 const EditorImage = ResizableImage.extend({
   addNodeView() {
@@ -53,11 +54,15 @@ export default function PostEditor({
   number,
   initialContent,
   published,
+  publishedAt,
+  author,
 }: {
   postId: string;
   number: number;
   initialContent: JSONContent;
   published: boolean;
+  publishedAt: string | null;
+  author: { name: string | null; image: string | null } | null;
 }) {
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -256,12 +261,33 @@ export default function PostEditor({
         </div>
       </div>
 
-      <p
-        className="mb-2 text-lg font-semibold tracking-tight sm:text-xl"
-        style={{ color: BRAND }}
-      >
-        Through The Visvine #{number}
-      </p>
+      <header className="mt-8 mb-10 sm:mt-10">
+        <h1
+          className="text-3xl font-semibold tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
+          style={{ color: BRAND }}
+        >
+          Through The Visvine{" "}
+          <span className="whitespace-nowrap">#{number}</span>
+        </h1>
+        <div className="mt-4 flex items-center gap-3">
+          {author?.image && (
+            <img
+              src={author.image}
+              alt={author.name ?? ""}
+              className="h-8 w-8 rounded-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          )}
+          <div>
+            {author?.name && (
+              <p className="text-sm font-medium text-neutral-800">{author.name}</p>
+            )}
+            <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+              {publishedAt ? formatBlogDate(new Date(publishedAt), "Draft") : "Draft"}
+            </p>
+          </div>
+        </div>
+      </header>
 
       <EditorContent editor={editor} />
 

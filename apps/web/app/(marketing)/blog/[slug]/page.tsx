@@ -60,6 +60,8 @@ export default async function BlogPost({ params }: Props) {
               number={post.number}
               initialContent={post.content as JSONContent}
               published={post.published}
+              publishedAt={post.publishedAt?.toISOString() ?? null}
+              author={post.author}
             />
           </div>
           <div className="mt-16 pt-10">
