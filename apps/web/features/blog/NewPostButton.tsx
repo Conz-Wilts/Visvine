@@ -17,7 +17,7 @@ export default function NewPostButton() {
     });
     if (res.ok) {
       const { slug } = await res.json();
-      router.push(`/blog/${slug}`);
+      router.push(`/blog/admin/${slug}`);
     } else {
       setBusy(false);
       alert("Could not create post");

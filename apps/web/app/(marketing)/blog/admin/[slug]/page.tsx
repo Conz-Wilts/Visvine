@@ -24,16 +24,16 @@ export default async function BlogAdminEdit({ params }: Props) {
 
   return (
     <article className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
-      <div className="mt-8">
-        <PostEditor
-          postId={post.id}
-          number={post.number}
-          initialContent={post.content as JSONContent}
-          published={post.published}
-          publishedAt={post.publishedAt?.toISOString() ?? null}
-          author={post.author}
-        />
-      </div>
+      <PostEditor
+        postId={post.id}
+        number={post.number}
+        slug={post.slug}
+        title={post.title}
+        initialContent={post.content as JSONContent}
+        published={post.published}
+        publishedAt={post.publishedAt?.toISOString() ?? null}
+        author={post.author}
+      />
       <div className="mt-16 pt-10">
         <BlogCommentSection
           postId={post.id}

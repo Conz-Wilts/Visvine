@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react";
 import { Extension, type JSONContent, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -52,6 +54,8 @@ function textLinesToHtml(lines: string[]): string {
 export default function PostEditor({
   postId,
   number,
+  slug,
+  title,
   initialContent,
   published,
   publishedAt,
@@ -59,14 +63,20 @@ export default function PostEditor({
 }: {
   postId: string;
   number: number;
+  slug: string;
+  title: string;
   initialContent: JSONContent;
   published: boolean;
   publishedAt: string | null;
   author: { name: string | null; image: string | null } | null;
 }) {
+  const router = useRouter();
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [titleValue, setTitleValue] = useState(title);
+  const [currentSlug, setCurrentSlug] = useState(slug);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor({
@@ -82,7 +92,6 @@ export default function PostEditor({
     editorProps: {
       attributes: { class: "blog-prose focus:outline-none min-h-[40vh]" },
       transformPastedHTML(html) {
-        // Replace emoji <img> tags (Notion, Slack, etc.) with their alt text.
         return html.replace(/<img\b[^>]*>/gi, (match) => {
           if (!/class="[^"]*emoji[^"]*"/.test(match) && !/\bdata-emoji\b/.test(match)) return match;
           const alt = match.match(/\balt="([^"]*)"/)?.[1] ?? "";
@@ -90,7 +99,6 @@ export default function PostEditor({
         });
       },
       handlePaste: (_view, event) => {
-        // If HTML is on the clipboard, let TipTap handle it natively.
         if (event.clipboardData?.getData("text/html")) return false;
         const text = event.clipboardData?.getData("text/plain") ?? "";
         const lines = text.split(/\r?\n/);
@@ -101,48 +109,63 @@ export default function PostEditor({
     },
   });
 
-  const save = useCallback(
-    async () => {
-      if (!editor) return;
-      setSaveState("saving");
-      try {
-        const res = await fetch(`/api/blog/posts/${postId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: editor.getJSON() }),
-        });
-        if (!res.ok) throw new Error();
-        setSaveState("saved");
-      } catch {
-        setSaveState("error");
+  const save = useCallback(async () => {
+    if (!editor) return;
+    setSaveState("saving");
+    try {
+      const res = await fetch(`/api/blog/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editor.getJSON() }),
+      });
+      if (!res.ok) throw new Error();
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+    }
+  }, [editor, postId]);
+
+  const queueSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => save(), 1200);
+  }, [save]);
+
+  async function saveTitle(newTitle: string) {
+    const trimmed = newTitle.trim() || "Untitled post";
+    try {
+      const res = await fetch(`/api/blog/posts/${postId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: trimmed }),
+      });
+      if (res.ok) {
+        const { slug: newSlug } = await res.json();
+        if (newSlug && newSlug !== currentSlug) {
+          setCurrentSlug(newSlug);
+          router.replace(`/blog/admin/${newSlug}`);
+        }
       }
-    },
-    [editor, postId],
-  );
+    } catch {
+      // silent — content save state covers feedback
+    }
+  }
 
-  const queueSave = useCallback(
-    () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => save(), 1200);
-    },
-    [save],
-  );
+  function queueTitleSave(newTitle: string) {
+    if (titleSaveTimer.current) clearTimeout(titleSaveTimer.current);
+    titleSaveTimer.current = setTimeout(() => saveTitle(newTitle), 1200);
+  }
 
-  // Autosave on content edits.
   useEffect(() => {
     if (!editor) return;
     const handler = () => queueSave();
     editor.on("update", handler);
-    return () => {
-      editor.off("update", handler);
-    };
+    return () => { editor.off("update", handler); };
   }, [editor, queueSave]);
 
-  // Cancel any pending debounced save on unmount so navigating away mid-debounce
-  // can't fire a stray PATCH / setState on a torn-down component.
   useEffect(
     () => () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (titleSaveTimer.current) clearTimeout(titleSaveTimer.current);
     },
     [],
   );
@@ -154,10 +177,7 @@ export default function PostEditor({
     const form = new FormData();
     form.append("file", file);
     const res = await fetch("/api/blog/upload", { method: "POST", body: form });
-    if (!res.ok) {
-      alert("Image upload failed");
-      return;
-    }
+    if (!res.ok) { alert("Image upload failed"); return; }
     const { url } = await res.json();
     editor.chain().focus().setImage({ src: url }).run();
   }
@@ -169,106 +189,130 @@ export default function PostEditor({
 
   return (
     <div>
-      {/* Combined toolbar: admin actions + formatting in one box. Full-width top bar on mobile, fixed box top-right on desktop. */}
+      {/* Toolbar */}
       <div className="sticky top-0 z-20 mb-6 flex flex-col gap-2 rounded-xl border border-neutral-200 bg-white/95 px-2 py-2 shadow-sm backdrop-blur lg:fixed lg:right-5 lg:top-44 lg:mb-0 lg:w-auto lg:gap-1.5 lg:shadow-md">
         <AdminBar postId={postId} published={published} />
         <span className="h-px w-full bg-neutral-200" />
         <div className="flex flex-wrap items-center gap-1">
-        <button type="button" className={btn(editor.isActive("bold"))} onClick={() => editor.chain().focus().toggleBold().run()}>
-          <b>B</b>
-        </button>
-        <button type="button" className={btn(editor.isActive("italic"))} onClick={() => editor.chain().focus().toggleItalic().run()}>
-          <i>I</i>
-        </button>
-        <span className="mx-1 h-5 w-px bg-neutral-200" />
-        <button type="button" className={btn(editor.isActive("heading", { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-          H2
-        </button>
-        <button type="button" className={btn(editor.isActive("heading", { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
-          H3
-        </button>
-        <button type="button" className={btn(editor.isActive("bulletList"))} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-          • List
-        </button>
-        <button type="button" className={btn(editor.isActive("orderedList"))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-          1. List
-        </button>
-        <button type="button" className={btn(editor.isActive("blockquote"))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
-          ❝
-        </button>
-        <span className="mx-1 h-5 w-px bg-neutral-200" />
-        <button
-          type="button"
-          className={btn(editor.isActive("link"))}
-          onClick={() => {
-            const prev = editor.getAttributes("link").href as string | undefined;
-            const url = window.prompt("Link URL", prev ?? "https://");
-            if (url === null) return;
-            if (url === "") editor.chain().focus().unsetLink().run();
-            else editor.chain().focus().setLink({ href: url }).run();
-          }}
-        >
-          Link
-        </button>
-        <button type="button" className={btn(false)} onClick={() => fileInputRef.current?.click()}>
-          🖼 Image
-        </button>
-        <span className="mx-1 h-5 w-px bg-neutral-200" />
-        <label
-          className={`${btn(editor.isActive("textStyle"))} relative flex cursor-pointer items-center`}
-          title="Text colour"
-        >
-          <span
-            className="font-semibold"
-            style={{ color: (editor.getAttributes("textStyle").color as string) || undefined }}
-          >
-            A
-          </span>
-          <input
-            type="color"
-            aria-label="Text colour"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-            value={(editor.getAttributes("textStyle").color as string) || "#000000"}
-            onInput={(e) => editor.chain().focus().setColor(e.currentTarget.value).run()}
-          />
-        </label>
-        {editor.getAttributes("textStyle").color && (
+          <button type="button" className={btn(editor.isActive("bold"))} onClick={() => editor.chain().focus().toggleBold().run()}>
+            <b>B</b>
+          </button>
+          <button type="button" className={btn(editor.isActive("italic"))} onClick={() => editor.chain().focus().toggleItalic().run()}>
+            <i>I</i>
+          </button>
+          <span className="mx-1 h-5 w-px bg-neutral-200" />
+          <button type="button" className={btn(editor.isActive("heading", { level: 2 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+            H2
+          </button>
+          <button type="button" className={btn(editor.isActive("heading", { level: 3 }))} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+            H3
+          </button>
+          <button type="button" className={btn(editor.isActive("bulletList"))} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+            • List
+          </button>
+          <button type="button" className={btn(editor.isActive("orderedList"))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+            1. List
+          </button>
+          <button type="button" className={btn(editor.isActive("blockquote"))} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+            ❝
+          </button>
+          <span className="mx-1 h-5 w-px bg-neutral-200" />
           <button
             type="button"
-            className={btn(false)}
-            title="Reset text colour"
-            onClick={() => editor.chain().focus().unsetColor().run()}
+            className={btn(editor.isActive("link"))}
+            onClick={() => {
+              const prev = editor.getAttributes("link").href as string | undefined;
+              const url = window.prompt("Link URL", prev ?? "https://");
+              if (url === null) return;
+              if (url === "") editor.chain().focus().unsetLink().run();
+              else editor.chain().focus().setLink({ href: url }).run();
+            }}
           >
-            ✕
+            Link
           </button>
-        )}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) onUpload(f);
-            e.target.value = "";
-          }}
-        />
-        <span className="ml-auto pl-1 text-sm text-neutral-400 lg:text-xs">
-          {saveState === "saving" && "Saving…"}
-          {saveState === "saved" && "Saved"}
-          {saveState === "error" && <span className="text-red-600">Save failed</span>}
-        </span>
+          <button type="button" className={btn(false)} onClick={() => fileInputRef.current?.click()}>
+            🖼 Image
+          </button>
+          <span className="mx-1 h-5 w-px bg-neutral-200" />
+          <label
+            className={`${btn(editor.isActive("textStyle"))} relative flex cursor-pointer items-center`}
+            title="Text colour"
+          >
+            <span
+              className="font-semibold"
+              style={{ color: (editor.getAttributes("textStyle").color as string) || undefined }}
+            >
+              A
+            </span>
+            <input
+              type="color"
+              aria-label="Text colour"
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              value={(editor.getAttributes("textStyle").color as string) || "#000000"}
+              onInput={(e) => editor.chain().focus().setColor(e.currentTarget.value).run()}
+            />
+          </label>
+          {editor.getAttributes("textStyle").color && (
+            <button
+              type="button"
+              className={btn(false)}
+              title="Reset text colour"
+              onClick={() => editor.chain().focus().unsetColor().run()}
+            >
+              ✕
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) onUpload(f);
+              e.target.value = "";
+            }}
+          />
+          <span className="ml-auto pl-1 text-sm text-neutral-400 lg:text-xs">
+            {saveState === "saving" && "Saving…"}
+            {saveState === "saved" && "Saved"}
+            {saveState === "error" && <span className="text-red-600">Save failed</span>}
+          </span>
         </div>
       </div>
 
-      <header className="mt-8 mb-10 sm:mt-10">
-        <h1
-          className="text-3xl font-semibold tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
+      {/* Back link — matches reading view */}
+      <Link
+        href="/blog/admin"
+        className="text-sm uppercase tracking-[0.18em] text-neutral-500 transition hover:text-black"
+      >
+        ← All posts
+      </Link>
+
+      {/* Header — matches reading view layout */}
+      <header className="mt-8 sm:mt-10">
+        <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+          Through The Visvine #{number}
+        </p>
+        {/* Editable title — styled identically to the public H1 */}
+        <input
+          type="text"
+          value={titleValue}
+          onChange={(e) => {
+            setTitleValue(e.target.value);
+            queueTitleSave(e.target.value);
+          }}
+          onBlur={() => {
+            if (titleSaveTimer.current) {
+              clearTimeout(titleSaveTimer.current);
+              titleSaveTimer.current = null;
+            }
+            saveTitle(titleValue);
+          }}
+          placeholder="Untitled post"
+          className="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight leading-[1.05] placeholder:text-neutral-300 focus:outline-none sm:text-4xl md:text-5xl"
           style={{ color: BRAND }}
-        >
-          Through The Visvine{" "}
-          <span className="whitespace-nowrap">#{number}</span>
-        </h1>
+        />
         <div className="mt-4 flex items-center gap-3">
           {author?.image && (
             <img
@@ -289,7 +333,9 @@ export default function PostEditor({
         </div>
       </header>
 
-      <EditorContent editor={editor} />
+      <div className="mt-10">
+        <EditorContent editor={editor} />
+      </div>
 
       <div className="mt-10 flex items-center gap-3">
         <button
