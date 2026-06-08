@@ -55,10 +55,13 @@ export default async function BlogPost({ params }: Props) {
         <p className="text-xs uppercase tracking-[0.18em]" style={{ color: BRAND }}>
           Through The Visvine #{post.number}
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight leading-[1.05] text-black sm:text-4xl md:text-5xl">
+        <h1
+          className="mt-2 text-3xl font-medium tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
+          style={{ color: BRAND }}
+        >
           {post.title}
         </h1>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-5 flex items-center gap-3">
           {post.author?.image && (
             <img
               src={post.author.image}
@@ -69,7 +72,7 @@ export default async function BlogPost({ params }: Props) {
           )}
           <div>
             {post.author?.name && (
-              <p className="text-sm font-medium text-neutral-800">
+              <p className="text-sm font-normal text-neutral-600">
                 Written by {post.author.name}
               </p>
             )}
@@ -78,16 +81,9 @@ export default async function BlogPost({ params }: Props) {
             </p>
           </div>
         </div>
-        {admin && (
-          <Link
-            href={`/blog/admin/${post.slug}`}
-            className="mt-3 inline-block text-xs uppercase tracking-[0.18em] text-neutral-400 transition hover:text-black"
-          >
-            Edit post →
-          </Link>
-        )}
       </header>
-      <div className="mt-10">
+      <hr className="mt-8 border-neutral-200" />
+      <div className="mt-8">
         <PostContent content={post.content as JSONContent} />
       </div>
       <div className="mt-16 pt-10">
