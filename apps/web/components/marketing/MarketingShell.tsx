@@ -88,7 +88,7 @@ export default function MarketingShell({
             <div ref={avatarRef} className="relative">
               <button
                 onClick={() => setAvatarOpen((v) => !v)}
-                className="w-8 h-8 rounded-full overflow-hidden border-2 border-neutral-300 hover:border-neutral-400 transition-colors focus:outline-none"
+                className="w-8 h-8 rounded-lg overflow-hidden border-2 border-brand-green transition-colors focus:outline-none"
                 aria-label="Account menu"
               >
                 {user.image ? (

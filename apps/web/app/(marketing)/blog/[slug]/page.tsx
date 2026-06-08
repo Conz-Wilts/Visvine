@@ -70,7 +70,7 @@ export default async function BlogPost({ params }: Props) {
             <img
               src={post.author.image}
               alt={post.author.name}
-              className="w-11 h-11 rounded-2xl object-cover"
+              className="w-11 h-11 rounded-2xl object-cover border-2 border-brand-green"
               referrerPolicy="no-referrer"
             />
           )}
