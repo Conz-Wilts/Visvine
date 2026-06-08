@@ -58,7 +58,6 @@ export default async function BlogPost({ params }: Props) {
             <PostEditor
               postId={post.id}
               number={post.number}
-              initialTitle={post.title}
               initialContent={post.content as JSONContent}
               published={post.published}
             />

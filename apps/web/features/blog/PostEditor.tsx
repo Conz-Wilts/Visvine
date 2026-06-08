@@ -31,17 +31,14 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 export default function PostEditor({
   postId,
   number,
-  initialTitle,
   initialContent,
   published,
 }: {
   postId: string;
   number: number;
-  initialTitle: string;
   initialContent: JSONContent;
   published: boolean;
 }) {
-  const [title, setTitle] = useState(initialTitle);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,33 +59,28 @@ export default function PostEditor({
   });
 
   const save = useCallback(
-    async (nextTitle: string) => {
+    async () => {
       if (!editor) return;
       setSaveState("saving");
       try {
         const res = await fetch(`/api/blog/posts/${postId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: nextTitle, content: editor.getJSON() }),
+          body: JSON.stringify({ content: editor.getJSON() }),
         });
         if (!res.ok) throw new Error();
-        const data: { slug?: string } = await res.json();
         setSaveState("saved");
-        // Slug tracks the title while unpublished — keep the URL current.
-        if (!published && data.slug) {
-          window.history.replaceState(null, "", `/blog/${data.slug}`);
-        }
       } catch {
         setSaveState("error");
       }
     },
-    [editor, postId, published],
+    [editor, postId],
   );
 
   const queueSave = useCallback(
-    (nextTitle: string) => {
+    () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => save(nextTitle), 1200);
+      saveTimer.current = setTimeout(() => save(), 1200);
     },
     [save],
   );
@@ -96,12 +88,12 @@ export default function PostEditor({
   // Autosave on content edits.
   useEffect(() => {
     if (!editor) return;
-    const handler = () => queueSave(title);
+    const handler = () => queueSave();
     editor.on("update", handler);
     return () => {
       editor.off("update", handler);
     };
-  }, [editor, queueSave, title]);
+  }, [editor, queueSave]);
 
   // Cancel any pending debounced save on unmount so navigating away mid-debounce
   // can't fire a stray PATCH / setState on a torn-down component.
@@ -231,23 +223,12 @@ export default function PostEditor({
         Through The Visvine #{number}
       </p>
 
-      <input
-        value={title}
-        onChange={(e) => {
-          setTitle(e.target.value);
-          queueSave(e.target.value);
-        }}
-        placeholder="Post title"
-        className="mb-8 w-full text-4xl font-medium tracking-tight text-black outline-none sm:text-5xl"
-        style={{ fontFamily: "var(--font-ginto)" }}
-      />
-
       <EditorContent editor={editor} />
 
       <div className="mt-10 flex items-center gap-3">
         <button
           type="button"
-          onClick={() => save(title)}
+          onClick={() => save()}
           className="rounded-lg px-4 py-2 text-sm font-medium text-white"
           style={{ backgroundColor: BRAND }}
         >
