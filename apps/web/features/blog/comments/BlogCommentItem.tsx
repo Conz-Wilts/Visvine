@@ -46,6 +46,7 @@ export interface BlogCommentItemProps {
   comment: BlogCommentData | Omit<BlogCommentData, 'replies'>;
   currentUserId: string | null;
   isAdmin: boolean;
+  myGuestCommentIds?: Set<string>;
   onReply?: (commentId: string, authorName: string, parentIsPrivate: boolean) => void;
   onDelete: (commentId: string) => void;
   onReaction: (commentId: string, emoji: string) => void;
@@ -56,6 +57,7 @@ export default function BlogCommentItem({
   comment,
   currentUserId,
   isAdmin,
+  myGuestCommentIds,
   onReply,
   onDelete,
   onReaction,
@@ -64,7 +66,10 @@ export default function BlogCommentItem({
   const [showPicker, setShowPicker] = useState(false);
   const reactions = groupReactions(comment.reactions, currentUserId);
   const displayName = comment.author?.name ?? comment.guestName ?? 'Anonymous';
-  const canDelete = (currentUserId && currentUserId === comment.author?.id) || isAdmin;
+  const canDelete =
+    (currentUserId && currentUserId === comment.author?.id) ||
+    isAdmin ||
+    myGuestCommentIds?.has(comment.id);
 
   return (
     <div className={`flex gap-3 ${isReply ? 'ml-10' : ''}`}>
@@ -156,6 +161,7 @@ export default function BlogCommentItem({
                 comment={reply}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
+                myGuestCommentIds={myGuestCommentIds}
                 onDelete={onDelete}
                 onReaction={onReaction}
                 isReply

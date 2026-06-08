@@ -11,6 +11,27 @@ interface Props {
   isAdmin: boolean;
 }
 
+const GUEST_COMMENTS_KEY = 'visvine:guestCommentIds';
+
+function loadGuestCommentIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(GUEST_COMMENTS_KEY);
+    return new Set(raw ? JSON.parse(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveGuestCommentId(id: string) {
+  try {
+    const ids = loadGuestCommentIds();
+    ids.add(id);
+    localStorage.setItem(GUEST_COMMENTS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // localStorage unavailable — skip silently
+  }
+}
+
 export default function BlogCommentSection({ postId, currentUserId, isAdmin }: Props) {
   const [comments, setComments] = useState<BlogCommentData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,8 +42,13 @@ export default function BlogCommentSection({ postId, currentUserId, isAdmin }: P
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ commentId: string; authorName: string; parentIsPrivate: boolean } | null>(null);
+  const [myGuestCommentIds, setMyGuestCommentIds] = useState<Set<string>>(new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setMyGuestCommentIds(loadGuestCommentIds());
+  }, []);
 
   useEffect(() => {
     fetch(`/api/blog/${postId}/comments`)
@@ -109,6 +135,12 @@ export default function BlogCommentSection({ postId, currentUserId, isAdmin }: P
       });
       if (!res.ok) return;
       const { comment } = await res.json();
+
+      // Track guest-posted comment IDs so the delete button can be shown without a session
+      if (!currentUserId) {
+        saveGuestCommentId(comment.id);
+        setMyGuestCommentIds((prev) => new Set([...prev, comment.id]));
+      }
 
       if (replyingTo) {
         setComments((prev) =>
@@ -280,6 +312,7 @@ export default function BlogCommentSection({ postId, currentUserId, isAdmin }: P
               comment={comment}
               currentUserId={currentUserId}
               isAdmin={isAdmin}
+              myGuestCommentIds={myGuestCommentIds}
               onReply={handleReply}
               onDelete={handleDelete}
               onReaction={handleReaction}

@@ -291,9 +291,12 @@ export default function PostEditor({
 
       {/* Header — matches reading view layout */}
       <header className="mt-8 sm:mt-10">
-        <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
-          Through The Visvine #{number}
-        </p>
+        <span
+          className="inline-block rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.15em] text-white"
+          style={{ backgroundColor: BRAND }}
+        >
+          Through The Visvine
+        </span>
         {/* Editable title — styled identically to the public H1 */}
         <input
           type="text"
@@ -310,21 +313,21 @@ export default function PostEditor({
             saveTitle(titleValue);
           }}
           placeholder="Untitled post"
-          className="mt-2 w-full bg-transparent text-3xl font-semibold tracking-tight leading-[1.05] placeholder:text-neutral-300 focus:outline-none sm:text-4xl md:text-5xl"
-          style={{ color: BRAND }}
+          className="mt-4 w-full bg-transparent text-3xl font-medium tracking-tight leading-[1.05] placeholder:text-neutral-300 focus:outline-none sm:text-4xl md:text-5xl"
+          style={{ color: "#2f7a3e" }}
         />
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-5 flex items-center gap-3">
           {author?.image && (
             <img
               src={author.image}
               alt={author.name ?? ""}
-              className="h-8 w-8 rounded-full object-cover"
+              className="w-11 h-11 rounded-2xl object-cover border-2 border-brand-green"
               referrerPolicy="no-referrer"
             />
           )}
           <div>
             {author?.name && (
-              <p className="text-sm font-medium text-neutral-800">Written by {author.name}</p>
+              <p className="text-base font-normal text-neutral-600">Written by {author.name}</p>
             )}
             <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
               {publishedAt ? formatBlogDate(new Date(publishedAt), "Draft") : "Draft"}
@@ -333,7 +336,9 @@ export default function PostEditor({
         </div>
       </header>
 
-      <div className="mt-10">
+      <hr className="mt-8 border-neutral-200" />
+
+      <div className="mt-8">
         <EditorContent editor={editor} />
       </div>
 
