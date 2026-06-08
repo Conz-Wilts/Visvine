@@ -64,7 +64,7 @@ export default function BlogSearchList({ posts, isAdmin = false }: { posts: Post
                 </div>
                 <h2
                   className="mt-3 text-2xl font-medium tracking-tight leading-[1.1] transition group-hover:opacity-75 sm:text-3xl"
-                  style={{ color: BRAND }}
+                  style={{ color: "#2f7a3e" }}
                 >
                   {post.title}
                 </h2>

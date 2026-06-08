@@ -43,15 +43,16 @@ export default async function BlogPost({ params }: Props) {
   if (!post.published && !admin) notFound();
 
   return (
-    <article className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
+    <article className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-4 pb-24 sm:px-8 sm:pt-6">
       <Link
         href="/blog"
-        className="text-sm uppercase tracking-[0.18em] text-neutral-500 transition hover:text-black"
+        className="text-xl text-neutral-400 transition hover:text-black"
+        aria-label="Back to blog"
       >
-        ← Blog
+        ←
       </Link>
 
-      <header className="mt-8 sm:mt-10">
+      <header className="mt-5 sm:mt-6">
         <span
           className="inline-block rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.15em] text-white"
           style={{ backgroundColor: BRAND }}
@@ -60,7 +61,7 @@ export default async function BlogPost({ params }: Props) {
         </span>
         <h1
           className="mt-4 text-3xl font-medium tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
-          style={{ color: BRAND }}
+          style={{ color: "#2f7a3e" }}
         >
           {post.title}
         </h1>
@@ -69,7 +70,7 @@ export default async function BlogPost({ params }: Props) {
             <img
               src={post.author.image}
               alt={post.author.name}
-              className="w-11 h-11 rounded-full object-cover"
+              className="w-11 h-11 rounded-2xl object-cover"
               referrerPolicy="no-referrer"
             />
           )}

@@ -24,7 +24,7 @@ export default function MarketingShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isBlog = pathname.startsWith("/blog");
+  const isBlogPost = pathname.startsWith("/blog/");
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInCallbackUrl, setSignInCallbackUrl] = useState<string | undefined>(
     undefined,
@@ -71,7 +71,7 @@ export default function MarketingShell({
 
   return (
     <main className="font-ginto relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
-      {!isBlog && <Vines />}
+      {!isBlogPost && <Vines />}
       <header className="relative pt-6 sm:pt-10 lg:pt-12 pb-4 flex flex-col items-center gap-3 sm:gap-6 lg:gap-7 z-10 px-4">
         {/* Auth area — top right */}
         <div className="absolute top-6 right-4 sm:right-8 lg:right-12 flex items-center">
