@@ -280,7 +280,7 @@ export default function PostEditor({
           )}
           <div>
             {author?.name && (
-              <p className="text-sm font-medium text-neutral-800">{author.name}</p>
+              <p className="text-sm font-medium text-neutral-800">Written by {author.name}</p>
             )}
             <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
               {publishedAt ? formatBlogDate(new Date(publishedAt), "Draft") : "Draft"}

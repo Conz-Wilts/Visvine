@@ -92,13 +92,13 @@ export default async function BlogPost({ params }: Props) {
                 />
               )}
               <div>
-                {post.author && (
+                {post.author?.name && (
                   <p className="text-sm font-medium text-neutral-800">
-                    {post.author.name}
+                    Written by {post.author.name}
                   </p>
                 )}
                 <p className="text-xs uppercase tracking-[0.18em] text-neutral-400">
-                  {formatBlogDate(post.publishedAt, "Draft")}
+                  {formatBlogDate(post.publishedAt ?? post.updatedAt, "Draft")}
                 </p>
               </div>
             </div>
