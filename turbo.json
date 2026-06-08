@@ -10,7 +10,6 @@
         "NEXT_PUBLIC_*",
         "OPENAI_API_KEY",
         "SUPABASE_*",
-        "RESEND_API_KEY"
       ]
     },
     "dev": {

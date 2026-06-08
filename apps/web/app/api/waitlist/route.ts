@@ -1,7 +1,6 @@
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { requireSession, isSuperAdmin } from "@/lib/session";
-import { sendWaitlistConfirmation } from "@/lib/email/waitlist";
 import { takeToken } from "@/lib/messages/rateLimit";
 
 export async function POST(request: Request) {
@@ -65,11 +64,6 @@ export async function POST(request: Request) {
     }
     throw err;
   }
-
-  // Fire-and-forget: the signup is already persisted, so a mail failure must
-  // never fail the request. sendWaitlistConfirmation no-ops without
-  // RESEND_API_KEY and swallows its own errors — see lib/email/waitlist.ts.
-  void sendWaitlistConfirmation(email, firstName);
 
   return Response.json({ ok: true });
 }

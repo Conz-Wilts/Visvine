@@ -13,7 +13,7 @@
   "scripts": {
     "setup": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:seed",
     "dev": "docker compose up -d --wait && pnpm --filter @visvine/web dev",
-    "dev:cloud": "concurrently -n proxy,web -c blue,green -k \"pnpm db:proxy:cloud\" \"pnpm --filter @visvine/web dev\"",
+    "proxy": "bash scripts/start-cloud-sql-proxy.sh",
     "build": "pnpm --filter @visvine/web build",
     "start": "pnpm --filter @visvine/web start",
     "lint": "turbo lint",

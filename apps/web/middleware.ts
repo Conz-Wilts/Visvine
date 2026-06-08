@@ -15,6 +15,7 @@ const PUBLIC_PATHS = [
   "/contact",
   "/blog",
   "/api/waitlist",
+  "/api/blog",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 
