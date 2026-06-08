@@ -52,11 +52,14 @@ export default async function BlogPost({ params }: Props) {
       </Link>
 
       <header className="mt-8 sm:mt-10">
-        <p className="text-xs uppercase tracking-[0.18em]" style={{ color: BRAND }}>
-          Through The Visvine #{post.number}
-        </p>
+        <span
+          className="inline-block rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.15em] text-white"
+          style={{ backgroundColor: BRAND }}
+        >
+          Through The Visvine
+        </span>
         <h1
-          className="mt-2 text-3xl font-medium tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
+          className="mt-4 text-3xl font-medium tracking-tight leading-[1.05] sm:text-4xl md:text-5xl"
           style={{ color: BRAND }}
         >
           {post.title}
@@ -66,13 +69,13 @@ export default async function BlogPost({ params }: Props) {
             <img
               src={post.author.image}
               alt={post.author.name}
-              className="w-8 h-8 rounded-full object-cover"
+              className="w-11 h-11 rounded-full object-cover"
               referrerPolicy="no-referrer"
             />
           )}
           <div>
             {post.author?.name && (
-              <p className="text-sm font-normal text-neutral-600">
+              <p className="text-base font-normal text-neutral-600">
                 Written by {post.author.name}
               </p>
             )}

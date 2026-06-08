@@ -49,13 +49,23 @@ export default function BlogSearchList({ posts, isAdmin = false }: { posts: Post
                 href={`/blog/${post.slug}`}
                 className="group block rounded-2xl border border-neutral-200 bg-white p-6 transition-all hover:border-neutral-300 hover:shadow-sm sm:p-8"
               >
-                <p className="text-xs uppercase tracking-[0.18em]" style={{ color: BRAND }}>
-                  Through The Visvine #{post.number}
-                  {post.publishedAt
-                    ? ` · ${formatBlogDate(new Date(post.publishedAt))}`
-                    : ""}
-                </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight leading-[1.1] text-black transition group-hover:opacity-75 sm:text-3xl">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="inline-block rounded-full px-3 py-1 text-xs font-medium uppercase tracking-[0.15em] text-white"
+                    style={{ backgroundColor: BRAND }}
+                  >
+                    Through The Visvine
+                  </span>
+                  {post.publishedAt && (
+                    <span className="text-xs uppercase tracking-[0.18em] text-neutral-400">
+                      {formatBlogDate(new Date(post.publishedAt))}
+                    </span>
+                  )}
+                </div>
+                <h2
+                  className="mt-3 text-2xl font-medium tracking-tight leading-[1.1] transition group-hover:opacity-75 sm:text-3xl"
+                  style={{ color: BRAND }}
+                >
                   {post.title}
                 </h2>
                 {post.excerpt && (
