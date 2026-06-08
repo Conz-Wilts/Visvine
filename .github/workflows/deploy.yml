@@ -46,7 +46,7 @@ jobs:
           fi
           corepack enable && corepack prepare pnpm@10.30.2 --activate
           cd apps/web
-          DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --skip-generate --accept-data-loss
+          DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
 
       - name: Build and push image
         run: |
