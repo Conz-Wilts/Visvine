@@ -18,7 +18,7 @@ export default async function BlogIndex() {
     select: {
       id: true,
       slug: true,
-      title: true,
+      number: true,
       excerpt: true,
       publishedAt: true,
     },
@@ -43,7 +43,7 @@ export default async function BlogIndex() {
                   <span>{formatBlogDate(post.publishedAt)}</span>
                 </div>
                 <h2 className="mt-2 text-2xl font-medium tracking-tight leading-[1.1] text-black transition group-hover:opacity-80 sm:text-3xl md:text-4xl">
-                  {post.title}
+                  Through The Visvine #{post.number}
                 </h2>
                 {post.excerpt && (
                   <p className="mt-3 text-lg leading-[1.6] text-neutral-700 sm:text-xl">

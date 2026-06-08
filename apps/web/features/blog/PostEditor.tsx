@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, ReactNodeViewRenderer } from "@tiptap/react";
-import { Extension, type JSONContent } from "@tiptap/core";
+import { Extension, type JSONContent, type Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { TextStyle, Color } from "@tiptap/extension-text-style";
 import { ResizableImage, STARTER_KIT_CONFIG } from "@/lib/blog/tiptap";
@@ -28,6 +28,26 @@ const HardBreakKeymap = Extension.create({
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
+function textLinesToHtml(lines: string[]): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const parts: string[] = [];
+  let inList = false;
+  for (const line of lines) {
+    const m = line.match(/^\s*[*\-•]\s+(.*)/);
+    if (m) {
+      if (!inList) { parts.push("<ul>"); inList = true; }
+      parts.push(`<li>${esc(m[1])}</li>`);
+    } else {
+      if (inList) { parts.push("</ul>"); inList = false; }
+      const t = line.trim();
+      if (t) parts.push(`<p>${esc(t)}</p>`);
+    }
+  }
+  if (inList) parts.push("</ul>");
+  return parts.join("");
+}
+
 export default function PostEditor({
   postId,
   number,
@@ -42,6 +62,7 @@ export default function PostEditor({
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -55,6 +76,23 @@ export default function PostEditor({
     immediatelyRender: false,
     editorProps: {
       attributes: { class: "blog-prose focus:outline-none min-h-[40vh]" },
+      transformPastedHTML(html) {
+        // Replace emoji <img> tags (Notion, Slack, etc.) with their alt text.
+        return html.replace(/<img\b[^>]*>/gi, (match) => {
+          if (!/class="[^"]*emoji[^"]*"/.test(match) && !/\bdata-emoji\b/.test(match)) return match;
+          const alt = match.match(/\balt="([^"]*)"/)?.[1] ?? "";
+          return alt && !alt.startsWith(":") ? alt : "";
+        });
+      },
+      handlePaste: (_view, event) => {
+        // If HTML is on the clipboard, let TipTap handle it natively.
+        if (event.clipboardData?.getData("text/html")) return false;
+        const text = event.clipboardData?.getData("text/plain") ?? "";
+        const lines = text.split(/\r?\n/);
+        if (!lines.some((l) => /^\s*[*\-•]\s+\S/.test(l))) return false;
+        editorRef.current?.commands.insertContent(textLinesToHtml(lines));
+        return true;
+      },
     },
   });
 
@@ -103,6 +141,8 @@ export default function PostEditor({
     },
     [],
   );
+
+  useEffect(() => { editorRef.current = editor; }, [editor]);
 
   async function onUpload(file: File) {
     if (!editor) return;

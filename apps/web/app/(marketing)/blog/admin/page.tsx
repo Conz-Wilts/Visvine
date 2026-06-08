@@ -28,7 +28,6 @@ export default async function BlogAdmin() {
       id: true,
       slug: true,
       number: true,
-      title: true,
       published: true,
       publishedAt: true,
       updatedAt: true,
@@ -77,7 +76,7 @@ export default async function BlogAdmin() {
                     </span>
                   </div>
                   <h2 className="mt-1 truncate text-xl font-medium tracking-tight text-black transition group-hover:opacity-80">
-                    {post.title}
+                    Through The Visvine #{post.number}
                   </h2>
                 </div>
                 <span className="shrink-0 text-sm text-neutral-400 transition group-hover:text-black">
