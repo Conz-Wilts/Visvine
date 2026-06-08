@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     const number = (agg._max.number ?? 0) + 1;
     try {
       const post = await prisma.blogPost.create({
-        data: { title, slug, content: EMPTY_DOC, number },
+        data: { title, slug, content: EMPTY_DOC, number, authorId: session.userId },
       });
       return Response.json({ id: post.id, slug: post.slug });
     } catch (err) {

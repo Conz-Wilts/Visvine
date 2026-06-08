@@ -72,7 +72,7 @@ export async function uploadProfileImage(
       await file.save(processed, {
         contentType: 'image/webp',
         resumable: false,
-        metadata: { cacheControl: 'public, max-age=0, must-revalidate' },
+        metadata: { cacheControl: 'public, max-age=86400' },
       });
     })
   );
@@ -137,7 +137,7 @@ export async function uploadBlogImage(
   await bucket.file(objectPath).save(webp, {
     contentType: 'image/webp',
     resumable: false,
-    metadata: { cacheControl: 'public, max-age=0, must-revalidate' },
+    metadata: { cacheControl: 'public, max-age=31536000, immutable' },
   });
   return objectPath;
 }
