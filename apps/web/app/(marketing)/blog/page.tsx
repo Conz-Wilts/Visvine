@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import prisma from "@/lib/prisma";
 import { getSession, isSuperAdmin } from "@/lib/session";
 import BlogSearchList from "@/features/blog/BlogSearchList";
@@ -33,7 +33,7 @@ export default async function BlogIndex() {
   }));
 
   return (
-    <section className="relative z-10 w-full max-w-[900px] px-5 pt-6 pb-24 sm:px-8 sm:pt-10 lg:pl-16">
+    <section className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
       <h1 className="text-5xl font-medium tracking-tight leading-[1.02] text-black sm:text-6xl">
         Blogs
       </h1>
