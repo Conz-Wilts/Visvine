@@ -43,7 +43,7 @@ export default async function BlogPost({ params }: Props) {
   if (!post.published && !admin) notFound();
 
   return (
-    <article className="relative z-10 w-full max-w-[900px] px-5 pt-6 pb-24 sm:px-8 sm:pt-10 lg:pl-16">
+    <article className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
       <Link
         href="/blog"
         className="text-sm uppercase tracking-[0.18em] text-neutral-500 transition hover:text-black"

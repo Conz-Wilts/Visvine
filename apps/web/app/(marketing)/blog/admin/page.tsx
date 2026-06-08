@@ -35,7 +35,7 @@ export default async function BlogAdmin() {
   });
 
   return (
-    <section className="relative z-10 w-full max-w-[900px] px-5 pt-6 pb-24 sm:px-8 sm:pt-10 lg:pl-16">
+    <section className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-5xl font-medium tracking-tight leading-[1.02] text-black sm:text-6xl">
           Admin.
