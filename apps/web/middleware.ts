@@ -18,6 +18,13 @@ const PUBLIC_PATHS = [
   // Public event share pages + their no-login RSVP API (visvine.com/e/<slug>).
   "/e/",
   "/api/public",
+  // MCP server + its self-hosted OAuth 2.1 layer. These must bypass the HTML
+  // redirect-to-/signin: the MCP endpoint answers 401 + WWW-Authenticate and
+  // the OAuth endpoints validate Bearer/PKCE/cookie themselves. (`/.well-known`
+  // serves public discovery metadata.) See docs/MCP.md.
+  "/.well-known/oauth-",
+  "/api/oauth",
+  "/api/mcp",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 

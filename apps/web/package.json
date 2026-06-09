@@ -20,6 +20,7 @@
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",
     "@google-cloud/storage": "^7.19.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",
     "@tiptap/core": "^3.26.0",
@@ -38,6 +39,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.545.0",
     "mammoth": "^1.11.0",
+    "mcp-handler": "^1.1.0",
     "next": "^15.5.9",
     "openai": "^6.13.0",
     "pg": "^8.18.0",
@@ -49,7 +51,7 @@
     "react-virtuoso": "^4.18.5",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-"sharp": "^0.34.5",
+    "sharp": "^0.34.5",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5",
     "zod": "^4.1.12"
