@@ -1,0 +1,87 @@
+/**
+ * Host actions on a single attendee: change status (approve / decline / promote /
+ * check-in / no-show / waitlist) or remove them. Host or community admin only.
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { getEvent, setAttendeeStatus, removeAttendee } from '@/lib/eventRepo';
+import { requireEventManager } from '@/lib/eventAuth';
+import type { RSVPStatus } from '@/lib/types';
+import { logger } from '@/lib/logger';
+
+type RouteContext = {
+  params: Promise<{ eventId: string; attendeeId: string }>;
+};
+
+// Host-facing action verbs → operational status.
+const ACTION_TO_STATUS: Record<string, RSVPStatus> = {
+  approve: 'going',
+  going: 'going',
+  promote: 'going',
+  decline: 'cancelled',
+  cancel: 'cancelled',
+  waitlist: 'waitlisted',
+  checkin: 'checked_in',
+  uncheckin: 'going',
+  no_show: 'no_show',
+};
+
+const patchSchema = z.object({
+  action: z.enum(Object.keys(ACTION_TO_STATUS) as [string, ...string[]]),
+});
+
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  try {
+    const { eventId, attendeeId } = await context.params;
+    const communityId = new URL(request.url).searchParams.get('communityId');
+    if (!communityId) {
+      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    }
+
+    const event = await getEvent(communityId, eventId);
+    if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
+
+    const parsed = patchSchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Validation error', details: parsed.error.issues }, { status: 400 });
+    }
+
+    const updated = await setAttendeeStatus(
+      communityId, eventId, attendeeId, ACTION_TO_STATUS[parsed.data.action],
+    );
+    if (!updated) return NextResponse.json({ error: 'Attendee not found' }, { status: 404 });
+
+    return NextResponse.json({ attendee: updated });
+  } catch (error) {
+    logger.error('api.events.attendee.patch.failed', { err: error });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+  try {
+    const { eventId, attendeeId } = await context.params;
+    const communityId = new URL(request.url).searchParams.get('communityId');
+    if (!communityId) {
+      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    }
+
+    const event = await getEvent(communityId, eventId);
+    if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
+
+    const ok = await removeAttendee(communityId, eventId, attendeeId);
+    if (!ok) return NextResponse.json({ error: 'Attendee not found' }, { status: 404 });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    logger.error('api.events.attendee.delete.failed', { err: error });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

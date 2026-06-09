@@ -4,6 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getEvent, getAttendees, getCommunityGraphData } from '@/lib/eventRepo';
+import { requireEventManager } from '@/lib/eventAuth';
+import { normalizeStatus } from '@/lib/eventUtils';
 import { logger } from '@/lib/logger';
 
 type RouteContext = {
@@ -50,6 +52,10 @@ export async function GET(
       );
     }
 
+    // Attendee export is PII — host or community admin only.
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
+
     const attendees = await getAttendees(communityId, eventId);
     const graphData = await getCommunityGraphData(communityId);
 
@@ -60,6 +66,8 @@ export async function GET(
       'Company',
       'Role',
       'Status',
+      'Response',
+      'Guests (+N)',
       'LinkedIn URL',
       'Checked In At',
       'Registered At',
@@ -67,15 +75,17 @@ export async function GET(
     ];
 
     const rows = attendees.map((attendee) => {
-      const person = graphData.nodes.find((n) => n.id === attendee.personId);
-      const name = person?.name || 'Unknown';
+      const person = attendee.personId ? graphData.nodes.find((n) => n.id === attendee.personId) : undefined;
+      const name = person?.name || attendee.name || 'Unknown';
 
       return [
         escapeCSV(name),
         escapeCSV(attendee.email),
         escapeCSV(attendee.companyName),
         escapeCSV(attendee.roleTitle),
-        escapeCSV(attendee.status),
+        escapeCSV(normalizeStatus(attendee.status)),
+        escapeCSV(attendee.response ?? ''),
+        escapeCSV(attendee.plusOnes ?? 0),
         escapeCSV(attendee.linkedinUrl),
         escapeCSV(attendee.checkinAt),
         escapeCSV(attendee.createdAt),

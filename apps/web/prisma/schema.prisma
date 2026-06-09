@@ -28,6 +28,7 @@ model Community {
   nodes            Node[]
   userCommunities  UserCommunity[]
   graphLayout      GraphLayout?
+  introRequests    IntroRequest[]
 
   @@map("communities")
 }
@@ -96,25 +97,56 @@ model Link {
 }
 
 model Attendee {
-  id          String    @id
-  eventId     String    @map("event_id")
-  personId    String?   @map("person_id")
-  email       String?
-  linkedinUrl String?   @map("linkedin_url")
-  companyName String?   @map("company_name")
-  roleTitle   String?   @map("role_title")
-  answers     Json      @default("{}")
-  status      String    @default("registered")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  checkinAt   DateTime? @map("checkin_at")
-  event       Node      @relation("EventNode", fields: [eventId], references: [id], onDelete: Cascade)
-  person      Node?     @relation("PersonNode", fields: [personId], references: [id])
+  id              String    @id
+  eventId         String    @map("event_id")
+  personId        String?   @map("person_id")
+  name            String? // typed guest name (loginless RSVP; no Person node required)
+  email           String?
+  linkedinUrl     String?   @map("linkedin_url")
+  companyName     String?   @map("company_name")
+  roleTitle       String?   @map("role_title")
+  answers         Json      @default("{}")
+  // Operational lifecycle: going | waitlisted | pending | checked_in | no_show | cancelled | invited.
+  // Legacy rows may still hold 'registered' (normalized to 'going' on read — see eventUtils.normalizeStatus).
+  status          String    @default("going")
+  // Guest's intent, separate from the operational status: going | maybe | declined.
+  response        String?
+  plusOnes        Int       @default(0) @map("plus_ones")
+  plusOneNames    String[]  @default([]) @map("plus_one_names")
+  invitedBy       String?   @map("invited_by") // userId/personId who invited/added them
+  remindersSentAt Json      @default("{}") @map("reminders_sent_at") // { "24h": iso, "1h": iso } dedupe
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  checkinAt       DateTime? @map("checkin_at")
+  event           Node      @relation("EventNode", fields: [eventId], references: [id], onDelete: Cascade)
+  person          Node?     @relation("PersonNode", fields: [personId], references: [id])
 
+  @@unique([eventId, email]) // dedupe RSVPs by email (NULL emails remain distinct in Postgres)
   @@index([eventId])
+  @@index([eventId, status])
   @@index([personId])
   @@index([email])
   @@map("attendees")
+}
+
+/// Host blasts + scheduled reminders/confirmations for an event.
+/// Sending requires a mail provider + scheduler (see docs); rows are inert until then.
+model EventMessage {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  eventId      String    @map("event_id")
+  communityId  String    @map("community_id")
+  kind         String // 'confirmation' | 'reminder' | 'blast'
+  audience     String    @default("going") // going | maybe | waitlisted | all
+  subject      String
+  body         String
+  scheduledFor DateTime? @map("scheduled_for")
+  sentAt       DateTime? @map("sent_at")
+  createdBy    String    @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([eventId])
+  @@index([scheduledFor, sentAt])
+  @@map("event_messages")
 }
 
 model User {
@@ -849,4 +881,30 @@ model BlogCommentReaction {
   @@unique([commentId, userId, emoji])
   @@index([commentId])
   @@map("blog_comment_reactions")
+}
+
+/// Warm-introduction request (double opt-in). Node ids are stored loosely as
+/// strings (like Link/Attendee) and enriched to node summaries in the service.
+/// Flow: pending → approved (introducer endorses) → connected (target accepts).
+/// A decline from either party sets status=declined + declinedBy.
+model IntroRequest {
+  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId         String    @map("community_id")
+  requesterNodeId     String    @map("requester_node_id")
+  introducerNodeId    String    @map("introducer_node_id")
+  targetNodeId        String    @map("target_node_id")
+  messageToIntroducer String    @map("message_to_introducer")
+  messageToTarget     String    @map("message_to_target")
+  endorsement         String?
+  status              String    @default("pending")
+  declinedBy          String?   @map("declined_by")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  community           Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId])
+  @@index([introducerNodeId, status])
+  @@index([requesterNodeId])
+  @@index([targetNodeId, status])
+  @@map("intro_requests")
 }

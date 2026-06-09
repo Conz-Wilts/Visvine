@@ -1,5 +1,5 @@
 export type AvatarSize = 'avatar-sm' | 'avatar-md' | 'avatar-lg' | 'original';
-export type ImageEntityType = 'card' | 'person' | 'community';
+export type ImageEntityType = 'card' | 'person' | 'community' | 'event';
 
 /**
  * Upload an image for any entity type.

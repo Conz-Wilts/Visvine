@@ -15,6 +15,9 @@ const PUBLIC_PATHS = [
   "/blog",
   "/api/waitlist",
   "/api/blog",
+  // Public event share pages + their no-login RSVP API (visvine.com/e/<slug>).
+  "/e/",
+  "/api/public",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 

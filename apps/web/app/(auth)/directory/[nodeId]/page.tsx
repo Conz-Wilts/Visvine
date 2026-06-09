@@ -152,7 +152,6 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
         <IntroRequestModal
           communityId={communityId}
           targetNode={{ id: nodeId, name: node.name, type: node.type, subtitle: node.subtitle ?? null, imageUrl: node.image_url ?? null }}
-          requesterNodeId={requesterNodeId}
           requesterName={requesterName}
           onClose={() => setIntroOpen(false)}
         />

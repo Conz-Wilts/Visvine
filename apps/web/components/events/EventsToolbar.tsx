@@ -102,7 +102,7 @@ export default function EventsToolbar({
   const hasFilters = currentFilter !== 'all' || locationFilter !== 'all';
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <MiniDropdown label="Time" value={currentFilter} options={TIME_OPTIONS} onChange={onFilterChange} />
       {onLocationFilterChange && (
         <MiniDropdown label="Type" value={locationFilter} options={LOCATION_OPTIONS} onChange={onLocationFilterChange} />
@@ -121,11 +121,11 @@ export default function EventsToolbar({
         </button>
       )}
 
-      {/* Spacer */}
-      <div className="flex-1" />
+      {/* Spacer — only separates on sm+; on mobile the search wraps to its own row */}
+      <div className="hidden sm:block sm:flex-1" />
 
-      {/* Search */}
-      <div className="relative max-w-xs">
+      {/* Search — full-width on its own row on mobile, inline (max-w-xs) on sm+ */}
+      <div className="relative order-last w-full min-w-0 sm:order-none sm:w-auto sm:max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
         <input
           type="text"
@@ -147,7 +147,7 @@ export default function EventsToolbar({
       {/* Add button */}
       <Link
         href="/events/new"
-        className="flex h-9 items-center gap-2 rounded-full px-4 bg-brand-green font-semibold hover:opacity-90 transition-all shadow-sm text-white text-sm"
+        className="flex h-9 items-center gap-2 rounded-full px-4 bg-brand-green font-semibold hover:opacity-90 transition-all shadow-sm text-white text-sm ml-auto sm:ml-0"
       >
         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

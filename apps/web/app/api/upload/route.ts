@@ -28,6 +28,7 @@ const ENTITY_PREFIXES: Record<ImageEntityType, string> = {
   card:      'cards',
   person:    'persons',
   community: 'communities',
+  event:     'events',
 };
 
 function buildPrefix(entityType: ImageEntityType, entityId: string): string {
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!Object.keys(ENTITY_PREFIXES).includes(entityType)) {
-      return NextResponse.json({ error: 'entityType must be card, person, or community' }, { status: 400 });
+      return NextResponse.json({ error: 'entityType must be card, person, community, or event' }, { status: 400 });
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {

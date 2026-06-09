@@ -10,31 +10,25 @@ import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { EventHeader } from '@/components/events/EventHeader';
 import { EventActions } from '@/components/events/EventActions';
-import { AttendeesTable } from '@/components/events/AttendeesTable';
+import { GuestManager } from '@/components/events/GuestManager';
 import { DeleteEventModal } from '@/components/events/DeleteEventModal';
 import { copyToClipboard } from '@/lib/utils';
-import type { NBEvent, NBAttendee } from '@/lib/types';
-import { Link2, Trash2 } from 'lucide-react';
+import type { NBEvent } from '@/lib/types';
+import { Link2, Trash2, Pencil } from 'lucide-react';
 
-interface AttendeeWithPerson extends NBAttendee {
-  person?: {
-    id: string;
-    name: string;
-    subtitle?: string;
-    tags?: string[];
-  } | null;
-}
-
-type Tab = 'overview' | 'attendees' | 'form';
+type Tab = 'overview' | 'guests' | 'form';
 
 interface EventStats {
   total: number;
+  going?: number;
   registered: number;
   waitlisted: number;
+  pending?: number;
   invited: number;
   checkedIn: number;
   cancelled: number;
   noShow: number;
+  maybe?: number;
 }
 
 export default function EventDetailPage({
@@ -47,7 +41,6 @@ export default function EventDetailPage({
   const { currentCommunity } = useCommunity();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [event, setEvent] = useState<NBEvent | null>(null);
-  const [attendees, setAttendees] = useState<AttendeeWithPerson[]>([]);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [copyStatus, setCopyStatus] = useState('');
@@ -75,27 +68,11 @@ export default function EventDetailPage({
     loadEvent();
   }, [currentCommunity, resolvedParams.eventId]);
 
-  useEffect(() => {
-    if (!currentCommunity || activeTab !== 'attendees') return;
-
-    const loadAttendees = async () => {
-      try {
-        const response = await fetch(
-          `/api/events/${resolvedParams.eventId}/attendees?communityId=${currentCommunity.id}`
-        );
-        const data = await response.json();
-        setAttendees(data.attendees);
-      } catch (error) {
-        console.error('Failed to load attendees:', error);
-      }
-    };
-
-    loadAttendees();
-  }, [currentCommunity, resolvedParams.eventId, activeTab]);
+  const publicSlug = event?.slug ?? resolvedParams.eventId.replace(/^event:/, '');
+  const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/e/${publicSlug}` : `/e/${publicSlug}`;
 
   const handleCopyFormLink = async () => {
-    const url = `${window.location.origin}/events/${resolvedParams.eventId}/rsvp`;
-    const success = await copyToClipboard(url);
+    const success = await copyToClipboard(publicUrl);
     setCopyStatus(success ? 'Copied!' : 'Failed');
     setTimeout(() => setCopyStatus(''), 2000);
   };
@@ -137,17 +114,26 @@ export default function EventDetailPage({
           <div className="flex-1">
             <EventHeader
               event={event}
-              attendeeCount={stats?.registered || 0}
+              attendeeCount={stats?.going ?? stats?.registered ?? 0}
               showCapacity={true}
             />
           </div>
-          <button
-            onClick={() => setShowDeleteModal(true)}
-            className="p-2.5 text-brand-green hover:bg-brand-green/10 rounded-lg transition-all border border-gray-200 hover:border-brand-green"
-            title="Delete event"
-          >
-            <Trash2 className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/events/${resolvedParams.eventId}/edit`}
+              className="p-2.5 text-brand-green hover:bg-brand-green/10 rounded-lg transition-all border border-gray-200 hover:border-brand-green"
+              title="Edit event"
+            >
+              <Pencil className="w-5 h-5" />
+            </Link>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="p-2.5 text-brand-green hover:bg-brand-green/10 rounded-lg transition-all border border-gray-200 hover:border-brand-green"
+              title="Delete event"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <EventActions
@@ -158,7 +144,7 @@ export default function EventDetailPage({
 
         <div className="border-b border-gray-200">
           <nav className="flex gap-6">
-            {(['overview', 'attendees', 'form'] as const).map((tab) => (
+            {(['overview', 'guests', 'form'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -168,7 +154,7 @@ export default function EventDetailPage({
                   }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                {tab === 'attendees' && stats && ` (${stats.total})`}
+                {tab === 'guests' && stats && ` (${stats.total})`}
               </button>
             ))}
           </nav>
@@ -196,10 +182,10 @@ export default function EventDetailPage({
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div className="p-5 bg-brand-light-bg rounded-xl border border-brand-light-bg">
                       <div className="text-3xl font-bold text-brand-green">
-                        {stats.registered}
+                        {stats.going ?? stats.registered}
                       </div>
                       <div className="text-sm text-brand-grey mt-1">
-                        Registered
+                        Going
                       </div>
                     </div>
                     <div className="p-5 bg-brand-light-bg rounded-xl border border-brand-light-bg">
@@ -232,8 +218,8 @@ export default function EventDetailPage({
             </div>
           )}
 
-          {activeTab === 'attendees' && (
-            <AttendeesTable attendees={attendees} />
+          {activeTab === 'guests' && (
+            <GuestManager event={event} communityId={currentCommunity.id} />
           )}
 
           {activeTab === 'form' && (
@@ -295,10 +281,10 @@ export default function EventDetailPage({
                     Public RSVP URL:
                   </p>
                   <Link
-                    href={`/events/${resolvedParams.eventId}/rsvp`}
+                    href={`/e/${publicSlug}`}
                     className="text-sm text-brand-green hover:underline break-all"
                   >
-                    {window.location.origin}/events/{resolvedParams.eventId}/rsvp
+                    {publicUrl}
                   </Link>
                 </div>
 

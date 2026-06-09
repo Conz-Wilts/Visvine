@@ -3,11 +3,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   MapPin, ExternalLink, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
-  Pencil, Plus, Share2, Users, Building2, Sparkles, Wrench, Network as NetworkIcon,
+  Pencil, Plus, Share2, Building2, Sparkles, Wrench, Network as NetworkIcon,
   Eye, Palette, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { useProfile } from '@/hooks/useProfile';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useSession } from '@/lib/auth-client';
@@ -22,6 +21,7 @@ import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
 import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
+import ConnectButton from './ConnectButton';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | null;
 const SECTIONS = ['about', 'skills', 'network', 'contact'] as const;
@@ -50,7 +50,6 @@ function useScrollSpy(ids: readonly string[]) {
 }
 
 export default function ProfilePageContent({ nodeId }: { nodeId: string }) {
-  const router = useRouter();
   const { data: session } = useSession();
   const { currentCommunity } = useCommunity();
   const { profile, loading, error, updateBasicInfo } = useProfile(nodeId);
@@ -216,17 +215,18 @@ export default function ProfilePageContent({ nodeId }: { nodeId: string }) {
                 </button>
               </>
             ) : (
-              <>
-                <button disabled title="Coming soon" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: theme.base }}>
-                  <Users className="w-4 h-4" /> Connect
-                </button>
-                <button onClick={() => router.push('/messages')} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold bg-surface-1 border-[1.5px] active:scale-95" style={{ color: theme.dark, borderColor: `${theme.base}88` }}>
-                  <Mail className="w-4 h-4" /> Message
-                </button>
-                <button disabled title="Coming soon" className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold bg-surface-2 text-text-secondary border border-border-default disabled:opacity-50 disabled:cursor-not-allowed">
-                  <Users className="w-4 h-4" /> Request intro
-                </button>
-              </>
+              <ConnectButton
+                targetNode={{
+                  id: nodeId,
+                  name: profile.name,
+                  type: nodeData?.node?.type ?? 'People',
+                  subtitle: profile.subtitle ?? null,
+                  imageUrl: profile.imageUrl ?? null,
+                }}
+                communityId={currentCommunity?.id ?? nodeData?.node?.community_id ?? ''}
+                requesterName={session?.user?.name ?? 'there'}
+                accent={{ base: theme.base, dark: theme.dark }}
+              />
             )}
           </div>
 

@@ -4,17 +4,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
-import {
-  getEvent,
-  getAttendees,
-  upsertAttendee,
-  getCommunityGraphData,
-  updateCommunityGraphData,
-  updateEventAnalytics,
-} from '@/lib/eventRepo';
-import { findMatchingPerson, createPersonNode, ensureUniquePersonId } from '@/lib/personDedupe';
-import { generateAttendeeId, isEmailDomainAllowed } from '@/lib/eventUtils';
-import type { NBAttendee, NBLink, RSVPStatus } from '@/lib/types';
+import { getEvent, getAttendees, getCommunityNodes, submitRsvp, EventFullError } from '@/lib/eventRepo';
+import { isEmailDomainAllowed } from '@/lib/eventUtils';
+import { rsvpMessage } from '@/lib/eventCopy';
+import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
+import { requireEventManager } from '@/lib/eventAuth';
 import { logger } from '@/lib/logger';
 
 type RouteContext = {
@@ -79,6 +73,10 @@ export async function POST(
       );
     }
 
+    if (event.status === 'draft') {
+      return NextResponse.json({ error: 'This event is not open for RSVPs yet' }, { status: 403 });
+    }
+
     if (!event.form.enabled) {
       return NextResponse.json(
         { error: 'RSVP form is not enabled for this event' },
@@ -106,130 +104,27 @@ export async function POST(
       );
     }
 
-    // Get existing graph data to find/create person
-    const graphData = await getCommunityGraphData(communityId);
+    // Clamp +guests to what the event allows.
+    const plusOnes = Math.min(submission.plusOnes ?? 0, event.allowPlusOnes ?? 0);
 
-    // Try to find matching person
-    const matchedPerson = findMatchingPerson(graphData.nodes, {
-      name: submission.name,
-      email: submission.email,
-      linkedinUrl: submission.linkedinUrl,
-      companyName: submission.companyName,
+    const { attendee, status, created } = await submitRsvp(communityId, event, {
+      ...submission,
+      plusOnes,
     });
 
-    let personId: string;
-
-    if (matchedPerson) {
-      personId = matchedPerson.id;
-    } else {
-      // Create new person node
-      const newPerson = createPersonNode({
-        name: submission.name,
-        email: submission.email,
-        linkedinUrl: submission.linkedinUrl,
-        companyName: submission.companyName,
-        roleTitle: submission.roleTitle,
-      });
-
-      // Ensure unique ID
-      const uniquePerson = ensureUniquePersonId(newPerson, graphData.nodes);
-      personId = uniquePerson.id;
-
-      // Add to graph
-      graphData.nodes.push(uniquePerson);
-      await updateCommunityGraphData(communityId, graphData);
-    }
-
-    // Determine RSVP status
-    const existingAttendees = await getAttendees(communityId, eventId);
-    const registeredCount = existingAttendees.filter((a) => a.status === 'registered').length;
-
-    let status: RSVPStatus;
-    if (event.form.requireApproval) {
-      status = 'invited';
-    } else if (event.capacity && registeredCount >= event.capacity) {
-      status = 'waitlisted';
-    } else {
-      status = 'registered';
-    }
-
-    // Check if this person already has an attendee record
-    const existingAttendee = existingAttendees.find((a) => a.personId === personId);
-
-    let attendee: NBAttendee;
-    const now = new Date().toISOString();
-
-    if (existingAttendee) {
-      // Update existing attendee
-      attendee = {
-        ...existingAttendee,
-        email: submission.email || existingAttendee.email,
-        linkedinUrl: submission.linkedinUrl || existingAttendee.linkedinUrl,
-        companyName: submission.companyName || existingAttendee.companyName,
-        roleTitle: submission.roleTitle || existingAttendee.roleTitle,
-        answers: { ...existingAttendee.answers, ...submission.answers } as Record<string, string | boolean>,
-        status,
-        updatedAt: now,
-      };
-    } else {
-      // Create new attendee
-      const attendeeId = generateAttendeeId(eventId, submission.email || personId);
-      attendee = {
-        id: attendeeId as `attendee:${string}`,
-        eventId: eventId as `event:${string}`,
-        personId: personId as `person:${string}`,
-        email: submission.email,
-        linkedinUrl: submission.linkedinUrl,
-        companyName: submission.companyName,
-        roleTitle: submission.roleTitle,
-        answers: submission.answers as Record<string, string | boolean> | undefined,
-        status,
-        createdAt: now,
-        updatedAt: now,
-      };
-    }
-
-    await upsertAttendee(communityId, attendee);
-
-    // Add attended link to graph (if not exists)
-    const linkExists = graphData.links.some(
-      (link) =>
-        ((typeof link.source === 'string' ? link.source : link.source.id) === personId &&
-          (typeof link.target === 'string' ? link.target : link.target.id) === eventId) ||
-        ((typeof link.source === 'string' ? link.source : link.source.id) === eventId &&
-          (typeof link.target === 'string' ? link.target : link.target.id) === personId)
+    // Fire-and-forget confirmation email (no-op unless a mail provider is configured).
+    void sendRsvpConfirmation(event, submission.email, submission.name, status).catch((err) =>
+      logger.error('email.rsvp.failed', { err }),
     );
 
-    if (!linkExists) {
-      const attendedLink: NBLink = {
-        source: personId,
-        target: eventId,
-        relationship: 'attended',
-        since: event.startAt,
-        metadata: { status },
-      };
-      graphData.links.push(attendedLink);
-      await updateCommunityGraphData(communityId, graphData);
-    }
-
-    // Update event analytics
-    if (!existingAttendee) {
-      await updateEventAnalytics(communityId, eventId, {
-        rsvpCount: event.analytics.rsvpCount + 1,
-      });
-    }
-
-    return NextResponse.json({
-      attendee,
-      status,
-      message:
-        status === 'registered'
-          ? 'Successfully registered!'
-          : status === 'waitlisted'
-            ? 'You have been added to the waitlist.'
-            : 'Your RSVP is pending approval.',
-    }, { status: existingAttendee ? 200 : 201 });
+    return NextResponse.json(
+      { attendee, status, message: rsvpMessage(status) },
+      { status: created ? 201 : 200 },
+    );
   } catch (error) {
+    if (error instanceof EventFullError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     logger.error('api.events.rsvp.failed', { err: error });
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -257,15 +152,25 @@ export async function GET(
       );
     }
 
+    // Guest list is PII — host or community admin only.
+    const event = await getEvent(communityId, eventId);
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
+
     const attendees = await getAttendees(communityId, eventId);
 
-    // Get person details for each attendee
-    const graphData = await getCommunityGraphData(communityId);
+    // Get person details for each attendee (nodes only — no need to load links)
+    const nodes = await getCommunityNodes(communityId);
 
     const attendeesWithPersons = attendees.map((attendee) => {
-      const person = graphData.nodes.find((n) => n.id === attendee.personId);
+      const person = attendee.personId ? nodes.find((n) => n.id === attendee.personId) : undefined;
       return {
         ...attendee,
+        // resolved display name: person node wins, else the typed guest name
+        name: person?.name ?? attendee.name,
         person: person
           ? {
             id: person.id,

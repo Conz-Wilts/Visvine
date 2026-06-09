@@ -41,6 +41,7 @@ export type RelationshipType =
   | 'founded'
   | 'invested_in'
   | 'attended'
+  | 'hosting'
   | 'member_of'
   | 'sponsors'
   | 'partner_with';
@@ -123,7 +124,10 @@ export interface UserCommunityPreferences {
 
 // Event types
 export type EventVisibility = 'public' | 'community' | 'private';
-export type RSVPStatus = 'invited' | 'registered' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
+// Operational lifecycle. 'registered' is legacy (read as 'going' via normalizeStatus).
+export type RSVPStatus = 'invited' | 'pending' | 'going' | 'registered' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
+// The guest's intent, independent of the operational status above.
+export type RSVPResponse = 'going' | 'maybe' | 'declined';
 export type FormFieldType = 'text' | 'textarea' | 'email' | 'select' | 'checkbox' | 'url' | 'linkedin' | 'company';
 
 export interface FormField {
@@ -153,6 +157,16 @@ export interface NBEvent {
   organizerEmail?: string;
   capacity?: number;
   visibility: EventVisibility;
+  // --- rebuild additions (all stored in Node.metadata; coverImageUrl mirrors Node.imageUrl) ---
+  coverImageUrl?: string;
+  theme?: { color?: string };
+  status?: 'draft' | 'published'; // undefined = legacy/published
+  slug?: string; // clean public URL segment (visvine.com/e/<slug>); mirrors Node.alias
+  waitlistEnabled?: boolean; // auto-on when capacity is set
+  guestListVisible?: boolean; // show the guest list on the public page
+  allowPlusOnes?: number; // max additional guests per RSVP (0 = none)
+  allowedResponses?: RSVPResponse[]; // which RSVP buttons the host enables
+  // -------------------------------------------------------------------------------------------
   form: {
     enabled: boolean;
     slug: string;
@@ -173,13 +187,18 @@ export interface NBEvent {
 export interface NBAttendee {
   id: `attendee:${string}`;
   eventId: NBEvent['id'];
-  personId: `person:${string}`;
+  personId: string; // 'person:...' or '' for a loginless guest with no Person node
+  name?: string; // typed guest name (loginless RSVP)
   email?: string;
   linkedinUrl?: string;
   companyName?: string;
   roleTitle?: string;
   answers?: Record<string, string | boolean>;
   status: RSVPStatus;
+  response?: RSVPResponse; // guest intent (going/maybe/declined)
+  plusOnes?: number;
+  plusOneNames?: string[];
+  invitedBy?: string;
   createdAt: string;
   updatedAt: string;
   checkinAt?: string;

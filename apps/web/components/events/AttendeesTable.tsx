@@ -22,7 +22,9 @@ interface AttendeesTableProps {
 }
 
 const STATUS_CONFIG: Record<RSVPStatus, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
-  registered: { label: 'Registered', icon: CheckCircle, color: 'text-brand-green' },
+  going: { label: 'Going', icon: CheckCircle, color: 'text-brand-green' },
+  registered: { label: 'Going', icon: CheckCircle, color: 'text-brand-green' },
+  pending: { label: 'Pending', icon: Clock, color: 'text-amber-500' },
   waitlisted: { label: 'Waitlisted', icon: Clock, color: 'text-orange-500' },
   invited: { label: 'Invited', icon: Clock, color: 'text-blue-500' },
   cancelled: { label: 'Cancelled', icon: XCircle, color: 'text-brand-grey' },

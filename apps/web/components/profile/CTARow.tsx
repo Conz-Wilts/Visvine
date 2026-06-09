@@ -134,7 +134,7 @@ export default function CTARow({
                 <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
                 <button
                   onClick={() => { setMsgOpen(false); onRequestIntro?.(); }}
-                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-brand-dark-green hover:bg-brand-light-bg transition-colors"
                 >
                   <Users className="w-4 h-4" />
                   Request Intro

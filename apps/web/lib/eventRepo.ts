@@ -6,9 +6,19 @@
 import prisma from './prisma';
 import { Prisma } from '@prisma/client';
 import { revalidateTag, unstable_cache } from 'next/cache';
-import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPStatus } from './types';
+import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPStatus, RSVPResponse } from './types';
 import { normalizeImageUrl } from './mediaUrl';
+import { findMatchingPerson } from './personDedupe';
+import { generateAttendeeId, normalizeStatus, occupiedSpots, decideRsvpStatus } from './eventUtils';
 import { logger } from './logger';
+
+/** Thrown by submitRsvp when an event is full and its waitlist is disabled. */
+export class EventFullError extends Error {
+  constructor(message = 'This event is full.') {
+    super(message);
+    this.name = 'EventFullError';
+  }
+}
 
 // ─── Node converter ──────────────────────────────────────────────────────────
 
@@ -34,6 +44,7 @@ function nodeRowToNBNode(row: {
 
 function nodeRowToNBEvent(row: {
   id: string; communityId: string | null; name: string; subtitle: string | null;
+  imageUrl?: string | null; alias?: string | null;
   metadata: unknown; createdAt: Date; updatedAt: Date;
 }): NBEvent {
   const meta = (row.metadata as Record<string, unknown>) ?? {};
@@ -51,6 +62,15 @@ function nodeRowToNBEvent(row: {
     organizerEmail: (meta.organizerEmail as string) ?? undefined,
     capacity: (meta.capacity as number) ?? undefined,
     visibility: ((meta.visibility as string) ?? 'community') as NBEvent['visibility'],
+    // rebuild fields (Node.imageUrl/alias are authoritative; fall back to metadata)
+    coverImageUrl: normalizeImageUrl(row.imageUrl ?? (meta.coverImageUrl as string) ?? null) ?? undefined,
+    theme: (meta.theme as NBEvent['theme']) ?? undefined,
+    status: (meta.status as NBEvent['status']) ?? 'published',
+    slug: (row.alias ?? (meta.slug as string)) ?? undefined,
+    waitlistEnabled: (meta.waitlistEnabled as boolean) ?? undefined,
+    guestListVisible: (meta.guestListVisible as boolean) ?? undefined,
+    allowPlusOnes: (meta.allowPlusOnes as number) ?? undefined,
+    allowedResponses: (meta.allowedResponses as NBEvent['allowedResponses']) ?? undefined,
     form: (meta.form_schema as NBEvent['form']) ?? (meta.form as NBEvent['form']) ?? { enabled: false, slug: '', schema: [] },
     analytics: (meta.analytics as NBEvent['analytics']) ?? {
       views: 0, rsvpCount: 0, checkinCount: 0,
@@ -58,6 +78,34 @@ function nodeRowToNBEvent(row: {
       updatedAt: row.updatedAt.toISOString(),
     },
     metadata: meta,
+  };
+}
+
+function attendeeRowToNBAttendee(a: {
+  id: string; eventId: string; personId: string | null; name: string | null;
+  email: string | null; linkedinUrl: string | null; companyName: string | null; roleTitle: string | null;
+  answers: unknown; status: string; response: string | null; plusOnes: number;
+  plusOneNames: string[]; invitedBy: string | null;
+  createdAt: Date; updatedAt: Date; checkinAt: Date | null;
+}): NBAttendee {
+  return {
+    id: a.id as `attendee:${string}`,
+    eventId: a.eventId as `event:${string}`,
+    personId: a.personId ?? '',
+    name: a.name ?? undefined,
+    email: a.email ?? undefined,
+    linkedinUrl: a.linkedinUrl ?? undefined,
+    companyName: a.companyName ?? undefined,
+    roleTitle: a.roleTitle ?? undefined,
+    answers: (a.answers as Record<string, string | boolean>) || {},
+    status: a.status as RSVPStatus,
+    response: (a.response as NBAttendee['response']) ?? undefined,
+    plusOnes: a.plusOnes ?? 0,
+    plusOneNames: a.plusOneNames ?? [],
+    invitedBy: a.invitedBy ?? undefined,
+    createdAt: a.createdAt.toISOString(),
+    updatedAt: a.updatedAt.toISOString(),
+    checkinAt: a.checkinAt?.toISOString(),
   };
 }
 
@@ -71,9 +119,17 @@ function nodeRowToNBEvent(row: {
  * set. The graph view composes this with links via {@link getCommunityGraphData}.
  */
 async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
-  const nodeRows = await prisma.node.findMany({
+  const allRows = await prisma.node.findMany({
     where: { communityId },
     select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true },
+  });
+
+  // Keep draft and unlisted (private) events out of the directory/graph — they're
+  // reached only via their own page / share link, never the community listing.
+  const nodeRows = allRows.filter((n) => {
+    if (n.type !== 'event') return true;
+    const meta = (n.metadata as Record<string, unknown>) ?? {};
+    return meta.status !== 'draft' && meta.visibility !== 'private';
   });
 
   // Person.imageUrl is authoritative for profile photos (stays in sync with GCS uploads).
@@ -204,20 +260,7 @@ export async function getEventsData(communityId: string): Promise<EventsData> {
       : [];
 
     const events = eventRows.map(nodeRowToNBEvent);
-    const attendees: NBAttendee[] = attendeeRows.map(a => ({
-      id: a.id as `attendee:${string}`,
-      eventId: a.eventId as `event:${string}`,
-      personId: (a.personId ?? '') as `person:${string}`,
-      email: a.email ?? undefined,
-      linkedinUrl: a.linkedinUrl ?? undefined,
-      companyName: a.companyName ?? undefined,
-      roleTitle: a.roleTitle ?? undefined,
-      answers: (a.answers as Record<string, string | boolean>) || {},
-      status: a.status as RSVPStatus,
-      createdAt: a.createdAt.toISOString(),
-      updatedAt: a.updatedAt.toISOString(),
-      checkinAt: a.checkinAt?.toISOString(),
-    }));
+    const attendees: NBAttendee[] = attendeeRows.map(attendeeRowToNBAttendee);
 
     return { events, attendees };
   } catch (err) {
@@ -236,6 +279,22 @@ export async function getEvent(communityId: string, eventId: string): Promise<NB
   }
 }
 
+/**
+ * Resolve an event from a public URL slug (Node.alias, or the id minus the
+ * `event:` prefix). Global lookup — no community scope needed for the public page.
+ */
+export async function getEventBySlug(slug: string): Promise<NBEvent | null> {
+  try {
+    const row = await prisma.node.findFirst({
+      where: { type: 'event', OR: [{ alias: slug }, { id: `event:${slug}` }] },
+    });
+    return row ? nodeRowToNBEvent(row) : null;
+  } catch (err) {
+    logger.error('eventRepo.getEventBySlug.failed', { err });
+    return null;
+  }
+}
+
 export async function upsertEvent(communityId: string, event: NBEvent): Promise<void> {
   const meta = {
     ...(event.metadata ?? {}),
@@ -250,7 +309,20 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
     hosts: event.hosts,
     organizerEmail: event.organizerEmail,
     analytics: event.analytics,
+    // rebuild fields
+    coverImageUrl: event.coverImageUrl,
+    theme: event.theme,
+    status: event.status ?? 'published',
+    slug: event.slug,
+    waitlistEnabled: event.waitlistEnabled,
+    guestListVisible: event.guestListVisible,
+    allowPlusOnes: event.allowPlusOnes,
+    allowedResponses: event.allowedResponses,
   };
+
+  // Node.imageUrl powers the graph/directory poster; Node.alias powers /e/<slug>.
+  const imageUrl = event.coverImageUrl ?? null;
+  const alias = event.slug ?? null;
 
   await prisma.node.upsert({
     where: { id: event.id },
@@ -260,6 +332,8 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
       name: event.title,
       subtitle: event.description ?? null,
       location: event.location?.label ?? null,
+      imageUrl,
+      alias,
       communityId,
       tags: [],
       metadata: meta as object,
@@ -268,6 +342,8 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
       name: event.title,
       subtitle: event.description ?? null,
       location: event.location?.label ?? null,
+      imageUrl,
+      alias,
       metadata: meta as object,
     },
   });
@@ -292,20 +368,7 @@ export async function updateEventAnalytics(communityId: string, eventId: string,
 export async function getAttendees(communityId: string, eventId: string): Promise<NBAttendee[]> {
   try {
     const rows = await prisma.attendee.findMany({ where: { eventId } });
-    return rows.map(a => ({
-      id: a.id as `attendee:${string}`,
-      eventId: a.eventId as `event:${string}`,
-      personId: (a.personId ?? '') as `person:${string}`,
-      email: a.email ?? undefined,
-      linkedinUrl: a.linkedinUrl ?? undefined,
-      companyName: a.companyName ?? undefined,
-      roleTitle: a.roleTitle ?? undefined,
-      answers: (a.answers as Record<string, string | boolean>) || {},
-      status: a.status as RSVPStatus,
-      createdAt: a.createdAt.toISOString(),
-      updatedAt: a.updatedAt.toISOString(),
-      checkinAt: a.checkinAt?.toISOString(),
-    }));
+    return rows.map(attendeeRowToNBAttendee);
   } catch (err) {
     logger.error('eventRepo.getAttendees.failed', { err });
     return [];
@@ -313,31 +376,233 @@ export async function getAttendees(communityId: string, eventId: string): Promis
 }
 
 export async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
+  const writable = {
+    personId: attendee.personId || null,
+    name: attendee.name ?? null,
+    email: attendee.email ?? null,
+    linkedinUrl: attendee.linkedinUrl ?? null,
+    companyName: attendee.companyName ?? null,
+    roleTitle: attendee.roleTitle ?? null,
+    answers: (attendee.answers as object) || {},
+    status: attendee.status,
+    response: attendee.response ?? null,
+    plusOnes: attendee.plusOnes ?? 0,
+    plusOneNames: attendee.plusOneNames ?? [],
+    invitedBy: attendee.invitedBy ?? null,
+    checkinAt: attendee.checkinAt ? new Date(attendee.checkinAt) : null,
+  };
   await prisma.attendee.upsert({
     where: { id: attendee.id },
-    create: {
-      id: attendee.id,
-      eventId: attendee.eventId,
-      personId: attendee.personId || null,
-      email: attendee.email ?? null,
-      linkedinUrl: attendee.linkedinUrl ?? null,
-      companyName: attendee.companyName ?? null,
-      roleTitle: attendee.roleTitle ?? null,
-      answers: (attendee.answers as object) || {},
-      status: attendee.status,
-      checkinAt: attendee.checkinAt ? new Date(attendee.checkinAt) : null,
-    },
-    update: {
-      personId: attendee.personId || null,
-      email: attendee.email ?? null,
-      linkedinUrl: attendee.linkedinUrl ?? null,
-      companyName: attendee.companyName ?? null,
-      roleTitle: attendee.roleTitle ?? null,
-      answers: (attendee.answers as object) || {},
-      status: attendee.status,
-      checkinAt: attendee.checkinAt ? new Date(attendee.checkinAt) : null,
-    },
+    create: { id: attendee.id, eventId: attendee.eventId, ...writable },
+    update: writable,
   });
+}
+
+/**
+ * Best-effort 'attended' graph link person -> event (so the directory can answer
+ * "what did person Y attend"). Never throws into the RSVP path.
+ */
+async function ensureAttendedLink(
+  communityId: string, personId: string, eventId: string, status: RSVPStatus, since?: string,
+): Promise<void> {
+  try {
+    const existing = await prisma.link.findFirst({
+      where: { sourceId: personId, targetId: eventId, relationship: 'attended' },
+      select: { id: true },
+    });
+    if (existing) {
+      await prisma.link.update({ where: { id: existing.id }, data: { metadata: { status } } });
+    } else {
+      await prisma.link.create({
+        data: { sourceId: personId, targetId: eventId, relationship: 'attended', since: since ?? null, metadata: { status }, communityId },
+      });
+    }
+    revalidateTag('graph-data-v2');
+  } catch (err) {
+    logger.error('eventRepo.ensureAttendedLink.failed', { err });
+  }
+}
+
+export interface RsvpInput {
+  name: string;
+  email?: string;
+  linkedinUrl?: string;
+  companyName?: string;
+  roleTitle?: string;
+  response: RSVPResponse;
+  plusOnes?: number;
+  plusOneNames?: string[];
+  answers?: Record<string, string | boolean>;
+  invitedBy?: string;
+}
+
+/**
+ * Create or update an RSVP for an event. Single source of truth shared by the
+ * authenticated and public RSVP endpoints.
+ *
+ *  - Matches an existing community member (so the graph links up) but NEVER
+ *    auto-creates a Person node for an unknown public guest — name/email live on
+ *    the Attendee row. This keeps the directory clean and the RSVP path fast.
+ *  - Computes going / waitlisted / pending from capacity + approval settings.
+ *  - Idempotent per (event, email|name): re-RSVP updates the same row.
+ */
+export async function submitRsvp(
+  communityId: string,
+  event: NBEvent,
+  submission: RsvpInput,
+): Promise<{ attendee: NBAttendee; status: RSVPStatus; created: boolean }> {
+  const eventId = event.id;
+
+  // Person match is read-only — safe to resolve outside the capacity lock.
+  const nodes = await getCommunityNodes(communityId);
+  const matched = findMatchingPerson(nodes, {
+    name: submission.name,
+    email: submission.email,
+    linkedinUrl: submission.linkedinUrl,
+    companyName: submission.companyName,
+  });
+  const personId = matched?.id ?? '';
+  const emailLc = submission.email?.toLowerCase();
+
+  // Serialize the capacity-sensitive read → decide → write per event with a
+  // transaction-scoped advisory lock, so two concurrent RSVPs can't both read the
+  // same occupancy and overshoot capacity. The lock auto-releases at commit.
+  const { attendee, created } = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId})::bigint)`;
+
+    const existing = (await tx.attendee.findMany({ where: { eventId } })).map(attendeeRowToNBAttendee);
+
+    // Prefer an email-keyed row over a person-keyed one: writing a submission's
+    // email onto a *different* row that already holds it would violate
+    // @@unique([eventId, email]). When no existing row holds this email, no
+    // collision is possible, so falling back to the person match is safe.
+    const byEmail = emailLc ? existing.find((a) => a.email?.toLowerCase() === emailLc) : undefined;
+    const byPerson = personId ? existing.find((a) => a.personId === personId) : undefined;
+    const existingAttendee = byEmail ?? byPerson;
+
+    const party = 1 + (submission.plusOnes ?? 0);
+    const occupied = occupiedSpots(existing.filter((a) => a.id !== existingAttendee?.id));
+    const isExistingConfirmed = existingAttendee
+      ? ['going', 'checked_in'].includes(normalizeStatus(existingAttendee.status))
+      : false;
+    const status = decideRsvpStatus(submission.response, party, {
+      capacity: event.capacity,
+      requireApproval: event.form.requireApproval,
+      waitlistEnabled: event.waitlistEnabled,
+      occupied,
+      isExistingConfirmed,
+    });
+    if (status === 'full') throw new EventFullError();
+
+    const now = new Date().toISOString();
+    const next: NBAttendee = {
+      id: existingAttendee?.id ?? generateAttendeeId(eventId, submission.email || submission.name),
+      eventId,
+      personId,
+      name: submission.name,
+      email: submission.email,
+      linkedinUrl: submission.linkedinUrl,
+      companyName: submission.companyName,
+      roleTitle: submission.roleTitle,
+      answers: { ...(existingAttendee?.answers ?? {}), ...(submission.answers ?? {}) },
+      status,
+      response: submission.response,
+      plusOnes: submission.plusOnes ?? 0,
+      plusOneNames: submission.plusOneNames ?? [],
+      invitedBy: existingAttendee?.invitedBy ?? submission.invitedBy,
+      createdAt: existingAttendee?.createdAt ?? now,
+      updatedAt: now,
+      checkinAt: existingAttendee?.checkinAt,
+    };
+
+    // Same field mapping as upsertAttendee, but bound to the locked transaction.
+    const writable = {
+      personId: next.personId || null,
+      name: next.name ?? null,
+      email: next.email ?? null,
+      linkedinUrl: next.linkedinUrl ?? null,
+      companyName: next.companyName ?? null,
+      roleTitle: next.roleTitle ?? null,
+      answers: (next.answers as object) || {},
+      status: next.status,
+      response: next.response ?? null,
+      plusOnes: next.plusOnes ?? 0,
+      plusOneNames: next.plusOneNames ?? [],
+      invitedBy: next.invitedBy ?? null,
+      checkinAt: next.checkinAt ? new Date(next.checkinAt) : null,
+    };
+    await tx.attendee.upsert({
+      where: { id: next.id },
+      create: { id: next.id, eventId: next.eventId, ...writable },
+      update: writable,
+    });
+
+    return { attendee: next, created: !existingAttendee };
+  });
+
+  // Best-effort side effects, outside the lock.
+  if (personId) {
+    await ensureAttendedLink(communityId, personId, eventId, attendee.status, event.startAt);
+  }
+  if (created) {
+    await updateEventAnalytics(communityId, eventId, { rsvpCount: event.analytics.rsvpCount + 1 });
+  }
+
+  return { attendee, status: attendee.status, created };
+}
+
+/**
+ * Host action: change an attendee's operational status (approve, decline,
+ * promote from waitlist, check in, mark no-show). Returns the updated attendee
+ * or null if not found.
+ */
+export async function setAttendeeStatus(
+  communityId: string,
+  eventId: string,
+  attendeeId: string,
+  status: RSVPStatus,
+): Promise<NBAttendee | null> {
+  const attendees = await getAttendees(communityId, eventId);
+  const attendee = attendees.find((a) => a.id === attendeeId);
+  if (!attendee) return null;
+
+  const next: NBAttendee = {
+    ...attendee,
+    status,
+    checkinAt: status === 'checked_in' ? (attendee.checkinAt ?? new Date().toISOString()) : attendee.checkinAt,
+    updatedAt: new Date().toISOString(),
+  };
+  await upsertAttendee(communityId, next);
+
+  if (status === 'checked_in') {
+    const event = await getEvent(communityId, eventId);
+    if (event) {
+      await updateEventAnalytics(communityId, eventId, {
+        checkinCount: (event.analytics.checkinCount ?? 0) + (attendee.status === 'checked_in' ? 0 : 1),
+      });
+    }
+  }
+  if (next.personId) {
+    await ensureAttendedLink(communityId, next.personId, eventId, status, undefined);
+  }
+  return next;
+}
+
+/** Permanently remove an attendee (and any 'attended' graph link). */
+export async function removeAttendee(communityId: string, eventId: string, attendeeId: string): Promise<boolean> {
+  const attendees = await getAttendees(communityId, eventId);
+  const attendee = attendees.find((a) => a.id === attendeeId);
+  if (!attendee) return false;
+  await prisma.attendee.deleteMany({ where: { id: attendeeId, eventId } });
+  if (attendee.personId) {
+    try {
+      await prisma.link.deleteMany({ where: { sourceId: attendee.personId, targetId: eventId, relationship: 'attended' } });
+      revalidateTag('graph-data-v2');
+    } catch (err) {
+      logger.error('eventRepo.removeAttendee.linkCleanup.failed', { err });
+    }
+  }
+  return true;
 }
 
 // ─── updateCommunityGraphData ─────────────────────────────────────────────────

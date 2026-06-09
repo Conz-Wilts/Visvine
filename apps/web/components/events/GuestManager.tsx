@@ -1,0 +1,305 @@
+'use client';
+
+/**
+ * GuestManager — the host's actionable guest console (replaces the read-only
+ * AttendeesTable for hosts). Segmented status filters with live counts, a
+ * capacity bar, inline per-row actions, bulk actions, check-in, CSV export, and
+ * a copyable public RSVP link. Optimistic updates + a 15s background refresh.
+ *
+ * Self-contained: fetches the host-only attendees endpoint and mutates via the
+ * attendee PATCH/DELETE/bulk routes. Host/admin gating is enforced server-side.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { NBEvent, NBAttendee, RSVPStatus } from '@/lib/types';
+import { copyToClipboard } from '@/lib/utils';
+import {
+  Check, Clock, X, UserCheck, Users, Link2, FileDown, RefreshCw, Loader2,
+  CheckCircle2, ChevronUp, Ban, ArrowUpCircle,
+} from 'lucide-react';
+
+interface AttendeeRow extends NBAttendee {
+  name?: string;
+  image_url?: string;
+  person?: { id: string; name: string; subtitle?: string; tags?: string[] } | null;
+}
+
+interface GuestManagerProps {
+  event: NBEvent;
+  communityId: string;
+}
+
+// Client-safe status helpers (kept local to avoid importing node `crypto` via eventUtils).
+const norm = (s: string): RSVPStatus => (!s || s === 'registered' ? 'going' : (s as RSVPStatus));
+const spots = (a: AttendeeRow) =>
+  a.response === 'maybe' ? 0 : (['going', 'checked_in'].includes(norm(a.status)) ? 1 + (a.plusOnes ?? 0) : 0);
+
+type FilterKey = 'all' | 'going' | 'maybe' | 'waitlisted' | 'pending' | 'checked_in';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'going', label: 'Going' },
+  { key: 'maybe', label: 'Maybe' },
+  { key: 'waitlisted', label: 'Waitlist' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'checked_in', label: 'Checked in' },
+];
+
+function matchesFilter(a: AttendeeRow, f: FilterKey): boolean {
+  if (f === 'all') return norm(a.status) !== 'cancelled';
+  if (f === 'maybe') return a.response === 'maybe' && norm(a.status) !== 'cancelled';
+  if (f === 'going') return norm(a.status) === 'going' && a.response !== 'maybe';
+  return norm(a.status) === f;
+}
+
+const STATUS_BADGE: Partial<Record<RSVPStatus, { label: string; cls: string; icon: React.ReactNode }>> = {
+  going: { label: 'Going', cls: 'bg-brand-green/10 text-brand-green', icon: <Check className="w-3 h-3" /> },
+  waitlisted: { label: 'Waitlist', cls: 'bg-orange-100 text-orange-700', icon: <Clock className="w-3 h-3" /> },
+  pending: { label: 'Pending', cls: 'bg-amber-100 text-amber-700', icon: <Clock className="w-3 h-3" /> },
+  checked_in: { label: 'Checked in', cls: 'bg-brand-green/15 text-brand-green', icon: <UserCheck className="w-3 h-3" /> },
+  cancelled: { label: 'Cancelled', cls: 'bg-gray-100 text-brand-grey', icon: <X className="w-3 h-3" /> },
+  no_show: { label: 'No show', cls: 'bg-gray-100 text-brand-grey', icon: <Ban className="w-3 h-3" /> },
+  invited: { label: 'Invited', cls: 'bg-blue-100 text-blue-700', icon: <Clock className="w-3 h-3" /> },
+};
+
+export function GuestManager({ event, communityId }: GuestManagerProps) {
+  const eventId = event.id;
+  const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${eventId}/attendees?communityId=${encodeURIComponent(communityId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setAttendees(data.attendees ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, communityId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // background refresh while the tab is open
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  useEffect(() => {
+    const t = setInterval(() => loadRef.current(), 15_000);
+    return () => clearInterval(t);
+  }, []);
+
+  const counts = useMemo(() => {
+    const c: Record<FilterKey, number> = { all: 0, going: 0, maybe: 0, waitlisted: 0, pending: 0, checked_in: 0 };
+    for (const f of FILTERS) c[f.key] = attendees.filter((a) => matchesFilter(a, f.key)).length;
+    return c;
+  }, [attendees]);
+
+  const occupied = useMemo(() => attendees.reduce((s, a) => s + spots(a), 0), [attendees]);
+
+  const visible = useMemo(
+    () => attendees.filter((a) => matchesFilter(a, filter)).sort((a, b) => (a.name || '').localeCompare(b.name || '')),
+    [attendees, filter],
+  );
+
+  const act = async (id: string, action: string) => {
+    const res = await fetch(`/api/events/${eventId}/attendees/${id}?communityId=${encodeURIComponent(communityId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    });
+    if (res.ok) {
+      const { attendee } = await res.json();
+      setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...attendee } : a)));
+    } else {
+      load();
+    }
+  };
+
+  const remove = async (id: string) => {
+    setAttendees((prev) => prev.filter((a) => a.id !== id)); // optimistic
+    const res = await fetch(`/api/events/${eventId}/attendees/${id}?communityId=${encodeURIComponent(communityId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) load();
+  };
+
+  const bulk = async (action: string) => {
+    if (selected.size === 0) return;
+    setBusy(true);
+    try {
+      await fetch(`/api/events/${eventId}/attendees/bulk?communityId=${encodeURIComponent(communityId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, attendeeIds: [...selected] }),
+      });
+      setSelected(new Set());
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSel = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const copyLink = async () => {
+    const slug = event.slug ?? eventId.replace(/^event:/, '');
+    if (await copyToClipboard(`${baseUrl}/e/${slug}`)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* action row */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button onClick={copyLink} className={actionBtn}>
+          {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+          {copied ? 'Copied' : 'Invite link'}
+        </button>
+        <a
+          href={`/api/events/${eventId}/export.csv?communityId=${encodeURIComponent(communityId)}`}
+          target="_blank"
+          rel="noreferrer"
+          className={actionBtn}
+        >
+          <FileDown className="w-4 h-4" /> Export CSV
+        </a>
+        <button onClick={() => load()} className={actionBtn}>
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
+        <div className="ml-auto text-sm text-brand-grey">
+          {occupied}
+          {event.capacity ? ` / ${event.capacity}` : ''} going
+        </div>
+      </div>
+
+      {/* capacity bar */}
+      {event.capacity ? (
+        <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="h-full bg-brand-green transition-all"
+            style={{ width: `${Math.min(100, (occupied / event.capacity) * 100)}%` }}
+          />
+        </div>
+      ) : null}
+
+      {/* filters */}
+      <div className="flex flex-wrap gap-2">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+              filter === f.key
+                ? 'bg-brand-green text-white border-brand-green'
+                : 'bg-brand-white text-brand-grey border-gray-200 hover:border-brand-green hover:text-brand-black'
+            }`}
+          >
+            {f.label} <span className="opacity-70">({counts[f.key]})</span>
+          </button>
+        ))}
+      </div>
+
+      {/* bulk bar */}
+      {selected.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-xl bg-brand-light-bg border border-brand-green/30">
+          <span className="text-sm font-medium text-brand-black">{selected.size} selected</span>
+          <button onClick={() => bulk('approve')} disabled={busy} className={bulkBtn}><CheckCircle2 className="w-4 h-4" /> Approve</button>
+          <button onClick={() => bulk('promote')} disabled={busy} className={bulkBtn}><ArrowUpCircle className="w-4 h-4" /> Promote</button>
+          <button onClick={() => bulk('checkin')} disabled={busy} className={bulkBtn}><UserCheck className="w-4 h-4" /> Check in</button>
+          <button onClick={() => bulk('remove')} disabled={busy} className={`${bulkBtn} text-red-600`}><X className="w-4 h-4" /> Remove</button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-brand-grey hover:text-brand-black"><ChevronUp className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* list */}
+      <div className="rounded-xl border border-gray-200 overflow-hidden">
+        {loading ? (
+          <div className="py-16 flex items-center justify-center text-brand-grey"><Loader2 className="w-5 h-5 animate-spin" /></div>
+        ) : visible.length === 0 ? (
+          <div className="py-16 text-center text-brand-grey flex flex-col items-center gap-2">
+            <Users className="w-7 h-7 opacity-50" />
+            No guests {filter !== 'all' ? 'in this view' : 'yet'}.
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {visible.map((a) => {
+              const status = norm(a.status);
+              const badge = STATUS_BADGE[status];
+              return (
+                <li key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-brand-light-bg/40 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(a.id)}
+                    onChange={() => toggleSel(a.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-brand-black truncate">{a.name || a.email || 'Guest'}</span>
+                      {a.response === 'maybe' && <span className="text-xs text-amber-600 font-medium">Maybe</span>}
+                      {(a.plusOnes ?? 0) > 0 && <span className="text-xs text-brand-grey">+{a.plusOnes}</span>}
+                    </div>
+                    <div className="text-xs text-brand-grey truncate">
+                      {[a.email, a.companyName].filter(Boolean).join(' · ') || '—'}
+                    </div>
+                  </div>
+                  {badge && (
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.cls}`}>
+                      {badge.icon}
+                      {badge.label}
+                    </span>
+                  )}
+                  <RowActions status={status} onAct={(action) => act(a.id, action)} onRemove={() => remove(a.id)} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RowActions({
+  status, onAct, onRemove,
+}: { status: RSVPStatus; onAct: (action: string) => void; onRemove: () => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      {status === 'pending' && <IconBtn title="Approve" onClick={() => onAct('approve')}><Check className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {status === 'waitlisted' && <IconBtn title="Promote" onClick={() => onAct('promote')}><ArrowUpCircle className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {(status === 'going') && <IconBtn title="Check in" onClick={() => onAct('checkin')}><UserCheck className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {status === 'checked_in' && <IconBtn title="Undo check-in" onClick={() => onAct('uncheckin')}><UserCheck className="w-4 h-4 text-brand-grey" /></IconBtn>}
+      {status !== 'cancelled' && status !== 'waitlisted' && (
+        <IconBtn title="Move to waitlist" onClick={() => onAct('waitlist')}><Clock className="w-4 h-4 text-brand-grey" /></IconBtn>
+      )}
+      <IconBtn title="Remove" onClick={onRemove}><X className="w-4 h-4 text-red-500" /></IconBtn>
+    </div>
+  );
+}
+
+function IconBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button title={title} onClick={onClick} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+      {children}
+    </button>
+  );
+}
+
+const actionBtn =
+  'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all';
+const bulkBtn =
+  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green transition-all disabled:opacity-50';

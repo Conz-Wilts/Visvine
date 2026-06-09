@@ -2,9 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Search } from 'lucide-react';
-import IntroPathCard, { type EnrichedPath } from './IntroPathCard';
+import type { MutualConnection } from '@/lib/intros/types';
+import MutualConnectionCard from './MutualConnectionCard';
 
-interface NodeSummary {
+export interface IntroTargetNode {
   id: string;
   name: string;
   type: string;
@@ -14,341 +15,293 @@ interface NodeSummary {
 
 interface IntroRequestModalProps {
   communityId: string;
-  targetNode: NodeSummary;
-  requesterNodeId: string;
+  targetNode: IntroTargetNode;
+  /** Display name of the requester (the viewer). Used in placeholders/copy only. */
   requesterName: string;
   onClose: () => void;
 }
 
-type ModalStep = 'paths' | 'compose' | 'success';
-
+type Step = 'pick' | 'compose' | 'success';
 const MAX_MSG = 600;
 
-export default function IntroRequestModal({
-  communityId,
-  targetNode,
-  requesterNodeId,
-  requesterName,
-  onClose,
-}: IntroRequestModalProps) {
-  const [step, setStep] = useState<ModalStep>('paths');
+export default function IntroRequestModal({ communityId, targetNode, requesterName, onClose }: IntroRequestModalProps) {
+  const [step, setStep] = useState<Step>('pick');
 
-  // Step 1: paths
-  const [paths, setPaths] = useState<EnrichedPath[]>([]);
-  const [nodeMap, setNodeMap] = useState<Record<string, NodeSummary>>({});
-  const [pathsLoading, setPathsLoading] = useState(true);
-  const [pathsError, setPathsError] = useState<string | null>(null);
-  const [selectedPathIdx, setSelectedPathIdx] = useState<number | null>(null);
+  const [mutuals, setMutuals] = useState<MutualConnection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Step 2: compose
-  const [msgToTarget, setMsgToTarget] = useState('');
-  const [msgToIntroducer, setMsgToIntroducer] = useState('');
-  const [composing, setComposing] = useState(false);
-  const [composeError, setComposeError] = useState<string | null>(null);
+  const [msgIntro, setMsgIntro] = useState('');
+  const [msgTarget, setMsgTarget] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const loadPaths = useCallback(async () => {
-    setPathsLoading(true);
-    setPathsError(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    setNeedsProfile(false);
     try {
       const res = await fetch(
-        `/api/intros/paths?from=${encodeURIComponent(requesterNodeId)}&to=${encodeURIComponent(targetNode.id)}&communityId=${encodeURIComponent(communityId)}`
+        `/api/intros/mutuals?targetId=${encodeURIComponent(targetNode.id)}&communityId=${encodeURIComponent(communityId)}`,
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to load paths');
-      setPaths(data.paths ?? []);
-      setNodeMap(data.nodes ?? {});
+      if (!res.ok) throw new Error(data.error ?? 'Failed to load connections');
+      if (data.error === 'no_profile') {
+        setNeedsProfile(true);
+        setMutuals([]);
+      } else {
+        setMutuals(data.mutuals ?? []);
+      }
     } catch (err: unknown) {
-      setPathsError(err instanceof Error ? err.message : 'Failed to load paths');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load connections');
     } finally {
-      setPathsLoading(false);
+      setLoading(false);
     }
-  }, [requesterNodeId, targetNode.id, communityId]);
+  }, [targetNode.id, communityId]);
 
-  useEffect(() => { loadPaths(); }, [loadPaths]);
+  useEffect(() => { load(); }, [load]);
 
-  const selectedPath = selectedPathIdx !== null ? paths[selectedPathIdx] : null;
-  const introducer = selectedPath ? nodeMap[selectedPath.path[1]] : null;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-  async function handleSubmit() {
-    if (!selectedPath || !msgToTarget.trim() || !msgToIntroducer.trim()) return;
-    setComposing(true);
-    setComposeError(null);
+  const selected = mutuals.find((m) => m.id === selectedId) ?? null;
+
+  async function submit() {
+    if (!selected || !msgIntro.trim() || !msgTarget.trim()) return;
+    setSubmitting(true);
+    setSubmitError(null);
     try {
       const res = await fetch('/api/intros', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           communityId,
-          requesterNodeId,
           targetNodeId: targetNode.id,
-          introducerNodeId: selectedPath.introducerNodeId,
-          pathNodeIds: selectedPath.path,
-          pathScore: selectedPath.score,
-          messageToTarget: msgToTarget,
-          messageToIntroducer: msgToIntroducer,
+          introducerNodeId: selected.id,
+          messageToIntroducer: msgIntro,
+          messageToTarget: msgTarget,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Failed to send request');
       setStep('success');
     } catch (err: unknown) {
-      setComposeError(err instanceof Error ? err.message : 'Something went wrong');
+      setSubmitError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
-      setComposing(false);
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-zinc-200 dark:border-zinc-700/60"
-        onClick={e => e.stopPropagation()}
+        className="bg-surface-1 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col border border-border-subtle"
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-800 flex-shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             {step === 'compose' && (
-              <button
-                onClick={() => setStep('paths')}
-                className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4 text-zinc-500" />
+              <button onClick={() => setStep('pick')} className="p-1.5 rounded-lg hover:bg-surface-2 transition" aria-label="Back">
+                <ArrowLeft className="w-4 h-4 text-text-muted" />
               </button>
             )}
-            <div>
-              <h2 className="text-base font-semibold text-zinc-900 dark:text-white">
-                {step === 'paths' && 'Request an Intro'}
+            <div className="min-w-0">
+              <h2 className="text-base font-bold text-text-primary truncate font-ginto">
+                {step === 'pick' && 'Ask for an introduction'}
                 {step === 'compose' && 'Write your messages'}
-                {step === 'success' && 'Request sent!'}
+                {step === 'success' && 'Request sent'}
               </h2>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {step === 'paths' && `To ${targetNode.name}`}
-                {step === 'compose' && `Via ${introducer?.name ?? '…'}`}
-                {step === 'success' && `${introducer?.name} will be notified`}
+              <p className="text-xs text-text-muted truncate mt-0.5">
+                {step === 'pick' && `To ${targetNode.name}`}
+                {step === 'compose' && selected && `Via ${selected.name}`}
+                {step === 'success' && selected && `${selected.name} will be notified`}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-          >
-            <X className="w-4 h-4 text-zinc-500" />
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-surface-2 transition" aria-label="Close">
+            <X className="w-4 h-4 text-text-muted" />
           </button>
         </div>
 
-        {/* Step indicator */}
-        {step !== 'success' && (
-          <div className="flex items-center gap-2 px-6 pt-4 flex-shrink-0">
-            {['paths', 'compose'].map((s, i) => (
-              <React.Fragment key={s}>
-                <div className={`flex items-center gap-1.5 text-xs font-medium ${
-                  step === s
-                    ? 'text-indigo-600 dark:text-indigo-400'
-                    : i < ['paths', 'compose'].indexOf(step)
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-zinc-400 dark:text-zinc-500'
-                }`}>
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
-                    step === s
-                      ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
-                      : i < ['paths', 'compose'].indexOf(step)
-                      ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600'
-                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'
-                  }`}>
-                    {i < ['paths', 'compose'].indexOf(step) ? '✓' : i + 1}
-                  </span>
-                  {s === 'paths' ? 'Select path' : 'Write messages'}
-                </div>
-                {i < 1 && <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700" />}
-              </React.Fragment>
-            ))}
-          </div>
-        )}
-
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-
-          {/* ── STEP 1: Path selection ── */}
-          {step === 'paths' && (
-            <div>
-              {pathsLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">Scanning your network…</p>
-                </div>
-              ) : pathsError ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <AlertCircle className="w-8 h-8 text-red-400" />
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">{pathsError}</p>
-                  <button onClick={loadPaths} className="text-xs text-indigo-500 underline">Retry</button>
-                </div>
-              ) : paths.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
-                  <Search className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">No intro paths found</p>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                      You don't share any mutual connections within 3 degrees of {targetNode.name}.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4">
-                    Found <span className="font-semibold text-zinc-700 dark:text-zinc-200">{paths.length}</span> path{paths.length !== 1 ? 's' : ''} to {targetNode.name}. Ranked by connection strength.
+        <div className="flex-1 overflow-y-auto px-6 py-5 min-h-0">
+          {step === 'pick' && (
+            loading ? (
+              <Centered>
+                <Loader2 className="w-6 h-6 animate-spin text-brand-dark-green" />
+                <p className="text-sm text-text-muted">Finding who you both know…</p>
+              </Centered>
+            ) : needsProfile ? (
+              <Centered>
+                <AlertCircle className="w-7 h-7 text-amber-500" />
+                <p className="text-sm text-text-secondary text-center max-w-xs">
+                  Link your own profile before requesting an introduction.
+                </p>
+              </Centered>
+            ) : loadError ? (
+              <Centered>
+                <AlertCircle className="w-7 h-7 text-amber-500" />
+                <p className="text-sm text-text-secondary text-center">{loadError}</p>
+                <button onClick={load} className="text-xs font-semibold text-brand-dark-green underline">Try again</button>
+              </Centered>
+            ) : mutuals.length === 0 ? (
+              <Centered>
+                <Search className="w-7 h-7 text-text-muted" />
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-text-primary">No mutual connections</p>
+                  <p className="text-xs text-text-muted mt-1 max-w-xs">
+                    You and {targetNode.name} don&apos;t yet share anyone who could make the introduction.
                   </p>
-                  <div className="space-y-3">
-                    {paths.map((p, i) => (
-                      <IntroPathCard
-                        key={p.path.join('-')}
-                        pathData={p}
-                        nodeMap={nodeMap}
-                        selected={selectedPathIdx === i}
-                        rank={i}
-                        onSelect={() => setSelectedPathIdx(i)}
-                        requesterLabel={requesterName.split(' ')[0]}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* ── STEP 2: Compose messages ── */}
-          {step === 'compose' && introducer && (
-            <div className="space-y-5">
-              {/* Message to introducer */}
-              <div>
-                <label className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100 mb-1">
-                  Message to {introducer.name}
-                  <span className="ml-1 text-xs font-normal text-zinc-400">(the person making the intro)</span>
-                </label>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-                  Explain why you're asking them specifically, and why this intro matters to you.
-                </p>
-                <textarea
-                  value={msgToIntroducer}
-                  onChange={e => setMsgToIntroducer(e.target.value.slice(0, MAX_MSG))}
-                  rows={5}
-                  placeholder={`Hi ${introducer.name.split(' ')[0]}, I'd really appreciate if you could introduce me to…`}
-                  className="w-full px-4 py-3 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400"
-                />
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 text-right mt-1">
-                  {msgToIntroducer.length}/{MAX_MSG}
-                </p>
-              </div>
-
-              {/* Message to target */}
-              <div>
-                <label className="block text-sm font-semibold text-zinc-800 dark:text-zinc-100 mb-1">
-                  Message to {targetNode.name}
-                  <span className="ml-1 text-xs font-normal text-zinc-400">(forwarded with the intro)</span>
-                </label>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-                  Introduce yourself and share what you're hoping to get from connecting.
-                </p>
-                <textarea
-                  value={msgToTarget}
-                  onChange={e => setMsgToTarget(e.target.value.slice(0, MAX_MSG))}
-                  rows={5}
-                  placeholder={`Hi ${targetNode.name.split(' ')[0]}, I'm ${requesterName}…`}
-                  className="w-full px-4 py-3 text-sm rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-400"
-                />
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 text-right mt-1">
-                  {msgToTarget.length}/{MAX_MSG}
-                </p>
-              </div>
-
-              {composeError && (
-                <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 rounded-xl px-4 py-3">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                  {composeError}
                 </div>
-              )}
-            </div>
-          )}
-
-          {/* ── STEP 3: Success ── */}
-          {step === 'success' && (
-            <div className="flex flex-col items-center justify-center py-10 gap-4 text-center">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-1">
-                  Intro request sent!
-                </h3>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm">
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">{introducer?.name}</span> has been notified. Once they approve, {targetNode.name} will receive the intro with your message.
+              </Centered>
+            ) : (
+              <>
+                <p className="text-xs text-text-muted mb-3">
+                  You both know <b className="text-text-secondary">{mutuals.length}</b>{' '}
+                  {mutuals.length === 1 ? 'person' : 'people'}. Pick who you&apos;d like to ask.
                 </p>
-              </div>
-              <div className="w-full max-w-xs bg-zinc-50 dark:bg-zinc-800 rounded-xl p-4 text-left mt-2">
-                <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2">Path</div>
-                <div className="flex items-center gap-1 flex-wrap text-sm text-zinc-700 dark:text-zinc-300">
-                  {selectedPath?.path.map((id, i) => (
-                    <React.Fragment key={id}>
-                      <span className="font-medium">
-                        {i === 0 ? requesterName.split(' ')[0] : nodeMap[id]?.name?.split(' ')[0] ?? id}
-                      </span>
-                      {i < (selectedPath.path.length - 1) && (
-                        <span className="text-zinc-400">→</span>
-                      )}
-                    </React.Fragment>
+                <div className="space-y-2">
+                  {mutuals.map((m) => (
+                    <MutualConnectionCard
+                      key={m.id}
+                      mutual={m}
+                      selected={selectedId === m.id}
+                      onSelect={() => setSelectedId(m.id)}
+                    />
                   ))}
                 </div>
+              </>
+            )
+          )}
+
+          {step === 'compose' && selected && (
+            <div className="space-y-5">
+              <Field
+                label={`Message to ${selected.name}`}
+                hint="The person making the intro — explain why you're asking them, and why it matters."
+                value={msgIntro}
+                onChange={setMsgIntro}
+                placeholder={`Hi ${selected.name.split(' ')[0]}, I'd really appreciate an intro to ${targetNode.name.split(' ')[0]}…`}
+              />
+              <Field
+                label={`Message to ${targetNode.name}`}
+                hint="Forwarded with the introduction — introduce yourself and your ask."
+                value={msgTarget}
+                onChange={setMsgTarget}
+                placeholder={`Hi ${targetNode.name.split(' ')[0]}, I'm ${requesterName}…`}
+              />
+              {submitError && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {submitError}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'success' && (
+            <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-brand-light-bg flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-brand-dark-green" />
               </div>
+              <div>
+                <h3 className="text-lg font-bold text-text-primary mb-1 font-ginto">Request sent</h3>
+                <p className="text-sm text-text-muted max-w-sm">
+                  <b className="text-text-secondary">{selected?.name}</b> has been asked to introduce you. Once they
+                  approve, {targetNode.name} can accept — then you&apos;ll be connected.
+                </p>
+              </div>
+              {selected && (
+                <PathPreview requester={requesterName} introducer={selected.name} target={targetNode.name} />
+              )}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex-shrink-0 gap-3">
-          {step === 'paths' && (
+        <div className="flex items-center justify-between px-6 py-4 border-t border-border-subtle flex-shrink-0 gap-3">
+          {step === 'pick' && (
             <>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              >
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition">
                 Cancel
               </button>
               <button
-                disabled={selectedPathIdx === null}
+                disabled={!selected}
                 onClick={() => setStep('compose')}
-                className="px-5 py-2 text-sm font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-brand-green text-brand-black hover:bg-[#6bc963] disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                Continue with this path →
+                Continue
               </button>
             </>
           )}
           {step === 'compose' && (
             <>
-              <button
-                onClick={() => setStep('paths')}
-                className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
-              >
+              <button onClick={() => setStep('pick')} className="px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition">
                 Back
               </button>
               <button
-                disabled={composing || !msgToTarget.trim() || !msgToIntroducer.trim()}
-                onClick={handleSubmit}
-                className="flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                disabled={submitting || !msgIntro.trim() || !msgTarget.trim()}
+                onClick={submit}
+                className="flex items-center gap-2 px-5 py-2 text-sm font-bold rounded-xl bg-brand-green text-brand-black hover:bg-[#6bc963] disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
-                {composing && <Loader2 className="w-4 h-4 animate-spin" />}
-                Send intro request
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                Send request
               </button>
             </>
           )}
           {step === 'success' && (
             <button
               onClick={onClose}
-              className="ml-auto px-5 py-2 text-sm font-medium rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 transition-opacity"
+              className="ml-auto px-5 py-2 text-sm font-bold rounded-xl bg-brand-green text-brand-black hover:bg-[#6bc963] transition"
             >
               Done
             </button>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col items-center justify-center py-12 gap-3">{children}</div>;
+}
+
+function Field({
+  label, hint, value, onChange, placeholder,
+}: {
+  label: string; hint: string; value: string; onChange: (v: string) => void; placeholder: string;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-text-primary mb-1">{label}</label>
+      <p className="text-xs text-text-muted mb-2">{hint}</p>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, MAX_MSG))}
+        rows={4}
+        placeholder={placeholder}
+        className="w-full px-4 py-3 text-sm rounded-xl border border-border-default bg-surface-1 text-text-primary placeholder:text-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green"
+      />
+      <p className="text-xs text-text-muted text-right mt-1">{value.length}/{MAX_MSG}</p>
+    </div>
+  );
+}
+
+function PathPreview({ requester, introducer, target }: { requester: string; introducer: string; target: string }) {
+  return (
+    <div className="w-full bg-surface-2 rounded-xl p-3 flex items-center justify-center gap-2 flex-wrap text-sm">
+      <span className="font-semibold text-text-primary">{requester.split(' ')[0]}</span>
+      <span className="text-text-muted">→</span>
+      <span className="font-semibold text-brand-dark-green">{introducer.split(' ')[0]}</span>
+      <span className="text-text-muted">→</span>
+      <span className="font-semibold text-text-primary">{target.split(' ')[0]}</span>
     </div>
   );
 }

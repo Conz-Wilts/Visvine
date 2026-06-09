@@ -2,7 +2,7 @@
  * Event-related utility functions
  */
 
-import type { NBEvent } from './types';
+import type { NBEvent, NBAttendee, RSVPStatus } from './types';
 import { createHash } from 'crypto';
 
 /**
@@ -135,8 +135,10 @@ export function makeICS(event: NBEvent): string {
   const description = event.description || '';
   const title = event.title;
 
-  // Escape special characters in iCalendar format
-  const escape = (str: string) => str.replace(/[,;\\]/g, '\\$&').replace(/\n/g, '\\n');
+  // Escape special characters in iCalendar format. Fold every newline variant
+  // (CRLF / CR / LF) so a bare \r can't inject extra calendar lines on this
+  // unauthenticated endpoint.
+  const escape = (str: string) => str.replace(/[,;\\]/g, '\\$&').replace(/\r\n|\r|\n/g, '\\n');
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
@@ -233,5 +235,57 @@ export function getEventStatus(startAt: string, endAt?: string): 'upcoming' | 'l
   if (now < start) return 'upcoming';
   if (now <= end) return 'live';
   return 'past';
+}
+
+// ─── RSVP status helpers ───────────────────────────────────────────────────────
+
+/**
+ * Normalize an attendee status to the current vocabulary.
+ * Legacy rows used 'registered' for what we now call 'going'.
+ */
+export function normalizeStatus(status: string | null | undefined): RSVPStatus {
+  if (!status || status === 'registered') return 'going';
+  return status as RSVPStatus;
+}
+
+/** Statuses that hold a confirmed seat at the event. */
+const CONFIRMED_STATUSES: RSVPStatus[] = ['going', 'checked_in'];
+
+/**
+ * How many capacity spots a single attendee occupies. A confirmed guest takes
+ * 1 + their plus-ones; a "maybe" reserves nothing; everyone else (waitlisted,
+ * pending, cancelled, no_show, invited) takes nothing.
+ */
+export function spotsTaken(a: Pick<NBAttendee, 'status' | 'response' | 'plusOnes'>): number {
+  if (a.response === 'maybe') return 0;
+  if (!CONFIRMED_STATUSES.includes(normalizeStatus(a.status))) return 0;
+  return 1 + (a.plusOnes ?? 0);
+}
+
+/** Total confirmed spots taken across an attendee list (for capacity math). */
+export function occupiedSpots(attendees: Array<Pick<NBAttendee, 'status' | 'response' | 'plusOnes'>>): number {
+  return attendees.reduce((sum, a) => sum + spotsTaken(a), 0);
+}
+
+/**
+ * Decide the operational status for a new/updated RSVP given the guest's
+ * response and the event's current occupancy.
+ */
+export function decideRsvpStatus(
+  response: NBAttendee['response'],
+  party: number,
+  opts: { capacity?: number; requireApproval?: boolean; occupied: number; isExistingConfirmed?: boolean; waitlistEnabled?: boolean },
+): RSVPStatus | 'full' {
+  if (response === 'declined') return 'cancelled';
+  if (response === 'maybe') return 'going'; // present but non-occupying
+  if (opts.requireApproval) return 'pending';
+  // Already-confirmed guests editing their RSVP keep their seat.
+  if (opts.isExistingConfirmed) return 'going';
+  if (opts.capacity && opts.occupied + party > opts.capacity) {
+    // Over capacity: waitlist by default; only reject ('full') when the host has
+    // explicitly disabled the waitlist.
+    return opts.waitlistEnabled === false ? 'full' : 'waitlisted';
+  }
+  return 'going';
 }
 

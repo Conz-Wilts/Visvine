@@ -1,10 +1,12 @@
 /**
- * Individual event API (GET, PATCH)
+ * Individual event API (GET, PATCH, DELETE)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
-import { getEvent, upsertEvent, getAttendees, deleteEvent, getCommunityGraphData, updateCommunityGraphData } from '@/lib/eventRepo';
+import { getEvent, upsertEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
+import { requireEventManager, requireCommunityMember } from '@/lib/eventAuth';
+import { normalizeStatus } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
@@ -31,6 +33,10 @@ export async function GET(
       );
     }
 
+    // Events are community-scoped: only members/admins may read event details.
+    const member = await requireCommunityMember(communityId);
+    if (member instanceof Response) return member;
+
     const event = await getEvent(communityId, eventId);
 
     if (!event) {
@@ -42,22 +48,30 @@ export async function GET(
 
     const attendees = await getAttendees(communityId, eventId);
 
-    // Calculate stats
+    // Calculate stats ('registered' is legacy for 'going')
+    const norm = (a: (typeof attendees)[number]) => normalizeStatus(a.status);
+    const goingCount = attendees.filter((a) => norm(a) === 'going').length;
     const stats = {
       total: attendees.length,
-      registered: attendees.filter((a) => a.status === 'registered').length,
-      waitlisted: attendees.filter((a) => a.status === 'waitlisted').length,
-      invited: attendees.filter((a) => a.status === 'invited').length,
-      checkedIn: attendees.filter((a) => a.status === 'checked_in').length,
-      cancelled: attendees.filter((a) => a.status === 'cancelled').length,
-      noShow: attendees.filter((a) => a.status === 'no_show').length,
+      going: goingCount,
+      registered: goingCount, // legacy alias
+      waitlisted: attendees.filter((a) => norm(a) === 'waitlisted').length,
+      pending: attendees.filter((a) => norm(a) === 'pending').length,
+      invited: attendees.filter((a) => norm(a) === 'invited').length,
+      checkedIn: attendees.filter((a) => norm(a) === 'checked_in').length,
+      cancelled: attendees.filter((a) => norm(a) === 'cancelled').length,
+      noShow: attendees.filter((a) => norm(a) === 'no_show').length,
+      maybe: attendees.filter((a) => a.response === 'maybe').length,
     };
 
-    // Optionally include attendee records with profile data
+    // Optionally include attendee records with profile data — guest PII, so host-only.
     const includeAttendees = searchParams.get('includeAttendees') === 'true';
     let attendeeList = undefined;
 
     if (includeAttendees) {
+      const auth = await requireEventManager(communityId, event);
+      if (auth instanceof Response) return auth;
+
       const personIds = attendees
         .map((a) => a.personId)
         .filter((id): id is `person:${string}` => !!id);
@@ -75,7 +89,8 @@ export async function GET(
         const person = a.personId ? personMap.get(a.personId) : undefined;
         return {
           ...a,
-          name: person?.name,
+          // person name wins; fall back to the typed guest name (loginless RSVP)
+          name: person?.name ?? a.name,
           image_url: person?.imageUrl,
         };
       });
@@ -123,6 +138,9 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
 
     const body = await request.json();
     const parsed = eventUpdateInputSchema.safeParse(body);
@@ -187,23 +205,15 @@ export async function DELETE(
       );
     }
 
-    // Delete event and attendees from events.json
+    const auth = await requireEventManager(communityId, event);
+    if (auth instanceof Response) return auth;
+
+    // Delete the event node. Attendee.event and Link.source/target are
+    // ON DELETE CASCADE (prisma/schema.prisma), so the DB removes the event's
+    // attendees and every connected graph link automatically. (The old
+    // read-filter-reupsert-the-whole-graph dance here threw 500s and clobbered
+    // node metadata with person-profile enrichment — see eventRepo notes.)
     await deleteEvent(communityId, eventId);
-
-    // Remove event node and related links from graph
-    const graphData = await getCommunityGraphData(communityId);
-    
-    // Remove event node
-    graphData.nodes = graphData.nodes.filter((n) => n.id !== eventId);
-    
-    // Remove all links connected to this event
-    graphData.links = graphData.links.filter((link) => {
-      const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-      const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-      return sourceId !== eventId && targetId !== eventId;
-    });
-
-    await updateCommunityGraphData(communityId, graphData);
 
     return NextResponse.json({ success: true, message: 'Event deleted successfully' });
   } catch (error) {

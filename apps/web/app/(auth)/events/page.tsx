@@ -142,17 +142,17 @@ export default function EventsPage() {
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
-      {/* Header row: centered title, view switcher right */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pt-6 pb-0">
-        <div />
-        <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto text-center">Events</h1>
-        <div className="justify-self-end">
+      {/* Header row: stacks on mobile, centered title + view switcher right on md+ */}
+      <div className="flex flex-col items-center gap-3 px-4 sm:px-6 pt-6 pb-0 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
+        <div className="hidden md:block" />
+        <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary font-ginto text-center">Events</h1>
+        <div className="md:justify-self-end">
           <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
         </div>
       </div>
 
       {/* Filters row */}
-      <div className="px-6 pt-3 pb-1">
+      <div className="px-4 sm:px-6 pt-3 pb-1">
         <EventsToolbar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -164,9 +164,9 @@ export default function EventsPage() {
       </div>
 
       {/* View Content */}
-      <div className="px-6 pt-4 pb-8">
+      <div className="px-4 sm:px-6 pt-4 pb-8">
         {currentView === 'calendar' && (
-          <EventsCalendarView events={filteredEvents} onEventClick={handleEventClick} />
+          <EventsCalendarView events={filteredEvents} onEventClick={handleEventClick} loading={loading} />
         )}
 
         {currentView === 'feed' && (

@@ -4,22 +4,17 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
-import { generateEventId, slugify } from '@/lib/eventUtils';
+import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData, upsertEvent } from '@/lib/eventRepo';
-import { getSession } from '@/lib/auth';
+import { requireCommunityMember } from '@/lib/eventAuth';
 import type { NBEvent } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
 /**
- * POST /api/events - Create a new event
+ * POST /api/events - Create a new event (any community member; creator becomes a host)
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const body = await request.json();
     const parsed = eventCreateInputSchema.safeParse(body);
 
@@ -32,15 +27,26 @@ export async function POST(request: NextRequest) {
 
     const input = parsed.data;
 
-    // Generate event ID
-    const eventId = generateEventId(input.title, input.startAt);
+    // Must be a member (or admin) of the target community.
+    const auth = await requireCommunityMember(input.communityId);
+    if (auth instanceof Response) return auth;
+    const session = auth;
 
-    // Generate form slug if not provided
+    // Honor a client-supplied draft id (stable across autosaves); else derive one.
+    const eventId = (input.id ?? generateEventId(input.title, input.startAt)) as `event:${string}`;
+    const slug = eventId.slice('event:'.length); // unique, reversible public URL segment
+
+    // Generate form slug if a form schema is present
     const formSlug = input.form?.schema ? slugify(input.title) : '';
 
-    // Create event object
+    // The creator is always a host so they can manage the event afterwards.
+    const hosts = Array.from(
+      new Set([...(input.hosts || []), ...(session.personId ? [session.personId] : [])]),
+    );
+
+    const now = new Date().toISOString();
     const event: NBEvent = {
-      id: eventId as `event:${string}`,
+      id: eventId,
       communityId: input.communityId,
       title: input.title,
       description: input.description,
@@ -48,10 +54,18 @@ export async function POST(request: NextRequest) {
       endAt: input.endAt,
       timezone: input.timezone,
       location: input.location,
-      hosts: input.hosts || [],
+      hosts,
       organizerEmail: input.organizerEmail,
       capacity: input.capacity,
-      visibility: input.visibility || 'public',
+      visibility: input.visibility || 'community',
+      coverImageUrl: input.coverImageUrl,
+      theme: input.theme,
+      status: input.status ?? 'published',
+      slug,
+      waitlistEnabled: input.waitlistEnabled ?? input.capacity != null,
+      guestListVisible: input.guestListVisible ?? true,
+      allowPlusOnes: input.allowPlusOnes ?? 0,
+      allowedResponses: input.allowedResponses ?? ['going', 'maybe', 'declined'],
       form: {
         enabled: input.form?.enabled ?? true,
         slug: formSlug,
@@ -59,30 +73,28 @@ export async function POST(request: NextRequest) {
         domainAllowlist: input.form?.domainAllowlist,
         requireApproval: input.form?.requireApproval,
       },
-      analytics: {
-        views: 0,
-        rsvpCount: 0,
-        checkinCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
+      analytics: { views: 0, rsvpCount: 0, checkinCount: 0, createdAt: now, updatedAt: now },
       metadata: input.metadata,
     };
 
-    // Save event as a node (events ARE nodes now)
+    // Save event as a node (events ARE nodes)
     await upsertEvent(input.communityId, event);
 
-    // Add hosted_by connections for hosts
+    // Connect each host to the event in the graph (idempotent: skip if it exists).
     const prisma = (await import('@/lib/prisma')).default;
     for (const hostId of event.hosts) {
       const hostExists = await prisma.node.findFirst({ where: { id: hostId, communityId: input.communityId } });
-
-      if (hostExists) {
+      if (!hostExists) continue;
+      const linkExists = await prisma.link.findFirst({
+        where: { sourceId: hostId, targetId: eventId, relationship: 'hosting' },
+        select: { id: true },
+      });
+      if (!linkExists) {
         await prisma.link.create({
           data: {
             sourceId: hostId,
             targetId: eventId,
-            relationship: 'sponsors',
+            relationship: 'hosting',
             since: event.analytics.createdAt,
             metadata: { role: 'host' },
             communityId: input.communityId,
@@ -116,20 +128,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Events are community-scoped: only members/admins of this community may list them.
+    const auth = await requireCommunityMember(communityId);
+    if (auth instanceof Response) return auth;
+
     const eventsData = await getEventsData(communityId);
 
-    // Add summary stats to each event
-    const eventsWithStats = eventsData.events.map((event) => {
+    // Drafts are only visible inside the composer, never in the public list.
+    const visibleEvents = eventsData.events.filter((e) => e.status !== 'draft');
+
+    // Add summary stats to each event ('registered' is legacy for 'going')
+    const eventsWithStats = visibleEvents.map((event) => {
       const attendees = eventsData.attendees.filter((a) => a.eventId === event.id);
-      const registeredCount = attendees.filter((a) => a.status === 'registered').length;
-      const waitlistedCount = attendees.filter((a) => a.status === 'waitlisted').length;
-      const checkedInCount = attendees.filter((a) => a.status === 'checked_in').length;
+      const goingCount = attendees.filter((a) => normalizeStatus(a.status) === 'going').length;
+      const waitlistedCount = attendees.filter((a) => normalizeStatus(a.status) === 'waitlisted').length;
+      const checkedInCount = attendees.filter((a) => normalizeStatus(a.status) === 'checked_in').length;
 
       return {
         ...event,
         _stats: {
           totalAttendees: attendees.length,
-          registered: registeredCount,
+          // keep the legacy `registered` key for the mobile contract; it now means "going"
+          registered: goingCount,
+          going: goingCount,
           waitlisted: waitlistedCount,
           checkedIn: checkedInCount,
         },

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CommunitySelector } from "@/features/communities";
 import UserMenu from "@/components/auth/UserMenu";
+import IntrosBell from "@/components/intros/IntrosBell";
 import ChatInterface from "@/components/chat/ChatInterface";
 import { useHeader } from "@/lib/contexts/HeaderContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
@@ -62,6 +63,7 @@ export default function Navbar() {
         {/* Right: page-injected controls (e.g. directory view toggle) + profile */}
         <div className="flex items-center gap-3">
           {headerRight}
+          <IntrosBell />
           <UserMenu />
         </div>
       </div>

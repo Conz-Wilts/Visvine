@@ -5,7 +5,7 @@
  */
 
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { EventForm } from '@/components/events/EventForm';
+import { EventComposer } from '@/components/events/EventComposer';
 
 export default function NewEventPage() {
   const { currentCommunity } = useCommunity();
@@ -21,17 +21,8 @@ export default function NewEventPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-brand-black">
-          Create New Event
-        </h1>
-        <p className="mt-2 text-brand-grey">
-          Create a new event for {currentCommunity.name}
-        </p>
-      </div>
-
-      <EventForm communityId={currentCommunity.id} mode="create" />
+    <div className="px-4 sm:px-6 lg:px-8 py-10">
+      <EventComposer communityId={currentCommunity.id} mode="create" />
     </div>
   );
 }
