@@ -29,6 +29,7 @@ model Community {
   userCommunities  UserCommunity[]
   graphLayout      GraphLayout?
   introRequests    IntroRequest[]
+  channels         Conversation[]
 
   @@map("communities")
 }
@@ -343,17 +344,22 @@ model Conversation {
   id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
   type        ConversationType     @default(DM)
   name        String?
+  description String?
   avatarUrl   String?              @map("avatar_url")
   dmKey       String?              @unique @map("dm_key")
+  /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
+  communityId String?              @map("community_id")
   createdById String               @map("created_by_id")
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
   members     ConversationMember[]
+  community   Community?           @relation(fields: [communityId], references: [id], onDelete: Cascade)
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
 
   @@index([type])
   @@index([updatedAt])
+  @@index([communityId, type])
   @@map("conversations")
 }
 
@@ -682,6 +688,7 @@ model PostCommentReaction {
 enum ConversationType {
   DM
   GROUP
+  CHANNEL
 }
 
 enum ConversationMemberRole {

@@ -26,7 +26,6 @@ export default function MutualConnectionCard({
       }`}
     >
       {mutual.imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={mutual.imageUrl} alt={mutual.name} className="w-11 h-11 rounded-xl object-cover flex-none" />
       ) : (
         <span className="w-11 h-11 rounded-xl bg-surface-3 text-text-muted flex items-center justify-center text-sm font-bold flex-none">

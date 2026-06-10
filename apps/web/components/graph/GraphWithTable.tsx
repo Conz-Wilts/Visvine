@@ -2,13 +2,24 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { GraphData, NBNode, NodeTypeConfig, CommunityAlias } from '@/lib/types';
+import { GraphData, NBNode, NodeTypeConfig, CommunityAlias, getNodeTypeConfig } from '@/lib/types';
 import GraphDataTables from './GraphDataTables';
 import NodeDetailsSidebar from './NodeDetailsSidebar';
-import { OBSIDIAN_PHYSICS } from './utils/constants';
+import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS } from './utils/constants';
+import { layoutGraph } from '@/lib/graph-layout/graphLayout';
 import { fetchNodeProfile } from '@/hooks/useNodeProfile';
 import { prefetchProfile } from '@/hooks/useProfile';
 import { type SimNode, type SimLink, type Transform } from './CustomForceGraph';
+
+/**
+ * Version stamp baked into the persisted layout hash. Bumping it invalidates
+ * every previously saved layout, forcing a one-time recompute with the
+ * current engine, after which the fresh result is persisted under the
+ * stamped hash. v2 → v3: composition switched from shelf-packing component
+ * boxes (which read as a rigid grid with same-sized clusters in rows) to
+ * force-directed circle packing (organic, roughly circular cloud).
+ */
+const LAYOUT_ALGO_VERSION = 'v3';
 
 // d3-force + the canvas renderer add ~120KB to the bundle and are only used
 // on the 'graph' tab. Defer until that tab mounts.
@@ -80,6 +91,15 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // a fresh server seed.
   const [recomputedHash, setRecomputedHash] = useState<string | null>(null);
 
+  // Layouts persisted during this session, keyed by their version-prefixed
+  // structure hash. The initialLayout prop stays frozen at its mount-time
+  // fetch, so after a structure round-trip (filter on → off) the hash would
+  // match that STALE copy again and resurrect pre-drag positions. Preferring
+  // the freshest layout persisted this session keeps in-session drags. A ref
+  // (not state) on purpose: a persist must not recreate simNodes — that would
+  // re-init the canvas and replay the spawn fade-in.
+  const sessionLayoutsRef = useRef<Map<string, GraphLayoutData>>(new Map());
+
   // Handle node clicks - just set the node directly, sidebar handles the transition
   const handleNodeClick = useCallback((node: NBNode) => {
     if (selectedNode?.id === node.id) {
@@ -114,16 +134,28 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
     return `${nodeIds}::${linkIds}`;
   }, [graphData.nodes, graphData.links]);
 
-  // The saved layout is only reusable while it describes the current structure.
+  // Hash under which layouts are persisted/matched. The algo-version prefix
+  // means saved layouts from older layout code never match → cold recompute.
+  const layoutHash = `${LAYOUT_ALGO_VERSION}:${graphDataHash}`;
+
+  // The saved layout is only reusable while it describes the current
+  // structure AND was produced by the current layout algorithm. Layouts
+  // persisted this session take precedence over the mount-time server copy.
   const serverSeed = useMemo(
-    () =>
-      (initialLayout && initialLayout.hash === graphDataHash && recomputedHash !== graphDataHash)
-        ? initialLayout
-        : null,
-    [initialLayout, graphDataHash, recomputedHash],
+    () => {
+      if (recomputedHash === graphDataHash) return null;
+      return (
+        sessionLayoutsRef.current.get(layoutHash) ??
+        (initialLayout && initialLayout.hash === layoutHash ? initialLayout : null)
+      );
+    },
+    [initialLayout, layoutHash, graphDataHash, recomputedHash],
   );
-  // Cold start = no reusable saved layout → run the full simulation.
+  // Cold start = no reusable saved layout → compute a fresh layout.
   const coldStart = serverSeed === null;
+  // Salt for "Re-run layout": bumping it re-rolls the deterministic engine
+  // seed so a manual re-run actually produces a different arrangement.
+  const [rerollNonce, setRerollNonce] = useState(0);
 
   const simLinks = useMemo<SimLink[]>(() => {
     const nodeIdSet = new Set(graphData.nodes.map(n => String(n.id)));
@@ -141,9 +173,49 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       .map(link => ({ ...link, source: String(link.source), target: String(link.target) }));
   }, [graphData.links, graphData.nodes]);
 
-  // Obsidian-style seed: tight central scatter so nodes "burst" outward as
-  // the simulation runs. In-session drags (savedPositionsRef) take precedence,
-  // then the server-saved layout, then a random seed for a fresh run.
+  // Fresh layout for cold starts, computed by the self-contained engine
+  // (PivotMDS init → Barnes-Hut forces → guaranteed overlap removal) instead
+  // of the old random-scatter + d3 burst, which stopped on alpha decay and
+  // could settle — then persist — with overlapping cards. Cards are modelled
+  // as their bounding circles, so "no circle overlap" implies "no card
+  // overlap". The engine output is normalized to its viewport; divide the
+  // reported scale back out to get world coordinates at true card size.
+  const engineLayout = useMemo<Map<string, { x: number; y: number }> | null>(() => {
+    if (serverSeed !== null || graphData.nodes.length === 0) return null;
+    const rectR = Math.hypot(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) / 2;
+    const hexR = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.75;
+    // d3-force's forceLink mutates simLinks in place, swapping string
+    // endpoints for node-object references once a simulation has run — so on
+    // a re-run this memo may see objects, not ids. Unwrap either form.
+    const endpointId = (v: SimLink['source']): string =>
+      typeof v === 'string' ? v : String((v as SimNode).id);
+    const result = layoutGraph(
+      graphData.nodes.map(n => ({
+        id: String(n.id),
+        r: getNodeTypeConfig(n.type, nodeTypes).shape === 'hexagon' ? hexR : rectR,
+      })),
+      simLinks.map(l => ({ source: endpointId(l.source), target: endpointId(l.target) })),
+      {
+        width: 2000,
+        height: 1400,
+        padding: 0,
+        nodePadding: 40,
+        // K-proportional default margin (~340px at card scale) reads as
+        // excessive whitespace between small components — one card width is
+        // plenty of separation.
+        componentMargin: 150,
+        timeBudgetMs: 1500,
+        seed: `${graphDataHash}:${rerollNonce}`,
+      },
+    );
+    const inv = 1 / result.stats.scale;
+    return new Map(
+      result.nodes.map(p => [String(p.id), { x: (p.x - 1000) * inv, y: (p.y - 700) * inv }]),
+    );
+  }, [serverSeed, graphData.nodes, simLinks, nodeTypes, graphDataHash, rerollNonce]);
+
+  // In-session drags (savedPositionsRef) take precedence, then the
+  // server-saved layout, then the freshly computed engine layout.
   const simNodes = useMemo<SimNode[]>(() => {
     const structureChanged = graphDataHash !== graphDataHashRef.current;
     if (structureChanged) {
@@ -154,10 +226,14 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
     const seedPositions = serverSeed?.positions ?? null;
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     return graphData.nodes.map((node, index) => {
-      const savedPos = savedPositionsRef.current.get(node.id) ?? seedPositions?.[node.id];
+      const savedPos =
+        savedPositionsRef.current.get(node.id) ??
+        seedPositions?.[node.id] ??
+        engineLayout?.get(String(node.id));
       if (savedPos) {
         return { ...node, x: savedPos.x, y: savedPos.y, spawnTime: now, spawnIndex: index };
       }
+      // Fallback only (engine covers every node): central scatter.
       const angle = Math.random() * 2 * Math.PI;
       const r = Math.random() * OBSIDIAN_PHYSICS.seedRadius;
       return {
@@ -169,13 +245,17 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData.nodes, graphDataHash, serverSeed, recomputedHash]);
+  }, [graphData.nodes, graphDataHash, serverSeed, engineLayout, recomputedHash]);
 
-  // Wrap the canvas's geometry callback to stamp it with the current structure
-  // hash before handing it to the persistence layer.
+  // Wrap the canvas's geometry callback to stamp it with the current
+  // version-prefixed structure hash before handing it to the persistence layer,
+  // remembering it session-side so a structure round-trip restores THIS layout
+  // rather than the stale mount-time copy.
   const handlePersistLayout = useCallback((positions: Record<string, { x: number; y: number }>, transform: Transform) => {
-    onPersistLayout?.({ hash: graphDataHash, transform, positions });
-  }, [onPersistLayout, graphDataHash]);
+    const layout: GraphLayoutData = { hash: layoutHash, transform, positions };
+    sessionLayoutsRef.current.set(layout.hash, layout);
+    onPersistLayout?.(layout);
+  }, [onPersistLayout, layoutHash]);
 
   // Loading state
   if (loading) {
@@ -223,12 +303,17 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             savedPositionsRef={savedPositionsRef}
             nodeTypes={nodeTypes}
             communityAliases={communityAliases}
-            // Restore the saved layout instead of recomputing it when we have one.
-            coldStart={coldStart}
+            // Both a server restore and a fresh engine layout arrive as final
+            // positions — freeze the simulation instead of running a burst.
+            coldStart={coldStart && engineLayout === null}
             initialTransform={serverSeed?.transform ?? null}
+            // A fresh engine layout (no saved camera) should be persisted once
+            // the canvas has fitted it; a server restore should not re-persist.
+            persistOnRestore={serverSeed === null && engineLayout !== null}
             onPersistLayout={handlePersistLayout}
             onRerunLayout={() => {
               setRecomputedHash(graphDataHash);
+              setRerollNonce(n => n + 1);
               savedPositionsRef.current.clear();
               graphDataHashRef.current = '';
             }}

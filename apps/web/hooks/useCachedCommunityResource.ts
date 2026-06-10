@@ -8,6 +8,12 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 const resourceCache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_DURATION = 30 * 1000; // 30 seconds
 
+// The nodeTypes signature each cache entry was loaded under, so a nodeTypes
+// change busts the entry. Module-level (not a per-instance ref) because the
+// consuming views unmount on every view toggle — a ref would reset to empty on
+// each mount and wrongly bust the cache every time.
+const nodeTypesSignatures = new Map<string, string>();
+
 const cacheKey = (resourceKey: string, communityId: string) => `${resourceKey}:${communityId}`;
 
 // Clear the cache for a resource (e.g. after an admin profile edit). With a
@@ -37,6 +43,8 @@ interface UseCachedCommunityResourceArgs<T> {
   errorLabel: string;
   /** Message surfaced on a non-abort fetch/parse failure. */
   fallbackError: string;
+  /** How long a cached entry stays fresh (default 30s). */
+  cacheDuration?: number;
 }
 
 /**
@@ -54,6 +62,7 @@ export function useCachedCommunityResource<T>({
   initialData,
   errorLabel,
   fallbackError,
+  cacheDuration = CACHE_DURATION,
 }: UseCachedCommunityResourceArgs<T>) {
   const { currentCommunity, loading: communityLoading } = useCommunity();
   const [data, setData] = useState<T>(initialData);
@@ -62,8 +71,6 @@ export function useCachedCommunityResource<T>({
   const abortControllerRef = useRef<AbortController | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // Track nodeTypes changes to bust cache when they change
-  const nodeTypesRef = useRef<string>('');
   const currentNodeTypesStr = JSON.stringify(currentCommunity?.nodeTypes || []);
 
   // Refresh function to clear cache and refetch
@@ -89,17 +96,16 @@ export function useCachedCommunityResource<T>({
         setError(null);
 
         // Check if nodeTypes changed - if so, bust the cache
-        const nodeTypesChanged = nodeTypesRef.current !== currentNodeTypesStr;
-        if (nodeTypesChanged) {
+        if (nodeTypesSignatures.get(key) !== currentNodeTypesStr) {
           resourceCache.delete(key);
-          nodeTypesRef.current = currentNodeTypesStr;
+          nodeTypesSignatures.set(key, currentNodeTypesStr);
         }
 
         // Check cache first
         const cached = resourceCache.get(key);
         const now = Date.now();
 
-        if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+        if (cached && (now - cached.timestamp) < cacheDuration) {
           setData(cached.data as T);
           setLoading(false);
           return;

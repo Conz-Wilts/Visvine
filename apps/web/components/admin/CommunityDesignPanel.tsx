@@ -135,7 +135,7 @@ export default function CommunityDesignPanel({ community, onSaved }: Props) {
   const existing = (community.designConfig ?? {}) as CommunityDesignConfig;
 
   const [bgType, setBgType] = useState<'solid' | 'image'>(existing.background?.type ?? 'solid');
-  const [bgColor, setBgColor] = useState(existing.background?.color ?? '#F5F7F5');
+  const [bgColor, setBgColor] = useState(existing.background?.color ?? '#ffffff');
   const [bgImageUrl, setBgImageUrl] = useState(existing.background?.imageUrl ?? '');
   const [mainFont, setMainFont] = useState<CommunityDesignFont | undefined>(existing.fonts?.main);
   const [utilityFont, setUtilityFont] = useState<CommunityDesignFont | undefined>(existing.fonts?.utility);
@@ -178,7 +178,7 @@ export default function CommunityDesignPanel({ community, onSaved }: Props) {
       const designConfig: CommunityDesignConfig = {};
 
       // Background
-      if (bgType === 'solid' && bgColor && bgColor !== '#F5F7F5') {
+      if (bgType === 'solid' && bgColor && bgColor.toLowerCase() !== '#ffffff') {
         designConfig.background = { type: 'solid', color: bgColor };
       } else if (bgType === 'image' && bgImageUrl) {
         designConfig.background = { type: 'image', imageUrl: bgImageUrl };
@@ -255,10 +255,10 @@ export default function CommunityDesignPanel({ community, onSaved }: Props) {
                 type="text"
                 value={bgColor}
                 onChange={e => setBgColor(e.target.value)}
-                placeholder="#F5F7F5"
+                placeholder="#ffffff"
                 className="px-3 py-2 text-sm border border-border-default rounded-lg bg-surface-1 text-text-primary w-28"
               />
-              <span className="text-xs text-text-muted">Default: #F5F7F5</span>
+              <span className="text-xs text-text-muted">Default: #ffffff</span>
             </div>
           )}
 

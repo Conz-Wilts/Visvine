@@ -1,4 +1,5 @@
 import type { ConversationMemberRole, ConversationType } from '@prisma/client';
+import type { ConversationIntroContext } from '@/lib/intros/types';
 
 export interface ConversationParticipant {
   id: string;
@@ -72,6 +73,7 @@ export interface ConversationSummary {
   id: string;
   type: ConversationType;
   name: string;
+  description?: string | null;
   avatarUrl: string | null;
   participants: ConversationParticipant[];
   lastMessage: SerializedMessage | null;
@@ -80,11 +82,22 @@ export interface ConversationSummary {
   currentUserRole: ConversationMemberRole;
 }
 
+/** One row in a community's channel directory (joined or not). */
+export interface ChannelDirectoryEntry {
+  id: string;
+  name: string;
+  description: string | null;
+  memberCount: number;
+  isMember: boolean;
+}
+
 export interface ConversationMessagesPage {
   conversation: ConversationSummary;
   messages: SerializedMessage[];
   nextCursor: string | null;
   hasMore: boolean;
+  /** Present when this DM exists because of an accepted introduction. */
+  intro?: ConversationIntroContext | null;
 }
 
 export interface RealtimeMessageEvent {

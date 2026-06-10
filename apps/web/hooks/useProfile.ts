@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FullProfile } from '@/lib/profileTypes';
 import { useProfileCache } from '@/lib/contexts/ProfileContext';
 
@@ -23,9 +23,18 @@ export function useProfile(personId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The cache is shared across every card/sidebar/page, so only ever write a
+  // profile under the id it was fetched for. When personId changes there is a
+  // render where `profile` still holds the previous person — writing that
+  // under the new key poisons the cache and makes other cards display the
+  // wrong person.
   useEffect(() => {
-    if (profile && personId) setCache(personId, profile);
+    if (profile && personId && profile.id === personId) setCache(personId, profile);
   }, [profile, personId, setCache]);
+
+  // Tracks the id the hook currently wants, so an in-flight fetch for a
+  // previous person is discarded instead of overwriting the current one.
+  const latestIdRef = useRef(personId);
 
   const load = useCallback(async () => {
     if (!personId) return;
@@ -33,28 +42,34 @@ export function useProfile(personId: string | null) {
     setError(null);
     try {
       const prefetched = prefetchCache.get(personId);
-      const data = prefetched
+      const data: FullProfile = prefetched
         ? await prefetched
         : await fetch(`/api/profile/${encodeURIComponent(personId)}`).then(res => {
             if (!res.ok) throw new Error('Profile not found');
             return res.json();
           });
       prefetchCache.delete(personId);
+      if (latestIdRef.current !== personId) return; // stale response — drop it
       setProfile(data);
     } catch (e: unknown) {
+      if (latestIdRef.current !== personId) return;
       setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
-      setLoading(false);
+      if (latestIdRef.current === personId) setLoading(false);
     }
   }, [personId]);
 
   useEffect(() => {
+    latestIdRef.current = personId;
     if (!personId) return;
     const cached = getCached(personId);
     if (cached) {
       setProfile(cached);
       return;
     }
+    // Clear the previous person's profile so it never renders for — or gets
+    // cached under — the new id while the fetch is in flight.
+    setProfile(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personId]);

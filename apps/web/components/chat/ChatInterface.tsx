@@ -30,8 +30,8 @@ export default function ChatInterface({
   const [isOverflowing, setIsOverflowing] = useState(false);
 
   const baseButtonClasses = `
-    w-8
-    h-8
+    w-9
+    h-9
     bg-brand-green
     hover:bg-brand-green
     disabled:bg-gray-300
@@ -121,7 +121,7 @@ export default function ChatInterface({
   return (
     <div className={`w-full max-w-3xl mx-auto ${className}`}>
       <form onSubmit={handleSubmit} className="relative">
-        <div className="bg-surface-1 border border-border-default rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[48px] flex flex-col justify-center shadow-float">
+        <div className="bg-surface-1 border border-border-default rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[56px] flex flex-col justify-center shadow-sm">
           <textarea
             ref={textareaRef}
             value={message}
@@ -135,7 +135,7 @@ export default function ChatInterface({
               py-1.5
               pl-4
               ${shouldShowInlineButton ? 'pr-14' : 'pr-4'}
-              text-sm
+              text-base
               text-text-primary
               bg-transparent
               resize-none

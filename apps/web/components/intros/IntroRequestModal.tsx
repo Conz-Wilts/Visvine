@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { X, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import type { MutualConnection } from '@/lib/intros/types';
 import MutualConnectionCard from './MutualConnectionCard';
@@ -25,6 +26,7 @@ type Step = 'pick' | 'compose' | 'success';
 const MAX_MSG = 600;
 
 export default function IntroRequestModal({ communityId, targetNode, requesterName, onClose }: IntroRequestModalProps) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('pick');
 
   const [mutuals, setMutuals] = useState<MutualConnection[]>([]);
@@ -256,12 +258,20 @@ export default function IntroRequestModal({ communityId, targetNode, requesterNa
             </>
           )}
           {step === 'success' && (
-            <button
-              onClick={onClose}
-              className="ml-auto px-5 py-2 text-sm font-bold rounded-xl bg-brand-green text-brand-black hover:bg-[#6bc963] transition"
-            >
-              Done
-            </button>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-text-muted hover:text-text-primary transition"
+              >
+                Done
+              </button>
+              <button
+                onClick={() => { onClose(); router.push('/messages?tab=intros'); }}
+                className="px-5 py-2 text-sm font-bold rounded-xl bg-brand-green text-brand-black hover:bg-[#6bc963] transition"
+              >
+                Track in Messages
+              </button>
+            </div>
           )}
         </div>
       </div>

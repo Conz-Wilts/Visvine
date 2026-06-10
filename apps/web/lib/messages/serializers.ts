@@ -82,6 +82,10 @@ export class MessagingError extends Error {
 }
 
 function getConversationDisplayName(conversation: ConversationWithContext, currentUserId: string): string {
+  if (conversation.type === ConversationType.CHANNEL) {
+    return conversation.name?.trim() || 'Unnamed channel';
+  }
+
   if (conversation.type === ConversationType.GROUP) {
     return conversation.name?.trim() || 'Unnamed group';
   }
@@ -91,7 +95,7 @@ function getConversationDisplayName(conversation: ConversationWithContext, curre
 }
 
 function getConversationAvatar(conversation: ConversationWithContext, currentUserId: string): string | null {
-  if (conversation.type === ConversationType.GROUP) {
+  if (conversation.type !== ConversationType.DM) {
     return conversation.avatarUrl;
   }
 
@@ -227,6 +231,7 @@ export function serializeConversation(
     id: conversation.id,
     type: conversation.type,
     name: getConversationDisplayName(conversation, currentUserId),
+    description: conversation.description,
     avatarUrl: getConversationAvatar(conversation, currentUserId),
     participants: conversation.members.map((member) => ({
       id: member.user.id,

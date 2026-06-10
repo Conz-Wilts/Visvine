@@ -9,7 +9,6 @@ export interface ColorTheme {
   accentDark: string;
   accentLight: string;     // light tint — used in light mode
   accentLightDark: string; // dark tint — used in dark mode
-  accentBg: string;
   pickerFilter: string;
   pickerFilterHover: string;
 }
@@ -22,7 +21,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#2f7a3e',
     accentLight: '#eaf9ec',
     accentLightDark: '#0f2b14',
-    accentBg: '#F5F7F5',
     pickerFilter: 'brightness(0) saturate(100%) invert(71%) sepia(0%) saturate(1%) hue-rotate(154deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%)',
   },
@@ -33,7 +31,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#1d4ed8',
     accentLight: '#eff6ff',
     accentLightDark: '#0f1f3d',
-    accentBg: '#f5f7ff',
     pickerFilter: 'brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(1%) hue-rotate(200deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(63%) sepia(40%) saturate(500%) hue-rotate(195deg) brightness(100%) contrast(90%)',
   },
@@ -44,7 +41,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#6d28d9',
     accentLight: '#f5f3ff',
     accentLightDark: '#1e1040',
-    accentBg: '#f7f5ff',
     pickerFilter: 'brightness(0) saturate(100%) invert(62%) sepia(10%) saturate(800%) hue-rotate(230deg) brightness(95%) contrast(88%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(55%) sepia(40%) saturate(600%) hue-rotate(240deg) brightness(100%) contrast(90%)',
   },
@@ -55,7 +51,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#dc2626',
     accentLight: '#fff1f2',
     accentLightDark: '#3d0a0a',
-    accentBg: '#fff5f5',
     pickerFilter: 'brightness(0) saturate(100%) invert(55%) sepia(5%) saturate(200%) hue-rotate(320deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(52%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(100%) contrast(90%)',
   },
@@ -66,7 +61,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#c2410c',
     accentLight: '#fff7ed',
     accentLightDark: '#3d1a05',
-    accentBg: '#fdf8f5',
     pickerFilter: 'brightness(0) saturate(100%) invert(65%) sepia(5%) saturate(200%) hue-rotate(20deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(62%) sepia(50%) saturate(600%) hue-rotate(15deg) brightness(100%) contrast(90%)',
   },
@@ -77,7 +71,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#0f766e',
     accentLight: '#f0fdfa',
     accentLightDark: '#05201e',
-    accentBg: '#f5fdfb',
     pickerFilter: 'brightness(0) saturate(100%) invert(70%) sepia(0%) saturate(1%) hue-rotate(170deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(72%) sepia(30%) saturate(500%) hue-rotate(155deg) brightness(95%) contrast(85%)',
   },
@@ -88,7 +81,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#be185d',
     accentLight: '#fdf2f8',
     accentLightDark: '#3d0a20',
-    accentBg: '#fef5fb',
     pickerFilter: 'brightness(0) saturate(100%) invert(60%) sepia(5%) saturate(200%) hue-rotate(295deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(58%) sepia(40%) saturate(600%) hue-rotate(295deg) brightness(100%) contrast(90%)',
   },
@@ -99,7 +91,6 @@ export const COLOR_THEMES: ColorTheme[] = [
     accentDark: '#3730a3',
     accentLight: '#eef2ff',
     accentLightDark: '#12143d',
-    accentBg: '#f5f5ff',
     pickerFilter: 'brightness(0) saturate(100%) invert(58%) sepia(5%) saturate(400%) hue-rotate(210deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(55%) sepia(35%) saturate(600%) hue-rotate(220deg) brightness(100%) contrast(90%)',
   },
@@ -137,7 +128,7 @@ function applyAll(theme: ColorTheme, isDark: boolean) {
   root.style.setProperty('--color-brand-green', theme.accent);
   root.style.setProperty('--color-brand-dark-green', theme.accentDark);
   root.style.setProperty('--color-brand-light-bg', isDark ? theme.accentLightDark : theme.accentLight);
-  root.style.setProperty('--color-brand-bg', isDark ? blendHex('#252524', theme.accent, 0.04) : theme.accentBg);
+  root.style.setProperty('--color-brand-bg', isDark ? blendHex('#252524', theme.accent, 0.04) : '#ffffff');
   root.style.setProperty('--theme-picker-filter', theme.pickerFilter);
   root.style.setProperty('--theme-picker-filter-hover', theme.pickerFilterHover);
   root.style.setProperty('--theme-accent-color', theme.accent);

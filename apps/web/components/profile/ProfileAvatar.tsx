@@ -7,6 +7,8 @@ import { getInitials } from '@/lib/avatarUtils';
 interface ProfileAvatarProps {
   name: string;
   nodeType: string;
+  /** Already-resolved colour (alias-aware); falls back to the base type colour. */
+  accentColor?: string;
   imageUrl?: string;
   size: 'sm' | 'md' | 'lg';
   isOwner?: boolean;
@@ -23,13 +25,14 @@ const SIZE_CLASSES = {
 export default function ProfileAvatar({
   name,
   nodeType,
+  accentColor,
   imageUrl,
   size,
   isOwner,
   onClick,
 }: ProfileAvatarProps) {
   const { dim, text } = SIZE_CLASSES[size];
-  const typeColor = getTypeColor(nodeType);
+  const typeColor = accentColor ?? getTypeColor(nodeType);
   const initials = getInitials(name);
 
   return (

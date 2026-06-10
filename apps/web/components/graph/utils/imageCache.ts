@@ -73,29 +73,11 @@ export async function preloadImages(urls: string[]): Promise<void> {
 
   await Promise.allSettled(
     validUrls.map(url => {
-      if (loadingImages.has(url)) {
-        return loadingImages.get(url);
-      }
-
-      return new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        img.onload = () => {
-          imageCache.set(url, img);
-          loadingImages.delete(url);
-          resolve(img);
-        };
-
-        img.onerror = () => {
-          failedImages.add(url);
-          loadingImages.delete(url);
-          reject(new Error(`Failed to load image: ${url}`));
-        };
-
-        loadingImages.set(url, Promise.resolve(img));
-        img.src = url;
-      });
+      // loadImage dedupes against in-flight loads and registers the real load
+      // promise in loadingImages (the old inline copy registered an
+      // already-resolved promise, so concurrent callers "finished" instantly).
+      loadImage(url);
+      return loadingImages.get(url);
     })
   );
 }

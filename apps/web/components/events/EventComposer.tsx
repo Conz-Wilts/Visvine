@@ -246,7 +246,6 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
         style={coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
       >
         {coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={coverImageUrl} alt="Event cover" className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-2 px-6 text-center">
@@ -314,7 +313,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
       {/* location */}
       <div className="mt-5">
         <label className="block text-sm font-medium text-brand-black mb-2">Location</label>
-        <div className="flex gap-2 mb-3">
+        <div className="flex gap-2 mb-3 justify-center">
           {([
             { value: 'in-person', label: 'In person', icon: <MapPin className="w-4 h-4" /> },
             { value: 'virtual', label: 'Virtual', icon: <Video className="w-4 h-4" /> },
@@ -324,7 +323,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
               key={opt.value}
               type="button"
               onClick={() => setEventType(opt.value)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-md border text-sm font-medium transition-colors ${
                 eventType === opt.value
                   ? 'bg-brand-green text-white border-brand-green'
                   : 'bg-brand-white text-brand-grey border-gray-200 hover:border-brand-green hover:text-brand-black'

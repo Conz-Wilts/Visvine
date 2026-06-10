@@ -8,7 +8,7 @@ import { drawLinks } from './renderers/LinkRenderer';
 import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
 import { drawCircleNode } from './renderers/CircleNodeRenderer';
-import { preloadImages, loadImage } from './utils/imageCache';
+import { preloadImages } from './utils/imageCache';
 import { createRectCollideForce } from './utils/forceRectCollide';
 import { isPointInHexagon } from './utils/hitTest';
 import { useLayoutPersistence } from './hooks/useLayoutPersistence';
@@ -67,14 +67,19 @@ const CustomForceGraph: React.FC<{
   nodeTypes?: NodeTypeConfig[];
   communityAliases?: CommunityAlias[];
   onRerunLayout?: () => void;
-  /** When false, the incoming node positions are a restored layout — freeze the
-   *  simulation and apply `initialTransform` instead of running a cold burst. */
+  /** When false, the incoming node positions are a final layout (server
+   *  restore or precomputed engine result) — freeze the simulation and apply
+   *  `initialTransform` (or auto-fit) instead of running a cold burst. */
   coldStart?: boolean;
   initialTransform?: Transform | null;
+  /** Persist the frozen layout once after mounting it. Used for freshly
+   *  precomputed layouts (which the server hasn't seen yet) — a plain server
+   *  restore leaves this false so it isn't pointlessly written back. */
+  persistOnRestore?: boolean;
   /** Called (debounced) when the layout settles, a node is dragged, or the user
    *  pans/zooms — so the parent can persist positions + camera transform. */
   onPersistLayout?: (positions: Record<string, { x: number; y: number }>, transform: Transform) => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, onPersistLayout }) => {
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -86,9 +91,11 @@ const CustomForceGraph: React.FC<{
   const dragNodeRef = useRef<SimNode | null>(null);
   const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
   // True once a press-on-node has moved past the click threshold and become a
-  // real drag. Until then the node is NOT pinned and the simulation is NOT
-  // reheated — so a plain click/hold leaves neighbours still instead of
-  // vibrating around the reheated, stationary node.
+  // real drag. Until then nothing is touched, so a plain click/hold moves
+  // nothing. A real drag moves ONLY the grabbed node — the simulation is never
+  // reheated, because on-screen positions come from the layout engine (or a
+  // server restore), not from this sim's equilibrium; restarting it would pull
+  // every node toward the d3 forces and collapse the layout.
   const dragStartedRef = useRef(false);
   const hasInitialFitRef = useRef(false);
   const prevFocusNodeIdRef = useRef<string | null>(null);
@@ -116,6 +123,8 @@ const CustomForceGraph: React.FC<{
   coldStartRef.current = coldStart;
   const initialTransformRef = useRef(initialTransform);
   initialTransformRef.current = initialTransform;
+  const persistOnRestoreRef = useRef(persistOnRestore);
+  persistOnRestoreRef.current = persistOnRestore;
 
   // Use refs for values that change frequently during interactions to avoid React re-renders
   const transformRef = useRef<Transform>({ x: 0, y: 0, k: 1 });
@@ -513,15 +522,29 @@ const CustomForceGraph: React.FC<{
     const introStart = typeof performance !== 'undefined' ? performance.now() : 0;
     nodes.forEach((node, i) => { node.spawnTime = introStart; node.spawnIndex = i; });
 
+    let fitRaf: number | null = null;
     if (coldStartRef.current === false) {
-      // Restored layout: freeze the simulation so the seeded positions stay put,
-      // and apply the saved camera transform instead of auto-fitting.
+      // Final layout (server restore or precomputed engine result): freeze the
+      // simulation so the seeded positions stay put.
       sim.alpha(0);
       if (initialTransformRef.current) {
+        // Server restore: apply the saved camera instead of auto-fitting.
         transformRef.current = { ...initialTransformRef.current };
+        hasInitialFitRef.current = true;
+        setIsInitialFitComplete(true);
+      } else {
+        // Fresh engine layout: no saved camera — fit it once the canvas has
+        // been sized (rAF runs after all mount effects), then persist the
+        // layout+camera so future visits restore instead of recomputing.
+        fitRaf = requestAnimationFrame(() => {
+          fitRaf = null;
+          fitToScreenRef.current?.(false);
+          if (persistOnRestoreRef.current) {
+            markDirty();
+            flushOnSettle(collectPositions(), transformRef.current);
+          }
+        });
       }
-      hasInitialFitRef.current = true;
-      setIsInitialFitComplete(true);
       isLayoutReadyRef.current = true;
       setIsLayoutReady(true);
       // The frozen sim won't tick, so drive the staggered fade-in ourselves —
@@ -548,10 +571,15 @@ const CustomForceGraph: React.FC<{
         cancelAnimationFrame(introRafRef.current);
         introRafRef.current = null;
       }
+      if (fitRaf !== null) cancelAnimationFrame(fitRaf);
     };
-  }, [nodes, links, startSimLoop, markDirty, playFadeIn, scheduleRender]);
+  }, [nodes, links, startSimLoop, markDirty, flushOnSettle, collectPositions, playFadeIn, scheduleRender]);
 
-  // Preload images for nodes and trigger re-render when loaded
+  // Warm the image cache a few at a time. Firing every request at once would
+  // open hundreds of concurrent loads through the media proxy on large
+  // communities, starving the initial data fetch and first paint. Visible
+  // nodes don't wait on this queue: the renderers call loadImage() during
+  // draw, so anything on screen starts loading immediately.
   useEffect(() => {
     const imageUrls = nodes
       .map(node => node.image_url)
@@ -559,11 +587,17 @@ const CustomForceGraph: React.FC<{
 
     if (imageUrls.length === 0) return;
 
-    imageUrls.forEach(url => loadImage(url));
-
-    preloadImages(imageUrls).then(() => {
-      scheduleRender();
-    });
+    let cancelled = false;
+    const CHUNK_SIZE = 8;
+    (async () => {
+      for (let i = 0; i < imageUrls.length; i += CHUNK_SIZE) {
+        if (cancelled) return;
+        await preloadImages(imageUrls.slice(i, i + CHUNK_SIZE));
+        if (cancelled) return;
+        scheduleRender();
+      }
+    })();
+    return () => { cancelled = true; };
   }, [nodes, scheduleRender]);
 
   /* --------------------------------------------------------------------------
@@ -625,12 +659,15 @@ const CustomForceGraph: React.FC<{
         }
         dragStartedRef.current = true;
         const node = dragNodeRef.current;
+        // Pin the node so a live cold-start burst (if one happens to be mid-
+        // flight) can't fight the pointer. Deliberately NO alphaTarget/restart:
+        // reheating the sim would move every other node, collapsing the
+        // engine/restored layout toward the d3 equilibrium.
         node.fx = node.x;
         node.fy = node.y;
-        // A user drag changes the layout — persist it when the sim re-settles.
+        // A user drag changes the layout — persist it on release (or on settle
+        // if a live sim is still running).
         markDirty();
-        simulationRef.current?.alphaTarget(0.3).restart();
-        startSimLoop();
       }
 
       const rect = canvas.getBoundingClientRect();
@@ -642,6 +679,8 @@ const CustomForceGraph: React.FC<{
       dragNodeRef.current.fy = newY;
       dragNodeRef.current.x = newX;
       dragNodeRef.current.y = newY;
+      // The sim isn't ticking (frozen layout), so drive the redraw directly.
+      scheduleRender();
     } else if (isPanningRef.current && dragStartRef.current) {
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
@@ -668,7 +707,7 @@ const CustomForceGraph: React.FC<{
         onNodeHover?.(null);
       }
     }
-  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions, markDirty, startSimLoop]);
+  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions, markDirty, scheduleRender]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -691,14 +730,22 @@ const CustomForceGraph: React.FC<{
       }
     }
 
-    // Only release/relax if a real drag actually started. A plain click never
-    // pinned the node or reheated the sim, so there's nothing to undo.
+    // Only release/persist if a real drag actually started. A plain click never
+    // pinned the node, so there's nothing to undo.
     if (isDraggingRef.current && dragNodeRef.current && dragStartedRef.current) {
       const node = dragNodeRef.current;
       node.fx = null;
       node.fy = null;
-      simulationRef.current?.alphaTarget(0).restart();
-      startSimLoop();
+      // No sim restart — nothing else moved, so there's nothing to relax.
+      // Record the new arrangement and persist via the shared debounce: rapid
+      // consecutive drags coalesce into one write (parallel PUTs could commit
+      // out of order, leaving the server one drag behind), and a drag that
+      // outlives a live cold-start burst still persists its final position
+      // here even after the settle handler has consumed the dirty flag.
+      const positions = collectPositions();
+      Object.entries(positions).forEach(([id, p]) => savedPositionsRef?.current.set(id, p));
+      schedulePersist(collectPositions, () => transformRef.current);
+      scheduleRender();
     }
 
     isDraggingRef.current = false;
@@ -715,7 +762,7 @@ const CustomForceGraph: React.FC<{
     const y = e.clientY - rect.top;
     const node = findNodeAt(x, y);
     setCursorStyle(node ? 'move' : 'grab');
-  }, [onNodeClick, findNodeAt, startSimLoop]);
+  }, [onNodeClick, findNodeAt, collectPositions, schedulePersist, savedPositionsRef, scheduleRender]);
 
   /* --------------------------------------------------------------------------
      EFFECTS - INITIALIZATION & UPDATES
@@ -962,19 +1009,14 @@ const CustomForceGraph: React.FC<{
           display: 'block',
         }}
       />
-      {/* Re-run Layout button */}
-      {onRerunLayout && (
+      {onRerunLayout && isLayoutReady && (
         <button
+          type="button"
           onClick={onRerunLayout}
-          className="absolute bottom-4 right-4 px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-lg bg-white text-gray-700 hover:bg-gray-100 border border-gray-300"
-          title="Re-run force layout"
+          title="Recompute the graph layout from scratch"
+          className="absolute bottom-4 right-4 z-10 rounded-lg border border-surface-3 bg-surface-1 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm transition-colors hover:text-text-primary hover:border-surface-2"
         >
-          <span className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-            </svg>
-            Re-layout
-          </span>
+          Re-run layout
         </button>
       )}
     </div>

@@ -7,7 +7,6 @@ import ChatInterface from '@/components/chat/ChatInterface';
 import SearchAndFilters from '@/components/dashboard/SearchAndFilters';
 import NodeGrid from '@/components/dashboard/NodeGrid';
 import CrmDirectoryTable from '@/components/crm/CrmDirectoryTable';
-import NodeDetailsSidebar from '@/components/graph/NodeDetailsSidebar';
 import { useDirectoryNodes } from '@/hooks/useDirectoryNodes';
 import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
@@ -77,8 +76,6 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentView, setCurrentView] = useState<DirectoryView>('grid');
   const [graphChatValue, setGraphChatValue] = useState('');
-  const [graphEverOpened, setGraphEverOpened] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
@@ -86,7 +83,7 @@ export default function DashboardPage() {
   const [editMode, setEditMode] = useState(false);
   // Saves multi-type selection when entering table view so it can be restored on exit
   const savedFilterTypesRef = useRef<Set<string> | null>(null);
-  const { setHeaderContent, setHeaderRight } = useHeader();
+  const { setHeaderRight } = useHeader();
   const router = useRouter();
 
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
@@ -136,7 +133,6 @@ export default function DashboardPage() {
   }, [nodes]);
 
   const handleViewChange = useCallback((next: DirectoryView) => {
-    if (next === 'graph') setGraphEverOpened(true);
     if (next === 'table' && currentView !== 'table') {
       // Entering table: save current selection, clamp to single type
       savedFilterTypesRef.current = new Set(filterTypes);
@@ -182,10 +178,8 @@ export default function DashboardPage() {
   }, [searchFilteredItems, filterTypes, filterAliases, filterTags, sortOrder]);
 
   const handleItemClick = useCallback((item: DirectoryItem) => {
-    if (selectedNode?.id === item.id) return;
-    const node = nodes.find(n => n.id === item.id);
-    if (node) setSelectedNode(node);
-  }, [nodes, selectedNode]);
+    router.push(`/directory/${encodeURIComponent(item.id)}`);
+  }, [router]);
 
   const handleGraphChatChange = useCallback((value: string) => {
     setGraphChatValue(value);
@@ -208,34 +202,31 @@ export default function DashboardPage() {
     clearGraphCache(community?.id);
   }, [refresh, community?.id]);
 
-  useEffect(() => {
-    setHeaderContent(
-      <div className="flex-1 flex items-center gap-3">
-        <div className="flex-1 max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-2xl xl:max-w-3xl">
-          <ChatInterface
-            value={isGraphView ? graphChatValue : searchTerm}
-            onChange={isGraphView ? handleGraphChatChange : setSearchTerm}
-            onSubmit={isGraphView ? handleGraphChatSubmit : handleGridTableSearchSubmit}
-            placeholder="Search…"
-          />
-        </div>
-        {isSemanticSearch && (
-          <button
-            onClick={handleClearSemantic}
-            className="flex h-8 items-center gap-2 rounded-full px-3 bg-surface-3 text-text-secondary text-xs font-semibold hover:bg-surface-3 transition-all shadow-sm shrink-0"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Clear
-          </button>
-        )}
+  // The search bar lives on the page (under the title; floating over the graph),
+  // not in the navbar. Shared between views so typing carries across toggles.
+  const searchBar = (
+    <div className="flex-1 flex items-center gap-3">
+      <div className="flex-1">
+        <ChatInterface
+          value={isGraphView ? graphChatValue : searchTerm}
+          onChange={isGraphView ? handleGraphChatChange : setSearchTerm}
+          onSubmit={isGraphView ? handleGraphChatSubmit : handleGridTableSearchSubmit}
+          placeholder="Search…"
+        />
       </div>
-    );
-    return () => setHeaderContent(null);
-  }, [isGraphView, graphChatValue, searchTerm, isSemanticSearch,
-      handleGraphChatChange, handleGraphChatSubmit, handleGridTableSearchSubmit,
-      handleClearSemantic, setHeaderContent]);
+      {isSemanticSearch && (
+        <button
+          onClick={handleClearSemantic}
+          className="flex h-10 items-center gap-2 rounded-full px-4 bg-surface-3 text-text-secondary text-sm font-semibold hover:bg-surface-3 transition-all shadow-sm shrink-0"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Clear
+        </button>
+      )}
+    </div>
+  );
 
   // View toggle lives in the navbar, to the left of the profile icon.
   useEffect(() => {
@@ -258,10 +249,14 @@ export default function DashboardPage() {
       {!isGraphView && (
         <>
           <div className="flex items-center justify-center gap-4 px-6 pt-6 pb-0 text-center">
-            <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
+            <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
           </div>
 
-          <div className="flex items-center justify-center gap-3 px-6 pt-6 pb-1">
+          <div className="flex justify-center px-6 pt-6">
+            <div className="flex w-full max-w-2xl">{searchBar}</div>
+          </div>
+
+          <div className="flex items-center justify-center gap-3 px-6 pt-4 pb-1">
             <FilterDropdown
               label="Type"
               singleSelect={currentView === 'table'}
@@ -302,14 +297,14 @@ export default function DashboardPage() {
             {isAdmin && currentView === 'table' && (
               <button
                 onClick={() => setEditMode(v => !v)}
-                className="flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors"
+                className="flex h-12 w-12 items-center justify-center rounded-2xl border shadow-sm transition-colors"
                 style={editMode
                   ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-green)', color: '#fff' }
                   : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
                 }
                 title={editMode ? 'Exit edit mode' : 'Edit profiles'}
               >
-                <Pencil className="h-3.5 w-3.5" />
+                <Pencil className="h-4 w-4" />
               </button>
             )}
 
@@ -328,9 +323,9 @@ export default function DashboardPage() {
                   setFilterTags(new Set());
                   setSortOrder('az');
                 }}
-                className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
+                className="flex h-12 items-center gap-1.5 rounded-2xl px-4 text-sm font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
               >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
                 Clear filters
@@ -340,12 +335,20 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* ── Graph canvas — lazily mounted on first open, then kept warm ── */}
-      {graphEverOpened && (
-        <div
-          className={`overflow-hidden rounded-xl ${isGraphView ? 'absolute inset-0 px-6' : 'absolute inset-0 px-6 pt-[100px]'}`}
-          style={{ visibility: isGraphView ? 'visible' : 'hidden', pointerEvents: isGraphView ? 'auto' : 'none' }}
-        >
+      {/* ── Graph view: search floats over the canvas ── */}
+      {isGraphView && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-full max-w-2xl px-6">
+          <div className="flex w-full">{searchBar}</div>
+        </div>
+      )}
+
+      {/* ── Graph canvas — mounted only while the graph view is active. Switching
+           away tears down the d3 simulation and canvas entirely; switching back
+           restores the persisted layout (no re-simulation), so the unmount costs
+           one cheap redraw instead of keeping the whole graph warm behind the
+           grid. ── */}
+      {isGraphView && (
+        <div className="overflow-hidden rounded-xl absolute inset-0 px-6">
           <DirectoryGraphView
             searchTerm={searchTerm}
             isSemanticSearch={isSemanticSearch}
@@ -429,16 +432,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-
-      <NodeDetailsSidebar
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-        onExpandToFullPage={(node) => {
-          // Full-screen profile is its own page (own URL), not an overlay on
-          // /directory. The sidebar peek stays here; expanding navigates away.
-          router.push(`/directory/${encodeURIComponent(node.id)}`);
-        }}
-      />
     </div>
   );
 }

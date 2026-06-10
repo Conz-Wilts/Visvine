@@ -92,15 +92,17 @@ export default function FullProfileOverlay({
 
         {/* Person nodes → new profile design */}
         {isPerson && nodeId ? (
-          <div className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden shadow-float" style={{ minHeight: 'calc(100vh - 4rem)' }}>
+          <div className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-clip shadow-float" style={{ minHeight: 'calc(100vh - 4rem)' }}>
+            {/* overflow-clip (not -hidden) keeps the rounded corners without creating
+                a scroll container, so the profile's sticky sub-nav still works */}
             <button
               onClick={handleClose}
-              className="absolute top-4 right-4 z-10 p-2 rounded-xl text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
+              className="absolute top-4 right-4 z-40 p-2 rounded-xl text-white/90 hover:text-white bg-black/20 hover:bg-black/30 backdrop-blur transition-colors"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
             </button>
-            <ProfilePageContent nodeId={nodeId} />
+            <ProfilePageContent nodeId={nodeId} overlay />
           </div>
         ) : isEvent && nodeId ? (
           <EventFullProfile nodeId={nodeId} node={initialNode} onClose={handleClose} />

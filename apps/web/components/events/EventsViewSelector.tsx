@@ -77,11 +77,11 @@ export default function EventsViewSelector({ currentView, onViewChange }: Events
   return (
     <div
       ref={containerRef}
-      className="relative flex items-center gap-1 rounded-full border border-border-default bg-surface-1 p-1 shadow-sm"
+      className="relative flex items-center gap-1 rounded-2xl border border-border-default bg-surface-1 p-1 h-12 shadow-float"
     >
       {pillStyle && (
         <span
-          className="absolute top-1 bottom-1 rounded-full bg-brand-green shadow-sm"
+          className="absolute top-1 bottom-1 rounded-xl bg-brand-green shadow-sm"
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
@@ -95,7 +95,7 @@ export default function EventsViewSelector({ currentView, onViewChange }: Events
           key={id}
           ref={el => { buttonRefs.current[i] = el; }}
           onClick={() => onViewChange(id)}
-          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors duration-200 ${
+          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors duration-200 ${
             currentView === id ? 'text-white' : 'text-text-muted hover:text-text-secondary'
           }`}
           aria-label={`${label} view`}

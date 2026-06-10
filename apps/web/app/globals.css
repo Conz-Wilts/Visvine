@@ -71,7 +71,7 @@
   --color-brand-light-bg: #eaf9ec;
   --color-brand-green: #78d870;
   --color-brand-dark-green: #2f7a3e;
-  --color-brand-bg: #F5F7F5;
+  --color-brand-bg: #ffffff;
   --shadow-soft: 0 8px 24px rgba(0,0,0,0.06);
   --font-ginto: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-open-sauce: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -108,12 +108,24 @@ html, body {
   color-scheme: light;
   --shimmer-base: #f0f0f0;
   --shimmer-highlight: #e8e8e8;
+  /* Lifted "floating chrome" shadow (navbar pills, sidebar). Lives on :root/.dark
+     (not @theme) so dark mode can swap it at runtime — Tailwind v4 inlines @theme
+     shadow values into utilities, which would freeze the light-mode value.
+     Note: tailwind.config.js is ignored under Tailwind v4. */
+  --shadow-float: 0 1px 2px rgba(16,24,40,0.10), 0 4px 10px rgba(16,24,40,0.10), 0 16px 32px -8px rgba(16,24,40,0.14);
+}
+
+/* Plain class (not @utility): reads the var at paint time so the .dark override applies */
+.shadow-float {
+  box-shadow: var(--shadow-float);
 }
 
 .dark {
   color-scheme: dark;
   --shimmer-base: #374151;
   --shimmer-highlight: #4b5563;
+  /* Dark surfaces need heavier shadows + a top bevel highlight to read as raised */
+  --shadow-float: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 6px rgba(0,0,0,0.45), 0 14px 32px -6px rgba(0,0,0,0.6);
 }
 a { 
   color: rgb(55 65 81); /* text-gray-700 */
@@ -154,8 +166,38 @@ a:hover {
   will-change: opacity, transform;
 }
 
+/* Full-view entrance — played when a directory card navigates to its profile
+   page (see app/(auth)/directory/[nodeId]/page.tsx). No fill mode: the
+   transform must not persist after the animation, or it would become a
+   containing block for any fixed-position modals rendered inside. */
+@keyframes profile-enter {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.profile-enter {
+  animation: profile-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Crossfade when the profile skeleton swaps to loaded content. */
+.profile-content-fade {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Dropdown menu entrance — quick fade + settle (table type selector, etc.) */
+@keyframes dropdown-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.dropdown-pop {
+  animation: dropdown-pop 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top left;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
+  .profile-enter,
+  .profile-content-fade,
+  .dropdown-pop,
   [style*="animation: shimmer"] {
     animation: none !important;
   }
@@ -188,6 +230,42 @@ textarea::-webkit-scrollbar-thumb {
 
 textarea::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+
+/* Thin custom scrollbar for internal scroll areas (dropdown panels etc.) —
+   accent-coloured thumb, no track, no arrow buttons.
+   Standard scrollbar-* props are Firefox-only here (guarded by -moz-appearance,
+   which Lightning CSS can't statically resolve): in Chromium they'd force
+   native (Fluent) rendering, which draws arrow buttons and ignores the
+   ::-webkit-scrollbar rules below. */
+@supports (-moz-appearance: none) {
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-brand-green, #78d870) transparent;
+  }
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-brand-green, #78d870);
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-dark-green, #5cb854);
 }
 
 /* Date & Time Picker Styling */

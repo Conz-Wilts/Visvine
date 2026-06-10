@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, ChevronDown, UserPlus, Mail } from 'lucide-react';
+import { Users, ChevronDown, UserPlus, Mail, Loader2 } from 'lucide-react';
 import IntroRequestModal, { type IntroTargetNode } from '@/components/intros/IntroRequestModal';
 
 interface ConnectButtonProps {
@@ -24,7 +24,32 @@ export default function ConnectButton({ targetNode, communityId, requesterName, 
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [introOpen, setIntroOpen] = useState(false);
+  const [openingDm, setOpeningDm] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  // Open (or create) the DM with this person directly, landing in the thread.
+  // Falls back to the messages index if their profile isn't linked to a user.
+  const openDm = async () => {
+    setOpeningDm(true);
+    try {
+      const res = await fetch('/api/messages/conversations/dm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: targetNode.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.conversation?.id) {
+        router.push(`/messages/${data.conversation.id}`);
+        return;
+      }
+      router.push('/messages');
+    } catch {
+      router.push('/messages');
+    } finally {
+      setOpeningDm(false);
+      setOpen(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -81,15 +106,18 @@ export default function ConnectButton({ targetNode, communityId, requesterName, 
 
           <button
             role="menuitem"
-            onClick={() => { setOpen(false); router.push('/messages'); }}
-            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-surface-2 transition"
+            disabled={openingDm}
+            onClick={() => void openDm()}
+            className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-surface-2 transition disabled:opacity-60"
           >
             <span className="mt-0.5 w-8 h-8 rounded-lg bg-surface-2 text-text-secondary flex items-center justify-center flex-none">
-              <Mail className="w-4 h-4" />
+              {openingDm ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
             </span>
             <span className="min-w-0">
               <b className="block text-sm font-semibold text-text-primary">Send a message</b>
-              <span className="block text-xs text-text-muted">Start a direct conversation</span>
+              <span className="block text-xs text-text-muted">
+                Start a direct conversation with {targetNode.name.split(' ')[0]}
+              </span>
             </span>
           </button>
         </div>

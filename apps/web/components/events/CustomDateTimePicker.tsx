@@ -214,9 +214,9 @@ export function CustomDateTimePicker({
                 <span className="text-xs font-semibold text-brand-black">Time</span>
               </div>
               
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2">
                 {/* Hours */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <input
                     type="number"
                     min="0"
@@ -228,7 +228,7 @@ export function CustomDateTimePicker({
                         handleTimeChange(val, selectedTime.minutes);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-gray-200 rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
                   />
                   <p className="text-[10px] text-brand-grey text-center mt-0.5">Hour</p>
                 </div>
@@ -236,7 +236,7 @@ export function CustomDateTimePicker({
                 <span className="text-lg font-bold text-brand-grey pb-4">:</span>
 
                 {/* Minutes */}
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <input
                     type="number"
                     min="0"
@@ -248,7 +248,7 @@ export function CustomDateTimePicker({
                         handleTimeChange(selectedTime.hours, val);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-gray-200 rounded-lg bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-gray-200 rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
                   />
                   <p className="text-[10px] text-brand-grey text-center mt-0.5">Min</p>
                 </div>
@@ -262,7 +262,7 @@ export function CustomDateTimePicker({
                         const newHours = selectedTime.hours >= 12 ? selectedTime.hours - 12 : selectedTime.hours + 12;
                         handleTimeChange(newHours, selectedTime.minutes);
                       }}
-                      className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${
+                      className={`px-2 py-1 text-xs font-bold rounded-sm transition-all ${
                         selectedTime.hours < 12
                           ? 'bg-brand-green text-brand-white'
                           : 'bg-brand-light-bg text-brand-black hover:bg-brand-light-bg'
@@ -276,7 +276,7 @@ export function CustomDateTimePicker({
                         const newHours = selectedTime.hours < 12 ? selectedTime.hours + 12 : selectedTime.hours;
                         handleTimeChange(newHours, selectedTime.minutes);
                       }}
-                      className={`px-2 py-1 text-xs font-bold rounded-md transition-all ${
+                      className={`px-2 py-1 text-xs font-bold rounded-sm transition-all ${
                         selectedTime.hours >= 12
                           ? 'bg-brand-green text-brand-white'
                           : 'bg-brand-light-bg text-brand-black hover:bg-brand-light-bg'

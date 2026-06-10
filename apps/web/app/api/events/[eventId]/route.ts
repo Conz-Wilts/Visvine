@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, upsertEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
 import { requireEventManager, requireCommunityMember } from '@/lib/eventAuth';
-import { normalizeStatus } from '@/lib/eventUtils';
+import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 
@@ -64,6 +64,47 @@ export async function GET(
       maybe: attendees.filter((a) => a.response === 'maybe').length,
     };
 
+    // The viewer's own RSVP record (matched by person node or session email) —
+    // their own data, safe for any member.
+    const viewerEmail = member.email?.toLowerCase();
+    const viewerAttendee = attendees.find(
+      (a) =>
+        (member.personId && a.personId === member.personId) ||
+        (!!viewerEmail && a.email?.toLowerCase() === viewerEmail),
+    );
+
+    // Sanitized confirmed-guest list — the same names the public /e/<slug> page
+    // already exposes when the host enables "show guest list", plus avatars.
+    let guests: Array<{ name: string; personId?: string; imageUrl?: string | null }> = [];
+    if (event.guestListVisible) {
+      const confirmed = attendees.filter(
+        (a) => ['going', 'checked_in'].includes(norm(a)) && a.response !== 'maybe',
+      );
+      const guestPersonIds = confirmed
+        .map((a) => a.personId)
+        .filter((id): id is `person:${string}` => !!id);
+      const guestNodes = guestPersonIds.length
+        ? await prisma.node.findMany({
+            where: { id: { in: guestPersonIds } },
+            select: { id: true, name: true, imageUrl: true },
+          })
+        : [];
+      const guestMap = new Map(guestNodes.map((n) => [n.id, n]));
+      guests = confirmed.slice(0, 50).flatMap((a) => {
+        const person = a.personId ? guestMap.get(a.personId) : undefined;
+        const name = person?.name ?? a.name;
+        return name ? [{ name, personId: a.personId || undefined, imageUrl: person?.imageUrl ?? null }] : [];
+      });
+    }
+
+    // Host person nodes for the "Hosted by" row
+    const hostNodes = event.hosts.length
+      ? await prisma.node.findMany({
+          where: { id: { in: event.hosts } },
+          select: { id: true, name: true, imageUrl: true, subtitle: true },
+        })
+      : [];
+
     // Optionally include attendee records with profile data — guest PII, so host-only.
     const includeAttendees = searchParams.get('includeAttendees') === 'true';
     let attendeeList = undefined;
@@ -100,6 +141,16 @@ export async function GET(
       event,
       stats,
       attendeesCount: attendees.length,
+      occupied: occupiedSpots(attendees),
+      viewer: viewerAttendee
+        ? {
+            status: normalizeStatus(viewerAttendee.status),
+            response: viewerAttendee.response ?? null,
+            plusOnes: viewerAttendee.plusOnes ?? 0,
+          }
+        : null,
+      guests,
+      hostNodes,
       ...(attendeeList && { attendees: attendeeList }),
     });
   } catch (error) {

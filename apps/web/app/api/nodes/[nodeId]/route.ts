@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const [node, linksWithNodes] = await Promise.all([
     prisma.node.findUnique({
       where: { id: nodeId },
-      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true, createdAt: true },
+      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, communityId: true, createdAt: true },
     }),
     prisma.$queryRaw<Array<{
       source_id: string;
@@ -74,6 +74,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         tags: node.tags,
         image_url: node.imageUrl ?? undefined,
         metadata: node.metadata as Record<string, unknown>,
+        alias: node.alias ?? undefined,
         community_id: node.communityId ?? undefined,
         createdAt: node.createdAt.toISOString(),
       },

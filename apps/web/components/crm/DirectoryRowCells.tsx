@@ -160,31 +160,36 @@ function DirectoryRowCells({
       {/* Type / Alias — editable for admin */}
       <td className="px-4 py-2.5 whitespace-nowrap relative">
         {editable && !isMemberRow && aliasEditNodeId === item.id ? (
-          <div className="absolute z-20 top-full left-4 mt-1 bg-surface-1 border border-border-subtle rounded-lg shadow-lg py-1 min-w-[140px]"
+          <div className="absolute z-20 top-full left-4 -mt-0.5 bg-surface-1 border border-border-subtle rounded-xl shadow-xl py-1.5 min-w-[190px] overflow-hidden dropdown-pop"
             onClick={e => e.stopPropagation()}
           >
-            {/* Person (no alias) */}
+            <div className="px-3.5 pb-1.5 mb-1 border-b border-border-subtle">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted">Set type</span>
+            </div>
             {(() => {
               const currentAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
-              return (
-                <>
+              const choices: { name: string | null; label: string; color: string }[] = [
+                { name: null, label: 'Person', color: getNodeTypeConfig('Person', nodeTypes).color },
+                ...personAliases.map(a => ({ name: a.name as string | null, label: a.name, color: a.color })),
+              ];
+              return choices.map(choice => {
+                const isSelected = (currentAlias ?? null) === choice.name;
+                return (
                   <button
-                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${!currentAlias ? 'font-semibold' : ''}`}
-                    onClick={() => saveAlias(item.id, null)}
+                    key={choice.label}
+                    className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-text-secondary hover:bg-surface-2 transition-colors"
+                    onClick={() => saveAlias(item.id, choice.name)}
                   >
-                    <Badge variant="type-pill" color={getNodeTypeConfig('Person', nodeTypes).color}>Person</Badge>
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: choice.color }} />
+                    <span className={`flex-1 text-left truncate ${isSelected ? 'font-semibold text-text-primary' : ''}`}>{choice.label}</span>
+                    {isSelected && (
+                      <svg className="h-4 w-4 shrink-0 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
                   </button>
-                  {personAliases.map(a => (
-                    <button
-                      key={a.name}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-surface-2 ${currentAlias === a.name ? 'font-semibold' : ''}`}
-                      onClick={() => saveAlias(item.id, a.name)}
-                    >
-                      <Badge variant="type-pill" color={a.color}>{a.name}</Badge>
-                    </button>
-                  ))}
-                </>
-              );
+                );
+              });
             })()}
           </div>
         ) : null}
@@ -192,12 +197,27 @@ function DirectoryRowCells({
           const displayAlias = aliasOverrides.has(item.id) ? aliasOverrides.get(item.id) : item.alias;
           const aliasConfig = findAlias(communityAliases, displayAlias, item.type);
           const color = aliasConfig?.color ?? getNodeTypeConfig(item.type, nodeTypes).color;
+          const canEdit = editable && !isMemberRow;
           return (
             <div
-              className={editable && !isMemberRow ? 'cursor-pointer hover:opacity-80' : ''}
-              onClick={editable && !isMemberRow ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
+              className={canEdit ? 'inline-flex items-center gap-1 cursor-pointer group/type' : ''}
+              onClick={canEdit ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
             >
-              <Badge variant="type-pill" color={color}>{displayAlias ?? item.type}</Badge>
+              <Badge
+                variant="type-pill"
+                color={color}
+                className={`${canEdit ? 'transition-opacity group-hover/type:opacity-85' : ''} ${!displayAlias ? 'capitalize' : ''}`.trim() || undefined}
+              >
+                {displayAlias ?? item.type}
+              </Badge>
+              {canEdit && (
+                <svg
+                  className={`h-3.5 w-3.5 text-text-muted transition-transform duration-150 ${aliasEditNodeId === item.id ? 'rotate-180' : ''}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
             </div>
           );
         })()}

@@ -46,7 +46,6 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
           style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
         >
           {event.coverImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover" />
           ) : (
             <span className="px-6 text-center text-xl font-bold drop-shadow">{event.title}</span>

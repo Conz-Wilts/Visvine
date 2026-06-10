@@ -68,20 +68,26 @@ export default function CommunitiesPage() {
                   }`}
                 >
                   {/* Avatar */}
-                  <div className="relative shrink-0 w-16 h-16 rounded-full ring-3 ring-surface-2 group-hover:ring-brand-green/20 transition-all duration-300">
+                  <Link
+                    href={`/communities/${encodeURIComponent(community.id)}`}
+                    className="relative shrink-0 w-16 h-16 rounded-full ring-3 ring-surface-2 group-hover:ring-brand-green/20 transition-all duration-300"
+                  >
                     <CommunityAvatar
                       name={community.name}
                       imageUrl={community.imageUrl}
                       className="w-full h-full"
                     />
-                  </div>
+                  </Link>
 
                   {/* Content */}
                   <div className="flex-1 flex flex-col ml-4 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-base font-semibold text-text-primary leading-tight truncate">
+                      <Link
+                        href={`/communities/${encodeURIComponent(community.id)}`}
+                        className="text-base font-semibold text-text-primary leading-tight truncate hover:underline"
+                      >
                         {community.name}
-                      </h3>
+                      </Link>
                       {isActive && (
                         <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-brand-light-bg text-brand-dark-green">
                           Active

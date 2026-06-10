@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { CommunitySelector } from "@/features/communities";
 import UserMenu from "@/components/auth/UserMenu";
-import IntrosBell from "@/components/intros/IntrosBell";
-import ChatInterface from "@/components/chat/ChatInterface";
 import { useHeader } from "@/lib/contexts/HeaderContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { useSession } from "@/lib/auth-client";
@@ -28,7 +26,7 @@ export default function Navbar() {
   }, [isAdmin, currentCommunity]);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-surface-1/80 backdrop-blur-md border-b border-border-default shadow-sm">
+    <header className="fixed top-0 left-0 right-0 z-50 h-20 bg-surface-1/80 backdrop-blur-md">
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
         {/* Left: logo + community selector + community management cog */}
         <div className="flex items-center gap-3">
@@ -38,7 +36,7 @@ export default function Navbar() {
               href="/admin"
               aria-label="Community management"
               title="Community management"
-              className="relative w-12 h-12 rounded-2xl flex items-center justify-center border border-border-subtle bg-surface-1 text-text-secondary hover:text-text-primary hover:bg-surface-2 transition shadow-float"
+              className="relative w-12 h-12 rounded-2xl flex items-center justify-center border border-border-default bg-surface-1 text-text-secondary hover:text-text-primary hover:bg-surface-2 transition shadow-float"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -53,17 +51,16 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Center: search bar — fills remaining space, shrinks on small screens */}
+        {/* Center: page-injected content (search lives on the pages themselves) */}
         <div className="flex items-center justify-center w-full min-w-0">
           <div className="w-full max-w-2xl">
-            {headerContent ?? <ChatInterface placeholder="Search…" />}
+            {headerContent}
           </div>
         </div>
 
         {/* Right: page-injected controls (e.g. directory view toggle) + profile */}
         <div className="flex items-center gap-3">
           {headerRight}
-          <IntrosBell />
           <UserMenu />
         </div>
       </div>

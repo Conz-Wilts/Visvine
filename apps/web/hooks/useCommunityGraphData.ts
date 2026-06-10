@@ -30,6 +30,11 @@ export function useCommunityGraphData() {
     initialData: EMPTY_GRAPH,
     errorLabel: 'graph data',
     fallbackError: 'Failed to load community data',
+    // The graph payload (all nodes + links) is the heaviest fetch in the app
+    // and the graph view unmounts on every switch to grid/table. Keep it fresh
+    // longer than the default 30s so toggling back doesn't re-download it;
+    // every local mutation path already calls clearGraphCache().
+    cacheDuration: 5 * 60 * 1000,
   });
 
   return { graphData: data, loading, error, community, refresh };

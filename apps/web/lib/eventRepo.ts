@@ -468,7 +468,9 @@ export async function submitRsvp(
   // transaction-scoped advisory lock, so two concurrent RSVPs can't both read the
   // same occupancy and overshoot capacity. The lock auto-releases at commit.
   const { attendee, created } = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId})::bigint)`;
+    // ::text cast — pg_advisory_xact_lock returns `void`, which Prisma's
+    // $queryRaw cannot deserialize ("Failed to deserialize column of type 'void'").
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId})::bigint)::text`;
 
     const existing = (await tx.attendee.findMany({ where: { eventId } })).map(attendeeRowToNBAttendee);
 

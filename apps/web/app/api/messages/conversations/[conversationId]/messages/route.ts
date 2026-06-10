@@ -4,6 +4,7 @@ import { handleMessagingError } from '@/lib/messages/http';
 import { sendMessageSchema } from '@/lib/messages/schemas';
 import { listMessagesForConversation, sendMessage } from '@/lib/messages/service';
 import { publishToUsers } from '@/lib/messages/realtime';
+import { getIntroContextForUsers } from '@/lib/intros/service';
 
 export async function GET(
   request: NextRequest,
@@ -29,6 +30,13 @@ export async function GET(
       query,
       limit: Number.isFinite(limit) ? limit : 30,
     });
+
+    // DMs born from an accepted introduction carry their provenance so the
+    // thread can render an "introduced by …" banner. Skip on paginated loads.
+    if (!cursor && page.conversation.type === 'DM' && page.conversation.participants.length === 2) {
+      const [a, b] = page.conversation.participants;
+      page.intro = await getIntroContextForUsers(a.id, b.id).catch(() => null);
+    }
 
     return NextResponse.json(page);
   } catch (error) {

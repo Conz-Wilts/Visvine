@@ -6,6 +6,12 @@ import { useCommunityGraphData } from '@/hooks/useCommunityGraphData';
 import { findBestMatchingNodeId } from '@/lib/graphUtils';
 import type { GraphData, SemanticSearchResult, CommunityAlias } from '@/lib/types';
 
+// The graph view unmounts whenever the user switches to grid/table, so keep the
+// last known layout per community for the session. A remount then restores the
+// frozen layout immediately instead of waiting on (or re-running) anything.
+// Updated on every persist so it never lags behind the server copy.
+const layoutCache = new Map<string, GraphLayoutData | null>();
+
 interface DirectoryGraphViewProps {
   /** Current value of the graph search box (drives focus + dimming). */
   searchTerm: string;
@@ -36,16 +42,27 @@ export default function DirectoryGraphView({
 
   // ── Saved layout (per community) ───────────────────────────────────────────
   // undefined = still loading, null = none saved, object = restore it.
-  const [layout, setLayout] = useState<GraphLayoutData | null | undefined>(undefined);
+  const [layout, setLayout] = useState<GraphLayoutData | null | undefined>(() =>
+    community?.id && layoutCache.has(community.id) ? layoutCache.get(community.id) : undefined
+  );
 
   useEffect(() => {
     const id = community?.id;
     if (!id) return;
+    if (layoutCache.has(id)) {
+      setLayout(layoutCache.get(id));
+      return;
+    }
     let cancelled = false;
     setLayout(undefined);
     fetch(`/api/communities/${id}/graph/layout`)
       .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (!cancelled) setLayout((d as GraphLayoutData | null) ?? null); })
+      .then(d => {
+        if (cancelled) return;
+        const next = (d as GraphLayoutData | null) ?? null;
+        layoutCache.set(id, next);
+        setLayout(next);
+      })
       .catch(() => { if (!cancelled) setLayout(null); });
     return () => { cancelled = true; };
   }, [community?.id]);
@@ -55,6 +72,7 @@ export default function DirectoryGraphView({
   const handlePersistLayout = useCallback((next: GraphLayoutData) => {
     const id = community?.id;
     if (!id) return;
+    layoutCache.set(id, next);
     fetch(`/api/communities/${id}/graph/layout`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

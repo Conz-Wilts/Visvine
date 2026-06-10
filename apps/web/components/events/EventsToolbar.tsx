@@ -6,12 +6,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { Search, X, ChevronDown, Check } from 'lucide-react';
+import { X, ChevronDown, Check } from 'lucide-react';
 
 interface EventsToolbarProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   currentFilter: 'all' | 'upcoming' | 'past';
   onFilterChange: (filter: 'all' | 'upcoming' | 'past') => void;
   locationFilter?: 'all' | 'in-person' | 'virtual';
@@ -59,30 +56,30 @@ function MiniDropdown<T extends string>({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(o => !o)}
-        className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors border ${
+        className="flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition-colors"
+        style={
           isFiltered
-            ? 'border-brand-green/40 bg-brand-green/10 text-brand-green'
-            : 'border-border-default bg-surface-1 text-text-muted hover:text-text-secondary hover:bg-surface-2'
-        }`}
+            ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-light-bg)', color: 'var(--color-brand-dark-green)' }
+            : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
+        }
       >
-        {label}{isFiltered ? `: ${activeLabel}` : ''}
-        <ChevronDown className="h-3 w-3" />
+        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} style={{ opacity: 0.5 }} />
+        <span style={{ opacity: 0.65 }}>{label}:</span>
+        <span>{activeLabel}</span>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[140px] rounded-xl border border-border-default bg-surface-1 shadow-lg py-1">
+        <div className="absolute left-0 top-full mt-2 z-50 min-w-[160px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl py-1.5 overflow-hidden">
           {options.map(opt => (
             <button
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false); }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors ${
-                value === opt.value
-                  ? 'text-brand-green font-semibold bg-brand-green/5'
-                  : 'text-text-secondary hover:bg-surface-2'
-              }`}
+              className="flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
             >
-              {value === opt.value && <Check className="h-3 w-3" />}
-              <span className={value !== opt.value ? 'pl-5' : ''}>{opt.label}</span>
+              <span className={value === opt.value ? 'font-medium text-text-primary' : 'text-text-secondary'}>
+                {opt.label}
+              </span>
+              {value === opt.value && <Check className="h-4 w-4 text-brand-green" />}
             </button>
           ))}
         </div>
@@ -92,8 +89,6 @@ function MiniDropdown<T extends string>({
 }
 
 export default function EventsToolbar({
-  searchQuery,
-  onSearchChange,
   currentFilter,
   onFilterChange,
   locationFilter = 'all',
@@ -120,40 +115,6 @@ export default function EventsToolbar({
           Clear
         </button>
       )}
-
-      {/* Spacer — only separates on sm+; on mobile the search wraps to its own row */}
-      <div className="hidden sm:block sm:flex-1" />
-
-      {/* Search — full-width on its own row on mobile, inline (max-w-xs) on sm+ */}
-      <div className="relative order-last w-full min-w-0 sm:order-none sm:w-auto sm:max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={e => onSearchChange(e.target.value)}
-          placeholder="Search events..."
-          className="w-full pl-9 pr-8 py-2 text-sm rounded-full border border-border-default bg-surface-1 text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => onSearchChange('')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-text-primary"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Add button */}
-      <Link
-        href="/events/new"
-        className="flex h-9 items-center gap-2 rounded-full px-4 bg-brand-green font-semibold hover:opacity-90 transition-all shadow-sm text-white text-sm ml-auto sm:ml-0"
-      >
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        Add
-      </Link>
     </div>
   );
 }

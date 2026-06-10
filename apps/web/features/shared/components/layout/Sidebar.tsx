@@ -9,7 +9,7 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 const NAV = [
   {
     href: "/directory",
-    label: "Home",
+    label: "Directory",
     icon: (
       <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -81,6 +81,24 @@ export default function Sidebar() {
   const { open: openCreateModal } = useCreateModal();
   const { expanded, setExpanded } = useSidebar();
   const [entered, setEntered] = useState(hasAnimatedRef.current);
+  // Introductions awaiting the viewer's action — intros live inside Messages now,
+  // so the badge sits on the Messages nav item (was the old topbar IntrosBell).
+  const [introCount, setIntroCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const res = await fetch('/api/intros/count');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setIntroCount(data.count ?? 0);
+      } catch { /* ignore */ }
+    };
+    refresh();
+    const t = setInterval(refresh, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
 
   useEffect(() => {
     if (hasAnimatedRef.current) return;
@@ -101,7 +119,7 @@ export default function Sidebar() {
       onMouseLeave={() => setExpanded(false)}
     >
       <div
-        className="flex flex-col bg-surface-1 rounded-2xl border border-border-subtle overflow-hidden shadow-float"
+        className="flex flex-col bg-surface-1 rounded-2xl border border-border-default overflow-hidden shadow-float"
         style={{
           width: expanded ? EXPANDED_W : COLLAPSED_W,
           paddingTop: 16,
@@ -144,8 +162,13 @@ export default function Sidebar() {
                   }}
                 >
                   {/* Icon: fixed 40x40 centered */}
-                  <span className="flex items-center justify-center shrink-0" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
+                  <span className="relative flex items-center justify-center shrink-0" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
                     {icon}
+                    {href === "/messages" && introCount > 0 && (
+                      <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-brand-green text-brand-black text-[9px] font-bold ring-2 ring-surface-1">
+                        {introCount > 99 ? '99+' : introCount}
+                      </span>
+                    )}
                   </span>
                   {/* Label: always present, clipped by container overflow-hidden when collapsed */}
                   <span className="text-sm font-medium whitespace-nowrap ml-3">

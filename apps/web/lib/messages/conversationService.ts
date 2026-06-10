@@ -1,6 +1,6 @@
 import { ConversationMemberRole, ConversationType, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import type { ConversationSummary } from './types';
+import type { ChannelDirectoryEntry, ConversationSummary } from './types';
 import { createDmKey } from './utils';
 import {
   CONVERSATION_INCLUDE,
@@ -239,6 +239,121 @@ export async function createGroupConversation(
   return serializeConversation(created, currentUserId, 0, currentUserMembership.role);
 }
 
+/**
+ * Create a community channel. Authorization (community admin) is enforced by the route;
+ * this only validates the community exists and seeds the creator as channel admin.
+ */
+export async function createChannelConversation(
+  currentUserId: string,
+  communityId: string,
+  name: string,
+  description?: string,
+): Promise<ConversationSummary> {
+  const community = await prisma.community.findUnique({
+    where: { id: communityId },
+    select: { id: true },
+  });
+
+  if (!community) {
+    throw new MessagingError(404, 'Community not found');
+  }
+
+  const created = await prisma.conversation.create({
+    data: {
+      type: ConversationType.CHANNEL,
+      name: name.trim(),
+      description: description?.trim() || null,
+      communityId,
+      createdById: currentUserId,
+      members: {
+        create: [
+          {
+            userId: currentUserId,
+            role: ConversationMemberRole.ADMIN,
+            lastReadAt: new Date(),
+          },
+        ],
+      },
+    },
+    include: CONVERSATION_INCLUDE,
+  });
+
+  return serializeConversation(created, currentUserId, 0, ConversationMemberRole.ADMIN);
+}
+
+/** All channels in a community, flagged with whether the user has joined. */
+export async function listChannelsForCommunity(
+  userId: string,
+  communityId: string,
+): Promise<ChannelDirectoryEntry[]> {
+  const membership = await prisma.userCommunity.findUnique({
+    where: { userId_communityId: { userId, communityId } },
+    select: { id: true },
+  });
+
+  if (!membership) {
+    return [];
+  }
+
+  const channels = await prisma.conversation.findMany({
+    where: { type: ConversationType.CHANNEL, communityId },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      _count: { select: { members: true } },
+      members: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return channels.map((channel) => ({
+    id: channel.id,
+    name: channel.name?.trim() || 'Unnamed channel',
+    description: channel.description,
+    memberCount: channel._count.members,
+    isMember: channel.members.length > 0,
+  }));
+}
+
+/** Join a community channel (any member of the channel's community can join). */
+export async function joinChannel(userId: string, conversationId: string): Promise<ConversationSummary> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { type: true, communityId: true },
+  });
+
+  if (!conversation || conversation.type !== ConversationType.CHANNEL) {
+    throw new MessagingError(404, 'Channel not found');
+  }
+
+  if (conversation.communityId) {
+    const membership = await prisma.userCommunity.findUnique({
+      where: { userId_communityId: { userId, communityId: conversation.communityId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new MessagingError(403, 'You must be a member of this community to join its channels');
+    }
+  }
+
+  await prisma.conversationMember.upsert({
+    where: { conversationId_userId: { conversationId, userId } },
+    update: {},
+    create: {
+      conversationId,
+      userId,
+      role: ConversationMemberRole.MEMBER,
+    },
+  });
+
+  return getConversationSummaryForUser(userId, conversationId);
+}
+
 export async function addMembersToGroup(
   currentUserId: string,
   conversationId: string,
@@ -246,8 +361,8 @@ export async function addMembersToGroup(
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
-  if (membership.conversation.type !== ConversationType.GROUP) {
-    throw new MessagingError(400, 'Members can only be added to group chats');
+  if (membership.conversation.type === ConversationType.DM) {
+    throw new MessagingError(400, 'Members cannot be added to direct messages');
   }
 
   if (membership.role !== ConversationMemberRole.ADMIN) {
@@ -293,8 +408,8 @@ export async function removeMemberFromGroup(
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
-  if (membership.conversation.type !== ConversationType.GROUP) {
-    throw new MessagingError(400, 'Members can only be removed from group chats');
+  if (membership.conversation.type === ConversationType.DM) {
+    throw new MessagingError(400, 'Members cannot be removed from direct messages');
   }
 
   if (membership.role !== ConversationMemberRole.ADMIN) {
@@ -361,7 +476,7 @@ export async function leaveConversation(currentUserId: string, conversationId: s
     const otherMembers = members.filter((member) => member.userId !== currentUserId);
 
     if (
-      membership.conversation.type === ConversationType.GROUP &&
+      membership.conversation.type !== ConversationType.DM &&
       currentMember.role === ConversationMemberRole.ADMIN &&
       otherMembers.length > 0
     ) {
@@ -389,7 +504,9 @@ export async function leaveConversation(currentUserId: string, conversationId: s
       },
     });
 
-    if (otherMembers.length === 0) {
+    // Channels persist even when the last member leaves — they stay discoverable
+    // in the community's channel directory.
+    if (otherMembers.length === 0 && membership.conversation.type !== ConversationType.CHANNEL) {
       await tx.conversation.delete({ where: { id: conversationId } });
       return;
     }
@@ -408,8 +525,8 @@ export async function updateGroupConversation(
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
-  if (membership.conversation.type !== ConversationType.GROUP) {
-    throw new MessagingError(400, 'Only group chats can be updated');
+  if (membership.conversation.type === ConversationType.DM) {
+    throw new MessagingError(400, 'Direct messages cannot be updated');
   }
 
   if (membership.role !== ConversationMemberRole.ADMIN) {

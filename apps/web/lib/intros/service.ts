@@ -22,7 +22,7 @@ import {
   sendIntroConnectedEmail,
 } from '@/lib/email/introEmails';
 import { getMutuals } from './mutuals';
-import type { IntroInbox, IntroNodeSummary, IntroRequestDTO, IntroStatus } from './types';
+import type { ConversationIntroContext, IntroInbox, IntroNodeSummary, IntroRequestDTO, IntroStatus } from './types';
 import type { CreateIntroInput, IntroActionInput } from '@/lib/schemas/introSchemas';
 
 export class IntroError extends Error {
@@ -123,6 +123,43 @@ export async function pendingCount(session: SessionPayload): Promise<number> {
   });
 }
 
+/**
+ * Provenance for a DM that exists because of an accepted introduction: given the
+ * two members of a DM, find the connected intro between their person nodes (either
+ * direction) so the thread can show "introduced by …". Returns null when the DM
+ * didn't come from an intro (the common case).
+ */
+export async function getIntroContextForUsers(userIdA: string, userIdB: string): Promise<ConversationIntroContext | null> {
+  const persons = await prisma.person.findMany({
+    where: { userId: { in: [userIdA, userIdB] } },
+    select: { id: true, userId: true },
+  });
+  if (persons.length < 2) return null;
+  const [a, b] = persons;
+
+  const intro = await prisma.introRequest.findFirst({
+    where: {
+      status: 'connected',
+      OR: [
+        { requesterNodeId: a.id, targetNodeId: b.id },
+        { requesterNodeId: b.id, targetNodeId: a.id },
+      ],
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+  if (!intro) return null;
+
+  const nodeMap = await summarizeNodes([intro.introducerNodeId, intro.requesterNodeId]);
+  return {
+    introId: intro.id,
+    introducer: nodeMap.get(intro.introducerNodeId) ?? null,
+    requesterNodeId: intro.requesterNodeId,
+    requesterName: nodeMap.get(intro.requesterNodeId)?.name ?? null,
+    endorsement: intro.endorsement,
+    connectedAt: intro.updatedAt.toISOString(),
+  };
+}
+
 // ── create ───────────────────────────────────────────────────────────────────
 
 export async function createIntro(session: SessionPayload, input: CreateIntroInput): Promise<IntroRequestDTO> {
@@ -180,7 +217,7 @@ export async function transition(
   id: string,
   action: IntroActionInput['action'],
   endorsement?: string,
-): Promise<IntroRequestDTO> {
+): Promise<IntroRequestDTO & { conversationId?: string }> {
   const personId = session.personId;
   if (!personId) throw new IntroError(401, 'No linked profile.');
 
@@ -188,6 +225,7 @@ export async function transition(
   if (!intro) throw new IntroError(404, 'Intro request not found.');
 
   let updated: IntroRequest;
+  let conversationId: string | undefined;
 
   if (action === 'approve') {
     if (intro.introducerNodeId !== personId) throw new IntroError(403, 'Only the introducer can approve this.');
@@ -219,10 +257,15 @@ export async function transition(
     updated = await prisma.introRequest.findUniqueOrThrow({ where: { id } });
     await connectNodes(updated);
     void notifyConnected(updated).catch((err) => logger.error('intro.email.connected.failed', { err }));
-    void seedIntroConversation(updated).catch((err) => logger.error('intro.dm.seed.failed', { err }));
+    // Awaited (still best-effort) so the response can point the client at the new DM.
+    conversationId = await seedIntroConversation(updated).catch((err) => {
+      logger.error('intro.dm.seed.failed', { err });
+      return undefined;
+    });
   }
 
-  return dtoFor(updated);
+  const dto = await dtoFor(updated);
+  return conversationId ? { ...dto, conversationId } : dto;
 }
 
 // ── side effects ─────────────────────────────────────────────────────────────
@@ -251,19 +294,20 @@ async function connectNodes(intro: IntroRequest): Promise<void> {
 }
 
 /** Best-effort: open a DM between requester & target seeded with the intro message. */
-async function seedIntroConversation(intro: IntroRequest): Promise<void> {
+async function seedIntroConversation(intro: IntroRequest): Promise<string | undefined> {
   const [requester, target] = await Promise.all([
     prisma.person.findUnique({ where: { id: intro.requesterNodeId }, select: { userId: true } }),
     prisma.person.findUnique({ where: { id: intro.targetNodeId }, select: { userId: true } }),
   ]);
   const requesterUserId = requester?.userId;
   const targetUserId = target?.userId;
-  if (!requesterUserId || !targetUserId || requesterUserId === targetUserId) return;
+  if (!requesterUserId || !targetUserId || requesterUserId === targetUserId) return undefined;
 
   const convo = await createDmConversation(requesterUserId, targetUserId);
   await prisma.message.create({
     data: { conversationId: convo.id, senderId: requesterUserId, text: intro.messageToTarget },
   });
+  return convo.id;
 }
 
 async function notifyRequested(intro: IntroRequest): Promise<void> {

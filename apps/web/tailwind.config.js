@@ -20,7 +20,7 @@ module.exports = {
         'brand-light-bg': '#eaf9ec',
         'brand-green': '#78d870',
         'brand-dark-green': '#2f7a3e',
-        'brand-bg': '#F5F7F5',
+        'brand-bg': '#ffffff',
       },
       boxShadow: {
         'soft': '0 8px 24px rgba(0,0,0,0.06)',

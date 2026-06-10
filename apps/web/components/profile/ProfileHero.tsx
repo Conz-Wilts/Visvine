@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { MapPin, ExternalLink } from 'lucide-react';
-import type { NBNode } from '@/lib/types';
+import { findAlias, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
+import { useCommunity } from '@/lib/contexts/CommunityContext';
 import ProfileAvatar from './ProfileAvatar';
 import CTARow from './CTARow';
 import StatsBar from './StatsBar';
@@ -46,7 +47,10 @@ export default function ProfileHero({
   onCommunitiesClick,
 }: ProfileHeroProps) {
   const avatarSize = AVATAR_SIZE[mode];
-  const typeColor = getTypeColor(node.type);
+  const { currentCommunity } = useCommunity();
+  // Alias colour wins over the base type colour, same as the directory cards.
+  const aliasConfig = findAlias(currentCommunity?.communityAliases, node.alias, node.type);
+  const typeColor = aliasConfig?.color ?? getTypeColor(node.type, currentCommunity?.nodeTypes);
 
   return (
     <div className="w-full px-6 pt-6 pb-2">
@@ -56,6 +60,7 @@ export default function ProfileHero({
         <ProfileAvatar
           name={node.name}
           nodeType={node.type}
+          accentColor={typeColor}
           imageUrl={node.image_url ?? undefined}
           size={avatarSize}
           isOwner={ctaState === 'owner'}
@@ -66,7 +71,7 @@ export default function ProfileHero({
           {/* Type badge + active indicator */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border" style={{ backgroundColor: `${typeColor}20`, color: typeColor, borderColor: `${typeColor}40` }}>
-              {node.type}
+              {node.alias ?? node.type}
             </span>
             {node.type === 'People' && (
               <span className="flex items-center gap-1 text-xs text-emerald-600">

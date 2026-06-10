@@ -104,7 +104,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold shadow-sm transition-colors"
+        className="flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition-colors"
         style={
           isActive && activeColor
             ? { borderColor: activeColor, backgroundColor: `${activeColor}18`, color: activeColor }
@@ -114,7 +114,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
         }
       >
         <svg
-          className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           style={{ opacity: 0.5 }}
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
@@ -126,21 +126,8 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
 
       {open && (
         <div className="absolute left-0 top-full mt-2 min-w-[200px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl z-50 py-1.5 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-1.5 border-b border-border-subtle">
-            <span className="text-[11px] font-semibold text-text-muted uppercase tracking-wide">{label}</span>
-            {isActive && !singleSelect && (
-              <button
-                type="button"
-                onClick={() => { onChange(new Set()); onChangeSub?.(new Set()); }}
-                className="text-[11px] text-brand-green font-semibold hover:underline"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-
-          <div className="px-3 py-2 border-b border-border-subtle">
-            <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
+          <div className="flex items-center gap-2 px-3 py-2">
+            <div className="flex flex-1 min-w-0 items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
               <svg className="h-3 w-3 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
               </svg>
@@ -160,8 +147,18 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                 </button>
               )}
             </div>
+            {isActive && !singleSelect && (
+              <button
+                type="button"
+                onClick={() => { onChange(new Set()); onChangeSub?.(new Set()); }}
+                className="shrink-0 text-[11px] text-brand-green font-semibold hover:underline"
+              >
+                Clear
+              </button>
+            )}
           </div>
 
+          <div className="max-h-[320px] overflow-y-auto overflow-x-hidden overscroll-contain custom-scrollbar">
           {filteredOptions.length === 0 && (
             <p className="px-4 py-3 text-xs text-text-muted">No matches</p>
           )}
@@ -231,7 +228,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                 </div>
 
                 {hasSubs && subExpanded && (
-                  <div className="border-l-2 ml-6 mr-2 mb-1 rounded" style={{ borderColor: `${color}40` }}>
+                  <div className="ml-6 mr-2 mb-1">
                     {opt.subOptions!.map(sub => {
                       const subChecked = selectedSub?.has(sub.value) ?? false;
                       const subColor = sub.color ?? color;
@@ -240,7 +237,8 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                           key={sub.value}
                           type="button"
                           onClick={() => toggleSub(sub.value)}
-                          className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-text-secondary hover:bg-surface-2 transition-colors"
+                          className="w-full flex items-center gap-2.5 border-l-2 px-3 py-2 text-xs text-text-secondary hover:bg-surface-2 transition-colors"
+                          style={{ borderColor: subColor }}
                         >
                           <span className={`flex-1 text-left ${subChecked ? 'font-medium text-text-primary' : ''}`}>{sub.label}</span>
                           {sub.count !== undefined && (
@@ -267,6 +265,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
               </div>
             );
           })}
+          </div>
         </div>
       )}
     </div>
@@ -303,12 +302,12 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex h-9 items-center gap-1.5 rounded-full border border-border-default bg-surface-1 px-3 text-xs font-semibold text-text-secondary shadow-sm hover:border-border-default transition-colors"
+        className="flex h-12 items-center gap-2 rounded-2xl border border-border-default bg-surface-1 px-4 text-sm font-semibold text-text-secondary shadow-sm hover:border-border-default transition-colors"
       >
         <span className="font-normal text-text-muted">Sort:</span>
         <span>{currentLabel}</span>
         <svg
-          className={`h-3.5 w-3.5 text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          className={`h-4 w-4 text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />

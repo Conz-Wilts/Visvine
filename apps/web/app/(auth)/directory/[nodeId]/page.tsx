@@ -25,16 +25,18 @@ const DEMO_COMMUNITY_ID = 'intro-demo';
 function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const router = useRouter();
   return (
-    <div className="w-full max-w-5xl mx-auto px-6">
-      <div className="px-6 pt-4 pb-2">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-sm text-brand-grey hover:text-brand-black transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
+    <div className="profile-enter w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl mx-auto px-4 sm:px-6 pb-10">
+      <button
+        onClick={() => router.back()}
+        className="flex items-center gap-1.5 mb-3 text-sm font-medium text-text-muted hover:text-text-primary transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" /> Back
+      </button>
+      {/* overflow-clip (not -hidden) keeps the rounded corners without creating
+          a scroll container, so the sticky sub-nav inside still works */}
+      <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-clip">
+        <ProfilePageContent nodeId={nodeId} />
       </div>
-      <ProfilePageContent nodeId={nodeId} />
     </div>
   );
 }
@@ -83,7 +85,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   }));
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-6">
+    <div className="profile-enter w-full max-w-5xl mx-auto px-6">
       <div className="px-6 pt-4 pb-2">
         <button
           onClick={() => router.back()}

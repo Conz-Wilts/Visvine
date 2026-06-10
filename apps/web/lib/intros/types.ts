@@ -44,6 +44,19 @@ export interface MutualConnection {
   relationshipToTarget: string;
 }
 
+/**
+ * Provenance attached to a DM conversation that exists because of an accepted
+ * introduction — lets the thread show "introduced by …" with the endorsement.
+ */
+export interface ConversationIntroContext {
+  introId: string;
+  introducer: IntroNodeSummary | null;
+  requesterNodeId: string;
+  requesterName: string | null;
+  endorsement: string | null;
+  connectedAt: string;
+}
+
 /** The viewer's intros split by the role they play in each. */
 export interface IntroInbox {
   /** Requests where the viewer is the introducer (to approve/decline). */

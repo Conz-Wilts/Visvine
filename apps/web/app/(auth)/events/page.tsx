@@ -6,12 +6,12 @@
  */
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useHeader } from '@/lib/contexts/HeaderContext';
 import { DeleteEventModal } from '@/components/events/DeleteEventModal';
 import { isEventUpcoming } from '@/lib/eventUtils';
-import NodeDetailsSidebar from '@/components/graph/NodeDetailsSidebar';
-import FullProfileOverlay from '@/components/profile/FullProfileOverlay';
-import type { NBEvent, NBNode } from '@/lib/types';
+import type { NBEvent } from '@/lib/types';
 import EventsToolbar from '@/components/events/EventsToolbar';
 import EventsCalendarView from '@/components/events/EventsCalendarView';
 import EventsFeedView from '@/components/events/EventsFeedView';
@@ -29,6 +29,7 @@ interface EventWithStats extends NBEvent {
 }
 
 export default function EventsPage() {
+  const router = useRouter();
   const { currentCommunity } = useCommunity();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,23 +38,18 @@ export default function EventsPage() {
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
-  const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
-  const [fullProfileNodeId, setFullProfileNodeId] = useState<string | null>(null);
-  const [fullProfileInitialNode, setFullProfileInitialNode] = useState<NBNode | null>(null);
+  const { setHeaderRight } = useHeader();
 
-  const eventToNode = (event: NBEvent): NBNode => ({
-    id: event.id,
-    type: 'event',
-    name: event.title,
-    subtitle: event.description,
-    location: event.location?.label,
-    tags: [],
-    metadata: (event.metadata ?? {}) as Record<string, unknown>,
-    community_id: event.communityId,
-  });
+  // View toggle lives in the navbar, to the left of the profile icon (same as Directory).
+  useEffect(() => {
+    setHeaderRight(
+      <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+    );
+    return () => setHeaderRight(null);
+  }, [currentView, setHeaderRight]);
 
   const handleEventClick = (event: NBEvent) => {
-    setSelectedNode(eventToNode(event));
+    router.push(`/events/${event.id}`);
   };
 
   useEffect(() => {
@@ -142,25 +138,45 @@ export default function EventsPage() {
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
-      {/* Header row: stacks on mobile, centered title + view switcher right on md+ */}
-      <div className="flex flex-col items-center gap-3 px-4 sm:px-6 pt-6 pb-0 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
-        <div className="hidden md:block" />
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-normal tracking-tight text-text-primary font-ginto text-center">Events</h1>
-        <div className="md:justify-self-end">
-          <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+      {/* Header row: centered title (view switcher lives in the navbar) */}
+      <div className="flex items-center justify-center px-4 sm:px-6 pt-6 pb-0 text-center">
+        <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto">Events</h1>
+      </div>
+
+      {/* Search bar — sized to match Directory */}
+      <div className="flex justify-center px-4 sm:px-6 pt-6">
+        <div className="w-full max-w-2xl">
+          <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm">
+            <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search events…"
+              className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery('')} className="text-text-muted hover:text-text-secondary">
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Filters row */}
-      <div className="px-4 sm:px-6 pt-3 pb-1">
-        <EventsToolbar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          currentFilter={timeFilter}
-          onFilterChange={setTimeFilter}
-          locationFilter={locationFilter}
-          onLocationFilterChange={setLocationFilter}
-        />
+      <div className="flex justify-center px-4 sm:px-6 pt-4 pb-1">
+        <div className="w-full max-w-2xl">
+          <EventsToolbar
+            currentFilter={timeFilter}
+            onFilterChange={setTimeFilter}
+            locationFilter={locationFilter}
+            onLocationFilterChange={setLocationFilter}
+          />
+        </div>
       </div>
 
       {/* View Content */}
@@ -182,22 +198,6 @@ export default function EventsPage() {
           <EventsMapView events={filteredEvents} />
         )}
       </div>
-
-      <NodeDetailsSidebar
-        node={selectedNode}
-        onClose={() => setSelectedNode(null)}
-        onExpandToFullPage={(node) => {
-          setFullProfileNodeId(node.id);
-          setFullProfileInitialNode(node);
-          setTimeout(() => setSelectedNode(null), 150);
-        }}
-      />
-
-      <FullProfileOverlay
-        nodeId={fullProfileNodeId}
-        initialNode={fullProfileInitialNode ?? undefined}
-        onClose={() => { setFullProfileNodeId(null); setFullProfileInitialNode(null); }}
-      />
 
       {/* Delete Modal */}
       {deleteEventId && deleteEvent && currentCommunity && (
