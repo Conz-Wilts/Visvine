@@ -69,16 +69,20 @@ export default function DirectoryGraphView({
 
   // Fire-and-forget save. The canvas already debounces camera changes and only
   // emits on settle/drag, so a second debounce here would just add latency.
+  // Skipped while a semantic filter narrows the node set: the server stores ONE
+  // layout per community, and persisting a filtered subset would overwrite the
+  // full-graph layout — forcing a recompute on the next unfiltered visit. This
+  // was why the saved layout rarely survived between sessions.
   const handlePersistLayout = useCallback((next: GraphLayoutData) => {
     const id = community?.id;
-    if (!id) return;
+    if (!id || isSemanticSearch) return;
     layoutCache.set(id, next);
     fetch(`/api/communities/${id}/graph/layout`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(next),
     }).catch(() => {});
-  }, [community?.id]);
+  }, [community?.id, isSemanticSearch]);
 
   // ── Graph data shaping (semantic search narrows; text search dims) ──────────
   const filteredGraphData = useMemo<GraphData>(() => {

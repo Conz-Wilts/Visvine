@@ -4,7 +4,7 @@
 
 import { NBNode } from '@/lib/types';
 import { drawWrappedText, roundRect } from '../utils/canvasUtils';
-import { CARD_DIMENSIONS } from '../utils/constants';
+import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
 
@@ -32,7 +32,7 @@ export function drawRectangleNode(
   node: NBNode,
   x: number,
   y: number,
-  simplified: boolean,
+  lod: NodeLOD,
   isFocused: boolean,
   isConnected: boolean,
   shouldDim: boolean,
@@ -43,24 +43,20 @@ export function drawRectangleNode(
   if (typeof x !== 'number' || typeof y !== 'number') return;
 
   const width = CARD_DIMENSIONS.WIDTH;
-  const height = simplified ? CARD_DIMENSIONS.SIMPLIFIED_HEIGHT : CARD_DIMENSIONS.HEIGHT;
+  const height = CARD_DIMENSIONS.HEIGHT;
   const halfWidth = width / 2;
   const halfHeight = height / 2;
 
-  // Configure shadow based on state
-  if (shouldDim) {
-    // Dimmed state: no glow, just subtle drop shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 2;
-  } else if (isFocused || isConnected) {
+  // shadowBlur is by far the most expensive canvas op here (a gaussian blur per
+  // fill). Only pay for it at full detail, or on the handful of
+  // focused/connected nodes — never across a whole zoomed-out graph.
+  if (isFocused || isConnected) {
     // Focused/connected state: strong colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-  } else {
+  } else if (lod === 'full' && !shouldDim) {
     // Default state: subtle colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 12;
@@ -73,8 +69,6 @@ export function drawRectangleNode(
   const cardBg = theme?.cardBg ?? '#ffffff';
   const textPrimary = theme?.textPrimary ?? '#111827';
   const textSecondary = theme?.textSecondary ?? '#6b7280';
-  const placeholderStart = theme?.placeholderStart ?? '#e5e7eb';
-  const placeholderEnd = theme?.placeholderEnd ?? '#f3f4f6';
 
   ctx.fillStyle = cardBg;
   roundRect(ctx, x - halfWidth, y - halfHeight, width, height, radius);
@@ -96,6 +90,15 @@ export function drawRectangleNode(
   const headerWidth = width - borderWidth;
   const headerHeight = CARD_DIMENSIONS.IMAGE_HEIGHT - borderOffset;
   const imageRadius = radius - 1; // Slightly smaller radius for image corners
+
+  // Zoomed far out: the card is a few dozen screen px — text and images are
+  // unreadable. A flat colored header block keeps the silhouette recognisable
+  // for a fraction of the draw cost, and skips the image fetch entirely.
+  if (lod === 'low') {
+    ctx.fillStyle = borderColor;
+    ctx.fillRect(headerX, headerY + imageRadius, headerWidth, headerHeight - imageRadius);
+    return;
+  }
 
   // Create clipping path for rounded top corners
   ctx.save();
@@ -141,11 +144,14 @@ export function drawRectangleNode(
   } else {
     // Coloured placeholder + initials when there's no image — matches the directory
     // card style so the graph view stays visually consistent with the card grid.
-    void placeholderStart; void placeholderEnd; // intentionally unused; theme-grey replaced
-    const headerGradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
-    headerGradient.addColorStop(0, withAlpha(borderColor, 0.8));
-    headerGradient.addColorStop(1, borderColor);
-    ctx.fillStyle = headerGradient;
+    if (lod === 'full') {
+      const headerGradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
+      headerGradient.addColorStop(0, withAlpha(borderColor, 0.8));
+      headerGradient.addColorStop(1, borderColor);
+      ctx.fillStyle = headerGradient;
+    } else {
+      ctx.fillStyle = borderColor;
+    }
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
     // Initials centred in the placeholder area
@@ -173,7 +179,7 @@ export function drawRectangleNode(
   const nameLineHeight = 16;
   const nameLines = drawWrappedText(ctx, node.name, x, nameY, width - CARD_DIMENSIONS.PADDING * 2, nameLineHeight, 'center');
 
-  if (!simplified) {
+  if (lod === 'full') {
     // Role / subtitle
     if (node.subtitle) {
       ctx.fillStyle = textSecondary;

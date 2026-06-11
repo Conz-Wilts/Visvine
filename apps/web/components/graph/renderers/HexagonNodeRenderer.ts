@@ -5,7 +5,7 @@
 import { NBNode } from '@/lib/types';
 import type { CanvasTheme } from './RectangleNodeRenderer';
 import { drawWrappedText, roundRect, drawHexagon } from '../utils/canvasUtils';
-import { CARD_DIMENSIONS } from '../utils/constants';
+import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
 
@@ -23,7 +23,7 @@ export function drawHexagonNode(
   node: NBNode,
   x: number,
   y: number,
-  simplified: boolean,
+  lod: NodeLOD,
   isFocused: boolean,
   isConnected: boolean,
   shouldDim: boolean,
@@ -34,25 +34,20 @@ export function drawHexagonNode(
   if (typeof x !== 'number' || typeof y !== 'number') return;
 
   const width = CARD_DIMENSIONS.WIDTH;
-  const height = simplified ? CARD_DIMENSIONS.SIMPLIFIED_HEIGHT : CARD_DIMENSIONS.HEIGHT;
-  
+  const height = CARD_DIMENSIONS.HEIGHT;
+
   // Hexagon shape for organizations and companies - make them larger
   const hexRadius = Math.max(width, height) * 0.75;
 
-  // Configure shadow based on state
-  if (shouldDim) {
-    // Dimmed state: no glow, just subtle drop shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 2;
-  } else if (isFocused || isConnected) {
+  // shadowBlur only at full detail or on focused/connected nodes — it's the
+  // most expensive canvas op and invisible at zoomed-out card sizes.
+  if (isFocused || isConnected) {
     // Focused/connected state: strong colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-  } else {
+  } else if (lod === 'full' && !shouldDim) {
     // Default state: subtle colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 12;
@@ -64,8 +59,6 @@ export function drawHexagonNode(
   const cardBg = theme?.cardBg ?? '#ffffff';
   const textPrimary = theme?.textPrimary ?? '#111827';
   const textSecondary = theme?.textSecondary ?? '#6b7280';
-  const placeholderStart = theme?.placeholderStart ?? '#e5e7eb';
-  const placeholderEnd = theme?.placeholderEnd ?? '#f3f4f6';
 
   ctx.fillStyle = cardBg;
   drawHexagon(ctx, x, y, hexRadius);
@@ -84,6 +77,15 @@ export function drawHexagonNode(
   const imageX = x - imageSize / 2;
   const imageY = y - hexRadius * 0.4 - imageSize / 2;
   const squareRadius = 8;
+
+  // Zoomed far out: flat colored inset keeps the silhouette readable without
+  // image fetches, gradients, or text.
+  if (lod === 'low') {
+    ctx.fillStyle = borderColor;
+    roundRect(ctx, imageX, imageY, imageSize, imageSize, squareRadius);
+    ctx.fill();
+    return;
+  }
 
   // Try to load and draw image if available
   const image = node.image_url ? loadImage(node.image_url) : null;
@@ -126,11 +128,14 @@ export function drawHexagonNode(
     ctx.stroke();
   } else {
     // Coloured placeholder + initials when there's no image
-    void placeholderStart; void placeholderEnd;
-    const imageGradient = ctx.createLinearGradient(imageX, imageY, imageX + imageSize, imageY + imageSize);
-    imageGradient.addColorStop(0, withAlpha(borderColor, 0.8));
-    imageGradient.addColorStop(1, borderColor);
-    ctx.fillStyle = imageGradient;
+    if (lod === 'full') {
+      const imageGradient = ctx.createLinearGradient(imageX, imageY, imageX + imageSize, imageY + imageSize);
+      imageGradient.addColorStop(0, withAlpha(borderColor, 0.8));
+      imageGradient.addColorStop(1, borderColor);
+      ctx.fillStyle = imageGradient;
+    } else {
+      ctx.fillStyle = borderColor;
+    }
 
     roundRect(ctx, imageX, imageY, imageSize, imageSize, squareRadius);
     ctx.fill();
@@ -163,6 +168,9 @@ export function drawHexagonNode(
   const nameLineHeight = 15;
   const maxTextWidth = hexRadius * 1.3;
   const nameLines = drawWrappedText(ctx, node.name, x, nameY, maxTextWidth, nameLineHeight, 'center');
+
+  // Subtitle + type tag are full-detail only.
+  if (lod !== 'full') return;
 
   // Secondary text (subtitle) - positioned below name
   if (node.subtitle) {

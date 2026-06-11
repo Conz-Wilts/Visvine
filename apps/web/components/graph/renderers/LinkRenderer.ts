@@ -26,6 +26,14 @@ interface Transform {
   k: number;
 }
 
+/** Viewport bounds in graph coordinates, used to skip clearly off-screen links. */
+export interface ViewBounds {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export function drawLinks(
   ctx: CanvasRenderingContext2D,
   links: SimLink[],
@@ -33,8 +41,14 @@ export function drawLinks(
   transform: Transform,
   focusNodeId: string | null,
   now: number,
-  reduceMotion: boolean
+  reduceMotion: boolean,
+  bounds?: ViewBounds
 ): void {
+  // Resolve string endpoints through a map instead of nodes.find() per link
+  // (O(L) instead of O(L×N) when links haven't been bound to node objects yet).
+  const nodeById = new Map<string, SimNode>();
+  nodes.forEach(n => nodeById.set(String(n.id), n));
+
   // Detect parallel edges between the same pair of endpoints; those get a small
   // curve offset so they don't render on top of each other.
   const edgePairCount = new Map<string, number>();
@@ -54,11 +68,23 @@ export function drawLinks(
     const targetId = typeof link.target === 'string' ? link.target : (link.target as SimNode).id;
 
     const source = typeof link.source === 'string'
-      ? nodes.find(n => String(n.id) === sourceId) : link.source as SimNode;
+      ? nodeById.get(sourceId) : link.source as SimNode;
     const target = typeof link.target === 'string'
-      ? nodes.find(n => String(n.id) === targetId) : link.target as SimNode;
+      ? nodeById.get(targetId) : link.target as SimNode;
 
     if (!source?.x || !target?.x || typeof source.y !== 'number' || typeof target.y !== 'number') return;
+
+    // Conservative cull: skip links whose endpoints are both past the same
+    // viewport edge — such a segment can't cross the viewport. Big win when
+    // zoomed in on a dense graph.
+    if (bounds) {
+      if (
+        (source.x < bounds.left && target.x < bounds.left) ||
+        (source.x > bounds.right && target.x > bounds.right) ||
+        (source.y < bounds.top && target.y < bounds.top) ||
+        (source.y > bounds.bottom && target.y > bounds.bottom)
+      ) return;
+    }
 
     const isFocusLink = focusNodeId != null &&
       (String(source.id) === String(focusNodeId) || String(target.id) === String(focusNodeId));

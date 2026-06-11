@@ -5,7 +5,7 @@
 import { NBNode } from '@/lib/types';
 import type { CanvasTheme } from './RectangleNodeRenderer';
 import { drawWrappedText } from '../utils/canvasUtils';
-import { CARD_DIMENSIONS } from '../utils/constants';
+import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
 
@@ -23,7 +23,7 @@ export function drawCircleNode(
   node: NBNode,
   x: number,
   y: number,
-  simplified: boolean,
+  lod: NodeLOD,
   isFocused: boolean,
   isConnected: boolean,
   shouldDim: boolean,
@@ -35,20 +35,15 @@ export function drawCircleNode(
 
   const radius = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.6;
 
-  // Configure shadow based on state
-  if (shouldDim) {
-    // Dimmed state: no glow, just subtle drop shadow
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.05)';
-    ctx.shadowBlur = 4;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 2;
-  } else if (isFocused || isConnected) {
+  // shadowBlur only at full detail or on focused/connected nodes — it's the
+  // most expensive canvas op and invisible at zoomed-out card sizes.
+  if (isFocused || isConnected) {
     // Focused/connected state: strong colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 20;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-  } else {
+  } else if (lod === 'full' && !shouldDim) {
     // Default state: subtle colored glow
     ctx.shadowColor = borderColor;
     ctx.shadowBlur = 12;
@@ -60,8 +55,6 @@ export function drawCircleNode(
   const cardBg = theme?.cardBg ?? '#ffffff';
   const textPrimary = theme?.textPrimary ?? '#111827';
   const textSecondary = theme?.textSecondary ?? '#6b7280';
-  const placeholderStart = theme?.placeholderStart ?? '#f3f4f6';
-  const placeholderEnd = theme?.placeholderEnd ?? '#e5e7eb';
 
   ctx.fillStyle = cardBg;
   ctx.beginPath();
@@ -81,6 +74,15 @@ export function drawCircleNode(
   const innerRadius = radius * 0.5;
   const innerCenterX = x;
   const innerCenterY = y - radius * 0.3;
+
+  // Zoomed far out: flat colored inner disc, no image fetch / text / gradient.
+  if (lod === 'low') {
+    ctx.fillStyle = borderColor;
+    ctx.beginPath();
+    ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
 
   // Try to load and draw image if available
   const image = node.image_url ? loadImage(node.image_url) : null;
@@ -126,11 +128,14 @@ export function drawCircleNode(
     ctx.stroke();
   } else {
     // Coloured placeholder + initials when there's no image
-    void placeholderStart; void placeholderEnd;
-    const gradient = ctx.createRadialGradient(innerCenterX, innerCenterY, 0, innerCenterX, innerCenterY, innerRadius);
-    gradient.addColorStop(0, withAlpha(borderColor, 0.8));
-    gradient.addColorStop(1, borderColor);
-    ctx.fillStyle = gradient;
+    if (lod === 'full') {
+      const gradient = ctx.createRadialGradient(innerCenterX, innerCenterY, 0, innerCenterX, innerCenterY, innerRadius);
+      gradient.addColorStop(0, withAlpha(borderColor, 0.8));
+      gradient.addColorStop(1, borderColor);
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = borderColor;
+    }
 
     ctx.beginPath();
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
@@ -167,7 +172,7 @@ export function drawCircleNode(
   const nameLines = drawWrappedText(ctx, node.name, x, nameY, maxTextWidth, nameLineHeight, 'center');
 
   // Secondary text (subtitle) - positioned below name
-  if (node.subtitle && !simplified) {
+  if (node.subtitle && lod === 'full') {
     ctx.fillStyle = textSecondary;
     ctx.font = '400 10px Inter, system-ui, -apple-system';
     const subtitleY = nameY + (nameLines * nameLineHeight) + 6;
@@ -175,7 +180,7 @@ export function drawCircleNode(
   }
 
   // Identity tag at bottom
-  if (!simplified) {
+  if (lod === 'full') {
     const tagY = y + radius * 0.6;
     const roleTag = node.type;
     ctx.font = '400 10px Inter, system-ui, -apple-system';

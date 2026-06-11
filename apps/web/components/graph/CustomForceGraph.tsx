@@ -3,12 +3,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as d3Force from 'd3-force';
 import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig, findAlias } from '@/lib/types';
-import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS as P } from './utils/constants';
+import { CARD_DIMENSIONS, LOD_THRESHOLDS, OBSIDIAN_PHYSICS as P, type NodeLOD } from './utils/constants';
 import { drawLinks } from './renderers/LinkRenderer';
 import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
 import { drawCircleNode } from './renderers/CircleNodeRenderer';
-import { preloadImages } from './utils/imageCache';
+import { preloadImages, onImageLoad } from './utils/imageCache';
 import { createRectCollideForce } from './utils/forceRectCollide';
 import { isPointInHexagon } from './utils/hitTest';
 import { useLayoutPersistence } from './hooks/useLayoutPersistence';
@@ -194,10 +194,11 @@ const CustomForceGraph: React.FC<{
   const drawNodeCard = useCallback((
     ctx: CanvasRenderingContext2D,
     node: SimNode,
-    simplified: boolean,
+    lod: NodeLOD,
     isFocused: boolean,
     isConnected: boolean,
-    shouldDim: boolean
+    shouldDim: boolean,
+    theme: CanvasTheme
   ) => {
     if (typeof node.x !== 'number' || typeof node.y !== 'number') return;
 
@@ -211,16 +212,15 @@ const CustomForceGraph: React.FC<{
     const shape = typeConfig.shape;
 
     const borderWidth = isFocused ? CARD_DIMENSIONS.BORDER_WIDTH * 1.6 : CARD_DIMENSIONS.BORDER_WIDTH;
-    const theme = getCanvasTheme();
 
     if (shape === 'hexagon') {
-      drawHexagonNode(ctx, node, node.x, node.y, simplified, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
+      drawHexagonNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     } else if (shape === 'circle') {
-      drawCircleNode(ctx, node, node.x, node.y, simplified, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
+      drawCircleNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     } else {
-      drawRectangleNode(ctx, node, node.x, node.y, simplified, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
+      drawRectangleNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     }
-  }, [nodeTypes, communityAliases, getCanvasTheme]);
+  }, [nodeTypes, communityAliases]);
 
   const render = useCallback(() => {
     const canvas = canvasRef.current;
@@ -255,6 +255,19 @@ const CustomForceGraph: React.FC<{
     const viewBottom = (cssHeight - transform.y) / transform.k;
     const cullPad = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 1.5;
 
+    // Zoom-based level of detail: full cards only when zoomed in enough to
+    // read them; flat silhouettes when zoomed far out. Keeps pan/zoom cheap on
+    // large communities and defers image fetches until the user actually zooms
+    // in on a card.
+    const lod: NodeLOD =
+      transform.k >= LOD_THRESHOLDS.FULL_MIN_K ? 'full'
+      : transform.k >= LOD_THRESHOLDS.MID_MIN_K ? 'mid'
+      : 'low';
+
+    // Resolve the CSS theme once per frame, not once per node — getComputedStyle
+    // per card per frame was a measurable chunk of the draw loop.
+    const theme = getCanvasTheme();
+
     // Calculate connected nodes if there's a focused node
     const connectedNodeIds = new Set<string>();
     let focusNodeExists = false;
@@ -282,7 +295,9 @@ const CustomForceGraph: React.FC<{
     const shouldDrawLinks = (!currentFocusNodeId && !allNodesDimmed) || focusNodeExists;
 
     if (shouldDrawLinks) {
-      drawLinks(ctx, links, nodes, transform, currentFocusNodeId, renderNow, reduceMotionRef.current);
+      drawLinks(ctx, links, nodes, transform, currentFocusNodeId, renderNow, reduceMotionRef.current, {
+        left: viewLeft, top: viewTop, right: viewRight, bottom: viewBottom,
+      });
     }
 
     // Draw Nodes with viewport culling
@@ -312,12 +327,12 @@ const CustomForceGraph: React.FC<{
       // node.x/node.y (and the persisted layout) are never touched.
       const rise = (1 - fadeAlpha) * P.fadeInRiseY;
       if (rise) ctx.translate(0, rise);
-      drawNodeCard(ctx, node, false, isFocused, isConnected, shouldDim);
+      drawNodeCard(ctx, node, lod, isFocused, isConnected, shouldDim, theme);
       ctx.restore();
     });
 
     ctx.restore();
-  }, [nodes, links, drawNodeCard]);
+  }, [nodes, links, drawNodeCard, getCanvasTheme]);
 
   const scheduleRender = useCallback(() => {
     if (!renderScheduledRef.current) {
@@ -406,9 +421,9 @@ const CustomForceGraph: React.FC<{
   // layout is restored: the simulation is frozen (alpha 0) and would otherwise
   // render a single frame, freezing the fade mid-way. Moves nothing — positions
   // stay exactly on the restored layout.
-  const playFadeIn = useCallback((startNow: number, count: number) => {
+  const playFadeIn = useCallback((startNow: number, totalStaggerMs: number) => {
     if (introRafRef.current !== null) cancelAnimationFrame(introRafRef.current);
-    const total = P.fadeInDurationMs + count * P.fadeInStaggerMs + 50;
+    const total = P.fadeInDurationMs + totalStaggerMs + 50;
     const frame = (now: number) => {
       scheduleRender();
       if (now - startNow < total) {
@@ -520,7 +535,14 @@ const CustomForceGraph: React.FC<{
     // may have been seconds earlier behind a loading spinner (which would leave
     // the fade already elapsed, popping the graph in flat).
     const introStart = typeof performance !== 'undefined' ? performance.now() : 0;
-    nodes.forEach((node, i) => { node.spawnTime = introStart; node.spawnIndex = i; });
+    // Compress the per-node stagger so the whole cascade fits inside the cap —
+    // otherwise large communities spend `count × staggerMs` (many seconds)
+    // continuously redrawing the full canvas. spawnIndex is fractional: the
+    // renderers multiply it by fadeInStaggerMs, so scaling it here scales the
+    // whole window.
+    const staggerScale = Math.min(1, P.fadeInMaxTotalStaggerMs / Math.max(1, nodes.length * P.fadeInStaggerMs));
+    nodes.forEach((node, i) => { node.spawnTime = introStart; node.spawnIndex = i * staggerScale; });
+    const totalStaggerMs = nodes.length * P.fadeInStaggerMs * staggerScale;
 
     let fitRaf: number | null = null;
     if (coldStartRef.current === false) {
@@ -552,7 +574,7 @@ const CustomForceGraph: React.FC<{
       if (reduceMotionRef.current) {
         scheduleRender();
       } else {
-        playFadeIn(introStart, nodes.length);
+        playFadeIn(introStart, totalStaggerMs);
       }
     } else {
       // Cold run: the live simulation renders every tick, so the fade rides along
@@ -575,11 +597,16 @@ const CustomForceGraph: React.FC<{
     };
   }, [nodes, links, startSimLoop, markDirty, flushOnSettle, collectPositions, playFadeIn, scheduleRender]);
 
-  // Warm the image cache a few at a time. Firing every request at once would
-  // open hundreds of concurrent loads through the media proxy on large
-  // communities, starving the initial data fetch and first paint. Visible
-  // nodes don't wait on this queue: the renderers call loadImage() during
-  // draw, so anything on screen starts loading immediately.
+  // Repaint (RAF-deduped) whenever an image the renderers requested on demand
+  // finishes loading — at mid/full zoom cards draw a placeholder first and this
+  // swaps the real photo in as it arrives.
+  useEffect(() => onImageLoad(scheduleRender), [scheduleRender]);
+
+  // Warm the image cache a few at a time, but only once the browser is idle —
+  // on large communities eagerly fetching hundreds of photos at mount competes
+  // with the graph payload and first paint. Zoomed-out views don't need photos
+  // at all (low-LOD cards don't draw them); anything visible at readable zoom
+  // loads immediately via loadImage() during draw.
   useEffect(() => {
     const imageUrls = nodes
       .map(node => node.image_url)
@@ -589,16 +616,32 @@ const CustomForceGraph: React.FC<{
 
     let cancelled = false;
     const CHUNK_SIZE = 8;
-    (async () => {
+    const run = async () => {
       for (let i = 0; i < imageUrls.length; i += CHUNK_SIZE) {
         if (cancelled) return;
         await preloadImages(imageUrls.slice(i, i + CHUNK_SIZE));
-        if (cancelled) return;
-        scheduleRender();
       }
-    })();
-    return () => { cancelled = true; };
-  }, [nodes, scheduleRender]);
+    };
+
+    type IdleWindow = Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    const w = window as IdleWindow;
+    let idleId: number | null = null;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    if (typeof w.requestIdleCallback === 'function') {
+      idleId = w.requestIdleCallback(() => { void run(); }, { timeout: 4000 });
+    } else {
+      timerId = setTimeout(() => { void run(); }, 2500);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId !== null) w.cancelIdleCallback?.(idleId);
+      if (timerId !== null) clearTimeout(timerId);
+    };
+  }, [nodes]);
 
   /* --------------------------------------------------------------------------
      EVENT HANDLERS
@@ -869,6 +912,13 @@ const CustomForceGraph: React.FC<{
     const container = containerRef.current;
     if (!canvas || !container) return;
 
+    // Refit only on REAL resizes, not the initial measurement — refitting on
+    // mount silently threw away the camera transform restored from the saved
+    // layout, so the graph always reopened at the fitted overview instead of
+    // where the user left it.
+    let prevWidth = 0;
+    let prevHeight = 0;
+
     const updateCanvasSize = () => {
       const dpr = window.devicePixelRatio || 1;
       const { width, height } = container.getBoundingClientRect();
@@ -881,7 +931,11 @@ const CustomForceGraph: React.FC<{
 
       scheduleRender();
 
-      if (isLayoutReadyRef.current) {
+      const sizeChanged = prevWidth !== 0 && (width !== prevWidth || height !== prevHeight);
+      prevWidth = width;
+      prevHeight = height;
+
+      if (sizeChanged && isLayoutReadyRef.current) {
         hasInitialFitRef.current = false;
         fitToScreen(false);
       }

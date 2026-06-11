@@ -7,6 +7,7 @@ import GraphDataTables from './GraphDataTables';
 import NodeDetailsSidebar from './NodeDetailsSidebar';
 import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS } from './utils/constants';
 import { layoutGraph } from '@/lib/graph-layout/graphLayout';
+import { placeIncrementally } from './utils/incrementalLayout';
 import { fetchNodeProfile } from '@/hooks/useNodeProfile';
 import { prefetchProfile } from '@/hooks/useProfile';
 import { type SimNode, type SimLink, type Transform } from './CustomForceGraph';
@@ -157,6 +158,11 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // seed so a manual re-run actually produces a different arrangement.
   const [rerollNonce, setRerollNonce] = useState(0);
 
+  // d3-force's forceLink mutates simLinks in place, swapping string endpoints
+  // for node-object references once a simulation has run — unwrap either form.
+  const endpointId = (v: SimLink['source']): string =>
+    typeof v === 'string' ? v : String((v as SimNode).id);
+
   const simLinks = useMemo<SimLink[]>(() => {
     const nodeIdSet = new Set(graphData.nodes.map(n => String(n.id)));
     const seen = new Set<string>();
@@ -173,6 +179,37 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       .map(link => ({ ...link, source: String(link.source), target: String(link.target) }));
   }, [graphData.links, graphData.nodes]);
 
+  // No exact-hash layout, but the structure usually only changed a little (a
+  // few members joined/left, or a filter narrowed the node set). Reuse the
+  // saved positions for every node we still know and place only the new ones —
+  // skipping the full engine run (~1.5s of blocked main thread) entirely.
+  // The user-facing "Re-run layout" button bypasses this on purpose.
+  const incrementalLayout = useMemo<Map<string, { x: number; y: number }> | null>(() => {
+    if (serverSeed !== null || graphData.nodes.length === 0) return null;
+    if (recomputedHash === graphDataHash) return null;
+
+    // Pick the algo-compatible saved layout (session or server) covering the
+    // most of the current node set.
+    const candidates = [...sessionLayoutsRef.current.values()];
+    if (initialLayout) candidates.push(initialLayout);
+    let best: GraphLayoutData | null = null;
+    let bestCovered = 0;
+    for (const c of candidates) {
+      if (!c.hash.startsWith(`${LAYOUT_ALGO_VERSION}:`)) continue;
+      const covered = graphData.nodes.reduce(
+        (n, node) => n + (c.positions[String(node.id)] ? 1 : 0), 0,
+      );
+      if (covered > bestCovered) { best = c; bestCovered = covered; }
+    }
+    if (!best) return null;
+
+    return placeIncrementally(
+      graphData.nodes.map(n => String(n.id)),
+      simLinks.map(l => ({ source: endpointId(l.source), target: endpointId(l.target) })),
+      best.positions,
+    );
+  }, [serverSeed, graphData.nodes, simLinks, graphDataHash, recomputedHash, initialLayout]);
+
   // Fresh layout for cold starts, computed by the self-contained engine
   // (PivotMDS init → Barnes-Hut forces → guaranteed overlap removal) instead
   // of the old random-scatter + d3 burst, which stopped on alpha decay and
@@ -181,14 +218,9 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // overlap". The engine output is normalized to its viewport; divide the
   // reported scale back out to get world coordinates at true card size.
   const engineLayout = useMemo<Map<string, { x: number; y: number }> | null>(() => {
-    if (serverSeed !== null || graphData.nodes.length === 0) return null;
+    if (serverSeed !== null || incrementalLayout !== null || graphData.nodes.length === 0) return null;
     const rectR = Math.hypot(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) / 2;
     const hexR = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.75;
-    // d3-force's forceLink mutates simLinks in place, swapping string
-    // endpoints for node-object references once a simulation has run — so on
-    // a re-run this memo may see objects, not ids. Unwrap either form.
-    const endpointId = (v: SimLink['source']): string =>
-      typeof v === 'string' ? v : String((v as SimNode).id);
     const result = layoutGraph(
       graphData.nodes.map(n => ({
         id: String(n.id),
@@ -212,7 +244,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
     return new Map(
       result.nodes.map(p => [String(p.id), { x: (p.x - 1000) * inv, y: (p.y - 700) * inv }]),
     );
-  }, [serverSeed, graphData.nodes, simLinks, nodeTypes, graphDataHash, rerollNonce]);
+  }, [serverSeed, incrementalLayout, graphData.nodes, simLinks, nodeTypes, graphDataHash, rerollNonce]);
 
   // In-session drags (savedPositionsRef) take precedence, then the
   // server-saved layout, then the freshly computed engine layout.
@@ -229,6 +261,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       const savedPos =
         savedPositionsRef.current.get(node.id) ??
         seedPositions?.[node.id] ??
+        incrementalLayout?.get(String(node.id)) ??
         engineLayout?.get(String(node.id));
       if (savedPos) {
         return { ...node, x: savedPos.x, y: savedPos.y, spawnTime: now, spawnIndex: index };
@@ -245,7 +278,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData.nodes, graphDataHash, serverSeed, engineLayout, recomputedHash]);
+  }, [graphData.nodes, graphDataHash, serverSeed, incrementalLayout, engineLayout, recomputedHash]);
 
   // Wrap the canvas's geometry callback to stamp it with the current
   // version-prefixed structure hash before handing it to the persistence layer,
@@ -303,13 +336,15 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             savedPositionsRef={savedPositionsRef}
             nodeTypes={nodeTypes}
             communityAliases={communityAliases}
-            // Both a server restore and a fresh engine layout arrive as final
-            // positions — freeze the simulation instead of running a burst.
-            coldStart={coldStart && engineLayout === null}
+            // A server restore, an incremental reuse, and a fresh engine layout
+            // all arrive as final positions — freeze the simulation instead of
+            // running a burst.
+            coldStart={coldStart && incrementalLayout === null && engineLayout === null}
             initialTransform={serverSeed?.transform ?? null}
-            // A fresh engine layout (no saved camera) should be persisted once
-            // the canvas has fitted it; a server restore should not re-persist.
-            persistOnRestore={serverSeed === null && engineLayout !== null}
+            // Fresh engine/incremental layouts (no saved camera) should be
+            // persisted once the canvas has fitted them; a server restore
+            // should not re-persist.
+            persistOnRestore={serverSeed === null && (incrementalLayout !== null || engineLayout !== null)}
             onPersistLayout={handlePersistLayout}
             onRerunLayout={() => {
               setRecomputedHash(graphDataHash);

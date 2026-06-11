@@ -13,6 +13,46 @@
  * @param align - Text alignment ('left' or 'center')
  * @returns Number of lines drawn
  */
+// Node names/subtitles never change between frames, but wrapping measures every
+// word with ctx.measureText — per card, per frame. Cache the computed lines per
+// (font, width, text); the cache is tiny relative to the cost it removes.
+const wrapCache = new Map<string, string[]>();
+const WRAP_CACHE_MAX = 4000;
+
+function getWrappedLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number
+): string[] {
+  const key = `${ctx.font}|${maxWidth}|${text}`;
+  const cached = wrapCache.get(key);
+  if (cached) return cached;
+
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let line = '';
+
+  for (let i = 0; i < words.length; i++) {
+    const testLine = line + (line ? ' ' : '') + words[i];
+    if (ctx.measureText(testLine).width > maxWidth && line !== '') {
+      lines.push(line);
+      line = words[i];
+      if (lines.length >= maxLines) {
+        line = '';
+        break;
+      }
+    } else {
+      line = testLine;
+    }
+  }
+  if (lines.length < maxLines && line) lines.push(line);
+
+  if (wrapCache.size >= WRAP_CACHE_MAX) wrapCache.clear();
+  wrapCache.set(key, lines);
+  return lines;
+}
+
 export function drawWrappedText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -22,40 +62,12 @@ export function drawWrappedText(
   lineHeight: number,
   align: 'left' | 'center' = 'left'
 ): number {
-  const words = text.split(' ');
-  let line = '';
-  let lineY = y;
-  const maxLines = 2; // Limit to 2 lines to fit in card
-  let lineCount = 0;
-
   ctx.textAlign = align;
-
-  for (let i = 0; i < words.length; i++) {
-    const testLine = line + (line ? ' ' : '') + words[i];
-    const metrics = ctx.measureText(testLine);
-
-    if (metrics.width > maxWidth && line !== '') {
-      // Draw the current line
-      ctx.fillText(line, x, lineY);
-      line = words[i];
-      lineY += lineHeight;
-      lineCount++;
-
-      if (lineCount >= maxLines) {
-        break;
-      }
-    } else {
-      line = testLine;
-    }
+  const lines = getWrappedLines(ctx, text, maxWidth, 2);
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x, y + i * lineHeight);
   }
-
-  // Draw the last line
-  if (lineCount < maxLines && line) {
-    ctx.fillText(line, x, lineY);
-    lineCount++;
-  }
-
-  return lineCount;
+  return lines.length;
 }
 
 /**
