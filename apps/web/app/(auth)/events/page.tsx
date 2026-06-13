@@ -8,8 +8,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useSession } from '@/lib/auth-client';
 import { useHeader } from '@/lib/contexts/HeaderContext';
-import { DeleteEventModal } from '@/components/events/DeleteEventModal';
 import { isEventUpcoming } from '@/lib/eventUtils';
 import type { NBEvent } from '@/lib/types';
 import EventsToolbar from '@/components/events/EventsToolbar';
@@ -18,6 +18,8 @@ import EventsFeedView from '@/components/events/EventsFeedView';
 import EventsMapView from '@/components/events/EventsMapView';
 import EventsViewSelector from '@/components/events/EventsViewSelector';
 import type { EventView } from '@/components/events/EventsViewSelector';
+import EventsScopeSelector from '@/components/events/EventsScopeSelector';
+import type { EventScope } from '@/components/events/EventsScopeSelector';
 
 interface EventWithStats extends NBEvent {
   _stats?: {
@@ -34,11 +36,13 @@ export default function EventsPage() {
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<EventView>('feed');
+  const [scope, setScope] = useState<EventScope>('community');
   const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [deleteEventId, setDeleteEventId] = useState<string | null>(null);
   const { setHeaderRight } = useHeader();
+  const { data: session } = useSession();
+  const myNodeId = session?.user?.nodeId;
 
   // View toggle lives in the navbar, to the left of the profile icon (same as Directory).
   useEffect(() => {
@@ -70,27 +74,17 @@ export default function EventsPage() {
     loadEvents();
   }, [currentCommunity]);
 
-  const reloadEvents = async () => {
-    if (!currentCommunity) return;
-    try {
-      const response = await fetch(`/api/events?communityId=${currentCommunity.id}`);
-      const data = await response.json();
-      setEvents(data.events || []);
-    } catch (error) {
-      console.error('Failed to load events:', error);
-    }
-  };
-
-  const handleDeleteSuccess = () => {
-    setDeleteEventId(null);
-    reloadEvents();
-  };
-
-  const deleteEvent = events.find((e) => e.id === deleteEventId);
-
   // Apply filters
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
+      // Scope: "My events" = events I host; "Discover" = publicly discoverable
+      // events; "Community" = everything in the current community.
+      if (scope === 'mine') {
+        if (!myNodeId || !event.hosts?.includes(myNodeId)) return false;
+      } else if (scope === 'discover') {
+        if (event.visibility !== 'public') return false;
+      }
+
       // Time filter
       if (timeFilter === 'upcoming') {
         if (!event.startAt || !isEventUpcoming(event.startAt)) return false;
@@ -122,7 +116,7 @@ export default function EventsPage() {
 
       return true;
     });
-  }, [events, timeFilter, locationFilter, searchQuery]);
+  }, [events, scope, myNodeId, timeFilter, locationFilter, searchQuery]);
 
   if (!currentCommunity) {
     return (
@@ -167,6 +161,11 @@ export default function EventsPage() {
         </div>
       </div>
 
+      {/* Scope tabs: discover / community / events I host */}
+      <div className="flex justify-center px-4 sm:px-6 pt-4">
+        <EventsScopeSelector scope={scope} onScopeChange={setScope} />
+      </div>
+
       {/* Filters row */}
       <div className="flex justify-center px-4 sm:px-6 pt-4 pb-1">
         <div className="w-full max-w-2xl">
@@ -188,8 +187,9 @@ export default function EventsPage() {
         {currentView === 'feed' && (
           <EventsFeedView
             events={filteredEvents}
+            community={{ name: currentCommunity.name, imageUrl: currentCommunity.imageUrl }}
             loading={loading}
-            onDelete={(eventId) => setDeleteEventId(eventId)}
+            onEdit={(eventId) => router.push(`/events/${eventId}/edit`)}
             onEventClick={handleEventClick}
           />
         )}
@@ -198,17 +198,6 @@ export default function EventsPage() {
           <EventsMapView events={filteredEvents} />
         )}
       </div>
-
-      {/* Delete Modal */}
-      {deleteEventId && deleteEvent && currentCommunity && (
-        <DeleteEventModal
-          eventTitle={deleteEvent.title}
-          eventId={deleteEvent.id}
-          communityId={currentCommunity.id}
-          onClose={() => setDeleteEventId(null)}
-          onSuccess={handleDeleteSuccess}
-        />
-      )}
     </div>
   );
 }

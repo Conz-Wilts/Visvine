@@ -2,8 +2,9 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { Calendar, MapPin, Users, Video, Trash2, Plus } from 'lucide-react';
-import { formatEventTime, getEventStatus, isEventUpcoming } from '@/lib/eventUtils';
+import { Calendar, MapPin, Users, Video, Pencil, Plus } from 'lucide-react';
+import { formatEventTime, getEventStatus, isEventUpcoming, startsInLabel } from '@/lib/eventUtils';
+import Avatar from '@/components/ui/Avatar';
 import type { NBEvent } from '@/lib/types';
 
 interface EventWithStats extends NBEvent {
@@ -15,10 +16,16 @@ interface EventWithStats extends NBEvent {
   };
 }
 
+interface CommunityInfo {
+  name: string;
+  imageUrl?: string | null;
+}
+
 interface EventsFeedViewProps {
   events: EventWithStats[];
+  community?: CommunityInfo;
   loading?: boolean;
-  onDelete?: (eventId: string) => void;
+  onEdit?: (eventId: string) => void;
   onEventClick?: (event: EventWithStats) => void;
 }
 
@@ -38,38 +45,28 @@ function formatFullDate(startAt: string, endAt?: string): string {
   return `${datePart}, ${startTime}`;
 }
 
-function relativeLabel(startAt: string): string | null {
-  const diffMs = new Date(startAt).getTime() - Date.now();
-  if (diffMs < 0) return null;
-  const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  if (days === 0) return 'Starts today';
-  if (days === 1) return 'Starts tomorrow';
-  if (days < 30) return `Starts in ${days} days`;
-  const months = Math.round(days / 30);
-  return `Starts in ${months} month${months > 1 ? 's' : ''}`;
-}
-
 function monthKey(date: Date): string {
   return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 
 function FeedCard({
   event,
+  community,
   featured,
-  onDelete,
+  onEdit,
   onClick,
 }: {
   event: EventWithStats;
+  community?: CommunityInfo;
   featured?: boolean;
-  onDelete?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onClick?: (event: EventWithStats) => void;
 }) {
   const cover = getCoverImage(event);
   const status = getEventStatus(event.startAt, event.endAt);
   const isVirtual = !event.location || event.location.lat == null;
   const attendeeCount = event._stats?.totalAttendees ?? 0;
-  const rel = relativeLabel(event.startAt);
-  const hostLabel = event.hosts?.[0];
+  const rel = startsInLabel(event.startAt);
 
   return (
     <div className={`group relative rounded-2xl border border-border-default bg-surface-1 overflow-hidden hover:shadow-md transition-all ${status === 'past' ? 'opacity-80' : ''}`}>
@@ -96,9 +93,17 @@ function FeedCard({
             </span>
           </div>
 
-          <p className="text-sm font-medium text-text-secondary">
-            {formatFullDate(event.startAt, event.endAt)}
-          </p>
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-text-secondary">
+              {formatFullDate(event.startAt, event.endAt)}
+            </p>
+            {community && (
+              <div className="flex items-center gap-1.5 text-sm text-text-muted">
+                <Avatar name={community.name} imageUrl={community.imageUrl} size="xs" />
+                {community.name} community
+              </div>
+            )}
+          </div>
 
           {event.description && (
             <p className={`text-sm text-text-secondary leading-relaxed ${featured ? 'line-clamp-3' : 'line-clamp-2'}`}>
@@ -130,12 +135,6 @@ function FeedCard({
                 </span>
               )
             )}
-            {hostLabel && (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
-                <Users className="w-3.5 h-3.5" />
-                {hostLabel}
-              </span>
-            )}
             {attendeeCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
                 <Users className="w-3.5 h-3.5" />
@@ -146,20 +145,20 @@ function FeedCard({
         </div>
       </button>
 
-      {onDelete && (
+      {onEdit && (
         <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(event.id); }}
-          className="absolute top-3 right-3 p-1.5 text-brand-grey hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 bg-surface-1/80 backdrop-blur-sm"
-          title="Delete event"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(event.id); }}
+          className="absolute top-3 right-3 p-1.5 text-brand-grey hover:text-brand-green hover:bg-brand-light-bg rounded-lg transition-all opacity-0 group-hover:opacity-100 bg-surface-1/80 backdrop-blur-sm"
+          title="Edit event"
         >
-          <Trash2 className="w-4 h-4" />
+          <Pencil className="w-4 h-4" />
         </button>
       )}
     </div>
   );
 }
 
-export default function EventsFeedView({ events, loading = false, onDelete, onEventClick }: EventsFeedViewProps) {
+export default function EventsFeedView({ events, community, loading = false, onEdit, onEventClick }: EventsFeedViewProps) {
   const { nextEvent, upcomingByMonth, pastEvents } = useMemo(() => {
     const upcoming = events
       .filter(e => e.startAt && isEventUpcoming(e.startAt))
@@ -210,7 +209,7 @@ export default function EventsFeedView({ events, loading = false, onDelete, onEv
       {nextEvent && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-brand-black">Next event</h2>
-          <FeedCard event={nextEvent} featured onDelete={onDelete} onClick={onEventClick} />
+          <FeedCard event={nextEvent} community={community} featured onEdit={onEdit} onClick={onEventClick} />
         </section>
       )}
 
@@ -219,7 +218,7 @@ export default function EventsFeedView({ events, loading = false, onDelete, onEv
           <h2 className="text-lg font-semibold text-brand-black">{month}</h2>
           <div className="space-y-4">
             {monthEvents.map(ev => (
-              <FeedCard key={ev.id} event={ev} onDelete={onDelete} onClick={onEventClick} />
+              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
             ))}
           </div>
         </section>
@@ -230,7 +229,7 @@ export default function EventsFeedView({ events, loading = false, onDelete, onEv
           <h2 className="text-lg font-semibold text-text-muted">Past events</h2>
           <div className="space-y-4">
             {pastEvents.map(ev => (
-              <FeedCard key={ev.id} event={ev} onDelete={onDelete} onClick={onEventClick} />
+              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
             ))}
           </div>
         </section>

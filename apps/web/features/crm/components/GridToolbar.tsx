@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search, Filter, UserPlus, Upload, Download } from "lucide-react";
+import Select from "@/components/ui/Select";
 import { FieldDefinition } from "@/lib/schemas/crm";
 import { useCrmGrid } from "../hooks/useCrmGrid";
 import { AddMemberModal } from "./AddMemberModal";
@@ -70,10 +71,9 @@ export function GridToolbar({
         {privateFields.length > 0 && (
           <div className="hidden sm:flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-400" aria-hidden="true" />
-            <select
+            <Select
               value={filterField}
               onChange={(e) => setFilterField(e.target.value)}
-              className="rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               aria-label="Filter field"
             >
               <option value="">Filter by...</option>
@@ -82,7 +82,7 @@ export function GridToolbar({
                   {f.label}
                 </option>
               ))}
-            </select>
+            </Select>
             {filterField && (
               <input
                 type="text"

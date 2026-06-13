@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { X } from "lucide-react";
+import Select from "@/components/ui/Select";
 import { FieldDefinition } from "@/lib/schemas/crm";
 import { useCrmGrid } from "../hooks/useCrmGrid";
 
@@ -123,12 +124,12 @@ export function AddMemberModal({
                 {field.label}
               </label>
               {field.type === "select" && field.options ? (
-                <select
+                <Select
                   value={privateValues[field.key] ?? ""}
                   onChange={(e) =>
                     setPrivateValues((v) => ({ ...v, [field.key]: e.target.value }))
                   }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full"
                 >
                   <option value="">—</option>
                   {field.options.map((o) => (
@@ -136,7 +137,7 @@ export function AddMemberModal({
                       {o}
                     </option>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <input
                   type={field.type === "number" ? "number" : "text"}

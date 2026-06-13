@@ -5,15 +5,19 @@
  */
 
 import { use, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { EventComposer } from '@/components/events/EventComposer';
+import { DeleteEventModal } from '@/components/events/DeleteEventModal';
 import type { NBEvent } from '@/lib/types';
 
 export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = use(params);
+  const router = useRouter();
   const { currentCommunity } = useCommunity();
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     if (!currentCommunity) return;
@@ -33,5 +37,23 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
   if (loading) return wrap(<p className="text-center text-brand-grey">Loading…</p>);
   if (!event) return wrap(<p className="text-center text-brand-grey">Event not found.</p>);
 
-  return wrap(<EventComposer communityId={currentCommunity.id} mode="edit" initialEvent={event} />);
+  return wrap(
+    <>
+      <EventComposer
+        communityId={currentCommunity.id}
+        mode="edit"
+        initialEvent={event}
+        onDelete={() => setConfirmingDelete(true)}
+      />
+      {confirmingDelete && (
+        <DeleteEventModal
+          eventTitle={event.title}
+          eventId={event.id}
+          communityId={currentCommunity.id}
+          onClose={() => setConfirmingDelete(false)}
+          onSuccess={() => router.push('/events')}
+        />
+      )}
+    </>
+  );
 }

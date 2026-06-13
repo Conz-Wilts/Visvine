@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+/**
+ * MessageRow — linear feed message (LinkedIn/Slack style).
+ *
+ * Every message renders left-aligned: avatar gutter, then a header line
+ * (name · time) for the first message of a sender group, then plain rich
+ * text. There is no own/other side split and no bubble chrome — the thread
+ * reads as one continuous feed.
+ */
+
+import { memo, useEffect, useRef, useState } from 'react';
 import { Smile, Reply, Pencil, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -27,6 +36,10 @@ export function formatChatTimestamp(value: string | null | undefined) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+function formatTimeOnly(value: string) {
+  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
 export function mergeMessages(messages: SerializedMessage[]) {
   const seen = new Set<string>();
   const merged: SerializedMessage[] = [];
@@ -51,7 +64,7 @@ function linkifyMentions(text: string): React.ReactNode[] {
     if (m.index > last) parts.push(text.slice(last, m.index));
     if (m[1]) {
       parts.push(
-        <span key={`u${m.index}`} className="font-semibold text-brand-green cursor-pointer hover:underline">{m[1]}</span>,
+        <span key={`u${m.index}`} className="font-semibold text-brand-dark-green cursor-pointer hover:underline">{m[1]}</span>,
       );
     } else if (m[2]) {
       parts.push(
@@ -117,7 +130,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void;
   }, [onClose]);
 
   return (
-    <div ref={ref} className="flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-2 py-1.5 shadow-lg">
+    <div ref={ref} className="flex items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-2 py-1.5 shadow-float">
       {QUICK_EMOJIS.map((emoji) => (
         <button
           key={emoji}
@@ -132,7 +145,7 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void;
   );
 }
 
-// ─── Image grid ──────────────────────────────────────────────────────────────
+// ─── Media ───────────────────────────────────────────────────────────────────
 
 function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
   if (!images?.length) return null;
@@ -142,14 +155,14 @@ function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
       <img
         src={images[0].imageUrl}
         alt=""
-        className="mt-1.5 max-h-64 w-full rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
+        className="mt-1.5 max-h-64 max-w-sm rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
         loading="lazy"
       />
     );
   }
 
   return (
-    <div className={`mt-1.5 grid gap-1 ${images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+    <div className="mt-1.5 grid max-w-md grid-cols-2 gap-1">
       {images.slice(0, 4).map((img, i) => (
         <div key={img.id} className="relative">
           <img
@@ -169,8 +182,6 @@ function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
   );
 }
 
-// ─── Link preview card ───────────────────────────────────────────────────────
-
 function LinkPreviewCard({ preview }: { preview: SerializedLinkPreview }) {
   if (!preview.title && !preview.description) return null;
 
@@ -179,7 +190,7 @@ function LinkPreviewCard({ preview }: { preview: SerializedLinkPreview }) {
       href={preview.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="mt-2 block rounded-xl border border-border-subtle bg-surface-1/50 overflow-hidden hover:bg-surface-2/50 transition-colors"
+      className="mt-2 block max-w-md rounded-xl border border-border-subtle bg-surface-2/60 overflow-hidden hover:bg-surface-2 transition-colors"
     >
       {preview.imageUrl && (
         <img src={preview.imageUrl} alt="" className="h-32 w-full object-cover" loading="lazy" />
@@ -199,12 +210,12 @@ function LinkPreviewCard({ preview }: { preview: SerializedLinkPreview }) {
   );
 }
 
-// ─── Message Bubble ──────────────────────────────────────────────────────────
+// ─── Message row ─────────────────────────────────────────────────────────────
 
-export interface MessageBubbleProps {
+export interface MessageRowProps {
   message: SerializedMessage;
-  currentUserId: string;
-  isLastInGroup?: boolean;
+  /** First message of a sender group — renders the avatar + name/time header. */
+  showHeader?: boolean;
   onReply: (replyTo: SerializedReplyTo) => void;
   onReaction: (messageId: string, emoji: string) => void;
   onEdit: (messageId: string, text: string) => void;
@@ -212,8 +223,7 @@ export interface MessageBubbleProps {
   onScrollToMessage?: (messageId: string) => void;
 }
 
-export default function MessageBubble({ message, currentUserId: _currentUserId, isLastInGroup = true, onReply, onReaction, onEdit, onDelete, onScrollToMessage }: MessageBubbleProps) {
-  const [showActions, setShowActions] = useState(false);
+function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, onDelete, onScrollToMessage }: MessageRowProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -238,57 +248,91 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
     setIsEditing(false);
   };
 
-  const isOwn = message.isOwn;
-
   if (isDeleted) {
     return (
-      <div className={`flex px-2 py-0.75 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-        <div className="rounded-2xl px-3.5 py-2 text-sm italic text-text-muted">This message was deleted</div>
+      <div className="flex gap-3 rounded-xl px-3 py-1">
+        <div className="w-9 shrink-0" />
+        <p className="text-sm italic text-text-muted">This message was deleted</p>
       </div>
     );
   }
 
   return (
     <div
-      className={`group relative flex w-full items-start gap-2 px-2 py-0.75 ${isOwn ? 'justify-end' : 'justify-start'}`}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => { setShowActions(false); setShowEmojiPicker(false); }}
+      className={`group relative flex gap-3 px-3 py-1 ${showHeader ? 'mt-2' : ''}`}
+      onMouseLeave={() => setShowEmojiPicker(false)}
     >
-      {/* Incoming avatar — show for first in group, spacer for continuation */}
-      {!isOwn && (
-        isLastInGroup ? (
-          <div className="shrink-0">
-            <Avatar name={message.sender.name} imageUrl={message.sender.image} size="md" />
-          </div>
-        ) : (
-          <div className="w-9 shrink-0" />
-        )
+      {/* Gutter: avatar for the first message of a group, hover timestamp after */}
+      {showHeader ? (
+        <div className="shrink-0 pt-0.5">
+          <Avatar name={message.sender.name} imageUrl={message.sender.image} size="md" />
+        </div>
+      ) : (
+        <div className="relative w-9 shrink-0">
+          <span className="absolute right-0 top-1 hidden text-[10px] leading-none text-text-muted group-hover:block">
+            {formatTimeOnly(message.createdAt)}
+          </span>
+        </div>
       )}
 
-      {/* Bubble column (max 65% desktop / 78% mobile, matching pretext.ts) */}
-      <div className={`relative flex min-w-0 max-w-[78%] flex-col sm:max-w-[65%] ${isOwn ? 'items-end' : 'items-start'}`}>
-        {/* Sender name (incoming, first in group) */}
-        {!isOwn && isLastInGroup && (
-          <span className="mb-0.5 px-1 text-xs font-semibold text-text-secondary">{message.sender.name}</span>
+      <div className="min-w-0 flex-1">
+        {/* Floating bubble card — fits its content, all bubbles left-aligned */}
+        <div className="relative w-fit max-w-full rounded-2xl border border-border-subtle/70 bg-surface-1 px-4 py-2.5 shadow-[0_2px_12px_rgba(16,24,40,0.06)]">
+        {/* Header line: name · time · receipts */}
+        {showHeader && (
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="text-[13px] font-semibold text-text-primary">
+              {message.isOwn ? 'You' : message.sender.name}
+            </span>
+            <span className="text-[11px] text-text-muted">{formatChatTimestamp(message.createdAt)}</span>
+            {message.isOwn && message.recipientCount > 0 && (
+              <span
+                className="text-[11px]"
+                title={
+                  message.isFullyReadByRecipients ? 'Read by everyone' : message.readByCount > 0 ? `Read by ${message.readByCount}` : 'Sent'
+                }
+              >
+                {message.isFullyReadByRecipients ? (
+                  <span className="text-blue-500">✓✓</span>
+                ) : message.readByCount > 0 ? (
+                  <span className="text-text-muted">✓✓</span>
+                ) : (
+                  <span className="text-text-muted">✓</span>
+                )}
+              </span>
+            )}
+            {message.pinnedAt && (
+              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                📌 Pinned
+              </span>
+            )}
+          </div>
         )}
 
-        {/* Reply preview */}
+        {/* Pinned badge for grouped messages (the header line carries it otherwise) */}
+        {!showHeader && message.pinnedAt && (
+          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+            📌 Pinned
+          </span>
+        )}
+
+        {/* Reply quote */}
         {message.replyTo && (
           <button
             type="button"
             onClick={() => onScrollToMessage?.(message.replyTo!.id)}
-            className="mb-1 flex w-full items-center gap-2 rounded-md border-l-[3px] border-brand-green bg-surface-3/50 px-3 py-1.5 text-left"
+            className="mt-0.5 flex w-full max-w-md items-center gap-2 rounded-md border-l-[3px] border-brand-green bg-surface-2/80 px-3 py-1.5 text-left hover:bg-surface-3 transition-colors"
           >
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-brand-green">{message.replyTo.senderName}</p>
+              <p className="text-xs font-semibold text-brand-dark-green">{message.replyTo.senderName}</p>
               <p className="truncate text-xs text-text-muted">{message.replyTo.text}</p>
             </div>
           </button>
         )}
 
-        {/* Bubble: message text or edit mode */}
+        {/* Body: rich text or edit mode */}
         {isEditing ? (
-          <div className="w-full space-y-2 rounded-2xl border border-brand-green/30 bg-surface-3/30 px-3 py-2">
+          <div className="mt-1 w-full space-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
             <textarea
               ref={editRef}
               value={editText}
@@ -301,67 +345,35 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
               rows={2}
             />
             <div className="flex items-center gap-2 text-xs">
-              <button type="button" onClick={handleEditSubmit} className="font-medium text-brand-green">Save</button>
+              <button type="button" onClick={handleEditSubmit} className="font-medium text-brand-dark-green">Save</button>
               <button type="button" onClick={() => setIsEditing(false)} className="text-text-muted">Cancel</button>
             </div>
           </div>
         ) : (
-          <div
-            className={`max-w-full rounded-2xl px-3.5 py-2.5 ${
-              isOwn
-                ? 'rounded-br-sm bg-brand-green text-white'
-                : 'rounded-bl-sm bg-surface-1 text-text-primary shadow-sm'
-            }`}
-          >
+          <>
             {message.text && (
-              <div className="text-[15px] leading-relaxed [&_a]:underline [&_p]:whitespace-pre-wrap">
+              <div className="text-[15px] leading-relaxed text-text-primary [&_a]:underline [&_p]:whitespace-pre-wrap">
                 <MarkdownMessage text={message.text} />
+                {isEdited && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
               </div>
             )}
 
-            {/* Images */}
             <MessageImageGrid images={message.images} />
 
-            {/* Link previews */}
+            {/* Image-only messages still need their edited marker */}
+            {!message.text && isEdited && (
+              <div className="mt-0.5"><span className="text-[11px] italic text-text-muted">(edited)</span></div>
+            )}
+
             {message.linkPreviews?.map((lp) => (
               <LinkPreviewCard key={lp.url} preview={lp} />
             ))}
-          </div>
-        )}
-
-        {/* Timestamp + delivery ticks below bubble, aligned to message side */}
-        {!isEditing && (
-          <div className={`mt-0.5 flex items-center gap-1.5 px-1 text-[11px] text-text-muted ${isOwn ? 'flex-row-reverse' : ''}`}>
-            <span>{formatChatTimestamp(message.createdAt)}</span>
-            {isEdited && <span className="italic">(edited)</span>}
-
-            {/* Delivery ticks (own messages, last in group) */}
-            {isOwn && isLastInGroup && message.recipientCount > 0 && (
-              <span title={
-                message.isFullyReadByRecipients ? 'Read by everyone' : message.readByCount > 0 ? `Read by ${message.readByCount}` : 'Sent'
-              }>
-                {message.isFullyReadByRecipients ? (
-                  <span className="text-blue-500">✓✓</span>
-                ) : message.readByCount > 0 ? (
-                  <span className="text-text-muted">✓✓</span>
-                ) : (
-                  <span className="text-text-muted">✓</span>
-                )}
-              </span>
-            )}
-
-            {/* Pinned indicator */}
-            {message.pinnedAt && (
-              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                📌 Pinned
-              </span>
-            )}
-          </div>
+          </>
         )}
 
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className={`mt-1 flex flex-wrap gap-1 ${isOwn ? 'justify-end' : ''}`}>
+          <div className="mt-1 flex flex-wrap gap-1">
             {message.reactions.map((r) => (
               <button
                 key={r.emoji}
@@ -379,11 +391,10 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
             ))}
           </div>
         )}
-      </div>
-
-      {/* Hover actions toolbar — floats on the inner side of the bubble */}
-      {showActions && !isEditing && (
-        <div className={`absolute -top-3 z-10 flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-md ${isOwn ? 'left-4' : 'right-4'}`}>
+          {/* Hover actions — floating toolbar pinned to the bubble (CSS
+              group-hover so a mouse pass doesn't re-render the row) */}
+          {!isEditing && (
+            <div className="absolute -top-4 right-3 z-10 hidden items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex">
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}
@@ -410,28 +421,36 @@ export default function MessageBubble({ message, currentUserId: _currentUserId, 
               <Pencil className="h-4 w-4" />
             </button>
           )}
-          {isOwn && (
-            <button
-              type="button"
-              onClick={() => onDelete(message.id)}
-              className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+              {message.isOwn && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(message.id)}
+                  className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Emoji picker popup */}
+          {showEmojiPicker && (
+            <div className="absolute -top-12 right-3 z-20">
+              <EmojiPicker
+                onSelect={(emoji) => onReaction(message.id, emoji)}
+                onClose={() => setShowEmojiPicker(false)}
+              />
+            </div>
           )}
         </div>
-      )}
-
-      {/* Emoji picker popup */}
-      {showEmojiPicker && (
-        <div className={`absolute -top-12 z-20 ${isOwn ? 'left-4' : 'right-4'}`}>
-          <EmojiPicker
-            onSelect={(emoji) => onReaction(message.id, emoji)}
-            onClose={() => setShowEmojiPicker(false)}
-          />
-        </div>
-      )}
+      </div>
     </div>
   );
 }
+
+// Memoized: the row re-parses markdown on every render, and the virtualized
+// feed re-runs itemContent for all visible rows on each MessagesClient state
+// change (typing events, scroll position, polls). Callers must pass stable
+// callbacks for the memo to hold.
+export default memo(MessageRow);

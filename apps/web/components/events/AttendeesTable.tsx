@@ -7,6 +7,7 @@
 import { useState, useMemo } from 'react';
 import type { NBAttendee, RSVPStatus } from '@/lib/types';
 import { CheckCircle, Clock, XCircle, UserCheck } from 'lucide-react';
+import Select from '@/components/ui/Select';
 
 interface AttendeeWithPerson extends NBAttendee {
   person?: {
@@ -74,10 +75,9 @@ export function AttendeesTable({ attendees }: AttendeesTableProps) {
           <label className="text-sm font-medium text-brand-black">
             Filter:
           </label>
-          <select
+          <Select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as RSVPStatus | 'all')}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
           >
             <option value="all">All ({attendees.length})</option>
             {Object.entries(statusCounts).map(([status, count]) => (
@@ -85,22 +85,21 @@ export function AttendeesTable({ attendees }: AttendeesTableProps) {
                 {STATUS_CONFIG[status as RSVPStatus].label} ({count})
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="flex items-center gap-2.5">
           <label className="text-sm font-medium text-brand-black">
             Sort by:
           </label>
-          <select
+          <Select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'name' | 'date' | 'status')}
-            className="px-4 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
           >
             <option value="date">Registration Date</option>
             <option value="name">Name</option>
             <option value="status">Status</option>
-          </select>
+          </Select>
         </div>
       </div>
 

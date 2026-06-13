@@ -5,8 +5,8 @@
  * Grey dropdown-style selectors matching Directory's FilterDropdown pattern
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { X, ChevronDown, Check } from 'lucide-react';
+import { X } from 'lucide-react';
+import Dropdown from '@/components/ui/Dropdown';
 
 interface EventsToolbarProps {
   currentFilter: 'all' | 'upcoming' | 'past';
@@ -27,67 +27,6 @@ const LOCATION_OPTIONS: { value: 'all' | 'in-person' | 'virtual'; label: string 
   { value: 'virtual', label: 'Virtual' },
 ];
 
-function MiniDropdown<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (v: T) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const activeLabel = options.find(o => o.value === value)?.label ?? label;
-  const isFiltered = value !== 'all';
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition-colors"
-        style={
-          isFiltered
-            ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-light-bg)', color: 'var(--color-brand-dark-green)' }
-            : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
-        }
-      >
-        <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} style={{ opacity: 0.5 }} />
-        <span style={{ opacity: 0.65 }}>{label}:</span>
-        <span>{activeLabel}</span>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-2 z-50 min-w-[160px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl py-1.5 overflow-hidden">
-          {options.map(opt => (
-            <button
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className="flex w-full items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              <span className={value === opt.value ? 'font-medium text-text-primary' : 'text-text-secondary'}>
-                {opt.label}
-              </span>
-              {value === opt.value && <Check className="h-4 w-4 text-brand-green" />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function EventsToolbar({
   currentFilter,
   onFilterChange,
@@ -97,10 +36,22 @@ export default function EventsToolbar({
   const hasFilters = currentFilter !== 'all' || locationFilter !== 'all';
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      <MiniDropdown label="Time" value={currentFilter} options={TIME_OPTIONS} onChange={onFilterChange} />
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+      <Dropdown
+        label="Time"
+        value={currentFilter}
+        options={TIME_OPTIONS}
+        onChange={onFilterChange}
+        active={currentFilter !== 'all'}
+      />
       {onLocationFilterChange && (
-        <MiniDropdown label="Type" value={locationFilter} options={LOCATION_OPTIONS} onChange={onLocationFilterChange} />
+        <Dropdown
+          label="Type"
+          value={locationFilter}
+          options={LOCATION_OPTIONS}
+          onChange={onLocationFilterChange}
+          active={locationFilter !== 'all'}
+        />
       )}
 
       {hasFilters && (

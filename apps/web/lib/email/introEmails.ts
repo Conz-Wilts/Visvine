@@ -83,6 +83,26 @@ export async function sendIntroForwardedEmail(args: {
   });
 }
 
+/** → the other parties after someone politely declines. */
+export async function sendIntroDeclinedEmail(args: {
+  to: string;
+  recipientName: string;
+  declinerName: string;
+  requesterName: string;
+  targetName: string;
+}): Promise<void> {
+  await sendEmail({
+    to: args.to,
+    subject: `${args.declinerName} politely declined the introduction`,
+    html: shell({
+      heading: 'Introduction declined',
+      intro: `Hi ${escapeHtml(args.recipientName.split(' ')[0])}, <strong>${escapeHtml(args.declinerName)}</strong> has politely declined the request for an introduction between <strong>${escapeHtml(args.requesterName)}</strong> and <strong>${escapeHtml(args.targetName)}</strong>.`,
+      ctaLabel: 'Open your intros',
+      ctaPath: '/messages?tab=intros',
+    }),
+  });
+}
+
 /** → both parties once the target accepts. */
 export async function sendIntroConnectedEmail(args: {
   to: string;

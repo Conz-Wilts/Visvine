@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { OnboardingData } from '@/app/onboarding/OnboardingWizard';
+import Toggle from '@/components/ui/Toggle';
 
 interface Props {
   data: OnboardingData;
@@ -33,18 +34,7 @@ export default function AboutStep({ data, onNext, onBack, saving }: Props) {
         <p className="text-xs text-gray-400 text-right mt-1">{bio.length}/{MAX_BIO}</p>
       </div>
 
-      <label className="flex items-center gap-3 cursor-pointer">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={openToWork}
-          onClick={() => setOpenToWork(!openToWork)}
-          className={`relative w-10 h-6 rounded-full transition-colors duration-200 ${openToWork ? 'bg-brand-green' : 'bg-gray-200'}`}
-        >
-          <span className={`block w-4 h-4 bg-white rounded-full shadow absolute top-1 transition-transform duration-200 ${openToWork ? 'translate-x-5' : 'translate-x-1'}`} />
-        </button>
-        <span className="text-sm text-gray-700">Open to work</span>
-      </label>
+      <Toggle checked={openToWork} onChange={setOpenToWork} label="Open to work" />
 
       <div className="flex justify-between mt-8">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">

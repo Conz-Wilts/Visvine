@@ -137,6 +137,20 @@ export async function GET(request: NextRequest) {
     // Drafts are only visible inside the composer, never in the public list.
     const visibleEvents = eventsData.events.filter((e) => e.status !== 'draft');
 
+    // Resolve host node ids (e.g. "person:dev_admin") to display names so
+    // clients never have to render raw ids. Matched by id alone (ids are
+    // globally unique) — host person nodes can live in another community,
+    // same as the event detail route's hostNodes lookup.
+    const hostIds = Array.from(new Set(visibleEvents.flatMap((e) => e.hosts || [])));
+    const prisma = (await import('@/lib/prisma')).default;
+    const hostNodes = hostIds.length
+      ? await prisma.node.findMany({
+          where: { id: { in: hostIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const hostNameById = new Map(hostNodes.map((n) => [n.id, n.name]));
+
     // Add summary stats to each event ('registered' is legacy for 'going')
     const eventsWithStats = visibleEvents.map((event) => {
       const attendees = eventsData.attendees.filter((a) => a.eventId === event.id);
@@ -146,6 +160,9 @@ export async function GET(request: NextRequest) {
 
       return {
         ...event,
+        hostNames: (event.hosts || [])
+          .map((id) => hostNameById.get(id))
+          .filter((name): name is string => !!name),
         _stats: {
           totalAttendees: attendees.length,
           // keep the legacy `registered` key for the mobile contract; it now means "going"

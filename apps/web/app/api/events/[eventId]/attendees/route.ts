@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, getAttendees, getCommunityNodes, submitRsvp, EventFullError } from '@/lib/eventRepo';
-import { isEmailDomainAllowed } from '@/lib/eventUtils';
+import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
 import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { requireEventManager } from '@/lib/eventAuth';
@@ -102,6 +102,11 @@ export async function POST(
         { error: 'Email domain not allowed for this event' },
         { status: 403 }
       );
+    }
+
+    const missing = missingRequiredAnswers(event.form.schema, submission);
+    if (missing.length > 0) {
+      return NextResponse.json({ error: `Please answer: ${missing.join(', ')}` }, { status: 400 });
     }
 
     // Clamp +guests to what the event allows.

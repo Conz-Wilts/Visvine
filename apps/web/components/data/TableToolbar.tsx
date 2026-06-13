@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Plus, Columns, X, Search } from 'lucide-react';
+import Select from '@/components/ui/Select';
 
 export type FieldType = 'text' | 'select' | 'tags' | 'readonly' | 'date' | 'image';
 
@@ -181,20 +182,16 @@ export function AddColumnDialog({ isOpen, onClose, onAdd }: AddColumnDialogProps
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Column Type
             </label>
-            <select
+            <Select
               value={type}
               onChange={(e) => setType(e.target.value as FieldType)}
-              className="
-                w-full px-4 py-2 text-sm
-                border border-gray-300 rounded-lg
-                focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500
-              "
+              className="w-full"
             >
               <option value="text">Text</option>
               <option value="tags">Tags (Multi-select)</option>
               <option value="date">Date</option>
               <option value="select">Select (Single)</option>
-            </select>
+            </Select>
           </div>
         </div>
 

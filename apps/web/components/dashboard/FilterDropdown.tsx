@@ -1,6 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Dropdown, {
+  DROPDOWN_TRIGGER_CLASS,
+  DROPDOWN_MENU_CLASS,
+  DROPDOWN_TRIGGER_ACTIVE_STYLE,
+  DROPDOWN_TRIGGER_IDLE_STYLE,
+} from '@/components/ui/Dropdown';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
 export interface SubOption {
@@ -104,13 +110,13 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition-colors"
+        className={DROPDOWN_TRIGGER_CLASS}
         style={
           isActive && activeColor
             ? { borderColor: activeColor, backgroundColor: `${activeColor}18`, color: activeColor }
             : isActive
-            ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-light-bg)', color: 'var(--color-brand-dark-green)' }
-            : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
+            ? DROPDOWN_TRIGGER_ACTIVE_STYLE
+            : DROPDOWN_TRIGGER_IDLE_STYLE
         }
       >
         <svg
@@ -125,7 +131,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full mt-2 min-w-[200px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl z-50 py-1.5 overflow-hidden">
+        <div className={`${DROPDOWN_MENU_CLASS} min-w-[200px]`}>
           <div className="flex items-center gap-2 px-3 py-2">
             <div className="flex flex-1 min-w-0 items-center gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5">
               <svg className="h-3 w-3 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -284,57 +290,13 @@ const SORT_OPTIONS = [
 ];
 
 export function SortDropdown({ value, onChange }: SortDropdownProps) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const currentLabel = SORT_OPTIONS.find(o => o.value === value)?.label ?? 'A → Z';
-
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex h-12 items-center gap-2 rounded-2xl border border-border-default bg-surface-1 px-4 text-sm font-semibold text-text-secondary shadow-sm hover:border-border-default transition-colors"
-      >
-        <span className="font-normal text-text-muted">Sort:</span>
-        <span>{currentLabel}</span>
-        <svg
-          className={`h-4 w-4 text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-2 min-w-[140px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl z-50 py-1.5 overflow-hidden">
-          {SORT_OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              <span className={value === opt.value ? 'font-medium text-text-primary' : 'text-text-secondary'}>
-                {opt.label}
-              </span>
-              {value === opt.value && (
-                <svg className="h-4 w-4 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <Dropdown
+      label="Sort"
+      value={value}
+      options={SORT_OPTIONS}
+      onChange={onChange}
+      menuWidthClass="min-w-[140px]"
+    />
   );
 }

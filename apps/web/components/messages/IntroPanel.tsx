@@ -186,6 +186,126 @@ export function IntroListItem({ item, isActive, onSelect }: {
   );
 }
 
+// ─── Centered request card ────────────────────────────────────────────────────
+
+/** Which note to surface under the request, for the viewer's role. */
+function introMessageFor({ intro, role }: IntroItem): { label: string; text: string } | null {
+  if (role === 'introducer') {
+    return intro.messageToIntroducer
+      ? { label: `Why ${firstName(intro.requesterNode?.name)} is asking you`, text: intro.messageToIntroducer }
+      : null;
+  }
+  if (role === 'target') {
+    return intro.messageToTarget
+      ? { label: `Message from ${firstName(intro.requesterNode?.name)}`, text: intro.messageToTarget }
+      : null;
+  }
+  return intro.messageToTarget ? { label: 'Your message', text: intro.messageToTarget } : null;
+}
+
+/**
+ * One intro in the centered Intros list: who ↔ who, the request message
+ * underneath, and Accept / Decline on the right while the viewer can act.
+ * Accepting as the target drops you into the new DM (handled by onAction);
+ * declining notifies the other parties that you politely declined.
+ */
+export function IntroRequestCard({ item, onAction, onOpenConversation }: {
+  item: IntroItem;
+  onAction: (id: string, action: IntroAction) => Promise<unknown>;
+  onOpenConversation?: (nodeId: string) => void;
+}) {
+  const { intro, role } = item;
+  const actionable = isIntroActionable(item);
+  const counterpart = introCounterpart(item);
+  const [busy, setBusy] = useState<IntroAction | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const message = introMessageFor(item);
+  const acceptAction: IntroAction = role === 'introducer' ? 'approve' : 'accept';
+
+  const run = async (action: IntroAction) => {
+    if (busy) return;
+    if (action === 'decline' && !window.confirm('Politely decline this introduction? The others will be notified.')) return;
+    setBusy(action);
+    setError(null);
+    try {
+      await onAction(intro.id, action);
+    } catch (e) {
+      setError((e as Error).message || 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="rounded-3xl border border-border-subtle/70 bg-surface-1 p-5 shadow-[0_2px_12px_rgba(16,24,40,0.06)]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3.5">
+          <IntroAvatarPair intro={intro} size="lg" />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-text-primary">{introTitle(item)}</p>
+              <StatusPill intro={intro} />
+              <span className="text-[11px] text-text-muted">{timeAgo(intro.updatedAt)}</span>
+            </div>
+            <p className="mt-0.5 text-xs text-text-muted">{introSubtitle(item)}</p>
+            {role === 'target' && intro.endorsement && (
+              <p className="mt-1 text-xs italic text-text-secondary">
+                “{intro.endorsement}” — {firstName(intro.introducerNode?.name)}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Actions on the right */}
+        {actionable && (
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void run('decline')}
+              disabled={busy !== null}
+              className="flex items-center gap-1.5 rounded-full border border-border-default px-4 py-2 text-xs font-semibold text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+            >
+              {busy === 'decline' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+              Decline
+            </button>
+            <button
+              type="button"
+              onClick={() => void run(acceptAction)}
+              disabled={busy !== null}
+              className="flex items-center gap-1.5 rounded-full bg-brand-green px-4 py-2 text-xs font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {busy === acceptAction ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
+              {role === 'target' ? 'Accept intro' : 'Accept'}
+            </button>
+          </div>
+        )}
+
+        {/* Connected → jump straight into the chat */}
+        {!actionable && intro.status === 'connected' && counterpart && onOpenConversation && (
+          <button
+            type="button"
+            onClick={() => onOpenConversation(counterpart.id)}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-brand-green/40 px-4 py-2 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Open chat
+          </button>
+        )}
+      </div>
+
+      {/* The request message under the header */}
+      {message && (
+        <div className="mt-3.5 rounded-2xl bg-surface-2/70 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">{message.label}</p>
+          <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-text-secondary">{message.text}</p>
+        </div>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
 // ─── Thread view ──────────────────────────────────────────────────────────────
 
 function PathPerson({ node, label, emphasize }: {
@@ -516,7 +636,7 @@ export function IntroBanner({ context }: { context: ConversationIntroContext }) 
   return (
     <div className="px-4 pt-3">
       <div className="mx-auto w-full max-w-3xl">
-        <div className="rounded-2xl border border-brand-green/25 bg-gradient-to-r from-brand-green/10 to-surface-1">
+        <div className="rounded-2xl bg-brand-green/10 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
           <button
             type="button"
             onClick={() => context.endorsement && setExpanded((v) => !v)}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import Select from '@/components/ui/Select';
 
 interface Member {
   id: string;
@@ -149,14 +150,13 @@ function InviteModal({ communityId, onAdded, onClose }: {
           </div>
           <div>
             <label className="block text-xs font-medium text-text-secondary mb-1">Role</label>
-            <select
+            <Select
               value={role}
               onChange={e => setRole(e.target.value as 'member' | 'admin')}
-              className="w-full px-3 py-2 text-sm border border-border-default rounded-lg bg-surface-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-brand-green"
             >
               <option value="member">Member</option>
               <option value="admin">Admin</option>
-            </select>
+            </Select>
           </div>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex gap-2 pt-1">

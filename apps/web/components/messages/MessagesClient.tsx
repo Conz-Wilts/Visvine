@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
+import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle } from 'lucide-react';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useMessageHeights } from '@/hooks/useMessageHeights';
@@ -15,13 +15,13 @@ import type {
 } from '@/lib/messages/types';
 import NewChatModal from './NewChatModal';
 import MessageComposer from './MessageComposer';
-import MessageBubble, { formatChatTimestamp, mergeMessages } from './MessageBubble';
+import MessageRow, { formatChatTimestamp, mergeMessages } from './MessageRow';
+import ProfilePanel from './ProfilePanel';
 import Avatar from '@/components/ui/Avatar';
 import { MessagesTabSelector, formatDateLabel, type MessageTab } from './messagesTabs';
 import {
   IntroBanner,
-  IntroListItem,
-  IntroThread,
+  IntroRequestCard,
   flattenIntroInbox,
   isIntroActionable,
   type IntroAction,
@@ -38,10 +38,13 @@ interface MessagesClientProps {
   initialConversationId?: string;
   initialTab?: MessageTab;
 }
+
+/** Messages within this window of the previous message from the same sender share a header. */
+const GROUP_WINDOW_MS = 7 * 60 * 1000;
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MessagesClient({ currentUser, initialConversationId, initialTab }: MessagesClientProps) {
-  const router = useRouter();
   const { setHeaderContent } = useHeader();
   const communityCtx = useCommunity();
 
@@ -71,12 +74,10 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [channelName, setChannelName] = useState('');
   const [channelDescription, setChannelDescription] = useState('');
   const [creatingChannel, setCreatingChannel] = useState(false);
-  const [selectedIntroId, setSelectedIntroId] = useState<string | null>(null);
   const [threadIntro, setThreadIntro] = useState<ConversationIntroContext | null>(null);
   const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
   const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const atBottomRef = useRef(true);
   const [newMessagesPending, setNewMessagesPending] = useState(0);
   const [announce, setAnnounce] = useState('');
@@ -88,6 +89,26 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const hasTypingSignalRef = useRef(false);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Per-conversation message cache: revisiting a chat renders instantly from
+  // here while a silent refresh runs in the background (no skeleton flash).
+  const messageCacheRef = useRef(new Map<string, {
+    messages: SerializedMessage[];
+    cursor: string | null;
+    hasMore: boolean;
+    intro: ConversationIntroContext | null;
+  }>());
+  // Which conversation the current `messages` state belongs to — guards the
+  // cache against being written with another conversation's rows mid-switch.
+  const messagesConvoRef = useRef<string | null>(null);
+  const lastAppliedSearchRef = useRef('');
+  // Mirror of `messages` for stable callbacks that only need to read it.
+  const messagesRef = useRef<SerializedMessage[]>([]);
+  // Whether the current `messages` state came from a search-filtered fetch.
+  // State alone can't tell: after clearing the search box the filtered rows
+  // linger until the debounced unfiltered reload lands, and caching them as
+  // the conversation's history would truncate the thread on the next visit.
+  const messagesFilteredRef = useRef(false);
 
   // Virtuoso: first item index for prepending older messages without scroll jump
   const INITIAL_FIRST_INDEX = 100000;
@@ -154,14 +175,14 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         selectedConversationRef.current = null;
         setActiveConversation(null);
         setMessages([]);
-        router.push('/messages');
+        window.history.replaceState(null, '', '/messages');
       }
     } catch (fetchError) {
       setError((fetchError as Error).message || 'Failed to load conversations.');
     } finally {
       setConversationsLoading(false);
     }
-  }, [router]);
+  }, []);
 
   const communityId = communityCtx?.currentCommunity?.id;
 
@@ -188,13 +209,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
   const loadMessages = useCallback(async (
     conversationId: string,
-    options?: { cursor?: string | null; prepend?: boolean; query?: string },
+    options?: { cursor?: string | null; prepend?: boolean; query?: string; silent?: boolean },
   ) => {
     const isPrepend = Boolean(options?.prepend);
     try {
       setError(null);
       if (isPrepend) setLoadingOlderMessages(true);
-      else setMessagesLoading(true);
+      else if (!options?.silent) setMessagesLoading(true);
       const params = new URLSearchParams();
       params.set('limit', '30');
       if (options?.cursor) params.set('cursor', options.cursor);
@@ -205,10 +226,14 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         throw new Error(payload.error ?? 'Failed to load messages');
       }
       const payload = await response.json();
+      // The user switched conversations while this request was in flight —
+      // applying it now would flash another thread's messages.
+      if (selectedConversationRef.current !== conversationId) return;
       const nextMessages: SerializedMessage[] = (payload.messages ?? []).map((m: SerializedMessage) => ({
         ...m,
         isOwn: m.sender.id === currentUser.id,
       }));
+      let keepCursor = false;
       if (isPrepend) {
         setMessages((prev) => {
           const merged = mergeMessages([...nextMessages, ...prev]);
@@ -217,30 +242,51 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         // Adjust firstItemIndex to prevent scroll jump
         setFirstItemIndex((prev) => prev - nextMessages.length);
       } else {
-        setMessages(nextMessages);
-        setFirstItemIndex(INITIAL_FIRST_INDEX);
+        const isFilteredFetch = Boolean(options?.query?.trim());
+        if (options?.silent && !isFilteredFetch && !messagesFilteredRef.current) {
+          // Background refresh of an already-rendered thread: merge the newest
+          // page into what's shown so older pages loaded via "Load earlier"
+          // survive (replacing would truncate the thread and jump the scroll).
+          const shownCount = messageCacheRef.current.get(conversationId)?.messages.length ?? 0;
+          keepCursor = shownCount > nextMessages.length;
+          setMessages((prev) => (prev.length > 0 ? mergeMessages([...prev, ...nextMessages]) : nextMessages));
+        } else {
+          // Replacing the list (initial load, applying or clearing a search) —
+          // re-anchor virtuoso to match.
+          setMessages(nextMessages);
+          setFirstItemIndex(INITIAL_FIRST_INDEX);
+        }
+        messagesFilteredRef.current = isFilteredFetch;
         setThreadIntro(payload.intro ?? null);
+        messagesConvoRef.current = conversationId;
       }
       setActiveConversation(payload.conversation ?? null);
       // Deep links to a channel should land on the Channels tab.
       if (payload.conversation?.type === 'CHANNEL') setActiveTab('channels');
-      setMessageCursor(payload.nextCursor ?? null);
-      setHasMoreMessages(Boolean(payload.hasMore));
+      if (!keepCursor) {
+        setMessageCursor(payload.nextCursor ?? null);
+        setHasMoreMessages(Boolean(payload.hasMore));
+      }
     } catch (loadError) {
-      setError((loadError as Error).message || 'Failed to load messages.');
+      if (selectedConversationRef.current === conversationId) {
+        setError((loadError as Error).message || 'Failed to load messages.');
+      }
     } finally {
-      setMessagesLoading(false);
-      setLoadingOlderMessages(false);
+      if (selectedConversationRef.current === conversationId) {
+        setMessagesLoading(false);
+        setLoadingOlderMessages(false);
+      }
     }
   }, [currentUser.id]);
 
-  // Header: inject nothing for messages page — sidebar is self-contained
+  // Header: inject nothing for messages page — the page is self-contained
   useEffect(() => {
     setHeaderContent(null);
     return () => setHeaderContent(null);
   }, [setHeaderContent]);
 
   useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
   useEffect(() => { if (initialTab) setActiveTab(initialTab); }, [initialTab]);
 
@@ -318,7 +364,10 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     return () => clearTimeout(t);
   }, [conversationSearch, fetchConversations]);
 
-  useEffect(() => {
+  // Layout effect so the cached messages / loading skeleton are applied
+  // before the browser paints — otherwise the previous thread's messages
+  // flash for one frame under the new conversation's header.
+  useLayoutEffect(() => {
     if (!selectedConversationId) {
       setMessages([]);
       setMessageCursor(null);
@@ -327,11 +376,45 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       setTypingUsers({});
       setReplyTo(null);
       setThreadIntro(null);
+      messagesConvoRef.current = null;
       return;
     }
-    void loadMessages(selectedConversationId);
+    // Search is per-conversation — reset it on switch.
+    setMessageSearch('');
+    setShowMessageSearch(false);
+    lastAppliedSearchRef.current = '';
+    messagesFilteredRef.current = false;
+    setTypingUsers({});
+    // Serve cached messages instantly and refresh silently in the background;
+    // the skeleton only shows for conversations we've never opened.
+    const cached = messageCacheRef.current.get(selectedConversationId);
+    if (cached) {
+      messagesConvoRef.current = selectedConversationId;
+      setMessages(cached.messages);
+      setMessageCursor(cached.cursor);
+      setHasMoreMessages(cached.hasMore);
+      setThreadIntro(cached.intro);
+      setFirstItemIndex(INITIAL_FIRST_INDEX);
+    }
+    void loadMessages(selectedConversationId, { silent: Boolean(cached) });
     void markConversationRead(selectedConversationId);
   }, [selectedConversationId, loadMessages, markConversationRead]);
+
+  // Keep the cache in sync with whatever the open thread currently shows.
+  useEffect(() => {
+    const convoId = selectedConversationRef.current;
+    if (!convoId || messagesConvoRef.current !== convoId || messages.length === 0) return;
+    // Never cache a filtered view — checking the ref as well as the input
+    // covers the window after the search box is cleared but before the
+    // unfiltered reload lands (the rows shown are still the filtered subset).
+    if (messageSearch.trim() || messagesFilteredRef.current) return;
+    messageCacheRef.current.set(convoId, {
+      messages,
+      cursor: messageCursor,
+      hasMore: hasMoreMessages,
+      intro: threadIntro,
+    });
+  }, [messages, messageCursor, hasMoreMessages, threadIntro, messageSearch]);
 
   // Set unread divider anchor on first message load for a conversation
   useEffect(() => {
@@ -352,7 +435,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
   useEffect(() => {
     if (!selectedConversationId) return;
-    const t = setTimeout(() => void loadMessages(selectedConversationId, { query: messageSearch }), 250);
+    // Only refetch when the search term actually changed — the conversation
+    // switch itself already loads messages (this used to double-fetch).
+    if (messageSearch === lastAppliedSearchRef.current) return;
+    const t = setTimeout(() => {
+      lastAppliedSearchRef.current = messageSearch;
+      void loadMessages(selectedConversationId, { query: messageSearch, silent: true });
+    }, 250);
     return () => clearTimeout(t);
   }, [messageSearch, selectedConversationId, loadMessages]);
 
@@ -462,13 +551,17 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   // ─── Action handlers ────────────────────────────────────────────────────────
 
   const handleSelectConversation = (id: string) => {
+    if (id === selectedConversationRef.current) return;
     clearTypingSignal(selectedConversationRef.current);
     setSelectedConversationId(id);
     selectedConversationRef.current = id;
     setActiveConversation(conversations.find((c) => c.id === id) ?? null);
-    setSelectedIntroId(null);
     setReplyTo(null);
-    router.push(`/messages/${id}`);
+    // Shallow URL update — a router.push here remounts the whole page
+    // (different route segment + force-dynamic), which is what caused the
+    // flash on every chat click. pushState keeps the component alive and
+    // Next syncs usePathname automatically.
+    window.history.pushState(null, '', `/messages/${id}`);
   };
 
   const handleBackToList = () => {
@@ -479,21 +572,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     setActiveConversation(null);
     setTypingUsers({});
     setReplyTo(null);
-    setSelectedIntroId(null);
-    router.push('/messages');
-  };
-
-  const handleSelectIntro = (id: string) => {
-    clearTypingSignal(selectedConversationRef.current);
-    setSelectedIntroId(id);
-    if (selectedConversationRef.current) {
-      setSelectedConversationId(null);
-      selectedConversationRef.current = null;
-      setActiveConversation(null);
-      setMessages([]);
-      setReplyTo(null);
-      router.push('/messages');
-    }
+    window.history.pushState(null, '', '/messages');
   };
 
   /** Open (or lazily create) the DM with a person node — the connected-intro CTA. */
@@ -633,21 +712,26 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     }
   };
 
-  const handleReaction = async (messageId: string, emoji: string) => {
-    if (!selectedConversationId) return;
+  // These four are passed to every (memoized) MessageRow — keep them stable
+  // via useCallback + refs or the memo never holds and each state change
+  // re-parses markdown for all visible rows.
+  const handleReaction = useCallback(async (messageId: string, emoji: string) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
     try {
-      await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}/reactions`, {
+      await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/reactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emoji }),
       });
     } catch { /* best-effort */ }
-  };
+  }, []);
 
-  const handleEdit = async (messageId: string, text: string) => {
-    if (!selectedConversationId) return;
+  const handleEdit = useCallback(async (messageId: string, text: string) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
     try {
-      const res = await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}`, {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
@@ -657,26 +741,27 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         setMessages((prev) => prev.map((m) => m.id === messageId ? { ...message, isOwn: true } : m));
       }
     } catch { /* best-effort */ }
-  };
+  }, []);
 
-  const handleDelete = async (messageId: string) => {
-    if (!selectedConversationId || !window.confirm('Delete this message?')) return;
+  const handleDelete = useCallback(async (messageId: string) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId || !window.confirm('Delete this message?')) return;
     try {
-      await fetch(`/api/messages/conversations/${selectedConversationId}/messages/${messageId}`, {
+      await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}`, {
         method: 'DELETE',
       });
       setMessages((prev) => prev.map((m) =>
         m.id === messageId ? { ...m, deletedAt: new Date().toISOString(), text: '' } : m,
       ));
     } catch { /* best-effort */ }
-  };
+  }, []);
 
-  const handleScrollToMessage = (messageId: string) => {
-    const idx = messages.findIndex((m) => m.id === messageId);
+  const handleScrollToMessage = useCallback((messageId: string) => {
+    const idx = messagesRef.current.findIndex((m) => m.id === messageId);
     if (idx >= 0) {
       virtuosoRef.current?.scrollToIndex({ index: idx, behavior: 'smooth', align: 'center' });
     }
-  };
+  }, []);
 
   const handleLeaveGroup = async () => {
     if (!selectedConversationId) return;
@@ -751,11 +836,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     ].some((name) => name?.toLowerCase().includes(q)));
   }, [introItems, conversationSearch]);
 
-  const selectedIntroItem = useMemo(
-    () => (selectedIntroId ? introItems.find((i) => i.intro.id === selectedIntroId) ?? null : null),
-    [introItems, selectedIntroId],
-  );
-
   const tabCounts = useMemo<Record<MessageTab, number>>(() => ({
     channels: conversations.filter((c) => c.type === 'CHANNEL' && c.unreadCount > 0).length,
     direct: conversations.filter((c) => c.type !== 'CHANNEL' && c.unreadCount > 0).length,
@@ -763,25 +843,24 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   }), [conversations, introItems]);
 
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
-  const hasSelection = Boolean(selectedConversationId);
-  const introThreadOpen = activeTab === 'intros' && Boolean(selectedIntroItem);
-  const showSidebar = !isMobile || !hasSelection;
-  const showConversation = !isMobile || hasSelection;
+  // Intros render as a centered list with inline actions — no thread opens there.
+  const hasOpenThread = activeTab !== 'intros' && Boolean(selectedConversationId);
+  const showInbox = !isMobile || !hasOpenThread;
+  const showThread = !isMobile || hasOpenThread;
+  const showProfile = !isMobile && activeTab !== 'intros' && Boolean(selectedConversation);
   // On mobile, give the open thread the full viewport — hide the centered controls.
-  const showCenterControls = !isMobile || (!hasSelection && !introThreadOpen);
-  // Collapse the sidebar to an avatar rail while the message window is hovered (desktop only,
-  // and only when a conversation is open so there's a message window to hover).
-  const isSidebarCollapsed = sidebarCollapsed && !isMobile && hasSelection;
+  const showCenterControls = !isMobile || !hasOpenThread;
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
+  // The auth shell wraps pages in mt-20 + pt-4 + pb-6 (120px) — fill the rest.
   return (
-    <div className="flex h-[calc(100dvh-56px)] w-full flex-col px-6">
+    <div className="flex h-[calc(100dvh-120px)] min-h-0 w-full flex-col px-6">
 
       {/* ── Page header — centered title, consistent with other pages ───── */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-6 pb-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-2 pb-0">
         <div />
-        <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto text-center">Messages</h1>
+        <h1 className="text-4xl md:text-6xl font-normal tracking-tight text-text-primary font-ginto text-center">Messages</h1>
         <div className="justify-self-end">
           {activeTab === 'channels' ? (
             communityCtx?.isAdmin && (
@@ -790,9 +869,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 onClick={() => setShowChannelForm((v) => !v)}
                 className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
               >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                 <span className="hidden sm:inline">New Channel</span>
               </button>
             )
@@ -802,23 +879,19 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               onClick={() => setShowNewChatModal(true)}
               className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
               <span className="hidden sm:inline">New Chat</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* ── Centered controls: search + tab switcher ─────────────────────── */}
+      {/* ── Centered controls: search + tab switcher, same as other pages ── */}
       {showCenterControls && (
         <div className="flex flex-col items-center gap-3 pt-6 pb-5">
           <div className="w-full max-w-2xl">
             <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm transition-colors focus-within:border-brand-green/40">
-              <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-              </svg>
+              <Search className="h-4 w-4 shrink-0 text-text-muted" />
               <input
                 ref={sidebarSearchRef}
                 value={conversationSearch}
@@ -828,9 +901,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               />
               {conversationSearch && (
                 <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
@@ -839,22 +910,17 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         </div>
       )}
 
-      {/* ── Two-pane interface for Chats / Groups (intros render centered below) ── */}
+      {/* ── List box · open thread · profile box (Chats / Channels) ───────── */}
       {activeTab !== 'intros' && (
-      <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+      <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 pb-2 md:gap-12 md:px-6">
 
-      {/* ── Sidebar (collapses to an avatar rail while the message window is hovered) ── */}
-      {showSidebar && (
-        <aside
-          onMouseEnter={() => setSidebarCollapsed(false)}
-          className={`flex shrink-0 flex-col overflow-hidden border-r border-border-subtle transition-[width] duration-300 ease-out ${
-            isSidebarCollapsed ? 'w-16' : 'w-96'
-          }`}
-        >
+      {/* ╭── List box — users or channels depending on the selected chip ──╮ */}
+      {showInbox && (
+        <aside className="flex w-full min-h-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float md:w-80 md:shrink-0">
 
           {/* Channel creation (community admins only) */}
-          {activeTab === 'channels' && showChannelForm && !isSidebarCollapsed && (
-            <form onSubmit={handleCreateChannel} className="border-b border-border-subtle px-3 py-3 space-y-2">
+          {activeTab === 'channels' && showChannelForm && (
+            <form onSubmit={handleCreateChannel} className="space-y-2 border-b border-border-subtle px-4 py-3">
               <input
                 value={channelName}
                 onChange={(e) => setChannelName(e.target.value)}
@@ -889,148 +955,140 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
             </form>
           )}
 
-          {/* Conversation list (search + tabs live in the centered controls above) */}
-          <div className={`flex-1 overflow-y-auto ${isSidebarCollapsed ? 'pt-2' : ''}`}>
-            {conversationsLoading && (
-              <div className="space-y-1 px-3 py-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className={`flex items-center gap-3 rounded-xl p-3 ${isSidebarCollapsed ? 'justify-center' : ''}`}>
-                    <div className="h-10 w-10 animate-pulse rounded-full bg-surface-3 shrink-0" />
-                    {!isSidebarCollapsed && (
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
-                        <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+          {/* List area */}
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
+
+            {/* ── Conversations (Chats / Channels tabs) ── */}
+            {(
+              <>
+                {conversationsLoading && (
+                  <div className="space-y-1 px-3 py-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 rounded-2xl p-3">
+                        <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-surface-3" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
+                          <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
 
-            {!conversationsLoading && filteredConversations.length === 0 && !isSidebarCollapsed
-              && (activeTab !== 'channels' || browsableChannels.length === 0) && (
-              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-3">
-                  <svg className="h-7 w-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                  </svg>
-                </div>
-                <p className="text-sm font-medium text-text-secondary">
-                  {activeTab === 'channels' ? 'No channels yet' : 'No conversations yet'}
-                </p>
-                <p className="mt-1 text-xs text-text-muted">
-                  {activeTab === 'channels'
-                    ? (communityCtx?.isAdmin
-                      ? 'Create the first channel with "New Channel" above.'
-                      : 'Channels created by your community admins will appear here.')
-                    : 'Start by clicking "New Chat" above.'}
-                </p>
-              </div>
-            )}
+                {!conversationsLoading && filteredConversations.length === 0
+                  && (activeTab !== 'channels' || browsableChannels.length === 0) && (
+                  <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
+                      {activeTab === 'channels'
+                        ? <Hash className="h-6 w-6 text-text-muted" />
+                        : <MessageCircle className="h-6 w-6 text-text-muted" />}
+                    </div>
+                    <p className="text-sm font-medium text-text-secondary">
+                      {activeTab === 'channels' ? 'No channels yet' : 'No conversations yet'}
+                    </p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      {activeTab === 'channels'
+                        ? (communityCtx?.isAdmin
+                          ? 'Create the first channel with the + button above.'
+                          : 'Channels created by your community admins will appear here.')
+                        : 'Start one with the + button above.'}
+                    </p>
+                  </div>
+                )}
 
-            {!conversationsLoading && filteredConversations.length > 0 && (
-              <div className="px-2 py-1">
-                {filteredConversations.map((conversation) => {
-                  const isActive = selectedConversationId === conversation.id;
-                  return (
-                    <button
-                      key={conversation.id}
-                      type="button"
-                      onClick={() => handleSelectConversation(conversation.id)}
-                      title={isSidebarCollapsed ? conversation.name : undefined}
-                      className={`group flex w-full items-center rounded-xl text-left transition-all duration-150 ${
-                        isSidebarCollapsed ? 'justify-center px-2 py-2' : 'gap-3 px-3 py-3'
-                      } ${
-                        isActive
-                          ? 'bg-brand-green/10 ring-1 ring-brand-green/20'
-                          : 'hover:bg-surface-2'
-                      }`}
-                    >
-                      <div className="relative shrink-0">
-                        <Avatar name={conversation.name} />
-                        {conversation.unreadCount > 0 && !isActive && (
-                          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
-                        )}
-                      </div>
-                      {!isSidebarCollapsed && (
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
-                              {conversation.type === 'CHANNEL' ? `#${conversation.name}` : conversation.name}
-                            </p>
-                            <span className="shrink-0 text-[11px] text-text-muted">
-                              {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
-                            </span>
-                          </div>
-                          <div className="mt-0.5 flex items-center justify-between gap-2">
-                            <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
-                              {conversation.lastMessage?.text ?? 'No messages yet'}
-                            </p>
+                {!conversationsLoading && filteredConversations.length > 0 && (
+                  <div className="px-2.5 py-1">
+                    {filteredConversations.map((conversation) => {
+                      const isActive = selectedConversationId === conversation.id;
+                      return (
+                        <button
+                          key={conversation.id}
+                          type="button"
+                          onClick={() => handleSelectConversation(conversation.id)}
+                          className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-150 ${
+                            isActive ? 'bg-brand-green/10 ring-1 ring-brand-green/20' : 'hover:bg-surface-2'
+                          }`}
+                        >
+                          <div className="relative shrink-0">
+                            <Avatar name={conversation.name} />
                             {conversation.unreadCount > 0 && !isActive && (
-                              <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
-                              </span>
+                              <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
                             )}
                           </div>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Channel directory: community channels the user hasn't joined yet */}
-            {activeTab === 'channels' && !isSidebarCollapsed && browsableChannels.length > 0 && (
-              <div className="px-2 py-1">
-                <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                  Browse channels
-                </p>
-                {browsableChannels.map((channel) => (
-                  <div
-                    key={channel.id}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-surface-2"
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-3 text-sm font-semibold text-text-muted">
-                      #
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text-secondary">#{channel.name}</p>
-                      <p className="truncate text-xs text-text-muted">
-                        {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleJoinChannel(channel.id)}
-                      disabled={joiningChannelId === channel.id}
-                      className="shrink-0 rounded-full border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
-                    >
-                      {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
-                    </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
+                                {conversation.type === 'CHANNEL' ? `#${conversation.name}` : conversation.name}
+                              </p>
+                              <span className="shrink-0 text-[11px] text-text-muted">
+                                {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center justify-between gap-2">
+                              <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
+                                {conversation.lastMessage?.text ?? 'No messages yet'}
+                              </p>
+                              {conversation.unreadCount > 0 && !isActive && (
+                                <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                  {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
-              </div>
+                )}
+
+                {/* Channel directory: community channels the user hasn't joined yet */}
+                {activeTab === 'channels' && browsableChannels.length > 0 && (
+                  <div className="px-2.5 py-1">
+                    <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                      Browse channels
+                    </p>
+                    {browsableChannels.map((channel) => (
+                      <div
+                        key={channel.id}
+                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-surface-2"
+                      >
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-sm font-semibold text-text-muted">
+                          #
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-text-secondary">#{channel.name}</p>
+                          <p className="truncate text-xs text-text-muted">
+                            {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleJoinChannel(channel.id)}
+                          disabled={joiningChannelId === channel.id}
+                          className="shrink-0 rounded-full border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                        >
+                          {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
           </div>
         </aside>
       )}
 
-      {/* ── Conversation panel ───────────────────────────────────────────── */}
-      {showConversation && (
-        <section
-          onMouseEnter={() => setSidebarCollapsed(true)}
-          className="flex min-w-0 flex-1 flex-col overflow-hidden"
-        >
+      {/* ╭── Thread — open on the page, just floating message bubbles ─────╮ */}
+      {showThread && (
+        <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden">
 
-          {/* Empty state */}
+          {/* ── Conversation thread ── */}
           {!selectedConversation && (
             <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-3">
-                <svg className="h-10 w-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                </svg>
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-2">
+                <MessageCircle className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-base font-semibold text-text-primary">No conversation selected</p>
@@ -1039,11 +1097,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               <button
                 type="button"
                 onClick={() => setShowNewChatModal(true)}
-                className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:opacity-90 transition-opacity"
+                className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
               >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                </svg>
+                <Plus className="h-4 w-4" strokeWidth={2.5} />
                 Start a new chat
               </button>
             </div>
@@ -1052,20 +1108,20 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           {selectedConversation && (
             <>
               {/* Conversation header */}
-              <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
+              <header className="flex items-center justify-between gap-3 px-5 py-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
                   {isMobile && (
                     <button
                       type="button"
                       onClick={handleBackToList}
                       className="mr-1 rounded-lg p-1.5 text-text-muted hover:bg-surface-3"
                     >
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
+                      <ArrowLeft className="h-5 w-5" />
                     </button>
                   )}
-                  <Avatar name={selectedConversation.name} size="lg" />
+                  <div className="hidden sm:block">
+                    <Avatar name={selectedConversation.name} size="lg" />
+                  </div>
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-text-primary">
                       {selectedConversation.type === 'CHANNEL' ? `#${selectedConversation.name}` : selectedConversation.name}
@@ -1081,39 +1137,34 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => setShowMessageSearch((v) => !v)}
-                    className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-brand-green/10 text-brand-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                    className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
                     title="Search in conversation"
                   >
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-                    </svg>
+                    <Search className="h-4 w-4" />
                   </button>
 
+                  {/* Below xl the profile/details layer is hidden — keep management actions here */}
                   {selectedConversation.type !== 'DM' && isAdmin && (
                     <>
                       <button
                         type="button"
                         onClick={() => setShowAddMembersModal(true)}
-                        className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
+                        className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
                         title="Add members"
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
+                        <UserPlus className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
                         onClick={handleRenameGroup}
-                        className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
+                        className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
                         title={selectedConversation.type === 'CHANNEL' ? 'Rename channel' : 'Rename group'}
                       >
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
+                        <Pencil className="h-4 w-4" />
                       </button>
                     </>
                   )}
@@ -1122,47 +1173,20 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     <button
                       type="button"
                       onClick={handleLeaveGroup}
-                      className="rounded-lg p-2 text-text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
+                      className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500 xl:hidden"
                       title={selectedConversation.type === 'CHANNEL' ? 'Leave channel' : 'Leave group'}
                     >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
+                      <LogOut className="h-4 w-4" />
                     </button>
                   )}
                 </div>
               </header>
 
-              {/* Member chips for group admins */}
-              {selectedConversation.type === 'GROUP' && isAdmin && (
-                <div className="flex flex-wrap gap-1.5 border-b border-border-subtle bg-surface-2 px-4 py-2">
-                  {selectedConversation.participants
-                    .filter((p) => p.id !== currentUser.id)
-                    .map((p) => (
-                      <div key={p.id} className="flex items-center gap-1 rounded-full bg-surface-1 border border-border-default px-2.5 py-1 text-xs text-text-secondary shadow-sm">
-                        <span>{p.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMember(p.id)}
-                          className="ml-0.5 rounded-full p-0.5 text-text-muted hover:bg-surface-3 hover:text-text-secondary"
-                          aria-label={`Remove ${p.name}`}
-                        >
-                          <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              )}
-
               {/* In-conversation search */}
               {showMessageSearch && (
-                <div className="border-b border-border-subtle px-4 py-2.5">
-                  <div className="flex items-center gap-2 rounded-xl bg-surface-3 px-3 py-2">
-                    <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-                    </svg>
+                <div className="px-5 py-2.5">
+                  <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2">
+                    <Search className="h-3.5 w-3.5 shrink-0 text-text-muted" />
                     <input
                       value={messageSearch}
                       onChange={(e) => setMessageSearch(e.target.value)}
@@ -1172,9 +1196,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     />
                     {messageSearch && (
                       <button type="button" onClick={() => setMessageSearch('')} className="text-text-muted hover:text-text-secondary">
-                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -1186,19 +1208,25 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 <IntroBanner context={threadIntro} />
               )}
 
-              {/* Messages area with Virtuoso */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-hidden">
+              {/* Linear message feed */}
+              <div ref={messagesContainerRef} className="relative flex-1 overflow-hidden">
                 {messagesLoading && (
-                  <div className="space-y-3 p-4">
+                  <div className="w-full space-y-4 px-6 py-5 md:px-8">
                     {Array.from({ length: 5 }).map((_, i) => (
-                      <div key={i} className="h-14 animate-pulse rounded-2xl bg-surface-1/60" />
+                      <div key={i} className="flex gap-3">
+                        <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-surface-3" />
+                        <div className="flex-1 space-y-2 pt-1">
+                          <div className="h-3 w-40 animate-pulse rounded bg-surface-3" />
+                          <div className="h-3 animate-pulse rounded bg-surface-3" style={{ width: `${85 - i * 12}%` }} />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
 
                 {!messagesLoading && messages.length === 0 && (
                   <div className="flex h-full items-center justify-center">
-                    <div className="rounded-2xl bg-surface-1 px-5 py-4 text-center text-sm text-text-muted shadow-sm">
+                    <div className="rounded-2xl bg-surface-2 px-5 py-4 text-center text-sm text-text-muted">
                       <p className="font-medium text-text-secondary">No messages yet</p>
                       <p className="mt-0.5 text-xs text-text-muted">Say hello to start the conversation!</p>
                     </div>
@@ -1207,11 +1235,12 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
                 {!messagesLoading && messages.length > 0 && (
                   <Virtuoso
+                    key={selectedConversation.id}
                     ref={virtuosoRef}
                     data={messages}
                     firstItemIndex={firstItemIndex}
                     initialTopMostItemIndex={messages.length - 1}
-                    defaultItemHeight={60}
+                    defaultItemHeight={48}
                     computeItemKey={(_index, message) => message.id}
                     increaseViewportBy={{ top: 200, bottom: 200 }}
                     scrollSeekConfiguration={{
@@ -1232,24 +1261,30 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     itemContent={(_index, message) => {
                       const adjustedIdx = _index - firstItemIndex;
                       const prevMsg = messages[adjustedIdx - 1];
-                      const isFirstInGroup = !prevMsg || prevMsg.sender.id !== message.sender.id;
                       const prevDay = prevMsg ? new Date(prevMsg.createdAt).toDateString() : null;
                       const thisDay = new Date(message.createdAt).toDateString();
                       const showDateSeparator = prevDay !== thisDay;
+                      const closeInTime = prevMsg
+                        ? new Date(message.createdAt).getTime() - new Date(prevMsg.createdAt).getTime() < GROUP_WINDOW_MS
+                        : false;
+                      const showHeader = !prevMsg
+                        || prevMsg.sender.id !== message.sender.id
+                        || !closeInTime
+                        || showDateSeparator;
                       const showUnreadDivider = unreadMarker === message.id;
                       return (
-                        <div className={`mx-auto w-full max-w-3xl px-4 ${isFirstInGroup ? 'mt-2' : ''}`} data-message-id={message.id}>
+                        <div className="w-full px-3 md:px-6" data-message-id={message.id}>
                           {showDateSeparator && (
-                            <div className="my-3 flex items-center gap-3 px-2">
+                            <div className="my-4 flex items-center gap-3 px-3">
                               <div className="h-px flex-1 bg-border-subtle" />
-                              <span className="rounded-full bg-surface-2 px-3 py-0.5 text-[11px] font-medium text-text-muted">
+                              <span className="text-[11px] font-medium text-text-muted">
                                 {formatDateLabel(message.createdAt)}
                               </span>
                               <div className="h-px flex-1 bg-border-subtle" />
                             </div>
                           )}
                           {showUnreadDivider && (
-                            <div className="my-2 flex items-center gap-3 px-2">
+                            <div className="my-2 flex items-center gap-3 px-3">
                               <div className="h-px flex-1 bg-red-500/50" />
                               <span className="text-[11px] font-semibold uppercase tracking-wide text-red-500">
                                 New
@@ -1257,11 +1292,10 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                               <div className="h-px flex-1 bg-red-500/50" />
                             </div>
                           )}
-                          <MessageBubble
+                          <MessageRow
                             message={message}
-                            currentUserId={currentUser.id}
-                            isLastInGroup={isFirstInGroup}
-                            onReply={(r) => setReplyTo(r)}
+                            showHeader={showHeader}
+                            onReply={setReplyTo}
                             onReaction={handleReaction}
                             onEdit={handleEdit}
                             onDelete={handleDelete}
@@ -1271,7 +1305,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                       );
                     }}
                     style={{ height: '100%' }}
-                    className="px-0 py-2"
+                    className="custom-scrollbar px-0 py-2"
                     components={{
                       Header: () => (
                         hasMoreMessages ? (
@@ -1282,7 +1316,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                               <button
                                 type="button"
                                 onClick={() => void handleLoadOlder()}
-                                className="rounded-full border border-border-subtle bg-surface-1 px-4 py-1.5 text-xs font-medium text-text-secondary shadow-sm hover:bg-surface-2"
+                                className="rounded-full bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
                               >
                                 Load earlier messages
                               </button>
@@ -1294,15 +1328,12 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                         // During fast scrolling, render lightweight placeholder at pretext height
                         const adjustedIndex = index - firstItemIndex;
                         const msg = messages[adjustedIndex];
-                        const h = msg ? getItemHeight(adjustedIndex) : (height || 60);
+                        const h = msg ? getItemHeight(adjustedIndex) : (height || 48);
                         return (
-                          <div className="mx-auto w-full max-w-3xl px-4 py-0.75" style={{ height: h }}>
-                            <div className={`flex items-end gap-2 ${msg?.isOwn ? 'justify-end' : 'justify-start'}`}>
-                              {!msg?.isOwn && <div className="h-8 w-8 rounded-full bg-surface-1/40 shrink-0" />}
-                              <div
-                                className={`rounded-2xl bg-surface-1/40 ${msg?.isOwn ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
-                                style={{ width: '60%', height: Math.max(h - 12, 20) }}
-                              />
+                          <div className="w-full px-3 md:px-6" style={{ height: h }}>
+                            <div className="flex gap-3 px-3 py-1">
+                              <div className="h-9 w-9 shrink-0 rounded-full bg-surface-2" />
+                              <div className="flex-1 rounded-lg bg-surface-2" style={{ height: Math.max(h - 16, 16), maxWidth: '70%' }} />
                             </div>
                           </div>
                         );
@@ -1310,26 +1341,26 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     }}
                   />
                 )}
-              </div>
 
-              {/* New-messages pill */}
-              {newMessagesPending > 0 && !atBottom && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
-                    setNewMessagesPending(0);
-                  }}
-                  className="pointer-events-auto absolute bottom-24 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-lg hover:opacity-90"
-                >
-                  ↓ {newMessagesPending} new message{newMessagesPending > 1 ? 's' : ''}
-                </button>
-              )}
+                {/* New-messages pill — floats over the feed */}
+                {newMessagesPending > 0 && !atBottom && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+                      setNewMessagesPending(0);
+                    }}
+                    className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-float hover:opacity-90"
+                  >
+                    ↓ {newMessagesPending} new message{newMessagesPending > 1 ? 's' : ''}
+                  </button>
+                )}
+              </div>
 
               {/* Accessibility: announce incoming messages */}
               <div role="status" aria-live="polite" className="sr-only">{announce}</div>
 
-              {/* Composer */}
+              {/* Composer — its own floating layer at the bottom of the thread */}
               <MessageComposer
                 onSend={handleSendMessage}
                 replyTo={replyTo}
@@ -1344,68 +1375,63 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         </section>
       )}
 
+      {/* ╭── Profile box — the person (or group) you're talking to ────────╮ */}
+      {showProfile && selectedConversation && (
+        <aside className="hidden w-72 shrink-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float xl:flex">
+          <ProfilePanel
+            conversation={selectedConversation}
+            currentUserId={currentUser.id}
+            isAdmin={isAdmin}
+            onAddMembers={() => setShowAddMembersModal(true)}
+            onRename={handleRenameGroup}
+            onLeave={handleLeaveGroup}
+            onRemoveMember={handleRemoveMember}
+          />
+        </aside>
+      )}
+
       </div>
       )}
 
-      {/* ── Intros — centered single-column view ─────────────────────────── */}
+      {/* ── Intros — centered list of requests with inline actions ────────── */}
       {activeTab === 'intros' && (
-        <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-          {selectedIntroItem ? (
-            <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col overflow-hidden">
-              <IntroThread
-                item={selectedIntroItem}
-                showBack
-                onBack={() => setSelectedIntroId(null)}
+        <div className="custom-scrollbar min-h-0 w-full flex-1 overflow-y-auto pb-6">
+          <div className="mx-auto w-full max-w-3xl space-y-3 px-1">
+            {introsLoading && (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3.5 rounded-3xl border border-border-subtle/70 bg-surface-1 p-5">
+                  <div className="h-11 w-11 shrink-0 animate-pulse rounded-xl bg-surface-3" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
+                    <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
+                  </div>
+                </div>
+              ))
+            )}
+
+            {!introsLoading && filteredIntroItems.length === 0 && (
+              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-green/10">
+                  <svg className="h-7 w-7 text-brand-dark-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                </div>
+                <p className="text-sm font-medium text-text-secondary">No introductions yet</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  Open a member&apos;s profile and use Connect → Request an introduction.
+                </p>
+              </div>
+            )}
+
+            {!introsLoading && filteredIntroItems.map((item) => (
+              <IntroRequestCard
+                key={item.intro.id}
+                item={item}
                 onAction={handleIntroAction}
                 onOpenConversation={(nodeId) => void openConversationWithNode(nodeId)}
               />
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto pb-8">
-              <div className="mx-auto w-full max-w-2xl">
-                {introsLoading && (
-                  <div className="space-y-1 py-2">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-3 rounded-xl p-3">
-                        <div className="h-10 w-10 animate-pulse rounded-full bg-surface-3 shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
-                          <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!introsLoading && filteredIntroItems.length === 0 && (
-                  <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-green/10">
-                      <svg className="h-7 w-7 text-brand-dark-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                      </svg>
-                    </div>
-                    <p className="text-sm font-medium text-text-secondary">No introductions yet</p>
-                    <p className="mt-1 text-xs text-text-muted">
-                      Open a member&apos;s profile and use Connect → Request an introduction.
-                    </p>
-                  </div>
-                )}
-
-                {!introsLoading && filteredIntroItems.length > 0 && (
-                  <div className="space-y-1 py-1">
-                    {filteredIntroItems.map((item) => (
-                      <IntroListItem
-                        key={item.intro.id}
-                        item={item}
-                        isActive={selectedIntroId === item.intro.id}
-                        onSelect={() => handleSelectIntro(item.intro.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
       )}
 

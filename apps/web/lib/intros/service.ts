@@ -20,7 +20,9 @@ import {
   sendIntroRequestedEmail,
   sendIntroForwardedEmail,
   sendIntroConnectedEmail,
+  sendIntroDeclinedEmail,
 } from '@/lib/email/introEmails';
+import { sendPushToUser } from '@/lib/webpush';
 import { getMutuals } from './mutuals';
 import type { ConversationIntroContext, IntroInbox, IntroNodeSummary, IntroRequestDTO, IntroStatus } from './types';
 import type { CreateIntroInput, IntroActionInput } from '@/lib/schemas/introSchemas';
@@ -230,10 +232,10 @@ export async function transition(
   if (action === 'approve') {
     if (intro.introducerNodeId !== personId) throw new IntroError(403, 'Only the introducer can approve this.');
     if (intro.status !== 'pending') throw new IntroError(409, 'This request is no longer pending.');
-    if (!endorsement?.trim()) throw new IntroError(400, 'Write a short endorsement to approve.');
+    // Endorsement is optional — the inline Accept button approves without one.
     updated = await prisma.introRequest.update({
       where: { id },
-      data: { status: 'approved', endorsement: endorsement.trim() },
+      data: { status: 'approved', endorsement: endorsement?.trim() || null },
     });
     void notifyForwarded(updated).catch((err) => logger.error('intro.email.forwarded.failed', { err }));
   } else if (action === 'decline') {
@@ -244,6 +246,7 @@ export async function transition(
     } else {
       throw new IntroError(403, "You can't decline this request right now.");
     }
+    void notifyDeclined(updated).catch((err) => logger.error('intro.notify.declined.failed', { err }));
   } else {
     // accept — only the recipient, only from 'approved'. The status flip is a
     // conditional updateMany so two concurrent accepts can't both proceed (and
@@ -341,6 +344,56 @@ async function notifyForwarded(intro: IntroRequest): Promise<void> {
     endorsement: intro.endorsement ?? '',
     message: intro.messageToTarget,
   });
+}
+
+async function resolvePartyWithUser(nodeId: string): Promise<{ name: string; email: string | null; userId: string | null } | null> {
+  const person = await prisma.person.findUnique({
+    where: { id: nodeId },
+    select: { name: true, user: { select: { id: true, email: true } } },
+  });
+  if (!person) return null;
+  return { name: person.name, email: person.user?.email ?? null, userId: person.user?.id ?? null };
+}
+
+/**
+ * Decline → tell the other parties "X has politely declined…" via web push +
+ * email. The requester always hears back; the introducer also does when the
+ * target declined. A target never hears about an introducer's decline — they
+ * never saw the request in the first place.
+ */
+async function notifyDeclined(intro: IntroRequest): Promise<void> {
+  const [requester, introducer, target] = await Promise.all([
+    resolvePartyWithUser(intro.requesterNodeId),
+    resolvePartyWithUser(intro.introducerNodeId),
+    resolvePartyWithUser(intro.targetNodeId),
+  ]);
+  const declinedByTarget = intro.declinedBy === 'target';
+  const declinerName = (declinedByTarget ? target?.name : introducer?.name) ?? 'They';
+  const recipients = declinedByTarget ? [requester, introducer] : [requester];
+
+  await Promise.all(recipients.flatMap((recipient) => {
+    if (!recipient) return [];
+    // Push and email are independent — send them concurrently.
+    const sends: Promise<unknown>[] = [];
+    if (recipient.userId) {
+      sends.push(sendPushToUser(recipient.userId, {
+        title: 'Introduction declined',
+        body: `${declinerName} has politely declined the request for the intro.`,
+        url: '/messages?tab=intros',
+        tag: `intro-declined-${intro.id}`,
+      }).catch(() => {}));
+    }
+    if (recipient.email) {
+      sends.push(sendIntroDeclinedEmail({
+        to: recipient.email,
+        recipientName: recipient.name,
+        declinerName,
+        requesterName: requester?.name ?? 'the requester',
+        targetName: target?.name ?? 'the other person',
+      }));
+    }
+    return sends;
+  }));
 }
 
 async function notifyConnected(intro: IntroRequest): Promise<void> {

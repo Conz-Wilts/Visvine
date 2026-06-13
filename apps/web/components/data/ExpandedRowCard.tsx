@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { Save, X, Camera, Loader2 } from 'lucide-react';
 import ComboboxMultiSelect from './ComboboxMultiSelect';
 import ImageCropper from './ImageCropper';
+import Select from '@/components/ui/Select';
 import { validateImageFile } from '@/lib/imageUpload';
 
 export type FieldType = 'text' | 'select' | 'tags' | 'readonly' | 'date' | 'image';
@@ -197,20 +198,16 @@ export default function ExpandedRowCard<T extends Record<string, unknown>>({
 
     if (col.type === 'select') {
       return (
-        <select
+        <Select
           value={String(value || '')}
           onChange={(e) => setValue(col, e.target.value)}
-          className="
-            w-full px-4 py-3 text-sm
-            border border-gray-300 rounded-lg
-            focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500
-          "
+          className="w-full"
         >
           <option value="">Select {col.label}...</option>
           {col.options?.map((opt) => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
-        </select>
+        </Select>
       );
     }
 

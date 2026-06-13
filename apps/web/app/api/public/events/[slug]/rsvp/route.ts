@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
 import { getEventBySlug, submitRsvp, EventFullError } from '@/lib/eventRepo';
-import { isEmailDomainAllowed } from '@/lib/eventUtils';
+import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
 import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { takeToken } from '@/lib/messages/rateLimit';
@@ -50,6 +50,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (submission.email && !isEmailDomainAllowed(submission.email, event.form.domainAllowlist)) {
       return NextResponse.json({ error: 'This event is restricted to certain email domains' }, { status: 403 });
+    }
+
+    const missing = missingRequiredAnswers(event.form.schema, submission);
+    if (missing.length > 0) {
+      return NextResponse.json({ error: `Please answer: ${missing.join(', ')}` }, { status: 400 });
     }
 
     const plusOnes = Math.min(submission.plusOnes ?? 0, event.allowPlusOnes ?? 0);

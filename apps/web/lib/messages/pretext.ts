@@ -11,35 +11,31 @@
 import { prepare, layout, type PreparedText } from '@chenglou/pretext';
 import type { SerializedMessage } from './types';
 
-// ─── Constants matching our message bubble CSS ───────────────────────────────
+// ─── Constants matching the linear MessageRow CSS ────────────────────────────
 
-// Font used in message bubbles: text-sm = 14px, leading-relaxed = 1.625
-const MESSAGE_FONT = '14px "Open Sauce One", ui-sans-serif, system-ui, sans-serif';
-const MESSAGE_LINE_HEIGHT = 22.75; // 14px * 1.625
+// Message body text: text-[15px], leading-relaxed = 1.625
+const MESSAGE_FONT = '15px "Open Sauce One", ui-sans-serif, system-ui, sans-serif';
+const MESSAGE_LINE_HEIGHT = 24.375; // 15px * 1.625
 
-// Bubble chrome (padding, margins, etc.)
-const BUBBLE_PADDING_X = 28; // px-3.5 = 14px * 2
-const BUBBLE_PADDING_Y = 20; // py-2.5 = 10px * 2
-const SENDER_NAME_HEIGHT = 20; // 11px font + margin, only for incoming messages
-const TIMESTAMP_HEIGHT = 18; // 10px font + mt-1
-const MESSAGE_GAP = 6; // space-y-1.5 equivalent (py-0.75 * 2 on wrapper)
+// Row chrome: avatar gutter (h-9 w-9 + gap-3), row padding, and bubble card
+const AVATAR_GUTTER_WIDTH = 48; // w-9 (36px) + gap-3 (12px)
+const ROW_PADDING_X = 24; // px-3 = 12px * 2 on the row
+const ROW_PADDING_Y = 8; // py-1 = 4px * 2 on the row
+const BUBBLE_PADDING_X = 34; // px-4 = 16px * 2 + 1px border each side
+const BUBBLE_PADDING_Y = 22; // py-2.5 = 10px * 2 + 1px border each side
+const HEADER_LINE_HEIGHT = 20; // name · time line (13px semibold + baseline gap)
 
 // Additional chrome heights
-const REPLY_PREVIEW_HEIGHT = 44; // reply quote above bubble
-const REACTION_ROW_HEIGHT = 26; // reaction pills below bubble
+const REPLY_PREVIEW_HEIGHT = 46; // reply quote above the body
+const REACTION_ROW_HEIGHT = 26; // reaction pills below the body
 const IMAGE_SINGLE_HEIGHT = 262; // max-h-64 + mt-1.5
 const IMAGE_GRID_HEIGHT = 134; // h-32 + mt-1.5 + gap
 const LINK_PREVIEW_HEIGHT = 180; // image + text card
-const DELETED_MESSAGE_HEIGHT = 40; // fixed height for deleted messages
+const DELETED_MESSAGE_HEIGHT = 28; // fixed height for deleted messages
 
-// Max bubble widths as fraction of container (matching CSS max-w-[78%] / max-w-[65%])
-const BUBBLE_MAX_WIDTH_MOBILE = 0.78;
-const BUBBLE_MAX_WIDTH_DESKTOP = 0.65;
-
-// The thread renders as a centered column (max-w-3xl = 768px) with px-4 (16px each side)
-// in MessagesClient. The container the ResizeObserver measures is the full-width panel, so
-// clamp the effective width to the column's content box so wrap estimates stay accurate.
-const THREAD_CONTENT_MAX_WIDTH = 768 - 32;
+// The feed spans the full width between the side boxes; the ResizeObserver measures
+// the feed container directly, minus the row's px-6 (24px each side) on desktop.
+const FEED_HORIZONTAL_PADDING = 48;
 
 // ─── Cache ───────────────────────────────────────────────────────────────────
 
@@ -84,29 +80,22 @@ export function calculateMessageHeight(
 
   // Deleted messages have fixed height
   if (message.deletedAt) {
-    return DELETED_MESSAGE_HEIGHT + MESSAGE_GAP;
+    return DELETED_MESSAGE_HEIGHT;
   }
 
-  const maxWidthFraction = isMobile ? BUBBLE_MAX_WIDTH_MOBILE : BUBBLE_MAX_WIDTH_DESKTOP;
-  // Clamp to the centered column width on desktop (the column is narrower than the panel).
-  const effectiveWidth = isMobile ? containerWidth : Math.min(containerWidth, THREAD_CONTENT_MAX_WIDTH);
-  const maxBubbleWidth = effectiveWidth * maxWidthFraction;
-  const textMaxWidth = maxBubbleWidth - BUBBLE_PADDING_X;
+  const effectiveWidth = isMobile ? containerWidth : containerWidth - FEED_HORIZONTAL_PADDING;
+  const textMaxWidth = effectiveWidth - ROW_PADDING_X - AVATAR_GUTTER_WIDTH - BUBBLE_PADDING_X;
 
-  let height = 0;
+  let height = ROW_PADDING_Y + BUBBLE_PADDING_Y;
 
-  // Sender name (only for incoming messages)
-  if (!message.isOwn) {
-    height += SENDER_NAME_HEIGHT;
-  }
+  // Name · time header line. Whether it renders depends on sender grouping
+  // (decided at render time), so estimate with half its height on average.
+  height += HEADER_LINE_HEIGHT / 2;
 
-  // Reply preview above bubble
+  // Reply preview above the body
   if (message.replyTo) {
     height += REPLY_PREVIEW_HEIGHT;
   }
-
-  // Bubble padding top
-  height += BUBBLE_PADDING_Y / 2;
 
   // Text content height via pretext
   if (message.text) {
@@ -129,19 +118,10 @@ export function calculateMessageHeight(
     height += LINK_PREVIEW_HEIGHT * message.linkPreviews.length;
   }
 
-  // Timestamp row (always present)
-  height += TIMESTAMP_HEIGHT;
-
-  // Bubble padding bottom
-  height += BUBBLE_PADDING_Y / 2;
-
-  // Reactions row below bubble
+  // Reactions row below the body
   if (message.reactions && message.reactions.length > 0) {
     height += REACTION_ROW_HEIGHT;
   }
-
-  // Gap between messages
-  height += MESSAGE_GAP;
 
   return Math.ceil(height);
 }

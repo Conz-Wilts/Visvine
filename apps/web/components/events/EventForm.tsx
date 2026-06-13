@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import { LocationAutocomplete } from './LocationAutocomplete';
+import Select from '@/components/ui/Select';
 
 interface EventFormProps {
   communityId: string;
@@ -269,14 +270,13 @@ export function EventForm({ communityId, initialData, mode = 'create' }: EventFo
 
         <div>
           <label className="block text-sm font-medium text-brand-black mb-2">Category</label>
-          <select
+          <Select
             value={category}
             onChange={e => setCategory(e.target.value)}
-            className={inputClass()}
           >
             <option value="">Select a category</option>
             {EVENT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
+          </Select>
         </div>
 
         {/* Tags */}
@@ -400,13 +400,12 @@ export function EventForm({ communityId, initialData, mode = 'create' }: EventFo
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-brand-black mb-2">Platform</label>
-              <select
+              <Select
                 value={virtualPlatform}
                 onChange={e => setVirtualPlatform(e.target.value)}
-                className={inputClass()}
               >
                 {VIRTUAL_PLATFORMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              </Select>
             </div>
             <div>
               <label className="block text-sm font-medium text-brand-black mb-2">Meeting Link</label>
@@ -576,13 +575,12 @@ export function EventForm({ communityId, initialData, mode = 'create' }: EventFo
                   onChange={e => updateFormField(index, { label: e.target.value })}
                   className={inputClass()}
                 />
-                <select
+                <Select
                   value={field.type}
                   onChange={e => updateFormField(index, { type: e.target.value as FormFieldType })}
-                  className={inputClass()}
                 >
                   {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
+                </Select>
               </div>
               <button
                 type="button"

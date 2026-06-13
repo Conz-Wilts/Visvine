@@ -11,7 +11,7 @@ export const createIntroSchema = z.object({
 
 export type CreateIntroInput = z.infer<typeof createIntroSchema>;
 
-/** Body for PATCH /api/intros/[id]. `endorsement` is required for `approve`. */
+/** Body for PATCH /api/intros/[id]. `endorsement` is optional on `approve`. */
 export const introActionSchema = z.object({
   action: z.enum(['approve', 'decline', 'accept']),
   endorsement: z.string().trim().max(600).optional(),

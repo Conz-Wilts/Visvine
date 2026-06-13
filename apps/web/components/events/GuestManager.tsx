@@ -68,6 +68,7 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -153,6 +154,37 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
       else next.add(id);
       return next;
     });
+
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Registration answers (labelled via the event's question schema) plus the
+  // extra profile fields not shown on the row itself.
+  const guestDetails = useCallback(
+    (a: AttendeeRow): { label: string; value: string }[] => {
+      const fmt = (v: string | boolean) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : v);
+      const ans = a.answers ?? {};
+      const schema = event.form?.schema ?? [];
+      const details: { label: string; value: string }[] = [];
+      for (const f of schema) {
+        const v = ans[f.id];
+        if (v !== undefined && v !== '') details.push({ label: f.label, value: fmt(v) });
+      }
+      // answers to questions the host has since removed from the form
+      for (const [k, v] of Object.entries(ans)) {
+        if (v !== '' && !schema.some((f) => f.id === k)) details.push({ label: k, value: fmt(v) });
+      }
+      if (a.roleTitle) details.push({ label: 'Role', value: a.roleTitle });
+      if (a.linkedinUrl) details.push({ label: 'LinkedIn', value: a.linkedinUrl });
+      return details;
+    },
+    [event.form?.schema],
+  );
 
   const copyLink = async () => {
     const slug = event.slug ?? eventId.replace(/^event:/, '');
@@ -240,31 +272,53 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
             {visible.map((a) => {
               const status = norm(a.status);
               const badge = STATUS_BADGE[status];
+              const details = guestDetails(a);
+              const isOpen = expanded.has(a.id);
               return (
-                <li key={a.id} className="flex items-center gap-3 px-4 py-3 hover:bg-brand-light-bg/40 transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(a.id)}
-                    onChange={() => toggleSel(a.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-brand-black truncate">{a.name || a.email || 'Guest'}</span>
-                      {a.response === 'maybe' && <span className="text-xs text-amber-600 font-medium">Maybe</span>}
-                      {(a.plusOnes ?? 0) > 0 && <span className="text-xs text-brand-grey">+{a.plusOnes}</span>}
+                <li key={a.id} className="hover:bg-brand-light-bg/40 transition-colors">
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(a.id)}
+                      onChange={() => toggleSel(a.id)}
+                      className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                    />
+                    <div
+                      className={`min-w-0 flex-1 ${details.length > 0 ? 'cursor-pointer' : ''}`}
+                      onClick={details.length > 0 ? () => toggleExpand(a.id) : undefined}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-brand-black truncate">{a.name || a.email || 'Guest'}</span>
+                        {a.response === 'maybe' && <span className="text-xs text-amber-600 font-medium">Maybe</span>}
+                        {(a.plusOnes ?? 0) > 0 && <span className="text-xs text-brand-grey">+{a.plusOnes}</span>}
+                      </div>
+                      <div className="text-xs text-brand-grey truncate">
+                        {[a.email, a.companyName].filter(Boolean).join(' · ') || '—'}
+                        {details.length > 0 && (
+                          <span className="ml-1.5 text-brand-green font-medium">
+                            · {details.length} {details.length === 1 ? 'answer' : 'answers'} {isOpen ? '▴' : '▾'}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-brand-grey truncate">
-                      {[a.email, a.companyName].filter(Boolean).join(' · ') || '—'}
-                    </div>
+                    {badge && (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.cls}`}>
+                        {badge.icon}
+                        {badge.label}
+                      </span>
+                    )}
+                    <RowActions status={status} onAct={(action) => act(a.id, action)} onRemove={() => remove(a.id)} />
                   </div>
-                  {badge && (
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${badge.cls}`}>
-                      {badge.icon}
-                      {badge.label}
-                    </span>
+                  {isOpen && details.length > 0 && (
+                    <dl className="px-4 pb-3 pl-11 space-y-1">
+                      {details.map((d) => (
+                        <div key={d.label} className="text-xs">
+                          <dt className="inline text-brand-grey">{d.label}: </dt>
+                          <dd className="inline text-brand-black break-words">{d.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
                   )}
-                  <RowActions status={status} onAct={(action) => act(a.id, action)} onRemove={() => remove(a.id)} />
                 </li>
               );
             })}

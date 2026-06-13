@@ -35,7 +35,9 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
 
   const when = event.startAt ? formatEventDateRange(event.startAt, event.endAt, event.timezone) : '';
   const isVirtual = (event.metadata?.eventType as string) === 'virtual';
-  const themeColor = event.theme?.color || '#78d870';
+  // Always the brand green — per-event theme colors made event pages clash
+  // with the rest of the app (matches EventDetailClient).
+  const themeColor = '#78d870';
 
   return (
     <div className="min-h-screen bg-brand-light-bg/30">
@@ -70,7 +72,12 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
           <div className="flex items-start gap-3">
             <Users className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
             <span>
-              {going} going{event.capacity ? ` · ${Math.max(0, event.capacity - going)} spots left` : ''}
+              {going} going
+              {event.capacity
+                ? going >= event.capacity
+                  ? ' · Event full'
+                  : ` · ${event.capacity - going} spots left`
+                : ''}
             </span>
           </div>
         </div>
@@ -84,6 +91,10 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
             slug={slug}
             allowPlusOnes={event.allowPlusOnes ?? 0}
             allowedResponses={event.allowedResponses ?? ['going', 'maybe', 'declined']}
+            formSchema={event.form?.schema ?? []}
+            isFull={!!event.capacity && going >= event.capacity}
+            waitlistEnabled={event.waitlistEnabled !== false}
+            requireApproval={event.form?.requireApproval ?? false}
           />
         </div>
 

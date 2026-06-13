@@ -2,41 +2,64 @@
 
 /**
  * The loginless RSVP form on the public /e/<slug> page. Name + optional email,
- * Going / Maybe / Can't go, and +guests when the host allows it. Posts to the
- * public RSVP endpoint and shows a confirmation with an "add to calendar" link.
+ * Going / Maybe / Can't go, +guests when the host allows it, and the host's
+ * custom registration questions. When the event is full the submit button
+ * morphs into "Join waitlist" (or the form is replaced by a sold-out notice if
+ * the host disabled the waitlist). Posts to the public RSVP endpoint and shows
+ * a confirmation with an "add to calendar" link.
  */
 
 import { useState } from 'react';
-import type { RSVPResponse } from '@/lib/types';
+import type { RSVPResponse, FormField } from '@/lib/types';
 import { Check, Loader2, CalendarPlus } from 'lucide-react';
+import Select from '@/components/ui/Select';
+import { RegistrationField } from '@/components/events/RegistrationField';
+import { missingRequiredAnswers, RESPONSE_LABELS } from '@/lib/eventUtils';
 
 interface PublicRsvpFormProps {
   slug: string;
   allowPlusOnes: number;
   allowedResponses: RSVPResponse[];
+  formSchema: FormField[];
+  isFull: boolean;
+  waitlistEnabled: boolean;
+  requireApproval: boolean;
 }
 
-const RESPONSE_LABELS: Record<RSVPResponse, string> = {
-  going: "I'm going",
-  maybe: 'Maybe',
-  declined: "Can't go",
-};
+const inputCls =
+  'w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all';
 
-export function PublicRsvpForm({ slug, allowPlusOnes, allowedResponses }: PublicRsvpFormProps) {
-  const [response, setResponse] = useState<RSVPResponse>('going');
+export function PublicRsvpForm({
+  slug, allowPlusOnes, allowedResponses, formSchema, isFull, waitlistEnabled, requireApproval,
+}: PublicRsvpFormProps) {
+  // Sold out with the waitlist off: "going" is no longer on the table, but the
+  // form stays up so existing guests can still change to maybe / can't go
+  // (freeing their spot) — otherwise a full event could never un-fill.
+  const soldOut = isFull && !waitlistEnabled;
+  const responses = (allowedResponses?.length ? allowedResponses : (['going', 'maybe', 'declined'] as RSVPResponse[]))
+    .filter((r) => !soldOut || r !== 'going');
+
+  const [response, setResponse] = useState<RSVPResponse>(responses[0] ?? 'going');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [plusOnes, setPlusOnes] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string | boolean>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ message: string } | null>(null);
 
-  const responses = allowedResponses?.length ? allowedResponses : (['going', 'maybe', 'declined'] as RSVPResponse[]);
+  const joinsWaitlist = isFull && waitlistEnabled && response === 'going';
+
+  const setAnswer = (id: string, value: string | boolean) =>
+    setAnswers((prev) => ({ ...prev, [id]: value }));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!name.trim()) { setError('Please add your name'); return; }
+    // Same predicate the RSVP endpoints enforce server-side.
+    const missing = missingRequiredAnswers(formSchema, { response, answers });
+    if (missing.length > 0) { setError(`Please answer: ${missing.join(', ')}`); return; }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/events/${encodeURIComponent(slug)}/rsvp`, {
@@ -47,6 +70,7 @@ export function PublicRsvpForm({ slug, allowPlusOnes, allowedResponses }: Public
           email: email.trim() || undefined,
           response,
           plusOnes: response === 'going' ? plusOnes : 0,
+          answers: response === 'going' && Object.keys(answers).length ? answers : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -76,10 +100,27 @@ export function PublicRsvpForm({ slug, allowPlusOnes, allowedResponses }: Public
     );
   }
 
+  // Sold out, waitlist off, and the host only allows "going" — nothing to submit.
+  if (soldOut && responses.length === 0) {
+    return (
+      <div className="rounded-2xl border border-gray-200 bg-brand-light-bg/40 p-6 text-center">
+        <p className="text-base font-semibold text-brand-black">This event is sold out</p>
+        <p className="mt-1 text-sm text-brand-grey">All spots have been taken.</p>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={submit} className="rounded-2xl border border-gray-200 p-5 space-y-4">
+      {soldOut && (
+        <div className="rounded-xl bg-brand-light-bg/40 border border-gray-200 px-4 py-3 text-center">
+          <p className="text-sm font-semibold text-brand-black">This event is sold out</p>
+          <p className="mt-0.5 text-xs text-brand-grey">Already RSVP&apos;d? You can still update your response below.</p>
+        </div>
+      )}
+
       {/* response buttons */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid gap-2 ${responses.length === 1 ? 'grid-cols-1' : responses.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
         {(['going', 'maybe', 'declined'] as RSVPResponse[]).filter((r) => responses.includes(r)).map((r) => (
           <button
             key={r}
@@ -94,35 +135,56 @@ export function PublicRsvpForm({ slug, allowPlusOnes, allowedResponses }: Public
         ))}
       </div>
 
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Your name"
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
-      />
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" className={inputCls} />
       <input
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="Email (for your confirmation)"
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+        className={inputCls}
       />
 
-      {allowPlusOnes > 0 && response === 'going' && (
+      {allowPlusOnes > 0 && response === 'going' && !isFull && (
         <label className="flex items-center justify-between gap-3">
           <span className="text-sm text-brand-black">Bringing guests?</span>
-          <select
+          <Select
             value={plusOnes}
             onChange={(e) => setPlusOnes(parseInt(e.target.value, 10))}
-            className="px-3 py-2 border border-gray-200 rounded-lg bg-brand-white text-brand-black focus:outline-none focus:ring-2 focus:ring-brand-green/20"
           >
             {Array.from({ length: allowPlusOnes + 1 }, (_, i) => (
               <option key={i} value={i}>{i === 0 ? 'Just me' : `+${i}`}</option>
             ))}
-          </select>
+          </Select>
         </label>
       )}
 
+      {/* host's registration questions */}
+      {response === 'going' && formSchema.length > 0 && (
+        <div className="space-y-3 pt-1">
+          {formSchema.map((f) => (
+            <RegistrationField
+              key={f.id}
+              field={f}
+              value={answers[f.id]}
+              onChange={(v) => setAnswer(f.id, v)}
+              classes={{
+                field: 'block',
+                fieldText: 'block text-sm font-medium text-brand-black mb-1.5',
+                input: inputCls,
+                checkbox: 'flex items-center gap-2.5 text-sm text-brand-black',
+                checkboxInput: 'w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green',
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {joinsWaitlist && (
+        <p className="text-xs text-brand-grey">This event is full — new RSVPs join the waitlist.</p>
+      )}
+      {requireApproval && response === 'going' && !joinsWaitlist && (
+        <p className="text-xs text-brand-grey">RSVPs need host approval before they&apos;re confirmed.</p>
+      )}
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
@@ -131,7 +193,7 @@ export function PublicRsvpForm({ slug, allowPlusOnes, allowedResponses }: Public
         className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-brand-green rounded-xl hover:opacity-90 disabled:opacity-50 transition-all"
       >
         {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-        {response === 'declined' ? 'Send response' : 'RSVP'}
+        {response === 'declined' ? 'Send response' : joinsWaitlist ? 'Join waitlist' : 'RSVP'}
       </button>
     </form>
   );

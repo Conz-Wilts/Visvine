@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import EditModal from './EditModal';
+import Toggle from '@/components/ui/Toggle';
 import type { FullProfile } from '@/lib/profileTypes';
 
 interface Props {
@@ -87,15 +88,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
           />
         </div>
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={openToWork}
-            onChange={(e) => setOpenToWork(e.target.checked)}
-            className="w-4 h-4 accent-brand-dark-green"
-          />
-          <span className="text-sm text-brand-black">Open to work</span>
-        </label>
+        <Toggle checked={openToWork} onChange={setOpenToWork} label="Open to work" />
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-brand-grey border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">

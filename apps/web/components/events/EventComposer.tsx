@@ -12,20 +12,47 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import { copyToClipboard } from '@/lib/utils';
-import type { NBEvent, EventVisibility } from '@/lib/types';
+import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import { LocationAutocomplete } from './LocationAutocomplete';
+import Select from '@/components/ui/Select';
 import {
   Loader2, ImagePlus, MapPin, Video, Globe, Users, Lock, ChevronDown, ChevronUp,
-  Check, Link2, CalendarPlus, ExternalLink, ArrowLeft, X, Sparkles,
+  Check, Link2, CalendarPlus, ExternalLink, ArrowLeft, X, Sparkles, Trash2, Plus,
 } from 'lucide-react';
 
 type EventType = 'in-person' | 'virtual' | 'hybrid';
+
+// A registration question being edited. Options are kept as the raw
+// comma-separated text while typing and only parsed into an array on save.
+type DraftQuestion = {
+  id: string;
+  label: string;
+  type: FormField['type'];
+  required: boolean;
+  optionsText: string;
+};
+
+// Must cover every type formFieldSchema allows — events created with the old
+// builder can carry email/linkedin/company questions, and a <Select> whose
+// value isn't in its option list silently displays (and on change, rewrites
+// to) the wrong type.
+const QUESTION_TYPES: { value: FormField['type']; label: string }[] = [
+  { value: 'text', label: 'Short answer' },
+  { value: 'textarea', label: 'Long answer' },
+  { value: 'select', label: 'Multiple choice' },
+  { value: 'checkbox', label: 'Checkbox' },
+  { value: 'url', label: 'Website' },
+  { value: 'email', label: 'Email' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'company', label: 'Company' },
+];
 
 interface EventComposerProps {
   communityId: string;
   mode?: 'create' | 'edit';
   initialEvent?: NBEvent;
+  onDelete?: () => void;
 }
 
 const THEME_COLORS = ['#78d870', '#2563eb', '#9333ea', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#111827'];
@@ -40,12 +67,18 @@ function inputClass() {
   return 'w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all';
 }
 
+function randomId(len: number): string {
+  return typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID().replace(/-/g, '').slice(0, len)
+    : Math.random().toString(36).slice(2, 2 + len);
+}
+
 function makeDraftId(): `event:${string}` {
-  const rnd =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID().replace(/-/g, '').slice(0, 12)
-      : Math.random().toString(36).slice(2, 14);
-  return `event:${rnd}`;
+  return `event:${randomId(12)}`;
+}
+
+function makeQuestionId(): string {
+  return `q_${randomId(8)}`;
 }
 
 function nextTopOfHourIso(): string {
@@ -59,7 +92,7 @@ function plusHoursIso(iso: string, hours: number): string {
   return new Date(new Date(iso).getTime() + hours * 3600_000).toISOString();
 }
 
-export function EventComposer({ communityId, mode = 'create', initialEvent }: EventComposerProps) {
+export function EventComposer({ communityId, mode = 'create', initialEvent, onDelete }: EventComposerProps) {
   const router = useRouter();
   const draftIdRef = useRef<`event:${string}`>(initialEvent?.id ?? makeDraftId());
   const createdRef = useRef(mode === 'edit');
@@ -86,6 +119,16 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
   const [guestListVisible, setGuestListVisible] = useState(initialEvent?.guestListVisible ?? true);
   const [allowPlusOnes, setAllowPlusOnes] = useState(initialEvent?.allowPlusOnes ?? 0);
   const [allowMaybe, setAllowMaybe] = useState(initialEvent?.allowedResponses ? initialEvent.allowedResponses.includes('maybe') : true);
+  const [waitlistEnabled, setWaitlistEnabled] = useState(initialEvent?.waitlistEnabled !== false);
+  const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
+    (initialEvent?.form?.schema ?? []).map((f) => ({
+      id: f.id,
+      label: f.label,
+      type: f.type,
+      required: f.required ?? false,
+      optionsText: (f.options ?? []).join(', '),
+    })),
+  );
 
   // ── ui state ────────────────────────────────────────────────────────────────
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -113,15 +156,31 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
       // Keep the existing status (e.g. 'published') on edit; new drafts default
       // to 'draft'. Never send a hardcoded 'draft' that would unpublish an event.
       status: initialStatus ?? 'draft',
-      waitlistEnabled: capacity != null,
+      waitlistEnabled: capacity != null ? waitlistEnabled : undefined,
       guestListVisible,
       allowPlusOnes,
       allowedResponses: ['going', ...(allowMaybe ? ['maybe'] : []), 'declined'],
-      // `hosts` and the form `schema` have no editor in this composer, so we omit
-      // them: the create route injects the creator as host and the update route
-      // preserves both. (Sending hosts:[]/schema:[] here used to strip the
-      // creator's host access and wipe custom RSVP questions on the first save.)
-      form: { enabled: true, requireApproval },
+      // `hosts` has no editor in this composer, so we omit it: the create route
+      // injects the creator as host and the update route preserves it. (Sending
+      // hosts:[] here used to strip the creator's host access on the first save.)
+      // The question schema IS owned by this composer now — state is seeded from
+      // the loaded event on edit, so sending it can't wipe anything.
+      form: {
+        enabled: true,
+        requireApproval,
+        schema: questions
+          .filter((q) => q.label.trim())
+          .map((q) => ({
+            id: q.id,
+            label: q.label.trim(),
+            type: q.type,
+            required: q.required || undefined,
+            options:
+              q.type === 'select'
+                ? q.optionsText.split(',').map((s) => s.trim()).filter(Boolean)
+                : undefined,
+          })),
+      },
       metadata: {
         eventType,
         virtualLink: eventType !== 'in-person' ? virtualLink || undefined : undefined,
@@ -129,8 +188,15 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
       ...overrides,
     }),
     [communityId, title, description, startAt, endAt, timezone, location, capacity, visibility,
-     coverImageUrl, themeColor, guestListVisible, allowPlusOnes, allowMaybe, requireApproval, eventType, virtualLink, initialStatus],
+     coverImageUrl, themeColor, guestListVisible, allowPlusOnes, allowMaybe, requireApproval, eventType, virtualLink, initialStatus,
+     waitlistEnabled, questions],
   );
+
+  const updateQuestion = (id: string, patch: Partial<DraftQuestion>) =>
+    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  const removeQuestion = (id: string) => setQuestions((prev) => prev.filter((q) => q.id !== id));
+  const addQuestion = () =>
+    setQuestions((prev) => [...prev, { id: makeQuestionId(), label: '', type: 'text', required: false, optionsText: '' }]);
 
   const persist = useCallback(
     async (overrides: Record<string, unknown> = {}): Promise<NBEvent> => {
@@ -200,6 +266,15 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
     setError(null);
     if (!title.trim()) { setError('Please add a title'); return; }
     if (!startAt) { setError('Please pick a date and time'); return; }
+    // A multiple-choice question with no options renders an unanswerable form
+    // (a required one would block every registration).
+    const optionless = questions.find(
+      (q) => q.label.trim() && q.type === 'select' && !q.optionsText.split(',').some((s) => s.trim()),
+    );
+    if (optionless) {
+      setError(`Add options (comma separated) to your multiple choice question “${optionless.label.trim()}”`);
+      return;
+    }
     setPublishing(true);
     try {
       const ev = await persist({ status: 'published' });
@@ -412,7 +487,14 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
                 className={inputClass()}
               />
               {capacity != null && (
-                <p className="mt-1.5 text-xs text-brand-grey">When full, new RSVPs join a waitlist automatically.</p>
+                <div className="mt-3">
+                  <Toggle
+                    label="Waitlist when full"
+                    hint={waitlistEnabled ? 'New RSVPs join the waitlist once every spot is taken' : 'Once full, the event shows as sold out'}
+                    value={waitlistEnabled}
+                    onChange={setWaitlistEnabled}
+                  />
+                </div>
               )}
             </div>
 
@@ -436,6 +518,71 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
             <Toggle label="Require approval" hint="Manually approve each RSVP" value={requireApproval} onChange={setRequireApproval} />
             <Toggle label="Show guest list" hint="Guests can see who else is coming" value={guestListVisible} onChange={setGuestListVisible} />
             <Toggle label='Allow "Maybe"' hint="Let guests reply Maybe as well as Going" value={allowMaybe} onChange={setAllowMaybe} />
+
+            {/* registration questions */}
+            <div className="pt-4 border-t border-gray-100">
+              <label className="block text-sm font-medium text-brand-black">Registration questions</label>
+              <p className="mt-0.5 text-xs text-brand-grey">Guests answer these when they RSVP. Name and email are always collected.</p>
+              {questions.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {questions.map((q) => (
+                    <div key={q.id} className="p-3 rounded-xl border border-gray-200 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={q.label}
+                          onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
+                          placeholder="Your question…"
+                          className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeQuestion(q.id)}
+                          className="p-2 text-brand-grey hover:text-red-600 transition-colors flex-shrink-0"
+                          aria-label="Remove question"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {q.type === 'select' && (
+                        <input
+                          value={q.optionsText}
+                          onChange={(e) => updateQuestion(q.id, { optionsText: e.target.value })}
+                          placeholder="Options, separated by commas"
+                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                        />
+                      )}
+                      <div className="flex items-center justify-between gap-3">
+                        <Select
+                          value={q.type}
+                          onChange={(e) => updateQuestion(q.id, { type: e.target.value as FormField['type'] })}
+                          className="w-44"
+                        >
+                          {QUESTION_TYPES.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </Select>
+                        <label className="flex items-center gap-1.5 text-xs font-medium text-brand-grey cursor-pointer flex-shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={q.required}
+                            onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
+                            className="w-3.5 h-3.5 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                          />
+                          Required
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={addQuestion}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:opacity-80 transition-opacity"
+              >
+                <Plus className="w-4 h-4" /> Add question
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -443,7 +590,19 @@ export function EventComposer({ communityId, mode = 'create', initialEvent }: Ev
       {/* sticky publish bar */}
       <div className="fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 bg-brand-white/95 backdrop-blur">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
-          <SaveIndicator state={saveState} />
+          <div className="flex items-center gap-4">
+            {mode === 'edit' && onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete event
+              </button>
+            )}
+            <SaveIndicator state={saveState} />
+          </div>
           <button
             onClick={handlePublish}
             disabled={publishing || uploading}

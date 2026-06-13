@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import type { NBEvent, FormField } from '@/lib/types';
 import { CheckCircle, Loader2 } from 'lucide-react';
+import Select from '@/components/ui/Select';
 
 interface RSVPFormProps {
   event: NBEvent;
@@ -104,8 +105,9 @@ export function RSVPForm({ event, communityId }: RSVPFormProps) {
         );
       case 'select':
         return (
-          <select
-            {...commonProps}
+          <Select
+            id={field.id}
+            required={field.required}
             value={(formState[field.id] as string) || ''}
             onChange={(e) => handleChange(field.id, e.target.value)}
           >
@@ -115,7 +117,7 @@ export function RSVPForm({ event, communityId }: RSVPFormProps) {
                 {option}
               </option>
             ))}
-          </select>
+          </Select>
         );
       case 'checkbox':
         return (

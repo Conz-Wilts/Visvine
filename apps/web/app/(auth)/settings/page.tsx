@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useTheme, COLOR_THEMES, ColorTheme } from '@/lib/contexts/ThemeContext';
+import Toggle from '@/components/ui/Toggle';
 import {
   User,
   Bell,
@@ -110,19 +111,7 @@ function AppearanceSection() {
               <p className="text-xs font-medium text-text-primary">Dark mode</p>
               <p className="text-xs text-text-muted">{isDark ? 'Currently on' : 'Currently off'}</p>
             </div>
-            {/* Toggle switch */}
-            <button
-              onClick={toggleDark}
-              role="switch"
-              aria-checked={isDark}
-              className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none flex-shrink-0"
-              style={{ background: isDark ? theme.accent : '#D1D5DB' }}
-            >
-              <span
-                className="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform duration-200"
-                style={{ transform: isDark ? 'translateX(18px)' : 'translateX(2px)' }}
-              />
-            </button>
+            <Toggle checked={isDark} onChange={toggleDark} aria-label="Dark mode" />
           </div>
 
           {/* Language (static) */}
