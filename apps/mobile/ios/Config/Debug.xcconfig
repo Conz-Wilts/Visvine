@@ -1,0 +1,8 @@
+// Debug configuration — local development (simulator → host machine).
+#include "Base.xcconfig"
+
+// Local dev backend. `$()` breaks the `//` so it isn't parsed as a comment.
+VISVINE_API_BASE_URL = http:/$()/localhost:3000
+
+// Dev-login bypass is available in Debug builds only.
+VISVINE_DEV_AUTH_ENABLED = true

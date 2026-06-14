@@ -4,7 +4,8 @@ import { getServerMessagingUser } from '@/lib/messages/auth';
 
 export const dynamic = 'force-dynamic';
 
-const TABS: MessageTab[] = ['channels', 'direct', 'intros'];
+// Channels moved to their own page (/channels); Messages keeps Chats + Intros.
+const TABS: MessageTab[] = ['direct', 'intros'];
 
 export default async function MessagesPage({
   searchParams,

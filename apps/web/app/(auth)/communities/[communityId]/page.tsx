@@ -432,8 +432,8 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
           {/* Activity feed */}
           {isMember && (
             <SectionCard id="activity" icon={<MessageSquare className="w-[18px] h-[18px]" />} title="Activity" theme={theme}
-                         action={posts.length > 0 ? <Link href="/feed" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link> : undefined}>
-              <Link href="/feed"
+                         action={posts.length > 0 ? <Link href="/channels" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link> : undefined}>
+              <Link href="/channels"
                     className="flex items-center gap-3 px-4 py-2.5 mb-3 rounded-xl border border-border-default bg-surface-2 text-sm text-text-muted hover:border-border-default hover:bg-surface-3 transition">
                 <MessageSquare className="w-4 h-4 flex-none" /> Share something with the community…
               </Link>

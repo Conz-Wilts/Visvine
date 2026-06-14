@@ -12,3 +12,6 @@ xcuserdata/
 # SwiftPM
 .swiftpm/
 Packages/
+
+# Developer-local signing/config overrides (Team ID, etc) — never commit.
+Config/Local.xcconfig

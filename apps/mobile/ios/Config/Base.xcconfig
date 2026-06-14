@@ -1,0 +1,21 @@
+// Shared build settings for all configurations.
+// Debug.xcconfig / Release.xcconfig #include this file.
+//
+// NOTE: in xcconfig files, `//` begins a comment — even inside a value. To put
+// a URL in a setting you must break the `//` with `$()`, e.g.
+//   https:/$()/example.com   ->   https://example.com
+// (see Debug.xcconfig / Release.xcconfig).
+
+// Optional developer-local overrides (Team ID, etc). Gitignored. Copy
+// Local.xcconfig.example -> Local.xcconfig and fill it in. The `?` makes the
+// include optional so the project still generates without it.
+#include? "Local.xcconfig"
+
+// Signing — automatic signing lets Xcode manage certs/profiles from your
+// Apple Developer team. DEVELOPMENT_TEAM is supplied by Local.xcconfig (or set
+// it in Xcode's Signing & Capabilities tab on first archive).
+CODE_SIGN_STYLE = Automatic
+
+// OAuth web client id (empty unless you wire real Google sign-in; can be
+// overridden in Local.xcconfig).
+VISVINE_GOOGLE_CLIENT_ID =

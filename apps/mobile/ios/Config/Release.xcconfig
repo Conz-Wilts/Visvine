@@ -1,0 +1,10 @@
+// Release configuration — TestFlight / App Store builds.
+#include "Base.xcconfig"
+
+// PRODUCTION backend. Replace the host below with your Cloud Run HTTPS URL
+// (no trailing slash). `$()` breaks the `//` so it isn't parsed as a comment,
+// so keep that exact form, e.g.  https:/$()/visvine-xxxx.run.app
+VISVINE_API_BASE_URL = https:/$()/REPLACE-WITH-CLOUD-RUN-URL
+
+// Never ship the dev-login bypass to testers / the store.
+VISVINE_DEV_AUTH_ENABLED = false

@@ -35,12 +35,13 @@
         <true/>
     </dict>
 
-    <!-- App configuration (replaces the old EXPO_PUBLIC_* values). -->
+    <!-- App configuration. Driven per-build-configuration from Config/*.xcconfig
+         (Debug -> local dev, Release -> production). Do not hardcode here. -->
     <key>VisvineApiBaseURL</key>
-    <string>http://localhost:3000</string>
+    <string>$(VISVINE_API_BASE_URL)</string>
     <key>VisvineDevAuthEnabled</key>
-    <true/>
+    <string>$(VISVINE_DEV_AUTH_ENABLED)</string>
     <key>VisvineGoogleClientID</key>
-    <string></string>
+    <string>$(VISVINE_GOOGLE_CLIENT_ID)</string>
 </dict>
 </plist>

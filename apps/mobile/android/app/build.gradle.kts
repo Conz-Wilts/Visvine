@@ -18,6 +18,19 @@ val apiBaseUrl = prop("visvine.apiBaseUrl", "http://10.0.2.2:3000")
 val devAuthEnabled = prop("visvine.devAuthEnabled", "true")
 val googleClientId = prop("visvine.googleClientId", "")
 
+// Release builds point at production and never ship the dev-login bypass,
+// regardless of the dev-default props above. Override with -P if needed.
+val releaseApiBaseUrl = prop("visvine.apiBaseUrl.release", "https://REPLACE-WITH-CLOUD-RUN-URL")
+val releaseDevAuthEnabled = prop("visvine.devAuthEnabled.release", "false")
+
+// Release signing — credentials live in keystore.properties (gitignored).
+// Copy keystore.properties.example -> keystore.properties and fill it in.
+// Without that file, release builds are produced unsigned (debug still works).
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.visvine.mobile"
     compileSdk = 35
@@ -40,6 +53,17 @@ android {
         manifestPlaceholders["authScheme"] = "visvine"
     }
 
+    signingConfigs {
+        create("release") {
+            if (keystorePropsFile.exists()) {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -47,6 +71,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            // Production backend + no dev-login for store/TestFlight-equivalent builds.
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
+            buildConfigField("boolean", "DEV_AUTH_ENABLED", releaseDevAuthEnabled)
+            // Only sign when keystore.properties is present (otherwise unsigned).
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         debug {
             applicationIdSuffix = ".debug"

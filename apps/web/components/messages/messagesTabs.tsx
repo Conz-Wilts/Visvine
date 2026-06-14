@@ -31,10 +31,11 @@ function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
  * Centered tab selector for the Messages page.
  * Matches EventsViewSelector styling — grey border, muted inactive text, animated green pill.
  */
-export function MessagesTabSelector({ activeTab, onTabChange, counts }: {
+export function MessagesTabSelector({ activeTab, onTabChange, counts, tabs = MESSAGE_TABS }: {
   activeTab: MessageTab;
   onTabChange: (tab: MessageTab) => void;
   counts: Record<MessageTab, number>;
+  tabs?: { id: MessageTab; label: string; icon: React.ElementType }[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -43,7 +44,7 @@ export function MessagesTabSelector({ activeTab, onTabChange, counts }: {
 
   useEffect(() => {
     const container = containerRef.current;
-    const activeIndex = MESSAGE_TABS.findIndex((t) => t.id === activeTab);
+    const activeIndex = tabs.findIndex((t) => t.id === activeTab);
     const btn = buttonRefs.current[activeIndex];
     if (!container || !btn) return;
     setPillStyle(measureBtn(btn, container));
@@ -53,11 +54,11 @@ export function MessagesTabSelector({ activeTab, onTabChange, counts }: {
   useEffect(() => {
     if (!animatedRef.current) return;
     const container = containerRef.current;
-    const activeIndex = MESSAGE_TABS.findIndex((t) => t.id === activeTab);
+    const activeIndex = tabs.findIndex((t) => t.id === activeTab);
     const btn = buttonRefs.current[activeIndex];
     if (!container || !btn) return;
     setPillStyle(measureBtn(btn, container));
-  }, [activeTab, counts]);
+  }, [activeTab, counts, tabs]);
 
   return (
     <div
@@ -75,7 +76,7 @@ export function MessagesTabSelector({ activeTab, onTabChange, counts }: {
         />
       )}
 
-      {MESSAGE_TABS.map(({ id, label, icon: Icon }, i) => (
+      {tabs.map(({ id, label, icon: Icon }, i) => (
         <button
           key={id}
           ref={(el) => { buttonRefs.current[i] = el; }}

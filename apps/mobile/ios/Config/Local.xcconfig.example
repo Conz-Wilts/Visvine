@@ -1,0 +1,9 @@
+// Copy this file to `Local.xcconfig` (gitignored) and fill in your values.
+// It is #include?'d by Base.xcconfig.
+
+// Your Apple Developer Team ID (App Store Connect > Membership). Required to
+// archive a signed build for TestFlight / the App Store.
+DEVELOPMENT_TEAM = REPLACE_WITH_TEAM_ID
+
+// Optional: real Google OAuth web client id for on-device Google sign-in.
+// VISVINE_GOOGLE_CLIENT_ID = xxxxxxxx.apps.googleusercontent.com
