@@ -17,6 +17,21 @@ export default function ConnectStep({ data, onNext, onBack, saving }: Props) {
   const [website, setWebsite] = useState(data.website);
   const [phone, setPhone] = useState(data.phone);
 
+  // People type "visvine.com"; store a valid URL so links work + match the server.
+  const normalizeUrl = (v: string) => {
+    const t = v.trim();
+    if (!t) return t;
+    return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  };
+
+  const handleNext = () =>
+    onNext({
+      linkedinUrl: normalizeUrl(linkedinUrl),
+      twitterUrl: normalizeUrl(twitterUrl),
+      website: normalizeUrl(website),
+      phone,
+    });
+
   return (
     <div className="p-8">
       <h2 className="text-xl font-bold text-gray-900 mb-1">Connect</h2>
@@ -83,7 +98,7 @@ export default function ConnectStep({ data, onNext, onBack, saving }: Props) {
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
         <button
-          onClick={() => onNext({ linkedinUrl, twitterUrl, website, phone })}
+          onClick={handleNext}
           disabled={saving}
           className="bg-brand-green text-white rounded-full px-6 py-2.5 text-sm font-semibold hover:opacity-90 active:translate-y-[1px] transition-all duration-200 shadow-soft flex items-center gap-1 disabled:opacity-60"
         >

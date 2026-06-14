@@ -24,28 +24,17 @@ export default function SignInCard({
     <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-10 flex flex-col items-center text-center">
       {/* Logo */}
       <span className="inline-flex items-center gap-2">
-        <span className="w-7 h-7 rounded-lg bg-[#78d870] flex items-center justify-center">
-          <svg viewBox="0 0 20 20" fill="none" className="w-4 h-4">
-            <circle cx="10" cy="10" r="3" fill="white" />
-            <circle cx="3" cy="5" r="2" fill="white" opacity="0.7" />
-            <circle cx="17" cy="5" r="2" fill="white" opacity="0.7" />
-            <circle cx="3" cy="15" r="2" fill="white" opacity="0.7" />
-            <circle cx="17" cy="15" r="2" fill="white" opacity="0.7" />
-            <line x1="10" y1="10" x2="3" y2="5" stroke="white" strokeWidth="1.2" opacity="0.5" />
-            <line x1="10" y1="10" x2="17" y2="5" stroke="white" strokeWidth="1.2" opacity="0.5" />
-            <line x1="10" y1="10" x2="3" y2="15" stroke="white" strokeWidth="1.2" opacity="0.5" />
-            <line x1="10" y1="10" x2="17" y2="15" stroke="white" strokeWidth="1.2" opacity="0.5" />
-          </svg>
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
         <span className="font-medium text-lg text-[#78d870] tracking-tight">Visvine</span>
       </span>
 
       {/* Heading */}
       <h1 className="mt-8 text-2xl font-bold text-gray-900 leading-tight">
-        Welcome back
+        Welcome to Visvine
       </h1>
       <p className="mt-2 text-gray-500 text-sm">
-        Sign in to explore your network graph
+        Sign in or create an account to explore communities
       </p>
 
       {/* Auth */}

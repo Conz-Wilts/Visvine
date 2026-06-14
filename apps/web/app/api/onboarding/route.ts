@@ -12,18 +12,31 @@ import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
 import { z } from 'zod';
 
+// Bare domains ("visvine.com", "linkedin.com/in/me") are the common way people
+// type a link — prepend https:// so they validate instead of being dropped.
+const urlField = z
+  .preprocess((v) => {
+    if (typeof v !== 'string') return v; // null / undefined pass through
+    const t = v.trim();
+    if (t === '') return '';
+    return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  }, z.string().url().or(z.literal('')).nullable())
+  .optional();
+
+// Empty inputs from the wizard arrive as `null` (the client sends `value || null`),
+// so every nullable string field must accept `null` as well as `undefined`.
 const OnboardingPatchSchema = z.object({
-  subtitle: z.string().max(200).optional(),
-  bio: z.string().max(2000).optional(),
-  location: z.string().max(200).optional(),
-  website: z.string().url().or(z.literal('')).optional(),
-  linkedinUrl: z.string().url().or(z.literal('')).optional(),
-  twitterUrl: z.string().url().or(z.literal('')).optional(),
-  phone: z.string().max(30).optional(),
-  pronouns: z.string().max(30).optional(),
+  subtitle: z.string().max(200).nullable().optional(),
+  bio: z.string().max(2000).nullable().optional(),
+  location: z.string().max(200).nullable().optional(),
+  website: urlField,
+  linkedinUrl: urlField,
+  twitterUrl: urlField,
+  phone: z.string().max(30).nullable().optional(),
+  pronouns: z.string().max(30).nullable().optional(),
   openToWork: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().nullable().optional(),
 });
 
 async function getPersonForSession() {

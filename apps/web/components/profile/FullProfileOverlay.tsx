@@ -90,14 +90,13 @@ export default function FullProfileOverlay({
     >
       <div className="w-full max-w-7xl mx-auto px-6 pt-8 pb-8">
 
-        {/* Person nodes → new profile design */}
+        {/* Person nodes → separate floating cards (no outer card wrapper, so the
+            cards float on the overlay background exactly like the standalone page) */}
         {isPerson && nodeId ? (
-          <div className="relative bg-surface-1 rounded-2xl border border-border-subtle overflow-clip shadow-float" style={{ minHeight: 'calc(100vh - 4rem)' }}>
-            {/* overflow-clip (not -hidden) keeps the rounded corners without creating
-                a scroll container, so the profile's sticky sub-nav still works */}
+          <div className="relative max-w-5xl mx-auto" style={{ minHeight: 'calc(100vh - 4rem)' }}>
             <button
               onClick={handleClose}
-              className="absolute top-4 right-4 z-40 p-2 rounded-xl text-white/90 hover:text-white bg-black/20 hover:bg-black/30 backdrop-blur transition-colors"
+              className="absolute top-3 right-3 z-50 p-2 rounded-xl text-white/90 hover:text-white bg-black/20 hover:bg-black/30 backdrop-blur transition-colors"
               aria-label="Close"
             >
               <X className="w-5 h-5" />

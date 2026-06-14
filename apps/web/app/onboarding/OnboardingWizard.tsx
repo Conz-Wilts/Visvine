@@ -49,6 +49,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
 
   const [data, setData] = useState<OnboardingData>({
@@ -69,7 +70,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
     setData((prev) => ({ ...prev, ...partial }));
   };
 
-  const saveStep = async (stepData: Partial<OnboardingData>) => {
+  const saveStep = async (stepData: Partial<OnboardingData>): Promise<boolean> => {
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {};
@@ -86,13 +87,16 @@ export default function OnboardingWizard({ person, userName }: Props) {
       if (stepData.phone !== undefined) payload.phone = stepData.phone || null;
       if (stepData.imageUrl !== undefined) payload.imageUrl = stepData.imageUrl;
 
-      if (Object.keys(payload).length > 0) {
-        await fetch('/api/onboarding', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      }
+      if (Object.keys(payload).length === 0) return true;
+
+      const res = await fetch('/api/onboarding', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch {
+      return false;
     } finally {
       setSaving(false);
     }
@@ -101,8 +105,13 @@ export default function OnboardingWizard({ person, userName }: Props) {
   const next = async (stepData?: Partial<OnboardingData>) => {
     if (stepData) {
       updateData(stepData);
-      await saveStep(stepData);
+      const ok = await saveStep(stepData);
+      if (!ok) {
+        setSaveError("We couldn't save your changes. Please check your entries and try again.");
+        return;
+      }
     }
+    setSaveError(null);
     setDirection('forward');
     setStep((s) => s + 1);
   };
@@ -113,12 +122,20 @@ export default function OnboardingWizard({ person, userName }: Props) {
   };
 
   const skipAll = async () => {
-    await fetch('/api/onboarding', { method: 'POST' });
+    try {
+      await fetch('/api/onboarding', { method: 'POST' });
+    } catch {
+      // best-effort; still let the user into the app
+    }
     router.push('/directory');
   };
 
   const complete = async () => {
-    await fetch('/api/onboarding', { method: 'POST' });
+    try {
+      await fetch('/api/onboarding', { method: 'POST' });
+    } catch {
+      // best-effort; DoneStep re-enables its button regardless
+    }
   };
 
   const firstName = userName.split(' ')[0];
@@ -130,8 +147,17 @@ export default function OnboardingWizard({ person, userName }: Props) {
           <StepProgress current={step} total={TOTAL_STEPS} />
         )}
 
+        {saveError && (
+          <div
+            role="alert"
+            className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600"
+          >
+            {saveError}
+          </div>
+        )}
+
         <div
-          className="bg-white rounded-2xl shadow-lg overflow-hidden"
+          className="relative bg-white rounded-2xl shadow-lg overflow-hidden"
           key={step}
           style={{
             animation: `${direction === 'forward' ? 'slideInRight' : 'slideInLeft'} 300ms ease-out`,

@@ -18,7 +18,7 @@ function computeCompletion(data: OnboardingData): number {
     !!data.bio,
     !!data.location,
     data.tags.length > 0,
-    !!(data.website || data.linkedinUrl || data.phone),
+    !!(data.website || data.linkedinUrl || data.twitterUrl || data.phone),
   ];
   return Math.round((sections.filter(Boolean).length / sections.length) * 100);
 }
@@ -29,7 +29,9 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
   const score = computeCompletion(data);
 
   useEffect(() => {
-    onComplete().then(() => setCompleting(false));
+    // Always re-enable the button — even if the completion POST fails the user
+    // must be able to leave onboarding rather than get stuck on "Finishing…".
+    onComplete().finally(() => setCompleting(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

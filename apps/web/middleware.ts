@@ -57,6 +57,19 @@ export async function middleware(req: NextRequest) {
     if (session) return NextResponse.next();
   }
 
+  // A logged-out visitor opening an in-app event detail link (/events/<id>)
+  // should land on the public share page (/e/<slug>) — which renders the event
+  // for public events and 404s for non-public ones — rather than a login wall.
+  // (getEventBySlug resolves by alias OR `event:<slug>` id, so the bare id works
+  // as the slug here without a DB lookup.) Organizer sub-routes
+  // (/events/<id>/manage|edit|rsvp), the list (/events) and /events/new are not
+  // matched and still fall through to sign-in.
+  const eventDetail = pathname.match(/^\/events\/([^/]+)$/);
+  if (eventDetail && eventDetail[1] !== "new") {
+    const slug = decodeURIComponent(eventDetail[1]).replace(/^event:/, "");
+    return NextResponse.redirect(new URL(`/e/${encodeURIComponent(slug)}`, req.url));
+  }
+
   const signIn = new URL("/signin", req.url);
   signIn.searchParams.set("callbackUrl", pathname);
   return NextResponse.redirect(signIn);

@@ -72,7 +72,7 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
       <h2 className="text-xl font-bold text-gray-900 mb-1">Your profile photo & basics</h2>
       <p className="text-sm text-gray-500 mb-6">Help people recognize you in the community.</p>
 
-      <div className="flex justify-center mb-6">
+      <div className="flex flex-col items-center mb-6">
         <div className="relative group">
           {imageUrl ? (
             <img src={imageUrl} alt="Profile" className="w-28 h-28 rounded-full object-cover" />
@@ -81,10 +81,13 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
               <Camera className="w-8 h-8 text-gray-400" />
             </div>
           )}
+          {/* Desktop hover affordance */}
           <button
+            type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+            aria-label={imageUrl ? 'Change photo' : 'Add photo'}
+            className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex items-center justify-center"
           >
             {uploading ? (
               <Loader2 className="w-6 h-6 text-white animate-spin" />
@@ -92,8 +95,23 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
               <Camera className="w-6 h-6 text-white" />
             )}
           </button>
+          {/* Always-visible badge so the control is discoverable (incl. touch) */}
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0 right-0 w-9 h-9 rounded-full bg-brand-green text-white flex items-center justify-center shadow-md ring-2 ring-white pointer-events-none"
+          >
+            <Camera className="w-4 h-4" />
+          </span>
           <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
         </div>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="mt-3 text-sm font-medium text-brand-green hover:underline disabled:opacity-60"
+        >
+          {uploading ? 'Uploading…' : imageUrl ? 'Change photo' : 'Add a photo'}
+        </button>
       </div>
       {uploadError && <p className="text-red-500 text-xs text-center mb-4">{uploadError}</p>}
 

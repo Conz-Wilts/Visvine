@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   MapPin, ExternalLink, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
   Pencil, Plus, Share2, Building2, Sparkles, Wrench, Network as NetworkIcon,
@@ -24,11 +24,6 @@ import EditContactModal from './edit/EditContactModal';
 import ConnectButton from './ConnectButton';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | null;
-const SECTIONS = ['about', 'skills', 'network', 'contact'] as const;
-type Section = typeof SECTIONS[number];
-const SECTION_LABELS: Record<Section, string> = {
-  about: 'About', skills: 'Skills', network: 'Network', contact: 'Contact',
-};
 /** Which edit modal completes each profile-strength item. */
 const COMPLETION_MODAL: Record<string, Exclude<ModalState, null>> = {
   photo: 'basicInfo', headline: 'basicInfo', about: 'about',
@@ -42,20 +37,6 @@ const hostname = (url?: string | null) => {
 
 /** Typed helper for inline CSS custom properties (CSSProperties rejects arbitrary keys). */
 const cssVars = (vars: Record<`--${string}`, string>): React.CSSProperties => vars as React.CSSProperties;
-
-/** Scroll-spy for the sticky sub-nav. */
-function useScrollSpy(ids: readonly string[]) {
-  const [active, setActive] = useState<string>(ids[0]);
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      (entries) => entries.forEach((e) => { if (e.isIntersecting) setActive(e.target.id); }),
-      { rootMargin: '-20% 0px -70% 0px' },
-    );
-    ids.forEach((id) => { const el = document.getElementById(id); if (el) obs.observe(el); });
-    return () => obs.disconnect();
-  }, [ids]);
-  return active;
-}
 
 interface ProfilePageContentProps {
   nodeId: string;
@@ -77,14 +58,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     return (nodeData?.connections ?? []).filter((c) => !seen.has(c.id) && !!seen.add(c.id));
   }, [nodeData?.connections]);
 
-  // Only sections that actually render get a sub-nav tab + scroll-spy target;
-  // the Network section is omitted when there are no connections.
   const hasConnections = connections.length > 0;
-  const visibleSections = useMemo(
-    () => SECTIONS.filter((s) => s !== 'network' || hasConnections),
-    [hasConnections],
-  );
-  const active = useScrollSpy(visibleSections);
 
   const isOwner = !!(session?.user?.nodeId && session.user.nodeId === nodeId);
 
@@ -126,151 +100,135 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const missing = Object.entries(completionSections).filter(([, s]) => !s.complete);
   const hasContact = !!(profile.email || profile.phone || profile.website || profile.linkedinUrl || profile.twitterUrl);
 
-  const jump = (id: Section) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // Sticky offsets: standalone sits under the fixed h-20 navbar; the overlay
-  // owns its scroll container so its nav sticks to the very top.
-  const navStick = overlay ? 'top-0' : 'top-20';
-  const railStick = overlay ? 'lg:top-16' : 'lg:top-36';
-  const sectionScrollMargin = overlay ? 'scroll-mt-16' : 'scroll-mt-2';
+  // The rail sticks under the fixed app chrome on the standalone page; in the
+  // overlay it owns its own scroll container, so it sticks near the very top.
+  const railStick = overlay ? 'lg:top-4' : 'lg:top-16';
+  const sectionScrollMargin = overlay ? 'scroll-mt-4' : 'scroll-mt-20';
 
   return (
-    <div className="profile-content-fade">
-      {/* ── COVER ── */}
-      <div
-        className="relative h-28 sm:h-36 2xl:h-44 rounded-t-2xl"
-        style={{
-          background: [
-            'radial-gradient(circle at 18% -30%, rgba(255,255,255,0.22), transparent 55%)',
-            `linear-gradient(120deg, ${theme.base}, ${theme.dark})`,
-          ].join(', '),
-        }}
-      >
-        <div className="absolute inset-0 rounded-t-2xl opacity-20"
-             style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.3) 1px, transparent 1.4px)', backgroundSize: '20px 20px' }} />
-      </div>
+    <div className="profile-content-fade flex flex-col gap-5">
+      {/* ══ IDENTITY HERO — its own floating card ══ */}
+      <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-clip">
+        {/* cover band */}
+        <div
+          className="relative h-24 sm:h-28"
+          style={{
+            background: [
+              'radial-gradient(circle at 18% -30%, rgba(255,255,255,0.22), transparent 55%)',
+              `linear-gradient(120deg, ${theme.base}, ${theme.dark})`,
+            ].join(', '),
+          }}
+        >
+          <div className="absolute inset-0 opacity-20"
+               style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.3) 1px, transparent 1.4px)', backgroundSize: '20px 20px' }} />
+        </div>
 
-      {/* ── HEADER ── */}
-      <header className="px-5 sm:px-8 2xl:px-10">
-        {/* avatar + actions */}
-        <div className="flex flex-wrap items-end justify-between gap-3 -mt-12 sm:-mt-14">
-          <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-none rounded-2xl overflow-hidden ring-4 ring-surface-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
-            {profile.imageUrl ? (
-              <Image src={profile.imageUrl} alt={profile.name} width={112} height={112} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-3xl sm:text-4xl font-bold text-white"
-                   style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
-                {getInitials(profile.name)}
-              </div>
-            )}
-          </div>
+        <div className="px-5 sm:px-8 pb-5">
+          {/* avatar + actions */}
+          <div className="flex flex-wrap items-end justify-between gap-3 -mt-12 sm:-mt-14">
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-none rounded-2xl overflow-hidden ring-4 ring-surface-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
+              {profile.imageUrl ? (
+                <Image src={profile.imageUrl} alt={profile.name} width={112} height={112} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-3xl sm:text-4xl font-bold text-white"
+                     style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
+                  {getInitials(profile.name)}
+                </div>
+              )}
+            </div>
 
-          <div className="flex flex-wrap justify-end items-center gap-2 pb-1">
-            <button onClick={shareProfile}
-              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
-              {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-              <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
-            </button>
-            {isOwner ? (
-              <button onClick={() => setModal('basicInfo')}
-                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
-                style={{ background: theme.base }}>
-                <Pencil className="w-4 h-4 flex-none" /> Edit profile
+            <div className="flex flex-wrap justify-end items-center gap-2 pb-1">
+              <button onClick={shareProfile}
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
+                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
               </button>
-            ) : (
-              <ConnectButton
-                targetNode={{
-                  id: nodeId,
-                  name: profile.name,
-                  type: nodeData?.node?.type ?? 'People',
-                  subtitle: profile.subtitle ?? null,
-                  imageUrl: profile.imageUrl ?? null,
-                }}
-                communityId={currentCommunity?.id ?? nodeData?.node?.community_id ?? ''}
-                requesterName={session?.user?.name ?? 'there'}
-                accent={{ base: theme.base, dark: theme.dark }}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* identity */}
-        <div className="mt-4">
-          <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
-            <h1 className="text-2xl sm:text-[27px] font-bold text-text-primary leading-tight tracking-tight font-ginto">{profile.name}</h1>
-            {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
-            {aliasName && (
-              <span
-                className={`inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border ${aliasColor ? '' : 'bg-surface-2 text-text-muted border-border-subtle'}`}
-                style={aliasColor ? { background: `${aliasColor}1a`, color: aliasColor, borderColor: `${aliasColor}55` } : undefined}
-              >
-                {aliasName}
-              </span>
-            )}
+              {isOwner ? (
+                <button onClick={() => setModal('basicInfo')}
+                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
+                  style={{ background: theme.base }}>
+                  <Pencil className="w-4 h-4 flex-none" /> Edit profile
+                </button>
+              ) : (
+                <ConnectButton
+                  targetNode={{
+                    id: nodeId,
+                    name: profile.name,
+                    type: nodeData?.node?.type ?? 'People',
+                    subtitle: profile.subtitle ?? null,
+                    imageUrl: profile.imageUrl ?? null,
+                  }}
+                  communityId={currentCommunity?.id ?? nodeData?.node?.community_id ?? ''}
+                  requesterName={session?.user?.name ?? 'there'}
+                  accent={{ base: theme.base, dark: theme.dark }}
+                />
+              )}
+            </div>
           </div>
 
-          {profile.subtitle ? (
-            <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{profile.subtitle}</p>
-          ) : isOwner ? (
-            <button onClick={() => setModal('basicInfo')} className="mt-1.5 text-sm font-medium hover:underline" style={{ color: theme.dark }}>
-              + Add a headline
-            </button>
-          ) : null}
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
-            {profile.location && (
-              <span className="inline-flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{profile.location}</span>
-            )}
-            {profile.website && (
-              <a href={profile.website} target="_blank" rel="noopener noreferrer"
-                 className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                <Globe2 className="w-3.5 h-3.5" />{hostname(profile.website)}
-              </a>
-            )}
-            {memberYear && (
-              <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {memberYear}</span>
-            )}
-            {profile.openToWork && (
-              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-semibold border"
-                    style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}55` }}>
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
-                  <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
+          {/* identity */}
+          <div className="mt-4">
+            <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
+              <h1 className="text-2xl sm:text-[27px] font-bold text-text-primary leading-tight tracking-tight font-ginto">{profile.name}</h1>
+              {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
+              {aliasName && (
+                <span
+                  className={`inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border ${aliasColor ? '' : 'bg-surface-2 text-text-muted border-border-subtle'}`}
+                  style={aliasColor ? { background: `${aliasColor}1a`, color: aliasColor, borderColor: `${aliasColor}55` } : undefined}
+                >
+                  {aliasName}
                 </span>
-                Open to work
-              </span>
-            )}
+              )}
+            </div>
+
+            {profile.subtitle ? (
+              <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{profile.subtitle}</p>
+            ) : isOwner ? (
+              <button onClick={() => setModal('basicInfo')} className="mt-1.5 text-sm font-medium hover:underline" style={{ color: theme.dark }}>
+                + Add a headline
+              </button>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+              {profile.location && (
+                <span className="inline-flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{profile.location}</span>
+              )}
+              {profile.website && (
+                <a href={profile.website} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
+                  <Globe2 className="w-3.5 h-3.5" />{hostname(profile.website)}
+                </a>
+              )}
+              {memberYear && (
+                <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {memberYear}</span>
+              )}
+              {profile.openToWork && (
+                <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-semibold border"
+                      style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}55` }}>
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
+                  </span>
+                  Open to work
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* stat strip */}
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 mt-5 pt-4 border-t border-border-subtle">
+            <StatItem value={connectionCount} label={connectionCount === 1 ? 'Connection' : 'Connections'}
+                      onClick={hasConnections ? () => jump('network') : undefined} accent={theme.dark} />
+            <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'} />
+            {memberYear && <StatItem value={memberYear} label="Member since" />}
           </div>
         </div>
+      </section>
 
-        {/* stat strip */}
-        <div className="flex flex-wrap items-center gap-x-7 gap-y-2 mt-5 pt-4 pb-4 border-t border-border-subtle">
-          <StatItem value={connectionCount} label={connectionCount === 1 ? 'Connection' : 'Connections'}
-                    onClick={hasConnections ? () => jump('network') : undefined} accent={theme.dark} />
-          <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'} />
-          {memberYear && <StatItem value={memberYear} label="Member since" />}
-        </div>
-      </header>
-
-      {/* ── STICKY SUB-NAV ── */}
-      <nav className={`sticky ${navStick} z-30 flex gap-1 px-3 sm:px-6 2xl:px-8 border-y border-border-subtle bg-surface-1/90 backdrop-blur overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
-           aria-label="Profile sections">
-        {visibleSections.map((s) => (
-          <button key={s} onClick={() => jump(s)}
-                  aria-current={active === s ? 'true' : undefined}
-                  className="relative px-3.5 py-3 text-sm font-semibold whitespace-nowrap transition-colors"
-                  style={{ color: active === s ? theme.dark : undefined }}>
-            <span className={active === s ? '' : 'text-text-muted hover:text-text-secondary transition-colors'}>
-              {SECTION_LABELS[s]}
-              {s === 'network' && <span className="ml-1.5 text-xs font-medium text-text-muted">{connectionCount}</span>}
-            </span>
-            {active === s && <span className="absolute left-3.5 right-3.5 bottom-0 h-0.5 rounded-t-full" style={{ background: theme.base }} />}
-          </button>
-        ))}
-      </nav>
-
-      {/* ── BODY ── */}
-      <div className="px-5 sm:px-8 2xl:px-10 py-6 2xl:py-8 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px] 2xl:grid-cols-[minmax(0,1fr)_380px] gap-5 xl:gap-6 2xl:gap-8">
+      {/* ══ TWO-COLUMN BODY — separate floating cards ══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] gap-5 xl:gap-6">
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
           {/* About */}
@@ -386,7 +344,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         </div>
       </div>
 
-      {/* Visitor-only private CRM notes */}
+      {/* Visitor-only private CRM notes — full-width floating card */}
       {!isOwner && <MyInsightsSection nodeId={nodeId} communityId={currentCommunity?.id} />}
 
       {/* Modals */}
@@ -423,7 +381,7 @@ function SectionCard({ id, icon, title, badge, theme, isOwner, onEdit, addLabel,
   isOwner: boolean; onEdit?: () => void; addLabel?: boolean; scrollMargin: string; children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={`bg-surface-1 border border-border-subtle rounded-2xl ${scrollMargin}`}>
+    <section id={id} className={`bg-surface-1 border border-border-subtle rounded-2xl shadow-soft ${scrollMargin}`}>
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
         <h2 className="flex items-center gap-2.5 text-[15px] font-bold font-ginto text-text-primary">
           <span className="w-7 h-7 rounded-lg grid place-items-center flex-none"
@@ -447,7 +405,7 @@ function SectionCard({ id, icon, title, badge, theme, isOwner, onEdit, addLabel,
 
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-surface-1 border border-border-subtle rounded-2xl px-5 py-4">
+    <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 py-4">
       <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-3.5">{title}</div>
       {children}
     </div>
