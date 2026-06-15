@@ -82,7 +82,9 @@ const CustomForceGraph: React.FC<{
   /** Right-click on a node — raises the node + cursor position so the parent can
    *  open a context menu (e.g. "Connect to…"). */
   onNodeContextMenu?: (node: SimNode, clientX: number, clientY: number) => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu }) => {
+  /** Double-click on a node — e.g. open its detail page. */
+  onNodeDoubleClick?: (node: SimNode) => void;
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -823,6 +825,15 @@ const CustomForceGraph: React.FC<{
     setCursorStyle(node ? 'move' : 'grab');
   }, [onNodeClick, findNodeAt, collectPositions, schedulePersist, savedPositionsRef, scheduleRender]);
 
+  const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!onNodeDoubleClick) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const node = findNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (node) onNodeDoubleClick(node);
+  }, [onNodeDoubleClick, findNodeAt]);
+
   /* --------------------------------------------------------------------------
      EFFECTS - INITIALIZATION & UPDATES
      -------------------------------------------------------------------------- */
@@ -1073,6 +1084,7 @@ const CustomForceGraph: React.FC<{
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         className={`w-full h-full ${cursorClass}`}
         style={{

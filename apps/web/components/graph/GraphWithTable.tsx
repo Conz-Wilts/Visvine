@@ -2,9 +2,9 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { GraphData, NBNode, NodeTypeConfig, CommunityAlias, LinkTypeConfig, getNodeTypeConfig } from '@/lib/types';
 import GraphDataTables from './GraphDataTables';
-import NodeDetailsSidebar from './NodeDetailsSidebar';
 import ConnectMenu from './ConnectMenu';
 import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS } from './utils/constants';
@@ -92,6 +92,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   linkTypes,
   onLinkCreated,
 }) => {
+  const router = useRouter();
   const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
   const [contextMenu, setContextMenu] = useState<{ node: SimNode; x: number; y: number } | null>(null);
 
@@ -137,7 +138,9 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // re-init the canvas and replay the spawn fade-in.
   const sessionLayoutsRef = useRef<Map<string, GraphLayoutData>>(new Map());
 
-  // Handle node clicks - just set the node directly, sidebar handles the transition
+  // Single click selects the node — this drives the focus highlight (the node +
+  // its connections stay bright, everything else dims). Click the same node
+  // again to clear the focus.
   const handleNodeClick = useCallback((node: NBNode) => {
     if (selectedNode?.id === node.id) {
       setSelectedNode(null);
@@ -145,6 +148,17 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       setSelectedNode(node);
     }
   }, [selectedNode]);
+
+  // Double click opens the node's detail page. Events have their own dedicated
+  // page; everything else uses the generic node profile route. Mirrors the
+  // grid/table's handleItemClick in directory/page.tsx.
+  const handleNodeDoubleClick = useCallback((node: NBNode) => {
+    if (String(node.type).toLowerCase() === 'event') {
+      router.push(`/events/${encodeURIComponent(node.id)}`);
+      return;
+    }
+    router.push(`/directory/${encodeURIComponent(node.id)}`);
+  }, [router]);
 
   // Prefetch profile data on hover so it's ready before the user clicks
   const hoveredNodeIdRef = useRef<string | null>(null);
@@ -368,6 +382,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             // Only auto-zoom for external focus, not on every click.
             autoZoomToFocus={selectedNode == null && focusNodeId != null}
             onNodeClick={handleNodeClick}
+            onNodeDoubleClick={handleNodeDoubleClick}
             onNodeHover={handleNodeHover}
             savedPositionsRef={savedPositionsRef}
             nodeTypes={nodeTypes}
@@ -391,10 +406,6 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             }}
           />
         </div>
-        <NodeDetailsSidebar
-          node={selectedNode}
-          onClose={() => setSelectedNode(null)}
-        />
         {contextMenu && canEdit && communityId && (
           <ConnectMenu
             source={{ id: String(contextMenu.node.id), name: contextMenu.node.name }}
@@ -402,7 +413,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             linkTypes={linkTypes}
             anchor={{ x: contextMenu.x, y: contextMenu.y }}
             onClose={() => setContextMenu(null)}
-            onViewProfile={() => setSelectedNode(contextMenu.node)}
+            onViewProfile={() => handleNodeDoubleClick(contextMenu.node)}
             onCreate={(targetId, relationship) => handleCreateLink(String(contextMenu.node.id), targetId, relationship)}
           />
         )}
