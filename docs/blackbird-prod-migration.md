@@ -94,9 +94,8 @@ local-db guards work again.
 
 ## Notes / caveats
 
-- **Embeddings stay NULL.** Like the local seed, this doesn't generate OpenAI
-  embeddings, so semantic search over the new nodes falls back to keyword until
-  you run `pnpm embed:backfill` against prod.
+- **Search is fuzzy/keyword only.** Directory search needs no embeddings or
+  OpenAI key — the new nodes are searchable immediately.
 - **Super-admin vs community-admin.** This grants community admin only. The
   deploy currently sets `SUPER_ADMIN_EMAILS` from a secret (the platform-wide
   bypass). If you also want connor@visvine.com to be a platform super admin, add

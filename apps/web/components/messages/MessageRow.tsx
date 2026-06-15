@@ -216,6 +216,12 @@ export interface MessageRowProps {
   message: SerializedMessage;
   /** First message of a sender group — renders the avatar + name/time header. */
   showHeader?: boolean;
+  /**
+   * 'bubble' (default) → floating bubble card, the Messages/DM aesthetic.
+   * 'feed' → flat Slack-style row (no bubble), matching the posts feed look
+   * used on the Channels page.
+   */
+  variant?: 'bubble' | 'feed';
   onReply: (replyTo: SerializedReplyTo) => void;
   onReaction: (messageId: string, emoji: string) => void;
   onEdit: (messageId: string, text: string) => void;
@@ -223,11 +229,14 @@ export interface MessageRowProps {
   onScrollToMessage?: (messageId: string) => void;
 }
 
-function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, onDelete, onScrollToMessage }: MessageRowProps) {
+function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, onReaction, onEdit, onDelete, onScrollToMessage }: MessageRowProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
   const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Channels render messages as flat feed rows; DMs keep the bubble cards.
+  const feed = variant === 'feed';
 
   const isDeleted = Boolean(message.deletedAt);
   const isEdited = Boolean(message.editedAt);
@@ -259,7 +268,11 @@ function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, o
 
   return (
     <div
-      className={`group relative flex gap-3 px-3 py-1 ${showHeader ? 'mt-2' : ''}`}
+      className={
+        feed
+          ? `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-2/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
+          : `group relative flex gap-3 px-3 py-1 ${showHeader ? 'mt-2' : ''}`
+      }
       onMouseLeave={() => setShowEmojiPicker(false)}
     >
       {/* Gutter: avatar for the first message of a group, hover timestamp after */}
@@ -276,12 +289,18 @@ function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, o
       )}
 
       <div className="min-w-0 flex-1">
-        {/* Floating bubble card — fits its content, all bubbles left-aligned */}
-        <div className="relative w-fit max-w-full rounded-2xl border border-border-subtle/70 bg-surface-1 px-4 py-2.5 shadow-[0_2px_12px_rgba(16,24,40,0.06)]">
+        {/* Bubble card (DMs) hugs its content; feed rows (Channels) sit flat. */}
+        <div
+          className={
+            feed
+              ? 'relative'
+              : 'relative w-fit max-w-full rounded-2xl border border-border-subtle/70 bg-surface-1 px-4 py-2.5 shadow-[0_2px_12px_rgba(16,24,40,0.06)]'
+          }
+        >
         {/* Header line: name · time · receipts */}
         {showHeader && (
           <div className="flex flex-wrap items-baseline gap-x-2">
-            <span className="text-[13px] font-semibold text-text-primary">
+            <span className={`${feed ? 'text-[15px]' : 'text-[13px]'} font-semibold text-text-primary`}>
               {message.isOwn ? 'You' : message.sender.name}
             </span>
             <span className="text-[11px] text-text-muted">{formatChatTimestamp(message.createdAt)}</span>
@@ -394,7 +413,7 @@ function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, o
           {/* Hover actions — floating toolbar pinned to the bubble (CSS
               group-hover so a mouse pass doesn't re-render the row) */}
           {!isEditing && (
-            <div className="absolute -top-4 right-3 z-10 hidden items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex">
+            <div className={`absolute z-10 hidden items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex ${feed ? '-top-3 right-1' : '-top-4 right-3'}`}>
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}
@@ -436,7 +455,7 @@ function MessageRow({ message, showHeader = true, onReply, onReaction, onEdit, o
 
           {/* Emoji picker popup */}
           {showEmojiPicker && (
-            <div className="absolute -top-12 right-3 z-20">
+            <div className={`absolute z-20 ${feed ? '-top-11 right-1' : '-top-12 right-3'}`}>
               <EmojiPicker
                 onSelect={(emoji) => onReaction(message.id, emoji)}
                 onClose={() => setShowEmojiPicker(false)}

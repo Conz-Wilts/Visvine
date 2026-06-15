@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
@@ -164,8 +164,20 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
 
 export default function NodeProfilePage() {
   const params = useParams();
+  const router = useRouter();
   const nodeId = typeof params.nodeId === 'string' ? decodeURIComponent(params.nodeId) : '';
+  const isEvent = nodeId.startsWith('event:');
 
+  // Events have their own dedicated detail page (EventDetailClient). Anything that
+  // links straight to /directory/event:… (graph deep-links, shared URLs) is
+  // redirected there rather than rendered with the generic node tab view.
+  useEffect(() => {
+    if (isEvent) router.replace(`/events/${encodeURIComponent(nodeId)}`);
+  }, [isEvent, nodeId, router]);
+
+  if (isEvent) {
+    return <ProfileSkeletonLoader mode="fullpage" />;
+  }
   if (nodeId.startsWith('person:')) {
     return <PersonProfilePage nodeId={nodeId} />;
   }

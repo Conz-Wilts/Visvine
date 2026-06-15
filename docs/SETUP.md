@@ -114,7 +114,7 @@ pnpm db:proxy:cloud   # in a separate terminal
 # CLOUD_SQL_CONNECTION_NAME, and NODE_ENV=production.
 cd apps/web
 pnpm dlx prisma@7.4.0 db push
-node scripts/apply-sql-functions.mjs   # creates the match_nodes function
+node scripts/apply-sql-functions.mjs   # hook for hand-written SQL (currently a no-op)
 ```
 
 **Option B — `prisma migrate deploy` (recommended once you have users).**
@@ -123,9 +123,10 @@ exists. This is a larger change; do it when you have data that can't be
 re-seeded.
 
 Either way, the legacy folder `apps/web/migrations/` is **reference
-material** — only `create_match_nodes_function.sql` is applied
-automatically by `apply-sql-functions.mjs`. The rest of the SQL in that
-folder is historical; their tables are now owned by `schema.prisma`.
+material** — `apply-sql-functions.mjs` no longer applies anything from it
+automatically (its only entry, `create_match_nodes_function.sql`, was removed
+with semantic search). The SQL in that folder is historical; their tables are
+now owned by `schema.prisma`.
 
 One exception: one-shot **data** cleanups live here too and must be run by
 hand against any long-lived DB. `remove_moderator_and_profile_subentities.sql`
@@ -248,9 +249,8 @@ worth doing the first time and then forgetting about:
 - [ ] App DB user created, password in Secret Manager
 - [ ] Service account for the app runtime, granted `roles/cloudsql.client`
 - [ ] Schema pushed once (`prisma db push` via the proxy)
-- [ ] `match_nodes` function applied (`apply-sql-functions.mjs`)
 - [ ] App-runtime env wired: `DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_*`,
-      `GCS_*`, `OPENAI_API_KEY`, `NEXT_PUBLIC_APP_URL`, no `ENABLE_DEV_AUTH`
+      `GCS_*`, `NEXT_PUBLIC_APP_URL`, no `ENABLE_DEV_AUTH`
 - [ ] Cloud SQL backups + PITR confirmed (the `gcloud sql instances
       create` flags above set this up)
 
@@ -258,14 +258,11 @@ worth doing the first time and then forgetting about:
 
 ## 6. Sharing a dev database between teammates (pg_dump + GCS)
 
-`pnpm db:seed` reseeds 1000 fake users locally, but **does not generate
-embeddings** — `Node.embedding` stays NULL, so semantic search is dead
-until someone runs `embed:backfill` (which costs OpenAI calls). Rather
-than every dev paying that cost on every fresh setup, the team can share
-one fixture snapshot via a private GCS bucket.
+`pnpm db:seed` reseeds 1000 fake users locally. Rather than every dev
+regenerating that on every fresh setup, the team can share one fixture
+snapshot via a private GCS bucket.
 
-One person (the "fixture maintainer", whoever holds `OPENAI_API_KEY`)
-seeds + backfills + publishes; everyone else pulls.
+One person (the "fixture maintainer") seeds + publishes; everyone else pulls.
 
 ### 6a. Provision the bucket (one-time)
 
@@ -300,17 +297,13 @@ Run when seed.ts changes meaningfully, schema migrations land, or
 embeddings drift. Cadence is up to you; once a sprint is plenty.
 
 ```powershell
-# 1. Make sure apps/web/.env has OPENAI_API_KEY uncommented and set.
-#    (The other GCS_* values aren't needed for db:publish — only ADC.)
+# 1. ADC is all db:publish needs (GCS_* values aren't required for it).
 gcloud auth application-default login   # if you haven't recently
 
 # 2. Reset and reseed the local DB
-pnpm db:fresh                            # ~5s; faker rows, NULL embeddings
+pnpm db:fresh                            # ~5s; faker rows
 
-# 3. Backfill embeddings (OpenAI API calls, ~$0.01 for 1000 nodes)
-pnpm embed:backfill                      # ~30s
-
-# 4. Dump + upload (refuses unless GCS_DUMP_BUCKET is set in apps/web/.env)
+# 3. Dump + upload (refuses unless GCS_DUMP_BUCKET is set in apps/web/.env)
 pnpm db:publish
 
 # Output should end with:
@@ -338,9 +331,6 @@ pnpm dev
 ```powershell
 pnpm db:restore           # downloads seed-latest.dump, drops+restores+pushes
 ```
-
-Both flows skip the OpenAI step entirely — the embeddings ride along in
-the dump.
 
 ### 6d. How filenames and `latest` work
 
@@ -377,9 +367,8 @@ fresh `pnpm db:publish`.)
 |---|---|
 | Bucket storage | ~10 MB per dump × keep history → ~$0.0002/month each |
 | Egress (devs pulling) | $0 within same region; pennies cross-region |
-| OpenAI embeddings (maintainer only, on publish) | ~$0.0001 per node, ~$0.01 per 1000 |
 
-Practically zero. The OpenAI bill is the only line item.
+Practically zero.
 
 ### 6g. Why not a shared Cloud SQL dev instance?
 
@@ -393,9 +382,10 @@ artifact, which is immutable per-version.
 
 ## 7. Gotchas
 
-- **The legacy `apps/web/migrations/` folder is historical.** Only
-  `create_match_nodes_function.sql` is auto-applied. Don't add new
-  migrations there — modify `schema.prisma` instead.
+- **The legacy `apps/web/migrations/` folder is historical.** Nothing in it
+  is auto-applied anymore (`apply-sql-functions.mjs` has an empty `files` list
+  since semantic search was removed). Don't add new migrations there — modify
+  `schema.prisma` instead.
 - **`apps/web/prisma/migrations/` is the new Prisma-managed folder.** It
   currently has one entry (`20260414_add_design_config`). If you adopt
   `prisma migrate` for prod, this folder becomes the source of truth.

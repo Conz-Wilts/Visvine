@@ -11,10 +11,9 @@ import { useDirectoryNodes } from '@/hooks/useDirectoryNodes';
 import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
-import { useSemanticSearch } from '@/hooks/useSemanticSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
-import type { NBNode, CommunityAlias, SemanticSearchResult } from '@/lib/types';
+import type { NBNode, CommunityAlias } from '@/lib/types';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { Pencil } from 'lucide-react';
@@ -51,27 +50,6 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
   };
 }
 
-// Semantic results carry a smaller payload; the grid only needs the card fields.
-function semanticResultToGridItem(r: SemanticSearchResult): DirectoryItem {
-  return {
-    id: r.id, name: r.name, type: r.type, alias: r.alias,
-    subtitle: r.subtitle, location: r.location, tags: r.tags,
-    company_name: r.metadata?.company_name as string | undefined,
-    company_image_url: r.metadata?.company_image_url as string | undefined,
-  };
-}
-
-// Table rows additionally surface the match explanation + similarity score.
-function semanticResultToTableItem(r: SemanticSearchResult): DirectoryItem {
-  return {
-    id: r.id, name: r.name, type: r.type, alias: r.alias,
-    subtitle: r.subtitle, location: r.location, url: r.url,
-    bio: r.metadata?.bio as string | undefined,
-    tags: r.tags,
-    explanation: r.explanation, similarity: r.similarity,
-  };
-}
-
 export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentView, setCurrentView] = useState<DirectoryView>('grid');
@@ -98,16 +76,6 @@ export default function DashboardPage() {
       document.body.style.overflow = '';
     };
   }, [isGraphView]);
-
-  const {
-    semanticResults,
-    sortedSemanticResults,
-    isSemanticSearch,
-    semanticLoading,
-    semanticError,
-    performSemanticSearch,
-    clearSemanticSearch,
-  } = useSemanticSearch();
 
   useEffect(() => { setGraphChatValue(searchTerm); }, [searchTerm]);
 
@@ -178,23 +146,19 @@ export default function DashboardPage() {
   }, [searchFilteredItems, filterTypes, filterAliases, filterTags, sortOrder]);
 
   const handleItemClick = useCallback((item: DirectoryItem) => {
+    // Events have their own dedicated detail page (EventDetailClient); send them
+    // there instead of the generic node profile view.
+    if (item.type.toLowerCase() === 'event') {
+      router.push(`/events/${encodeURIComponent(item.id)}`);
+      return;
+    }
     router.push(`/directory/${encodeURIComponent(item.id)}`);
   }, [router]);
 
   const handleGraphChatChange = useCallback((value: string) => {
     setGraphChatValue(value);
     setSearchTerm(value);
-    if (!value.trim() && isSemanticSearch) clearSemanticSearch();
-  }, [isSemanticSearch, clearSemanticSearch]);
-
-  const handleGraphChatSubmit = useCallback((value: string) => performSemanticSearch(value, community?.id), [performSemanticSearch, community?.id]);
-  const handleGridTableSearchSubmit = useCallback((value: string) => performSemanticSearch(value, community?.id), [performSemanticSearch, community?.id]);
-
-  const handleClearSemantic = useCallback(() => {
-    clearSemanticSearch();
-    setSearchTerm('');
-    setGraphChatValue('');
-  }, [clearSemanticSearch]);
+  }, []);
 
   // Admin edits invalidate both the directory list and the (separate) graph cache.
   const handleDataChanged = useCallback(() => {
@@ -210,21 +174,10 @@ export default function DashboardPage() {
         <ChatInterface
           value={isGraphView ? graphChatValue : searchTerm}
           onChange={isGraphView ? handleGraphChatChange : setSearchTerm}
-          onSubmit={isGraphView ? handleGraphChatSubmit : handleGridTableSearchSubmit}
           placeholder="Search…"
+          hideSubmitButton
         />
       </div>
-      {isSemanticSearch && (
-        <button
-          onClick={handleClearSemantic}
-          className="flex h-10 items-center gap-2 rounded-full px-4 bg-surface-3 text-text-secondary text-sm font-semibold hover:bg-surface-3 transition-all shadow-sm shrink-0"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          Clear
-        </button>
-      )}
     </div>
   );
 
@@ -349,14 +302,7 @@ export default function DashboardPage() {
            grid. ── */}
       {isGraphView && (
         <div className="overflow-hidden rounded-xl absolute inset-0 px-6">
-          <DirectoryGraphView
-            searchTerm={searchTerm}
-            isSemanticSearch={isSemanticSearch}
-            sortedSemanticResults={sortedSemanticResults}
-            semanticLoading={semanticLoading}
-            semanticError={semanticError}
-            onClearSemantic={handleClearSemantic}
-          />
+          <DirectoryGraphView searchTerm={searchTerm} />
         </div>
       )}
 
@@ -371,62 +317,27 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {isSemanticSearch && (
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-text-primary">Semantic Search Results</h2>
-                <button
-                  onClick={handleClearSemantic}
-                  className="text-sm text-text-muted hover:text-text-primary"
-                >
-                  Clear search
-                </button>
-              </div>
-            )}
-
-            {semanticLoading && (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-green" />
-                <p className="mt-4 text-text-muted">Searching...</p>
-              </div>
-            )}
-
-            {isSemanticSearch && !semanticLoading && semanticError && (
-              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                <p className="font-medium">Search failed</p>
-                <p className="mt-1 text-xs opacity-80">{semanticError}</p>
-              </div>
-            )}
-
-            {isSemanticSearch && !semanticLoading && !semanticError && semanticResults.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-lg text-text-secondary">No results found</p>
-                <p className="mt-2 text-sm text-text-muted">Try adjusting your search query</p>
-              </div>
-            )}
-
-            {!semanticLoading && (
-              currentView === 'grid' ? (
-                <NodeGrid
-                  items={isSemanticSearch ? sortedSemanticResults.map(semanticResultToGridItem) : filteredItems}
-                  loading={loading}
-                  onCardClick={handleItemClick}
-                  nodeTypes={community?.nodeTypes}
-                  communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
-                />
-              ) : (
-                <CrmDirectoryTable
-                  items={isSemanticSearch ? sortedSemanticResults.map(semanticResultToTableItem) : filteredItems}
-                  loading={loading}
-                  onRowClick={handleItemClick}
-                  nodeTypes={community?.nodeTypes}
-                  communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
-                  communityId={community?.id}
-                  isAdmin={isAdmin}
-                  editMode={editMode}
-                  activeType={filterTypes.size === 1 ? [...filterTypes][0] : (presentTypes[0] ?? 'person')}
-                  onDataChanged={handleDataChanged}
-                />
-              )
+            {currentView === 'grid' ? (
+              <NodeGrid
+                items={filteredItems}
+                loading={loading}
+                onCardClick={handleItemClick}
+                nodeTypes={community?.nodeTypes}
+                communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
+              />
+            ) : (
+              <CrmDirectoryTable
+                items={filteredItems}
+                loading={loading}
+                onRowClick={handleItemClick}
+                nodeTypes={community?.nodeTypes}
+                communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
+                communityId={community?.id}
+                isAdmin={isAdmin}
+                editMode={editMode}
+                activeType={filterTypes.size === 1 ? [...filterTypes][0] : (presentTypes[0] ?? 'person')}
+                onDataChanged={handleDataChanged}
+              />
             )}
 
           </div>

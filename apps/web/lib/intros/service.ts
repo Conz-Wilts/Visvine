@@ -14,6 +14,7 @@
 import type { IntroRequest } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { upsertLink } from '@/lib/graph/links';
 import type { SessionPayload } from '@/lib/session';
 import { createDmConversation } from '@/lib/messages/conversationService';
 import {
@@ -273,26 +274,17 @@ export async function transition(
 
 // ── side effects ─────────────────────────────────────────────────────────────
 
-/** Create an undirected "introduced" Link between requester and target if absent. */
+/** Create an undirected "introduced" Link between requester and target (deduped
+ *  via the unified path; `originRef` = intro id lets a later disconnect undo it). */
 async function connectNodes(intro: IntroRequest): Promise<void> {
-  const existing = await prisma.link.findFirst({
-    where: {
-      OR: [
-        { sourceId: intro.requesterNodeId, targetId: intro.targetNodeId },
-        { sourceId: intro.targetNodeId, targetId: intro.requesterNodeId },
-      ],
-    },
-    select: { id: true },
-  });
-  if (existing) return;
-  await prisma.link.create({
-    data: {
-      sourceId: intro.requesterNodeId,
-      targetId: intro.targetNodeId,
-      relationship: 'introduced',
-      communityId: intro.communityId,
-      since: new Date().toISOString().slice(0, 10),
-    },
+  await upsertLink({
+    communityId: intro.communityId,
+    sourceId: intro.requesterNodeId,
+    targetId: intro.targetNodeId,
+    relationship: 'introduced',
+    origin: 'intro',
+    originRef: intro.id,
+    since: new Date().toISOString().slice(0, 10),
   });
 }
 

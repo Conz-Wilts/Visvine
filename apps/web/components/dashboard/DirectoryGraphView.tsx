@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import GraphWithTable, { type GraphLayoutData } from '@/components/graph/GraphWithTable';
 import { useCommunityGraphData } from '@/hooks/useCommunityGraphData';
 import { findBestMatchingNodeId } from '@/lib/graphUtils';
-import type { GraphData, SemanticSearchResult, CommunityAlias } from '@/lib/types';
+import { useCommunity } from '@/lib/contexts/CommunityContext';
+import type { CommunityAlias } from '@/lib/types';
 
 // The graph view unmounts whenever the user switches to grid/table, so keep the
 // last known layout per community for the session. A remount then restores the
@@ -15,12 +16,6 @@ const layoutCache = new Map<string, GraphLayoutData | null>();
 interface DirectoryGraphViewProps {
   /** Current value of the graph search box (drives focus + dimming). */
   searchTerm: string;
-  isSemanticSearch: boolean;
-  sortedSemanticResults: SemanticSearchResult[];
-  semanticLoading: boolean;
-  semanticError: string | null;
-  /** Clear semantic search + the search input. */
-  onClearSemantic: () => void;
 }
 
 /**
@@ -32,13 +27,9 @@ interface DirectoryGraphViewProps {
  */
 export default function DirectoryGraphView({
   searchTerm,
-  isSemanticSearch,
-  sortedSemanticResults,
-  semanticLoading,
-  semanticError,
-  onClearSemantic,
 }: DirectoryGraphViewProps) {
-  const { graphData, loading, error, community } = useCommunityGraphData();
+  const { graphData, loading, error, community, refresh } = useCommunityGraphData();
+  const { isAdmin, currentCommunity } = useCommunity();
 
   // ── Saved layout (per community) ───────────────────────────────────────────
   // undefined = still loading, null = none saved, object = restore it.
@@ -69,46 +60,21 @@ export default function DirectoryGraphView({
 
   // Fire-and-forget save. The canvas already debounces camera changes and only
   // emits on settle/drag, so a second debounce here would just add latency.
-  // Skipped while a semantic filter narrows the node set: the server stores ONE
-  // layout per community, and persisting a filtered subset would overwrite the
-  // full-graph layout — forcing a recompute on the next unfiltered visit. This
-  // was why the saved layout rarely survived between sessions.
   const handlePersistLayout = useCallback((next: GraphLayoutData) => {
     const id = community?.id;
-    if (!id || isSemanticSearch) return;
+    if (!id) return;
     layoutCache.set(id, next);
     fetch(`/api/communities/${id}/graph/layout`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(next),
     }).catch(() => {});
-  }, [community?.id, isSemanticSearch]);
+  }, [community?.id]);
 
-  // ── Graph data shaping (semantic search narrows; text search dims) ──────────
-  const filteredGraphData = useMemo<GraphData>(() => {
-    if (graphData.nodes.length === 0) return { nodes: [], links: [] };
-
-    if (isSemanticSearch && !semanticLoading) {
-      if (sortedSemanticResults.length > 0) {
-        const matchedNodeIds = new Set(sortedSemanticResults.map(r => r.id));
-        return {
-          nodes: graphData.nodes.filter(n => matchedNodeIds.has(n.id)),
-          links: graphData.links.filter(l => {
-            const s = typeof l.source === 'string' ? l.source : l.source.id;
-            const t = typeof l.target === 'string' ? l.target : l.target.id;
-            return matchedNodeIds.has(s) && matchedNodeIds.has(t);
-          }),
-        };
-      }
-      return { nodes: [], links: [] };
-    }
-
-    return graphData;
-  }, [graphData, isSemanticSearch, sortedSemanticResults, semanticLoading]);
-
+  // ── Text search dims non-matching nodes (the full graph stays visible) ──────
   const dimmedNodeIds = useMemo<Set<string>>(() => {
     const normalized = searchTerm.trim().toLowerCase();
-    if (!normalized || isSemanticSearch) return new Set();
+    if (!normalized) return new Set();
     const ids = new Set<string>();
     graphData.nodes.forEach(node => {
       const matches =
@@ -119,20 +85,19 @@ export default function DirectoryGraphView({
       if (!matches) ids.add(node.id);
     });
     return ids;
-  }, [graphData, searchTerm, isSemanticSearch]);
+  }, [graphData, searchTerm]);
 
   const focusedNodeId = useMemo<string | null>(() => {
-    if (isSemanticSearch) return null;
     const trimmed = searchTerm.trim();
     if (!trimmed) return null;
     return findBestMatchingNodeId(graphData.nodes, trimmed);
-  }, [searchTerm, isSemanticSearch, graphData.nodes]);
+  }, [searchTerm, graphData.nodes]);
 
   return (
     <>
       <GraphWithTable
         activeTab="graph"
-        dataOverride={filteredGraphData}
+        dataOverride={graphData}
         loadingOverride={loading || layout === undefined}
         errorOverride={error}
         focusNodeId={focusedNodeId}
@@ -141,43 +106,11 @@ export default function DirectoryGraphView({
         communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
         initialLayout={layout ?? null}
         onPersistLayout={handlePersistLayout}
+        communityId={community?.id}
+        canEdit={isAdmin}
+        linkTypes={currentCommunity?.linkTypes}
+        onLinkCreated={refresh}
       />
-
-      {/* ── Semantic search status overlay ── */}
-      {isSemanticSearch && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-          {semanticLoading ? (
-            <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-border-default flex flex-col items-center gap-3">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-brand-green" />
-              <p className="text-text-muted">Searching...</p>
-            </div>
-          ) : semanticError ? (
-            <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-amber-300 dark:border-amber-700 max-w-md text-center">
-              <p className="text-lg font-medium text-text-primary mb-2">Search failed</p>
-              <p className="text-sm text-text-muted mb-4 break-words">{semanticError}</p>
-              <button
-                onClick={onClearSemantic}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg hover:opacity-90 transition-all"
-              >
-                Clear search
-              </button>
-            </div>
-          ) : sortedSemanticResults.length === 0 ? (
-            <div className="pointer-events-auto bg-surface-1 rounded-lg shadow-lg p-6 border border-border-default max-w-md text-center">
-              <p className="text-lg font-medium text-text-primary mb-2">No results found</p>
-              <p className="text-sm text-text-muted mb-4">
-                No matching results. Try a different search.
-              </p>
-              <button
-                onClick={onClearSemantic}
-                className="px-4 py-2 bg-brand-green text-white rounded-lg hover:opacity-90 transition-all"
-              >
-                Clear search
-              </button>
-            </div>
-          ) : null}
-        </div>
-      )}
     </>
   );
 }

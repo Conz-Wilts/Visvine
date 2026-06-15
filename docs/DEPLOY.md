@@ -81,9 +81,6 @@ Connect to the Cloud SQL instance (via Cloud Shell or your local auth proxy) and
 run this once:
 
 ```sql
--- Enable the pgvector extension (needed for Node.embedding column)
-CREATE EXTENSION IF NOT EXISTS vector;
-
 -- Create a dedicated app user (don't use the postgres superuser in prod)
 CREATE USER visvine_app WITH PASSWORD 'strong-password-here';
 GRANT ALL ON DATABASE visvine TO visvine_app;
@@ -123,9 +120,6 @@ echo -n "your-google-client-id" \
 echo -n "your-google-client-secret" \
   | gcloud secrets create GOOGLE_CLIENT_SECRET --data-file=- --project=$PROJECT
 
-# OpenAI (optional — enables semantic search; falls back to keyword without it)
-echo -n "sk-..." \
-  | gcloud secrets create OPENAI_API_KEY --data-file=- --project=$PROJECT
 
 # Web Push VAPID keys (optional — enables push notifications)
 # Generate with: npx web-push generate-vapid-keys
@@ -280,7 +274,7 @@ jobs:
             --platform=managed \
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
-            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest \
+            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest \
             --set-env-vars=NEXT_PUBLIC_APP_URL=https://YOUR-CLOUD-RUN-URL,SUPER_ADMIN_EMAILS=cwnz2004@gmail.com,ENABLE_DEV_AUTH=false,VAPID_SUBJECT=mailto:hello@visvine.com \
             --min-instances=0 \
             --max-instances=10 \

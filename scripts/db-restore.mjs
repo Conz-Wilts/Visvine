@@ -111,7 +111,7 @@ if (restore.status !== 0) {
   console.error(`db-restore: pg_restore exited ${restore.status} — non-zero is sometimes survivable for benign WARNINGs, continuing schema-forward…`);
 }
 
-console.error("db-restore: bringing schema forward (prisma db push + match_nodes)…");
+console.error("db-restore: bringing schema forward (prisma db push)…");
 const push = spawnSync(
   process.platform === "win32" ? "pnpm.cmd" : "pnpm",
   ["db:migrate"],
@@ -128,13 +128,13 @@ const verify = spawnSync(
   [
     "exec", "visvine-postgres",
     "psql", "-U", "postgres", "-d", "visvine", "-t", "-A",
-    "-c", "SELECT COUNT(*), COUNT(embedding) FROM nodes;",
+    "-c", "SELECT COUNT(*) FROM nodes;",
   ],
   { encoding: "utf8" },
 );
 if (verify.status === 0) {
-  const [total, withEmb] = verify.stdout.trim().split("|").map((s) => s.trim());
-  console.error(`db-restore: ok — ${total} nodes, ${withEmb} with embeddings`);
+  const total = verify.stdout.trim();
+  console.error(`db-restore: ok — ${total} nodes`);
 } else {
   console.error("db-restore: verify query failed (restore probably still ok)");
 }

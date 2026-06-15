@@ -1,0 +1,86 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  pairKeyFor,
+  normalizeRelationship,
+  getLinkTypeConfig,
+  isSystemRelationship,
+} from "../lib/graph/relationships";
+import type { LinkTypeConfig } from "../lib/types";
+
+// ── pairKeyFor: the dedup key that makes reversed pairs collapse to one edge ──
+
+test("pairKeyFor is order-independent (A->B and B->A share a key)", () => {
+  assert.equal(pairKeyFor("a", "b"), pairKeyFor("b", "a"));
+  assert.equal(pairKeyFor("person:9", "event:1"), pairKeyFor("event:1", "person:9"));
+});
+
+test("pairKeyFor sorts lexicographically into minId|maxId", () => {
+  assert.equal(pairKeyFor("b", "a"), "a|b");
+  assert.equal(pairKeyFor("a", "b"), "a|b");
+});
+
+test("pairKeyFor distinguishes different pairs", () => {
+  assert.notEqual(pairKeyFor("a", "b"), pairKeyFor("a", "c"));
+});
+
+// ── normalizeRelationship: label -> stored slug ──
+
+test("normalizeRelationship slugs human labels", () => {
+  assert.equal(normalizeRelationship("Works at"), "works_at");
+  assert.equal(normalizeRelationship("Invested in"), "invested_in");
+  assert.equal(normalizeRelationship("Introduced"), "introduced");
+  assert.equal(normalizeRelationship("Member of"), "member_of");
+});
+
+test("normalizeRelationship is idempotent on existing slugs", () => {
+  assert.equal(normalizeRelationship("works_at"), "works_at");
+  assert.equal(normalizeRelationship("co_invests_with"), "co_invests_with");
+});
+
+test("normalizeRelationship trims, lowercases, collapses, strips edges", () => {
+  assert.equal(normalizeRelationship("  Partner—With  "), "partner_with");
+  assert.equal(normalizeRelationship("A & B"), "a_b");
+  assert.equal(normalizeRelationship("__weird__"), "weird");
+  assert.equal(normalizeRelationship(""), "");
+});
+
+// ── getLinkTypeConfig: resolve a stored relationship to a display config ──
+
+const COMMUNITY_TYPES: LinkTypeConfig[] = [
+  { name: "Backs", color: "#111111", directed: true },
+  { name: "Related", color: "#222222", directed: false },
+];
+
+test("getLinkTypeConfig prefers the community config (by slugified name)", () => {
+  const cfg = getLinkTypeConfig("backs", COMMUNITY_TYPES);
+  assert.equal(cfg.color, "#111111");
+  assert.equal(cfg.directed, true);
+});
+
+test("getLinkTypeConfig falls back to the default set when no community config", () => {
+  const cfg = getLinkTypeConfig("works_at");
+  assert.equal(cfg.name, "Works at");
+  assert.equal(cfg.directed, true);
+});
+
+test("getLinkTypeConfig returns a neutral, title-cased config for unknown relationships", () => {
+  const cfg = getLinkTypeConfig("co_invests_with", COMMUNITY_TYPES);
+  assert.equal(cfg.name, "Co Invests With");
+  assert.equal(cfg.color, "#94a3b8");
+  assert.equal(cfg.directed, false);
+});
+
+// ── isSystemRelationship: protects the auto-flow types ──
+
+test("isSystemRelationship is true for the auto-flow relationships", () => {
+  assert.equal(isSystemRelationship("attended"), true);
+  assert.equal(isSystemRelationship("hosting"), true);
+  assert.equal(isSystemRelationship("introduced"), true);
+});
+
+test("isSystemRelationship is false for ordinary manual relationships", () => {
+  assert.equal(isSystemRelationship("related"), false);
+  assert.equal(isSystemRelationship("knows"), false);
+  assert.equal(isSystemRelationship("works_at"), false);
+});

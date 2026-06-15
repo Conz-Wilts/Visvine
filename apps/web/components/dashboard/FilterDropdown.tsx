@@ -203,33 +203,19 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
                     {opt.count !== undefined && (
                       <span className="text-xs text-text-muted tabular-nums">{opt.count}</span>
                     )}
-                    {singleSelect ? (
-                      <span
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full transition-colors"
-                        style={checked
-                          ? { border: `2px solid ${color}` }
-                          : { border: '2px solid var(--border-default, #d1d5db)', backgroundColor: 'var(--surface-1, #fff)' }
-                        }
-                      >
-                        {checked && (
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                        )}
-                      </span>
-                    ) : (
-                      <span
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
-                        style={checked
-                          ? { backgroundColor: color, borderColor: color, border: `1.5px solid ${color}` }
-                          : { border: '1.5px solid var(--border-default, #d1d5db)', backgroundColor: 'var(--surface-1, #fff)' }
-                        }
-                      >
-                        {checked && (
-                          <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </span>
-                    )}
+                    <span
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded transition-colors"
+                      style={checked
+                        ? { backgroundColor: color, borderColor: color, border: `1.5px solid ${color}` }
+                        : { border: '1.5px solid var(--border-default, #d1d5db)', backgroundColor: 'var(--surface-1, #fff)' }
+                      }
+                    >
+                      {checked && (
+                        <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </span>
                   </button>
                 </div>
 

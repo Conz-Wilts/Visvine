@@ -47,12 +47,20 @@ export async function GET(req: NextRequest) {
     const q = req.nextUrl.searchParams.get('q')?.trim();
     const field = req.nextUrl.searchParams.get('field') || 'name';
     const type = req.nextUrl.searchParams.get('type') || 'person';
+    // Optional, backward-compatible. The link picker passes both: scope to one
+    // community and exclude the source node + its existing neighbours so it can
+    // only ever offer a valid new target.
+    const communityId = req.nextUrl.searchParams.get('community_id');
+    const excludeIds = (req.nextUrl.searchParams.get('exclude_ids') ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
 
     if (!q || q.length < 2) {
       return NextResponse.json({ results: [] });
     }
 
-    const typeFilter = Prisma.join(dbTypesFor(type));
+    const isAny = type.toLowerCase() === 'any'; // 'any' = search every node kind (the link picker)
     const like = `%${q}%`;
 
     // Email lives in person metadata only; for any other type fall back to name.
@@ -60,6 +68,10 @@ export async function GET(req: NextRequest) {
       field === 'email' && type.toLowerCase() === 'person'
         ? Prisma.sql`LOWER(n.metadata->>'email') LIKE LOWER(${like})`
         : Prisma.sql`n.name ILIKE ${like}`;
+
+    const typeClause = isAny ? Prisma.empty : Prisma.sql` AND LOWER(n.type) IN (${Prisma.join(dbTypesFor(type))})`;
+    const communityClause = communityId ? Prisma.sql` AND n.community_id = ${communityId}` : Prisma.empty;
+    const excludeClause = excludeIds.length ? Prisma.sql` AND n.id <> ALL(${excludeIds}::text[])` : Prisma.empty;
 
     const rows = await prisma.$queryRaw<SearchRow[]>`
       SELECT
@@ -74,8 +86,7 @@ export async function GET(req: NextRequest) {
         c.name AS community_name
       FROM nodes n
       LEFT JOIN communities c ON c.id = n.community_id
-      WHERE LOWER(n.type) IN (${typeFilter})
-        AND ${matchExpr}
+      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}
       ORDER BY n.name ASC
       LIMIT 10
     `;

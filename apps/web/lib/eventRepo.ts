@@ -10,6 +10,7 @@ import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPSt
 import { normalizeImageUrl } from './mediaUrl';
 import { findMatchingPerson } from './personDedupe';
 import { generateAttendeeId, normalizeStatus, occupiedSpots, decideRsvpStatus } from './eventUtils';
+import { upsertLink, removeAutoLink } from './graph/links';
 import { logger } from './logger';
 
 /** Thrown by submitRsvp when an event is full and its waitlist is disabled. */
@@ -192,15 +193,17 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
 async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
   const linkRows = await prisma.link.findMany({
     where: { communityId },
-    select: { sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true },
+    select: { id: true, sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true, origin: true },
   });
   return linkRows.map(l => ({
+    id: l.id,
     source: l.sourceId,
     target: l.targetId,
     relationship: l.relationship,
     since: l.since ?? undefined,
     metadata: (l.metadata as Record<string, unknown>) ?? {},
     community_id: l.communityId ?? undefined,
+    origin: l.origin as NBLink['origin'],
   }));
 }
 
@@ -403,21 +406,19 @@ export async function upsertAttendee(communityId: string, attendee: NBAttendee):
  * "what did person Y attend"). Never throws into the RSVP path.
  */
 async function ensureAttendedLink(
-  communityId: string, personId: string, eventId: string, status: RSVPStatus, since?: string,
+  communityId: string, personId: string, eventId: string, status: RSVPStatus, attendeeId: string, since?: string,
 ): Promise<void> {
   try {
-    const existing = await prisma.link.findFirst({
-      where: { sourceId: personId, targetId: eventId, relationship: 'attended' },
-      select: { id: true },
+    await upsertLink({
+      communityId,
+      sourceId: personId,
+      targetId: eventId,
+      relationship: 'attended',
+      origin: 'event_attendance',
+      originRef: attendeeId, // lets removeAutoLink undo this exact edge on cancel/remove
+      since: since ?? null,
+      metadata: { status },
     });
-    if (existing) {
-      await prisma.link.update({ where: { id: existing.id }, data: { metadata: { status } } });
-    } else {
-      await prisma.link.create({
-        data: { sourceId: personId, targetId: eventId, relationship: 'attended', since: since ?? null, metadata: { status }, communityId },
-      });
-    }
-    revalidateTag('graph-data-v2');
   } catch (err) {
     logger.error('eventRepo.ensureAttendedLink.failed', { err });
   }
@@ -544,7 +545,7 @@ export async function submitRsvp(
 
   // Best-effort side effects, outside the lock.
   if (personId) {
-    await ensureAttendedLink(communityId, personId, eventId, attendee.status, event.startAt);
+    await ensureAttendedLink(communityId, personId, eventId, attendee.status, attendee.id, event.startAt);
   }
   if (created) {
     await updateEventAnalytics(communityId, eventId, { rsvpCount: event.analytics.rsvpCount + 1 });
@@ -585,7 +586,13 @@ export async function setAttendeeStatus(
     }
   }
   if (next.personId) {
-    await ensureAttendedLink(communityId, next.personId, eventId, status, undefined);
+    // Symmetric auto-undo: cancelling removes the auto 'attended' edge (origin-scoped,
+    // so a manual/promoted edge between the same person and event is left intact).
+    if (status === 'cancelled') {
+      await removeAutoLink(communityId, 'event_attendance', next.id);
+    } else {
+      await ensureAttendedLink(communityId, next.personId, eventId, status, next.id, undefined);
+    }
   }
   return next;
 }
@@ -598,8 +605,9 @@ export async function removeAttendee(communityId: string, eventId: string, atten
   await prisma.attendee.deleteMany({ where: { id: attendeeId, eventId } });
   if (attendee.personId) {
     try {
-      await prisma.link.deleteMany({ where: { sourceId: attendee.personId, targetId: eventId, relationship: 'attended' } });
-      revalidateTag('graph-data-v2');
+      // Origin-scoped: removes only the auto 'attended' edge for this attendee,
+      // never a manual/promoted edge between the same person and event.
+      await removeAutoLink(communityId, 'event_attendance', attendeeId);
     } catch (err) {
       logger.error('eventRepo.removeAttendee.linkCleanup.failed', { err });
     }
@@ -636,24 +644,39 @@ export async function updateCommunityGraphData(communityId: string, graphData: G
         `;
       }
 
-      // Batch upsert links in chunks of 50
-      for (let i = 0; i < graphData.links.length; i += CHUNK_SIZE) {
-        const batch = graphData.links.slice(i, i + CHUNK_SIZE);
+      // Batch upsert links in chunks of 50. Dedup by link identity first so a
+      // single INSERT never touches the same (community_id, pair_key, relationship)
+      // twice (Postgres rejects that under ON CONFLICT). Imported edges are stamped
+      // origin 'import'; the conflict update never touches origin, so re-import
+      // can't demote a manual/promoted edge.
+      const linkByIdentity = new Map<string, NBLink>();
+      for (const l of graphData.links) {
+        const s = typeof l.source === 'string' ? l.source : l.source.id;
+        const t = typeof l.target === 'string' ? l.target : l.target.id;
+        const pairKey = [s, t].sort().join('|');
+        linkByIdentity.set(`${pairKey}|${l.relationship}`, l);
+      }
+      const dedupedLinks = [...linkByIdentity.values()];
+      for (let i = 0; i < dedupedLinks.length; i += CHUNK_SIZE) {
+        const batch = dedupedLinks.slice(i, i + CHUNK_SIZE);
         const values = batch.map((l) => {
           const sourceId = typeof l.source === 'string' ? l.source : l.source.id;
           const targetId = typeof l.target === 'string' ? l.target : l.target.id;
+          const pairKey = [sourceId, targetId].sort().join('|');
           return Prisma.sql`(
             ${sourceId}, ${targetId}, ${communityId},
-            ${l.relationship}, ${l.since ?? null}, ${JSON.stringify(l.metadata ?? {})}::jsonb
+            ${l.relationship}, ${l.since ?? null}, ${JSON.stringify(l.metadata ?? {})}::jsonb,
+            ${pairKey}, 'import', now()
           )`;
         });
         await tx.$executeRaw`
-          INSERT INTO links (source_id, target_id, community_id, relationship, since, metadata)
+          INSERT INTO links (source_id, target_id, community_id, relationship, since, metadata, pair_key, origin, updated_at)
           VALUES ${Prisma.join(values)}
-          ON CONFLICT (source_id, target_id, community_id) DO UPDATE SET
+          ON CONFLICT (community_id, pair_key, relationship) DO UPDATE SET
             relationship = EXCLUDED.relationship,
             since = EXCLUDED.since,
-            metadata = EXCLUDED.metadata
+            metadata = EXCLUDED.metadata,
+            updated_at = now()
         `;
       }
     });

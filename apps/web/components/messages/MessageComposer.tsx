@@ -29,6 +29,16 @@ interface MessageComposerProps {
   typingLabel?: string | null;
   onTyping?: () => void;
   conversationId?: string | null;
+  /**
+   * 'full' (default) → the elevated card with the toolbar row (Messages/DMs).
+   * 'slim' → a single-line feed-style bar (avatar · photo · text · send) for
+   * the Channels page, matching the posts composer.
+   */
+  variant?: 'full' | 'slim';
+  /** Shown as the slim composer's leading avatar. */
+  currentUser?: { name: string; image: string | null };
+  /** Overrides the textarea placeholder (e.g. "Message #general…"). */
+  placeholder?: string;
 }
 
 const draftKey = (id: string) => `nb-msg-draft:${id}`;
@@ -42,7 +52,12 @@ export default function MessageComposer({
   typingLabel,
   onTyping,
   conversationId,
+  variant = 'full',
+  currentUser,
+  placeholder,
 }: MessageComposerProps) {
+  // Channels use the slim, single-line feed composer; DMs keep the full card.
+  const slim = variant === 'slim';
   const [text, setText] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -331,7 +346,7 @@ export default function MessageComposer({
 
   return (
     <footer
-      className={`relative w-full px-4 pb-4 pt-2 md:px-6 ${isDragging ? 'bg-brand-green/5' : ''}`}
+      className={`relative w-full ${slim ? 'px-3 pb-3 pt-2' : 'px-4 pb-4 pt-2 md:px-6'} ${isDragging ? 'bg-brand-green/5' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node)) return;
@@ -344,6 +359,8 @@ export default function MessageComposer({
           Drop images to attach
         </div>
       )}
+      {/* Slim (channel) composer reads in a centered feed-width column. */}
+      <div className={slim ? 'mx-auto w-full max-w-3xl' : 'contents'}>
       {typingLabel && (
         <p className="mb-1.5 px-1 text-xs text-text-muted italic">{typingLabel}</p>
       )}
@@ -447,7 +464,58 @@ export default function MessageComposer({
           </div>
         )}
 
+        {/* Slim feed-style bar (Channels): avatar · photo · text · send */}
+        {slim && (
+          <div className="flex items-end gap-2 rounded-2xl border border-border-default bg-surface-1 px-3 py-2 shadow-sm transition-colors focus-within:border-brand-green/40">
+            {currentUser && (
+              <div className="shrink-0 self-center">
+                <Avatar name={currentUser.name} imageUrl={currentUser.image} size="sm" />
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleImageUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="shrink-0 self-center rounded-lg p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-brand-green"
+              aria-label="Attach photo"
+            >
+              {uploading
+                ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
+                : <ImagePlus className="h-5 w-5" />}
+            </button>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={handleContentChange}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              rows={1}
+              placeholder={placeholder ?? 'Message…'}
+              disabled={disabled}
+              className="custom-scrollbar max-h-[140px] min-h-[28px] flex-1 resize-none self-center bg-transparent py-1 text-[15px] leading-relaxed text-text-primary outline-none placeholder:text-text-muted disabled:opacity-50"
+            />
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={disabled || (!text.trim() && imageUrls.length === 0)}
+              className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
+              aria-label="Send"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* Minimal composer: elevated card with textarea + toolbar row below */}
+        {!slim && (
         <div className="rounded-3xl border border-border-subtle bg-surface-1 shadow-float transition-shadow focus-within:border-brand-green/30">
           {/* Textarea */}
           <textarea
@@ -457,7 +525,7 @@ export default function MessageComposer({
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1}
-            placeholder="Message…"
+            placeholder={placeholder ?? 'Message…'}
             disabled={disabled}
             className="max-h-36 min-h-[40px] w-full resize-none bg-transparent px-5 pt-3 pb-1 text-[15px] leading-snug text-text-primary placeholder:text-text-muted focus:outline-none disabled:opacity-50"
           />
@@ -576,6 +644,8 @@ export default function MessageComposer({
             </button>
           </div>
         </div>
+        )}
+      </div>
       </div>
     </footer>
   );

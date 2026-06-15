@@ -21,7 +21,16 @@ if (!url) {
 // Hand-written SQL to apply against the local DB AFTER `prisma db push`.
 // Excludes storage_policies.sql (Supabase RLS, irrelevant locally) and
 // complete_schema.sql (Prisma already creates those tables).
-const files = ["create_match_nodes_function.sql"];
+//
+// Currently empty: the only entry used to be create_match_nodes_function.sql,
+// removed when semantic search was dropped in favour of fuzzy/keyword search.
+// Kept as the hook for future hand-written SQL functions.
+const files = [];
+
+if (files.length === 0) {
+  console.log("apply-sql-functions: nothing to apply.");
+  process.exit(0);
+}
 
 const client = new pg.Client({ connectionString: url });
 await client.connect();

@@ -119,6 +119,6 @@ OAuth client. See `apps/mobile/README.md`.
 
 ## Notes
 
-- Embeddings use OpenAI `text-embedding-3-small` (1536 dims) and are stored in `Node.embedding`. Set `OPENAI_API_KEY` to enable semantic search; otherwise the seed leaves embeddings NULL and search falls back to keyword.
+- Directory search is fuzzy/keyword only (client-side relevance matching + server-side ILIKE pickers). The former OpenAI/pgvector semantic search was removed.
 - Cookie name `auth_session`. Mobile sends `Authorization: Bearer <jwt>`. Same JWT system, two transports — see `apps/web/lib/session.ts`.
 - The dev auth bypass routes (`/dev/login`, `/api/dev/*`) return 404 unless both `NODE_ENV=development` and `ENABLE_DEV_AUTH=true`. Production builds compile `NODE_ENV=production` so the guard cannot be opened by env vars alone.

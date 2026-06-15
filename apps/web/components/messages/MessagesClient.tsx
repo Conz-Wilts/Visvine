@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle, Newspaper } from 'lucide-react';
+import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle } from 'lucide-react';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useMessageHeights } from '@/hooks/useMessageHeights';
@@ -19,7 +19,6 @@ import MessageRow, { formatChatTimestamp, mergeMessages } from './MessageRow';
 import ProfilePanel from './ProfilePanel';
 import Avatar from '@/components/ui/Avatar';
 import { MessagesTabSelector, MESSAGE_TABS, formatDateLabel, type MessageTab } from './messagesTabs';
-import PostsFeed from '@/components/feed/PostsFeed';
 import {
   IntroBanner,
   IntroRequestCard,
@@ -39,9 +38,10 @@ interface MessagesClientProps {
   initialConversationId?: string;
   initialTab?: MessageTab;
   /**
-   * 'messages' (default) → Chats + Intros tabs at /messages.
-   * 'channels' → the combined Channels page at /channels: a channel rail beside
-   * the community posts feed, with channel threads opening in place of the feed.
+   * 'messages' (default) → Chats + Intros tabs at /messages (bubble threads).
+   * 'channels' → the Channels page at /channels: a channel rail beside the
+   * selected channel, each rendered as a flat feed (feed-style rows + slim
+   * composer) on the same realtime message backend.
    */
   variant?: 'messages' | 'channels';
 }
@@ -85,9 +85,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [activeTab, setActiveTab] = useState<MessageTab>(
     variant === 'channels' ? 'channels' : (initialTab && initialTab !== 'channels' ? initialTab : 'direct'),
   );
-  // Channels page only: on mobile, whether the posts feed is open full-screen
-  // over the channel list (desktop always shows feed + rail side by side).
-  const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [introItems, setIntroItems] = useState<IntroItem[]>([]);
   const [introsLoading, setIntrosLoading] = useState(true);
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
@@ -583,7 +580,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     selectedConversationRef.current = id;
     setActiveConversation(conversations.find((c) => c.id === id) ?? null);
     setReplyTo(null);
-    setMobilePostsOpen(false);
     // Shallow URL update — a router.push here remounts the whole page
     // (different route segment + force-dynamic), which is what caused the
     // flash on every chat click. pushState keeps the component alive and
@@ -599,20 +595,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     setActiveConversation(null);
     setTypingUsers({});
     setReplyTo(null);
-    setMobilePostsOpen(false);
-    window.history.pushState(null, '', basePath);
-  };
-
-  /** Channels page: return the centre column to the posts feed view. */
-  const handleShowPostsFeed = () => {
-    clearTypingSignal(selectedConversationRef.current);
-    setSelectedConversationId(null);
-    selectedConversationRef.current = null;
-    setMessages([]);
-    setActiveConversation(null);
-    setTypingUsers({});
-    setReplyTo(null);
-    setMobilePostsOpen(true);
     window.history.pushState(null, '', basePath);
   };
 
@@ -884,12 +866,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   }), [conversations, introItems]);
 
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
-  // Channels page: the centre column shows the posts feed whenever no channel is open.
-  const postsFeedActive = channelsVariant && !selectedConversationId;
-  // Whether the centre column has "content" (a thread, or the posts feed on the
-  // Channels page). Desktop always shows the centre beside the rail; mobile shows
-  // it only when the user has opened a channel or tapped into the posts feed.
-  const mobileContentOpen = Boolean(selectedConversationId) || (channelsVariant && mobilePostsOpen);
+  // Whether the centre column has an open thread. Desktop always shows the centre
+  // beside the rail; mobile shows it only once the user opens a channel/chat.
+  const mobileContentOpen = Boolean(selectedConversationId);
   // Intros render as a centered list with inline actions — no thread opens there.
   const hasOpenThread = activeTab !== 'intros' && mobileContentOpen;
   const showInbox = !isMobile || !hasOpenThread;
@@ -1011,32 +990,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
           {/* List area */}
           <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
-
-            {/* ── Posts feed — the default "view" on the Channels page ── */}
-            {channelsVariant && (
-              <div className="px-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={handleShowPostsFeed}
-                  className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-150 ${
-                    postsFeedActive ? 'bg-brand-green/10 ring-1 ring-brand-green/20' : 'hover:bg-surface-2'
-                  }`}
-                >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-green/15 text-brand-dark-green">
-                    <Newspaper className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`truncate text-sm ${postsFeedActive ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
-                      Posts
-                    </p>
-                    <p className="truncate text-xs text-text-muted">Community feed</p>
-                  </div>
-                </button>
-                <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                  Channels
-                </p>
-              </div>
-            )}
 
             {/* ── Conversations (Chats / Channels tabs) ── */}
             {(
@@ -1164,25 +1117,32 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       {showThread && (
         <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden">
 
-          {/* ── Posts feed — the Channels page's default centre "view" ── */}
+          {/* ── Channels: empty state when no channel feed is open ── */}
           {!selectedConversation && channelsVariant && (
-            <div className="flex h-full flex-col overflow-hidden">
-              {isMobile && (
-                <header className="flex items-center gap-2 px-3 py-3">
-                  <button
-                    type="button"
-                    onClick={handleBackToList}
-                    className="rounded-lg p-1.5 text-text-muted hover:bg-surface-3"
-                    aria-label="Back to channels"
-                  >
-                    <ArrowLeft className="h-5 w-5" />
-                  </button>
-                  <p className="text-sm font-semibold text-text-primary">Posts</p>
-                </header>
-              )}
-              <div className="min-h-0 flex-1">
-                <PostsFeed embedded />
+            <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-2">
+                <Hash className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
               </div>
+              <div>
+                <p className="text-base font-semibold text-text-primary">No channel selected</p>
+                <p className="mt-1 text-sm text-text-muted">
+                  {filteredConversations.length > 0
+                    ? 'Pick a channel from the list to open its feed.'
+                    : communityCtx?.isAdmin
+                      ? 'Create your first channel to start a feed.'
+                      : 'Channels created by your community admins will appear here.'}
+                </p>
+              </div>
+              {communityCtx?.isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setShowChannelForm(true)}
+                  className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+                >
+                  <Plus className="h-4 w-4" strokeWidth={2.5} />
+                  New channel
+                </button>
+              )}
             </div>
           )}
 
@@ -1375,7 +1335,10 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                         || showDateSeparator;
                       const showUnreadDivider = unreadMarker === message.id;
                       return (
-                        <div className="w-full px-3 md:px-6" data-message-id={message.id}>
+                        <div
+                          className={channelsVariant ? 'mx-auto w-full max-w-3xl px-2 md:px-3' : 'w-full px-3 md:px-6'}
+                          data-message-id={message.id}
+                        >
                           {showDateSeparator && (
                             <div className="my-4 flex items-center gap-3 px-3">
                               <div className="h-px flex-1 bg-border-subtle" />
@@ -1397,6 +1360,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                           <MessageRow
                             message={message}
                             showHeader={showHeader}
+                            variant={channelsVariant ? 'feed' : 'bubble'}
                             onReply={setReplyTo}
                             onReaction={handleReaction}
                             onEdit={handleEdit}
@@ -1462,7 +1426,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               {/* Accessibility: announce incoming messages */}
               <div role="status" aria-live="polite" className="sr-only">{announce}</div>
 
-              {/* Composer — its own floating layer at the bottom of the thread */}
+              {/* Composer — slim feed bar on Channels, full card on DMs */}
               <MessageComposer
                 onSend={handleSendMessage}
                 replyTo={replyTo}
@@ -1471,6 +1435,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 typingLabel={typingLabel}
                 onTyping={handleComposerTyping}
                 conversationId={selectedConversationId}
+                variant={channelsVariant ? 'slim' : 'full'}
+                currentUser={channelsVariant ? currentUser : undefined}
+                placeholder={
+                  channelsVariant && selectedConversation
+                    ? `Message #${selectedConversation.name}…`
+                    : undefined
+                }
               />
             </>
           )}

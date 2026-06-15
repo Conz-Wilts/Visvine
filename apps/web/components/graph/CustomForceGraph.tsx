@@ -79,7 +79,10 @@ const CustomForceGraph: React.FC<{
   /** Called (debounced) when the layout settles, a node is dragged, or the user
    *  pans/zooms — so the parent can persist positions + camera transform. */
   onPersistLayout?: (positions: Record<string, { x: number; y: number }>, transform: Transform) => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout }) => {
+  /** Right-click on a node — raises the node + cursor position so the parent can
+   *  open a context menu (e.g. "Connect to…"). */
+  onNodeContextMenu?: (node: SimNode, clientX: number, clientY: number) => void;
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -174,6 +177,18 @@ const CustomForceGraph: React.FC<{
       }
     });
   }, [nodes, nodeTypes, screenToGraph]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (!onNodeContextMenu) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const node = findNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (node) {
+      e.preventDefault(); // only suppress the browser menu when we hit a node
+      onNodeContextMenu(node, e.clientX, e.clientY);
+    }
+  }, [onNodeContextMenu, findNodeAt]);
 
   /* --------------------------------------------------------------------------
      RENDERING
@@ -653,6 +668,7 @@ const CustomForceGraph: React.FC<{
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (e.button !== 0) return; // right/middle press is for the context menu, not pan/drag
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -1057,6 +1073,7 @@ const CustomForceGraph: React.FC<{
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onContextMenu={handleContextMenu}
         className={`w-full h-full ${cursorClass}`}
         style={{
           touchAction: 'none',

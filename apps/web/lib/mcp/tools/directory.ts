@@ -138,27 +138,6 @@ export function registerDirectoryTools(server: McpServer): void {
       }),
   );
 
-  server.registerTool(
-    "search_people_semantic",
-    {
-      description:
-        "Semantic + keyword search over a community's directory with natural language (e.g. 'female founders in SF working on climate'). Returns ranked matches with explanations. Requires a community you belong to.",
-      inputSchema: {
-        community_id: z.string(),
-        query: z.string().min(1),
-      },
-      annotations: { readOnlyHint: true },
-    },
-    (args, extra) =>
-      withCtx(extra, "directory:read", async (ctx) => {
-        await assertMember(ctx, args.community_id);
-        return callApi(ctx, "/api/search/semantic", {
-          method: "POST",
-          body: { query: args.query, communityId: args.community_id },
-        });
-      }),
-  );
-
   // ── Safe writes (admin-gated by the underlying route) ──
 
   server.registerTool(
@@ -312,35 +291,4 @@ export function registerDirectoryTools(server: McpServer): void {
       }),
   );
 
-  server.registerTool(
-    "get_embedding_status",
-    {
-      description:
-        "Report how many directory nodes have semantic-search embeddings vs not.",
-      inputSchema: {},
-      annotations: { readOnlyHint: true },
-    },
-    (_args, extra) =>
-      withCtx(extra, "directory:read", async (ctx) =>
-        callApi(ctx, "/api/populate-embeddings"),
-      ),
-  );
-
-  server.registerTool(
-    "backfill_embeddings",
-    {
-      description:
-        "Generate semantic-search embeddings for nodes that lack them (costs OpenAI API calls). Super-admin only.",
-      inputSchema: {
-        force: z.boolean().optional().describe("Re-embed every node, not just missing ones"),
-      },
-    },
-    (args, extra) =>
-      withCtx(extra, "directory:write", async (ctx) =>
-        callApi(ctx, "/api/populate-embeddings", {
-          method: "POST",
-          query: { force: args.force ? "1" : "0" },
-        }),
-      ),
-  );
 }

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
 import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData, upsertEvent } from '@/lib/eventRepo';
+import { upsertLink } from '@/lib/graph/links';
 import { requireCommunityMember } from '@/lib/eventAuth';
 import type { NBEvent } from '@/lib/types';
 import { logger } from '@/lib/logger';
@@ -85,22 +86,16 @@ export async function POST(request: NextRequest) {
     for (const hostId of event.hosts) {
       const hostExists = await prisma.node.findFirst({ where: { id: hostId, communityId: input.communityId } });
       if (!hostExists) continue;
-      const linkExists = await prisma.link.findFirst({
-        where: { sourceId: hostId, targetId: eventId, relationship: 'hosting' },
-        select: { id: true },
+      await upsertLink({
+        communityId: input.communityId,
+        sourceId: hostId,
+        targetId: eventId,
+        relationship: 'hosting',
+        origin: 'event_hosting',
+        originRef: eventId,
+        since: event.analytics.createdAt,
+        metadata: { role: 'host' },
       });
-      if (!linkExists) {
-        await prisma.link.create({
-          data: {
-            sourceId: hostId,
-            targetId: eventId,
-            relationship: 'hosting',
-            since: event.analytics.createdAt,
-            metadata: { role: 'host' },
-            communityId: input.communityId,
-          },
-        });
-      }
     }
 
     return NextResponse.json(event, { status: 201 });

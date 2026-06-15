@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
-import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, DEFAULT_LINK_TYPES, aliasesForType } from '@/lib/types';
+import type { CommunityAlias, Community, NodeTypeConfig, LinkTypeConfig } from '@/lib/types';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -403,6 +403,143 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
   );
 }
 
+// ─── Link Types Section ───────────────────────────────────────────────────────
+
+function LinkTypesSection({ linkTypes, onSave, saving }: {
+  linkTypes: LinkTypeConfig[];
+  onSave: (next: LinkTypeConfig[]) => void;
+  saving: boolean;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newColor, setNewColor] = useState('#6366f1');
+  const [newDirected, setNewDirected] = useState(false);
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+
+  const addType = () => {
+    const name = newName.trim();
+    if (!name || saving) return;
+    if (linkTypes.some(t => t.name.toLowerCase() === name.toLowerCase())) return;
+    onSave([...linkTypes, { name, color: newColor, directed: newDirected }]);
+    setNewName(''); setNewColor('#6366f1'); setNewDirected(false); setAdding(false);
+  };
+  const removeType = (name: string) => onSave(linkTypes.filter(t => t.name !== name));
+  const setColor = (name: string, color: string) => onSave(linkTypes.map(t => t.name === name ? { ...t, color } : t));
+  const toggleDirected = (name: string) => onSave(linkTypes.map(t => t.name === name ? { ...t, directed: !t.directed } : t));
+
+  return (
+    <div className="space-y-3 pt-2">
+      <div>
+        <h3 className="text-base font-semibold text-text-primary">Link types</h3>
+        <p className="text-sm text-text-muted mt-0.5">
+          Relationship types admins can pick when connecting nodes. Click a dot to recolour, the arrow to toggle directed (→) vs undirected (—). System types (used by RSVPs, events and intros) can&apos;t be removed.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {linkTypes.map(t => (
+          <div
+            key={t.name}
+            className="relative inline-flex items-center gap-1.5 group rounded-full border border-border-subtle bg-surface-1 pl-1.5 pr-2.5 py-1"
+          >
+            <button
+              type="button"
+              onClick={() => setPickerFor(p => p === t.name ? null : t.name)}
+              className="w-4 h-4 rounded-full shrink-0 transition-transform hover:scale-110"
+              style={{ background: t.color }}
+              title="Change colour"
+            />
+            <button
+              type="button"
+              onClick={() => toggleDirected(t.name)}
+              disabled={saving}
+              title={t.directed ? 'Directed (→) — click to make undirected' : 'Undirected (—) — click to make directed'}
+              className="text-xs font-semibold text-text-primary"
+            >
+              {t.name}<span className="ml-1 text-text-muted font-normal">{t.directed ? '→' : '—'}</span>
+            </button>
+            {t.system ? (
+              <span className="text-[9px] text-text-muted uppercase tracking-wide">system</span>
+            ) : (
+              <button
+                onClick={() => removeType(t.name)}
+                disabled={saving}
+                className="w-4 h-4 rounded-full flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all -mr-1"
+                title={`Remove "${t.name}"`}
+              >
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+            {pickerFor === t.name && (
+              <div className="absolute left-0 top-7 z-50" onClick={e => e.stopPropagation()}>
+                <ColorPicker color={t.color} onChange={c => setColor(t.name, c)} onClose={() => setPickerFor(null)} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {adding ? (
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setPickerFor(p => p === '__new__' ? null : '__new__')}
+              className="w-7 h-7 rounded-lg border-2 border-border-default shrink-0 transition-transform hover:scale-110"
+              style={{ background: newColor }}
+              title="Pick colour"
+            />
+            {pickerFor === '__new__' && (
+              <div className="absolute left-0 top-8 z-50">
+                <ColorPicker color={newColor} onChange={setNewColor} onClose={() => setPickerFor(null)} />
+              </div>
+            )}
+          </div>
+          <input
+            autoFocus
+            className="flex-1 px-3 py-1.5 rounded-lg border border-border-default bg-surface-1 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition-all"
+            placeholder="e.g. Mentors, Backs, Collaborates with…"
+            value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addType(); if (e.key === 'Escape') setAdding(false); }}
+            maxLength={40}
+          />
+          <label className="flex items-center gap-1.5 text-xs text-text-muted shrink-0 select-none">
+            <input type="checkbox" checked={newDirected} onChange={e => setNewDirected(e.target.checked)} />
+            Directed →
+          </label>
+          <button
+            onClick={addType}
+            disabled={!newName.trim() || saving}
+            className="px-3 py-1.5 rounded-lg bg-brand-green text-white text-sm font-medium disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+          >
+            Add
+          </button>
+          <button
+            onClick={() => setAdding(false)}
+            className="px-2 py-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-3 text-sm transition-colors shrink-0"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border-default text-xs font-medium text-text-muted hover:text-text-primary hover:bg-surface-3 transition-colors"
+        >
+          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          Add link type
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function TypesTab({ communityId: _ }: { communityId: string }) {
@@ -414,12 +551,16 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
   const [aliases, setAliases] = useState<CommunityAlias[]>(
     (currentCommunity?.communityAliases as CommunityAlias[]) ?? []
   );
+  const [linkTypes, setLinkTypes] = useState<LinkTypeConfig[]>(
+    currentCommunity?.linkTypes ?? DEFAULT_LINK_TYPES
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentCommunity?.nodeTypes) setTypes(currentCommunity.nodeTypes);
     if (currentCommunity?.communityAliases) setAliases(currentCommunity.communityAliases as CommunityAlias[]);
+    if (currentCommunity?.linkTypes) setLinkTypes(currentCommunity.linkTypes);
   }, [currentCommunity]);
 
   const saveCommunity = async (nextTypes: NodeTypeConfig[], nextAliases: CommunityAlias[]) => {
@@ -450,6 +591,28 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     saveCommunity(types, aliases.map(a => a.name === name && a.nodeType === nodeType ? { ...a, color } : a));
   const handleUpdateTypeColor = (typeName: string, color: string) =>
     saveCommunity(types.map(t => t.name === typeName ? { ...t, color } : t), aliases);
+
+  const saveLinkTypes = async (next: LinkTypeConfig[]) => {
+    if (!currentCommunity) return;
+    setLinkTypes(next); // optimistic; refreshCommunity reconciles
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/data/communities', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          community: { ...currentCommunity, nodeTypes: types, communityAliases: aliases, linkTypes: next } satisfies Community,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
+      await refreshCommunity();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Error saving');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!currentCommunity) {
     return <div className="p-6 text-sm text-text-muted">Select a community to manage aliases.</div>;
@@ -489,6 +652,10 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
       <p className="text-xs text-text-muted pt-1">
         Aliases appear in place of the base type label on node cards and graph tooltips.
       </p>
+
+      <div className="border-t border-border-subtle !mt-6" />
+
+      <LinkTypesSection linkTypes={linkTypes} onSave={saveLinkTypes} saving={saving} />
     </div>
   );
 }

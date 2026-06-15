@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin } from '@/lib/auth';
+import { upsertLink, removeLink } from '@/lib/graph/links';
 import type { NBLink } from '@/lib/types';
 import { logger } from '@/lib/logger';
 
@@ -19,16 +20,18 @@ export async function GET(request: NextRequest) {
 
     const data = await prisma.link.findMany({
       where: { communityId },
-      select: { id: true, sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true },
+      select: { id: true, sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true, origin: true },
     });
 
     const links = data.map(l => ({
+      id: l.id,
       source: l.sourceId,
       target: l.targetId,
       relationship: l.relationship,
       since: l.since,
       metadata: l.metadata,
       community_id: l.communityId,
+      origin: l.origin,
     }));
 
     return NextResponse.json({ links });
@@ -53,8 +56,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
     }
 
-    if (!link.source || !link.target || !link.relationship) {
-      return NextResponse.json({ error: 'Link must have source, target, and relationship' }, { status: 400 });
+    if (!link.source || !link.target) {
+      return NextResponse.json({ error: 'Link must have source and target' }, { status: 400 });
     }
 
     const session = await getSession();
@@ -66,26 +69,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required to create links' }, { status: 403 });
     }
 
-    const created = await prisma.link.create({
-      data: {
-        sourceId: link.source,
-        targetId: link.target,
-        relationship: link.relationship,
-        since: link.since ?? null,
-        metadata: (link.metadata as object) ?? {},
-        communityId: community_id,
-      },
+    const created = await upsertLink({
+      communityId: community_id,
+      sourceId: link.source,
+      targetId: link.target,
+      relationship: link.relationship || 'related', // geometry-only drag defaults to "related"
+      origin: 'manual',
+      createdBy: session?.userId ?? null,
+      since: link.since ?? null,
+      metadata: link.metadata,
     });
 
     revalidateTag('graph-data-v2');
     return NextResponse.json({
       link: {
+        id: created.id,
         source: created.sourceId,
         target: created.targetId,
         relationship: created.relationship,
         since: created.since,
         metadata: created.metadata,
         community_id: created.communityId,
+        origin: created.origin,
       },
     }, { status: 201 });
   } catch (err) {
@@ -165,6 +170,7 @@ export async function DELETE(request: NextRequest) {
     const sourceId = searchParams.get('source_id');
     const targetId = searchParams.get('target_id');
     const communityId = searchParams.get('community_id');
+    const relationship = searchParams.get('relationship') ?? undefined;
 
     if (!sourceId || !targetId || !communityId) {
       return NextResponse.json({ error: 'source_id, target_id, and community_id are required' }, { status: 400 });
@@ -175,9 +181,10 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    await prisma.link.deleteMany({
-      where: { sourceId, targetId, communityId },
-    });
+    // Undirected delete (matches the stored edge regardless of source/target order).
+    // Admins may remove any edge regardless of origin (auto edges included). An optional
+    // ?relationship= narrows the delete to one edge type between the pair.
+    await removeLink(communityId, sourceId, targetId, relationship);
 
     revalidateTag('graph-data-v2');
     return NextResponse.json({ success: true });

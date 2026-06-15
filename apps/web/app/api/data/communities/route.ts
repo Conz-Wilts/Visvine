@@ -26,6 +26,7 @@ export async function GET() {
         createdAt: true,
         imageUrl: true,
         communityAliases: true,
+        linkTypes: true,
         designConfig: true,
       },
       orderBy: { name: 'asc' },
@@ -45,6 +46,7 @@ export async function GET() {
       imageUrl: c.imageUrl ?? undefined,
       nodeTypes: undefined as unknown as Community['nodeTypes'],
       communityAliases: (c.communityAliases as unknown as CommunityAlias[]) ?? [],
+      linkTypes: (c.linkTypes as unknown) as Community['linkTypes'],
       designConfig: (c.designConfig as unknown as Community['designConfig']) ?? undefined,
     }));
 
@@ -168,6 +170,7 @@ export async function PUT(request: NextRequest) {
         imageUrl: community.imageUrl ?? null,
         nodeTypes: community.nodeTypes as object ?? null,
         communityAliases: community.communityAliases as object ?? [],
+        linkTypes: community.linkTypes as object ?? null,
       },
     });
 
@@ -183,6 +186,7 @@ export async function PUT(request: NextRequest) {
       imageUrl: updated.imageUrl ?? undefined,
       nodeTypes: (updated.nodeTypes as unknown) as Community['nodeTypes'],
       communityAliases: (updated.communityAliases as unknown as CommunityAlias[]) ?? [],
+      linkTypes: (updated.linkTypes as unknown) as Community['linkTypes'],
     };
 
     revalidateTag('graph-data');

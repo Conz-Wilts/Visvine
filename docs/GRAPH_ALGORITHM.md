@@ -26,7 +26,7 @@ that node — the simulation is **never reheated** on interaction. This avoids t
 | `lib/graph-layout/graphLayout.ts` | Deterministic offline layout engine (PivotMDS → Barnes-Hut → overlap removal → component packing) |
 | `components/graph/CustomForceGraph.tsx` | Canvas renderer, d3-force runtime, interaction (drag/pan/zoom/focus) |
 | `components/graph/GraphWithTable.tsx` | Picks the layout *source* (server seed / incremental / engine / fallback), builds sim nodes |
-| `components/graph/DirectoryGraphView.tsx` | Fetches graph data, applies semantic/text search filtering |
+| `components/dashboard/DirectoryGraphView.tsx` | Fetches graph data, applies text-search dimming/focus |
 | `components/graph/utils/constants.ts` | All tuning constants (`CARD_DIMENSIONS`, `LOD_THRESHOLDS`, `OBSIDIAN_PHYSICS`) |
 | `components/graph/utils/forceRectCollide.ts` | Custom rectangular collision force for cards |
 | `components/graph/utils/incrementalLayout.ts` | Reuse a saved layout and place only new nodes |
@@ -42,7 +42,7 @@ that node — the simulation is **never reheated** on interaction. This avoids t
 API/DB: { nodes, links }
    │
    ▼
-DirectoryGraphView ── fetch + semantic/text-search filtering
+DirectoryGraphView ── fetch + text-search dimming/focus
    │
    ▼
 GraphWithTable ── compute structure hash, then choose a layout SOURCE:
@@ -321,15 +321,13 @@ zoom without recomputing.
 ## 7. Search & filtering (`DirectoryGraphView.tsx`)
 
 - Data comes from `useCommunityGraphData()` → `{ nodes, links }`.
-- **Semantic search** filters `nodes`/`links` to the matched subset. This
-  filtered view is **not persisted** — clearing the filter restores the full
-  saved layout.
-- **Text search** dims unmatched nodes (opacity ~0.15) rather than removing them.
+- **Text search** dims unmatched nodes (opacity ~0.15) rather than removing them,
+  and focuses the best match. The full graph stays visible, so the saved layout
+  is unaffected.
 
-Semantic search itself (server side) expands the query via
-`lib/ai/queryParser.ts` and ranks nodes with the `match_nodes` pgvector function
-against `Node.embedding` (1536-dim, OpenAI `text-embedding-3-small`). That
-affects *which* nodes show, not where they're placed.
+Search is fuzzy/keyword only (name/subtitle/location/tags substring matching);
+the former pgvector semantic search was removed. Search affects *which* nodes are
+highlighted, not where they're placed.
 
 ---
 

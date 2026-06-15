@@ -1,6 +1,6 @@
 # Visvine MCP — Tool Inventory & Drip-Feed Plan
 
-> **Why this doc exists.** The MCP server (`apps/web/lib/mcp/`) was exposing **72 tools**
+> **Why this doc exists.** The MCP server (`apps/web/lib/mcp/`) was exposing **69 tools**
 > across 11 domain modules — too many for clients to reason about at once. We've temporarily
 > reduced the live surface to **the event tools only**. This document is the canonical record
 > of every tool that exists in the codebase so we can **drip-feed the others back in**, one
@@ -14,7 +14,7 @@
 ## Current state
 
 - **Live now:** `events` module only (9 tools).
-- **Parked (code intact, registration disabled):** the other 10 modules (63 tools).
+- **Parked (code intact, registration disabled):** the other 10 modules (60 tools).
 
 To bring a module back: open `apps/web/lib/mcp/tools/index.ts`, uncomment its import + its
 `register*Tools(server)` line, and (if relevant) confirm its scope is still advertised in
@@ -63,7 +63,7 @@ nearly every other tool needs a `community_id` the user can only get from here.
 | `get_profile` | `profile:read` | Get a person's full profile by person node id. |
 | `update_my_profile` | `profile:write` | Update your own profile (only passed fields change). |
 
-### 3. `directory` (12 tools) · `tools/directory.ts`
+### 3. `directory` (9 tools) · `tools/directory.ts`
 
 Graph / nodes / companies / search. Companies are `Node`s of type `organization`.
 
@@ -74,13 +74,10 @@ Graph / nodes / companies / search. Companies are `Node`s of type `organization`
 | `get_graph` | `directory:read` | Full relationship graph (nodes + links) for a community. |
 | `get_node` | `directory:read` | One node with its connections + connection count. |
 | `search_nodes` | `directory:read` | Fuzzy keyword search for nodes by name/email across your communities. |
-| `search_people_semantic` | `directory:read` | Natural-language semantic + keyword search over a community's directory. |
 | `create_node` | `directory:write` | Create a directory node; admin role required. |
 | `update_node` | `directory:write` | Update fields on an existing node; admin role required. |
 | `create_link` | `directory:write` | Create a directed relationship between two nodes; admin role. |
 | `update_link` | `directory:write` | Update an existing link's relationship/since/metadata; admin role. |
-| `get_embedding_status` | `directory:read` | How many nodes have semantic-search embeddings vs not. |
-| `backfill_embeddings` | `directory:write` | Generate embeddings for nodes lacking them (costs OpenAI calls); super-admin. |
 
 ### 4. `crm` (25 tools) · `tools/crm.ts`
 
@@ -195,7 +192,7 @@ Marketing/blog authoring. Super-admin only.
 | resources | 7 | ⏸ parked |
 | blog | 2 | ⏸ parked |
 | analytics | 2 | ⏸ parked |
-| **Total** | **72** | **9 live / 63 parked** |
+| **Total** | **69** | **9 live / 60 parked** |
 
 ---
 
