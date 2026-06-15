@@ -33,6 +33,30 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
+      - name: Sync database schema + seed
+        run: |
+          curl -sL https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.linux.amd64 -o cloud-sql-proxy
+          chmod +x cloud-sql-proxy
+          ./cloud-sql-proxy --address 127.0.0.1 --port 5432 ${{ env.SQL_INSTANCE }} &
+          sleep 5
+          DB_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL --project=${{ env.PROJECT }})
+          # Adapt the unix-socket prod URL (@localhost/db?host=/cloudsql/...) to the TCP proxy.
+          if echo "$DB_URL" | grep -q "host=/cloudsql"; then
+            DB_URL=$(echo "$DB_URL" | sed -E 's|@[^/]*/([^?]+)\?host=[^[:space:]]*|@127.0.0.1:5432/\1|')
+          fi
+          corepack enable && corepack prepare pnpm@10.30.2 --activate
+          pnpm install --frozen-lockfile
+          cd apps/web
+          # 1. Fixups `prisma db push` can't do on a populated table: backfill the
+          #    NOT-NULL `links.pair_key` + dedup so the unique index can build.
+          DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
+          # 2. Converge the live schema to schema.prisma.
+          DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
+          # 3. Ensure the Blackbird Ventures community + connor@visvine.com admin.
+          #    Idempotent + non-destructive: rebuilds the node graph only when the
+          #    community is empty; otherwise just ensures community + admin exist.
+          DATABASE_URL="$DB_URL" CONFIRM_PROD_SEED=blackbird node scripts/seed-blackbird-prod.mjs
+
       - name: Build and push image
         run: |
           docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
