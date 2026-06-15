@@ -201,11 +201,11 @@ export default function DashboardPage() {
       {/* ── Non-graph header: title + filters + view toggle ── */}
       {!isGraphView && (
         <>
-          <div className="flex items-center justify-center gap-4 px-6 pt-6 pb-0 text-center">
-            <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto">Directory</h1>
+          <div className="flex items-center justify-center gap-4 px-6 pt-4 pb-0 text-center sm:pt-6">
+            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto 2xl:text-5xl">Directory</h1>
           </div>
 
-          <div className="flex justify-center px-6 pt-6">
+          <div className="flex justify-center px-6 pt-4 sm:pt-6">
             <div className="flex w-full max-w-2xl">{searchBar}</div>
           </div>
 
@@ -250,7 +250,7 @@ export default function DashboardPage() {
             {isAdmin && currentView === 'table' && (
               <button
                 onClick={() => setEditMode(v => !v)}
-                className="flex h-12 w-12 items-center justify-center rounded-2xl border shadow-sm transition-colors"
+                className="flex h-12 w-12 lg:h-10 lg:w-10 items-center justify-center rounded-2xl border shadow-sm transition-colors"
                 style={editMode
                   ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-green)', color: '#fff' }
                   : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
@@ -276,7 +276,7 @@ export default function DashboardPage() {
                   setFilterTags(new Set());
                   setSortOrder('az');
                 }}
-                className="flex h-12 items-center gap-1.5 rounded-2xl px-4 text-sm font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
+                className="flex h-12 lg:h-10 items-center gap-1.5 rounded-2xl px-4 text-sm lg:text-[13px] font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

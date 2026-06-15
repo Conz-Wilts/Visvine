@@ -5,12 +5,11 @@ import * as d3Force from 'd3-force';
 import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig, findAlias } from '@/lib/types';
 import { CARD_DIMENSIONS, LOD_THRESHOLDS, OBSIDIAN_PHYSICS as P, type NodeLOD } from './utils/constants';
 import { drawLinks } from './renderers/LinkRenderer';
-import { drawHexagonNode } from './renderers/HexagonNodeRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
 import { drawCircleNode } from './renderers/CircleNodeRenderer';
+import { drawSquareNode } from './renderers/SquareNodeRenderer';
 import { preloadImages, onImageLoad } from './utils/imageCache';
 import { createRectCollideForce } from './utils/forceRectCollide';
-import { isPointInHexagon } from './utils/hitTest';
 import { useLayoutPersistence } from './hooks/useLayoutPersistence';
 import { prefersReducedMotion } from '@/lib/motion';
 
@@ -164,9 +163,14 @@ const CustomForceGraph: React.FC<{
 
       const shape = getNodeTypeConfig(node.type, nodeTypes).shape;
 
-      if (shape === 'hexagon') {
-        const hexRadius = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.75;
-        return isPointInHexagon(graphPos.x, graphPos.y, node.x, node.y, hexRadius);
+      if (shape === 'square' || shape === 'hexagon') {
+        const halfSide = CARD_DIMENSIONS.SQUARE_SIDE / 2;
+        return (
+          graphPos.x >= node.x - halfSide &&
+          graphPos.x <= node.x + halfSide &&
+          graphPos.y >= node.y - halfSide &&
+          graphPos.y <= node.y + halfSide
+        );
       } else {
         const halfWidth = CARD_DIMENSIONS.WIDTH / 2;
         const halfHeight = CARD_DIMENSIONS.HEIGHT / 2;
@@ -230,8 +234,11 @@ const CustomForceGraph: React.FC<{
 
     const borderWidth = isFocused ? CARD_DIMENSIONS.BORDER_WIDTH * 1.6 : CARD_DIMENSIONS.BORDER_WIDTH;
 
-    if (shape === 'hexagon') {
-      drawHexagonNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
+    // 'hexagon' is treated as 'square': the hexagon look was retired in favour of
+    // a rounded square (matching the community avatar). Existing data still stored
+    // with shape:'hexagon' therefore renders as a square without a DB migration.
+    if (shape === 'square' || shape === 'hexagon') {
+      drawSquareNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     } else if (shape === 'circle') {
       drawCircleNode(ctx, node, node.x, node.y, lod, isFocused, isConnected, shouldDim, borderColor, borderWidth, theme);
     } else {

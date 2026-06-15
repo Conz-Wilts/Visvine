@@ -6,7 +6,7 @@ import { ChevronDown, Check } from 'lucide-react';
 // Shared dropdown sizing — import these when building a custom dropdown
 // (multi-select, search, etc.) so trigger/menu/items stay in sync site-wide.
 export const DROPDOWN_TRIGGER_CLASS =
-  'flex h-12 items-center gap-2 rounded-2xl border px-4 text-sm font-semibold shadow-sm transition-colors';
+  'flex h-12 lg:h-10 items-center gap-2 rounded-2xl border px-4 text-sm lg:text-[13px] font-semibold shadow-sm transition-colors';
 export const DROPDOWN_MENU_CLASS =
   'absolute left-0 top-full mt-2 z-50 rounded-2xl border border-border-subtle bg-surface-1 shadow-xl py-1.5 overflow-hidden';
 export const DROPDOWN_ITEM_CLASS =

@@ -39,7 +39,9 @@ function getInitials(name: string): string {
 
 export default function CommunityAvatar({ name, imageUrl, size = 'md', className = '' }: CommunityAvatarProps) {
   const sizeClass = SIZE_CLASSES[size];
-  const base = `rounded-full object-cover flex-shrink-0 ${sizeClass} ${className}`;
+  // Rounded square to match the profile/person avatar style (see ui/Avatar.tsx),
+  // rather than a circle.
+  const base = `rounded-xl object-cover flex-shrink-0 ${sizeClass} ${className}`;
 
   if (imageUrl) {
     return (

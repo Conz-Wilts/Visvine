@@ -270,11 +270,15 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   const engineLayout = useMemo<Map<string, { x: number; y: number }> | null>(() => {
     if (serverSeed !== null || incrementalLayout !== null || graphData.nodes.length === 0) return null;
     const rectR = Math.hypot(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) / 2;
-    const hexR = Math.max(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) * 0.75;
+    const squareR = (CARD_DIMENSIONS.SQUARE_SIDE / 2) * Math.SQRT2; // circumscribed radius
+    // 'hexagon' is rendered as a square (the hexagon look was retired), so it
+    // takes the square collision radius.
+    const radiusForShape = (shape: string) =>
+      shape === 'square' || shape === 'hexagon' ? squareR : rectR;
     const result = layoutGraph(
       graphData.nodes.map(n => ({
         id: String(n.id),
-        r: getNodeTypeConfig(n.type, nodeTypes).shape === 'hexagon' ? hexR : rectR,
+        r: radiusForShape(getNodeTypeConfig(n.type, nodeTypes).shape),
       })),
       simLinks.map(l => ({ source: endpointId(l.source), target: endpointId(l.target) })),
       {

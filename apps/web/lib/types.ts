@@ -2,7 +2,7 @@
 export type NodeType = string;
 
 // Shape options for node rendering
-export type NodeShape = 'rectangle' | 'hexagon' | 'circle';
+export type NodeShape = 'rectangle' | 'hexagon' | 'circle' | 'square';
 
 // Configuration for a node type
 export interface NodeTypeConfig {
@@ -301,9 +301,9 @@ export interface DirectoryItem {
 // even before a community config has loaded. This is what prevents the
 // "everything is grey on first paint" race condition.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
-  { name: 'Community',    color: '#10b981', shape: 'hexagon'   },
+  { name: 'Community',    color: '#10b981', shape: 'square'    },
   { name: 'Person',       color: '#2563eb', shape: 'rectangle' },
-  { name: 'Organization', color: '#9333ea', shape: 'rectangle' },
+  { name: 'Organization', color: '#9333ea', shape: 'square'    },
   { name: 'Event',        color: '#ef4444', shape: 'rectangle' },
   { name: 'Group',        color: '#0ea5e9', shape: 'rectangle' },
   { name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },

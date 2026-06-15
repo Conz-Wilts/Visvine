@@ -54,7 +54,7 @@ const COMM = 'community:icehouse-ventures';
 const FIRM_ID = 'org:iv-icehouse-ventures';
 
 const nodeTypes = [
-  { icon: '🧊', name: 'Investor', color: '#0ea5e9', shape: 'hexagon' },
+  { icon: '🧊', name: 'Investor', color: '#0ea5e9', shape: 'square' },
   { icon: '🚀', name: 'Startup', color: '#9333ea', shape: 'rectangle' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
   { icon: '🏢', name: 'Organization', color: '#f59e0b', shape: 'rectangle' },

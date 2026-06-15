@@ -15,6 +15,9 @@ export const CARD_DIMENSIONS = {
   BORDER_WIDTH: 4,
   PADDING: 12,
   TAG_HEIGHT: 20,
+  // Side length of the rounded-square node (Community), sized to roughly match
+  // the hexagon footprint it replaces so layout/physics stay comparable.
+  SQUARE_SIDE: 260,
 } as const;
 
 /**

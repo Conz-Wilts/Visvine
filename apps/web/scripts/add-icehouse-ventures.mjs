@@ -44,7 +44,7 @@ const TYPE_REMAP = {
 
 // Base node types shown in the Types & Aliases console.
 const NODE_TYPES = [
-  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'hexagon' },
+  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 

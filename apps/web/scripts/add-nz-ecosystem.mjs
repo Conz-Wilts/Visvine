@@ -22,7 +22,7 @@ const NODE_TYPES = [
   { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'rectangle' },
   { icon: '📅', name: 'Event',        color: '#ef4444', shape: 'rectangle' },
   { icon: '👥', name: 'Group',        color: '#0ea5e9', shape: 'rectangle' },
-  { icon: '🌐', name: 'Community',    color: '#10b981', shape: 'hexagon'   },
+  { icon: '🌐', name: 'Community',    color: '#10b981', shape: 'square'   },
   { icon: '📦', name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
