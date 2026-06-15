@@ -100,9 +100,10 @@ local-db guards work again.
   deploy currently sets `SUPER_ADMIN_EMAILS` from a secret (the platform-wide
   bypass). If you also want connor@visvine.com to be a platform super admin, add
   it to that secret — separate from this migration.
-- **Provenance schema.** If the (currently uncommitted) link-provenance schema
-  change lands in the same deploy, `prisma db push` will try to add `pair_key`
-  NOT NULL to the prod `links` table. If prod already has link rows, run
-  `apps/web/migrations/add_link_provenance.sql` against prod **before** that push
-  (it backfills `pair_key` and collapses duplicates). This is independent of the
-  Blackbird seed.
+- **Provenance schema — applied.** The link-provenance schema change (`pair_key`
+  NOT NULL + the `(community_id, pair_key, relationship)` unique index) was
+  applied to prod via the proxy during the local→prod migration, so prod is
+  already in sync and the next `prisma db push` is a no-op for it. The one-off
+  `add_link_provenance.sql` backfill helper (for upgrading a *populated* `links`
+  table in place) was only ever a manual transition tool — never wired into the
+  build/deploy — and has been removed now that the transition is done.
