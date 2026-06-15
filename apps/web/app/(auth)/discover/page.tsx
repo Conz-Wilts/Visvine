@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
-import { Community, CommunityAlias } from '@/lib/types';
+import { Community, aliasesForType } from '@/lib/types';
 import Badge from '@/components/ui/Badge';
 
 const CATEGORY_FILTERS = ['All', 'Startup', 'VC', 'Technology', 'Innovation'] as const;
@@ -144,7 +144,9 @@ export default function DiscoverPage() {
   const isJoined = (id: string) => joinedCommunities.some(c => c.id === id);
 
   const handleJoin = (community: Community) => {
-    const aliases = (community.communityAliases ?? []) as CommunityAlias[];
+    // Only Person-scoped aliases are selectable when joining (a user is a person),
+    // so skip the picker entirely when none exist.
+    const aliases = aliasesForType(community.communityAliases, 'Person');
     if (aliases.length > 0) {
       setPendingCommunity(community);
       setSelectedAlias('');
@@ -184,7 +186,9 @@ export default function DiscoverPage() {
 
   const featured = filteredCommunities[0] ?? null;
   const gridCommunities = filteredCommunities.slice(1);
-  const aliases = (pendingCommunity?.communityAliases ?? []) as CommunityAlias[];
+  // A user joins as a person, so only offer Person-scoped aliases (e.g. "Founder").
+  // Org-scoped aliases like "Portfolio Company" must never be selectable here.
+  const aliases = aliasesForType(pendingCommunity?.communityAliases, 'Person');
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-surface-1 to-surface-2">
