@@ -25,6 +25,7 @@ model Community {
   country          String?
   crmSettings      Json            @default("{}") @map("crm_settings")
   designConfig     Json            @default("{}") @map("design_config")
+  featureConfig    Json            @default("{}") @map("feature_config")
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]

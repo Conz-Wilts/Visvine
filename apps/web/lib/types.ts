@@ -101,6 +101,13 @@ export interface CommunityDesignConfig {
   };
 }
 
+// Which optional community surfaces (directory, channels, events, …) are
+// switched on. A feature is enabled unless its key is explicitly `false`, so an
+// empty config means "everything on" — see lib/features.tsx#isFeatureEnabled.
+export interface CommunityFeatureConfig {
+  enabled?: Record<string, boolean>;
+}
+
 export interface Community {
   id: string;
   name: string;
@@ -116,6 +123,7 @@ export interface Community {
   communityAliases?: CommunityAlias[]; // Aliases with colors, scoped per node type
   linkTypes?: LinkTypeConfig[]; // Customizable relationship (edge) types for this community
   designConfig?: CommunityDesignConfig;
+  featureConfig?: CommunityFeatureConfig; // Which optional surfaces are enabled
 }
 
 // A named alias with a display color, scoped to a specific node type within a community

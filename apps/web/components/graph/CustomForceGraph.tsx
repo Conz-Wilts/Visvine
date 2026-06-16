@@ -83,7 +83,10 @@ const CustomForceGraph: React.FC<{
   onNodeContextMenu?: (node: SimNode, clientX: number, clientY: number) => void;
   /** Double-click on a node — e.g. open its detail page. */
   onNodeDoubleClick?: (node: SimNode) => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick }) => {
+  /** Click (not a pan) on empty canvas background — lets the parent clear any
+   *  current selection. */
+  onBackgroundClick?: () => void;
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick, onBackgroundClick }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -798,6 +801,17 @@ const CustomForceGraph: React.FC<{
       }
     }
 
+    // A click (not a pan) that started on empty canvas clears the selection.
+    // The press began on the background (no mouse-down node) and the pointer
+    // barely moved, so it isn't a pan.
+    if (onBackgroundClick && mouseDownPosRef.current && !mouseDownNodeRef.current) {
+      const dx = e.clientX - mouseDownPosRef.current.x;
+      const dy = e.clientY - mouseDownPosRef.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) {
+        onBackgroundClick();
+      }
+    }
+
     // Only release/persist if a real drag actually started. A plain click never
     // pinned the node, so there's nothing to undo.
     if (isDraggingRef.current && dragNodeRef.current && dragStartedRef.current) {
@@ -830,7 +844,7 @@ const CustomForceGraph: React.FC<{
     const y = e.clientY - rect.top;
     const node = findNodeAt(x, y);
     setCursorStyle(node ? 'move' : 'grab');
-  }, [onNodeClick, findNodeAt, collectPositions, schedulePersist, savedPositionsRef, scheduleRender]);
+  }, [onNodeClick, onBackgroundClick, findNodeAt, collectPositions, schedulePersist, savedPositionsRef, scheduleRender]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onNodeDoubleClick) return;

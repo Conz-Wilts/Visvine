@@ -1,10 +1,26 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { tokenize, scoreCandidate } from '@/features/search/utils';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
+
+// Predictable, ranked matching for the community switcher. Name-only (like the main
+// directory search) so it stays predictable — these are communities you already know
+// by name, and matching descriptions made every venture firm match "ven".
+// Ranking: exact > prefix > word-start > substring. Returns -Infinity for no match.
+function scoreCommunity(name: string, query: string): number {
+  const lower = name.toLowerCase();
+  if (lower === query) return 100000;
+  if (lower.startsWith(query)) return 90000 - query.length;
+  // Any word in the name starts with the query, e.g. "ven" → "Blackbird Ventures".
+  if (lower.split(/[^a-z0-9]+/).some(word => word.startsWith(query))) {
+    return 80000 - lower.indexOf(query);
+  }
+  const idx = lower.indexOf(query);
+  if (idx > 0) return 70000 - idx * 10;
+  return -Infinity;
+}
 
 export default function CommunitySelector({
   iconOnly = false,
@@ -14,18 +30,28 @@ export default function CommunitySelector({
   const { currentCommunity, joinedCommunities, setCurrentCommunity } = useCommunity();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close the dropdown when clicking anywhere outside it (including other top-bar items).
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isOpen]);
 
   const filteredCommunities = useMemo(() => {
-    let filtered = joinedCommunities;
-    if (searchQuery.trim()) {
-      const queryTokens = tokenize(searchQuery);
-      filtered = joinedCommunities.filter(community => {
-        if (scoreCandidate(queryTokens, tokenize(community.name)) > 0) return true;
-        if (scoreCandidate(queryTokens, tokenize(community.description)) > 0) return true;
-        return (community.tags || []).some(tag => scoreCandidate(queryTokens, tokenize(tag)) > 0);
-      });
-    }
-    return filtered;
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return joinedCommunities;
+    return joinedCommunities
+      .map(community => ({ community, score: scoreCommunity(community.name, query) }))
+      .filter(({ score }) => score > -Infinity)
+      .sort((a, b) => b.score - a.score)
+      .map(({ community }) => community);
   }, [joinedCommunities, searchQuery]);
 
   const handleSelect = (communityId: string) => {
@@ -35,14 +61,14 @@ export default function CommunitySelector({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       {/* Trigger Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={
           iconOnly
-            ? "w-12 h-12 rounded-2xl flex items-center justify-center border border-border-default bg-surface-1 hover:bg-surface-2 transition shadow-float"
-            : "flex items-center gap-2 h-12 px-3 text-sm font-medium text-text-secondary border border-border-default rounded-2xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
+            ? "w-16 h-16 rounded-2xl flex items-center justify-center border border-border-default bg-surface-1 hover:bg-surface-2 transition shadow-float"
+            : "flex items-center gap-2 h-16 px-3 text-sm font-medium text-text-secondary border border-border-default rounded-2xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
         }
       >
         {currentCommunity ? (
@@ -64,24 +90,26 @@ export default function CommunitySelector({
       </button>
 
       {isOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-
-          <div className="absolute left-0 mt-2 w-80 bg-surface-1 rounded-2xl shadow-xl border border-border-subtle z-50 overflow-hidden">
+        <div className="absolute left-0 mt-2 w-80 bg-surface-1 rounded-2xl shadow-xl border border-border-subtle z-50 overflow-hidden">
             {/* Search Input */}
             <div className="p-3 border-b border-border-subtle">
-              <input
-                type="text"
-                placeholder="Search communities..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-border-default rounded-xl bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:border-border-default transition"
-                autoFocus
-              />
+              <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 shadow-sm focus-within:border-brand-green transition-colors">
+                <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search communities…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+                  autoFocus
+                />
+              </div>
             </div>
 
-            {/* Communities List */}
-            <div className="max-h-96 overflow-y-auto">
+            {/* Communities List — caps at 5 rows (~56px each) before scrolling */}
+            <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
               {filteredCommunities.length === 0 ? (
                 <div className="p-4 text-sm text-text-muted text-center">No communities found</div>
               ) : (
@@ -89,39 +117,17 @@ export default function CommunitySelector({
                   <button
                     key={community.id}
                     onClick={() => handleSelect(community.id)}
-                    className={`w-full px-4 py-3 flex items-start gap-3 hover:bg-surface-2 transition text-left ${
+                    className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-surface-2 transition text-left ${
                       currentCommunity?.id === community.id ? 'bg-surface-2' : ''
                     }`}
                   >
                     <CommunityAvatar name={community.name} imageUrl={community.imageUrl} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-text-primary">{community.name}</span>
-                        {currentCommunity?.id === community.id && (
-                          <svg className="w-4 h-4 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <p className="text-xs text-text-muted truncate">{community.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {community.location && (
-                          <span className="text-xs text-text-muted flex items-center gap-1">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            {community.location}
-                          </span>
-                        )}
-                        <span className="text-xs text-text-muted flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                          </svg>
-                          {community.memberCount}
-                        </span>
-                      </div>
-                    </div>
+                    <span className="flex-1 min-w-0 font-medium text-sm text-text-primary truncate">{community.name}</span>
+                    {currentCommunity?.id === community.id && (
+                      <svg className="w-5 h-5 shrink-0 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    )}
                   </button>
                 ))
               )}
@@ -130,22 +136,18 @@ export default function CommunitySelector({
             {/* Footer */}
             <div className="p-2 border-t border-border-subtle bg-surface-2">
               <Link
-                href="/communities"
-                className="block w-full px-3 py-2 text-sm text-center text-text-secondary hover:text-text-primary font-medium hover:bg-surface-3 rounded-md transition"
-                onClick={() => setIsOpen(false)}
-              >
-                My Communities
-              </Link>
-              <Link
                 href="/discover"
-                className="block w-full px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"
+                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"
                 onClick={() => setIsOpen(false)}
               >
-                Discover More Communities →
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+                </svg>
+                Discover Communities
               </Link>
             </div>
           </div>
-        </>
       )}
     </div>
   );

@@ -31,12 +31,13 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, location, tags, designConfig } = body as {
+  const { name, description, location, tags, designConfig, featureConfig } = body as {
     name?: string;
     description?: string;
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
+    featureConfig?: { enabled?: Record<string, boolean> };
   };
 
   if (name !== undefined && !name.trim()) {
@@ -56,6 +57,17 @@ export async function PUT(
     }
   }
 
+  // Validate featureConfig if provided — must be { enabled: { [key]: boolean } }
+  if (featureConfig !== undefined) {
+    const enabled = featureConfig.enabled;
+    if (enabled !== undefined && (typeof enabled !== 'object' || enabled === null || Array.isArray(enabled))) {
+      return NextResponse.json({ error: 'featureConfig.enabled must be an object' }, { status: 400 });
+    }
+    if (enabled && Object.values(enabled).some((v) => typeof v !== 'boolean')) {
+      return NextResponse.json({ error: 'featureConfig.enabled values must be booleans' }, { status: 400 });
+    }
+  }
+
   const updated = await prisma.community.update({
     where: { id: communityId },
     data: {
@@ -64,6 +76,7 @@ export async function PUT(
       ...(location !== undefined && { location: location || null }),
       ...(tags !== undefined && { tags }),
       ...(designConfig !== undefined && { designConfig: designConfig as object }),
+      ...(featureConfig !== undefined && { featureConfig: featureConfig as object }),
     },
   });
 
@@ -85,6 +98,7 @@ export async function PUT(
       location: updated.location,
       tags: updated.tags,
       designConfig: updated.designConfig,
+      featureConfig: updated.featureConfig,
     },
   });
 }

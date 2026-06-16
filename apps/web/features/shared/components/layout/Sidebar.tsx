@@ -5,54 +5,10 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCreateModal } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
-
-const NAV = [
-  {
-    href: "/directory",
-    label: "Directory",
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-    ),
-  },
-  {
-    href: "/channels",
-    label: "Channels",
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h16M3 16h16" />
-      </svg>
-    ),
-  },
-  {
-    href: "/events",
-    label: "Events",
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
-  },
-  {
-    href: "/resources",
-    label: "Resources",
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-    ),
-  },
-  {
-    href: "/messages",
-    label: "Messages",
-    icon: (
-      <svg className="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-      </svg>
-    ),
-  },
-];
+import { useCommunity } from "@/lib/contexts/CommunityContext";
+import { enabledFeatures, AppsGridIcon } from "@/lib/features";
+import type { CommunityFeatureConfig } from "@/lib/types";
+import FeatureLauncher from "@/components/layout/FeatureLauncher";
 
 /*
  * Layout model (nothing changes on expanded toggle except container width):
@@ -80,7 +36,9 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { open: openCreateModal } = useCreateModal();
   const { expanded, setExpanded } = useSidebar();
+  const { currentCommunity } = useCommunity();
   const [entered, setEntered] = useState(hasAnimatedRef.current);
+  const [launcherOpen, setLauncherOpen] = useState(false);
   // Introductions awaiting the viewer's action — intros live inside Messages now,
   // so the badge sits on the Messages nav item (was the old topbar IntrosBell).
   const [introCount, setIntroCount] = useState(0);
@@ -109,10 +67,14 @@ export default function Sidebar() {
     return () => clearTimeout(t);
   }, []);
 
-  const allNav = NAV.filter((n) => n.href !== "/settings");
+  // Nav items come from the feature registry, filtered to the community's
+  // enabled surfaces (empty config → everything on). See lib/features.tsx.
+  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const allNav = enabledFeatures(featureConfig);
   const activeIndex = allNav.findIndex(({ href }) => pathname === href);
 
   return (
+    <>
     <aside
       className="fixed left-0 top-20 z-40 pt-4 pl-6"
       onMouseEnter={() => setExpanded(true)}
@@ -189,6 +151,31 @@ export default function Sidebar() {
           })}
         </nav>
 
+        {/* More — opens the feature launcher (apps grid). Sits just before Create. */}
+        <div className="relative group">
+          <button
+            onClick={() => setLauncherOpen(true)}
+            className="flex items-center h-10"
+            style={{ paddingLeft: ICON_LEFT, color: 'var(--text-secondary, #374151)' }}
+          >
+            <span
+              className="flex items-center justify-center shrink-0 rounded-full hover:bg-surface-2 transition-colors"
+              style={{ width: ICON_SIZE, height: ICON_SIZE }}
+            >
+              <AppsGridIcon className="h-5 w-5 shrink-0" />
+            </span>
+            <span className="text-sm font-medium whitespace-nowrap ml-3">More</span>
+          </button>
+
+          {!expanded && (
+            <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
+              style={{ left: COLLAPSED_W + 4 }}
+            >
+              More
+            </span>
+          )}
+        </div>
+
         {/* Create button */}
         <div className="relative group">
           <button
@@ -225,5 +212,8 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+
+    <FeatureLauncher open={launcherOpen} onClose={() => setLauncherOpen(false)} />
+    </>
   );
 }

@@ -32,69 +32,71 @@ function CommunityCard({
 }) {
   const isFeatured = variant === 'featured';
 
+  // Mirror the Directory NodeCard shape: vertical card with a fixed-height image
+  // banner on top, centered content, and actions pinned to the bottom. Colored
+  // border + soft glow exposed via CSS vars so hover is pure CSS.
+  const accent = 'var(--color-brand-green)';
+  const cardStyle = {
+    borderColor: accent,
+    '--card-glow': 'color-mix(in srgb, var(--color-brand-green) 33%, transparent)',
+    '--card-glow-strong': 'color-mix(in srgb, var(--color-brand-green) 60%, transparent)',
+  } as React.CSSProperties;
+
   return (
     <div
-      className={`group relative bg-surface-1 border border-border-subtle rounded-2xl hover:border-brand-green/50 hover:shadow-xl transition-all duration-300 cursor-pointer flex items-center ${
-        isFeatured ? 'p-5' : 'p-4'
-      }`}
+      className="bg-surface-1 rounded-2xl overflow-hidden cursor-pointer group flex flex-col h-[360px] w-full border-4 transition-[box-shadow,transform] duration-200 active:scale-[0.98] [box-shadow:0_6px_16px_rgba(0,0,0,0.08),0_0_12px_2px_var(--card-glow)] hover:[box-shadow:0_10px_24px_rgba(0,0,0,0.12),0_0_20px_4px_var(--card-glow-strong)]"
+      style={cardStyle}
     >
-      {isFeatured && (
-        <div className="absolute top-3 right-3">
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
-            ⭐ Featured
-          </span>
-        </div>
-      )}
-
-      {/* Circular profile image on left */}
-      <div className={`relative shrink-0 rounded-full ring-3 ring-surface-2 group-hover:ring-brand-green/20 transition-all duration-300 ${
-        isFeatured ? 'w-20 h-20' : 'w-16 h-16'
-      }`}>
+      {/* Fixed-height image banner */}
+      <div className="relative h-[180px] shrink-0 overflow-hidden">
         <CommunityAvatar
           name={community.name}
           imageUrl={community.imageUrl}
-          className="w-full h-full"
+          className="w-full h-full !rounded-none group-hover:scale-105 transition-transform duration-300"
         />
+        {isFeatured && (
+          <div className="absolute top-3 right-3">
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+              ⭐ Featured
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Content section in the middle */}
-      <div className="flex-1 flex flex-col ml-4 min-w-0">
-        {/* Title with member count */}
-        <div className="flex items-center gap-2 mb-1">
-          <h3 className={`font-semibold text-text-primary leading-tight truncate ${
-            isFeatured ? 'text-lg' : 'text-base'
-          }`}>
-            {community.name}
-          </h3>
-          <span className="text-xs text-text-muted flex items-center gap-1 shrink-0">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            {formatMemberCount(community.memberCount)}
-          </span>
-        </div>
+      {/* Content area — fills remaining height */}
+      <div className="px-4 pt-3 pb-3 flex flex-col flex-1 min-h-0 items-center text-center">
+        {/* Name — single line */}
+        <h3 className="shrink-0 font-semibold text-text-primary text-sm leading-tight line-clamp-1 w-full mb-1">
+          {community.name}
+        </h3>
 
-        {/* Description */}
-        <p className={`text-text-muted leading-relaxed mb-2 ${
-          isFeatured ? 'text-sm line-clamp-2' : 'text-xs line-clamp-1'
-        }`}>
+        {/* Member count */}
+        <span className="shrink-0 text-xs text-text-muted flex items-center gap-1 mb-1.5">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          {formatMemberCount(community.memberCount)} members
+        </span>
+
+        {/* Description — single line */}
+        <p className="shrink-0 text-text-muted text-xs leading-snug line-clamp-1 w-full mb-1.5">
           {community.description || 'An emerging community waiting to be discovered.'}
         </p>
 
-        {/* Location above tags */}
+        {/* Location */}
         {community.location && (
-          <div className="flex items-center gap-1 text-xs text-text-muted mb-2">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="shrink-0 flex items-center justify-center gap-1 text-xs text-text-muted mb-1.5">
+            <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-            {community.location}
+            <span className="line-clamp-1">{community.location}</span>
           </div>
         )}
 
         {/* Tags */}
         {community.tags && community.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="shrink-0 flex flex-wrap justify-center gap-1.5">
             {community.tags.slice(0, 2).map((tag, index) => (
               <Badge key={index} variant="tag">
                 {tag}
@@ -102,33 +104,30 @@ function CommunityCard({
             ))}
           </div>
         )}
-      </div>
 
-      {/* Join button on far right, vertically centered */}
-      <div className="ml-4 shrink-0">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onJoin(community);
-          }}
-          disabled={joined}
-          className={`px-5 py-2 text-sm font-semibold rounded-full transition-all duration-200 ${
-            joined
-              ? 'bg-brand-light-bg text-brand-green cursor-default'
-              : 'bg-brand-green text-white hover:bg-brand-green/90 active:scale-[0.98]'
-          }`}
-        >
-          {joined ? (
-            <span className="inline-flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Joined
-            </span>
-          ) : (
-            'Join'
-          )}
-        </button>
+        {/* Join button pinned to bottom */}
+        <div className="mt-auto pt-3 border-t border-border-subtle w-full" onClick={e => e.stopPropagation()}>
+          <button
+            onClick={() => onJoin(community)}
+            disabled={joined}
+            className={`w-full flex items-center justify-center gap-1 rounded-full text-xs font-semibold py-2 transition-all ${
+              joined
+                ? 'bg-brand-light-bg text-brand-green cursor-default'
+                : 'bg-brand-green text-white hover:opacity-90 shadow-sm active:scale-[0.98]'
+            }`}
+          >
+            {joined ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Joined
+              </>
+            ) : (
+              'Join'
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -251,7 +250,7 @@ export default function DiscoverPage() {
                   <h2 className="text-lg font-semibold text-text-primary">Featured Community</h2>
                   <span className="text-sm text-text-muted">Hand-picked for you</span>
                 </div>
-                <div className="max-w-md mx-auto">
+                <div className="w-[260px] mx-auto">
                   <CommunityCard
                     community={featured}
                     joined={isJoined(featured.id)}
@@ -269,7 +268,7 @@ export default function DiscoverPage() {
                   <h2 className="text-lg font-semibold text-text-primary">All Communities</h2>
                   <span className="text-sm text-text-muted">{gridCommunities.length} communities</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid gap-6 justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, 260px)' }}>
                   {gridCommunities.map((community) => (
                     <CommunityCard
                       key={community.id}

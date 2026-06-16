@@ -387,6 +387,8 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             autoZoomToFocus={selectedNode == null && focusNodeId != null}
             onNodeClick={handleNodeClick}
             onNodeDoubleClick={handleNodeDoubleClick}
+            // Clicking empty canvas clears the click-selection (the focus highlight).
+            onBackgroundClick={() => setSelectedNode(null)}
             onNodeHover={handleNodeHover}
             savedPositionsRef={savedPositionsRef}
             nodeTypes={nodeTypes}

@@ -28,6 +28,7 @@ export async function GET() {
         communityAliases: true,
         linkTypes: true,
         designConfig: true,
+        featureConfig: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -48,6 +49,7 @@ export async function GET() {
       communityAliases: (c.communityAliases as unknown as CommunityAlias[]) ?? [],
       linkTypes: (c.linkTypes as unknown) as Community['linkTypes'],
       designConfig: (c.designConfig as unknown as Community['designConfig']) ?? undefined,
+      featureConfig: (c.featureConfig as unknown as Community['featureConfig']) ?? undefined,
     }));
 
     return NextResponse.json(
