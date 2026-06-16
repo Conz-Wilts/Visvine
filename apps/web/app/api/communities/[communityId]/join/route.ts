@@ -3,6 +3,7 @@ import { revalidateTag } from 'next/cache';
 import { getSession } from '@/lib/session';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { aliasesForType, type CommunityAlias } from '@/lib/types';
 
 /**
  * POST: Current user joins a community (self-service)
@@ -13,9 +14,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
 
   const { communityId } = await params;
 
+  // The client sends the chosen identity (e.g. "Founder") in the body. It's
+  // optional — some communities have no aliases at all.
+  const body = (await req.json().catch(() => ({}))) as { alias?: unknown };
+  const requestedAlias = typeof body.alias === 'string' ? body.alias.trim() : '';
+
   try {
-    const community = await prisma.community.findUnique({ where: { id: communityId }, select: { id: true } });
+    const community = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { id: true, communityAliases: true },
+    });
     if (!community) return NextResponse.json({ error: 'Community not found' }, { status: 404 });
+
+    // A user joins as a Person node, so they may only identify with a
+    // Person-type alias. Anything else (an Organization alias, or an unknown
+    // string) is ignored rather than trusted from the client.
+    const personAliases = aliasesForType(
+      (community.communityAliases ?? []) as unknown as CommunityAlias[],
+      'Person',
+    );
+    const resolvedAlias = personAliases.find(
+      (a) => a.name.toLowerCase() === requestedAlias.toLowerCase(),
+    )?.name;
 
     const membership = await prisma.userCommunity.upsert({
       where: { userId_communityId: { userId: session.userId, communityId } },
@@ -39,6 +59,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
       if (typeof pub.headline === 'string') nodeUpdate.subtitle = pub.headline;
       if (typeof pub.location === 'string') nodeUpdate.location = pub.location;
       if (typeof pub.avatar_url === 'string') nodeUpdate.imageUrl = pub.avatar_url;
+      if (resolvedAlias) nodeUpdate.alias = resolvedAlias;
       if (Object.keys(nodeUpdate).length > 0) {
         await prisma.node.updateMany({
           where: { id: person.id, communityId },

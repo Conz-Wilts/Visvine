@@ -52,6 +52,9 @@ const NODE_TYPES = [
 const COMMUNITY_ALIASES = [
   { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Organization' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
+  { name: 'LP', color: '#d97706', nodeType: 'Person' },
+  { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
+  { name: 'Employee', color: '#db2777', nodeType: 'Person' },
 ];
 
 const SECTOR_OPTIONS = [
