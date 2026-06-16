@@ -18,6 +18,7 @@ import MessageComposer from './MessageComposer';
 import MessageRow, { formatChatTimestamp, mergeMessages } from './MessageRow';
 import ProfilePanel from './ProfilePanel';
 import Avatar from '@/components/ui/Avatar';
+import PageTitle from '@/components/ui/PageTitle';
 import { MessagesTabSelector, MESSAGE_TABS, formatDateLabel, type MessageTab } from './messagesTabs';
 import {
   IntroBanner,
@@ -884,9 +885,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     <div className="flex h-[calc(100dvh-120px)] min-h-0 w-full flex-col px-6">
 
       {/* ── Page header — centered title, consistent with other pages ───── */}
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-2 pb-0">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-0 pb-0">
         <div />
-        <h1 className="text-4xl md:text-6xl font-normal tracking-tight text-text-primary font-ginto text-center">{channelsVariant ? 'Channels' : 'Messages'}</h1>
+        <PageTitle title={channelsVariant ? 'Channels' : 'Messages'} />
         <div className="justify-self-end">
           {activeTab === 'channels' ? (
             communityCtx?.isAdmin && (

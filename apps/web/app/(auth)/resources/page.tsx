@@ -12,6 +12,7 @@ import {
   FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
 } from '@/components/resources/resourceUi';
 import type { Resource } from '@/lib/types';
+import { PageTitle } from '@/components/ui';
 
 // xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
 const SpreadsheetViewer = dynamic(() => import('@/components/resources/SpreadsheetViewer'), { ssr: false });
@@ -479,9 +480,7 @@ export default function ResourcesPage() {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* ── Page header: centered title ───────── */}
-        <div className="flex items-center justify-center pt-6 pb-0">
-          <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto text-center">Resources</h1>
-        </div>
+        <PageTitle title="Resources" />
 
         {/* ── Search bar — sized to match Directory ───────────────────── */}
         <div className="flex justify-center pt-6">

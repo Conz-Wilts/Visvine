@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
-import { Badge, EmptyState } from '@/components/ui';
+import { Badge, EmptyState, PageTitle } from '@/components/ui';
 
 export default function CommunitiesPage() {
   const { joinedCommunities, currentCommunity, setCurrentCommunity, leaveCommunity } = useCommunity();
@@ -23,22 +23,15 @@ export default function CommunitiesPage() {
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-surface-1 to-surface-2">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-10">
 
-        {/* Page header */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-4 mb-10">
-          <div className="hidden sm:block" />
-          <div className="text-center sm:col-start-2">
-            <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto mb-2">
-              My Communities
-            </h1>
-            <p className="text-text-muted text-base max-w-2xl mx-auto">
-              Communities you're part of. Switch between them to view their networks.
-            </p>
-          </div>
+        {/* Page header — centered title, consistent with other pages */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mb-10">
+          <div />
+          <PageTitle title="My Communities" />
           <Link
             href="/discover"
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-center sm:justify-self-end"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-end"
             style={{ color: '#ffffff' }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

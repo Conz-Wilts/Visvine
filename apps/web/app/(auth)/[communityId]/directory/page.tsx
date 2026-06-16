@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { CrmGrid } from "@/features/crm/CrmGrid";
 import { FieldDefinition } from "@/lib/schemas/crm";
+import { PageTitle } from "@/components/ui";
 import prisma from "@/lib/prisma";
 
 interface DirectoryPageProps {
@@ -46,15 +47,11 @@ export default async function DirectoryPage({ params }: DirectoryPageProps) {
 
   return (
     <main className="p-4 sm:p-6 max-w-screen-2xl mx-auto">
-      <div className="mb-4 sm:mb-6 text-center">
-        <h1 className="text-2xl sm:text-3xl font-semibold text-gray-900">
-          {community.name} — Member Directory
-        </h1>
-        <p className="text-sm text-gray-500 mt-1 hidden sm:block">
-          Manage and view all members. Private CRM fields are visible only to
-          admins.
-        </p>
-      </div>
+      <PageTitle
+        title={`${community.name} — Member Directory`}
+        subtitle="Manage and view all members. Private CRM fields are visible only to admins."
+        className="mb-4 pt-0 sm:mb-6"
+      />
 
       <CrmGrid
         communityId={communityId}

@@ -16,6 +16,7 @@ import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
 import type { NBNode, CommunityAlias } from '@/lib/types';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
+import { PageTitle } from '@/components/ui';
 import { Pencil } from 'lucide-react';
 
 // The graph view pulls in d3-force + the canvas renderer. Defer the whole thing
@@ -201,11 +202,9 @@ export default function DashboardPage() {
       {/* ── Non-graph header: title + filters + view toggle ── */}
       {!isGraphView && (
         <>
-          <div className="flex items-center justify-center gap-4 px-6 pt-4 pb-0 text-center sm:pt-6">
-            <h1 className="text-4xl font-normal tracking-tight text-text-primary font-ginto 2xl:text-5xl">Directory</h1>
-          </div>
+          <PageTitle title="Directory" />
 
-          <div className="flex justify-center px-6 pt-4 sm:pt-6">
+          <div className="flex justify-center px-6 pt-6">
             <div className="flex w-full max-w-2xl">{searchBar}</div>
           </div>
 

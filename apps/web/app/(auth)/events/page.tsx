@@ -20,6 +20,7 @@ import EventsViewSelector from '@/components/events/EventsViewSelector';
 import type { EventView } from '@/components/events/EventsViewSelector';
 import EventsScopeSelector from '@/components/events/EventsScopeSelector';
 import type { EventScope } from '@/components/events/EventsScopeSelector';
+import { PageTitle } from '@/components/ui';
 
 interface EventWithStats extends NBEvent {
   _stats?: {
@@ -133,9 +134,7 @@ export default function EventsPage() {
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
       {/* Header row: centered title (view switcher lives in the navbar) */}
-      <div className="flex items-center justify-center px-4 sm:px-6 pt-6 pb-0 text-center">
-        <h1 className="text-6xl font-normal tracking-tight text-text-primary font-ginto">Events</h1>
-      </div>
+      <PageTitle title="Events" />
 
       {/* Search bar — sized to match Directory */}
       <div className="flex justify-center px-4 sm:px-6 pt-6">

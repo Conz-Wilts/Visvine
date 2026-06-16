@@ -5,6 +5,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
 import { Community, aliasesForType } from '@/lib/types';
 import Badge from '@/components/ui/Badge';
+import { PageTitle } from '@/components/ui';
 
 const CATEGORY_FILTERS = ['All', 'Startup', 'VC', 'Technology', 'Innovation'] as const;
 
@@ -192,48 +193,44 @@ export default function DiscoverPage() {
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-surface-1 to-surface-2">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-10">
 
-        {/* Page header */}
-        <div className="mb-10 text-center">
-          <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto mb-2">
-            Discover Communities
-          </h1>
-          <p className="text-text-muted text-base max-w-2xl mx-auto">
-            Find and join ecosystems that matter to you. Connect with like-minded individuals and grow together.
-          </p>
+        {/* Page header — centered title, consistent with other pages */}
+        <PageTitle title="Discover Communities" />
+
+        {/* Search bar — centered, sized to match Directory/Events/Resources */}
+        <div className="flex justify-center pt-6">
+          <div className="w-full max-w-2xl">
+            <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm">
+              <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search communities by name, description, or tags…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Search + category filters */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-10">
-          <div className="relative flex-1 max-w-md w-full">
-            <svg className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search communities by name, description, or tags…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 text-sm rounded-2xl bg-surface-1 border border-border-subtle text-text-primary placeholder:text-text-muted focus:outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 transition-all"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {CATEGORY_FILTERS.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-150 ${
-                  activeCategory === cat
-                    ? 'bg-brand-green text-white shadow-md shadow-brand-green/20'
-                    : 'bg-surface-1 text-text-secondary hover:bg-surface-2 border border-border-subtle'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+        {/* Category filters — centered below the search */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-4 mb-10">
+          {CATEGORY_FILTERS.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-150 ${
+                activeCategory === cat
+                  ? 'bg-brand-green text-white shadow-md shadow-brand-green/20'
+                  : 'bg-surface-1 text-text-secondary hover:bg-surface-2 border border-border-subtle'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
 
         {filteredCommunities.length === 0 ? (

@@ -5,6 +5,7 @@ export { default as Button } from './Button';
 export { default as EmptyState } from './EmptyState';
 export { default as LoadingText } from './LoadingText';
 export { default as PageHeader } from './PageHeader';
+export { default as PageTitle } from './PageTitle';
 export { default as SearchInput } from './SearchInput';
 export { default as Skeleton } from './Skeleton';
 export { default as TabNav } from './TabNav';

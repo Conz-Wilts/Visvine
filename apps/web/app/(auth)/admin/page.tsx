@@ -10,7 +10,7 @@ import ActivityLogPanel from '@/components/admin/ActivityLogPanel';
 import TypesTab from '@/components/data/TypesTab';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
 import CommunityDesignPanel from '@/components/admin/CommunityDesignPanel';
-import { PageHeader, LoadingText, TabNav, Alert } from '@/components/ui';
+import { PageTitle, LoadingText, TabNav, Alert } from '@/components/ui';
 import { useState } from 'react';
 import { Community } from '@/lib/types';
 
@@ -63,12 +63,10 @@ export default function AdminPage() {
   return (
     <div className="w-full">
       <div className="w-full max-w-6xl mx-auto px-6 py-8">
-        <PageHeader
+        <PageTitle
           title="Community Console"
-          titleClassName="text-5xl font-normal tracking-tight font-ginto"
-          description={
-            <>Manage <span className="font-medium">{community.name}</span></>
-          }
+          subtitle={<>Manage <span className="font-medium">{community.name}</span></>}
+          className="pt-0"
         />
 
         <TabNav

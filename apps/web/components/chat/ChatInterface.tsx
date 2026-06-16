@@ -121,7 +121,7 @@ export default function ChatInterface({
   return (
     <div className={`w-full max-w-3xl mx-auto ${className}`}>
       <form onSubmit={handleSubmit} className="relative">
-        <div className="bg-surface-1 border border-border-default rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[56px] lg:min-h-[48px] flex flex-col justify-center shadow-sm">
+        <div className="bg-surface-1 border border-border-default rounded-2xl overflow-hidden focus-within:border-border-default transition-all duration-200 px-3 py-1 relative min-h-[56px] flex flex-col justify-center shadow-sm">
           <textarea
             ref={textareaRef}
             value={message}
