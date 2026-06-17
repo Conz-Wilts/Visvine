@@ -1,14 +1,24 @@
 {
   "mcpServers": {
-    "playwright": {
-      "type": "stdio",
+    "chrome-devtools": {
       "command": "npx",
-      "args": [
-        "@playwright/mcp@latest",
-        "--output-dir",
-        ".playwright-mcp"
-      ],
-      "env": {}
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp", "--browser", "chrome"]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
     }
   }
 }

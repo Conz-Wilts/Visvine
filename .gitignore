@@ -51,11 +51,6 @@ yarn-error.log*
 !.env.*.example
 !**/.env.*.example
 
-# playwright mcp output (console logs, page snapshots) — disposable
-.playwright-mcp/
-# playwright screenshots, routed here by .claude/hooks/route-screenshot.mjs — disposable
-screenshots/
-
 # vercel
 .vercel
 
