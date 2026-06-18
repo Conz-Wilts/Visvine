@@ -271,9 +271,9 @@ export default function MembersPanel({ communityId }: { communityId: string }) {
                 <td className="py-3 pr-4">
                   <div className="flex items-center gap-3">
                     {member.user.image ? (
-                      <img src={member.user.image} alt="" className="w-8 h-8 rounded-full object-cover" />
+                      <img src={member.user.image} alt="" className="w-8 h-8 rounded-lg object-cover" />
                     ) : (
-                      <div className="w-8 h-8 rounded-full bg-surface-3 flex items-center justify-center text-xs font-bold text-text-secondary">
+                      <div className="w-8 h-8 rounded-lg bg-surface-3 flex items-center justify-center text-xs font-bold text-text-secondary">
                         {member.user.name[0]?.toUpperCase()}
                       </div>
                     )}

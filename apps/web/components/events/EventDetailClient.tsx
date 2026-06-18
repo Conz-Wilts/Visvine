@@ -760,8 +760,8 @@ function GuestChip({ guest }: { guest: GuestPreview }) {
   const inner = (
     <>
       {guest.imageUrl
-        ? <img src={guest.imageUrl} alt="" className="w-5 h-5 rounded-full object-cover flex-none" />
-        : <span className={`w-5 h-5 rounded-full ${getAvatarColor(guest.name)} text-white flex items-center justify-center text-[9px] font-bold flex-none`}>{getInitials(guest.name)}</span>}
+        ? <img src={guest.imageUrl} alt="" className="w-5 h-5 rounded-md object-cover flex-none" />
+        : <span className={`w-5 h-5 rounded-md ${getAvatarColor(guest.name)} text-white flex items-center justify-center text-[9px] font-bold flex-none`}>{getInitials(guest.name)}</span>}
       <span className="truncate max-w-[14ch]">{guest.name}</span>
     </>
   );

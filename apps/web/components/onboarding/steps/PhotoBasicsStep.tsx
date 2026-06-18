@@ -75,9 +75,9 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
       <div className="flex flex-col items-center mb-6">
         <div className="relative group">
           {imageUrl ? (
-            <img src={imageUrl} alt="Profile" className="w-28 h-28 rounded-full object-cover" />
+            <img src={imageUrl} alt="Profile" className="w-28 h-28 rounded-2xl object-cover" />
           ) : (
-            <div className="w-28 h-28 rounded-full bg-gray-100 flex items-center justify-center">
+            <div className="w-28 h-28 rounded-2xl bg-gray-100 flex items-center justify-center">
               <Camera className="w-8 h-8 text-gray-400" />
             </div>
           )}
@@ -87,7 +87,7 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
             aria-label={imageUrl ? 'Change photo' : 'Add photo'}
-            className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex items-center justify-center"
+            className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity flex items-center justify-center"
           >
             {uploading ? (
               <Loader2 className="w-6 h-6 text-white animate-spin" />

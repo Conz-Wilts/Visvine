@@ -1,10 +1,12 @@
 /**
- * Square node renderer — a rounded-square node used for Community nodes.
+ * Square node renderer — an image-forward rounded card used for Organization and
+ * Community nodes.
  *
- * Visually mirrors the rounded-square community avatar (see ui/Avatar.tsx and
- * community/CommunityAvatar.tsx): a rounded square frame with a square image
- * inset at the top and name/subtitle/type tag below. Modelled on the hexagon
- * renderer it replaced, just with a square outline instead of a hexagon.
+ * The image fills the majority of the card (a large header that spans the full
+ * width), with a compact strip below holding the name and the alias chip. The
+ * outer footprint stays a 260×260 rounded square (CARD_DIMENSIONS.SQUARE_SIDE) so
+ * hit-testing and the collision force are unaffected — only the internal layout
+ * changed from the old "small centred image + type tag" composition.
  */
 
 import { NBNode } from '@/lib/types';
@@ -19,8 +21,18 @@ function withAlpha(hex: string, alpha: number): string {
   return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
 }
 
+// Stored node types are often lowercase ('person'); capitalise for display.
+function capitalize(value: string): string {
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+}
+
+// Corner radius for the alias/type chip — small, not a full pill.
+const CHIP_RADIUS = 6;
+
 /**
- * Draw a rounded-square node on canvas. Used for the Community node type.
+ * Draw an image-forward rounded card on canvas. Used for the Organization and
+ * Community node types: a square image fills the width, with a name + alias-chip
+ * caption strip below.
  */
 export function drawSquareNode(
   ctx: CanvasRenderingContext2D,
@@ -37,10 +49,13 @@ export function drawSquareNode(
 ): void {
   if (typeof x !== 'number' || typeof y !== 'number') return;
 
-  const side = CARD_DIMENSIONS.SQUARE_SIDE;
-  const half = side / 2;
-  const left = x - half;
-  const top = y - half;
+  // Square image (full width) + caption strip below → a gentle portrait card.
+  const width = CARD_DIMENSIONS.SQUARE_SIDE;
+  const height = CARD_DIMENSIONS.SQUARE_SIDE + CARD_DIMENSIONS.SQUARE_CAPTION;
+  const halfW = width / 2;
+  const halfH = height / 2;
+  const left = x - halfW;
+  const top = y - halfH;
   const outerRadius = 24;
 
   // shadowBlur only at full detail or on focused/connected nodes — it's the
@@ -59,133 +74,141 @@ export function drawSquareNode(
 
   const cardBg = theme?.cardBg ?? '#ffffff';
   const textPrimary = theme?.textPrimary ?? '#111827';
-  const textSecondary = theme?.textSecondary ?? '#6b7280';
 
-  // Square background
+  // Card background
   ctx.fillStyle = cardBg;
-  roundRect(ctx, left, top, side, side, outerRadius);
+  roundRect(ctx, left, top, width, height, outerRadius);
   ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.shadowBlur = 0;
 
-  // Main border (colored by type)
+  // Main border (colored by type/alias)
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = borderWidth;
-  roundRect(ctx, left, top, side, side, outerRadius);
+  roundRect(ctx, left, top, width, height, outerRadius);
   ctx.stroke();
 
-  // Square image inset, centered horizontally in the upper portion
-  const imageSize = side * 0.5;
-  const imageX = x - imageSize / 2;
-  const imageY = y - side * 0.22 - imageSize / 2;
-  const imageRadius = 14;
+  // Image header — full width and SQUARE (height === width), at the top.
+  const borderOffset = borderWidth / 2;
+  const headerX = left + borderOffset;
+  const headerY = top + borderOffset;
+  const headerWidth = width - borderWidth;
+  const headerHeight = headerWidth;
+  const imageRadius = outerRadius - 2;
 
-  // Zoomed far out: flat colored inset keeps the silhouette readable without
-  // image fetches, gradients, or text.
+  // Header path: rounded top corners (matching the card), square bottom where it
+  // meets the caption. Reused for the low-LOD fill and the full clip so the
+  // colored block reaches the top edge — no white gap above it when zoomed out.
+  const traceHeader = () => {
+    ctx.beginPath();
+    ctx.moveTo(headerX + imageRadius, headerY);
+    ctx.lineTo(headerX + headerWidth - imageRadius, headerY);
+    ctx.quadraticCurveTo(headerX + headerWidth, headerY, headerX + headerWidth, headerY + imageRadius);
+    ctx.lineTo(headerX + headerWidth, headerY + headerHeight);
+    ctx.lineTo(headerX, headerY + headerHeight);
+    ctx.lineTo(headerX, headerY + imageRadius);
+    ctx.quadraticCurveTo(headerX, headerY, headerX + imageRadius, headerY);
+    ctx.closePath();
+  };
+
+  // Zoomed far out: a flat colored header keeps the silhouette readable without
+  // image fetches or text.
   if (lod === 'low') {
     ctx.fillStyle = borderColor;
-    roundRect(ctx, imageX, imageY, imageSize, imageSize, imageRadius);
+    traceHeader();
     ctx.fill();
     return;
   }
 
+  // Clip to the header so the image fills it with rounded top corners.
+  ctx.save();
+  traceHeader();
+  ctx.clip();
+
   const image = node.image_url ? loadImage(node.image_url) : null;
 
   if (image) {
-    // Clip to rounded square and draw the image object-cover style
-    ctx.save();
-    roundRect(ctx, imageX, imageY, imageSize, imageSize, imageRadius);
-    ctx.clip();
-
+    // Object-cover the image into the header area.
     const imgAspect = image.width / image.height;
+    const headerAspect = headerWidth / headerHeight;
     let drawWidth: number;
     let drawHeight: number;
     let drawX: number;
     let drawY: number;
 
-    if (imgAspect > 1) {
-      drawHeight = imageSize;
-      drawWidth = imageSize * imgAspect;
-      drawX = imageX - (drawWidth - imageSize) / 2;
-      drawY = imageY;
+    if (imgAspect > headerAspect) {
+      drawHeight = headerHeight;
+      drawWidth = headerHeight * imgAspect;
+      drawX = headerX - (drawWidth - headerWidth) / 2;
+      drawY = headerY;
     } else {
-      drawWidth = imageSize;
-      drawHeight = imageSize / imgAspect;
-      drawX = imageX;
-      drawY = imageY - (drawHeight - imageSize) / 2;
+      drawWidth = headerWidth;
+      drawHeight = headerWidth / imgAspect;
+      drawX = headerX;
+      drawY = headerY - (drawHeight - headerHeight) / 2;
     }
 
     ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
-    ctx.restore();
-
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = borderWidth * 0.6;
-    roundRect(ctx, imageX, imageY, imageSize, imageSize, imageRadius);
-    ctx.stroke();
   } else {
-    // Coloured placeholder + initials when there's no image
+    // Coloured placeholder + initials when there's no image.
     if (lod === 'full') {
-      const gradient = ctx.createLinearGradient(imageX, imageY, imageX + imageSize, imageY + imageSize);
+      const gradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
       gradient.addColorStop(0, withAlpha(borderColor, 0.8));
       gradient.addColorStop(1, borderColor);
       ctx.fillStyle = gradient;
     } else {
       ctx.fillStyle = borderColor;
     }
+    ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
-    roundRect(ctx, imageX, imageY, imageSize, imageSize, imageRadius);
-    ctx.fill();
-
-    ctx.strokeStyle = borderColor;
-    ctx.lineWidth = borderWidth * 0.6;
-    roundRect(ctx, imageX, imageY, imageSize, imageSize, imageRadius);
-    ctx.stroke();
-
-    ctx.save();
     ctx.fillStyle = '#ffffff';
-    ctx.font = `700 ${Math.round(imageSize * 0.4)}px Inter, system-ui, -apple-system`;
+    ctx.font = `700 ${Math.round(headerHeight * 0.32)}px Inter, system-ui, -apple-system`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(getInitials(node.name ?? ''), imageX + imageSize / 2, imageY + imageSize / 2);
-    ctx.restore();
+    ctx.fillText(getInitials(node.name ?? ''), headerX + headerWidth / 2, headerY + headerHeight / 2);
   }
 
-  // Content layout
-  ctx.textBaseline = 'top';
+  ctx.restore();
 
-  // Primary text (name) - positioned below the image
-  const nameY = imageY + imageSize + 12;
+  // ── Caption strip: name + alias chip, vertically centred under the image so
+  //    short names don't leave dead space that stretches the card. ────────────
+  const maxTextWidth = width - 40;
+  // Prefer the (user-entered) alias; fall back to the capitalised type.
+  const chipLabel = node.alias ?? capitalize(node.type);
+  const hasChip = lod === 'full' && !!chipLabel;
+
+  ctx.font = '600 15px Inter, system-ui, -apple-system';
+  const nameLineHeight = 19;
+  const nameLines = ctx.measureText(node.name).width <= maxTextWidth ? 1 : 2;
+  const chipHeight = 22;
+  const chipGap = 9;
+  const blockHeight = nameLines * nameLineHeight + (hasChip ? chipGap + chipHeight : 0);
+
+  const headerBottom = headerY + headerHeight;
+  const regionHeight = top + height - headerBottom;
+  let cursorY = headerBottom + (regionHeight - blockHeight) / 2;
+
+  // Name
   ctx.fillStyle = textPrimary;
-  ctx.font = '600 13px Inter, system-ui, -apple-system';
-  const nameLineHeight = 16;
-  const maxTextWidth = side - 32;
-  const nameLines = drawWrappedText(ctx, node.name, x, nameY, maxTextWidth, nameLineHeight, 'center');
+  ctx.textBaseline = 'top';
+  drawWrappedText(ctx, node.name, x, cursorY, maxTextWidth, nameLineHeight, 'center');
+  cursorY += nameLines * nameLineHeight;
 
-  // Subtitle + type tag are full-detail only.
-  if (lod !== 'full') return;
+  if (!hasChip) return;
 
-  if (node.subtitle) {
-    ctx.fillStyle = textSecondary;
-    ctx.font = '400 10px Inter, system-ui, -apple-system';
-    const subtitleY = nameY + (nameLines * nameLineHeight) + 6;
-    drawWrappedText(ctx, node.subtitle, x, subtitleY, maxTextWidth, 12, 'center');
-  }
-
-  // Identity tag near the bottom
-  const tagY = y + half - CARD_DIMENSIONS.PADDING - CARD_DIMENSIONS.TAG_HEIGHT;
-  const roleTag = node.type;
-  ctx.font = '400 10px Inter, system-ui, -apple-system';
-
-  const tagWidth = ctx.measureText(roleTag).width + 16;
-  const tagX = x - tagWidth / 2;
-  const tagHeight = CARD_DIMENSIONS.TAG_HEIGHT;
+  // Alias chip (prefer the alias, e.g. "Portfolio Company"; fall back to the type)
+  cursorY += chipGap;
+  const chipPadX = 14;
+  ctx.font = '600 12px Inter, system-ui, -apple-system';
+  const chipWidth = ctx.measureText(chipLabel).width + chipPadX * 2;
+  const chipX = x - chipWidth / 2;
 
   ctx.fillStyle = borderColor;
-  roundRect(ctx, tagX, tagY, tagWidth, tagHeight, 9);
+  roundRect(ctx, chipX, cursorY, chipWidth, chipHeight, CHIP_RADIUS);
   ctx.fill();
 
   ctx.fillStyle = '#ffffff';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(roleTag, x, tagY + tagHeight / 2);
+  ctx.fillText(chipLabel, x, cursorY + chipHeight / 2);
 }

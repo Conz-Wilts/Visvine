@@ -267,8 +267,8 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   <a key={c.id} href={`/directory/${encodeURIComponent(c.id)}`}
                      className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle hover:bg-surface-2 hover:border-border-default transition-colors">
                     {c.image_url
-                      ? <img src={c.image_url} alt={c.name} className="w-10 h-10 rounded-full object-cover flex-none" />
-                      : <span className="w-10 h-10 rounded-full bg-surface-3 text-text-muted flex items-center justify-center text-sm font-semibold flex-none">{getInitials(c.name)}</span>}
+                      ? <img src={c.image_url} alt={c.name} className="w-10 h-10 rounded-lg object-cover flex-none" />
+                      : <span className="w-10 h-10 rounded-lg bg-surface-3 text-text-muted flex items-center justify-center text-sm font-semibold flex-none">{getInitials(c.name)}</span>}
                     <span className="min-w-0">
                       <span className="block text-[13.5px] font-semibold text-text-primary truncate">{c.name}</span>
                       {c.subtitle && <span className="block text-xs text-text-muted truncate">{c.subtitle}</span>}

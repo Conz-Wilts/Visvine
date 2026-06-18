@@ -15,9 +15,12 @@ export const CARD_DIMENSIONS = {
   BORDER_WIDTH: 4,
   PADDING: 12,
   TAG_HEIGHT: 20,
-  // Side length of the rounded-square node (Community), sized to roughly match
-  // the hexagon footprint it replaces so layout/physics stay comparable.
-  SQUARE_SIDE: 260,
+  // Organization/Community card: a SQUARE image (side = SQUARE_SIDE, full width)
+  // plus a caption strip below for the name + alias chip. So the card itself is a
+  // gentle portrait rectangle (SQUARE_SIDE wide × SQUARE_SIDE + SQUARE_CAPTION
+  // tall) — taller than wide, but less elongated than the 140×215 rectangle cards.
+  SQUARE_SIDE: 192,
+  SQUARE_CAPTION: 76,
 } as const;
 
 /**

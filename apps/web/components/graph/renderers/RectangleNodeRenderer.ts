@@ -95,8 +95,19 @@ export function drawRectangleNode(
   // unreadable. A flat colored header block keeps the silhouette recognisable
   // for a fraction of the draw cost, and skips the image fetch entirely.
   if (lod === 'low') {
+    // Fill the header with rounded top corners reaching the top edge, so there's
+    // no white gap above the colored block when zoomed out.
     ctx.fillStyle = borderColor;
-    ctx.fillRect(headerX, headerY + imageRadius, headerWidth, headerHeight - imageRadius);
+    ctx.beginPath();
+    ctx.moveTo(headerX + imageRadius, headerY);
+    ctx.lineTo(headerX + headerWidth - imageRadius, headerY);
+    ctx.quadraticCurveTo(headerX + headerWidth, headerY, headerX + headerWidth, headerY + imageRadius);
+    ctx.lineTo(headerX + headerWidth, headerY + headerHeight);
+    ctx.lineTo(headerX, headerY + headerHeight);
+    ctx.lineTo(headerX, headerY + imageRadius);
+    ctx.quadraticCurveTo(headerX, headerY, headerX + imageRadius, headerY);
+    ctx.closePath();
+    ctx.fill();
     return;
   }
 
@@ -189,17 +200,18 @@ export function drawRectangleNode(
       drawWrappedText(ctx, node.subtitle, x, subtitleY, width - CARD_DIMENSIONS.PADDING * 2, 14, 'center');
     }
 
-    // Role Tag - only show the node type with its color
+    // Role Tag — the node type, capitalised for display (stored types are often
+    // lowercase, e.g. 'person', which would otherwise render lowercase).
     const tagsY = y + halfHeight - CARD_DIMENSIONS.PADDING - CARD_DIMENSIONS.TAG_HEIGHT;
-    const roleTag = node.type;
+    const roleTag = node.type ? node.type.charAt(0).toUpperCase() + node.type.slice(1) : node.type;
     ctx.font = '400 10px Inter, system-ui, -apple-system';
 
     const tagWidth = ctx.measureText(roleTag).width + 16;
     const tagX = x - tagWidth / 2; // Center the tag
 
-    // pill background: solid type color
+    // tag background: solid type color, lightly rounded (not a full pill)
     ctx.fillStyle = borderColor;
-    roundRect(ctx, tagX, tagsY, tagWidth, CARD_DIMENSIONS.TAG_HEIGHT, 9);
+    roundRect(ctx, tagX, tagsY, tagWidth, CARD_DIMENSIONS.TAG_HEIGHT, 6);
     ctx.fill();
     // white text on solid background
     ctx.fillStyle = '#ffffff';

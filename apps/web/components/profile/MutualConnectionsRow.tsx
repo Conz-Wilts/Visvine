@@ -47,7 +47,7 @@ export default function MutualConnectionsRow({ mutualConnections }: MutualConnec
           </div>
         ))}
         {overflow > 0 && (
-          <div className="w-8 h-8 rounded-full ring-2 ring-surface-1 bg-surface-3 flex items-center justify-center text-xs font-medium text-text-muted flex-shrink-0">
+          <div className="w-8 h-8 rounded-lg ring-2 ring-surface-1 bg-surface-3 flex items-center justify-center text-xs font-medium text-text-muted flex-shrink-0">
             +{overflow}
           </div>
         )}

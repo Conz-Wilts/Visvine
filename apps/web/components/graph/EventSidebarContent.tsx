@@ -92,7 +92,7 @@ export default function EventSidebarContent({ displayNode }: EventSidebarContent
       {/* Host pill */}
       {hosts[0] && (
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-border-subtle w-fit">
-          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-semibold bg-brand-green text-white">
+          <div className="w-5 h-5 rounded-md flex items-center justify-center text-[9px] font-semibold bg-brand-green text-white">
             {getInitials(hosts[0])}
           </div>
           <span className="text-sm font-medium text-text-primary">{hosts[0]}</span>

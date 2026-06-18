@@ -18,10 +18,10 @@ export function CellDisplay({ value, col }: CellDisplayProps) {
         alt=""
         width={32}
         height={32}
-        className="rounded-full object-cover"
+        className="rounded-lg object-cover"
       />
     ) : (
-      <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
+      <div className="h-8 w-8 rounded-lg bg-gray-200 flex items-center justify-center text-xs text-gray-500">
         ?
       </div>
     );

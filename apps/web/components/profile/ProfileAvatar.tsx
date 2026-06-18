@@ -38,7 +38,7 @@ export default function ProfileAvatar({
   return (
     <div
       className={`
-        relative ${dim} rounded-full
+        relative ${dim} rounded-2xl
         ring-4 ring-surface-1
         flex-shrink-0
         overflow-hidden

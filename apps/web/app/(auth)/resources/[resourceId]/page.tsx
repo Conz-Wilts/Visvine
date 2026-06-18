@@ -211,8 +211,8 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
               <>
                 <span className="inline-flex items-center gap-1.5">
                   {detail.uploader.image
-                    ? <img src={detail.uploader.image} alt="" className="w-4 h-4 rounded-full object-cover" />
-                    : <span className="w-4 h-4 rounded-full bg-surface-3 grid place-items-center text-[8px] font-bold">{getInitials(detail.uploader.name)}</span>}
+                    ? <img src={detail.uploader.image} alt="" className="w-4 h-4 rounded-md object-cover" />
+                    : <span className="w-4 h-4 rounded-md bg-surface-3 grid place-items-center text-[8px] font-bold">{getInitials(detail.uploader.name)}</span>}
                   Uploaded by{' '}
                   {detail.uploader.personId
                     ? <Link href={`/directory/${encodeURIComponent(detail.uploader.personId)}`} className="font-semibold text-text-secondary hover:underline">{detail.uploader.name}</Link>
@@ -390,7 +390,7 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
           comments.map((c) => (
             <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
               <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-surface-3 text-text-muted grid place-items-center text-[10px] font-bold flex-none">
+                <span className="w-6 h-6 rounded-md bg-surface-3 text-text-muted grid place-items-center text-[10px] font-bold flex-none">
                   {getInitials(c.author)}
                 </span>
                 <b className="text-[13px] font-bold text-text-primary truncate">{c.author}</b>
@@ -504,8 +504,8 @@ function DetailsTab({ resource, uploader }: { resource: Resource; uploader: Uplo
           <div className="text-xs text-text-muted mb-1">Uploaded by</div>
           <div className="flex items-center gap-2">
             {uploader.image
-              ? <img src={uploader.image} alt="" className="w-6 h-6 rounded-full object-cover" />
-              : <span className="w-6 h-6 rounded-full bg-surface-3 grid place-items-center text-[10px] font-bold text-text-muted">{getInitials(uploader.name)}</span>}
+              ? <img src={uploader.image} alt="" className="w-6 h-6 rounded-md object-cover" />
+              : <span className="w-6 h-6 rounded-md bg-surface-3 grid place-items-center text-[10px] font-bold text-text-muted">{getInitials(uploader.name)}</span>}
             {uploader.personId
               ? <Link href={`/directory/${encodeURIComponent(uploader.personId)}`} className="text-sm font-semibold text-text-primary hover:underline">{uploader.name}</Link>
               : <span className="text-sm font-semibold text-text-primary">{uploader.name}</span>}

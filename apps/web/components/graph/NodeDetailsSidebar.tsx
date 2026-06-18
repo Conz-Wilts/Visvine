@@ -149,10 +149,10 @@ function NonPersonContent({
                 className="flex flex-col items-center gap-1.5 p-2 rounded-xl border border-border-subtle bg-surface-2"
               >
                 {n.image_url ? (
-                  <img src={n.image_url} alt={n.name} className="w-9 h-9 rounded-full object-cover" />
+                  <img src={n.image_url} alt={n.name} className="w-9 h-9 rounded-xl object-cover" />
                 ) : (
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold"
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-semibold"
                     style={{ background: theme.light, color: theme.dark }}
                   >
                     {getInitials(n.name)}
@@ -292,7 +292,7 @@ function PersonProfileContent({
             <div className="flex gap-3">
               {connections.slice(0, 10).map(conn => (
                 <div key={conn.id} className="group flex-shrink-0 flex flex-col items-center gap-1 cursor-pointer" title={conn.name}>
-                  <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-border-subtle group-hover:ring-brand-green transition-all group-hover:scale-110">
+                  <div className="w-10 h-10 rounded-xl overflow-hidden ring-2 ring-border-subtle group-hover:ring-brand-green transition-all group-hover:scale-110">
                     {conn.image_url ? (
                       <img src={conn.image_url} alt={conn.name} className="w-full h-full object-cover" />
                     ) : (
@@ -306,7 +306,7 @@ function PersonProfileContent({
               ))}
               {connectionCount > 10 && (
                 <div className="flex-shrink-0 flex flex-col items-center gap-1">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold border-2" style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-semibold border-2" style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
                     +{connectionCount - 10}
                   </div>
                   <span className="text-[10px] text-text-muted">more</span>

@@ -112,7 +112,7 @@ function DirectoryRowCells({
         <div className="flex items-center gap-3">
           {/* Photo — clickable in edit mode */}
           <div
-            className={`relative flex-shrink-0 h-8 w-8 rounded-full overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
+            className={`relative flex-shrink-0 h-8 w-8 rounded-lg overflow-hidden group/img ${editable ? 'cursor-pointer' : ''}`}
             onClick={editable ? e => triggerImageUpload(item.id, e) : undefined}
           >
             {imgSrc ? (

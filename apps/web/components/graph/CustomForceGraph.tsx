@@ -167,12 +167,14 @@ const CustomForceGraph: React.FC<{
       const shape = getNodeTypeConfig(node.type, nodeTypes).shape;
 
       if (shape === 'square' || shape === 'hexagon') {
-        const halfSide = CARD_DIMENSIONS.SQUARE_SIDE / 2;
+        // Image-forward card: SQUARE_SIDE wide × SQUARE_SIDE + SQUARE_CAPTION tall.
+        const halfW = CARD_DIMENSIONS.SQUARE_SIDE / 2;
+        const halfH = (CARD_DIMENSIONS.SQUARE_SIDE + CARD_DIMENSIONS.SQUARE_CAPTION) / 2;
         return (
-          graphPos.x >= node.x - halfSide &&
-          graphPos.x <= node.x + halfSide &&
-          graphPos.y >= node.y - halfSide &&
-          graphPos.y <= node.y + halfSide
+          graphPos.x >= node.x - halfW &&
+          graphPos.x <= node.x + halfW &&
+          graphPos.y >= node.y - halfH &&
+          graphPos.y <= node.y + halfH
         );
       } else {
         const halfWidth = CARD_DIMENSIONS.WIDTH / 2;

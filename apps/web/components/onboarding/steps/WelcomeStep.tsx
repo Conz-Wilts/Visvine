@@ -19,10 +19,10 @@ export default function WelcomeStep({ firstName, imageUrl, onStart, onSkip }: Pr
           <img
             src={imageUrl}
             alt={firstName}
-            className="w-24 h-24 rounded-full object-cover ring-4 ring-brand-light-bg"
+            className="w-24 h-24 rounded-2xl object-cover ring-4 ring-brand-light-bg"
           />
         ) : (
-          <div className="w-24 h-24 rounded-full bg-brand-light-bg flex items-center justify-center">
+          <div className="w-24 h-24 rounded-2xl bg-brand-light-bg flex items-center justify-center">
             <span className="text-3xl font-semibold text-brand-dark-green">
               {firstName.charAt(0)}
             </span>

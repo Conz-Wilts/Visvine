@@ -63,7 +63,7 @@ export default function CommunitiesPage() {
                   {/* Avatar */}
                   <Link
                     href={`/communities/${encodeURIComponent(community.id)}`}
-                    className="relative shrink-0 w-16 h-16 rounded-full ring-3 ring-surface-2 group-hover:ring-brand-green/20 transition-all duration-300"
+                    className="relative shrink-0 w-16 h-16 rounded-xl ring-3 ring-surface-2 group-hover:ring-brand-green/20 transition-all duration-300"
                   >
                     <CommunityAvatar
                       name={community.name}

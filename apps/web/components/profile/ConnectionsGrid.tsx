@@ -119,10 +119,10 @@ function ConnectionCard({ conn }: { conn: ProfileConnection }) {
   return (
     <div className="flex flex-col items-center gap-2 p-3 bg-surface-2 rounded-xl border border-border-subtle hover:border-border-default hover:shadow-soft hover:scale-[1.01] transition-all duration-150 cursor-pointer">
       {conn.image_url ? (
-        <img src={conn.image_url} alt={conn.name} className="w-16 h-16 rounded-full object-cover" />
+        <img src={conn.image_url} alt={conn.name} className="w-16 h-16 rounded-xl object-cover" />
       ) : (
         <div
-          className="w-16 h-16 rounded-full flex items-center justify-center text-base font-semibold text-white"
+          className="w-16 h-16 rounded-xl flex items-center justify-center text-base font-semibold text-white"
           style={{ backgroundColor: typeColor }}
           aria-hidden="true"
         >

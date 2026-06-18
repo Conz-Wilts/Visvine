@@ -253,7 +253,7 @@ export default function AnalyticsPanel({ communityId }: { communityId: string })
                       }`}>
                         {i + 1}
                       </span>
-                      <div className="w-7 h-7 rounded-full bg-surface-3 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-text-secondary">
+                      <div className="w-7 h-7 rounded-lg bg-surface-3 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-text-secondary">
                         {(c.name?.[0] ?? '?').toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -276,7 +276,7 @@ export default function AnalyticsPanel({ communityId }: { communityId: string })
               <div className="divide-y divide-border-subtle">
                 {data.recentActivity.map((item, i) => (
                   <div key={i} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="w-6 h-6 rounded-full bg-surface-3 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <div className="w-6 h-6 rounded-md bg-surface-3 flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="text-xs font-semibold text-text-muted">
                         {(item.actorName?.[0] ?? '?').toUpperCase()}
                       </span>

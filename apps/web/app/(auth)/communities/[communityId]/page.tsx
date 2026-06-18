@@ -661,8 +661,8 @@ function PostPreview({ post }: { post: FeedPost }) {
     <article className="rounded-2xl border border-border-subtle p-4">
       <div className="flex items-center gap-2.5">
         {image
-          ? <img src={image} alt={post.author.name} className="w-8 h-8 rounded-full object-cover flex-none" />
-          : <span className="w-8 h-8 rounded-full bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(post.author.name)}</span>}
+          ? <img src={image} alt={post.author.name} className="w-8 h-8 rounded-lg object-cover flex-none" />
+          : <span className="w-8 h-8 rounded-lg bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(post.author.name)}</span>}
         <div className="min-w-0">
           <b className="block text-[13.5px] font-bold text-text-primary truncate">{post.author.name}</b>
           <span className="block text-xs text-text-muted">{timeAgo(post.createdAt)}</span>
@@ -681,8 +681,8 @@ function MemberRow({ member, theme, badge }: { member: OverviewMember; theme: Th
   const inner = (
     <>
       {member.image
-        ? <img src={member.image} alt={member.name} className="w-9 h-9 rounded-full object-cover flex-none" />
-        : <span className="w-9 h-9 rounded-full bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(member.name)}</span>}
+        ? <img src={member.image} alt={member.name} className="w-9 h-9 rounded-xl object-cover flex-none" />
+        : <span className="w-9 h-9 rounded-xl bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(member.name)}</span>}
       <span className="min-w-0 flex-1">
         <b className="block text-[13.5px] font-bold text-text-primary truncate">{member.name}</b>
         {member.subtitle && <span className="block text-xs text-text-muted truncate">{member.subtitle}</span>}
@@ -703,9 +703,9 @@ function MemberRow({ member, theme, badge }: { member: OverviewMember; theme: Th
 
 function MemberAvatar({ member, theme }: { member: OverviewMember; theme: ThemePalette }) {
   const inner = member.image
-    ? <img src={member.image} alt={member.name} title={member.name} className="w-full aspect-square rounded-full object-cover" />
+    ? <img src={member.image} alt={member.name} title={member.name} className="w-full aspect-square rounded-2xl object-cover" />
     : (
-      <span className="w-full aspect-square rounded-full flex items-center justify-center text-xs font-bold text-white"
+      <span className="w-full aspect-square rounded-2xl flex items-center justify-center text-xs font-bold text-white"
             title={member.name} style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
         {getInitials(member.name)}
       </span>

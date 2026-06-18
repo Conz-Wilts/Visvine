@@ -52,9 +52,9 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
       <div className="border border-gray-100 rounded-xl p-4 mb-6 text-left">
         <div className="flex items-center gap-3">
           {data.imageUrl ? (
-            <img src={data.imageUrl} alt={personName} className="w-12 h-12 rounded-full object-cover" />
+            <img src={data.imageUrl} alt={personName} className="w-12 h-12 rounded-xl object-cover" />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-brand-light-bg flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-brand-light-bg flex items-center justify-center">
               <span className="text-lg font-semibold text-brand-dark-green">{personName.charAt(0)}</span>
             </div>
           )}

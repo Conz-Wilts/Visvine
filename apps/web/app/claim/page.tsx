@@ -45,10 +45,10 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
               alt={profile.name}
               width={64}
               height={64}
-              className="rounded-full object-cover flex-shrink-0"
+              className="rounded-xl object-cover flex-shrink-0"
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+            <div className="w-16 h-16 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
               <span className="text-2xl font-semibold text-blue-600">
                 {profile.name.charAt(0).toUpperCase()}
               </span>
