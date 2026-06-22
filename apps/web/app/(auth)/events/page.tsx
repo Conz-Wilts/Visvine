@@ -38,7 +38,7 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<EventView>('feed');
   const [scope, setScope] = useState<EventScope>('community');
-  const [timeFilter, setTimeFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { setHeaderRight } = useHeader();
@@ -132,7 +132,7 @@ export default function EventsPage() {
   }
 
   return (
-    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+    <div className="relative w-full">
       {/* Header row: centered title (view switcher lives in the navbar) */}
       <PageTitle title="Events" />
 

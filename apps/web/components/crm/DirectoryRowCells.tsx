@@ -29,6 +29,7 @@ interface CrmColumn {
 // removes the "add a handler, forget to compare it" drift footgun.
 interface RowHandlers {
   isEditable: (id: string) => boolean;
+  onRowClick?: (item: DirectoryItem) => void;
   triggerImageUpload: (nodeId: string, e: React.MouseEvent) => void;
   openProfileCell: (nodeId: string, field: string, e: React.MouseEvent) => void;
   commitProfileCell: (nodeId: string, field: string, value: string) => Promise<void>;
@@ -69,7 +70,6 @@ interface DirectoryRowCellsProps {
   nodeTypes?: NodeTypeConfig[];
   communityId: string | null | undefined;
   isAuthenticated: boolean;
-  editMode: boolean;
   // Stable handler bundle
   handlers: RowHandlers;
 }
@@ -92,11 +92,10 @@ function DirectoryRowCells({
   nodeTypes,
   communityId,
   isAuthenticated,
-  editMode,
   handlers,
 }: DirectoryRowCellsProps) {
   const {
-    isEditable, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
+    isEditable, onRowClick, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
     saveAlias, setAliasEditNodeId, toggleOpenToWork, handleCellClick, handleCellSave,
     setEditingCell, getCellValue, shareValueWithCommunity,
   } = handlers;
@@ -135,24 +134,14 @@ function DirectoryRowCells({
             )}
           </div>
 
-          {/* Name — inline editable */}
+          {/* Name — hardcoded (not editable); clicking it opens the person's card */}
           <div className="min-w-0">
-            {editable && profileCell?.nodeId === item.id && profileCell.field === 'name' ? (
-              <CellEditor
-                value={item.name}
-                type="text"
-                onSave={value => commitProfileCell(item.id, 'name', value)}
-                onCancel={closeProfileCell}
-                className="text-sm font-medium text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
-              />
-            ) : (
-              <div
-                className={`text-sm font-medium text-text-primary truncate ${editable ? 'hover:bg-brand-green/10 rounded px-1 -mx-1 cursor-text' : ''}`}
-                onClick={editable ? e => openProfileCell(item.id, 'name', e) : undefined}
-              >
-                {item.name}
-              </div>
-            )}
+            <div
+              className="text-sm font-medium text-text-primary truncate cursor-pointer hover:text-brand-green hover:underline"
+              onClick={e => { e.stopPropagation(); onRowClick?.(item); }}
+            >
+              {item.name}
+            </div>
           </div>
         </div>
       </td>
@@ -203,13 +192,17 @@ function DirectoryRowCells({
               className={canEdit ? 'inline-flex items-center gap-1 cursor-pointer group/type' : ''}
               onClick={canEdit ? e => { e.stopPropagation(); setAliasEditNodeId(prev => prev === item.id ? null : item.id); } : undefined}
             >
-              <Badge
-                variant="type-pill"
-                color={color}
-                className={`${canEdit ? 'transition-opacity group-hover/type:opacity-85' : ''} ${!displayAlias ? 'capitalize' : ''}`.trim() || undefined}
-              >
-                {displayAlias ?? item.type}
-              </Badge>
+              {displayAlias ? (
+                <Badge
+                  variant="type-pill"
+                  color={color}
+                  className={canEdit ? 'transition-opacity group-hover/type:opacity-85' : undefined}
+                >
+                  {displayAlias}
+                </Badge>
+              ) : (
+                <span className="text-sm text-text-muted">—</span>
+              )}
               {canEdit && (
                 <svg
                   className={`h-3.5 w-3.5 text-text-muted transition-transform duration-150 ${aliasEditNodeId === item.id ? 'rotate-180' : ''}`}
@@ -252,7 +245,7 @@ function DirectoryRowCells({
                 placeholder={col.key === 'tags' ? 'tag1, tag2' : undefined}
                 onSave={value => commitProfileCell(item.id, editField, value)}
                 onCancel={closeProfileCell}
-                className="text-sm text-text-primary bg-transparent border-b border-brand-green outline-none w-full min-w-[120px] pb-0.5"
+                className="px-2 py-1 text-sm text-text-primary bg-surface-1 border border-brand-green rounded focus:outline-none"
               />
             ) : (
               <div className={isEditableField ? 'hover:bg-brand-green/10 rounded px-1 -mx-1' : ''}>
@@ -276,7 +269,7 @@ function DirectoryRowCells({
           <td
             key={col.key}
             className="px-4 py-2.5 whitespace-nowrap"
-            onClick={e => !isPending && !editMode && handleCellClick(item.id, col.key, e)}
+            onClick={e => !isPending && handleCellClick(item.id, col.key, e)}
           >
             {isCrmEditing ? (
               <CellEditor
@@ -322,6 +315,13 @@ function DirectoryRowCells({
           </td>
         );
       })}
+
+      {/* Type — read-only, at the end */}
+      <td className="px-4 py-2.5 whitespace-nowrap">
+        <Badge variant="type-pill" color={getNodeTypeConfig(item.type, nodeTypes).color} className="capitalize">
+          {item.type}
+        </Badge>
+      </td>
 
       {/* Empty add-column spacer */}
       <td className="px-4 py-2.5" />
@@ -379,8 +379,7 @@ function arePropsEqual(prev: DirectoryRowCellsProps, next: DirectoryRowCellsProp
     prev.communityAliases !== next.communityAliases ||
     prev.nodeTypes !== next.nodeTypes ||
     prev.communityId !== next.communityId ||
-    prev.isAuthenticated !== next.isAuthenticated ||
-    prev.editMode !== next.editMode
+    prev.isAuthenticated !== next.isAuthenticated
   ) return false;
 
   // All handlers travel in one stable, useMemo'd bundle — a single identity

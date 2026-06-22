@@ -9,14 +9,13 @@ import { X } from 'lucide-react';
 import Dropdown from '@/components/ui/Dropdown';
 
 interface EventsToolbarProps {
-  currentFilter: 'all' | 'upcoming' | 'past';
-  onFilterChange: (filter: 'all' | 'upcoming' | 'past') => void;
+  currentFilter: 'upcoming' | 'past';
+  onFilterChange: (filter: 'upcoming' | 'past') => void;
   locationFilter?: 'all' | 'in-person' | 'virtual';
   onLocationFilterChange?: (filter: 'all' | 'in-person' | 'virtual') => void;
 }
 
-const TIME_OPTIONS: { value: 'all' | 'upcoming' | 'past'; label: string }[] = [
-  { value: 'all', label: 'All' },
+const TIME_OPTIONS: { value: 'upcoming' | 'past'; label: string }[] = [
   { value: 'upcoming', label: 'Upcoming' },
   { value: 'past', label: 'Past' },
 ];
@@ -33,7 +32,7 @@ export default function EventsToolbar({
   locationFilter = 'all',
   onLocationFilterChange,
 }: EventsToolbarProps) {
-  const hasFilters = currentFilter !== 'all' || locationFilter !== 'all';
+  const hasFilters = currentFilter !== 'upcoming' || locationFilter !== 'all';
 
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
@@ -42,7 +41,7 @@ export default function EventsToolbar({
         value={currentFilter}
         options={TIME_OPTIONS}
         onChange={onFilterChange}
-        active={currentFilter !== 'all'}
+        active={currentFilter !== 'upcoming'}
       />
       {onLocationFilterChange && (
         <Dropdown
@@ -57,7 +56,7 @@ export default function EventsToolbar({
       {hasFilters && (
         <button
           onClick={() => {
-            onFilterChange('all');
+            onFilterChange('upcoming');
             onLocationFilterChange?.('all');
           }}
           className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"

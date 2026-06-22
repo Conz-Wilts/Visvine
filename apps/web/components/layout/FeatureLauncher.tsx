@@ -1,26 +1,27 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { FEATURES, isFeatureEnabled } from '@/lib/features';
 import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
- * The "apps" launcher opened from the sidebar More button. Shows every optional
- * community surface as a card. Members tap a card to jump to that surface;
- * admins also get a toggle to switch each feature on or off for the whole
- * community (persisted via the settings route, then refreshed into context).
+ * The "apps" launcher opened from the sidebar More button. Lists only the
+ * optional community surfaces that are NOT already in the sidebar (i.e. the
+ * features that are currently switched off). Admins can add any of them to the
+ * community (persisted via the settings route, then refreshed into context);
+ * there is no remove/disable control here — turning a feature off is not done
+ * from More.
  */
 export default function FeatureLauncher({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const { currentCommunity, isAdmin, refreshCommunity } = useCommunity();
   const overlayRef = useRef<HTMLDivElement>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const config = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  // Features that aren't in the sidebar yet — switched-off, non-core surfaces.
+  const available = FEATURES.filter((f) => !f.core && !isFeatureEnabled(config, f.key));
 
   useEffect(() => {
     if (!open) return;
@@ -31,17 +32,14 @@ export default function FeatureLauncher({ open, onClose }: { open: boolean; onCl
 
   if (!open) return null;
 
-  const go = (href: string) => {
-    onClose();
-    router.push(href);
-  };
-
-  const toggleFeature = async (key: string, nextEnabled: boolean) => {
+  // Admins can only ADD features here (turn them on). There is no disable path
+  // from More — a feature is removed elsewhere, not from this launcher.
+  const addFeature = async (key: string) => {
     if (!currentCommunity || savingKey) return;
     setError(null);
     setSavingKey(key);
     // Merge the new flag over the existing enabled map.
-    const enabled: Record<string, boolean> = { ...(config?.enabled ?? {}), [key]: nextEnabled };
+    const enabled: Record<string, boolean> = { ...(config?.enabled ?? {}), [key]: true };
     try {
       const res = await fetch(`/api/communities/${currentCommunity.id}/settings`, {
         method: 'PUT',
@@ -74,11 +72,11 @@ export default function FeatureLauncher({ open, onClose }: { open: boolean; onCl
         {/* Header */}
         <div className="relative flex items-center justify-center px-6 pt-6 pb-4 border-b border-border-subtle">
           <div className="text-center">
-            <h2 className="font-semibold text-text-primary text-base">Community features</h2>
+            <h2 className="font-semibold text-text-primary text-base">Add features</h2>
             <p className="text-xs text-text-muted mt-0.5">
               {isAdmin
-                ? 'Choose what this community includes. Changes apply for everyone.'
-                : 'Jump to any part of this community.'}
+                ? 'More surfaces you can add to this community. Changes apply for everyone.'
+                : 'More surfaces this community could add.'}
             </p>
           </div>
           <button
@@ -92,73 +90,54 @@ export default function FeatureLauncher({ open, onClose }: { open: boolean; onCl
           </button>
         </div>
 
-        {/* Grid of feature cards */}
-        <div className="px-6 py-5 grid grid-cols-2 gap-3">
-          {FEATURES.map((f) => {
-            const enabled = isFeatureEnabled(config, f.key);
-            const active = pathname === f.href;
-            const saving = savingKey === f.key;
-            return (
-              <div
-                key={f.key}
-                className={`relative rounded-xl border p-3.5 transition-colors ${
-                  enabled
-                    ? active
-                      ? 'border-brand-green bg-brand-green/10'
-                      : 'border-border-subtle bg-surface-2/40'
-                    : 'border-dashed border-border-subtle bg-transparent opacity-60'
-                }`}
-              >
-                {/* Card body — navigates when the feature is on */}
-                <button
-                  type="button"
-                  disabled={!enabled}
-                  onClick={() => enabled && go(f.href)}
-                  className="flex items-start gap-3 text-left w-full disabled:cursor-default"
+        {/* Only the features that are NOT already in the sidebar (i.e. switched
+            off). Core features are always in the sidebar, so never listed here. */}
+        {available.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-text-muted">
+            Every feature is already in your sidebar.
+          </div>
+        ) : (
+          <div className="px-6 py-5 grid grid-cols-2 gap-3">
+            {available.map((f) => {
+              const saving = savingKey === f.key;
+              return (
+                <div
+                  key={f.key}
+                  className="relative rounded-xl border border-dashed border-border-subtle bg-transparent p-3.5"
                 >
-                  <span
-                    className="flex items-center justify-center shrink-0 rounded-lg w-9 h-9 text-text-secondary"
-                    style={{ background: 'var(--color-surface-2, #f1f1f1)' }}
-                  >
-                    {f.icon}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 text-sm font-semibold text-text-primary">
-                      {f.label}
-                      {f.core && (
-                        <span className="text-[9px] font-medium uppercase tracking-wide text-text-muted border border-border-subtle rounded px-1 py-px">
-                          Core
-                        </span>
-                      )}
-                    </span>
-                    <span className="block text-[11px] leading-snug text-text-muted mt-0.5">
-                      {f.description}
-                    </span>
-                  </span>
-                </button>
-
-                {/* Admin toggle (hidden for core features, which can't be turned off) */}
-                {isAdmin && !f.core && (
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={() => toggleFeature(f.key, !enabled)}
-                    role="switch"
-                    aria-checked={enabled}
-                    aria-label={`${enabled ? 'Disable' : 'Enable'} ${f.label}`}
-                    className="absolute top-3 right-3 w-9 h-5 rounded-full transition-colors disabled:opacity-50"
-                    style={{ background: enabled ? 'var(--color-brand-green, #78d870)' : 'var(--color-border-default, #d4d4d4)' }}
-                  >
+                  <div className="flex items-start gap-3 text-left w-full">
                     <span
-                      className="block w-4 h-4 rounded-full bg-white shadow transition-transform"
-                      style={{ transform: enabled ? 'translateX(18px)' : 'translateX(2px)' }}
-                    />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                      className="flex items-center justify-center shrink-0 rounded-lg w-9 h-9 text-text-secondary"
+                      style={{ background: 'var(--color-surface-2, #f1f1f1)' }}
+                    >
+                      {f.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-text-primary">
+                        {f.label}
+                      </span>
+                      <span className="block text-[11px] leading-snug text-text-muted mt-0.5">
+                        {f.description}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Admins can add the feature to the community. No remove here. */}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => addFeature(f.key)}
+                      className="mt-3 w-full rounded-lg border border-brand-green text-brand-green text-xs font-semibold py-1.5 transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                    >
+                      {saving ? 'Adding…' : 'Add to community'}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {error && (
           <p className="mx-6 mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

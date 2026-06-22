@@ -17,7 +17,6 @@ import type { NBNode, CommunityAlias } from '@/lib/types';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { PageTitle } from '@/components/ui';
-import { Pencil } from 'lucide-react';
 
 // The graph view pulls in d3-force + the canvas renderer. Defer the whole thing
 // until the user opens the graph, so grid/table users never download it.
@@ -59,7 +58,6 @@ export default function DashboardPage() {
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
   const [filterTags, setFilterTags] = useState<Set<string>>(new Set());
   const [sortOrder, setSortOrder] = useState<SortOrder>('az');
-  const [editMode, setEditMode] = useState(false);
   // Saves multi-type selection when entering table view so it can be restored on exit
   const savedFilterTypesRef = useRef<Set<string> | null>(null);
   const { setHeaderRight } = useHeader();
@@ -246,20 +244,6 @@ export default function DashboardPage() {
             />
             <SortDropdown value={sortOrder} onChange={setSortOrder} />
 
-            {isAdmin && currentView === 'table' && (
-              <button
-                onClick={() => setEditMode(v => !v)}
-                className="flex h-12 w-12 lg:h-10 lg:w-10 items-center justify-center rounded-2xl border shadow-sm transition-colors"
-                style={editMode
-                  ? { borderColor: 'var(--color-brand-green)', backgroundColor: 'var(--color-brand-green)', color: '#fff' }
-                  : { borderColor: 'var(--border-default, #e5e7eb)', backgroundColor: 'var(--surface-1, #fff)', color: 'var(--text-secondary, #374151)' }
-                }
-                title={editMode ? 'Exit edit mode' : 'Edit profiles'}
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            )}
-
             {currentView === 'table' && (
               <span className="text-xs text-text-muted ml-1">Table shows one type at a time</span>
             )}
@@ -333,7 +317,6 @@ export default function DashboardPage() {
                 communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
                 communityId={community?.id}
                 isAdmin={isAdmin}
-                editMode={editMode}
                 activeType={filterTypes.size === 1 ? [...filterTypes][0] : (presentTypes[0] ?? 'person')}
                 onDataChanged={handleDataChanged}
               />

@@ -71,12 +71,10 @@ function DirectoryTableSkeleton({ extraColumns = 4 }: { extraColumns?: number })
 // Per-row context so the (stable) custom components can style/handle each row
 // without re-creating component identities on every render.
 interface RowContext {
-  editMode: boolean;
   isEditable: (id: string) => boolean;
   isMember: (id: string) => boolean;
-  onRowClick?: (item: DirectoryItem) => void;
   // Explicit per-column widths (px) for the fixed-layout <colgroup>. Length and
-  // order must match the header/row cells: Name, Type, …profile, …crm, spacer.
+  // order must match the header/row cells: Name, Alias, …profile, …crm, Type, spacer.
   columnWidths: number[];
 }
 
@@ -140,18 +138,10 @@ const tableComponents = {
       return <tbody {...props} ref={ref} className="bg-surface-1 divide-y divide-border-subtle" />;
     }
   ),
-  TableRow: ({ item, context, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item: DirectoryItem } & CtxProp) => {
-    const ctx = context!;
-    const editable = ctx.isEditable(item.id);
-    const isMemberRow = ctx.isMember(item.id);
-    return (
-      <tr
-        {...props}
-        style={{ ...style, opacity: ctx.editMode && isMemberRow ? 0.5 : 1 }}
-        className={`group relative ${ctx.editMode ? (editable ? 'cursor-default' : 'cursor-default opacity-60') : 'cursor-pointer'}`}
-        onClick={ctx.editMode ? undefined : () => ctx.onRowClick?.(item)}
-      />
-    );
+  TableRow: ({ item: _item, context: _context, style, ...props }: React.ComponentPropsWithoutRef<'tr'> & { item: DirectoryItem } & CtxProp) => {
+    // The row itself is no longer clickable — the name cell opens the card and
+    // every other cell edits inline. Cursor stays default across the row.
+    return <tr {...props} style={style} className="group relative cursor-default" />;
   },
 } as unknown as TableComponents<DirectoryItem, RowContext>;
 
@@ -163,7 +153,6 @@ interface CrmDirectoryTableProps {
   communityAliases?: CommunityAlias[];
   communityId: string | null | undefined;
   isAdmin?: boolean;
-  editMode?: boolean;
   activeType?: string;
   onDataChanged?: () => void;
 }
@@ -176,7 +165,6 @@ export default function CrmDirectoryTable({
   communityAliases,
   communityId,
   isAdmin = false,
-  editMode = false,
   activeType = 'person',
   onDataChanged,
 }: CrmDirectoryTableProps) {
@@ -289,10 +277,10 @@ export default function CrmDirectoryTable({
   }, [isAdmin, communityId]);
 
   const isEditable = useCallback((nodeId: string) => {
-    if (!isAdmin || !editMode) return false;
+    if (!isAdmin) return false;
     const an = adminNodes.get(nodeId);
     return !!an && !an.isMember;
-  }, [isAdmin, editMode, adminNodes]);
+  }, [isAdmin, adminNodes]);
 
   const openProfileCell = useCallback((nodeId: string, field: string, e: React.MouseEvent) => {
     if (!isEditable(nodeId)) return;
@@ -448,24 +436,23 @@ export default function CrmDirectoryTable({
 
   const profileColumns = useMemo(() => getProfileColumns(activeType), [activeType]);
 
-  // Fixed-layout column widths (px), in render order: Name, Type, profile cols,
-  // CRM cols, then the add-column spacer. `tags` gets extra room since it wraps.
+  // Fixed-layout column widths (px), in render order: Name, Alias, profile cols,
+  // CRM cols, Type, then the add-column spacer. `tags` gets extra room since it wraps.
   const columnWidths = useMemo(() => {
     const widths = [230, 130];
     for (const col of profileColumns) widths.push(col.key === 'tags' ? 220 : 168);
     for (let i = 0; i < crmColumns.length; i++) widths.push(168);
-    widths.push(110);
+    widths.push(130); // Type
+    widths.push(110); // add-column spacer
     return widths;
   }, [profileColumns, crmColumns]);
 
   // Stable per-row context for the virtualized rows.
   const rowContext = useMemo<RowContext>(() => ({
-    editMode,
     isEditable,
     isMember: (id: string) => adminNodes.get(id)?.isMember ?? false,
-    onRowClick,
     columnWidths,
-  }), [editMode, isEditable, adminNodes, onRowClick, columnWidths]);
+  }), [isEditable, adminNodes, columnWidths]);
 
   // Every function a row needs, bundled into one identity-stable object so the
   // row's arePropsEqual can compare it with a single reference check. Nothing
@@ -473,6 +460,7 @@ export default function CrmDirectoryTable({
   // user types in a cell.
   const rowHandlers = useMemo(() => ({
     isEditable,
+    onRowClick,
     triggerImageUpload,
     openProfileCell,
     commitProfileCell,
@@ -486,7 +474,7 @@ export default function CrmDirectoryTable({
     getCellValue,
     shareValueWithCommunity,
   }), [
-    isEditable, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
+    isEditable, onRowClick, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
     saveAlias, toggleOpenToWork, handleCellClick, handleCellSave, getCellValue,
     shareValueWithCommunity,
   ]);
@@ -496,7 +484,7 @@ export default function CrmDirectoryTable({
     <tr>
       {/* Standard columns */}
       <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2 border-b border-border-default">Name</th>
-      <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2 border-b border-border-default">Type</th>
+      <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2 border-b border-border-default">Alias</th>
       {profileColumns.map(col => (
         <th key={col.key} className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2 border-b border-border-default">
           {col.label}
@@ -520,6 +508,9 @@ export default function CrmDirectoryTable({
           </div>
         </th>
       ))}
+
+      {/* Type — read-only, moved to the end */}
+      <th className="px-4 py-2.5 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap bg-surface-2 border-b border-border-default">Type</th>
 
       {/* Add column button */}
       <th className="px-4 py-2.5 text-left bg-surface-2 border-b border-border-default">
@@ -554,7 +545,6 @@ export default function CrmDirectoryTable({
       nodeTypes={nodeTypes}
       communityId={communityId}
       isAuthenticated={isAuthenticated}
-      editMode={editMode}
       handlers={rowHandlers}
     />
   );

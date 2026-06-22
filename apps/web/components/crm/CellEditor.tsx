@@ -15,7 +15,14 @@ interface CellEditorProps {
 }
 
 const DEFAULT_INPUT_CLASS =
-  'w-full px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none';
+  'px-2 py-1 text-sm bg-surface-1 border border-brand-green rounded focus:outline-none';
+
+// Let the editor grow with its content and float above the neighbouring cells
+// instead of being clipped to the (fixed-layout) column width. `field-sizing`
+// auto-grows in supporting browsers; `relative z-30` + a shadow lift it over the
+// adjacent cells and the hover overlay (z-10) so the full text stays readable.
+const OVERFLOW_CLASS = 'relative z-30 shadow-soft';
+const OVERFLOW_STYLE = { fieldSizing: 'content', minWidth: '100%', maxWidth: '420px' } as React.CSSProperties;
 
 export default function CellEditor({ value: initialValue, type, options, onSave, onCancel, className, placeholder }: CellEditorProps) {
   const [value, setValue] = useState(initialValue);
@@ -45,7 +52,8 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
         onChange={e => setValue(e.target.value)}
         onBlur={handleSave}
         disabled={saving}
-        className={className ?? DEFAULT_INPUT_CLASS}
+        className={`${className ?? DEFAULT_INPUT_CLASS} ${OVERFLOW_CLASS}`}
+        style={OVERFLOW_STYLE}
       >
         <option value="">—</option>
         {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -60,7 +68,8 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
         type="date" value={value}
         onChange={e => setValue(e.target.value)}
         onBlur={handleSave} onKeyDown={handleKey} disabled={saving}
-        className={className ?? DEFAULT_INPUT_CLASS}
+        className={`${className ?? DEFAULT_INPUT_CLASS} ${OVERFLOW_CLASS}`}
+        style={OVERFLOW_STYLE}
       />
     );
   }
@@ -71,9 +80,12 @@ export default function CellEditor({ value: initialValue, type, options, onSave,
       type={type === 'url' ? 'url' : 'text'}
       value={value}
       placeholder={placeholder}
+      // Cross-browser auto-grow fallback for engines without `field-sizing`.
+      size={Math.min(Math.max(value.length + 2, 14), 60)}
       onChange={e => setValue(e.target.value)}
       onBlur={handleSave} onKeyDown={handleKey} disabled={saving}
-      className={className ?? `${DEFAULT_INPUT_CLASS} min-w-[120px]`}
+      className={`${className ?? DEFAULT_INPUT_CLASS} ${OVERFLOW_CLASS}`}
+      style={OVERFLOW_STYLE}
     />
   );
 }

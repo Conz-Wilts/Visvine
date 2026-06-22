@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
-import { Calendar, MapPin, Users, Video, Pencil, Plus } from 'lucide-react';
+import { Calendar, MapPin, Users, Video, Pencil } from 'lucide-react';
 import { formatEventTime, getEventStatus, isEventUpcoming, startsInLabel } from '@/lib/eventUtils';
 import Avatar from '@/components/ui/Avatar';
 import type { NBEvent } from '@/lib/types';
@@ -187,19 +186,9 @@ export default function EventsFeedView({ events, community, loading = false, onE
 
   if (events.length === 0) {
     return (
-      <div className="max-w-3xl mx-auto text-center py-20 bg-surface-1 rounded-2xl border border-border-subtle">
+      <div className="max-w-3xl mx-auto text-center py-20">
         <Calendar className="w-14 h-14 text-brand-grey mx-auto mb-4" />
-        <p className="text-lg font-semibold text-brand-black">No events found</p>
-        <p className="text-sm text-text-muted mt-2 max-w-sm mx-auto">
-          Create your first event or adjust your filters to see results.
-        </p>
-        <Link
-          href="/events/new"
-          className="inline-flex items-center gap-2 mt-6 px-5 py-2.5 rounded-full bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Create Event
-        </Link>
+        <p className="text-sm text-text-muted">No events found</p>
       </div>
     );
   }

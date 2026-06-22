@@ -135,6 +135,12 @@ const CustomForceGraph: React.FC<{
 
   // Use refs for values that change frequently during interactions to avoid React re-renders
   const transformRef = useRef<Transform>({ x: 0, y: 0, k: 1 });
+  // Lower bound for wheel zoom-out. Defaults to a far-out floor but is widened by
+  // fitToScreen so the user can always zoom back out to (and a touch beyond) the
+  // initial "whole graph" overview — on large graphs / small screens that fit
+  // zoom can be smaller than the static floor, which otherwise traps the camera
+  // zoomed-in with no way back to the starting view.
+  const minZoomRef = useRef(0.05);
   const isDraggingRef = useRef(false);
   const isPanningRef = useRef(false);
 
@@ -936,6 +942,9 @@ const CustomForceGraph: React.FC<{
     const scaleX = width / graphWidth;
     const scaleY = height / graphHeight;
     const targetZoom = Math.min(scaleX, scaleY, 1.2);
+    // Allow zooming out slightly past the overview so the fit level is never the
+    // hard floor; keep the static 0.05 floor when the fit is already closer in.
+    minZoomRef.current = Math.min(0.05, targetZoom * 0.8);
     const targetX = width / 2 - graphCenterX * targetZoom;
     const targetY = height / 2 - graphCenterY * targetZoom;
 
@@ -1014,7 +1023,7 @@ const CustomForceGraph: React.FC<{
       const factor = Math.exp(delta);
 
       updateTransform(prev => {
-        const newK = Math.max(0.05, Math.min(prev.k * factor, 8));
+        const newK = Math.max(minZoomRef.current, Math.min(prev.k * factor, 8));
 
         const graphPosBefore = {
           x: (mouseX - prev.x) / prev.k,
@@ -1041,6 +1050,22 @@ const CustomForceGraph: React.FC<{
       canvas.removeEventListener('wheel', handleNativeWheel);
     };
   }, [updateTransform, schedulePersist, collectPositions]);
+
+  // Block the browser's pinch-to-zoom (ctrl+wheel) across the whole window while
+  // the graph is mounted. The canvas listener above only prevents default over
+  // the canvas itself; on small screens the canvas is ringed by page chrome
+  // (toolbar/search/sidebar), so an accidental trackpad pinch whose centroid
+  // lands off-canvas zooms the entire page in — and scrolling over the graph
+  // can't undo a browser page-zoom, which reads to users as "I zoomed in and
+  // can't zoom back out." Swallowing ctrl+wheel here keeps page zoom from ever
+  // engaging on the graph view.
+  useEffect(() => {
+    const handlePinchZoom = (e: WheelEvent) => {
+      if (e.ctrlKey) e.preventDefault();
+    };
+    window.addEventListener('wheel', handlePinchZoom, { passive: false });
+    return () => window.removeEventListener('wheel', handlePinchZoom);
+  }, []);
 
   // Auto-zoom to focused node with smooth animation
   useEffect(() => {
