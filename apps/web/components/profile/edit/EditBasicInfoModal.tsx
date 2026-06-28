@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import EditModal from './EditModal';
+import ModalFooter from './ModalFooter';
 import Toggle from '@/components/ui/Toggle';
 import type { FullProfile } from '@/lib/profileTypes';
 
@@ -90,14 +91,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
         </div>
         <Toggle checked={openToWork} onChange={setOpenToWork} label="Open to work" />
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-brand-grey border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-            Cancel
-          </button>
-          <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-black rounded-xl hover:opacity-80 transition-opacity disabled:opacity-50">
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        </div>
+        <ModalFooter onCancel={onClose} saving={saving} />
       </form>
     </EditModal>
   );

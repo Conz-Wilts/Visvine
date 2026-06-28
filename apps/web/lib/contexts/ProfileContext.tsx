@@ -9,8 +9,7 @@
  * underlying node data.
  *
  * This means profile edits made in ProfilePageContent are immediately
- * visible in NodeDetailsSidebar and FullProfileOverlay without a page
- * reload or graph-cache bust.
+ * visible in FullProfileOverlay without a page reload or graph-cache bust.
  */
 
 import React, { createContext, useContext, useCallback, useRef, useState } from 'react';

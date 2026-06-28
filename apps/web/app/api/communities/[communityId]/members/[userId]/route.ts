@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logActivity } from '@/lib/activityLog';
-
-async function requireAdmin(communityId: string) {
-  const session = await getSession();
-  if (!session) return null;
-  if (isSuperAdmin(session.email)) return session;
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId } },
-    select: { role: true },
-  });
-  if (membership?.role !== 'admin') return null;
-  return session;
-}
 
 /**
  * PUT: Update a member's role (admin only)

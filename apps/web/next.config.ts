@@ -8,8 +8,8 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "lh3.googleusercontent.com",
       },
-      // Google Cloud Storage — direct bucket access
-      // Cloud CDN / custom domain (set GCS_CDN_BASE_URL env var)
+      // Cloud CDN / custom domain for GCS media, used by next/image.
+      // Set GCS_CDN_HOSTNAME (bare host, e.g. cdn.example.com) to enable.
       ...(process.env.GCS_CDN_HOSTNAME
         ? [{ protocol: "https" as const, hostname: process.env.GCS_CDN_HOSTNAME }]
         : []),

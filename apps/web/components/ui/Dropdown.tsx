@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 
 // Shared dropdown sizing — import these when building a custom dropdown
 // (multi-select, search, etc.) so trigger/menu/items stay in sync site-wide.
@@ -56,13 +57,7 @@ export default function Dropdown<T extends string>({
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  useClickOutside(ref, () => setOpen(false));
 
   const activeLabel = options.find(o => o.value === value)?.label ?? '';
 

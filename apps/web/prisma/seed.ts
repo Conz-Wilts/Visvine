@@ -70,17 +70,6 @@ async function wipeData() {
   // Delete in dependency order. Anything with onDelete: Cascade is wiped
   // by the parent deletes; the rest are explicit.
   await prisma.$transaction([
-    prisma.userBlock.deleteMany({}),
-    prisma.messageReaction.deleteMany({}),
-    prisma.messageDelivery.deleteMany({}),
-    prisma.messageImage.deleteMany({}),
-    prisma.messageMention.deleteMany({}),
-    prisma.messageStar.deleteMany({}),
-    prisma.messageAttachment.deleteMany({}),
-    prisma.messageLinkPreview.deleteMany({}),
-    prisma.message.deleteMany({}),
-    prisma.conversationMember.deleteMany({}),
-    prisma.conversation.deleteMany({}),
     prisma.link.deleteMany({}),
     prisma.attendee.deleteMany({}),
     prisma.privateColumnValue.deleteMany({}),

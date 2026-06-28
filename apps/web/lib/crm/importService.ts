@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { FieldDefinition } from "@/lib/schemas/crm";
+import { parseCsvRows } from "@/lib/crm/csv";
 
 export type ImportOutcome =
   | "created"
@@ -24,52 +25,9 @@ export interface ImportSummary {
   errors: number;
 }
 
-/**
- * Parses a CSV string into rows. Returns headers + data rows.
- * Simple parser: handles quoted fields with commas inside.
- */
-export function parseCSV(csv: string): {
-  headers: string[];
-  rows: Record<string, string>[];
-} {
-  const lines = csv.trim().split(/\r?\n/);
-  if (lines.length < 2) return { headers: [], rows: [] };
-
-  function splitLine(line: string): string[] {
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === "," && !inQuotes) {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += ch;
-      }
-    }
-    result.push(current.trim());
-    return result;
-  }
-
-  const headers = splitLine(lines[0]).map((h) => h.toLowerCase().trim());
-  const rows = lines.slice(1).map((line) => {
-    const values = splitLine(line);
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => {
-      row[h] = values[i] ?? "";
-    });
-    return row;
-  });
-
-  return { headers, rows };
+/** Parses a CSV string into lowercased headers + keyed data rows. */
+export function parseCSV(csv: string): { headers: string[]; rows: Record<string, string>[] } {
+  return parseCsvRows(csv);
 }
 
 /**

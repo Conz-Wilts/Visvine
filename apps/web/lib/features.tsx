@@ -3,14 +3,9 @@ import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
  * Community feature registry — the single source of truth for the optional
- * surfaces a community builder can switch on or off (directory, channels,
- * events, resources, …). The Sidebar renders nav items from this list and the
- * FeatureLauncher ("apps" grid) renders its toggle cards from it, so the two
- * never drift.
- *
- * A feature marked `core` is always present and cannot be disabled (e.g.
- * Messages — the personal inbox where intros land — is cross-cutting and not
- * tied to a single community's surface choices).
+ * surfaces a community builder can switch on or off (directory, context,
+ * events, resources). The Sidebar renders its nav items from this list, so
+ * the nav and the per-community feature toggles never drift.
  */
 export interface FeatureDef {
   key: string;        // stable id stored in Community.featureConfig.enabled
@@ -18,7 +13,6 @@ export interface FeatureDef {
   href: string;
   description: string; // shown on the launcher card
   icon: ReactNode;
-  core?: boolean;      // always on, not toggleable
 }
 
 const iconClass = 'h-5 w-5 shrink-0';
@@ -30,19 +24,23 @@ export const FEATURES: FeatureDef[] = [
     href: '/directory',
     description: 'A searchable graph & table of everyone and everything in the community.',
     icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
       </svg>
     ),
   },
   {
-    key: 'channels',
-    label: 'Channels',
-    href: '/channels',
-    description: 'A shared feed and topic channels for posts and conversation.',
+    key: 'notes',
+    label: 'Context',
+    href: '/context',
+    description: 'Jot down and keep track of your context.',
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h16M3 16h16" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
   },
@@ -68,45 +66,14 @@ export const FEATURES: FeatureDef[] = [
       </svg>
     ),
   },
-  {
-    key: 'messages',
-    label: 'Messages',
-    href: '/messages',
-    core: true,
-    description: 'Direct messages and warm intro requests (always available).',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-      </svg>
-    ),
-  },
 ];
 
-/** The 9-squares-in-a-square "apps" grid icon used by the More button. */
-export function AppsGridIcon({ className = 'h-5 w-5 shrink-0' }: { className?: string }) {
-  return (
-    <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="3" y="3" width="5" height="5" rx="1.4" />
-      <rect x="9.5" y="3" width="5" height="5" rx="1.4" />
-      <rect x="16" y="3" width="5" height="5" rx="1.4" />
-      <rect x="3" y="9.5" width="5" height="5" rx="1.4" />
-      <rect x="9.5" y="9.5" width="5" height="5" rx="1.4" />
-      <rect x="16" y="9.5" width="5" height="5" rx="1.4" />
-      <rect x="3" y="16" width="5" height="5" rx="1.4" />
-      <rect x="9.5" y="16" width="5" height="5" rx="1.4" />
-      <rect x="16" y="16" width="5" height="5" rx="1.4" />
-    </svg>
-  );
-}
-
 /**
- * Is `key` enabled for a community? Core features are always on. Otherwise a
- * feature is enabled unless `featureConfig.enabled[key]` is explicitly `false`
- * — so existing communities (empty config) keep every surface by default.
+ * Is `key` enabled for a community? A feature is enabled unless
+ * `featureConfig.enabled[key]` is explicitly `false` — so existing communities
+ * (empty config) keep every surface by default.
  */
 export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefined, key: string): boolean {
-  const feature = FEATURES.find((f) => f.key === key);
-  if (feature?.core) return true;
   const enabled = config?.enabled;
   if (!enabled || enabled[key] === undefined) return true;
   return enabled[key] !== false;

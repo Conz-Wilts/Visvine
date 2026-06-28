@@ -14,6 +14,7 @@ import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import { CreateModalProvider } from "@/lib/contexts/CreateModalContext";
 import CreateModal from "@/components/create/CreateModal";
 import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext";
+import { ContextPanelProvider } from "@/lib/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 
@@ -82,11 +83,13 @@ export default function AuthLayoutClient({ children }: { children: React.ReactNo
           <HeaderProvider>
             <FullProfileProvider>
               <SidebarProvider>
+              <ContextPanelProvider>
               <CreateModalProvider>
                 <AuthLayoutInner>
                   {children}
                 </AuthLayoutInner>
               </CreateModalProvider>
+              </ContextPanelProvider>
               </SidebarProvider>
             </FullProfileProvider>
           </HeaderProvider>

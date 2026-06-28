@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
@@ -10,18 +10,6 @@ export type AdminProfileNode = NBNode & {
   isActiveUser: boolean;
   userId?: string;
 };
-
-async function requireAdmin(communityId: string) {
-  const session = await getSession();
-  if (!session) return null;
-  if (isSuperAdmin(session.email)) return session;
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId } },
-    select: { role: true },
-  });
-  if (membership?.role !== 'admin') return null;
-  return session;
-}
 
 /**
  * GET: List all nodes for a community with member status info (admin only)

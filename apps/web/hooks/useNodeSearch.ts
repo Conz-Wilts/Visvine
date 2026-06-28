@@ -5,6 +5,8 @@ import { useDebounce } from './useDebounce';
 
 export interface NodeSearchResult {
   id: string;
+  /** Canonical cross-community identity, when the node has been resolved to one. */
+  identity_id: string | null;
   name: string;
   subtitle: string | null;
   location: string | null;
@@ -12,6 +14,8 @@ export interface NodeSearchResult {
   image_url: string | null;
   community_id: string | null;
   community_name: string | null;
+  /** All communities this identity appears in (for the finder badge). */
+  communities?: string[];
   metadata: Record<string, unknown> | null;
 }
 
@@ -87,15 +91,10 @@ function deduplicateResults(results: NodeSearchResult[]): NodeSearchResult[] {
   const map = new Map<string, NodeSearchResult>();
 
   for (const r of results) {
-    const email = (r.metadata?.email as string)?.toLowerCase() ?? '';
-    // People come from two fetches (name + email) and may exist in several
-    // communities, so collapse the same person by name+email. Types without an
-    // email (resource, event) are keyed by node identity instead, so distinct
-    // cross-community entries that share a name are all kept rather than merged.
-    const key = email
-      ? `${r.name.toLowerCase()}|${email}`
-      : `${r.id}|${r.community_id ?? ''}`;
-
+    // The server already collapses node rows by canonical identity; this only
+    // re-merges the same identity returned by both the name and email fetches.
+    // Rows with no identity yet stay distinct by node id.
+    const key = r.identity_id ?? `node:${r.id}`;
     const existing = map.get(key);
     if (!existing || fieldCount(r) > fieldCount(existing)) {
       map.set(key, r);

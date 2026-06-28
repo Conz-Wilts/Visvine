@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useCreateModal } from '@/lib/contexts/CreateModalContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
 
 // Predictable, ranked matching for the community switcher. Name-only (like the main
@@ -28,6 +29,7 @@ export default function CommunitySelector({
   iconOnly?: boolean;
 }) {
   const { currentCommunity, joinedCommunities, setCurrentCommunity } = useCommunity();
+  const { open: openCreateModal } = useCreateModal();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
@@ -134,7 +136,17 @@ export default function CommunitySelector({
             </div>
 
             {/* Footer */}
-            <div className="p-2 border-t border-border-subtle bg-surface-2">
+            <div className="p-2 border-t border-border-subtle bg-surface-2 flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => { setIsOpen(false); openCreateModal('community'); }}
+                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create community
+              </button>
               <Link
                 href="/discover"
                 className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"

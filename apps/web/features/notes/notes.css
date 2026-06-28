@@ -1,0 +1,292 @@
+/* Notes editor + link styling. Body typography is inherited from .blog-prose
+ * (globals.css); this file adds the note-specific bits the ProseMirror editor
+ * generates and can't be classed inline: [[ ]] link rendering, broken-link
+ * flagging, inline #hashtag pills, task lists, and tables. Scoped under
+ * .notes-editor so nothing leaks into the rest of the app. */
+
+.notes-editor .ProseMirror {
+  outline: none;
+  min-height: 55vh;
+}
+
+/* ---------- Centred writing column ----------
+ * Body, freshness line, and references share one scroll container and one
+ * centred 760px column, so the references read as a continuation of the note
+ * rather than a separate boxed panel (matches blackbird-brain's editor). */
+.notes-column {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 28px;
+}
+
+/* When the toolbar floats over the note (no toolbar row), the writing column
+ * needs head-room so the first lines rest below the navbar + floating toolbar;
+ * scrolling then carries the text up behind them. */
+.notes-column--floating {
+  padding-top: 150px;
+}
+
+/* The note title — rendered above the body from frontmatter, in heading style so
+ * every note opens with a clear, prominent title. The body no longer carries a
+ * duplicate `# Title` line, so this is the single source of the visible title. */
+.notes-title {
+  margin: 0 0 0.6rem;
+  font-size: 2.5rem;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary, #111827);
+}
+
+/* In-body H1s (the title lives above the body, but a note may still use one as a
+ * section heading) need explicit styling: .blog-prose only defines h2/h3, and
+ * Tailwind's preflight flattens unstyled headings to body size. */
+.notes-editor h1 {
+  color: #000;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 2.25rem 0 0.75rem;
+}
+
+/* Freshness line at the very bottom of the note. */
+.notes-meta {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 8px 28px 28px;
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-author-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border-radius: 5px;
+  background: var(--color-brand-light-bg, #eaf9ec);
+  color: var(--color-brand-dark-green, #2f7a3e);
+  font-size: 8px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* ---------- Linked / unlinked references (Roam-style backlinks) ----------
+ * Typographic, not boxed: each reference is a quoted block carrying the source
+ * note's title, date, and the passage it appeared in — no cards, no borders. */
+.notes-references {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 4px 28px 56px;
+}
+.notes-ref-group {
+  margin-top: 28px;
+}
+.notes-ref-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-ref-count {
+  font-weight: 500;
+  opacity: 0.6;
+}
+.notes-ref-block {
+  padding: 12px 0;
+}
+.notes-ref-head-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.notes-ref-from {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-brand-dark-green, #2f7a3e);
+  cursor: pointer;
+}
+.notes-ref-from:hover {
+  text-decoration: underline;
+}
+.notes-ref-date {
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-ref-excerpt {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-text-primary, #1f2937);
+}
+.notes-ref-mention {
+  color: var(--color-brand-dark-green, #2f7a3e);
+  font-weight: 500;
+}
+.notes-ref-mention::before {
+  content: '[[';
+  opacity: 0.4;
+}
+.notes-ref-mention::after {
+  content: ']]';
+  opacity: 0.4;
+}
+.notes-related {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.notes-related-item {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-brand-dark-green, #2f7a3e);
+  cursor: pointer;
+}
+.notes-related-item:hover {
+  text-decoration: underline;
+}
+
+/* Internal note links render visually wrapped in [[ ]] — brackets that are pure
+ * CSS, never part of the stored markdown (which keeps OKF [text](path.md)). */
+.notes-editor a.note-link {
+  color: var(--color-brand-dark-green, #2f7a3e);
+  text-decoration: none;
+  font-weight: 500;
+  cursor: pointer;
+}
+.notes-editor a.note-link::before {
+  content: '[[';
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-editor a.note-link::after {
+  content: ']]';
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-editor a.note-link:hover {
+  text-decoration: underline;
+}
+
+/* A link whose target note doesn't exist — flagged the same way the graph does. */
+.notes-editor a.broken-link {
+  color: #ef4444;
+  text-decoration: underline dotted;
+}
+
+/* Directory-entity mentions render as [[ ⬛ Name ]] — an avatar square inside the
+ * brackets, before the name. Decoration-only (EntityChip): the avatar + opening
+ * [[ are a widget; the name is the link text (.entity-link); the closing ]] is a
+ * CSS ::after. The stored markdown stays a plain [Name](/people/slug.md) link. */
+.notes-editor .entity-chip-widget {
+  /* Plain inline (not a vertical-shifted flex box) so the opening `[[` sits on the
+   * text baseline, level with the closing `]]`. Only the avatar is nudged down to
+   * sit centred on the text — the brackets stay on the baseline. */
+  display: inline;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+}
+.notes-editor .entity-bracket {
+  color: var(--color-text-muted, #6b7280);
+  margin-right: 0.15em;
+}
+.notes-editor .entity-avatar {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  vertical-align: -0.22em;
+  margin-right: 0.2em;
+}
+.notes-editor a:has(.entity-link) {
+  text-decoration: none;
+  color: inherit;
+}
+.notes-editor .entity-link {
+  color: var(--color-brand-dark-green, #2f7a3e);
+  font-weight: 500;
+  cursor: pointer;
+}
+.notes-editor .entity-link::after {
+  content: ']]';
+  margin-left: 0.1em;
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-editor a:has(.entity-link):hover .entity-link {
+  text-decoration: underline;
+}
+
+.notes-editor a[href^='http'],
+.notes-editor a[href^='mailto'] {
+  color: var(--color-brand-dark-green, #2f7a3e);
+}
+
+/* Inline Roam-style #hashtag pills (decoration-only; text stays plain markdown). */
+.notes-editor .hashtag {
+  background: var(--color-brand-light-bg, #eaf9ec);
+  color: var(--color-brand-dark-green, #2f7a3e);
+  border-radius: 9999px;
+  padding: 0.05em 0.4em;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+/* Task lists (checkboxes). */
+.notes-editor ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+.notes-editor ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.notes-editor ul[data-type='taskList'] li > label {
+  margin-top: 0.2rem;
+  user-select: none;
+}
+.notes-editor ul[data-type='taskList'] li > div {
+  flex: 1 1 auto;
+}
+
+/* Tables. */
+.notes-editor table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  table-layout: fixed;
+}
+.notes-editor th,
+.notes-editor td {
+  border: 1px solid var(--color-border-default, #d1d5db);
+  padding: 0.35rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.notes-editor th {
+  background: var(--color-surface-2, #f9fafb);
+  font-weight: 600;
+}

@@ -29,8 +29,20 @@ interface SearchRow {
   tags: string[];
   image_url: string | null;
   community_id: string | null;
+  identity_id: string | null;
   metadata: unknown;
   community_name: string | null;
+}
+
+/** How many fields a row has filled — used to pick the best representative per identity. */
+function fieldScore(r: SearchRow): number {
+  let n = 0;
+  if (r.subtitle) n++;
+  if (r.location) n++;
+  if (r.tags?.length) n++;
+  if (r.image_url) n++;
+  if ((r.metadata as Record<string, unknown> | null)?.email) n++;
+  return n;
 }
 
 /**
@@ -82,28 +94,54 @@ export async function GET(req: NextRequest) {
         n.tags,
         n.image_url,
         n.community_id,
+        n.identity_id,
         n.metadata,
         c.name AS community_name
       FROM nodes n
       LEFT JOIN communities c ON c.id = n.community_id
       WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}
       ORDER BY n.name ASC
-      LIMIT 10
+      LIMIT 30
     `;
 
-    return NextResponse.json({
-      results: rows.map(r => ({
-        id: r.id,
-        name: r.name,
-        subtitle: r.subtitle,
-        location: r.location,
-        tags: r.tags,
-        image_url: r.image_url,
-        community_id: r.community_id,
-        community_name: r.community_name,
-        metadata: r.metadata as Record<string, unknown> | null,
-      })),
-    });
+    // Collapse to one entry per canonical identity so the finder shows e.g. "Craig
+    // Piggott" once even when several communities each have their own node for him.
+    // Rows without an identity yet (legacy/unresolved) are kept distinct by node id.
+    // We over-fetch (LIMIT 30) then group down to 10 distinct entries.
+    const groups = new Map<string, { rep: SearchRow; communities: Set<string> }>();
+    for (const r of rows) {
+      const key = r.identity_id ?? `node:${r.id}`;
+      const existing = groups.get(key);
+      if (r.community_name) {
+        (existing?.communities ?? new Set<string>()).add(r.community_name);
+      }
+      if (!existing) {
+        const communities = new Set<string>();
+        if (r.community_name) communities.add(r.community_name);
+        groups.set(key, { rep: r, communities });
+      } else {
+        if (r.community_name) existing.communities.add(r.community_name);
+        if (fieldScore(r) > fieldScore(existing.rep)) existing.rep = r;
+      }
+    }
+
+    const results = Array.from(groups.values())
+      .slice(0, 10)
+      .map(({ rep, communities }) => ({
+        id: rep.id,
+        identity_id: rep.identity_id,
+        name: rep.name,
+        subtitle: rep.subtitle,
+        location: rep.location,
+        tags: rep.tags,
+        image_url: rep.image_url,
+        community_id: rep.community_id,
+        community_name: rep.community_name,
+        communities: Array.from(communities),
+        metadata: rep.metadata as Record<string, unknown> | null,
+      }));
+
+    return NextResponse.json({ results });
   } catch (err) {
     logger.error('api.nodes.search.failed', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

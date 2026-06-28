@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { ViewToggle, type ViewToggleOption } from '@/components/ui'
 
 type DirectoryView = 'grid' | 'table' | 'graph'
 
@@ -9,7 +9,7 @@ interface SearchAndFiltersProps {
   onViewChange: (view: DirectoryView) => void
 }
 
-const VIEWS: { id: DirectoryView; label: string; icon: React.ReactNode }[] = [
+const VIEWS: ViewToggleOption<DirectoryView>[] = [
   {
     id: 'graph',
     label: 'Graph',
@@ -39,68 +39,6 @@ const VIEWS: { id: DirectoryView; label: string; icon: React.ReactNode }[] = [
   },
 ]
 
-function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
-  const b = btn.getBoundingClientRect()
-  const c = container.getBoundingClientRect()
-  return { left: b.left - c.left, width: b.width }
-}
-
 export default function SearchAndFilters({ currentView, onViewChange }: SearchAndFiltersProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
-  const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null)
-  const animatedRef = useRef(false)
-
-  // Initial placement — no transition, fires after first paint
-  useEffect(() => {
-    const container = containerRef.current
-    const activeIndex = VIEWS.findIndex(v => v.id === currentView)
-    const btn = buttonRefs.current[activeIndex]
-    if (!container || !btn) return
-    setPillStyle(measureBtn(btn, container))
-    // Allow transitions from next change onwards
-    requestAnimationFrame(() => { animatedRef.current = true })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Slide to new position on view change
-  useEffect(() => {
-    if (!animatedRef.current) return
-    const container = containerRef.current
-    const activeIndex = VIEWS.findIndex(v => v.id === currentView)
-    const btn = buttonRefs.current[activeIndex]
-    if (!container || !btn) return
-    setPillStyle(measureBtn(btn, container))
-  }, [currentView])
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative flex items-center gap-1 rounded-2xl border border-border-default bg-surface-1 p-1 h-12 shadow-float"
-    >
-      {pillStyle && (
-        <span
-          className="absolute top-1 bottom-1 rounded-xl bg-brand-green shadow-sm"
-          style={{
-            left: pillStyle.left,
-            width: pillStyle.width,
-            transition: 'left 220ms cubic-bezier(0.4,0,0.2,1), width 220ms cubic-bezier(0.4,0,0.2,1)',
-          }}
-        />
-      )}
-
-      {VIEWS.map(({ id, label, icon }, i) => (
-        <button
-          key={id}
-          ref={el => { buttonRefs.current[i] = el }}
-          onClick={() => onViewChange(id)}
-          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors duration-200 ${
-            currentView === id ? 'text-white' : 'text-text-muted hover:text-text-secondary'
-          }`}
-        >
-          {icon}
-          {label}
-        </button>
-      ))}
-    </div>
-  )
+  return <ViewToggle options={VIEWS} value={currentView} onChange={onViewChange} />
 }

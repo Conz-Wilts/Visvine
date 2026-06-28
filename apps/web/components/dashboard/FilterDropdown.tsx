@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useClickOutside } from '@/hooks/useClickOutside';
 import Dropdown, {
   DROPDOWN_TRIGGER_CLASS,
   DROPDOWN_MENU_CLASS,
@@ -39,16 +40,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
     ? getColor([...selected][0])
     : null;
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSearch('');
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
+  useClickOutside(ref, () => { setOpen(false); setSearch(''); });
 
   useEffect(() => {
     if (open) setTimeout(() => searchRef.current?.focus(), 50);

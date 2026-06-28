@@ -5,6 +5,16 @@ import { getSession, isAdmin } from '@/lib/auth';
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { logger } from '@/lib/logger';
+import { tryResolveIdentity, confirmIdentity, type ResolveResult } from '@/lib/identity/resolve';
+import type { IdentityKind } from '@/lib/identity/match';
+
+/** Which canonical-identity kind (if any) a node type participates in. */
+function identityKindFor(type: string): IdentityKind | null {
+  const t = type.toLowerCase();
+  if (t === 'person' || t === 'people') return 'person';
+  if (t === 'organization' || t === 'organisation' || t === 'org') return 'organization';
+  return null;
+}
 
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
@@ -59,7 +69,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { node, community_id } = body as { node: NBNode; community_id: string };
+    const { node, community_id, identity_id } = body as {
+      node: NBNode;
+      community_id: string;
+      // Optional: an identity the user explicitly picked from the quick-add finder.
+      // An explicit human choice is trusted (and recorded as 'confirmed'); without
+      // it the server resolves the identity itself — the client can never silently
+      // force a merge.
+      identity_id?: string | null;
+    };
 
     if (!community_id) {
       return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
@@ -78,6 +96,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required to create nodes' }, { status: 403 });
     }
 
+    // ── Resolve the canonical cross-community identity (people/orgs only) ──
+    const kind = identityKindFor(node.type);
+    const meta = (node.metadata as Record<string, unknown>) ?? {};
+    let identityId: string | null = null;
+    let resolution: ResolveResult | null = null;
+
+    if (kind) {
+      if (identity_id) {
+        // Honour the explicit pick from the finder if it exists.
+        const chosen = await prisma.identity.findFirst({ where: { id: identity_id, kind }, select: { id: true } });
+        if (chosen) {
+          identityId = chosen.id;
+          await confirmIdentity(node.id, chosen.id, { actorUserId: session?.userId ?? null, reason: 'picked from finder' });
+        }
+      }
+      if (!identityId) {
+        resolution = await tryResolveIdentity(node.id, {
+          kind,
+          name: node.name,
+          // Only EXPLICIT signals feed matching — never coerce subtitle into a
+          // company, which would risk auto-merging two same-named people.
+          email: kind === 'person' ? ((meta.email as string) ?? null) : null,
+          linkedinUrl: (meta.linkedinUrl as string) ?? null,
+          website: kind === 'organization' ? (((meta.website as string) ?? (meta.url as string) ?? node.url) ?? null) : null,
+          company: kind === 'person' ? ((meta.companyName as string) ?? null) : null,
+          location: node.location ?? null,
+        }, { actorUserId: session?.userId ?? null });
+        identityId = resolution?.identityId ?? null;
+      }
+    }
+
     const row = await prisma.node.create({
       data: {
         id: node.id,
@@ -93,11 +142,14 @@ export async function POST(request: NextRequest) {
         tags: node.tags ?? [],
         metadata: (node.metadata as object) ?? {},
         communityId: community_id,
+        identityId,
       },
     });
 
     revalidateTag('graph-data-v2');
-    return NextResponse.json({ node: nodeRowToNBNode(row) }, { status: 201 });
+    // `resolution` lets the client surface possible-match suggestions (Tier C) for
+    // inline confirmation; null when the type has no identity or an explicit pick won.
+    return NextResponse.json({ node: nodeRowToNBNode(row), resolution }, { status: 201 });
   } catch (err) {
     logger.error('api.data.nodes.post.failed', { err });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -212,60 +212,54 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* Chat Interface Styles */
+/* ─── Global custom scrollbar ──────────────────────────────────────────────
+   Brand-green thumb, transparent track, no arrow buttons — applied to every
+   scrollable element in the app (page, panels, dropdowns, textareas, …). A
+   clean bar, primary colour, no native chrome.
 
-textarea::-webkit-scrollbar {
-  width: 6px;
-}
-
-textarea::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 3px;
-}
-
-textarea::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-}
-
-textarea::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-/* Thin custom scrollbar for internal scroll areas (dropdown panels etc.) —
-   accent-coloured thumb, no track, no arrow buttons.
-   Standard scrollbar-* props are Firefox-only here (guarded by -moz-appearance,
-   which Lightning CSS can't statically resolve): in Chromium they'd force
-   native (Fluent) rendering, which draws arrow buttons and ignores the
-   ::-webkit-scrollbar rules below. */
+   Firefox/Chromium split: the standard `scrollbar-*` props, when set in
+   Chromium, force native (Fluent) rendering — which draws arrow buttons and
+   ignores the `::-webkit-scrollbar` rules. So they're guarded by
+   `@supports (-moz-appearance: none)` (Firefox-only here, and a guard Lightning
+   CSS can't statically resolve); Chromium is styled through the
+   `::-webkit-scrollbar*` pseudo-elements below.
+   `.custom-scrollbar` is kept as an alias for code/components still targeting
+   it — the `*` rules already cover those elements. */
 @supports (-moz-appearance: none) {
+  *,
   .custom-scrollbar {
     scrollbar-width: thin;
     scrollbar-color: var(--color-brand-green, #78d870) transparent;
   }
 }
 
+*::-webkit-scrollbar,
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 
+*::-webkit-scrollbar-button,
 .custom-scrollbar::-webkit-scrollbar-button {
   display: none;
   width: 0;
   height: 0;
 }
 
+*::-webkit-scrollbar-track,
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
+*::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background: var(--color-brand-green, #78d870);
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
+*::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-dark-green, #5cb854);
+  background: var(--color-brand-dark-green, #2f7a3e);
 }
 
 /* Date & Time Picker Styling */

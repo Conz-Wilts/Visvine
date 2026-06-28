@@ -4,8 +4,6 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
-import { useSession } from '@/lib/auth-client';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
 import ProfileHero from '@/components/profile/ProfileHero';
 import ProfileTabBar, { type ProfileTab } from '@/components/profile/ProfileTabBar';
@@ -13,12 +11,7 @@ import ProfileAboutPanel from '@/components/profile/ProfileAboutPanel';
 import ConnectionsGrid from '@/components/profile/ConnectionsGrid';
 import CommunitiesPanel from '@/components/profile/CommunitiesPanel';
 import ActivityFeed from '@/components/profile/ActivityFeed';
-import IntroRequestModal from '@/components/intros/IntroRequestModal';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
-
-const DEMO_NODE_ID = 'person:alex-chen';
-const DEMO_NODE_NAME = 'Alex Chen';
-const DEMO_COMMUNITY_ID = 'intro-demo';
 
 // ── Person nodes → LinkedIn profile ──────────────────────────────────────────
 
@@ -44,13 +37,7 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
 function NodeTabPage({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
   const [activeTab, setActiveTab] = useState<ProfileTab>('about');
-  const [introOpen, setIntroOpen] = useState(false);
-  const { data: session } = useSession();
-  const { currentCommunity } = useCommunity();
   const router = useRouter();
-
-  const requesterNodeId = session?.user?.nodeId ?? DEMO_NODE_ID;
-  const requesterName = session?.user?.name ?? DEMO_NODE_NAME;
 
   if (loading) return <ProfileSkeletonLoader mode="fullpage" />;
 
@@ -70,8 +57,6 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   }
 
   const { node, connectionCount, communityCount, connections } = data;
-  const canRequestIntro = node.type === 'People' && requesterNodeId !== nodeId;
-  const communityId = currentCommunity?.id ?? data?.node?.community_id ?? DEMO_COMMUNITY_ID;
   const communities = node.community_id
     ? [{ id: node.community_id, name: node.community_id, role: 'member' }]
     : [];
@@ -98,7 +83,6 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
         mutualConnections={[]}
         onConnectionsClick={() => setActiveTab('connections')}
         onCommunitiesClick={() => setActiveTab('communities')}
-        onRequestIntro={canRequestIntro ? () => setIntroOpen(true) : undefined}
       />
       <div className="mt-8">
         <ProfileTabBar
@@ -148,14 +132,6 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
         {activeTab === 'communities' && <CommunitiesPanel communities={communities} />}
         {activeTab === 'activity' && <ActivityFeed items={activityItems} />}
       </div>
-      {introOpen && (
-        <IntroRequestModal
-          communityId={communityId}
-          targetNode={{ id: nodeId, name: node.name, type: node.type, subtitle: node.subtitle ?? null, imageUrl: node.image_url ?? null }}
-          requesterName={requesterName}
-          onClose={() => setIntroOpen(false)}
-        />
-      )}
     </div>
   );
 }

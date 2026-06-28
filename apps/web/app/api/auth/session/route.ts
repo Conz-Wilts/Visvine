@@ -1,18 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession, isSuperAdmin, verifySession } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { getSession, isSuperAdmin } from "@/lib/session";
 
-export async function GET(req: NextRequest) {
-  // Check for Bearer token (mobile app) or cookie (web)
-  const authHeader = req.headers.get("authorization");
-  let session = null;
-
-  if (authHeader?.startsWith("Bearer ")) {
-    const token = authHeader.substring(7);
-    session = await verifySession(token);
-  } else {
-    session = await getSession();
-  }
-
+export async function GET() {
+  // getSession() already prefers a Bearer token (mobile) over the cookie (web).
+  const session = await getSession();
   if (!session) return NextResponse.json({ session: null });
 
   return NextResponse.json({

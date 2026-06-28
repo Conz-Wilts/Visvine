@@ -30,10 +30,72 @@ model Community {
   nodes            Node[]
   userCommunities  UserCommunity[]
   graphLayout      GraphLayout?
-  introRequests    IntroRequest[]
-  channels         Conversation[]
+  notes            CommunityNote[]
+  noteFolders      CommunityNoteFolder[]
 
   @@map("communities")
+}
+
+/// A markdown note in a community's notes/knowledge surface. Notes live in a
+/// "brain" identified by (communityId, ownerKey): ownerKey "shared" = the
+/// community-wide brain every member sees; any other value is a userId = that
+/// user's personal brain scoped to this community. `path` is the brain-relative
+/// POSIX path ("portfolio/canva.md") and doubles as the link-resolution identity,
+/// so the pure index/graph/backlink pipeline (lib/notes/shared) treats a row exactly
+/// like a file on disk. `content` (full markdown incl. YAML frontmatter) is the
+/// source of truth. Soft-deleted notes (deletedAt set) are the trash.
+model CommunityNote {
+  id          String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String                  @map("community_id")
+  ownerKey    String                  @map("owner_key") // 'shared' = community brain; else a userId = personal brain
+  path        String // brain-relative POSIX path, e.g. "portfolio/canva.md"
+  content     String // full markdown incl. frontmatter (source of truth)
+  pinned      Boolean                 @default(false)
+  createdBy   String                  @map("created_by")
+  createdAt   DateTime                @default(now()) @map("created_at")
+  updatedAt   DateTime                @updatedAt @map("updated_at")
+  deletedAt   DateTime?               @map("deleted_at") // soft-delete = trash; null = live
+  deletedPath String?                 @map("deleted_path") // original path while trashed
+  community   Community               @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  revisions   CommunityNoteRevision[]
+
+  @@unique([communityId, ownerKey, path], name: "note_identity")
+  @@index([communityId, ownerKey, deletedAt])
+  @@map("community_notes")
+}
+
+/// Append-only revision snapshots for a CommunityNote (newest by `at`). Mirrors
+/// the .history sidecar of the source app: a baseline is seeded on first edit and
+/// every save records a full snapshot, capped/coalesced in lib/notes/store.ts.
+model CommunityNoteRevision {
+  id          String        @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noteId      String        @map("note_id")
+  at          DateTime      @default(now())
+  editor      String // display name of who saved it (from the session)
+  editorEmail String?       @map("editor_email")
+  origin      String        @default("edit") // edit | ai-refactor | restore | baseline
+  model       String? // LLM model name when origin = ai-refactor
+  content     String // full snapshot (frontmatter + body) at this save
+  note        CommunityNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, at])
+  @@map("community_note_revisions")
+}
+
+/// Explicitly-created folders for a brain. Notes already imply their ancestor
+/// folders, but this table lets empty folders exist and be renamed; the tree
+/// builder grafts these in alongside note-derived folders.
+model CommunityNoteFolder {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String    @map("community_id")
+  ownerKey    String    @map("owner_key")
+  path        String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, ownerKey, path], name: "folder_identity")
+  @@index([communityId, ownerKey])
+  @@map("community_note_folders")
 }
 
 /// Persisted force-directed graph layout for a community's directory graph view.
@@ -65,6 +127,10 @@ model Node {
   createdAt             DateTime               @default(now()) @map("created_at")
   updatedAt             DateTime               @updatedAt @map("updated_at")
   alias                 String?
+  // Canonical cross-community identity this node represents (people/orgs). Nullable:
+  // legacy rows and non-person/org types may have none. Set by lib/identity/resolve.
+  identityId            String?                @map("identity_id")
+  identity              Identity?              @relation(fields: [identityId], references: [id], onDelete: SetNull)
   attendees             Attendee[]             @relation("EventNode")
   attendeePerson        Attendee[]             @relation("PersonNode")
   communityColumnValues CommunityColumnValue[]
@@ -76,6 +142,7 @@ model Node {
   @@index([communityId])
   @@index([type])
   @@index([communityId, type])
+  @@index([identityId])
   @@map("nodes")
 }
 
@@ -141,26 +208,6 @@ model Attendee {
   @@map("attendees")
 }
 
-/// Host blasts + scheduled reminders/confirmations for an event.
-/// Sending requires a mail provider + scheduler (see docs); rows are inert until then.
-model EventMessage {
-  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  eventId      String    @map("event_id")
-  communityId  String    @map("community_id")
-  kind         String // 'confirmation' | 'reminder' | 'blast'
-  audience     String    @default("going") // going | maybe | waitlisted | all
-  subject      String
-  body         String
-  scheduledFor DateTime? @map("scheduled_for")
-  sentAt       DateTime? @map("sent_at")
-  createdBy    String    @map("created_by")
-  createdAt    DateTime  @default(now()) @map("created_at")
-
-  @@index([eventId])
-  @@index([scheduledFor, sentAt])
-  @@map("event_messages")
-}
-
 model User {
   id                      String                   @id @default(dbgenerated("(gen_random_uuid())::text"))
   name                    String
@@ -177,27 +224,11 @@ model User {
   columnRequestsSubmitted CommunityColumnRequest[] @relation("ColumnRequestRequester")
   columnRequestsReviewed  CommunityColumnRequest[] @relation("ColumnRequestReviewer")
   communityColumnValues   CommunityColumnValue[]
-  conversationMemberships ConversationMember[]
-  conversationsCreated    Conversation[]           @relation("ConversationCreator")
-  messagesSent            Message[]                @relation("MessageSender")
   person                  Person?
   privateColumnValues     PrivateColumnValue[]
   privateColumns          PrivateColumn[]
   membersAdded            UserCommunity[]          @relation("AddedByRelation")
   userCommunities         UserCommunity[]          @relation("MemberOf")
-  posts                   Post[]                   @relation("PostAuthor")
-  postComments            PostComment[]            @relation("CommentAuthor")
-  postLikes               PostLike[]               @relation("PostLiker")
-  postReactions           PostReaction[]           @relation("PostReactor")
-  postCommentReactions    PostCommentReaction[]    @relation("CommentReactor")
-  messageReactions        MessageReaction[]        @relation("ReactionAuthor")
-  messageDeliveries       MessageDelivery[]
-  messageStars            MessageStar[]
-  pushSubscriptions       PushSubscription[]
-  blocksInitiated         UserBlock[]              @relation("Blocker")
-  blocksReceived          UserBlock[]              @relation("Blocked")
-  pollVotes               PollVote[]
-  scheduledMessages       ScheduledMessage[]
   valueSharesSubmitted    ValueShareRequest[]      @relation("ValueShareRequester")
   valueSharesReviewed     ValueShareRequest[]      @relation("ValueShareReviewer")
   blogPosts               BlogPost[]               @relation("BlogPostAuthor")
@@ -351,152 +382,6 @@ model ValueShareRequest {
   @@map("value_share_requests")
 }
 
-model Conversation {
-  id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  type        ConversationType     @default(DM)
-  name        String?
-  description String?
-  avatarUrl   String?              @map("avatar_url")
-  dmKey       String?              @unique @map("dm_key")
-  /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
-  communityId String?              @map("community_id")
-  createdById String               @map("created_by_id")
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-  members     ConversationMember[]
-  community   Community?           @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  messages    Message[]
-
-  @@index([type])
-  @@index([updatedAt])
-  @@index([communityId, type])
-  @@map("conversations")
-}
-
-model ConversationMember {
-  id             String                 @id @default(dbgenerated("(gen_random_uuid())::text"))
-  conversationId String                 @map("conversation_id")
-  userId         String                 @map("user_id")
-  role           ConversationMemberRole @default(MEMBER)
-  joinedAt       DateTime               @default(now()) @map("joined_at")
-  lastReadAt     DateTime?              @map("last_read_at")
-  mutedUntil     DateTime?              @map("muted_until")
-  archivedAt     DateTime?              @map("archived_at")
-  conversation   Conversation           @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([conversationId, userId])
-  @@index([userId])
-  @@index([conversationId])
-  @@index([conversationId, lastReadAt])
-  @@map("conversation_members")
-}
-
-model Message {
-  id              String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  conversationId  String               @map("conversation_id")
-  senderId        String               @map("sender_id")
-  text            String
-  attachmentUrl   String?              @map("attachment_url")
-  editedAt        DateTime?            @map("edited_at")
-  deletedAt       DateTime?            @map("deleted_at")
-  replyToId       String?              @map("reply_to_id")
-  forwardedFromId String?              @map("forwarded_from_id")
-  threadRootId    String?              @map("thread_root_id")
-  pinnedAt        DateTime?            @map("pinned_at")
-  expiresAt       DateTime?            @map("expires_at")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  conversation    Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  replyTo         Message?             @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]            @relation("MessageReplies")
-  forwardedFrom   Message?             @relation("MessageForwards", fields: [forwardedFromId], references: [id], onDelete: SetNull)
-  forwards        Message[]            @relation("MessageForwards")
-  threadRoot      Message?             @relation("MessageThread", fields: [threadRootId], references: [id], onDelete: Cascade)
-  threadReplies   Message[]            @relation("MessageThread")
-  images          MessageImage[]
-  mentions        MessageMention[]
-  reactions       MessageReaction[]
-  linkPreviews    MessageLinkPreview[]
-  deliveries      MessageDelivery[]
-  attachments     MessageAttachment[]
-  stars           MessageStar[]
-  poll            Poll?
-
-  @@index([conversationId, createdAt])
-  @@index([senderId, createdAt])
-  @@index([conversationId, pinnedAt])
-  @@index([threadRootId])
-  @@index([expiresAt])
-  @@map("messages")
-}
-
-model MessageImage {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId String   @map("message_id")
-  imageUrl  String   @map("image_url")
-  position  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-  @@map("message_images")
-}
-
-model MessageMention {
-  id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId       String   @map("message_id")
-  mentionedUserId String?  @map("mentioned_user_id")
-  mentionedNodeId String?  @map("mentioned_node_id")
-  mentionType     String   @default("user") @map("mention_type")
-  createdAt       DateTime @default(now()) @map("created_at")
-  message         Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-  @@index([mentionedUserId])
-  @@index([mentionedNodeId])
-  @@map("message_mentions")
-}
-
-model MessageReaction {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId String   @map("message_id")
-  userId    String   @map("user_id")
-  emoji     String
-  createdAt DateTime @default(now()) @map("created_at")
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User     @relation("ReactionAuthor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([messageId, userId, emoji])
-  @@index([messageId])
-  @@map("message_reactions")
-}
-
-model LinkPreview {
-  id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  url         String               @unique
-  title       String?
-  description String?
-  imageUrl    String?              @map("image_url")
-  siteName    String?              @map("site_name")
-  fetchedAt   DateTime             @default(now()) @map("fetched_at")
-  messages    MessageLinkPreview[]
-
-  @@map("link_previews")
-}
-
-model MessageLinkPreview {
-  id            String      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId     String      @map("message_id")
-  linkPreviewId String      @map("link_preview_id")
-  message       Message     @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  linkPreview   LinkPreview @relation(fields: [linkPreviewId], references: [id])
-
-  @@index([messageId])
-  @@map("message_link_previews")
-}
-
 model Person {
   id           String   @id
   userId       String?  @unique @map("user_id")
@@ -519,6 +404,59 @@ model Person {
   user         User?    @relation(fields: [userId], references: [id])
 
   @@map("persons")
+}
+
+/// Canonical, cross-community identity for a real person or organization.
+/// Each community keeps its own private `Node` row; all nodes that represent the
+/// same real person/org point to ONE Identity (Node.identityId). Communities never
+/// share their per-node data — only identity-level facts live here (canonical name,
+/// photo, strong identifiers). Resolution (lib/identity/resolve.ts) decides whether
+/// a new node attaches to an existing identity or mints a new one. `userId` links the
+/// identity to a registered User when claimed/verified (email/linkedin become
+/// authoritative); kept as a plain unique scalar to avoid a relation on the large
+/// User model. Strong identifiers are stored normalized and treated as effectively
+/// unique per kind by the resolver/backfill (no DB partial-unique with db push).
+model Identity {
+  kind           String // 'person' | 'organization'
+  canonicalName  String   @map("canonical_name")
+  nameKey        String   @map("name_key") // normalized name, used for blocking
+  imageUrl       String?  @map("image_url")
+  email          String? // normalized lowercase (person)
+  linkedinHandle String?  @map("linkedin_handle") // normalized "linkedin.com/in/x" (person)
+  websiteDomain  String?  @map("website_domain") // normalized bare domain (org)
+  metadata       Json     @default("{}") // survivorship signals: { company, location, ... }
+  verified       Boolean  @default(false)
+  userId         String?  @unique @map("user_id") // set when claimed by a registered User
+  id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  nodes          Node[]
+
+  @@index([kind, email])
+  @@index([kind, linkedinHandle])
+  @@index([kind, websiteDomain])
+  @@index([kind, nameKey])
+  @@map("identities")
+}
+
+/// Append-only audit trail of identity-resolution decisions, for transparency and
+/// reversibility. Also records anti-matches: a `rejected` (or `split`) row for a
+/// (nodeId, identityId) pair tells the resolver "these are NOT the same" so it never
+/// re-suggests or re-auto-merges them. `actorUserId` is null for system decisions.
+model IdentityResolution {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  nodeId      String   @map("node_id")
+  identityId  String?  @map("identity_id") // candidate or chosen identity
+  decision    String // auto_strong | auto_name_company | suggested | confirmed | rejected | split | merged
+  confidence  Float    @default(0)
+  reason      String // human-readable, e.g. "email match" | "name+company"
+  actorUserId String?  @map("actor_user_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([nodeId])
+  @@index([identityId])
+  @@index([decision])
+  @@map("identity_resolutions")
 }
 
 model Resource {
@@ -587,242 +525,6 @@ model AuditLog {
   @@map("audit_log")
 }
 
-model Post {
-  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String         @map("community_id")
-  authorId    String         @map("author_id")
-  content     String
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-  images      PostImage[]
-  comments    PostComment[]
-  likes       PostLike[]
-  reactions   PostReaction[]
-  mentions    PostMention[]
-  author      User           @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([communityId, createdAt])
-  @@index([authorId])
-  @@map("posts")
-}
-
-model PostImage {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  imageUrl  String   @map("image_url")
-  position  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-  @@map("post_images")
-}
-
-model PostComment {
-  id        String                @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String                @map("post_id")
-  authorId  String                @map("author_id")
-  parentId  String?               @map("parent_id")
-  content   String
-  createdAt DateTime              @default(now()) @map("created_at")
-  updatedAt DateTime              @updatedAt @map("updated_at")
-  post      Post                  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User                  @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  parent    PostComment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   PostComment[]         @relation("CommentThread")
-  mentions  PostMention[]
-  reactions PostCommentReaction[]
-
-  @@index([postId, createdAt])
-  @@index([authorId])
-  @@index([parentId])
-  @@map("post_comments")
-}
-
-model PostLike {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  userId    String   @map("user_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation("PostLiker", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, userId])
-  @@index([postId])
-  @@index([userId])
-  @@map("post_likes")
-}
-
-model PostMention {
-  id              String       @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId          String?      @map("post_id")
-  commentId       String?      @map("comment_id")
-  mentionedUserId String       @map("mentioned_user_id")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  post            Post?        @relation(fields: [postId], references: [id], onDelete: Cascade)
-  comment         PostComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-  @@index([commentId])
-  @@index([mentionedUserId])
-  @@map("post_mentions")
-}
-
-model PostReaction {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  userId    String   @map("user_id")
-  emoji     String
-  createdAt DateTime @default(now()) @map("created_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation("PostReactor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, userId, emoji])
-  @@index([postId])
-  @@map("post_reactions")
-}
-
-model PostCommentReaction {
-  id        String      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  commentId String      @map("comment_id")
-  userId    String      @map("user_id")
-  emoji     String
-  createdAt DateTime    @default(now()) @map("created_at")
-  comment   PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User        @relation("CommentReactor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([commentId, userId, emoji])
-  @@index([commentId])
-  @@map("post_comment_reactions")
-}
-
-enum ConversationType {
-  DM
-  GROUP
-  CHANNEL
-}
-
-enum ConversationMemberRole {
-  MEMBER
-  ADMIN
-}
-
-model MessageDelivery {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId   String    @map("message_id")
-  userId      String    @map("user_id")
-  deliveredAt DateTime? @map("delivered_at")
-  readAt      DateTime? @map("read_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  message     Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([messageId, userId])
-  @@index([userId, readAt])
-  @@index([messageId])
-  @@map("message_deliveries")
-}
-
-model MessageAttachment {
-  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId  String   @map("message_id")
-  url        String
-  mimeType   String   @map("mime_type")
-  sizeBytes  Int      @map("size_bytes")
-  name       String
-  kind       String   @default("file") // file | audio | video
-  durationMs Int?     @map("duration_ms")
-  createdAt  DateTime @default(now()) @map("created_at")
-  message    Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-
-  @@index([messageId])
-  @@map("message_attachments")
-}
-
-model MessageStar {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId String   @map("message_id")
-  userId    String   @map("user_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([messageId, userId])
-  @@index([userId, createdAt])
-  @@map("message_stars")
-}
-
-model UserBlock {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  blockerId String   @map("blocker_id")
-  blockedId String   @map("blocked_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
-
-  @@unique([blockerId, blockedId])
-  @@index([blockedId])
-  @@map("user_blocks")
-}
-
-model PushSubscription {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId    String   @map("user_id")
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  userAgent String?  @map("user_agent")
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("push_subscriptions")
-}
-
-model ScheduledMessage {
-  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  conversationId String    @map("conversation_id")
-  senderId       String    @map("sender_id")
-  text           String
-  payload        Json      @default("{}")
-  scheduledFor   DateTime  @map("scheduled_for")
-  sentAt         DateTime? @map("sent_at")
-  canceledAt     DateTime? @map("canceled_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  sender         User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([scheduledFor, sentAt])
-  @@index([senderId])
-  @@map("scheduled_messages")
-}
-
-model Poll {
-  id        String     @id @default(dbgenerated("(gen_random_uuid())::text"))
-  messageId String     @unique @map("message_id")
-  question  String
-  options   Json // [{id, text}]
-  multi     Boolean    @default(false)
-  closesAt  DateTime?  @map("closes_at")
-  createdAt DateTime   @default(now()) @map("created_at")
-  message   Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  votes     PollVote[]
-
-  @@map("polls")
-}
-
-model PollVote {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  pollId    String   @map("poll_id")
-  userId    String   @map("user_id")
-  optionId  String   @map("option_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([pollId, userId, optionId])
-  @@index([pollId])
-  @@map("poll_votes")
-}
 
 // ─── Marketing / launch surfaces (global, no communityId) ───
 
@@ -899,32 +601,6 @@ model BlogCommentReaction {
   @@unique([commentId, userId, emoji])
   @@index([commentId])
   @@map("blog_comment_reactions")
-}
-
-/// Warm-introduction request (double opt-in). Node ids are stored loosely as
-/// strings (like Link/Attendee) and enriched to node summaries in the service.
-/// Flow: pending → approved (introducer endorses) → connected (target accepts).
-/// A decline from either party sets status=declined + declinedBy.
-model IntroRequest {
-  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId         String    @map("community_id")
-  requesterNodeId     String    @map("requester_node_id")
-  introducerNodeId    String    @map("introducer_node_id")
-  targetNodeId        String    @map("target_node_id")
-  messageToIntroducer String    @map("message_to_introducer")
-  messageToTarget     String    @map("message_to_target")
-  endorsement         String?
-  status              String    @default("pending")
-  declinedBy          String?   @map("declined_by")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  community           Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-
-  @@index([communityId])
-  @@index([introducerNodeId, status])
-  @@index([requesterNodeId])
-  @@index([targetNodeId, status])
-  @@map("intro_requests")
 }
 
 // ─── MCP OAuth 2.1 authorization server (self-hosted; see docs/MCP.md) ───

@@ -6,6 +6,8 @@ import { getSession, isSuperAdmin } from "@/lib/session";
 import NewPostButton from "@/features/blog/NewPostButton";
 import BlogPostList from "@/features/admin/BlogPostList";
 import WaitlistTable from "@/features/admin/WaitlistTable";
+import IdentityReviewTable from "@/features/admin/IdentityReviewTable";
+import { listSuggestions } from "@/lib/identity/steward";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +16,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-type ConsoleTab = "blog" | "waitlist";
+type ConsoleTab = "blog" | "waitlist" | "identities";
 
 const TABS: { id: ConsoleTab; label: string }[] = [
   { id: "blog", label: "Blog" },
   { id: "waitlist", label: "Waitlist" },
+  { id: "identities", label: "Identities" },
 ];
 
 export default async function AdminConsole({
@@ -34,7 +37,8 @@ export default async function AdminConsole({
   }
 
   const { tab } = await searchParams;
-  const activeTab: ConsoleTab = tab === "waitlist" ? "waitlist" : "blog";
+  const activeTab: ConsoleTab =
+    tab === "waitlist" ? "waitlist" : tab === "identities" ? "identities" : "blog";
 
   const posts =
     activeTab === "blog"
@@ -55,6 +59,9 @@ export default async function AdminConsole({
     activeTab === "waitlist"
       ? await prisma.waitlistEntry.findMany({ orderBy: { createdAt: "asc" } })
       : [];
+
+  // Super admins reach the whole queue (no community scope) — see listSuggestions.
+  const suggestions = activeTab === "identities" ? await listSuggestions() : [];
 
   return (
     <section className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
@@ -91,8 +98,10 @@ export default async function AdminConsole({
 
       {activeTab === "blog" ? (
         <BlogPostList posts={posts} />
-      ) : (
+      ) : activeTab === "waitlist" ? (
         <WaitlistTable entries={waitlist} />
+      ) : (
+        <IdentityReviewTable initial={suggestions} />
       )}
     </section>
   );

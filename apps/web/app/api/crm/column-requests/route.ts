@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
+import { isAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-
-async function isAdmin(userId: string, communityId: string): Promise<boolean> {
-  // Check super admin emails
-  const superAdmins = (process.env.SUPER_ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean);
-  const session = await getSession();
-  if (session && superAdmins.includes(session.email)) return true;
-
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId, communityId } },
-  });
-  return membership?.role === 'admin';
-}
 
 // GET /api/crm/column-requests?community_id=X
 export async function GET(req: NextRequest) {
@@ -22,7 +11,7 @@ export async function GET(req: NextRequest) {
   const communityId = req.nextUrl.searchParams.get('community_id');
   if (!communityId) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
 
-  const admin = await isAdmin(session.userId, communityId);
+  const admin = await isAdmin(session.userId, communityId, session.email);
 
   const requests = await prisma.communityColumnRequest.findMany({
     where: {
@@ -86,7 +75,7 @@ export async function PUT(req: NextRequest) {
   const requestRecord = await prisma.communityColumnRequest.findUnique({ where: { id } });
   if (!requestRecord) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const admin = await isAdmin(session.userId, requestRecord.communityId);
+  const admin = await isAdmin(session.userId, requestRecord.communityId, session.email);
   if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const updated = await prisma.communityColumnRequest.update({

@@ -48,11 +48,6 @@ export function getLinkTypeConfig(
   return { name, color: '#94a3b8', directed: false };
 }
 
-/** Convenience: the stroke colour for a relationship within a community. */
-export function linkTypeColor(relationship: string, communityLinkTypes?: LinkTypeConfig[]): string {
-  return getLinkTypeConfig(relationship, communityLinkTypes).color;
-}
-
 /** True when the relationship's configured type is the kind the auto-flows own. */
 export function isSystemRelationship(relationship: string, communityLinkTypes?: LinkTypeConfig[]): boolean {
   return getLinkTypeConfig(relationship, communityLinkTypes).system === true

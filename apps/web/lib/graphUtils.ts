@@ -2,7 +2,7 @@
  * Graph data normalization and filtering utilities
  */
 
-import type { GraphData, NBNode, NBLink, NodeType } from './types';
+import type { NBNode, NBLink, NodeType } from './types';
 import { normalizeImageUrl } from './mediaUrl';
 
 /**
@@ -35,29 +35,6 @@ export function normalizeLink(link: NBLink): NBLink {
     since: link.since ?? '',
     metadata: link.metadata ?? {}
   };
-}
-
-/**
- * Filter graph data by allowed node IDs
- */
-export function filterGraphByNodeIds(
-  graphData: GraphData,
-  allowedIds: Set<string>
-): GraphData {
-  const nodes = graphData.nodes.filter(node => allowedIds.has(node.id));
-  const nodeIdSet = new Set(nodes.map(node => node.id));
-  
-  const links = graphData.links.filter(link => {
-    const sourceId = typeof link.source === 'object' 
-      ? String((link.source as NBNode).id) 
-      : String(link.source);
-    const targetId = typeof link.target === 'object' 
-      ? String((link.target as NBNode).id) 
-      : String(link.target);
-    return nodeIdSet.has(sourceId) && nodeIdSet.has(targetId);
-  });
-
-  return { nodes, links };
 }
 
 /**

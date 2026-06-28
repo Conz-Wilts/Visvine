@@ -4,7 +4,6 @@
  */
 
 import prisma from './prisma';
-import { Prisma } from '@prisma/client';
 import { revalidateTag, unstable_cache } from 'next/cache';
 import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPStatus, RSVPResponse } from './types';
 import { normalizeImageUrl } from './mediaUrl';
@@ -378,22 +377,27 @@ export async function getAttendees(communityId: string, eventId: string): Promis
   }
 }
 
-export async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
-  const writable = {
-    personId: attendee.personId || null,
-    name: attendee.name ?? null,
-    email: attendee.email ?? null,
-    linkedinUrl: attendee.linkedinUrl ?? null,
-    companyName: attendee.companyName ?? null,
-    roleTitle: attendee.roleTitle ?? null,
-    answers: (attendee.answers as object) || {},
-    status: attendee.status,
-    response: attendee.response ?? null,
-    plusOnes: attendee.plusOnes ?? 0,
-    plusOneNames: attendee.plusOneNames ?? [],
-    invitedBy: attendee.invitedBy ?? null,
-    checkinAt: attendee.checkinAt ? new Date(attendee.checkinAt) : null,
+/** Maps an NBAttendee to the Prisma Attendee writable columns. Shared by upsertAttendee + submitRsvp. */
+function attendeeToWritable(a: NBAttendee) {
+  return {
+    personId: a.personId || null,
+    name: a.name ?? null,
+    email: a.email ?? null,
+    linkedinUrl: a.linkedinUrl ?? null,
+    companyName: a.companyName ?? null,
+    roleTitle: a.roleTitle ?? null,
+    answers: (a.answers as object) || {},
+    status: a.status,
+    response: a.response ?? null,
+    plusOnes: a.plusOnes ?? 0,
+    plusOneNames: a.plusOneNames ?? [],
+    invitedBy: a.invitedBy ?? null,
+    checkinAt: a.checkinAt ? new Date(a.checkinAt) : null,
   };
+}
+
+export async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
+  const writable = attendeeToWritable(attendee);
   await prisma.attendee.upsert({
     where: { id: attendee.id },
     create: { id: attendee.id, eventId: attendee.eventId, ...writable },
@@ -519,21 +523,7 @@ export async function submitRsvp(
     };
 
     // Same field mapping as upsertAttendee, but bound to the locked transaction.
-    const writable = {
-      personId: next.personId || null,
-      name: next.name ?? null,
-      email: next.email ?? null,
-      linkedinUrl: next.linkedinUrl ?? null,
-      companyName: next.companyName ?? null,
-      roleTitle: next.roleTitle ?? null,
-      answers: (next.answers as object) || {},
-      status: next.status,
-      response: next.response ?? null,
-      plusOnes: next.plusOnes ?? 0,
-      plusOneNames: next.plusOneNames ?? [],
-      invitedBy: next.invitedBy ?? null,
-      checkinAt: next.checkinAt ? new Date(next.checkinAt) : null,
-    };
+    const writable = attendeeToWritable(next);
     await tx.attendee.upsert({
       where: { id: next.id },
       create: { id: next.id, eventId: next.eventId, ...writable },
@@ -613,77 +603,5 @@ export async function removeAttendee(communityId: string, eventId: string, atten
     }
   }
   return true;
-}
-
-// ─── updateCommunityGraphData ─────────────────────────────────────────────────
-
-export async function updateCommunityGraphData(communityId: string, graphData: GraphData): Promise<void> {
-  try {
-    await prisma.$transaction(async (tx) => {
-      // Batch upsert nodes in chunks of 50
-      const CHUNK_SIZE = 50;
-      for (let i = 0; i < graphData.nodes.length; i += CHUNK_SIZE) {
-        const batch = graphData.nodes.slice(i, i + CHUNK_SIZE);
-        const values = batch.map((n) => Prisma.sql`(
-          ${n.id}, ${n.type.toLowerCase()}, ${n.name}, ${communityId},
-          ${n.subtitle ?? null}, ${n.location ?? null}, ${n.url ?? null},
-          ${n.image_url ?? null}, ${n.tags ?? []}::text[], ${JSON.stringify(n.metadata ?? {})}::jsonb
-        )`);
-        await tx.$executeRaw`
-          INSERT INTO nodes (id, type, name, community_id, subtitle, location, url, image_url, tags, metadata)
-          VALUES ${Prisma.join(values)}
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            subtitle = EXCLUDED.subtitle,
-            location = EXCLUDED.location,
-            url = EXCLUDED.url,
-            image_url = EXCLUDED.image_url,
-            tags = EXCLUDED.tags,
-            metadata = EXCLUDED.metadata,
-            updated_at = NOW()
-        `;
-      }
-
-      // Batch upsert links in chunks of 50. Dedup by link identity first so a
-      // single INSERT never touches the same (community_id, pair_key, relationship)
-      // twice (Postgres rejects that under ON CONFLICT). Imported edges are stamped
-      // origin 'import'; the conflict update never touches origin, so re-import
-      // can't demote a manual/promoted edge.
-      const linkByIdentity = new Map<string, NBLink>();
-      for (const l of graphData.links) {
-        const s = typeof l.source === 'string' ? l.source : l.source.id;
-        const t = typeof l.target === 'string' ? l.target : l.target.id;
-        const pairKey = [s, t].sort().join('|');
-        linkByIdentity.set(`${pairKey}|${l.relationship}`, l);
-      }
-      const dedupedLinks = [...linkByIdentity.values()];
-      for (let i = 0; i < dedupedLinks.length; i += CHUNK_SIZE) {
-        const batch = dedupedLinks.slice(i, i + CHUNK_SIZE);
-        const values = batch.map((l) => {
-          const sourceId = typeof l.source === 'string' ? l.source : l.source.id;
-          const targetId = typeof l.target === 'string' ? l.target : l.target.id;
-          const pairKey = [sourceId, targetId].sort().join('|');
-          return Prisma.sql`(
-            ${sourceId}, ${targetId}, ${communityId},
-            ${l.relationship}, ${l.since ?? null}, ${JSON.stringify(l.metadata ?? {})}::jsonb,
-            ${pairKey}, 'import', now()
-          )`;
-        });
-        await tx.$executeRaw`
-          INSERT INTO links (source_id, target_id, community_id, relationship, since, metadata, pair_key, origin, updated_at)
-          VALUES ${Prisma.join(values)}
-          ON CONFLICT (community_id, pair_key, relationship) DO UPDATE SET
-            relationship = EXCLUDED.relationship,
-            since = EXCLUDED.since,
-            metadata = EXCLUDED.metadata,
-            updated_at = now()
-        `;
-      }
-    });
-    revalidateTag('graph-data-v2');
-  } catch (err) {
-    logger.error('eventRepo.updateCommunityGraphData.failed', { err });
-    throw err;
-  }
 }
 

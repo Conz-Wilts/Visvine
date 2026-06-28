@@ -36,7 +36,7 @@ export async function GET(
     const role = isSuperAdmin(session.email) ? 'admin' : membership?.role ?? null;
     const isMember = role !== null;
 
-    const [memberTotal, nodeCount, resourceCount, memberships, latestPost, latestResources] =
+    const [memberTotal, nodeCount, resourceCount, memberships, latestResources] =
       await Promise.all([
         prisma.userCommunity.count({ where: { communityId } }),
         prisma.node.count({ where: { communityId } }),
@@ -46,11 +46,6 @@ export async function GET(
           orderBy: { joinedAt: 'asc' },
           take: 60,
           include: { user: { select: { id: true, name: true, image: true, person: { select: { id: true, imageUrl: true, subtitle: true } } } } },
-        }),
-        prisma.post.findFirst({
-          where: { communityId },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true },
         }),
         isMember
           ? prisma.resource.findMany({
@@ -116,7 +111,7 @@ export async function GET(
       members,
       events,
       resources: latestResources.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() })),
-      lastPostAt: latestPost?.createdAt.toISOString() ?? null,
+      lastPostAt: null,
     });
   } catch (error) {
     logger.error('api.communities.overview.failed', { err: error });

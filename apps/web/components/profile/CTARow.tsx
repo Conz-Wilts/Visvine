@@ -99,7 +99,7 @@ export default function CTARow({
       )}
 
       {/* Message — split button when intro is available */}
-      {(state === 'idle' || state === 'connected') && (
+      {onMessage && (state === 'idle' || state === 'connected') && (
         showIntro ? (
           <div className="relative flex" ref={dropdownRef}>
             {/* Primary: Message */}

@@ -1,0 +1,80 @@
+// Pure helpers mapping directory entities (person/organization Nodes) to their
+// canonical per-entity note path, and back. A `[[Craig Piggott]]` mention is
+// stored as an ordinary OKF link to this path, so the note that records context
+// about the entity is a real note — graph, backlinks, and search all work with
+// no special-casing. No fs/DOM access, so this is unit-testable like lib/notes/shared/*.
+
+export type EntityKind = 'person' | 'company'
+
+// The minimal shape we need off a directory node (NBNode-compatible).
+export interface EntityNodeLike {
+  id: string
+  type: string
+  name?: string | null
+  subtitle?: string | null
+}
+
+export const PEOPLE_DIR = 'people'
+export const COMPANIES_DIR = 'companies'
+
+// Map a node `type` to an entity kind (null for events/resources/etc.). Liberal
+// so it copes with 'person'/'people' and 'organization'/'org'/'company'.
+export function entityKindOf(type: string | null | undefined): EntityKind | null {
+  const t = (type ?? '').trim().toLowerCase()
+  if (t === 'person' || t === 'people') return 'person'
+  if (t.startsWith('org') || t === 'company' || t === 'companies') return 'company'
+  return null
+}
+
+// Strip the `<type>:` prefix from a node id to get its slug (`person:craig` → `craig`).
+function idSlug(id: string): string {
+  const i = id.indexOf(':')
+  return (i === -1 ? id : id.slice(i + 1)).trim()
+}
+
+// The canonical note path for a directory entity, or null if the node isn't a
+// person/organization. person → people/<slug>.md, organization → companies/<slug>.md.
+export function entityNotePath(node: EntityNodeLike): string | null {
+  const kind = entityKindOf(node.type)
+  const slug = idSlug(node.id)
+  if (!kind || !slug) return null
+  return `${kind === 'person' ? PEOPLE_DIR : COMPANIES_DIR}/${slug}.md`
+}
+
+// Normalize a link href to a canonical entity-note path, or null if it isn't one.
+// Tolerant of a leading slash; requires the people/ or companies/ namespace + .md.
+export function parseEntityHref(href: string): string | null {
+  if (!href) return null
+  const raw = href.startsWith('/') ? href.slice(1) : href
+  return /^(people|companies)\/.+\.md$/.test(raw) ? raw : null
+}
+
+// The entity kind implied by a note path (people/… vs companies/…), or null.
+export function entityKindOfPath(path: string): EntityKind | null {
+  if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
+  if (path.startsWith(`${COMPANIES_DIR}/`)) return 'company'
+  return null
+}
+
+// Default markdown for an auto-created entity context note. Carries the directory
+// `node:` id in frontmatter so the note view can link back to the directory profile.
+export function entityStub(node: EntityNodeLike): string {
+  const kind = entityKindOf(node.type)
+  const title = (node.name ?? idSlug(node.id)).trim()
+  const typeLabel = kind === 'company' ? 'Company' : 'Person'
+  const tag = kind === 'company' ? 'company' : 'person'
+  const noun = kind === 'company' ? 'company' : 'person'
+  // The title renders as the note heading from frontmatter (see NoteEditor), so the
+  // body carries no `# Title` line — just the optional subtitle and a starter prompt.
+  const subtitle = node.subtitle ? `> ${node.subtitle}\n\n` : ''
+  return (
+    `---\n` +
+    `type: ${typeLabel}\n` +
+    `title: ${JSON.stringify(title)}\n` +
+    `node: ${JSON.stringify(node.id)}\n` +
+    `tags: [${tag}]\n` +
+    `---\n\n` +
+    `${subtitle}` +
+    `Context and notes about this ${noun}.\n`
+  )
+}

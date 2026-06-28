@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession, signOut } from "@/lib/auth-client";
 import { useTheme } from "@/lib/contexts/ThemeContext";
 import { useFullProfile } from "@/lib/contexts/FullProfileContext";
 import { Moon, Sun } from "lucide-react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 export default function UserMenu() {
   const { data: session, isPending } = useSession();
@@ -16,13 +17,7 @@ export default function UserMenu() {
   const { isDark, toggleDark } = useTheme();
   const { openProfile } = useFullProfile();
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+  useClickOutside(menuRef, () => setOpen(false));
 
   if (isPending) {
     return <div className="w-12 h-12 rounded-xl bg-surface-3 animate-pulse shrink-0" />;

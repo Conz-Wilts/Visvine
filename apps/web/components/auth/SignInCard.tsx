@@ -24,7 +24,6 @@ export default function SignInCard({
     <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-10 flex flex-col items-center text-center">
       {/* Logo */}
       <span className="inline-flex items-center gap-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
         <span className="font-medium text-lg text-[#78d870] tracking-tight">Visvine</span>
       </span>

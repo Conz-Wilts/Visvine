@@ -83,9 +83,6 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
           <button className="flex-1 flex items-center justify-center gap-1 rounded-full border border-border-default text-text-muted text-xs font-semibold py-2 hover:bg-surface-2 transition-all">
             Invite
           </button>
-          <button className="flex-1 flex items-center justify-center gap-1 rounded-full bg-brand-green text-white text-xs font-semibold py-2 hover:opacity-90 transition-all shadow-sm">
-            Message
-          </button>
         </div>
       </div>
     </div>

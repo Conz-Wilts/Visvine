@@ -3,7 +3,7 @@
  */
 
 import type { NBNode } from './types';
-import { normalizeLinkedIn, slugify } from './eventUtils';
+import { normalizeLinkedIn } from './eventUtils';
 
 export interface PersonMatchInput {
   name: string;
@@ -65,57 +65,6 @@ export function findMatchingPerson(
   return null;
 }
 
-/**
- * Create a new person node from minimal information
- */
-export function createPersonNode(input: {
-  name: string;
-  email?: string;
-  linkedinUrl?: string;
-  companyName?: string;
-  roleTitle?: string;
-}): NBNode {
-  const baseSlug = slugify(input.name);
-
-  // Generate a unique ID (caller should check for collisions and append suffix if needed)
-  const id = `person:${baseSlug}`;
-
-  const subtitle = input.roleTitle || input.companyName || '';
-
-  const metadata: Record<string, unknown> = {};
-  if (input.email) metadata.email = input.email;
-  if (input.linkedinUrl) metadata.linkedinUrl = normalizeLinkedIn(input.linkedinUrl);
-  if (input.companyName) metadata.companyName = input.companyName;
-  if (input.roleTitle) metadata.roleTitle = input.roleTitle;
-
-  return {
-    id,
-    type: 'person',
-    name: input.name,
-    subtitle,
-    tags: input.companyName ? [input.companyName] : [],
-    metadata,
-  };
-}
-
-/**
- * Ensure person ID is unique by appending suffix if needed
- */
-export function ensureUniquePersonId(
-  baseNode: NBNode,
-  existingNodes: NBNode[]
-): NBNode {
-  let id = baseNode.id;
-  let suffix = 2;
-
-  const existingIds = new Set(existingNodes.map((n) => n.id));
-
-  while (existingIds.has(id)) {
-    const baseId = baseNode.id.replace(/person:/, '');
-    id = `person:${baseId}-${suffix}`;
-    suffix++;
-  }
-
-  return { ...baseNode, id };
-}
+// createPersonNode / ensureUniquePersonId were removed (unused) — node creation
+// now goes through the canonical lib/identity resolver.
 

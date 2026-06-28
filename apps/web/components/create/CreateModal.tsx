@@ -1,10 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useCreateModal, type CreateableType } from '@/lib/contexts/CreateModalContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { isFeatureEnabled } from '@/lib/features';
 import { slugify } from '@/lib/eventUtils';
-import type { CommunityAlias } from '@/lib/types';
+import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
@@ -50,13 +52,25 @@ const EVENT_FINDER_ICON = (
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function CreateModal() {
+  const router = useRouter();
   const { isOpen, defaultType, close } = useCreateModal();
   const { currentCommunity, refreshCommunity } = useCommunity();
+
+  // The "Create new" grid: the registry's grid types, minus any whose feature is
+  // off for this community (Context appears only where the notes feature is on).
+  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
+  const gridOptions = TYPE_OPTIONS.filter(
+    (o) => o.inGrid && (o.id !== 'context' || notesEnabled),
+  );
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
   const [step, setStep] = useState(0);
   const [selectedType, setSelectedType] = useState<CreateableType | null>(null);
   const [selectedAlias, setSelectedAlias] = useState<string | null>(null);
+  // Canonical identity chosen from the finder ("this is the existing Craig Piggott").
+  // Cleared the moment the user edits the form, so an edited entry isn't mis-attached.
+  const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +102,16 @@ export default function CreateModal() {
       imageBlob: null,
       imagePreview: r.image_url || null,
     });
+    // Attach the new community node to the SAME canonical identity (if resolved),
+    // so adding someone another community already has doesn't create a duplicate.
+    setSelectedIdentityId(r.identity_id ?? null);
+  };
+
+  // Any manual edit detaches from a previously picked identity — the server will
+  // then resolve the (now possibly different) person from scratch.
+  const handlePersonChange = (next: PersonFormData) => {
+    setSelectedIdentityId(null);
+    setPersonData(next);
   };
 
   const handleResourceMatch = (r: NodeSearchResult) => {
@@ -121,6 +145,7 @@ export default function CreateModal() {
     setStep(0);
     setSelectedType(null);
     setSelectedAlias(null);
+    setSelectedIdentityId(null);
     setSaving(false);
     setError(null);
     setCropperFile(null);
@@ -168,6 +193,13 @@ export default function CreateModal() {
   };
 
   const handleTypeSelect = (t: CreateableType) => {
+    // Context isn't created here — it lives at /context. Close and hand off to the
+    // notes workspace, which auto-opens its New-note dialog (see ?new=note).
+    if (t === 'context') {
+      handleClose();
+      router.push('/context?new=note');
+      return;
+    }
     setSelectedType(t);
     setStep(1);
   };
@@ -259,6 +291,9 @@ export default function CreateModal() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         community_id: currentCommunity.id,
+        // When the user picked an existing person from the finder, tell the server
+        // to attach this node to that canonical identity instead of resolving anew.
+        identity_id: selectedType === 'person' ? (selectedIdentityId ?? undefined) : undefined,
         node: {
           id,
           type,
@@ -423,7 +458,7 @@ export default function CreateModal() {
           {/* Body */}
           <div className="px-6 py-5">
             {step === 0 && (
-              <TypeSelector selected={selectedType} onSelect={handleTypeSelect} />
+              <TypeSelector options={gridOptions} selected={selectedType} onSelect={handleTypeSelect} />
             )}
 
             {step === 1 && selectedType === 'person' && (
@@ -432,7 +467,7 @@ export default function CreateModal() {
                 <div className="flex-1 min-w-0">
                   <PersonForm
                     data={personData}
-                    onChange={setPersonData}
+                    onChange={handlePersonChange}
                     nameRef={nameRef}
                     onCropRequest={setCropperFile}
                   />

@@ -300,8 +300,6 @@ export interface DirectoryItem {
   phone?: string
   pronouns?: string
   openToWork?: boolean
-  explanation?: string
-  similarity?: number
 }
 
 // Canonical node types and their default colours/shapes. A community can override

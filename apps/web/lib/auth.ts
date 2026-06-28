@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import { isSuperAdmin } from '@/lib/session';
+import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 
 /**
  * Checks whether a user has admin access to a community.
@@ -16,6 +16,20 @@ export async function isAdmin(
     select: { role: true },
   });
   return membership?.role === 'admin';
+}
+
+/**
+ * Session + community-admin gate, as a value (not a Response). Returns the
+ * session payload if the caller is a community admin (or super admin),
+ * otherwise null — mirrors the gate several admin routes used to inline.
+ *
+ *   const session = await getAdminSession(communityId);
+ *   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+ */
+export async function getAdminSession(communityId: string): Promise<SessionPayload | null> {
+  const session = await getSession();
+  if (!session) return null;
+  return (await isAdmin(session.userId, communityId, session.email)) ? session : null;
 }
 
 /**

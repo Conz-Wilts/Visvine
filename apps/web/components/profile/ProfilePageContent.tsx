@@ -16,12 +16,10 @@ import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import { computeProfileCompletion } from '@/lib/profileTypes';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
-import MyInsightsSection from './MyInsightsSection';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
 import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
-import ConnectButton from './ConnectButton';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | null;
 /** Which edit modal completes each profile-strength item. */
@@ -151,20 +149,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   style={{ background: theme.base }}>
                   <Pencil className="w-4 h-4 flex-none" /> Edit profile
                 </button>
-              ) : (
-                <ConnectButton
-                  targetNode={{
-                    id: nodeId,
-                    name: profile.name,
-                    type: nodeData?.node?.type ?? 'People',
-                    subtitle: profile.subtitle ?? null,
-                    imageUrl: profile.imageUrl ?? null,
-                  }}
-                  communityId={currentCommunity?.id ?? nodeData?.node?.community_id ?? ''}
-                  requesterName={session?.user?.name ?? 'there'}
-                  accent={{ base: theme.base, dark: theme.dark }}
-                />
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -343,9 +328,6 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           </SectionCard>
         </div>
       </div>
-
-      {/* Visitor-only private CRM notes — full-width floating card */}
-      {!isOwner && <MyInsightsSection nodeId={nodeId} communityId={currentCommunity?.id} />}
 
       {/* Modals */}
       {modal === 'basicInfo' && <EditBasicInfoModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}

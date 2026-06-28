@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   MapPin, Calendar, Users, Share2, FolderOpen, Sparkles, Network as NetworkIcon,
-  Plus, Check, MessageSquare, Heart, ChevronRight, LogOut, Globe2, UserPlus,
+  Plus, Check, ChevronRight, LogOut, Globe2, UserPlus,
   CalendarPlus, Loader2,
 } from 'lucide-react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
@@ -78,18 +78,9 @@ interface Overview {
   lastPostAt: string | null;
 }
 
-interface FeedPost {
-  id: string;
-  content: string;
-  createdAt: string;
-  author: { id: string; name: string; image?: string | null; person?: { subtitle?: string | null; imageUrl?: string | null } | null };
-  images: { id: string; url: string }[];
-  _count: { reactions: number; comments: number };
-}
-
 /* ── helpers ──────────────────────────────────────────────────────────────── */
 
-const SECTIONS = ['overview', 'events', 'activity', 'resources'] as const;
+const SECTIONS = ['overview', 'events', 'resources'] as const;
 type Section = (typeof SECTIONS)[number];
 
 function useScrollSpy(ids: readonly string[]) {
@@ -105,20 +96,6 @@ function useScrollSpy(ids: readonly string[]) {
   return active;
 }
 
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(ms / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
-}
-
 const FOURTEEN_DAYS_MS = 14 * 24 * 60 * 60 * 1000;
 
 /* ── page ─────────────────────────────────────────────────────────────────── */
@@ -132,7 +109,6 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [posts, setPosts] = useState<FeedPost[]>([]);
   const [copied, setCopied] = useState(false);
   const [joining, setJoining] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
@@ -155,21 +131,13 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
   const isMember = !!data?.viewer.role;
   const isAdminViewer = data?.viewer.role === 'admin';
 
-  useEffect(() => {
-    if (!isMember) { setPosts([]); return; }
-    fetch(`/api/feed?communityId=${encodeURIComponent(communityId)}&limit=3`)
-      .then((r) => (r.ok ? r.json() : { posts: [] }))
-      .then((d) => setPosts(d.posts ?? []))
-      .catch(() => {});
-  }, [communityId, isMember]);
-
   const theme = useMemo(
     () => hexToPalette(getNodeTypeConfig('Community', data?.community.nodeTypes ?? undefined).color),
     [data?.community.nodeTypes],
   );
 
   const visibleSections = useMemo(() => SECTIONS.filter((s) => {
-    if (s === 'events' || s === 'activity' || s === 'resources') return isMember;
+    if (s === 'events' || s === 'resources') return isMember;
     return true;
   }), [isMember]);
   const active = useScrollSpy(visibleSections);
@@ -429,24 +397,6 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
             </SectionCard>
           )}
 
-          {/* Activity feed */}
-          {isMember && (
-            <SectionCard id="activity" icon={<MessageSquare className="w-[18px] h-[18px]" />} title="Activity" theme={theme}
-                         action={posts.length > 0 ? <Link href="/channels" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link> : undefined}>
-              <Link href="/channels"
-                    className="flex items-center gap-3 px-4 py-2.5 mb-3 rounded-xl border border-border-default bg-surface-2 text-sm text-text-muted hover:border-border-default hover:bg-surface-3 transition">
-                <MessageSquare className="w-4 h-4 flex-none" /> Share something with the community…
-              </Link>
-              {posts.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {posts.map((p) => <PostPreview key={p.id} post={p} />)}
-                </div>
-              ) : (
-                <p className="text-sm text-text-muted italic text-center py-3">No posts yet — be the first to post.</p>
-              )}
-            </SectionCard>
-          )}
-
           {/* Resources */}
           {isMember && (
             <SectionCard id="resources" icon={<FolderOpen className="w-[18px] h-[18px]" />} title="Resources" theme={theme}
@@ -652,28 +602,6 @@ function EventMiniCard({ event, theme }: { event: OverviewEvent; theme: ThemePal
         )}
       </div>
     </Link>
-  );
-}
-
-function PostPreview({ post }: { post: FeedPost }) {
-  const image = post.author.person?.imageUrl ?? post.author.image;
-  return (
-    <article className="rounded-2xl border border-border-subtle p-4">
-      <div className="flex items-center gap-2.5">
-        {image
-          ? <img src={image} alt={post.author.name} className="w-8 h-8 rounded-lg object-cover flex-none" />
-          : <span className="w-8 h-8 rounded-lg bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(post.author.name)}</span>}
-        <div className="min-w-0">
-          <b className="block text-[13.5px] font-bold text-text-primary truncate">{post.author.name}</b>
-          <span className="block text-xs text-text-muted">{timeAgo(post.createdAt)}</span>
-        </div>
-      </div>
-      <p className="mt-2.5 text-sm text-text-secondary leading-relaxed line-clamp-4 whitespace-pre-line">{post.content}</p>
-      <div className="flex items-center gap-4 mt-2.5 text-xs text-text-muted">
-        <span className="inline-flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {post._count.reactions}</span>
-        <span className="inline-flex items-center gap-1"><MessageSquare className="w-3.5 h-3.5" /> {post._count.comments}</span>
-      </div>
-    </article>
   );
 }
 

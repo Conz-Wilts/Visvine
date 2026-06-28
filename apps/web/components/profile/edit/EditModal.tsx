@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { X } from 'lucide-react';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 
 interface EditModalProps {
   title: string;
@@ -12,12 +13,7 @@ interface EditModalProps {
 }
 
 export default function EditModal({ title, open, onClose, children, size = 'md' }: EditModalProps) {
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [open, onClose]);
+  useEscapeKey(onClose, open);
 
   if (!open) return null;
 
