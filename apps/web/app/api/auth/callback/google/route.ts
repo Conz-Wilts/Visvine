@@ -1,73 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createSession, COOKIE_NAME, MAX_AGE } from "@/lib/session";
+import { createSession } from "@/lib/session";
 import { generateClaimToken } from "@/lib/crm/claimService";
 import { safeRelativePath } from "@/lib/redirects";
+import {
+  ensurePerson,
+  setSessionCookie,
+  postAuthTarget,
+  type SessionableUser,
+} from "@/lib/auth/bootstrap";
 import prisma from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
-
-type SessionableUser = {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-};
 
 async function buildSessionResponse(
   user: SessionableUser,
   callbackUrl: string,
-  appUrl: string,
-  _req: NextRequest
+  appUrl: string
 ) {
-  // Fetch associated Person record if it exists
-  let person = await prisma.person.findUnique({
-    where: { userId: user.id },
-  });
-
-  // If no Person record exists, create one automatically
-  if (!person) {
-    // Generate a unique person ID based on email
-    const emailPrefix = user.email.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
-    const personId = `person:${emailPrefix}`;
-
-    try {
-      person = await prisma.person.create({
-        data: {
-          id: personId,
-          userId: user.id,
-          name: user.name,
-          imageUrl: user.image,
-        },
-      });
-    } catch (e) {
-      // If ID already exists, find a unique one
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        let suffix = 1;
-        let uniqueId = `person:${emailPrefix}-${suffix}`;
-        while (true) {
-          try {
-            person = await prisma.person.create({
-              data: {
-                id: uniqueId,
-                userId: user.id,
-                name: user.name,
-                imageUrl: user.image,
-              },
-            });
-            break;
-          } catch (err) {
-            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-              suffix++;
-              uniqueId = `person:${emailPrefix}-${suffix}`;
-            } else {
-              throw err;
-            }
-          }
-        }
-      } else {
-        throw e;
-      }
-    }
-  }
+  const person = await ensurePerson(user);
 
   const token = await createSession({
     userId: user.id,
@@ -77,17 +26,10 @@ async function buildSessionResponse(
     personId: person.id,
   });
 
-  // Redirect new users to onboarding
-  const redirectUrl = person.hasOnboarded ? callbackUrl : '/onboarding';
+  // New users go through onboarding first.
+  const redirectUrl = postAuthTarget(person.hasOnboarded, callbackUrl);
   const response = NextResponse.redirect(new URL(redirectUrl, appUrl));
-  response.cookies.set(COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: MAX_AGE,
-    path: "/",
-  });
-  return response;
+  return setSessionCookie(response, token);
 }
 
 export async function GET(req: NextRequest) {
@@ -159,7 +101,7 @@ export async function GET(req: NextRequest) {
         where: { id: user.id },
         data: { name: googleName, image: googlePicture || user.image },
       });
-      return await buildSessionResponse(user, callbackUrl, appUrl, req);
+      return await buildSessionResponse(user, callbackUrl, appUrl);
     }
     // googleId is linked to a shadow — unusual state; fall through to claim flow
   }
@@ -197,7 +139,7 @@ export async function GET(req: NextRequest) {
         throw e;
       }
     }
-    return await buildSessionResponse(newUser, callbackUrl, appUrl, req);
+    return await buildSessionResponse(newUser, callbackUrl, appUrl);
   }
 
   // Step 6: Email matched a shadow profile — initiate claim flow
@@ -215,7 +157,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(claimUrl);
   }
 
-  // Step 7: Active user found by email — link Google ID if not yet linked
+  // Step 7: Active user found by email — link Google to it. Google has just
+  // proven the person signing in controls this inbox.
+  //
+  // If that account was created by password signup and never verified its email
+  // (`emailVerified` false), the password may have been set by someone who does
+  // NOT own the address (email squatting / account pre-hijacking). Google's proof
+  // of ownership wins: mark the email verified and REVOKE the unverified password
+  // so a squatter can't keep access via /api/auth/login. A genuine user who set a
+  // password and then signed in with Google simply uses Google from now on.
   if (!userByEmail.googleId) {
     await prisma.user.update({
       where: { id: userByEmail.id },
@@ -224,9 +174,11 @@ export async function GET(req: NextRequest) {
         oauthProvider: "google",
         name: googleName,
         image: googlePicture || userByEmail.image,
+        emailVerified: true,
+        ...(userByEmail.emailVerified ? {} : { passwordHash: null }),
       },
     });
   }
 
-  return await buildSessionResponse(userByEmail, callbackUrl, appUrl, req);
+  return await buildSessionResponse(userByEmail, callbackUrl, appUrl);
 }

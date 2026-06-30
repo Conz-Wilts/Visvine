@@ -80,7 +80,7 @@ export default function CommunitySelector({
         )}
         {!iconOnly && (
           <>
-            <span className="hidden md:inline font-ginto">{currentCommunity?.name || 'Select Community'}</span>
+            <span className="hidden md:inline font-open-sauce">{currentCommunity?.name || 'Select Community'}</span>
             <svg
               className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"

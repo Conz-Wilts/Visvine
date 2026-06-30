@@ -12,7 +12,7 @@ interface Props {
 export default function WelcomeStep({ firstName, imageUrl, onStart, onSkip }: Props) {
   return (
     <div className="p-8 text-center">
-      <div className="w-full h-2 bg-gradient-to-r from-brand-green to-brand-dark-green rounded-t-2xl absolute top-0 left-0" />
+      <div className="w-full h-2 bg-gradient-to-r from-blue-500 via-fuchsia-500 to-amber-400 rounded-t-2xl absolute top-0 left-0" />
 
       <div className="mb-6 mt-4 flex justify-center">
         {imageUrl ? (
@@ -22,8 +22,8 @@ export default function WelcomeStep({ firstName, imageUrl, onStart, onSkip }: Pr
             className="w-24 h-24 rounded-2xl object-cover ring-4 ring-brand-light-bg"
           />
         ) : (
-          <div className="w-24 h-24 rounded-2xl bg-brand-light-bg flex items-center justify-center">
-            <span className="text-3xl font-semibold text-brand-dark-green">
+          <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-100 via-fuchsia-100 to-amber-100 flex items-center justify-center">
+            <span className="text-3xl font-bold bg-gradient-to-br from-blue-600 via-fuchsia-600 to-amber-500 bg-clip-text text-transparent">
               {firstName.charAt(0)}
             </span>
           </div>
@@ -31,7 +31,11 @@ export default function WelcomeStep({ firstName, imageUrl, onStart, onSkip }: Pr
       </div>
 
       <h1 className="text-2xl font-bold text-gray-900 mb-2">
-        Welcome, {firstName}!
+        Welcome,{' '}
+        <span className="bg-gradient-to-r from-blue-600 via-fuchsia-600 to-amber-500 bg-clip-text text-transparent">
+          {firstName}
+        </span>
+        !
       </h1>
       <p className="text-gray-500 mb-8 max-w-sm mx-auto">
         Let&apos;s set up your profile so people in the community can find and connect with you.

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import WaitlistForm from "@/components/marketing/WaitlistForm";
+import HomeCtas from "@/components/marketing/HomeCtas";
 import Countdown from "@/components/marketing/Countdown";
 
 export default async function Home() {
@@ -8,7 +8,7 @@ export default async function Home() {
   if (session) redirect("/directory");
 
   return (
-    <section className="flex-1 flex flex-col items-center justify-center px-5 sm:px-10 md:px-16 lg:px-24 pt-4 pb-24 sm:pb-32 md:pb-40 text-center">
+    <section className="flex-1 flex flex-col items-center justify-center px-5 sm:px-10 md:px-16 lg:px-24 py-10 sm:py-14 text-center">
       <h1 className="text-[1.75rem] sm:text-4xl md:text-5xl lg:text-[3.75rem] font-medium tracking-tight leading-[1.1] max-w-4xl lg:max-w-6xl text-balance">
         Every ecosystem, visualised. Every opportunity, accessible.
       </h1>
@@ -16,9 +16,9 @@ export default async function Home() {
         The community platform built by community.
       </p>
       <div className="mt-8 sm:mt-10 w-full max-w-md">
-        <WaitlistForm />
+        <HomeCtas />
       </div>
-      <div className="mt-8 sm:mt-10">
+      <div className="mt-10 sm:mt-12">
         <Countdown />
       </div>
     </section>

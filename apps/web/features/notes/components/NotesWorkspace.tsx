@@ -13,11 +13,11 @@ import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { useHeader } from '@/lib/contexts/HeaderContext'
 import { useCommunityGraphData } from '@/hooks/useCommunityGraphData'
 import { ViewToggle, type ViewToggleOption } from '@/components/ui'
-import { entityNotePath, entityStub } from '@/lib/notes/entities'
+import { entityNotePath, entityStub, entityKindOfPath } from '@/lib/notes/entities'
 import { notesApi, type Scope } from '../lib/notesApi'
 import { NoteSidebar } from './NoteSidebar'
 import { NoteEditor } from './NoteEditor'
-import { NoteSearchHome } from './NoteSearchHome'
+import { NoteSearchBox } from './NoteSearchBox'
 import { NotePicker, type PickerEntity } from './NotePicker'
 import { CreateModal } from './CreateModal'
 import { NotesGraph } from './NotesGraph'
@@ -104,7 +104,11 @@ export function NotesWorkspace() {
   const [tree, setTree] = useState<TreeNode | null>(null)
   const [notes, setNotes] = useState<NoteMeta[]>([])
   const [pinned, setPinned] = useState<string[]>([])
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  // The open note carries its OWN brain (scope), captured at open time, so an entity
+  // note can open from the shared brain while you browse your personal one. Entity
+  // context notes are community-canonical: opening one that isn't in the current brain
+  // resolves to `shared` (see scopeForPath). selectedPath/openScope derive from this.
+  const [open, setOpen] = useState<{ path: string; scope: Scope } | null>(null)
   const [content, setContent] = useState<string>('')
   const [references, setReferences] = useState<References | null>(null)
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
@@ -113,14 +117,35 @@ export function NotesWorkspace() {
   const [error, setError] = useState<string | null>(null)
   const [createKind, setCreateKind] = useState<'note' | 'folder' | null>(null)
   const [quickOpen, setQuickOpen] = useState(false)
-  // The active workspace surface. Search is the landing screen; Editor/Raw are the
-  // open note's two modes (only reachable once a note is open).
-  const [view, setView] = useState<'search' | 'graph' | 'editor' | 'raw'>('search')
+  // The active workspace surface. The graph is the landing screen (with a search
+  // box floated on top); Editor/Raw are the open note's two modes (only reachable
+  // once a note is open).
+  const [view, setView] = useState<'graph' | 'editor' | 'raw'>('graph')
   const [graphData, setGraphData] = useState<{ graph: GraphData; insights: LinkInsights } | null>(null)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [trashOpen, setTrashOpen] = useState(false)
   const [reorganizeOpen, setReorganizeOpen] = useState(false)
+  // Post-create "also keep a personal copy?" prompt, and a transient neutral toast.
+  const [entityPrompt, setEntityPrompt] = useState<{ path: string; name: string } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // The open note's path + the brain it lives in (see `open` above).
+  const selectedPath = open?.path ?? null
+  const openScope: Scope = open?.scope ?? scope
+
+  // Latest directory map, read by the load effect's self-heal without making it a
+  // dependency (so the open note isn't re-read every time the directory graph loads).
+  const entityByPathRef = useRef(entityByPath)
+  entityByPathRef.current = entityByPath
+
+  // The brain an entity note resolves to: the current brain when it has the note,
+  // else the canonical shared brain. Non-entity notes always use the current brain.
+  const scopeForPath = useCallback(
+    (path: string): Scope =>
+      entityKindOfPath(path) && !notes.some((n) => n.path === path) ? 'shared' : scope,
+    [notes, scope],
+  )
 
   const loadSeq = useRef(0)
   const noteRefs = useMemo(() => notes.map((n) => ({ path: n.path, title: n.title })), [notes])
@@ -151,6 +176,13 @@ export function NotesWorkspace() {
     notesApi.config().then((c) => setAiConfigured(c.aiConfigured)).catch(() => {})
   }, [])
 
+  // Auto-dismiss the transient neutral toast.
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 3500)
+    return () => clearTimeout(t)
+  }, [toast])
+
   const loadIndex = useCallback(
     async (autoSelect: boolean) => {
       if (!communityId) return
@@ -165,10 +197,13 @@ export function NotesWorkspace() {
         setPinned(list.pinned)
         setTree(treeRes.tree)
         if (autoSelect) {
-          setSelectedPath((cur) => {
-            if (cur && list.notes.some((n) => n.path === cur)) return cur
-            const welcome = list.notes.find((n) => n.path.toLowerCase() === 'welcome.md')
-            return welcome?.path ?? list.notes[0]?.path ?? null
+          // Auto-selection picks from the just-loaded browsing list, so the note
+          // lives in the current brain → open it under the current scope.
+          setOpen((cur) => {
+            const keep = cur && list.notes.some((n) => n.path === cur.path) ? cur.path : null
+            const next =
+              keep ?? list.notes.find((n) => n.path.toLowerCase() === 'welcome.md')?.path ?? list.notes[0]?.path ?? null
+            return next ? { path: next, scope } : null
           })
         }
       } catch (err) {
@@ -181,54 +216,100 @@ export function NotesWorkspace() {
   )
 
   // Reload the index whenever the community or brain changes, landing on the
-  // search-first screen with no note open (notes are opened from there).
+  // graph screen with no note open (notes are opened from there).
   useEffect(() => {
-    setSelectedPath(null)
+    setOpen(null)
     setContent('')
     setReferences(null)
     setRelated(null)
-    setView('search')
+    setView('graph')
     loadIndex(false)
   }, [loadIndex])
 
   // Open a note into the editor (the one entry point used by search, the sidebar,
-  // pickers, the graph, and in-note links).
-  const openNote = useCallback((path: string) => {
-    setSelectedPath(path)
-    setView('editor')
-  }, [])
+  // pickers, the graph, and in-note links). An entity note absent from the current
+  // brain resolves to the canonical shared note (scopeForPath). Drop any stale error
+  // so a leftover toast (e.g. from a prior failed open) doesn't follow you on.
+  const openNote = useCallback(
+    (path: string) => {
+      setError(null)
+      setOpen({ path, scope: scopeForPath(path) })
+      setView('editor')
+    },
+    [scopeForPath],
+  )
 
-  // Load the selected note's content + references + related.
+  // Load the open note's content + references + related, from the brain captured in
+  // `open` (which may differ from the browsing scope for a shared entity note).
   useEffect(() => {
-    if (!communityId || !selectedPath) {
+    if (!communityId || !open) {
       setContent('')
       setReferences(null)
       setRelated(null)
       return
     }
     const seq = ++loadSeq.current
-    const path = selectedPath
+    const { path, scope: sc } = open
+    // Clear the previous note's body up front so a slow/failed open never shows a
+    // ghost of the note you came from under the new heading.
+    setContent('')
     setReferences(null)
     setRelated(null)
     notesApi
-      .read(communityId, scope, path)
+      .read(communityId, sc, path)
       .then(({ content: c }) => {
-        if (loadSeq.current === seq) setContent(c)
+        if (loadSeq.current === seq) {
+          setContent(c)
+          setError(null) // a successful open clears any stale error toast
+        }
       })
-      .catch((err) => {
+      .catch(async (err) => {
+        if (loadSeq.current !== seq) return
+        // Self-heal: a directory entity can lack a seeded shared note. If this is a
+        // known entity resolved to shared, create its stub from the directory entity
+        // and re-read once before surfacing an error.
+        const entity = sc === 'shared' ? entityByPathRef.current?.get(path) : undefined
+        if (entity) {
+          try {
+            await notesApi.create(communityId, 'shared', path, entityStub(entity))
+          } catch {
+            /* tolerate already-exists / a concurrent create */
+          }
+          try {
+            const { content: c } = await notesApi.read(communityId, 'shared', path)
+            if (loadSeq.current === seq) {
+              setContent(c)
+              setError(null)
+            }
+            return
+          } catch {
+            /* fall through to the original error */
+          }
+        }
         if (loadSeq.current === seq) setError(err instanceof Error ? err.message : 'Failed to open note')
       })
-    notesApi.references(communityId, scope, path).then(({ references: r }) => {
+    notesApi.references(communityId, sc, path).then(({ references: r }) => {
       if (loadSeq.current === seq) setReferences(r)
     }).catch(() => {})
-    notesApi.related(communityId, scope, path).then(({ related: r }) => {
+    notesApi.related(communityId, sc, path).then(({ related: r }) => {
       if (loadSeq.current === seq) setRelated(r)
     }).catch(() => {})
-  }, [communityId, scope, selectedPath])
+  }, [communityId, open])
 
   const changeScope = (next: Scope) => {
     if (next === scope) return
     localStorage.setItem(SCOPE_KEY, next)
+    // Clear the open note (and any stale error) in the SAME batched update as the
+    // scope flip, so the note-load effect never fires the old path against the new
+    // brain. Without this, switching while a brain-specific note is open (e.g. the
+    // Community-only `companies/index.md`) reads it from the other brain and 404s
+    // ("Note not found: …"). The new brain's index loads via the loadIndex effect.
+    setOpen(null)
+    setContent('')
+    setReferences(null)
+    setRelated(null)
+    setView('graph')
+    setError(null)
     setScope(next)
   }
 
@@ -238,8 +319,11 @@ export function NotesWorkspace() {
   const handleSave = useCallback(
     async (path: string, body: string, origin?: string) => {
       if (!communityId) return
+      // Write to the open note's brain (shared for a cross-brain entity note); the
+      // sidebar index still refreshes for the brain you're browsing.
+      const sc = open && open.path === path ? open.scope : scope
       try {
-        await notesApi.write(communityId, scope, path, body, origin)
+        await notesApi.write(communityId, sc, path, body, origin)
         const [list, treeRes] = await Promise.all([
           notesApi.list(communityId, scope),
           notesApi.tree(communityId, scope),
@@ -247,36 +331,66 @@ export function NotesWorkspace() {
         setNotes(list.notes)
         setPinned(list.pinned)
         setTree(treeRes.tree)
-        if (selectedPath === path) {
-          notesApi.references(communityId, scope, path).then(({ references: r }) => setReferences(r)).catch(() => {})
-          notesApi.related(communityId, scope, path).then(({ related: r }) => setRelated(r)).catch(() => {})
+        if (open?.path === path) {
+          notesApi.references(communityId, sc, path).then(({ references: r }) => setReferences(r)).catch(() => {})
+          notesApi.related(communityId, sc, path).then(({ related: r }) => setRelated(r)).catch(() => {})
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
     },
-    [communityId, scope, selectedPath],
+    [communityId, scope, open],
   )
 
-  // Ensure a directory entity's context note exists in the current brain, then
-  // return its path. Picking `[[Craig Piggott]]` calls this before inserting the
-  // link, so the mention always resolves to a real note (graph + backlinks light up).
+  // Ensure a directory entity's context note exists, then return its path. Picking
+  // `[[Craig Piggott]]` calls this before inserting the link, so the mention always
+  // resolves to a real note (graph + backlinks light up). Entity notes are
+  // community-canonical, so they're created in the SHARED brain by default; when a
+  // note is newly created we offer to also keep a personal copy.
   const onEnsureEntityNote = useCallback(
     async (entity: PickerEntity): Promise<string> => {
       const path = entityNotePath({ id: entity.id, type: entity.type })
       if (!path) throw new Error('Not a directory entity')
       if (!communityId) throw new Error('No community')
-      if (notes.some((n) => n.path === path)) return path
+      let created = false
       try {
-        await notesApi.create(communityId, scope, path, entityStub(entity))
+        await notesApi.create(communityId, 'shared', path, entityStub(entity))
+        created = true
       } catch (err) {
-        // Tolerate a note that already exists (created concurrently / elsewhere).
+        // Tolerate a note that already exists (seeded / created elsewhere).
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
-      await loadIndex(false)
+      if (created) {
+        // Reflect the new shared note in the sidebar if you're browsing the shared brain.
+        if (scope === 'shared') await loadIndex(false)
+        setEntityPrompt({ path, name: entity.name })
+      }
       return path
     },
-    [communityId, scope, notes, loadIndex],
+    [communityId, scope, loadIndex],
+  )
+
+  // Keep a private copy of an entity note in the user's personal brain (a fresh stub,
+  // separate from the shared writeup). Tolerant of one already existing.
+  const onAddToPersonal = useCallback(
+    async (path: string) => {
+      if (!communityId) return
+      const entity = entityByPath.get(path)
+      if (!entity) return
+      setEntityPrompt(null)
+      try {
+        await notesApi.create(communityId, 'personal', path, entityStub(entity))
+        setToast(`Added ${entity.name} to your personal brain`)
+        if (scope === 'personal') await loadIndex(false)
+      } catch (err) {
+        if (err instanceof Error && /already exists/i.test(err.message)) {
+          setToast(`${entity.name} is already in your notes`)
+        } else {
+          setError(err instanceof Error ? err.message : 'Failed to add to your personal brain')
+        }
+      }
+    },
+    [communityId, scope, entityByPath, loadIndex],
   )
 
   const handleCreate = async (name: string, folder: string) => {
@@ -301,11 +415,12 @@ export function NotesWorkspace() {
 
   const handleDelete = async (path: string) => {
     if (!communityId) return
+    const sc = open && open.path === path ? open.scope : scope
     try {
-      await notesApi.remove(communityId, scope, path)
-      if (selectedPath === path) {
-        setSelectedPath(null)
-        setView('search')
+      await notesApi.remove(communityId, sc, path)
+      if (open?.path === path) {
+        setOpen(null)
+        setView('graph')
       }
       await loadIndex(false)
     } catch (err) {
@@ -363,7 +478,7 @@ export function NotesWorkspace() {
       { id: 'new-note', label: 'New note', run: () => { setPaletteOpen(false); setCreateKind('note') } },
       { id: 'new-folder', label: 'New folder', run: () => { setPaletteOpen(false); setCreateKind('folder') } },
       { id: 'find', label: 'Jump to note', hint: '⌘P', run: () => { setPaletteOpen(false); setQuickOpen(true) } },
-      { id: 'graph', label: view === 'graph' ? 'Show search' : 'Show link graph', run: () => { setPaletteOpen(false); setView(view === 'graph' ? 'search' : 'graph') } },
+      { id: 'graph', label: 'Show link graph', run: () => { setPaletteOpen(false); setView('graph') } },
       { id: 'brain', label: scope === 'shared' ? 'Switch to my notes' : 'Switch to community brain', run: () => { setPaletteOpen(false); changeScope(scope === 'shared' ? 'personal' : 'shared') } },
       { id: 'trash', label: 'Open trash', run: () => { setPaletteOpen(false); setTrashOpen(true) } },
     ]
@@ -377,12 +492,11 @@ export function NotesWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, scope, selectedPath, aiConfigured])
 
-  // The Search/Graph/Editor/Raw view selector lives in the navbar, to the left of
-  // the profile icon — sharing the directory's animated brand-green ViewToggle so
-  // the two read as the same control. Editor/Raw only appear once a note is open.
+  // The Graph/Editor/Raw view selector lives in the navbar, to the left of the
+  // profile icon — sharing the directory's animated brand-green ViewToggle so the
+  // two read as the same control. Editor/Raw only appear once a note is open.
   useEffect(() => {
-    const viewOptions: ViewToggleOption<'search' | 'graph' | 'editor' | 'raw'>[] = [
-      { id: 'search', label: 'Search' },
+    const viewOptions: ViewToggleOption<'graph' | 'editor' | 'raw'>[] = [
       { id: 'graph', label: 'Graph' },
     ]
     if (selectedPath) {
@@ -436,6 +550,31 @@ export function NotesWorkspace() {
         </div>
       )}
 
+      {/* After a new entity note is saved to the shared directory, offer a personal copy. */}
+      {entityPrompt && (
+        <div className="mx-auto mt-3 flex max-w-3xl items-center justify-between gap-3 rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-secondary shadow-soft">
+          <span>
+            Added <span className="font-semibold text-text-primary">{entityPrompt.name}</span> to the community directory.
+          </span>
+          <span className="flex flex-none items-center gap-1.5">
+            <button
+              onClick={() => onAddToPersonal(entityPrompt.path)}
+              className="rounded-full border border-border-subtle bg-surface-1 px-3 py-1 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
+            >
+              Add to my notes
+            </button>
+            <button onClick={() => setEntityPrompt(null)} className="text-text-muted hover:text-text-secondary">✕</button>
+          </span>
+        </div>
+      )}
+
+      {toast && (
+        <div className="mx-auto mt-3 flex max-w-3xl items-center justify-between rounded-lg border border-brand-green/30 bg-brand-light-bg px-3 py-2 text-sm text-brand-dark-green">
+          <span>{toast}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-brand-dark-green/60 hover:text-brand-dark-green">✕</button>
+        </div>
+      )}
+
       {/* Context tree — rendered INTO the global Sidebar's docked card (it owns the
           rail + tree container chrome); we just supply the tree content via a portal.
           host is null off /context, when collapsed, or below lg (no docked card). */}
@@ -467,7 +606,7 @@ export function NotesWorkspace() {
       {(view === 'editor' || view === 'raw') && selectedPath ? (
         <div className="relative -mt-24" style={{ height: 'calc(100dvh - 16px)' }}>
           <NoteEditor
-            key={`${scope}:${selectedPath}`}
+            key={`${openScope}:${selectedPath}`}
             path={selectedPath}
             meta={selectedMeta}
             notes={noteRefs}
@@ -480,10 +619,11 @@ export function NotesWorkspace() {
             entities={entities}
             entityByPath={entityByPath}
             onEnsureEntityNote={onEnsureEntityNote}
+            onAddToPersonal={onAddToPersonal}
             onSave={handleSave}
             onOpenNote={openNote}
             onShowHistory={() => setHistoryOpen(true)}
-            exportHref={notesApi.exportUrl(communityId!, scope, selectedPath)}
+            exportHref={notesApi.exportUrl(communityId!, openScope, selectedPath)}
             onDelete={() => handleDelete(selectedPath)}
           />
         </div>
@@ -491,17 +631,29 @@ export function NotesWorkspace() {
         <div className="mt-3 flex min-h-0 flex-1 pb-4 pr-4 sm:pr-6 lg:pr-8">
           <main className="min-w-0 flex-1 overflow-hidden">
             {view === 'graph' ? (
-              graphData ? (
-                <NotesGraph
-                  graph={graphData.graph}
-                  selectedPath={selectedPath}
-                  onOpenNote={openNote}
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-text-muted">Loading graph…</div>
-              )
-            ) : view === 'search' ? (
-              <NoteSearchHome notes={notes} pinned={pinned} onOpen={openNote} onNew={() => setCreateKind('note')} heading={heading} />
+              <div className="relative h-full">
+                {/* Search floats on top of the graph (centred near the top). The wrapper
+                    is click-through so graph panning still works around the box; only the
+                    box + its results dropdown capture pointer events. */}
+                <div className="pointer-events-none absolute inset-x-0 top-3 z-10 flex justify-center px-4">
+                  <div className="pointer-events-auto w-full max-w-md">
+                    <NoteSearchBox
+                      notes={notes}
+                      onOpen={openNote}
+                      placeholder={scope === 'shared' ? `Search ${heading}…` : 'Search your notes…'}
+                    />
+                  </div>
+                </div>
+                {graphData ? (
+                  <NotesGraph
+                    graph={graphData.graph}
+                    selectedPath={selectedPath}
+                    onOpenNote={openNote}
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-text-muted">Loading graph…</div>
+                )}
+              </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
                 <p className="text-base font-semibold text-text-secondary">Select a note to start editing</p>
@@ -538,7 +690,7 @@ export function NotesWorkspace() {
       {historyOpen && communityId && selectedPath && (
         <RevisionHistory
           communityId={communityId}
-          scope={scope}
+          scope={openScope}
           path={selectedPath}
           onRestored={() => loadIndex(false)}
           onClose={() => setHistoryOpen(false)}

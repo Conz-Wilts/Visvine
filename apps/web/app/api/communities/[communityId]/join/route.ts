@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getSession } from '@/lib/session';
+import { isForeignPersonalSpace } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { aliasesForType, type CommunityAlias } from '@/lib/types';
@@ -22,9 +23,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
   try {
     const community = await prisma.community.findUnique({
       where: { id: communityId },
-      select: { id: true, communityAliases: true },
+      select: { id: true, communityAliases: true, personalOwnerId: true },
     });
     if (!community) return NextResponse.json({ error: 'Community not found' }, { status: 404 });
+
+    // Personal spaces (me:<userId>) are private single-member communities —
+    // nobody but the owner may join one.
+    if (isForeignPersonalSpace(community.personalOwnerId, session.userId)) {
+      return NextResponse.json({ error: 'This community is private' }, { status: 403 });
+    }
 
     // A user joins as a Person node, so they may only identify with a
     // Person-type alias. Anything else (an Organization alias, or an unknown

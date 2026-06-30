@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/brand";
 
-export default function WaitlistForm() {
+export default function WaitlistForm({
+  variant = "primary",
+}: {
+  variant?: "primary" | "link";
+}) {
   const [open, setOpen] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -64,7 +68,7 @@ export default function WaitlistForm() {
 
   return (
     <>
-      <div className="flex flex-col items-center gap-3">
+      {variant === "link" ? (
         <button
           type="button"
           onClick={() => {
@@ -72,12 +76,26 @@ export default function WaitlistForm() {
             setStatus("idle");
             setMessage("");
           }}
-          className="px-7 py-3 sm:px-8 sm:py-3.5 rounded-md font-medium text-sm sm:text-base text-white shadow-sm hover:opacity-90 transition"
-          style={{ backgroundColor: BRAND }}
+          className="text-sm text-neutral-500 underline-offset-4 hover:text-neutral-800 hover:underline transition"
         >
-          Join waitlist
+          Just want updates? Join the waitlist
         </button>
-      </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(true);
+              setStatus("idle");
+              setMessage("");
+            }}
+            className="px-7 py-3 sm:px-8 sm:py-3.5 rounded-md font-medium text-sm sm:text-base text-white shadow-sm hover:opacity-90 transition"
+            style={{ backgroundColor: BRAND }}
+          >
+            Join waitlist
+          </button>
+        </div>
+      )}
 
       {open && (
         <div

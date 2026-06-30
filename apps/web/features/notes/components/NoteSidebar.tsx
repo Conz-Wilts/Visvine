@@ -221,24 +221,24 @@ function NoteRow({
           type="button"
           title={pinned ? 'Unpin' : 'Pin'}
           onClick={() => onTogglePin(path, !pinned)}
-          className={`rounded p-1 text-sm ${pinned ? 'text-brand-dark-green' : 'text-text-muted hover:text-text-secondary'}`}
+          className={`rounded p-1 ${pinned ? 'text-brand-dark-green' : 'text-text-muted hover:text-text-secondary'}`}
         >
-          {pinned ? '★' : '☆'}
+          <PinIcon filled={pinned} />
         </button>
         {canEdit && (
           <button
             type="button"
             title="Delete"
             onClick={() => onDelete(path)}
-            className="rounded p-1 text-sm text-text-muted hover:text-red-500"
+            className="rounded p-1 text-red-500 hover:text-red-600"
           >
-            ✕
+            <TrashIcon />
           </button>
         )}
       </div>
       {pinned && (
-        <span className="pointer-events-none -ml-1 text-sm text-brand-dark-green opacity-100 group-hover:hidden">
-          ★
+        <span className="pointer-events-none -ml-1 text-brand-dark-green opacity-100 group-hover:hidden">
+          <PinIcon filled />
         </span>
       )}
     </div>
@@ -268,6 +268,29 @@ function FileIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
       <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+    </svg>
+  )
+}
+
+function PinIcon({ filled = false }: { filled?: boolean }) {
+  // A compact thumbtack (tack pointing down) — reads smaller and cleaner than the
+  // angled pushpin. Fills when pinned.
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 4v6l-2 3v1h10v-1l-2-3V4" />
+      <path d="M7 4h10" />
+      <path d="M12 14v6" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
     </svg>
   )
 }

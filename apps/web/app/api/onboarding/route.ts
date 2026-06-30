@@ -10,6 +10,7 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
+import { provisionPersonalCommunity } from '@/lib/onboarding/personalCommunity';
 import { z } from 'zod';
 
 // Bare domains ("visvine.com", "linkedin.com/in/me") are the common way people
@@ -130,5 +131,19 @@ export async function POST() {
     data: { hasOnboarded: true },
   });
 
-  return NextResponse.json({ ok: true });
+  // Give the new user their private "personal space" — a community named after
+  // them that hosts their personal context notes. Idempotent, so a re-POST (e.g.
+  // skip then finish) is harmless. Returns the id so the client can make it the
+  // active community before redirecting into the app.
+  const { communityId } = await provisionPersonalCommunity({
+    userId: session.userId,
+    name: session.name,
+    email: session.email,
+  });
+
+  // The user's person node was just placed in their space — bust the graph cache
+  // so their directory isn't empty on first load.
+  revalidateTag('graph-data-v2');
+
+  return NextResponse.json({ ok: true, communityId });
 }

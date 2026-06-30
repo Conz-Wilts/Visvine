@@ -15,6 +15,14 @@ export async function GET() {
     if (session instanceof Response) return session;
 
     const data = await prisma.community.findMany({
+      // Personal spaces (personalOwnerId set) are private to their owner — keep
+      // them out of every other user's list (Discover, switcher, graph picker).
+      where: {
+        OR: [
+          { personalOwnerId: null },
+          { personalOwnerId: session.userId },
+        ],
+      },
       select: {
         id: true,
         name: true,

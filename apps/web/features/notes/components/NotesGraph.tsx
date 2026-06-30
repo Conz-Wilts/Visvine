@@ -1,25 +1,22 @@
 'use client'
 
 // The force-directed link graph for a brain: notes are nodes (sized by degree),
-// resolved OKF links are edges. Layout is a one-shot d3-force run (d3-force is
-// already a Visvine dep), rendered as SVG so labels + clicks are simple at
-// note-scale. The whole brain is rendered; click a node to open the note.
+// resolved OKF links are edges. Positions come from the shared graphLayout engine
+// — the same deterministic PivotMDS → Barnes-Hut → zero-overlap → component-packing
+// pipeline the main directory graph uses — rendered as SVG so labels + clicks are
+// simple at note-scale. The whole brain is rendered; click a node to open the note.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  forceCenter,
-  forceCollide,
-  forceLink,
-  forceManyBody,
-  forceSimulation,
-  type SimulationNodeDatum,
-} from 'd3-force'
+import { layoutGraph } from '@/lib/graph-layout/graphLayout'
+import { useTheme } from '@/lib/contexts/ThemeContext'
 import type { GraphData } from '@/lib/notes/shared/types'
 
-interface GNode extends SimulationNodeDatum {
+interface GNode {
   id: string
   label: string
   degree: number
+  x: number
+  y: number
 }
 interface GLink {
   source: GNode
@@ -36,25 +33,41 @@ const WIDTH = 1000
 const HEIGHT = 700
 
 function layout(data: GraphData): { nodes: GNode[]; links: GLink[] } {
-  const nodes: GNode[] = data.nodes.map((n) => ({ id: n.id, label: n.label, degree: n.degree }))
+  if (data.nodes.length === 0) return { nodes: [], links: [] }
+
+  // Model each dot as its collision radius (>= the render radius below) so the
+  // engine's zero-overlap guarantee covers the drawn circles. Labels extend
+  // rightward and aren't modelled — same as the old forceCollide, so no regression.
+  const result = layoutGraph(
+    data.nodes.map((n) => ({ id: n.id, r: 10 + Math.sqrt(n.degree) * 4 })),
+    data.links.map((l) => ({ source: l.source, target: l.target })),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      idealEdgeLength: 70, // matches the old forceLink .distance(70) feel
+      nodePadding: 10, // a little breathing room between dots
+      // No `seed`: the engine auto-derives a deterministic seed from the node ids.
+    },
+  )
+
+  const byInput = new Map(data.nodes.map((n) => [n.id, n]))
+  const nodes: GNode[] = result.nodes.map((p) => {
+    const src = byInput.get(String(p.id))!
+    return { id: src.id, label: src.label, degree: src.degree, x: p.x, y: p.y }
+  })
+
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const links: GLink[] = data.links
     .map((l) => ({ source: byId.get(l.source)!, target: byId.get(l.target)! }))
     .filter((l) => l.source && l.target)
 
-  const sim = forceSimulation(nodes)
-    .force('link', forceLink<GNode, GLink>(links).id((d) => d.id).distance(70).strength(0.6))
-    .force('charge', forceManyBody().strength(-220))
-    .force('center', forceCenter(WIDTH / 2, HEIGHT / 2))
-    .force('collide', forceCollide<GNode>().radius((d) => 10 + Math.sqrt(d.degree) * 4))
-    .stop()
-
-  const ticks = Math.min(400, Math.max(120, nodes.length * 6))
-  for (let i = 0; i < ticks; i++) sim.tick()
   return { nodes, links }
 }
 
 export function NotesGraph({ graph, selectedPath, onOpenNote }: NotesGraphProps) {
+  // Note dots use the active theme accent (the user's selected primary colour),
+  // not a hardcoded green, so the graph matches the rest of the app's theme.
+  const { theme } = useTheme()
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 })
   const dragRef = useRef<{ x: number; y: number } | null>(null)
 
@@ -138,7 +151,7 @@ export function NotesGraph({ graph, selectedPath, onOpenNote }: NotesGraphProps)
                   >
                     <circle
                       r={r}
-                      fill={isSelected ? '#2f7a3e' : '#78d870'}
+                      fill={isSelected ? theme.accentDark : theme.accent}
                       stroke={isSelected ? '#111827' : '#ffffff'}
                       strokeWidth={isSelected ? 2 : 1}
                     />

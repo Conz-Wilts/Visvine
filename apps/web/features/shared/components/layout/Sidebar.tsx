@@ -105,7 +105,7 @@ export default function Sidebar() {
   const railInner = (
     <>
       {/* Create button */}
-      <div className="relative group">
+      <div className="relative group" data-tour="create">
         <button
           onClick={() => openCreateModal()}
           className="flex items-center h-10 text-white"
@@ -157,10 +157,10 @@ export default function Sidebar() {
           />
         )}
 
-        {allNav.map(({ href, label, icon }) => {
+        {allNav.map(({ key, href, label, icon }) => {
           const active = pathname === href;
           return (
-            <div key={href} className="relative group">
+            <div key={href} data-tour={`nav-${key}`} className="relative group">
               <Link
                 href={href}
                 className="relative z-10 flex items-center h-10"

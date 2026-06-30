@@ -17,6 +17,7 @@ import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext";
 import { ContextPanelProvider } from "@/lib/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
+import TourLauncher from "@/features/onboarding/TourLauncher";
 
 // If the community has switched off the feature whose page is currently open,
 // bounce to the first feature that's still enabled (directory by default). The
@@ -69,6 +70,9 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* Global create modal */}
       <CreateModal />
+
+      {/* One-time post-onboarding feature tour (no-op unless the flag is set) */}
+      <TourLauncher />
     </div>
   );
 }

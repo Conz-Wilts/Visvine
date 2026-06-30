@@ -30,7 +30,9 @@ export default function Navbar() {
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
         {/* Left: logo + community selector + community management cog */}
         <div className="flex items-center gap-3">
-          <CommunitySelector />
+          <div data-tour="community-switcher">
+            <CommunitySelector />
+          </div>
           {canAccessAdmin && (
             <Link
               href="/admin"

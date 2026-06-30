@@ -77,13 +77,6 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
         <Badge variant="type-pill" color={typeColor} className="mt-1 mb-2">
           {item.alias ?? (item.type.charAt(0).toUpperCase() + item.type.slice(1))}
         </Badge>
-
-        {/* Push buttons to bottom */}
-        <div className="mt-auto pt-3 border-t border-border-subtle flex gap-2 w-full" onClick={e => e.stopPropagation()}>
-          <button className="flex-1 flex items-center justify-center gap-1 rounded-full border border-border-default text-text-muted text-xs font-semibold py-2 hover:bg-surface-2 transition-all">
-            Invite
-          </button>
-        </div>
       </div>
     </div>
   )

@@ -15,12 +15,14 @@ export default function SignInModal({
   devAuthEnabled,
   callbackUrl,
   error,
+  initialMode = "signin",
 }: {
   open: boolean;
   onClose: () => void;
   devAuthEnabled: boolean;
   callbackUrl?: string;
   error?: string;
+  initialMode?: "signin" | "signup";
 }) {
   // Close on Escape and lock background scroll while the popup is open.
   useEffect(() => {
@@ -68,6 +70,8 @@ export default function SignInModal({
           </svg>
         </button>
         <SignInCard
+          key={initialMode}
+          initialMode={initialMode}
           devAuthEnabled={devAuthEnabled}
           callbackUrl={callbackUrl}
           error={error}

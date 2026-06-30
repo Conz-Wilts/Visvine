@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
+import { communityReadForbidden } from '@/lib/auth';
 
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
@@ -49,6 +50,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
   ]);
 
   if (!node) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+
+  // A node that lives in another user's personal space is private — treat it as
+  // not-found rather than reveal its profile + connections.
+  if (node.communityId && (await communityReadForbidden(session.userId, node.communityId))) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 

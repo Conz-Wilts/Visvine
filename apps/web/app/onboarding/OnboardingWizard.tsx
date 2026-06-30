@@ -14,7 +14,6 @@ export interface OnboardingData {
   imageUrl: string | null;
   subtitle: string;
   location: string;
-  pronouns: string;
   bio: string;
   openToWork: boolean;
   tags: string[];
@@ -32,7 +31,6 @@ interface Props {
     subtitle?: string | null;
     bio?: string | null;
     location?: string | null;
-    pronouns?: string | null;
     openToWork: boolean;
     tags: string[];
     linkedinUrl?: string | null;
@@ -56,7 +54,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
     imageUrl: person.imageUrl ?? null,
     subtitle: person.subtitle ?? '',
     location: person.location ?? '',
-    pronouns: person.pronouns ?? '',
     bio: person.bio ?? '',
     openToWork: person.openToWork,
     tags: person.tags,
@@ -77,7 +74,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
 
       if (stepData.subtitle !== undefined) payload.subtitle = stepData.subtitle || null;
       if (stepData.location !== undefined) payload.location = stepData.location || null;
-      if (stepData.pronouns !== undefined) payload.pronouns = stepData.pronouns || null;
       if (stepData.bio !== undefined) payload.bio = stepData.bio || null;
       if (stepData.openToWork !== undefined) payload.openToWork = stepData.openToWork;
       if (stepData.tags !== undefined) payload.tags = stepData.tags;
@@ -121,20 +117,36 @@ export default function OnboardingWizard({ person, userName }: Props) {
     setStep((s) => Math.max(0, s - 1));
   };
 
-  const skipAll = async () => {
+  // Mark onboarding complete + provision the user's personal community on the
+  // server. Returns its id so we can make it the active community before the user
+  // lands in the app. (localStorage key mirrors CommunityContext's.)
+  const finishOnboarding = async (): Promise<string | null> => {
     try {
-      await fetch('/api/onboarding', { method: 'POST' });
+      const res = await fetch('/api/onboarding', { method: 'POST' });
+      if (!res.ok) return null;
+      const data = (await res.json().catch(() => ({}))) as { communityId?: string };
+      return typeof data.communityId === 'string' ? data.communityId : null;
     } catch {
-      // best-effort; still let the user into the app
+      return null;
+    }
+  };
+
+  const skipAll = async () => {
+    const communityId = await finishOnboarding();
+    if (communityId) {
+      try { localStorage.setItem('nb_current_community', communityId); } catch {}
     }
     router.push('/directory');
   };
 
   const complete = async () => {
-    try {
-      await fetch('/api/onboarding', { method: 'POST' });
-    } catch {
-      // best-effort; DoneStep re-enables its button regardless
+    const communityId = await finishOnboarding();
+    if (communityId) {
+      try {
+        localStorage.setItem('nb_current_community', communityId);
+        // One-shot flag — the auth shell's TourLauncher runs the feature tour once.
+        localStorage.setItem('nb_onboarding_tour', '1');
+      } catch {}
     }
   };
 

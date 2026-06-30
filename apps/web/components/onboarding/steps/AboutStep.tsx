@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Pencil } from 'lucide-react';
 import type { OnboardingData } from '@/app/onboarding/OnboardingWizard';
 import Toggle from '@/components/ui/Toggle';
 
@@ -20,7 +20,12 @@ export default function AboutStep({ data, onNext, onBack, saving }: Props) {
 
   return (
     <div className="p-8">
-      <h2 className="text-xl font-bold text-gray-900 mb-1">About you</h2>
+      <div className="flex items-center gap-3 mb-1">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
+          <Pencil className="h-5 w-5" />
+        </span>
+        <h2 className="text-xl font-bold text-gray-900">About you</h2>
+      </div>
       <p className="text-sm text-gray-500 mb-6">Tell the community a bit about yourself.</p>
 
       <div className="mb-4">

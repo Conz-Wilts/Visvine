@@ -102,13 +102,19 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
     await Promise.all([loadAllCommunities(), loadUserCommunities()]);
   };
 
-  const currentCommunity = communities.find(c => c.id === currentCommunityId) || null;
   const joinedCommunities = communities
     .filter(c => membershipRoles.has(c.id))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  // Derive isAdmin from membership roles (super-admins already mapped to 'admin' server-side)
-  const isAdmin = currentCommunityId ? membershipRoles.get(currentCommunityId) === 'admin' : false;
+  // Use the stored selection when it still resolves; otherwise fall back to the
+  // first joined community. This lands a brand-new user in their personal space
+  // even when localStorage was never written (e.g. onboarding skipped that step).
+  const currentCommunity =
+    communities.find(c => c.id === currentCommunityId) ?? joinedCommunities[0] ?? null;
+
+  // Derive isAdmin from the resolved current community (super-admins already
+  // mapped to 'admin' server-side).
+  const isAdmin = currentCommunity ? membershipRoles.get(currentCommunity.id) === 'admin' : false;
 
   return (
     <CommunityContext.Provider

@@ -156,7 +156,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           {/* identity */}
           <div className="mt-4">
             <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
-              <h1 className="text-2xl sm:text-[27px] font-bold text-text-primary leading-tight tracking-tight font-ginto">{profile.name}</h1>
+              <h1 className="text-2xl sm:text-[27px] font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
               {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
               {aliasName && (
                 <span
@@ -288,7 +288,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                 <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
                      style={{ background: `conic-gradient(${theme.base} ${score}%, var(--surface-3,#f3f4f6) 0)` }}>
                   <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
-                  <b className="relative text-[13px] font-bold font-ginto text-text-primary">{score}%</b>
+                  <b className="relative text-[13px] font-bold font-open-sauce text-text-primary">{score}%</b>
                 </div>
                 <p className="text-[13px] text-text-secondary leading-snug">Complete profiles rank higher in your community’s directory.</p>
               </div>
@@ -343,7 +343,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 function StatItem({ value, label, onClick, accent }: { value: number; label: string; onClick?: () => void; accent?: string }) {
   const inner = (
     <>
-      <b className="text-[15px] font-bold font-ginto text-text-primary tabular-nums">{value}</b>
+      <b className="text-[15px] font-bold font-open-sauce text-text-primary tabular-nums">{value}</b>
       <span className="text-[13px] text-text-muted">{label}</span>
     </>
   );
@@ -365,7 +365,7 @@ function SectionCard({ id, icon, title, badge, theme, isOwner, onEdit, addLabel,
   return (
     <section id={id} className={`bg-surface-1 border border-border-subtle rounded-2xl shadow-soft ${scrollMargin}`}>
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
-        <h2 className="flex items-center gap-2.5 text-[15px] font-bold font-ginto text-text-primary">
+        <h2 className="flex items-center gap-2.5 text-[15px] font-bold font-open-sauce text-text-primary">
           <span className="w-7 h-7 rounded-lg grid place-items-center flex-none"
                 style={{ background: theme.light, color: theme.dark }}>
             {icon}

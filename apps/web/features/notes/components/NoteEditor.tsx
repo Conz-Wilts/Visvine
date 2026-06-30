@@ -30,9 +30,9 @@ import {
   Download as DownloadIcon,
   Trash2 as TrashIcon,
 } from 'lucide-react'
-import Link from 'next/link'
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
+import { EntityNoteHeader } from './EntityNoteHeader'
 import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
 import { parseEntityHref } from '@/lib/notes/entities'
@@ -64,6 +64,8 @@ interface NoteEditorProps {
   entities?: PickerEntity[]
   entityByPath?: Map<string, PickerEntity>
   onEnsureEntityNote?: (entity: PickerEntity) => Promise<string>
+  // Keep a private copy of an entity context note in the user's personal brain.
+  onAddToPersonal?: (path: string) => void
   onSave: (path: string, content: string, origin?: string) => void
   onOpenNote: (path: string) => void
   onOpenTag?: (tag: string) => void
@@ -114,6 +116,7 @@ export function NoteEditor({
   entities,
   entityByPath,
   onEnsureEntityNote,
+  onAddToPersonal,
   onSave,
   onOpenNote,
   onOpenTag,
@@ -224,7 +227,10 @@ export function NoteEditor({
           return true
         }
         const resolved = resolveOkfLink(href, pathRef.current)
-        if (resolved && notesSetRef.current.has(resolved)) {
+        // Open if the note is in this brain's index, OR it's a directory entity
+        // note — those resolve to the canonical shared note even when the current
+        // brain doesn't have them (the workspace handles the cross-brain open).
+        if (resolved && (notesSetRef.current.has(resolved) || parseEntityHref(resolved))) {
           onOpenNote(resolved)
           return true
         }
@@ -378,7 +384,20 @@ export function NoteEditor({
     }
   }, [editor, refactoring, flush])
 
-  const noteTitle = (meta?.title?.trim() || path.replace(/\.md$/i, '').split('/').pop()) ?? path
+  // Title and entity id come from the note's OWN frontmatter (parsed from the
+  // loaded content), falling back to the index `meta`. Deriving from content means
+  // the entity card still renders when the open note isn't in the current brain's
+  // index — e.g. a shared company note opened from the personal brain (meta is null).
+  const ownFrontmatter = useMemo(() => parseFrontmatter(initialContent), [initialContent])
+  const noteTitle = (meta?.title?.trim() || titleFromContent(initialContent, path)) ?? path
+
+  // Entity context notes (a directory person/company, carrying a `node:` id in
+  // frontmatter) open with an identity card + expandable profile instead of the
+  // plain title. Avatar/headline come from the cached directory entity, keyed by
+  // the note path; the node id (for the embed + deep-link) comes from frontmatter.
+  const rawNode = meta?.frontmatter?.node ?? ownFrontmatter.node
+  const entityNodeId = rawNode ? String(rawNode) : null
+  const entity = entityNodeId ? (entityByPath?.get(path) ?? null) : null
 
   return (
     <div className="relative h-full">
@@ -387,23 +406,21 @@ export function NoteEditor({
           the translucent navbar. Nothing boxes it — only overflow clips it. */}
       <div className="h-full overflow-y-auto">
         <div className="notes-column notes-column--floating">
-          {mode === 'wysiwyg' && (
-            <>
-              {/* The note title — rendered as the page heading from frontmatter, so
-                  every note opens with a styled title and the body carries none. */}
+          {mode === 'wysiwyg' &&
+            (entityNodeId ? (
+              // Entity context note: identity card + expandable directory profile.
+              <EntityNoteHeader
+                nodeId={entityNodeId}
+                name={entity?.name ?? noteTitle}
+                subtitle={entity?.subtitle ?? null}
+                imageUrl={entity?.image_url ?? null}
+                onAddToPersonal={onAddToPersonal ? () => onAddToPersonal(path) : undefined}
+              />
+            ) : (
+              // The note title — rendered as the page heading from frontmatter, so
+              // every note opens with a styled title and the body carries none.
               <h1 className="notes-title">{noteTitle}</h1>
-              {meta?.frontmatter?.node ? (
-                <div className="mb-2 -mt-1">
-                  <Link
-                    href={`/directory/${encodeURIComponent(String(meta.frontmatter.node))}`}
-                    className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-1 px-2.5 py-1 text-xs font-medium text-brand-dark-green transition hover:bg-brand-light-bg"
-                  >
-                    Directory profile ↗
-                  </Link>
-                </div>
-              ) : null}
-            </>
-          )}
+            ))}
           {mode === 'wysiwyg' ? (
             <EditorContent editor={editor} />
           ) : (

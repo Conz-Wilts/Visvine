@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, X, Tags } from 'lucide-react';
 import type { OnboardingData } from '@/app/onboarding/OnboardingWizard';
 
 interface Props {
@@ -49,7 +49,12 @@ export default function SkillsStep({ data, onNext, onBack, saving }: Props) {
 
   return (
     <div className="p-8">
-      <h2 className="text-xl font-bold text-gray-900 mb-1">Skills & Interests</h2>
+      <div className="flex items-center gap-3 mb-1">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+          <Tags className="h-5 w-5" />
+        </span>
+        <h2 className="text-xl font-bold text-gray-900">Skills & Interests</h2>
+      </div>
       <p className="text-sm text-gray-500 mb-6">Add tags so others with similar interests can find you.</p>
 
       {/* Selected tags */}
@@ -97,17 +102,27 @@ export default function SkillsStep({ data, onNext, onBack, saving }: Props) {
         </div>
       )}
 
-      <div className="flex justify-between mt-8">
+      <div className="flex items-center justify-between mt-8">
         <button onClick={onBack} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
-        <button
-          onClick={() => onNext({ tags })}
-          disabled={saving}
-          className="bg-brand-green text-white rounded-full px-6 py-2.5 text-sm font-semibold hover:opacity-90 active:translate-y-[1px] transition-all duration-200 shadow-soft flex items-center gap-1 disabled:opacity-60"
-        >
-          {saving ? 'Saving...' : 'Next'} {!saving && <ArrowRight className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => onNext({})}
+            disabled={saving}
+            className="text-sm text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+          >
+            Skip for now
+          </button>
+          <button
+            onClick={() => onNext({ tags })}
+            disabled={saving}
+            className="bg-brand-green text-white rounded-full px-6 py-2.5 text-sm font-semibold hover:opacity-90 active:translate-y-[1px] transition-all duration-200 shadow-soft flex items-center gap-1 disabled:opacity-60"
+          >
+            {saving ? 'Saving...' : 'Next'} {!saving && <ArrowRight className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
     </div>
   );

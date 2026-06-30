@@ -84,6 +84,9 @@ export async function GET(req: NextRequest) {
     const typeClause = isAny ? Prisma.empty : Prisma.sql` AND LOWER(n.type) IN (${Prisma.join(dbTypesFor(type))})`;
     const communityClause = communityId ? Prisma.sql` AND n.community_id = ${communityId}` : Prisma.empty;
     const excludeClause = excludeIds.length ? Prisma.sql` AND n.id <> ALL(${excludeIds}::text[])` : Prisma.empty;
+    // Never surface nodes that live in another user's personal space (private
+    // `me:<userId>` communities). Null-community nodes have no owner and pass.
+    const personalClause = Prisma.sql` AND (c.personal_owner_id IS NULL OR c.personal_owner_id = ${session.userId})`;
 
     const rows = await prisma.$queryRaw<SearchRow[]>`
       SELECT
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
         c.name AS community_name
       FROM nodes n
       LEFT JOIN communities c ON c.id = n.community_id
-      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}
+      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}${personalClause}
       ORDER BY n.name ASC
       LIMIT 30
     `;

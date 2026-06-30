@@ -26,6 +26,10 @@ model Community {
   crmSettings      Json            @default("{}") @map("crm_settings")
   designConfig     Json            @default("{}") @map("design_config")
   featureConfig    Json            @default("{}") @map("feature_config")
+  // Set = a private, single-member "personal space" owned by this user (created at
+  // onboarding to host their personal context notes). Null = a normal community.
+  // Filtered out of Discover / other users' community lists.
+  personalOwnerId  String?         @map("personal_owner_id")
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]
@@ -33,6 +37,7 @@ model Community {
   notes            CommunityNote[]
   noteFolders      CommunityNoteFolder[]
 
+  @@index([personalOwnerId])
   @@map("communities")
 }
 
@@ -218,6 +223,7 @@ model User {
   updatedAt               DateTime                 @updatedAt @map("updated_at")
   claimNonce              String?                  @unique @map("claim_nonce")
   googleId                String?                  @unique @map("google_id")
+  passwordHash            String?                  @map("password_hash")
   isActive                Boolean                  @default(true) @map("is_active")
   oauthProvider           String?                  @map("oauth_provider")
   publicMeta              Json                     @default("{}") @map("public_meta")

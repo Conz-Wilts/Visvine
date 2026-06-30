@@ -94,16 +94,9 @@ const CustomForceGraph: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderScheduledRef = useRef<boolean>(false);
+  // Tracks the last pointer position while panning. Nodes are static (not
+  // draggable), so this is used only for canvas panning.
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const dragNodeRef = useRef<SimNode | null>(null);
-  const dragOffsetRef = useRef<{ x: number; y: number } | null>(null);
-  // True once a press-on-node has moved past the click threshold and become a
-  // real drag. Until then nothing is touched, so a plain click/hold moves
-  // nothing. A real drag moves ONLY the grabbed node — the simulation is never
-  // reheated, because on-screen positions come from the layout engine (or a
-  // server restore), not from this sim's equilibrium; restarting it would pull
-  // every node toward the d3 forces and collapse the layout.
-  const dragStartedRef = useRef(false);
   const hasInitialFitRef = useRef(false);
   const prevFocusNodeIdRef = useRef<string | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -141,7 +134,6 @@ const CustomForceGraph: React.FC<{
   // zoom can be smaller than the static floor, which otherwise traps the camera
   // zoomed-in with no way back to the starting view.
   const minZoomRef = useRef(0.05);
-  const isDraggingRef = useRef(false);
   const isPanningRef = useRef(false);
 
   // Refs to stabilize render callback - these are synced from props before rendering
@@ -688,7 +680,7 @@ const CustomForceGraph: React.FC<{
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button !== 0) return; // right/middle press is for the context menu, not pan/drag
+    if (e.button !== 0) return; // right/middle press is for the context menu, not panning
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -701,66 +693,19 @@ const CustomForceGraph: React.FC<{
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     mouseDownNodeRef.current = node || null;
 
-    if (node && typeof node.x === 'number' && typeof node.y === 'number') {
-      // Mark this as a drag candidate only. Pinning the node and reheating the
-      // simulation is deferred to handleMouseMove (once the pointer moves past
-      // DRAG_THRESHOLD) so a plain click/hold doesn't make neighbours vibrate.
-      isDraggingRef.current = true;
-      dragStartedRef.current = false;
-      setCursorStyle('move');
-      dragNodeRef.current = node;
-      const graphPos = screenToGraph(x, y);
-      dragOffsetRef.current = {
-        x: graphPos.x - node.x,
-        y: graphPos.y - node.y
-      };
-    } else {
-      isPanningRef.current = true;
-      setCursorStyle('grabbing');
-      dragStartRef.current = { x: e.clientX, y: e.clientY };
-    }
-  }, [findNodeAt, screenToGraph]);
+    // Nodes are static — a press never moves a node. It resolves to a click
+    // (released within DRAG_THRESHOLD) or pans the canvas, whether the press
+    // started on a node or on empty space.
+    isPanningRef.current = true;
+    setCursorStyle('grabbing');
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+  }, [findNodeAt]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    if (isDraggingRef.current && dragNodeRef.current && dragOffsetRef.current) {
-      // Defer the actual drag (pinning the node + reheating the simulation)
-      // until the pointer has moved past the click threshold. Reheating on a
-      // stationary press is what made nearby nodes vibrate.
-      if (!dragStartedRef.current) {
-        const downPos = mouseDownPosRef.current;
-        if (downPos) {
-          const ddx = e.clientX - downPos.x;
-          const ddy = e.clientY - downPos.y;
-          if (Math.sqrt(ddx * ddx + ddy * ddy) < DRAG_THRESHOLD) return;
-        }
-        dragStartedRef.current = true;
-        const node = dragNodeRef.current;
-        // Pin the node so a live cold-start burst (if one happens to be mid-
-        // flight) can't fight the pointer. Deliberately NO alphaTarget/restart:
-        // reheating the sim would move every other node, collapsing the
-        // engine/restored layout toward the d3 equilibrium.
-        node.fx = node.x;
-        node.fy = node.y;
-        // A user drag changes the layout — persist it on release (or on settle
-        // if a live sim is still running).
-        markDirty();
-      }
-
-      const rect = canvas.getBoundingClientRect();
-      const graphPos = screenToGraph(e.clientX - rect.left, e.clientY - rect.top);
-
-      const newX = graphPos.x - dragOffsetRef.current.x;
-      const newY = graphPos.y - dragOffsetRef.current.y;
-      dragNodeRef.current.fx = newX;
-      dragNodeRef.current.fy = newY;
-      dragNodeRef.current.x = newX;
-      dragNodeRef.current.y = newY;
-      // The sim isn't ticking (frozen layout), so drive the redraw directly.
-      scheduleRender();
-    } else if (isPanningRef.current && dragStartRef.current) {
+    if (isPanningRef.current && dragStartRef.current) {
       const dx = e.clientX - dragStartRef.current.x;
       const dy = e.clientY - dragStartRef.current.y;
 
@@ -779,14 +724,14 @@ const CustomForceGraph: React.FC<{
       const node = findNodeAt(x, y);
 
       if (node) {
-        setCursorStyle('move');
+        setCursorStyle('pointer');
         onNodeHover?.(node);
       } else {
         setCursorStyle('grab');
         onNodeHover?.(null);
       }
     }
-  }, [screenToGraph, updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions, markDirty, scheduleRender]);
+  }, [updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -820,30 +765,8 @@ const CustomForceGraph: React.FC<{
       }
     }
 
-    // Only release/persist if a real drag actually started. A plain click never
-    // pinned the node, so there's nothing to undo.
-    if (isDraggingRef.current && dragNodeRef.current && dragStartedRef.current) {
-      const node = dragNodeRef.current;
-      node.fx = null;
-      node.fy = null;
-      // No sim restart — nothing else moved, so there's nothing to relax.
-      // Record the new arrangement and persist via the shared debounce: rapid
-      // consecutive drags coalesce into one write (parallel PUTs could commit
-      // out of order, leaving the server one drag behind), and a drag that
-      // outlives a live cold-start burst still persists its final position
-      // here even after the settle handler has consumed the dirty flag.
-      const positions = collectPositions();
-      Object.entries(positions).forEach(([id, p]) => savedPositionsRef?.current.set(id, p));
-      schedulePersist(collectPositions, () => transformRef.current);
-      scheduleRender();
-    }
-
-    isDraggingRef.current = false;
-    dragStartedRef.current = false;
     isPanningRef.current = false;
-    dragNodeRef.current = null;
     dragStartRef.current = null;
-    dragOffsetRef.current = null;
     mouseDownPosRef.current = null;
     mouseDownNodeRef.current = null;
 
@@ -851,8 +774,8 @@ const CustomForceGraph: React.FC<{
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     const node = findNodeAt(x, y);
-    setCursorStyle(node ? 'move' : 'grab');
-  }, [onNodeClick, onBackgroundClick, findNodeAt, collectPositions, schedulePersist, savedPositionsRef, scheduleRender]);
+    setCursorStyle(node ? 'pointer' : 'grab');
+  }, [onNodeClick, onBackgroundClick, findNodeAt]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onNodeDoubleClick) return;

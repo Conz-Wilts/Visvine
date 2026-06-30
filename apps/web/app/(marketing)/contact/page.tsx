@@ -3,7 +3,7 @@ import { BRAND } from "@/lib/brand";
 
 export default function Contact() {
   return (
-    <section className="flex-1 flex flex-col items-center px-5 sm:px-10 md:px-20 pt-8 sm:pt-12 lg:pt-16 pb-10 max-w-5xl mx-auto">
+    <section className="flex-1 flex flex-col items-center justify-center px-5 sm:px-10 md:px-20 py-12 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row items-center justify-center gap-10 sm:gap-14 lg:gap-16">
         <div
           className="overflow-hidden rounded-3xl max-w-full"
@@ -19,12 +19,12 @@ export default function Contact() {
           />
         </div>
 
-        <div className="flex flex-col items-center sm:items-start gap-3 text-center sm:text-left">
+        <div className="flex flex-col items-center sm:items-start gap-4 text-center sm:text-left">
           <div>
             <p className="text-3xl sm:text-4xl md:text-5xl font-medium tracking-tight">
               Connor Wiltshire
             </p>
-            <p className="mt-2 text-base sm:text-lg text-black">
+            <p className="mt-2 text-base sm:text-lg text-neutral-600">
               Creator of Visvine
             </p>
           </div>
@@ -32,7 +32,7 @@ export default function Contact() {
           <div className="flex flex-col items-center sm:items-start gap-2 text-base sm:text-lg">
             <a
               href="mailto:connor@visvine.com"
-              className="text-black hover:underline"
+              className="text-black underline-offset-4 hover:underline"
             >
               connor@visvine.com
             </a>
@@ -40,7 +40,7 @@ export default function Contact() {
               href="https://www.linkedin.com/in/connor-wiltshire-9a4304255/"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-black hover:underline"
+              className="text-black underline-offset-4 hover:underline"
             >
               LinkedIn
             </a>

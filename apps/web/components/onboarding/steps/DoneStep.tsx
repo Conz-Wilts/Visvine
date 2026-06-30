@@ -11,6 +11,15 @@ interface Props {
   onComplete: () => Promise<void>;
 }
 
+// Rotating primary-colour chips so the finished profile feels celebratory.
+const TAG_COLORS = [
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-emerald-100 text-emerald-700',
+];
+
 function computeCompletion(data: OnboardingData): number {
   const sections = [
     !!data.imageUrl,
@@ -70,8 +79,8 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
         </div>
         {data.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-3">
-            {data.tags.slice(0, 5).map((tag) => (
-              <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-brand-light-bg text-brand-dark-green">{tag}</span>
+            {data.tags.slice(0, 5).map((tag, i) => (
+              <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full ${TAG_COLORS[i % TAG_COLORS.length]}`}>{tag}</span>
             ))}
             {data.tags.length > 5 && <span className="text-[10px] text-gray-400">+{data.tags.length - 5} more</span>}
           </div>
