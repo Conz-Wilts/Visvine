@@ -138,6 +138,9 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   const [location, setLocation] = useState(community.location ?? '');
   const [tagsInput, setTagsInput] = useState((community.tags ?? []).join(', '));
   const [imageUrl, setImageUrl] = useState(community.imageUrl ?? '');
+  const [visibility, setVisibility] = useState<'public' | 'private'>(
+    community.visibility === 'private' ? 'private' : 'public'
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -154,7 +157,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
       const res = await fetch(`/api/communities/${community.id}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), description, country: country || null, location, tags }),
+        body: JSON.stringify({ name: name.trim(), description, country: country || null, location, tags, visibility }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? 'Failed to save'); return; }
@@ -229,6 +232,33 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
           className="w-full px-3 py-2 text-sm border border-border-default rounded-lg bg-surface-1 text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="mt-1 text-xs text-text-muted">Separate tags with commas</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-text-primary mb-1">Visibility</label>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'public', title: 'Public', desc: 'Discoverable & self-joinable' },
+            { value: 'private', title: 'Private', desc: 'Invite link or admin add only' },
+          ] as const).map(opt => {
+            const active = visibility === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setVisibility(opt.value)}
+                className={`flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all ${
+                  active
+                    ? 'border-brand-green bg-brand-green/10'
+                    : 'border-border-default hover:border-brand-green/60'
+                }`}
+              >
+                <span className="text-sm font-medium text-text-primary">{opt.title}</span>
+                <span className="text-xs text-text-muted">{opt.desc}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {error && <p className="text-sm text-red-500">{error}</p>}

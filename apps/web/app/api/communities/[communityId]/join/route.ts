@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
   try {
     const community = await prisma.community.findUnique({
       where: { id: communityId },
-      select: { id: true, communityAliases: true, personalOwnerId: true },
+      select: { id: true, communityAliases: true, personalOwnerId: true, visibility: true },
     });
     if (!community) return NextResponse.json({ error: 'Community not found' }, { status: 404 });
 
@@ -31,6 +31,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
     // nobody but the owner may join one.
     if (isForeignPersonalSpace(community.personalOwnerId, session.userId)) {
       return NextResponse.json({ error: 'This community is private' }, { status: 403 });
+    }
+
+    // Private communities are not self-joinable — entry is via an invite link
+    // (which creates a pending request) or an admin adding the user directly.
+    if (community.visibility === 'private') {
+      const existing = await prisma.userCommunity.findUnique({
+        where: { userId_communityId: { userId: session.userId, communityId } },
+        select: { id: true },
+      });
+      if (!existing) {
+        return NextResponse.json(
+          { error: 'This community is private. Ask an admin for an invite link.' },
+          { status: 403 }
+        );
+      }
     }
 
     // A user joins as a Person node, so they may only identify with a

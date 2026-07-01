@@ -28,10 +28,6 @@ function generateNodeId(type: string, name: string): string {
   return `${type.toLowerCase()}:${slugify(name)}`;
 }
 
-function generateCommunityId(name: string): string {
-  return slugify(name);
-}
-
 // Fallback avatars for the finder panel, shown when a match has no image.
 const PERSON_FINDER_ICON = (
   <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,7 +74,7 @@ export default function CreateModal() {
   const [personData, setPersonData] = useState<PersonFormData>({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
   const [resourceData, setResourceData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [eventData, setEventData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
-  const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '' });
+  const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
 
   const nameRef = useRef<HTMLInputElement | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -152,7 +148,7 @@ export default function CreateModal() {
     setPersonData({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
     setResourceData({ name: '', subtitle: '', location: '', tags: '' });
     setEventData({ name: '', subtitle: '', location: '', tags: '' });
-    setCommunityData({ name: '', description: '', location: '' });
+    setCommunityData({ name: '', description: '', location: '', visibility: 'public' });
   }, []);
 
   // On open, if a default type is given skip to step 1
@@ -342,18 +338,17 @@ export default function CreateModal() {
 
   const createCommunity = async () => {
     const name = communityData.name.trim();
-    const id = generateCommunityId(name);
 
-    const res = await fetch('/api/data/communities', {
+    // User-facing create: any signed-in user, server derives the id and makes the
+    // creator an admin. (The /api/data/communities POST is super-admin-only bulk.)
+    const res = await fetch('/api/communities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        community: {
-          id,
-          name,
-          description: communityData.description.trim(),
-          location: communityData.location.trim() || undefined,
-        },
+        name,
+        description: communityData.description.trim(),
+        location: communityData.location.trim() || undefined,
+        visibility: communityData.visibility,
       }),
     });
 

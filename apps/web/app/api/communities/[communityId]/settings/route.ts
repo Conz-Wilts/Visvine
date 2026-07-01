@@ -19,17 +19,22 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, location, tags, designConfig, featureConfig } = body as {
+  const { name, description, location, tags, designConfig, featureConfig, visibility } = body as {
     name?: string;
     description?: string;
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
     featureConfig?: { enabled?: Record<string, boolean> };
+    visibility?: string;
   };
 
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+  }
+
+  if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {
+    return NextResponse.json({ error: 'visibility must be public or private' }, { status: 400 });
   }
 
   // Validate designConfig if provided
@@ -65,6 +70,7 @@ export async function PUT(
       ...(tags !== undefined && { tags }),
       ...(designConfig !== undefined && { designConfig: designConfig as object }),
       ...(featureConfig !== undefined && { featureConfig: featureConfig as object }),
+      ...(visibility !== undefined && { visibility }),
     },
   });
 
@@ -87,6 +93,7 @@ export async function PUT(
       tags: updated.tags,
       designConfig: updated.designConfig,
       featureConfig: updated.featureConfig,
+      visibility: updated.visibility,
     },
   });
 }

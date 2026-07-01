@@ -401,6 +401,7 @@ export interface CommunityFormData {
   name: string;
   description: string;
   location: string;
+  visibility: 'public' | 'private';
 }
 
 export function CommunityForm({
@@ -439,6 +440,31 @@ export function CommunityForm({
           value={data.location}
           onChange={(e) => onChange({ ...data, location: e.target.value })}
         />
+      </Field>
+      <Field label="Visibility">
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: 'public', title: 'Public', desc: 'Anyone can find & join from Discover' },
+            { value: 'private', title: 'Private', desc: 'Hidden — join by invite link or admin add' },
+          ] as const).map((opt) => {
+            const active = data.visibility === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onChange({ ...data, visibility: opt.value })}
+                className={`flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all ${
+                  active
+                    ? 'border-brand-green bg-brand-green/10'
+                    : 'border-border-default hover:border-brand-green/60'
+                }`}
+              >
+                <span className="text-sm font-medium text-text-primary">{opt.title}</span>
+                <span className="text-xs text-text-muted">{opt.desc}</span>
+              </button>
+            );
+          })}
+        </div>
       </Field>
     </div>
   );

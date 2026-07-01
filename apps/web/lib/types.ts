@@ -124,6 +124,7 @@ export interface Community {
   linkTypes?: LinkTypeConfig[]; // Customizable relationship (edge) types for this community
   designConfig?: CommunityDesignConfig;
   featureConfig?: CommunityFeatureConfig; // Which optional surfaces are enabled
+  visibility?: 'public' | 'private'; // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
 }
 
 // A named alias with a display color, scoped to a specific node type within a community

@@ -4,7 +4,11 @@ import prisma from '@/lib/prisma';
 import { logActivity } from '@/lib/activityLog';
 
 /**
- * PUT: Update a member's role (admin only)
+ * PUT: Update a member's role, or approve a pending join request (admin only).
+ *
+ * Body may carry `role` (change role) and/or `status: 'active'` (approve a
+ * pending invite-link join request). Approving a pending member bumps the
+ * community's memberCount.
  */
 export async function PUT(
   req: NextRequest,
@@ -17,13 +21,33 @@ export async function PUT(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  // Prevent self-demotion to avoid locking out the only admin
-  if (userId === session.userId) {
+  const body = await req.json().catch(() => ({}));
+  const { role, status } = body as { role?: string; status?: string };
+
+  if (role !== undefined && !['member', 'admin'].includes(role)) {
+    return NextResponse.json({ error: 'role must be member or admin' }, { status: 400 });
+  }
+  if (status !== undefined && status !== 'active') {
+    return NextResponse.json({ error: 'status can only be set to active' }, { status: 400 });
+  }
+  if (role === undefined && status === undefined) {
+    return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
+  }
+
+  const existing = await prisma.userCommunity.findUnique({
+    where: { userId_communityId: { userId, communityId } },
+    select: { status: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+  }
+
+  // Prevent demoting the only admin to avoid locking out the community.
+  if (role !== undefined && role !== 'admin' && userId === session.userId) {
     const adminCount = await prisma.userCommunity.count({
       where: { communityId, role: 'admin' },
     });
-    const body = await req.json();
-    if (body.role !== 'admin' && adminCount <= 1) {
+    if (adminCount <= 1) {
       return NextResponse.json(
         { error: 'Cannot demote the only admin. Promote another member first.' },
         { status: 400 }
@@ -31,26 +55,32 @@ export async function PUT(
     }
   }
 
-  const body = await req.json();
-  const { role } = body as { role: string };
-  if (!['member', 'admin'].includes(role)) {
-    return NextResponse.json({ error: 'role must be member or admin' }, { status: 400 });
-  }
+  const approving = status === 'active' && existing.status !== 'active';
 
   const updated = await prisma.userCommunity.update({
     where: { userId_communityId: { userId, communityId } },
-    data: { role },
+    data: {
+      ...(role !== undefined && { role }),
+      ...(status !== undefined && { status }),
+    },
     include: { user: { select: { id: true, name: true, email: true, image: true } } },
   });
+
+  if (approving) {
+    await prisma.community.update({
+      where: { id: communityId },
+      data: { memberCount: { increment: 1 } },
+    });
+  }
 
   await logActivity({
     communityId,
     actorEmail: session.email,
     actorName: session.name,
-    action: 'role_changed',
+    action: approving ? 'member_added' : 'role_changed',
     targetEmail: updated.user.email,
     targetName: updated.user.name,
-    details: { newRole: role },
+    details: approving ? { approved: true, role: updated.role } : { newRole: role },
   });
 
   return NextResponse.json({
@@ -58,6 +88,7 @@ export async function PUT(
       id: updated.id,
       userId: updated.userId,
       role: updated.role,
+      status: updated.status,
       joinedAt: updated.joinedAt.toISOString(),
       user: updated.user,
     },
@@ -94,6 +125,14 @@ export async function DELETE(
     where: { userId_communityId: { userId, communityId } },
     include: { user: { select: { email: true, name: true } } },
   });
+
+  // Only active members counted toward memberCount; pending (denied) ones didn't.
+  if (membership.status === 'active') {
+    await prisma.community.update({
+      where: { id: communityId },
+      data: { memberCount: { decrement: 1 } },
+    });
+  }
 
   await logActivity({
     communityId,

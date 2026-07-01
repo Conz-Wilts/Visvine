@@ -7,8 +7,6 @@ import { Community, aliasesForType } from '@/lib/types';
 import Badge from '@/components/ui/Badge';
 import { PageTitle } from '@/components/ui';
 
-const CATEGORY_FILTERS = ['All', 'Startup', 'VC', 'Technology', 'Innovation'] as const;
-
 function formatMemberCount(count: number): string {
   if (count >= 1000000) {
     return `${(count / 1000000).toFixed(1)}M`;
@@ -138,7 +136,6 @@ export default function DiscoverPage() {
   const [pendingCommunity, setPendingCommunity] = useState<Community | null>(null);
   const [selectedAlias, setSelectedAlias] = useState('');
   const [joining, setJoining] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [search, setSearch] = useState('');
 
   const isJoined = (id: string) => joinedCommunities.some(c => c.id === id);
@@ -168,11 +165,6 @@ export default function DiscoverPage() {
 
   const filteredCommunities = useMemo(() => {
     let result = communities;
-    if (activeCategory !== 'All') {
-      result = result.filter(c =>
-        c.tags.some(t => t.toLowerCase().includes(activeCategory.toLowerCase()))
-      );
-    }
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(c =>
@@ -182,17 +174,15 @@ export default function DiscoverPage() {
       );
     }
     return result;
-  }, [communities, activeCategory, search]);
+  }, [communities, search]);
 
-  const featured = filteredCommunities[0] ?? null;
-  const gridCommunities = filteredCommunities.slice(1);
   // A user joins as a person, so only offer Person-scoped aliases (e.g. "Founder").
   // Org-scoped aliases like "Portfolio Company" must never be selectable here.
   const aliases = aliasesForType(pendingCommunity?.communityAliases, 'Person');
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-b from-surface-1 to-surface-2">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pb-10">
 
         {/* Page header — centered title, consistent with other pages */}
         <PageTitle title="Discover Communities" />
@@ -215,72 +205,24 @@ export default function DiscoverPage() {
           </div>
         </div>
 
-        {/* Category filters — centered below the search */}
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-4 mb-10">
-          {CATEGORY_FILTERS.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-150 ${
-                activeCategory === cat
-                  ? 'bg-brand-green text-white shadow-md shadow-brand-green/20'
-                  : 'bg-surface-1 text-text-secondary hover:bg-surface-2 border border-border-subtle'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
         {filteredCommunities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <div className="w-20 h-20 rounded-full bg-surface-2 flex items-center justify-center mb-4">
               <span className="text-4xl">🔍</span>
             </div>
             <p className="text-lg font-medium text-text-primary mb-1">No communities found</p>
-            <p className="text-sm text-text-muted">Try a different search or category filter.</p>
+            <p className="text-sm text-text-muted">Try a different search.</p>
           </div>
         ) : (
-          <div className="space-y-12">
-
-            {/* Featured community */}
-            {featured && (
-              <section>
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-semibold text-text-primary">Featured Community</h2>
-                  <span className="text-sm text-text-muted">Hand-picked for you</span>
-                </div>
-                <div className="w-[260px] mx-auto">
-                  <CommunityCard
-                    community={featured}
-                    joined={isJoined(featured.id)}
-                    onJoin={handleJoin}
-                    variant="featured"
-                  />
-                </div>
-              </section>
-            )}
-
-            {/* All communities grid */}
-            {gridCommunities.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-5">
-                  <h2 className="text-lg font-semibold text-text-primary">All Communities</h2>
-                  <span className="text-sm text-text-muted">{gridCommunities.length} communities</span>
-                </div>
-                <div className="grid gap-6 justify-center" style={{ gridTemplateColumns: 'repeat(auto-fill, 260px)' }}>
-                  {gridCommunities.map((community) => (
-                    <CommunityCard
-                      key={community.id}
-                      community={community}
-                      joined={isJoined(community.id)}
-                      onJoin={handleJoin}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
+          <div className="grid gap-6 pt-6" style={{ gridTemplateColumns: 'repeat(auto-fill, 260px)', justifyContent: 'space-evenly' }}>
+            {filteredCommunities.map((community) => (
+              <CommunityCard
+                key={community.id}
+                community={community}
+                joined={isJoined(community.id)}
+                onJoin={handleJoin}
+              />
+            ))}
           </div>
         )}
       </div>

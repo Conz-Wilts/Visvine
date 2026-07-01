@@ -24,6 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ com
     id: m.id,
     userId: m.userId,
     role: m.role,
+    status: m.status,
     joinedAt: m.joinedAt.toISOString(),
     user: {
       id: m.user.id,
@@ -70,9 +71,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
     return NextResponse.json({ error: 'User is already a member' }, { status: 409 });
   }
 
+  // Admin-added members are active immediately (no approval needed).
   const membership = await prisma.userCommunity.create({
-    data: { userId: user.id, communityId, role },
+    data: { userId: user.id, communityId, role, status: 'active', addedBy: session.userId },
     include: { user: { select: { id: true, name: true, email: true, image: true, createdAt: true } } },
+  });
+
+  await prisma.community.update({
+    where: { id: communityId },
+    data: { memberCount: { increment: 1 } },
   });
 
   await logActivity({
@@ -90,6 +97,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
       id: membership.id,
       userId: membership.userId,
       role: membership.role,
+      status: membership.status,
       joinedAt: membership.joinedAt.toISOString(),
       user: {
         id: membership.user.id,

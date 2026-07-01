@@ -14,15 +14,39 @@ export async function GET() {
     const session = await requireSession();
     if (session instanceof Response) return session;
 
+    const superAdmin = isSuperAdmin(session.email);
+
     const data = await prisma.community.findMany({
-      // Personal spaces (personalOwnerId set) are private to their owner — keep
-      // them out of every other user's list (Discover, switcher, graph picker).
-      where: {
-        OR: [
-          { personalOwnerId: null },
-          { personalOwnerId: session.userId },
-        ],
-      },
+      // Visibility rules (super-admins see everything):
+      //  - Personal spaces (personalOwnerId set) are private to their owner.
+      //  - Private communities (visibility 'private') are hidden from Discover /
+      //    other users' lists unless the user is already an active member.
+      //  - Public communities are visible to everyone.
+      where: superAdmin
+        ? undefined
+        : {
+            AND: [
+              // Not someone else's personal space.
+              {
+                OR: [
+                  { personalOwnerId: null },
+                  { personalOwnerId: session.userId },
+                ],
+              },
+              // Public, or the caller is an active member of it.
+              {
+                OR: [
+                  { visibility: 'public' },
+                  { personalOwnerId: session.userId },
+                  {
+                    userCommunities: {
+                      some: { userId: session.userId, status: 'active' },
+                    },
+                  },
+                ],
+              },
+            ],
+          },
       select: {
         id: true,
         name: true,
@@ -37,6 +61,7 @@ export async function GET() {
         linkTypes: true,
         designConfig: true,
         featureConfig: true,
+        visibility: true,
       },
       orderBy: { name: 'asc' },
     });
@@ -58,6 +83,7 @@ export async function GET() {
       linkTypes: (c.linkTypes as unknown) as Community['linkTypes'],
       designConfig: (c.designConfig as unknown as Community['designConfig']) ?? undefined,
       featureConfig: (c.featureConfig as unknown as Community['featureConfig']) ?? undefined,
+      visibility: (c.visibility as 'public' | 'private') ?? 'public',
     }));
 
     return NextResponse.json(

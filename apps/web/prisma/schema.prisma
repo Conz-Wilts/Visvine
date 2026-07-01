@@ -30,6 +30,12 @@ model Community {
   // onboarding to host their personal context notes). Null = a normal community.
   // Filtered out of Discover / other users' community lists.
   personalOwnerId  String?         @map("personal_owner_id")
+  // "public" = discoverable & self-joinable from Discover; "private" = hidden from
+  // Discover / non-members' lists, joinable only via invite link or admin add.
+  visibility       String          @default("public")
+  // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
+  // previously shared link. Null until first generated.
+  inviteToken      String?         @unique @map("invite_token")
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]
@@ -251,6 +257,9 @@ model UserCommunity {
   userId      String    @map("user_id")
   communityId String    @map("community_id")
   role        String    @default("member")
+  // "active" = full member; "pending" = requested to join via invite link, awaiting
+  // admin approval in the community console.
+  status      String    @default("active")
   joinedAt    DateTime  @default(now()) @map("joined_at")
   addedBy     String?   @map("added_by")
   privateMeta Json      @default("{}") @map("private_meta")
