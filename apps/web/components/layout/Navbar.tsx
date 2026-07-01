@@ -36,6 +36,7 @@ export default function Navbar() {
           {canAccessAdmin && (
             <Link
               href="/admin"
+              data-tour="community-console"
               aria-label="Community management"
               title="Community management"
               className="relative w-12 h-12 rounded-xl flex items-center justify-center border border-border-default bg-surface-1 text-text-secondary hover:text-text-primary hover:bg-surface-2 transition shadow-float"

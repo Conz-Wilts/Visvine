@@ -90,7 +90,7 @@ type EditableField = (typeof EDITABLE_FIELDS)[number];
 
 // Person-model fields editable by admin for non-member person nodes
 const PERSON_EDITABLE_FIELDS = [
-  'bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns', 'openToWork',
+  'bio', 'website', 'linkedinUrl', 'twitterUrl', 'phone', 'pronouns',
 ] as const;
 
 /**
@@ -174,11 +174,7 @@ export async function PATCH(
     for (const key of PERSON_EDITABLE_FIELDS) {
       if (key in fields) {
         const val = fields[key];
-        if (key === 'openToWork') {
-          personData.openToWork = !!val;
-        } else {
-          personData[key] = val === '' ? null : (val as string | null);
-        }
+        personData[key] = val === '' ? null : (val as string | null);
       }
     }
   }
@@ -213,7 +209,7 @@ export async function PATCH(
       where: { id: nodeId },
       update: personData,
       create: { id: nodeId, name: updated?.name ?? '', ...personData },
-      select: { bio: true, website: true, linkedinUrl: true, twitterUrl: true, phone: true, pronouns: true, openToWork: true, imageUrl: true },
+      select: { bio: true, website: true, linkedinUrl: true, twitterUrl: true, phone: true, pronouns: true, imageUrl: true },
     });
   }
 

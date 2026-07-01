@@ -15,6 +15,7 @@ interface Props {
 
 export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving }: Props) {
   const [imageUrl, setImageUrl] = useState(data.imageUrl);
+  const [name, setName] = useState(data.name);
   const [subtitle, setSubtitle] = useState(data.subtitle);
   const [location, setLocation] = useState(data.location);
   const [uploading, setUploading] = useState(false);
@@ -62,16 +63,16 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
     }
   };
 
+  const trimmedName = name.trim();
+
   const handleNext = () => {
-    onNext({ imageUrl, subtitle, location });
+    if (!trimmedName) return;
+    onNext({ imageUrl, name: trimmedName, subtitle, location });
   };
 
   return (
     <div className="p-8">
-      <div className="flex items-center gap-3 mb-1">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
-          <Camera className="h-5 w-5" />
-        </span>
+      <div className="mb-1">
         <h2 className="text-xl font-bold text-gray-900">Your profile photo & basics</h2>
       </div>
       <p className="text-sm text-gray-500 mb-6">Help people recognize you in the community.</p>
@@ -121,6 +122,20 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
 
       <div className="space-y-4">
         <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Your full name"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+          />
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Headline</label>
           <input
             type="text"
@@ -149,7 +164,7 @@ export default function PhotoBasicsStep({ data, personId, onNext, onBack, saving
         </button>
         <button
           onClick={handleNext}
-          disabled={saving}
+          disabled={saving || !trimmedName}
           className="bg-brand-green text-white rounded-full px-6 py-2.5 text-sm font-semibold hover:opacity-90 active:translate-y-[1px] transition-all duration-200 shadow-soft flex items-center gap-1 disabled:opacity-60"
         >
           {saving ? 'Saving...' : 'Next'} {!saving && <ArrowRight className="w-4 h-4" />}

@@ -36,7 +36,6 @@ interface RowHandlers {
   closeProfileCell: () => void;
   setAliasEditNodeId: React.Dispatch<React.SetStateAction<string | null>>;
   saveAlias: (nodeId: string, alias: string | null) => void;
-  toggleOpenToWork: (item: DirectoryItem) => void;
   handleCellClick: (nodeId: string, key: string, e: React.MouseEvent) => void;
   handleCellSave: (nodeId: string, key: string, value: string) => Promise<void>;
   setEditingCell: React.Dispatch<React.SetStateAction<{ nodeId: string; key: string } | null>>;
@@ -96,7 +95,7 @@ function DirectoryRowCells({
 }: DirectoryRowCellsProps) {
   const {
     isEditable, onRowClick, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
-    saveAlias, setAliasEditNodeId, toggleOpenToWork, handleCellClick, handleCellSave,
+    saveAlias, setAliasEditNodeId, handleCellClick, handleCellSave,
     setEditingCell, getCellValue, shareValueWithCommunity,
   } = handlers;
   const editable = isEditable(item.id);
@@ -218,9 +217,7 @@ function DirectoryRowCells({
 
       {/* Type-specific profile columns (Global Public layer) */}
       {profileColumns.map(col => {
-        const isToggle = col.key === 'openToWork';
-        const isEditableField = editable && !isMemberRow && !isToggle;
-        const isToggleable = editable && !isMemberRow && isToggle;
+        const isEditableField = editable && !isMemberRow;
         const editField = col.key as string;
         const currentVal = col.key === 'tags'
           ? item.tags?.join(', ') ?? ''
@@ -228,13 +225,11 @@ function DirectoryRowCells({
         return (
           <td
             key={col.key}
-            className={`px-4 py-2.5 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField || isToggleable ? 'cursor-pointer' : ''}`}
+            className={`px-4 py-2.5 ${col.key === 'tags' ? '' : 'whitespace-nowrap'} ${isEditableField ? 'cursor-pointer' : ''}`}
             onClick={
-              isToggleable
-                ? e => { e.stopPropagation(); toggleOpenToWork(item); }
-                : isEditableField
-                  ? e => openProfileCell(item.id, editField, e)
-                  : undefined
+              isEditableField
+                ? e => openProfileCell(item.id, editField, e)
+                : undefined
             }
             title={isMemberRow ? `Managed by ${item.name}` : undefined}
           >

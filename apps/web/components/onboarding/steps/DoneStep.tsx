@@ -20,22 +20,9 @@ const TAG_COLORS = [
   'bg-emerald-100 text-emerald-700',
 ];
 
-function computeCompletion(data: OnboardingData): number {
-  const sections = [
-    !!data.imageUrl,
-    !!data.subtitle,
-    !!data.bio,
-    !!data.location,
-    data.tags.length > 0,
-    !!(data.website || data.linkedinUrl || data.twitterUrl || data.phone),
-  ];
-  return Math.round((sections.filter(Boolean).length / sections.length) * 100);
-}
-
 export default function DoneStep({ data, personName, onComplete }: Props) {
   const router = useRouter();
   const [completing, setCompleting] = useState(true);
-  const score = computeCompletion(data);
 
   useEffect(() => {
     // Always re-enable the button — even if the completion POST fails the user
@@ -55,7 +42,7 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
       </div>
 
       <h2 className="text-2xl font-bold text-gray-900 mb-2">You&apos;re all set!</h2>
-      <p className="text-sm text-gray-500 mb-6">Your profile is {score}% complete. You can always update it later.</p>
+      <p className="text-sm text-gray-500 mb-6">You can always update your profile later.</p>
 
       {/* Profile preview card */}
       <div className="border border-gray-100 rounded-xl p-4 mb-6 text-left">
@@ -85,17 +72,6 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
             {data.tags.length > 5 && <span className="text-[10px] text-gray-400">+{data.tags.length - 5} more</span>}
           </div>
         )}
-      </div>
-
-      {/* Completion bar */}
-      <div className="mb-6">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>Profile completion</span>
-          <span className="font-medium text-brand-dark-green">{score}%</span>
-        </div>
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-brand-green rounded-full transition-all duration-1000" style={{ width: `${score}%` }} />
-        </div>
       </div>
 
       <button

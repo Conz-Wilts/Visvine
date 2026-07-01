@@ -30,9 +30,25 @@ export async function POST(
     personId: user.person?.id ?? null,
   });
 
-  const callbackUrl = safeRelativePath(req.nextUrl.searchParams.get("callbackUrl"));
+  // Dev-only "Create account" path: reset the user's onboarding flag so the
+  // wizard runs again, and land them on /onboarding instead of the callback.
+  // This lets us review the full sign-up/onboarding flow with a seeded user.
+  const onboard = req.nextUrl.searchParams.get("onboard") === "1";
+  if (onboard && user.person) {
+    await prisma.person.update({
+      where: { id: user.person.id },
+      data: { hasOnboarded: false },
+    });
+  }
+
+  const callbackUrl = onboard
+    ? "/onboarding"
+    : safeRelativePath(req.nextUrl.searchParams.get("callbackUrl"));
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const response = NextResponse.redirect(new URL(callbackUrl, appUrl));
+  // 303 See Other so the browser follows with a GET — a default (307) redirect
+  // would replay this POST against the destination page, which only handles GET
+  // and renders a blank screen.
+  const response = NextResponse.redirect(new URL(callbackUrl, appUrl), 303);
   response.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

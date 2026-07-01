@@ -2,12 +2,11 @@
 
 import { BRAND } from "@/lib/brand";
 import { useSignInModal } from "@/components/marketing/MarketingShell";
-import WaitlistForm from "@/components/marketing/WaitlistForm";
 
 /**
  * Primary calls-to-action on the marketing home: "Join our community" (opens the
  * sign-in popup in signup mode → onboarding) is primary, with a "Sign in" link
- * and the demoted waitlist beneath it.
+ * beneath it.
  */
 export default function HomeCtas() {
   const openSignIn = useSignInModal();
@@ -34,8 +33,6 @@ export default function HomeCtas() {
           Sign in
         </button>
       </p>
-
-      <WaitlistForm variant="link" />
     </div>
   );
 }

@@ -46,7 +46,6 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
     twitterUrl: node.metadata?.twitterUrl as string | undefined,
     phone: node.metadata?.phone as string | undefined,
     pronouns: node.metadata?.pronouns as string | undefined,
-    openToWork: node.metadata?.openToWork as boolean | undefined,
   };
 }
 
@@ -191,6 +190,7 @@ export default function DashboardPage() {
   return (
     <div
       className="relative w-full"
+      data-tour="directory-canvas"
       style={isGraphView
         ? { height: 'calc(100vh - 5rem - 3rem)', overflow: 'hidden' }
         : { minHeight: 'calc(100dvh - 56px)' }

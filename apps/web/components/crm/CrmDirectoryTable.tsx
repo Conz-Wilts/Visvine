@@ -382,14 +382,6 @@ export default function CrmDirectoryTable({
     }
   };
 
-  const toggleOpenToWork = useCallback(async (item: DirectoryItem) => {
-    if (!communityId) return;
-    try {
-      const res = await patchAdminProfile(communityId, item.id, { openToWork: !item.openToWork });
-      if (res.ok) onDataChanged?.();
-    } catch { /* ignore */ }
-  }, [communityId, onDataChanged]);
-
   // Upgrade prompt: first private column exceeding threshold that hasn't been dismissed
   const upgradeCandidate = useMemo(() => {
     if (!isAuthenticated) return null;
@@ -467,7 +459,6 @@ export default function CrmDirectoryTable({
     closeProfileCell,
     setAliasEditNodeId,
     saveAlias,
-    toggleOpenToWork,
     handleCellClick,
     handleCellSave,
     setEditingCell,
@@ -475,7 +466,7 @@ export default function CrmDirectoryTable({
     shareValueWithCommunity,
   }), [
     isEditable, onRowClick, triggerImageUpload, openProfileCell, commitProfileCell, closeProfileCell,
-    saveAlias, toggleOpenToWork, handleCellClick, handleCellSave, getCellValue,
+    saveAlias, handleCellClick, handleCellSave, getCellValue,
     shareValueWithCommunity,
   ]);
 

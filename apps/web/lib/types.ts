@@ -299,7 +299,6 @@ export interface DirectoryItem {
   twitterUrl?: string
   phone?: string
   pronouns?: string
-  openToWork?: boolean
 }
 
 // Canonical node types and their default colours/shapes. A community can override

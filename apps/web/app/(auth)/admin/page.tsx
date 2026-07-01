@@ -69,21 +69,23 @@ export default function AdminPage() {
           className="pt-0"
         />
 
-        <TabNav
-          className="mb-8"
-          center
-          tabs={[
-            { id: 'general', label: 'General' },
-            { id: 'design', label: 'Design' },
-            { id: 'members', label: 'Members' },
-            { id: 'submissions', label: 'Submissions' },
-            { id: 'activity', label: 'Activity Log' },
-            { id: 'types', label: 'Types' },
-            { id: 'analytics', label: 'Analytics' },
-          ]}
-          activeTab={activeTab}
-          onTabChange={id => setActiveTab(id as Tab)}
-        />
+        <div data-tour="console-tabs">
+          <TabNav
+            className="mb-8"
+            center
+            tabs={[
+              { id: 'general', label: 'General' },
+              { id: 'design', label: 'Design' },
+              { id: 'members', label: 'Members' },
+              { id: 'submissions', label: 'Submissions' },
+              { id: 'activity', label: 'Activity Log' },
+              { id: 'types', label: 'Types' },
+              { id: 'analytics', label: 'Analytics' },
+            ]}
+            activeTab={activeTab}
+            onTabChange={id => setActiveTab(id as Tab)}
+          />
+        </div>
 
         {/* Settings-style tabs sit in a single clean card; dashboard-style
             tabs (submissions / activity / analytics) render their own cards

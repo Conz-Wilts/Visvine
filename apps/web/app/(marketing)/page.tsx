@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import HomeCtas from "@/components/marketing/HomeCtas";
-import Countdown from "@/components/marketing/Countdown";
 
 export default async function Home() {
   const session = await getSession();
@@ -17,9 +16,6 @@ export default async function Home() {
       </p>
       <div className="mt-8 sm:mt-10 w-full max-w-md">
         <HomeCtas />
-      </div>
-      <div className="mt-10 sm:mt-12">
-        <Countdown />
       </div>
     </section>
   );

@@ -400,7 +400,6 @@ model Person {
   twitterUrl   String?  @map("twitter_url")
   phone        String?
   pronouns     String?
-  openToWork   Boolean  @default(false) @map("open_to_work")
   imageUrl     String?  @map("image_url")
   tags         String[] @default([])
   metadata     Json     @default("{}")

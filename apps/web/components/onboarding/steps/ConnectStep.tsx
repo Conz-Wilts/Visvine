@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Linkedin, Globe, Phone, Link2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Linkedin, Globe, Phone } from 'lucide-react';
 import type { OnboardingData } from '@/app/onboarding/OnboardingWizard';
 
 interface Props {
@@ -34,15 +34,28 @@ export default function ConnectStep({ data, onNext, onBack, saving }: Props) {
 
   return (
     <div className="p-8">
-      <div className="flex items-center gap-3 mb-1">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
-          <Link2 className="h-5 w-5" />
-        </span>
+      <div className="mb-1">
         <h2 className="text-xl font-bold text-gray-900">Connect</h2>
       </div>
       <p className="text-sm text-gray-500 mb-6">Add links so people can reach you outside the platform.</p>
 
       <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
+            <Phone className="w-4 h-4" /> Phone <span className="text-gray-400 font-normal">(private)</span>
+          </label>
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+1 (555) 123-4567"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Only people who you allow to join your community will be able to see this.
+          </p>
+        </div>
+
         <div>
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
             <Linkedin className="w-4 h-4" /> LinkedIn
@@ -81,20 +94,6 @@ export default function ConnectStep({ data, onNext, onBack, saving }: Props) {
             placeholder="https://yourwebsite.com"
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
           />
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-            <Phone className="w-4 h-4" /> Phone <span className="text-gray-400 font-normal">(optional)</span>
-          </label>
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+1 (555) 123-4567"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green"
-          />
-          <p className="text-xs text-gray-400 mt-1">Only visible to community members.</p>
         </div>
       </div>
 

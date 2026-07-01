@@ -108,7 +108,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ IDENTITY HERO — its own floating card ══ */}
-      <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-clip">
+      <section data-tour="profile-hero" className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-clip">
         {/* cover band */}
         <div
           className="relative h-24 sm:h-28"
@@ -145,6 +145,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
               </button>
               {isOwner ? (
                 <button onClick={() => setModal('basicInfo')}
+                  data-tour="profile-edit"
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
                   style={{ background: theme.base }}>
                   <Pencil className="w-4 h-4 flex-none" /> Edit profile
@@ -188,16 +189,6 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
               )}
               {memberYear && (
                 <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {memberYear}</span>
-              )}
-              {profile.openToWork && (
-                <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-xs font-semibold border"
-                      style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}55` }}>
-                  <span className="relative flex h-1.5 w-1.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
-                  </span>
-                  Open to work
-                </span>
               )}
             </div>
           </div>

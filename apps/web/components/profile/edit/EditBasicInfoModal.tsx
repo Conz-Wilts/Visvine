@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
-import Toggle from '@/components/ui/Toggle';
 import type { FullProfile } from '@/lib/profileTypes';
 
 interface Props {
@@ -18,7 +17,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
   const [subtitle, setSubtitle] = useState(profile.subtitle ?? '');
   const [location, setLocation] = useState(profile.location ?? '');
   const [pronouns, setPronouns] = useState(profile.pronouns ?? '');
-  const [openToWork, setOpenToWork] = useState(profile.openToWork);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -27,7 +25,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
       setSubtitle(profile.subtitle ?? '');
       setLocation(profile.location ?? '');
       setPronouns(profile.pronouns ?? '');
-      setOpenToWork(profile.openToWork);
     }
   }, [open, profile]);
 
@@ -40,7 +37,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
         subtitle: subtitle.trim() || null,
         location: location.trim() || null,
         pronouns: pronouns.trim() || null,
-        openToWork,
       });
       onClose();
     } finally {
@@ -89,8 +85,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
           />
         </div>
-        <Toggle checked={openToWork} onChange={setOpenToWork} label="Open to work" />
-
         <ModalFooter onCancel={onClose} saving={saving} />
       </form>
     </EditModal>

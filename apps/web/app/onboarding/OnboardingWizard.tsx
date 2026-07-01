@@ -1,21 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import WelcomeStep from '@/components/onboarding/steps/WelcomeStep';
 import PhotoBasicsStep from '@/components/onboarding/steps/PhotoBasicsStep';
 import AboutStep from '@/components/onboarding/steps/AboutStep';
-import SkillsStep from '@/components/onboarding/steps/SkillsStep';
 import ConnectStep from '@/components/onboarding/steps/ConnectStep';
 import DoneStep from '@/components/onboarding/steps/DoneStep';
 import StepProgress from '@/components/onboarding/StepProgress';
 
 export interface OnboardingData {
+  name: string;
   imageUrl: string | null;
   subtitle: string;
   location: string;
   bio: string;
-  openToWork: boolean;
   tags: string[];
   linkedinUrl: string;
   twitterUrl: string;
@@ -31,7 +29,6 @@ interface Props {
     subtitle?: string | null;
     bio?: string | null;
     location?: string | null;
-    openToWork: boolean;
     tags: string[];
     linkedinUrl?: string | null;
     twitterUrl?: string | null;
@@ -41,21 +38,20 @@ interface Props {
   userName: string;
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 3;
 
 export default function OnboardingWizard({ person, userName }: Props) {
-  const router = useRouter();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
 
   const [data, setData] = useState<OnboardingData>({
+    name: person.name ?? '',
     imageUrl: person.imageUrl ?? null,
     subtitle: person.subtitle ?? '',
     location: person.location ?? '',
     bio: person.bio ?? '',
-    openToWork: person.openToWork,
     tags: person.tags,
     linkedinUrl: person.linkedinUrl ?? '',
     twitterUrl: person.twitterUrl ?? '',
@@ -72,10 +68,10 @@ export default function OnboardingWizard({ person, userName }: Props) {
     try {
       const payload: Record<string, unknown> = {};
 
+      if (stepData.name !== undefined) payload.name = stepData.name;
       if (stepData.subtitle !== undefined) payload.subtitle = stepData.subtitle || null;
       if (stepData.location !== undefined) payload.location = stepData.location || null;
       if (stepData.bio !== undefined) payload.bio = stepData.bio || null;
-      if (stepData.openToWork !== undefined) payload.openToWork = stepData.openToWork;
       if (stepData.tags !== undefined) payload.tags = stepData.tags;
       if (stepData.linkedinUrl !== undefined) payload.linkedinUrl = stepData.linkedinUrl || null;
       if (stepData.twitterUrl !== undefined) payload.twitterUrl = stepData.twitterUrl || null;
@@ -131,21 +127,15 @@ export default function OnboardingWizard({ person, userName }: Props) {
     }
   };
 
-  const skipAll = async () => {
-    const communityId = await finishOnboarding();
-    if (communityId) {
-      try { localStorage.setItem('nb_current_community', communityId); } catch {}
-    }
-    router.push('/directory');
-  };
-
   const complete = async () => {
     const communityId = await finishOnboarding();
     if (communityId) {
       try {
         localStorage.setItem('nb_current_community', communityId);
-        // One-shot flag — the auth shell's TourLauncher runs the feature tour once.
+        // One-shot flag — the auth shell's TourLauncher runs the guided tour once,
+        // starting from the first step (index 0).
         localStorage.setItem('nb_onboarding_tour', '1');
+        localStorage.setItem('nb_tour_index', '0');
       } catch {}
     }
   };
@@ -155,7 +145,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
-        {step > 0 && step < 5 && (
+        {step > 0 && step < 4 && (
           <StepProgress current={step} total={TOTAL_STEPS} />
         )}
 
@@ -180,7 +170,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
               firstName={firstName}
               imageUrl={data.imageUrl}
               onStart={() => next()}
-              onSkip={skipAll}
             />
           )}
           {step === 1 && (
@@ -201,14 +190,6 @@ export default function OnboardingWizard({ person, userName }: Props) {
             />
           )}
           {step === 3 && (
-            <SkillsStep
-              data={data}
-              onNext={(d) => next(d)}
-              onBack={back}
-              saving={saving}
-            />
-          )}
-          {step === 4 && (
             <ConnectStep
               data={data}
               onNext={(d) => next(d)}
@@ -216,7 +197,7 @@ export default function OnboardingWizard({ person, userName }: Props) {
               saving={saving}
             />
           )}
-          {step === 5 && (
+          {step === 4 && (
             <DoneStep
               data={data}
               personName={userName}

@@ -144,7 +144,6 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
     twitterUrl: string | null;
     phone: string | null;
     pronouns: string | null;
-    openToWork: boolean;
   }>();
   if (personNodeIds.length > 0) {
     const personRows = await prisma.person.findMany({
@@ -152,7 +151,7 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
       select: {
         id: true, imageUrl: true, bio: true, website: true,
         linkedinUrl: true, twitterUrl: true, phone: true,
-        pronouns: true, openToWork: true,
+        pronouns: true,
       },
     });
     for (const p of personRows) {
@@ -164,7 +163,6 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
         twitterUrl: p.twitterUrl,
         phone: p.phone,
         pronouns: p.pronouns,
-        openToWork: p.openToWork,
       });
     }
   }
@@ -182,7 +180,6 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
         twitterUrl: personData.twitterUrl,
         phone: personData.phone,
         pronouns: personData.pronouns,
-        openToWork: personData.openToWork,
       };
     }
     return base;

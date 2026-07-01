@@ -27,6 +27,7 @@ const urlField = z
 // Empty inputs from the wizard arrive as `null` (the client sends `value || null`),
 // so every nullable string field must accept `null` as well as `undefined`.
 const OnboardingPatchSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
   subtitle: z.string().max(200).nullable().optional(),
   bio: z.string().max(2000).nullable().optional(),
   location: z.string().max(200).nullable().optional(),
@@ -35,7 +36,6 @@ const OnboardingPatchSchema = z.object({
   twitterUrl: urlField,
   phone: z.string().max(30).nullable().optional(),
   pronouns: z.string().max(30).nullable().optional(),
-  openToWork: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
   imageUrl: z.string().nullable().optional(),
 });
@@ -69,13 +69,14 @@ export async function PATCH(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
 
   const {
-    subtitle, bio, location, website, linkedinUrl, twitterUrl,
-    phone, pronouns, openToWork, tags, imageUrl,
+    name, subtitle, bio, location, website, linkedinUrl, twitterUrl,
+    phone, pronouns, tags, imageUrl,
   } = parsed.data;
 
   const updated = await prisma.person.update({
     where: { id: person.id },
     data: {
+      ...(name !== undefined && { name }),
       ...(subtitle !== undefined && { subtitle }),
       ...(bio !== undefined && { bio }),
       ...(location !== undefined && { location }),
@@ -84,7 +85,6 @@ export async function PATCH(req: NextRequest) {
       ...(twitterUrl !== undefined && { twitterUrl }),
       ...(phone !== undefined && { phone }),
       ...(pronouns !== undefined && { pronouns }),
-      ...(openToWork !== undefined && { openToWork }),
       ...(tags !== undefined && { tags }),
       ...(imageUrl !== undefined && { imageUrl }),
     },
@@ -93,6 +93,7 @@ export async function PATCH(req: NextRequest) {
   logger.info('api.onboarding.person.updated', { id: person.id, imageUrl });
 
   const nodeUpdate: Record<string, unknown> = {};
+  if (name !== undefined) nodeUpdate.name = name;
   if (subtitle !== undefined) nodeUpdate.subtitle = subtitle;
   if (location !== undefined) nodeUpdate.location = location;
   if (imageUrl !== undefined) nodeUpdate.imageUrl = imageUrl;

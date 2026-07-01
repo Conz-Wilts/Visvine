@@ -56,7 +56,6 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         twitterUrl: str(meta.twitterUrl),
         phone: str(meta.phone),
         pronouns: str(meta.pronouns),
-        openToWork: meta.openToWork === true,
         email: null,
         imageUrl: normalizeImageUrl(node.imageUrl) ?? node.imageUrl ?? null,
         tags: node.tags ?? [],
@@ -94,7 +93,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   const body = await req.json();
   const {
     name, subtitle, bio, location, website, linkedinUrl, twitterUrl,
-    phone, pronouns, openToWork, tags, imageUrl, metadata,
+    phone, pronouns, tags, imageUrl, metadata,
   } = body;
 
   // Sync shared fields back to the Node record so the graph/sidebar stay fresh.
@@ -122,7 +121,6 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
         ...(twitterUrl !== undefined && { twitterUrl }),
         ...(phone !== undefined && { phone }),
         ...(pronouns !== undefined && { pronouns }),
-        ...(openToWork !== undefined && { openToWork }),
         ...(tags !== undefined && { tags }),
         ...(imageUrl !== undefined && { imageUrl }),
         ...(metadata !== undefined && { metadata }),

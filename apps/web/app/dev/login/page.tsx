@@ -32,8 +32,10 @@ export default async function DevLoginPage({
     <main style={styles.main}>
       <h1 style={styles.h1}>Dev login</h1>
       <p style={styles.note}>
-        Local-only. Pick a seeded user to sign in as. Available because{" "}
-        <code>ENABLE_DEV_AUTH=true</code> and <code>NODE_ENV=development</code>.
+        Local-only. Available because <code>ENABLE_DEV_AUTH=true</code> and{" "}
+        <code>NODE_ENV=development</code>. Click a user to log straight in, or{" "}
+        <strong>Create account</strong> to reset their onboarding and run the
+        sign-up wizard.
       </p>
       {users.length === 0 ? (
         <p style={styles.empty}>
@@ -45,14 +47,33 @@ export default async function DevLoginPage({
             const role = u.userCommunities[0]?.role ?? "member";
             return (
               <li key={u.id} style={styles.item}>
-                <form action={`/api/dev/login-as/${u.id}${loginAsQuery}`} method="POST">
-                  <button type="submit" style={styles.button}>
-                    <span style={styles.name}>{u.name}</span>
-                    <span style={styles.meta}>
-                      {u.email} · {role}
-                    </span>
-                  </button>
-                </form>
+                <div style={styles.row}>
+                  <form
+                    action={`/api/dev/login-as/${u.id}${loginAsQuery}`}
+                    method="POST"
+                    style={styles.loginForm}
+                  >
+                    <button type="submit" style={styles.button}>
+                      <span style={styles.name}>{u.name}</span>
+                      <span style={styles.meta}>
+                        {u.email} · {role}
+                      </span>
+                    </button>
+                  </form>
+                  <form
+                    action={`/api/dev/login-as/${u.id}?onboard=1`}
+                    method="POST"
+                    style={styles.onboardForm}
+                  >
+                    <button
+                      type="submit"
+                      style={styles.onboardButton}
+                      title="Log in and run the onboarding wizard"
+                    >
+                      Create account
+                    </button>
+                  </form>
+                </div>
               </li>
             );
           })}
@@ -74,8 +95,12 @@ const styles = {
   empty: { color: "#888" },
   list: { listStyle: "none", padding: 0, margin: 0 },
   item: { marginBottom: 8 },
+  row: { display: "flex", gap: 8, alignItems: "stretch" },
+  loginForm: { flex: 1 },
+  onboardForm: { display: "flex" },
   button: {
     width: "100%",
+    height: "100%",
     textAlign: "left" as const,
     padding: "12px 16px",
     border: "1px solid #ddd",
@@ -85,6 +110,18 @@ const styles = {
     display: "flex",
     flexDirection: "column" as const,
     gap: 2,
+  },
+  onboardButton: {
+    height: "100%",
+    padding: "12px 16px",
+    border: "1px solid #2563eb",
+    borderRadius: 6,
+    background: "#2563eb",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: 14,
+    whiteSpace: "nowrap" as const,
   },
   name: { fontWeight: 600, fontSize: 15 },
   meta: { fontSize: 13, color: "#666" },

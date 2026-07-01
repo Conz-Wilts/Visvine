@@ -74,9 +74,9 @@ export default function CommunitySelector({
         }
       >
         {currentCommunity ? (
-          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="sm" className="!w-8 !h-8 !text-sm" />
+          <CommunityAvatar name={currentCommunity.name} imageUrl={currentCommunity.imageUrl} size="md" rounded="rounded-[10px]" className="!w-10 !h-10 !text-base" />
         ) : (
-          <div className="w-8 h-8 rounded-xl bg-surface-3 flex-shrink-0" />
+          <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
         )}
         {!iconOnly && (
           <>

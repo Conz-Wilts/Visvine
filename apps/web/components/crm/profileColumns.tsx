@@ -18,7 +18,6 @@ const TYPE_COLUMNS: Record<string, ProfileColumn[]> = {
     { key: 'twitterUrl', label: 'Twitter' },
     { key: 'phone', label: 'Phone' },
     { key: 'pronouns', label: 'Pronouns' },
-    { key: 'openToWork', label: 'Open to Work' },
   ],
   organization: [
     { key: 'subtitle', label: 'Description' },
@@ -78,11 +77,6 @@ export function renderProfileCell(item: DirectoryItem, col: ProfileColumn): Reac
         {(value as string).replace(/^https?:\/\//, '')}
       </a>
     );
-  }
-  if (col.key === 'openToWork') {
-    return value
-      ? <Badge variant="table-type" className="bg-green-100 text-green-700 border-transparent">Yes</Badge>
-      : <span className="text-text-muted">—</span>;
   }
   if (!value) return <span className="text-text-muted">—</span>;
   return <span className="text-sm text-text-primary truncate max-w-[200px] block">{value as string}</span>;

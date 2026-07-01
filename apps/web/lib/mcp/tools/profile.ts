@@ -37,7 +37,6 @@ export function registerProfileTools(server: McpServer): void {
         twitterUrl: z.string().optional(),
         phone: z.string().optional(),
         pronouns: z.string().optional(),
-        openToWork: z.boolean().optional(),
         tags: z.array(z.string()).optional(),
       },
     },
@@ -61,7 +60,6 @@ export function registerProfileTools(server: McpServer): void {
           "twitterUrl",
           "phone",
           "pronouns",
-          "openToWork",
           "tags",
         ] as const) {
           if (args[k] !== undefined) body[k] = args[k];

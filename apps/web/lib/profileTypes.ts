@@ -10,7 +10,6 @@ export interface FullProfile {
   twitterUrl?: string | null;
   phone?: string | null;
   pronouns?: string | null;
-  openToWork: boolean;
   email?: string | null;
   imageUrl?: string | null;
   tags: string[];
