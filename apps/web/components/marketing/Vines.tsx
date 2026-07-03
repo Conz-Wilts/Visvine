@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 import { BRAND } from "@/lib/brand";
 
+// On-screen pixel height of one wave period (one 600-unit viewBox segment).
+// Fixed in pixels so the wave shape stays constant regardless of viewport height.
+const PERIOD_PX = 900;
+
 export default function Vines() {
   const stroke = BRAND;
   const width = 40;
@@ -12,9 +16,8 @@ export default function Vines() {
 
   useEffect(() => {
     const compute = () => {
-      const vh = window.innerHeight || 1;
       const ph = document.documentElement.scrollHeight;
-      setPeriods(Math.max(2, Math.ceil(ph / vh) + 1));
+      setPeriods(Math.max(2, Math.ceil(ph / PERIOD_PX) + 1));
     };
     compute();
     window.addEventListener("resize", compute);
@@ -58,7 +61,7 @@ export default function Vines() {
   const rightPath = buildPath(period, true);
 
   const viewBoxH = 600 * periods;
-  const heightStyle = { height: `${periods * 100}svh` } as const;
+  const heightStyle = { height: `${periods * PERIOD_PX}px` } as const;
 
   return (
     <>
