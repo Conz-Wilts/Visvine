@@ -13,6 +13,7 @@ export interface FeatureDef {
   href: string;
   description: string; // shown on the launcher card
   icon: ReactNode;
+  core?: boolean;      // always on, not toggleable
 }
 
 const iconClass = 'h-5 w-5 shrink-0';
@@ -45,6 +46,17 @@ export const FEATURES: FeatureDef[] = [
     ),
   },
   {
+    key: 'channels',
+    label: 'Channels',
+    href: '/channels',
+    description: 'A shared feed and topic channels for posts and conversation.',
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h16M3 16h16" />
+      </svg>
+    ),
+  },
+  {
     key: 'events',
     label: 'Events',
     href: '/events',
@@ -63,6 +75,17 @@ export const FEATURES: FeatureDef[] = [
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+    ),
+  },
+  {
+    key: 'messages',
+    label: 'Messages',
+    href: '/messages',
+    description: 'Direct messages and warm intro requests.',
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
   },

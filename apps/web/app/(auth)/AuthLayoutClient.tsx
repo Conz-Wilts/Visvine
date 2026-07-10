@@ -7,6 +7,7 @@ import { HeaderProvider } from "@/lib/contexts/HeaderContext";
 import Navbar from "@/components/layout/Navbar";
 import { CommunityProvider, useCommunity } from "@/lib/contexts/CommunityContext";
 import { FEATURES, isFeatureEnabled, enabledFeatures } from "@/lib/features";
+import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
 import type { CommunityFeatureConfig } from "@/lib/types";
 import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/CommunityDesignContext";
 import { ProfileProvider } from "@/lib/contexts/ProfileContext";
@@ -43,9 +44,19 @@ function useFeatureRouteGuard() {
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { backgroundStyle } = useCommunityDesign();
   const { expanded } = useSidebar();
+  const pathname = usePathname();
   useFeatureRouteGuard();
+
+  // /context owns its own scroll (fixed-height panels; the editor deliberately
+  // bleeds up behind the navbar via a negative margin), so its <main> must NOT be
+  // a scroll container — `overflow-visible` preserves that bleed exactly. Every
+  // other page scrolls, and we want that scroll to live in <main> — not on the
+  // document — so the green scrollbar starts BELOW the fixed navbar instead of
+  // running up its right edge to the top of the viewport.
+  const contextView = pathname.startsWith('/context'); // scroll owned by the page
+
   return (
-    <div className="flex flex-col min-h-screen bg-brand-bg" style={backgroundStyle}>
+    <div className="flex h-screen flex-col overflow-hidden bg-brand-bg" style={backgroundStyle}>
       <Navbar />
 
       {/* Sidebar floats fixed over content — shadow not clipped */}
@@ -55,11 +66,14 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
           The shell does NOT add the gutter — each page supplies its own 24px
           horizontal padding (px-6), which lands the content 24px to the right of
           the sidebar (matching the sidebar's own left inset) and 24px from the
-          right edge. Collapsed: 24 + 64 = 88. Expanded: 24 + 200 = 224. */}
+          right edge. Collapsed: 24 + COLLAPSED_W. Expanded: 24 + EXPANDED_W.
+          <main> is the scroll container (mt-16 sits it below the fixed navbar), so
+          its scrollbar starts under the navbar rather than at the viewport top. */}
       <main
-        className="flex-1 pt-4 pb-6 mt-20"
+        className={`flex-1 mt-16 pt-4 pb-6 scroll-pt-32 ${contextView ? 'overflow-visible' : 'overflow-y-auto'}`}
         style={{
-          paddingLeft: expanded ? 224 : 88,
+          paddingLeft: (expanded ? EXPANDED_W : COLLAPSED_W) + 24,
+          scrollbarGutter: 'stable',
           transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
         }}
       >

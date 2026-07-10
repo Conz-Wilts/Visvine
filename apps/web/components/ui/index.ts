@@ -1,6 +1,8 @@
 export { default as Alert } from './Alert';
+export { default as Avatar } from './Avatar';
 export { default as Badge } from './Badge';
 export { default as EmptyState } from './EmptyState';
+export { default as SearchInput } from './SearchInput';
 export { default as LoadingText } from './LoadingText';
 export { default as PageTitle } from './PageTitle';
 export { default as Skeleton } from './Skeleton';

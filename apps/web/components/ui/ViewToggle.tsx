@@ -59,7 +59,7 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
   return (
     <div
       ref={containerRef}
-      className={`relative flex items-center gap-1 rounded-2xl border border-border-default bg-surface-1 p-1 h-12 shadow-float ${className}`}
+      className={`relative flex items-center gap-1 rounded-2xl border border-border-default bg-transparent p-1 h-12 ${className}`}
     >
       {pillStyle && (
         <span

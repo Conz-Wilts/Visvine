@@ -69,8 +69,8 @@ export default function CommunitySelector({
         onClick={() => setIsOpen(!isOpen)}
         className={
           iconOnly
-            ? "w-12 h-12 rounded-xl flex items-center justify-center border border-border-default bg-surface-1 hover:bg-surface-2 transition shadow-float"
-            : "flex items-center gap-2 h-12 px-3 text-sm font-medium text-text-secondary border border-border-default rounded-xl bg-surface-1 hover:bg-surface-2 transition shadow-float"
+            ? "w-12 h-12 rounded-xl flex items-center justify-center hover:bg-surface-2 transition"
+            : "flex items-center gap-2 h-12 px-3 text-sm font-medium text-text-secondary rounded-xl hover:bg-surface-2 transition"
         }
       >
         {currentCommunity ? (

@@ -5,35 +5,34 @@
 // (admin-only in the shared brain, enforced server-side).
 
 import { useEffect, useState } from 'react'
-import { notesApi, type Scope } from '../lib/notesApi'
+import { notesApi } from '../lib/notesApi'
 import { formatRelativeTime } from '@/lib/notes/shared/time'
 import type { TrashEntry } from '@/lib/notes/shared/types'
 
 interface TrashModalProps {
   communityId: string
-  scope: Scope
   onChanged: () => void
   onClose: () => void
 }
 
-export function TrashModal({ communityId, scope, onChanged, onClose }: TrashModalProps) {
+export function TrashModal({ communityId, onChanged, onClose }: TrashModalProps) {
   const [entries, setEntries] = useState<TrashEntry[] | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const load = () =>
-    notesApi.trash(communityId, scope).then(({ trash }) => setEntries(trash)).catch(() => setEntries([]))
+    notesApi.trash(communityId).then(({ trash }) => setEntries(trash)).catch(() => setEntries([]))
 
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [communityId, scope])
+  }, [communityId])
 
   const restore = async (id: string) => {
     setBusy(true)
     setError(null)
     try {
-      await notesApi.restoreTrash(communityId, scope, id)
+      await notesApi.restoreTrash(communityId, id)
       await load()
       onChanged()
     } catch (err) {
@@ -47,7 +46,7 @@ export function TrashModal({ communityId, scope, onChanged, onClose }: TrashModa
     setBusy(true)
     setError(null)
     try {
-      await notesApi.emptyTrash(communityId, scope)
+      await notesApi.emptyTrash(communityId)
       await load()
       onChanged()
     } catch (err) {

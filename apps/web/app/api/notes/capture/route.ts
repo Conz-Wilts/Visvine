@@ -1,0 +1,38 @@
+// POST /api/notes/capture — quick capture, two forms:
+//   { communityId, text, refs?, tags? }        → { path }  — append a dated line
+//        to the caller's private monthly log (their PERSONAL COMMUNITY's brain,
+//        whatever community the request came from).
+//   { communityId, path, entry }               → { path }  — append a dated `## Log`
+//        entry to an existing note in the resolved brain (gated; denied → 403).
+
+import { NextRequest, NextResponse } from 'next/server'
+import { requireBrain, fail, failFromError } from '@/lib/notes/api'
+import { principalOf, resolvePersonalBrain } from '@/lib/notes/brain'
+import { appendCapture, appendNoteBound } from '@/lib/notes/capture'
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  const brain = await requireBrain(req, body)
+  if (brain instanceof Response) return brain
+  const p = await principalOf(brain)
+
+  try {
+    // Note-bound form: append to an existing note through the gated write path.
+    if (typeof body.path === 'string' && typeof body.entry === 'string') {
+      const result = await appendNoteBound(p, brain, body.path, body.entry)
+      if (result.status === 'denied') return fail(result.reason, 403)
+      return NextResponse.json({ path: result.path })
+    }
+
+    const text = typeof body.text === 'string' ? body.text : null
+    if (!text) return fail('text is required (or path + entry for a note-bound log)')
+    const refs = Array.isArray(body.refs) ? body.refs.map(String) : undefined
+    const tags = Array.isArray(body.tags) ? body.tags.map(String) : undefined
+    // Captures always land in the caller's personal community's log, whatever
+    // community the request resolved.
+    const personal = await resolvePersonalBrain({ userId: p.userId, name: p.name, email: p.email || null })
+    return NextResponse.json({ path: await appendCapture(p, personal, text, refs, tags) })
+  } catch (err) {
+    return failFromError(err)
+  }
+}

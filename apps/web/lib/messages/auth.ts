@@ -20,6 +20,15 @@ export async function getApiMessagingUser(): Promise<ApiMessagingUser | null> {
   };
 }
 
+/** Server-component variant — same session resolution as the API helper. */
+export async function getServerMessagingUser(): Promise<ApiMessagingUser | null> {
+  return getApiMessagingUser();
+}
+
 export function unauthorizedResponse() {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+export function forbiddenResponse(message = 'Forbidden') {
+  return NextResponse.json({ error: message }, { status: 403 });
 }

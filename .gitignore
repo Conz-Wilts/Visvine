@@ -73,6 +73,10 @@ docs/*.credentials.md
 # migration files
 supabase_data_dump.sql
 *.dump.sql
+*.local.sql
+
+# nested/scratch repos (not submodules)
+/blackbird-brain/
 
 # Local dev fixtures (pg_dump output before/after GCS round-trip).
 # See docs/SETUP.md §6.

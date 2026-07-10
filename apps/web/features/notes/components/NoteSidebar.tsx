@@ -8,6 +8,15 @@
 
 import { useMemo, useState } from 'react'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
+import type { FolderLevel } from '@/lib/notes/shared/brainTypes'
+
+/** Registry-derived adornments for a TOP-LEVEL folder row (shared brain only). */
+export interface FolderBadge {
+  private: boolean
+  locked?: boolean
+  /** The viewer's own level in the folder, shown as a small chip. */
+  level?: FolderLevel
+}
 
 interface NoteSidebarProps {
   tree: TreeNode
@@ -18,6 +27,10 @@ interface NoteSidebarProps {
   onSelect: (path: string) => void
   onTogglePin: (path: string, pinned: boolean) => void
   onDeleteNote: (path: string) => void
+  /** Registry badges keyed by top-level folder id (shared scope only). */
+  folderBadges?: Map<string, FolderBadge>
+  /** Hover action on top-level folder rows: open the folder access panel. */
+  onFolderAccess?: (folderId: string) => void
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -32,6 +45,8 @@ export function NoteSidebar({
   onSelect,
   onTogglePin,
   onDeleteNote,
+  folderBadges,
+  onFolderAccess,
   bare = false,
 }: NoteSidebarProps) {
   const pinnedSet = useMemo(() => new Set(pinned), [pinned])
@@ -81,6 +96,8 @@ export function NoteSidebar({
             onSelect={onSelect}
             onTogglePin={onTogglePin}
             onDeleteNote={onDeleteNote}
+            folderBadges={folderBadges}
+            onFolderAccess={onFolderAccess}
           />
         </div>
       </div>
@@ -96,6 +113,8 @@ function Tree({
   onSelect,
   onTogglePin,
   onDeleteNote,
+  folderBadges,
+  onFolderAccess,
 }: {
   node: TreeNode
   selectedPath: string | null
@@ -104,6 +123,8 @@ function Tree({
   onSelect: (path: string) => void
   onTogglePin: (path: string, pinned: boolean) => void
   onDeleteNote: (path: string) => void
+  folderBadges?: Map<string, FolderBadge>
+  onFolderAccess?: (folderId: string) => void
 }) {
   const children = node.children ?? []
   return (
@@ -119,6 +140,8 @@ function Tree({
             onSelect={onSelect}
             onTogglePin={onTogglePin}
             onDeleteNote={onDeleteNote}
+            folderBadges={folderBadges}
+            onFolderAccess={onFolderAccess}
           />
         ) : (
           <NoteRow
@@ -146,21 +169,50 @@ function FolderRow(props: {
   onSelect: (path: string) => void
   onTogglePin: (path: string, pinned: boolean) => void
   onDeleteNote: (path: string) => void
+  folderBadges?: Map<string, FolderBadge>
+  onFolderAccess?: (folderId: string) => void
 }) {
   const [open, setOpen] = useState(true)
+  // Registry adornments apply to TOP-LEVEL folders only (the registry's unit of
+  // access control) — a top-level folder's tree path has no slash.
+  const isTopLevel = !props.node.path.includes('/')
+  const badge = isTopLevel ? props.folderBadges?.get(props.node.path) : undefined
+  const showAccess = isTopLevel && !!props.onFolderAccess
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 rounded-lg py-1.5 pl-2 pr-2 text-left text-[15px] text-text-secondary transition hover:bg-surface-2"
-      >
-        <span className="w-3 shrink-0 text-xs text-text-muted">{open ? '▾' : '▸'}</span>
-        <span className="shrink-0 text-text-muted">
-          <FolderIcon open={open} />
-        </span>
-        <span className="truncate font-medium">{props.node.name}</span>
-      </button>
+      <div className="group/folder flex items-center rounded-lg pr-1.5 transition hover:bg-surface-2">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-2 text-left text-[15px] text-text-secondary"
+        >
+          <span className="w-3 shrink-0 text-xs text-text-muted">{open ? '▾' : '▸'}</span>
+          <span className="shrink-0 text-text-muted">
+            <FolderIcon open={open} />
+          </span>
+          <span className="truncate font-medium">{props.node.name}</span>
+          {badge?.private && (
+            <span className="shrink-0 text-text-muted" title="Private folder">
+              <LockIcon />
+            </span>
+          )}
+          {badge?.level && (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+              {badge.level}
+            </span>
+          )}
+        </button>
+        {showAccess && (
+          <button
+            type="button"
+            title="Folder access"
+            onClick={() => props.onFolderAccess!(props.node.path)}
+            className="shrink-0 rounded p-1 text-text-muted opacity-0 transition hover:text-text-secondary group-hover/folder:opacity-100"
+          >
+            <ShieldIcon />
+          </button>
+        )}
+      </div>
       {open && (
         // Indented child container with a left guide line (VS Code style).
         <div className="ml-[15px] border-l border-border-default/70 pl-[2px]">
@@ -172,6 +224,8 @@ function FolderRow(props: {
             onSelect={props.onSelect}
             onTogglePin={props.onTogglePin}
             onDeleteNote={props.onDeleteNote}
+            folderBadges={props.folderBadges}
+            onFolderAccess={props.onFolderAccess}
           />
         </div>
       )}
@@ -280,6 +334,23 @@ function PinIcon({ filled = false }: { filled?: boolean }) {
       <path d="M9 4v6l-2 3v1h10v-1l-2-3V4" />
       <path d="M7 4h10" />
       <path d="M12 14v6" />
+    </svg>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
     </svg>
   )
 }

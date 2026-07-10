@@ -203,13 +203,12 @@ a:hover {
   }
 }
 
-/* scroll padding for sticky tab bar + navbar */
+/* scroll padding for sticky tab bar + navbar. Page scroll lives in the auth
+   shell's <main> (see AuthLayoutClient), not the document, so the scrollbar
+   starts below the fixed navbar — <main> reserves its own gutter and carries the
+   scroll padding. The document itself no longer scrolls. */
 html {
   scroll-padding-top: 128px;
-  /* Always reserve the scrollbar gutter. Graph mode sets body overflow:hidden,
-     which removes the vertical scrollbar; without a reserved gutter the viewport
-     widens by the scrollbar width and the fixed top bar shifts right. */
-  scrollbar-gutter: stable;
 }
 
 /* ─── Global custom scrollbar ──────────────────────────────────────────────

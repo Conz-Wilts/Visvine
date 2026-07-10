@@ -11,6 +11,7 @@ import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
+import { notesApi } from '@/features/notes/lib/notesApi';
 import MatchPanel from './MatchPanel';
 import {
   TYPE_OPTIONS,
@@ -56,8 +57,36 @@ export default function CreateModal() {
   // off for this community (Context appears only where the notes feature is on).
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
+
+  // Context also requires write access to this community's brain root: check the
+  // folder registry's gate when the modal opens. Personal spaces (`me:`) are
+  // always writable by their owner; while the check is in flight (or on failure)
+  // the tile stays hidden rather than offering a create that would 403.
+  const isPersonalSpace = currentCommunity?.id.startsWith('me:') ?? false;
+  const [brainWritable, setBrainWritable] = useState(false);
+  useEffect(() => {
+    if (!isOpen || !notesEnabled || !currentCommunity) return;
+    if (isPersonalSpace) {
+      setBrainWritable(true);
+      return;
+    }
+    let alive = true;
+    setBrainWritable(false);
+    notesApi
+      .getRegistry(currentCommunity.id)
+      .then((r) => {
+        if (alive) setBrainWritable(r.gate.canWrite);
+      })
+      .catch(() => {
+        if (alive) setBrainWritable(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [isOpen, notesEnabled, isPersonalSpace, currentCommunity]);
+
   const gridOptions = TYPE_OPTIONS.filter(
-    (o) => o.inGrid && (o.id !== 'context' || notesEnabled),
+    (o) => o.inGrid && (o.id !== 'context' || (notesEnabled && brainWritable)),
   );
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success

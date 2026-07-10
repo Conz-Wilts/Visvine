@@ -9,14 +9,15 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEventTools } from "@/lib/mcp/tools/events";
+import { registerBrainTools } from "@/lib/mcp/tools/brain";
+import { registerIntroTools } from "@/lib/mcp/tools/intros";
+import { registerMessageTools } from "@/lib/mcp/tools/messages";
+import { registerFeedTools } from "@/lib/mcp/tools/feed";
 
 // ── Parked modules (uncomment to drip-feed back; see docs/mcp-tools-inventory.md) ──
 // import { registerIdentityTools } from "@/lib/mcp/tools/identity";
 // import { registerDirectoryTools } from "@/lib/mcp/tools/directory";
 // import { registerCrmTools } from "@/lib/mcp/tools/crm";
-// import { registerIntroTools } from "@/lib/mcp/tools/intros";
-// import { registerMessageTools } from "@/lib/mcp/tools/messages";
-// import { registerFeedTools } from "@/lib/mcp/tools/feed";
 // import { registerResourceTools } from "@/lib/mcp/tools/resources";
 // import { registerBlogTools } from "@/lib/mcp/tools/blog";
 // import { registerAnalyticsTools } from "@/lib/mcp/tools/analytics";
@@ -24,14 +25,15 @@ import { registerEventTools } from "@/lib/mcp/tools/events";
 
 export function registerAllTools(server: McpServer): void {
   registerEventTools(server);
+  registerBrainTools(server);
+  registerIntroTools(server);
+  registerMessageTools(server);
+  registerFeedTools(server);
 
   // ── Parked modules (uncomment to drip-feed back; see docs/mcp-tools-inventory.md) ──
   // registerIdentityTools(server);
   // registerDirectoryTools(server);
   // registerCrmTools(server);
-  // registerIntroTools(server);
-  // registerMessageTools(server);
-  // registerFeedTools(server);
   // registerResourceTools(server);
   // registerBlogTools(server);
   // registerAnalyticsTools(server);

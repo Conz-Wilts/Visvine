@@ -5,17 +5,16 @@
 // note renames. Nothing moves until the user clicks Apply.
 
 import { useEffect, useState } from 'react'
-import { notesApi, type Scope } from '../lib/notesApi'
+import { notesApi } from '../lib/notesApi'
 import type { MoveProposal } from '@/lib/notes/shared/types'
 
 interface ReorganizeModalProps {
   communityId: string
-  scope: Scope
   onApplied: () => void
   onClose: () => void
 }
 
-export function ReorganizeModal({ communityId, scope, onApplied, onClose }: ReorganizeModalProps) {
+export function ReorganizeModal({ communityId, onApplied, onClose }: ReorganizeModalProps) {
   const [summary, setSummary] = useState('')
   const [moves, setMoves] = useState<MoveProposal[]>([])
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -25,7 +24,7 @@ export function ReorganizeModal({ communityId, scope, onApplied, onClose }: Reor
 
   useEffect(() => {
     notesApi
-      .reorganize(communityId, scope)
+      .reorganize(communityId)
       .then(({ plan }) => {
         setSummary(plan.summary)
         setMoves(plan.moves)
@@ -33,7 +32,7 @@ export function ReorganizeModal({ communityId, scope, onApplied, onClose }: Reor
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Reorganize failed'))
       .finally(() => setLoading(false))
-  }, [communityId, scope])
+  }, [communityId])
 
   const toggle = (i: number) =>
     setSelected((s) => {
@@ -49,7 +48,7 @@ export function ReorganizeModal({ communityId, scope, onApplied, onClose }: Reor
     try {
       for (let i = 0; i < moves.length; i++) {
         if (!selected.has(i)) continue
-        await notesApi.rename(communityId, scope, moves[i].from, moves[i].to)
+        await notesApi.rename(communityId, moves[i].from, moves[i].to)
       }
       onApplied()
       onClose()

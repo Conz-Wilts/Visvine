@@ -1,17 +1,24 @@
 'use client'
 
-// A floating fuzzy-search box for the notes graph: type to match note titles/paths,
-// arrow/Enter to open. Lifted from the former search-first landing (NoteSearchHome),
-// now overlaid on top of the link graph as a compact floating control.
+// A floating search box for the notes graph: type to match notes, arrow/Enter to
+// open. Client-side fuzzy title/path matching answers instantly; when the caller
+// supplies `serverSearch`, the query is also sent (debounced) to the fused
+// full-text search endpoint, whose snippet-bearing results replace the fuzzy list
+// once they arrive. A failed server call silently keeps the fuzzy results.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteMeta } from '@/lib/notes/shared/types'
+import type { FusedResult } from '@/lib/notes/shared/retrieval'
 
 interface NoteSearchBoxProps {
   notes: NoteMeta[]
   onOpen: (path: string) => void
   placeholder: string
+  /** Debounced full-text search against the server; results carry snippets. */
+  serverSearch?: (query: string) => Promise<FusedResult[]>
 }
+
+const SERVER_DEBOUNCE_MS = 250
 
 const MAX_RESULTS = 8
 
@@ -43,13 +50,17 @@ function SearchIcon() {
   )
 }
 
-export function NoteSearchBox({ notes, onOpen, placeholder }: NoteSearchBoxProps) {
+export function NoteSearchBox({ notes, onOpen, placeholder, serverSearch }: NoteSearchBoxProps) {
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  // Server (fused full-text) results for the CURRENT query; null = not arrived
+  // (or failed) → the client-side fuzzy list carries the dropdown instead.
+  const [serverResults, setServerResults] = useState<FusedResult[] | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const searchSeq = useRef(0)
 
   // Fuzzy results over title and path; the better of the two scores wins.
-  const results = useMemo(() => {
+  const fuzzyResults = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return []
     const scored = notes
@@ -64,6 +75,36 @@ export function NoteSearchBox({ notes, onOpen, placeholder }: NoteSearchBoxProps
     scored.sort((a, b) => (a.score !== b.score ? a.score - b.score : a.meta.title.localeCompare(b.meta.title)))
     return scored.slice(0, MAX_RESULTS).map((x) => x.meta)
   }, [notes, query])
+
+  // Debounced server search. Stale responses are dropped (seq guard); a failed
+  // request leaves serverResults null so the fuzzy list keeps working.
+  useEffect(() => {
+    const seq = ++searchSeq.current
+    setServerResults(null)
+    const q = query.trim()
+    if (!serverSearch || !q) return
+    const t = setTimeout(() => {
+      serverSearch(q)
+        .then((results) => {
+          if (searchSeq.current === seq) setServerResults(results)
+        })
+        .catch(() => {
+          /* fall back to client-side fuzzy results */
+        })
+    }, SERVER_DEBOUNCE_MS)
+    return () => clearTimeout(t)
+  }, [query, serverSearch])
+
+  // What the dropdown shows: server results (with snippets) once they land,
+  // otherwise the instant fuzzy matches. Fuzzy also covers an empty server hit
+  // list so quick title/path switching never goes dark mid-flight.
+  const results = useMemo(
+    () =>
+      serverResults && serverResults.length > 0
+        ? serverResults.map((r) => ({ path: r.path, title: r.title, snippet: r.snippet }))
+        : fuzzyResults.map((m) => ({ path: m.path, title: m.title, snippet: undefined as string | undefined })),
+    [serverResults, fuzzyResults],
+  )
 
   useEffect(() => {
     setActive(0)
@@ -103,7 +144,7 @@ export function NoteSearchBox({ notes, onOpen, placeholder }: NoteSearchBoxProps
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
-          className="w-full rounded-2xl border border-border-default bg-surface-1 py-3 pl-12 pr-10 text-base text-text-primary shadow-float outline-none transition placeholder:text-text-muted focus:border-brand-green"
+          className="h-14 w-full rounded-2xl border border-border-default bg-surface-1 pl-12 pr-10 text-base text-text-primary shadow-float outline-none transition placeholder:text-text-muted focus:border-brand-green"
         />
         {searching && (
           <button
@@ -125,15 +166,22 @@ export function NoteSearchBox({ notes, onOpen, placeholder }: NoteSearchBoxProps
                   type="button"
                   onMouseEnter={() => setActive(i)}
                   onClick={() => onOpen(m.path)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${
+                  className={`flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition ${
                     i === active ? 'bg-surface-2' : 'hover:bg-surface-2'
                   }`}
                 >
-                  <span className="text-text-muted">
+                  <span className="mt-0.5 text-text-muted">
                     <SearchIcon />
                   </span>
-                  <span className="truncate text-sm font-medium text-text-primary">{m.title}</span>
-                  <span className="ml-auto truncate text-xs text-text-muted">{m.path}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-3">
+                      <span className="truncate text-sm font-medium text-text-primary">{m.title}</span>
+                      <span className="ml-auto truncate text-xs text-text-muted">{m.path}</span>
+                    </span>
+                    {m.snippet && (
+                      <span className="mt-0.5 line-clamp-2 block text-xs text-text-muted">{m.snippet}</span>
+                    )}
+                  </span>
                 </button>
               </li>
             ))

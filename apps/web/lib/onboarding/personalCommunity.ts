@@ -32,10 +32,10 @@ tags: [getting-started]
 This is **${name}** — your own private corner. Only you can see it.
 
 ## Two kinds of notes
-- **My notes** (you're here now) — private context just for you: people you meet, ideas, reminders, anything.
-- **Community brain** — shared notes inside any community you join.
+- **Your space** (you're here now) — private context just for you: people you meet, ideas, reminders, anything.
+- **Community brains** — shared notes inside any community you join, on that community's Context page.
 
-Use the toggle at the top of the Context page to switch between them.
+Share upward when something's worth it: promote a note from here into a community brain, or quick-capture from anywhere — captures always land in your space first.
 
 ## Capture context fast
 - Type \`[[\` to link a person or another note — e.g. \`[[Jane Doe]]\`.
@@ -112,10 +112,11 @@ export async function provisionPersonalCommunity(user: {
     })
   }
 
-  // 4. Seed a welcome note in the personal brain (ownerKey = userId). Best-effort:
-  //    a failed note write must never block the user from finishing onboarding.
+  // 4. Seed a welcome note in the personal community's brain (its shared brain —
+  //    the user is the only member). Best-effort: a failed note write must never
+  //    block the user from finishing onboarding.
   try {
-    const brain = { communityId, ownerKey: user.userId }
+    const brain = { communityId, ownerKey: 'shared' }
     if ((await noteCount(brain)) === 0) {
       await createNote(brain, WELCOME_PATH, welcomeNote(displayName), {
         id: user.userId,

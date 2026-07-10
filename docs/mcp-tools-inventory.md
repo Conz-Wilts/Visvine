@@ -13,7 +13,7 @@
 
 ## Current state
 
-- **Live now:** `events` module only (9 tools).
+- **Live now:** `events` (9 tools) + `brain` (8 tools).
 - **Parked (code intact, registration disabled):** the other 10 modules (60 tools).
 
 To bring a module back: open `apps/web/lib/mcp/tools/index.ts`, uncomment its import + its
@@ -37,6 +37,29 @@ Each tool below lists its **scope** (the OAuth scope the token must carry) and a
 | `bulk_update_attendees` | `events:manage` | Apply a status action to many attendees by id list or status scope. |
 | `export_attendees_csv` | `events:manage` | Export an event's attendee list as CSV text; host/admin. |
 | `get_event_ics` | `events:read` | Get an event as an iCalendar (.ics) document. |
+
+---
+
+## ✅ LIVE — `brain` (8 tools) · `apps/web/lib/mcp/tools/brain.ts`
+
+The knowledge-store (community/personal note brains) surface. Unlike the other
+modules these call the `lib/notes` domain layer directly (brainService/registry/
+capture) rather than the internal HTTP routes; membership is enforced per call
+by `requireBrainPrincipal` (`isAdmin` OR a live `userCommunity` row → else 403),
+and the brain service applies the folder-visibility lens + write gate itself.
+`scope` selects the shared community brain vs the caller's personal space (the brain of their `me:<userId>` personal community) —
+reads default to `shared`, writes default to `personal`.
+
+| Tool | Scope | Summary |
+|---|---|---|
+| `brain_search` | `content:read` | Fused (BM25 + vector + link-graph) search over the notes the caller can read; filters: type/tags/folder_id, `k` results. |
+| `brain_read` | `content:read` | Read one note by path; absent and inaccessible are indistinguishable ("No accessible note"). |
+| `brain_index` | `content:read` | List visible notes (title, path, description), filterable by top-level folder or path prefix, clipped at `limit` (default 100). |
+| `brain_backlinks` | `content:read` | List the visible notes whose links point at a given note path. |
+| `brain_write` | `content:write` | Full-note create/overwrite; defaults to the PERSONAL brain — shared writes need explicit `scope:'shared'` and are folder-gated. |
+| `brain_append_log` | `content:write` | Append a dated, attributed `## Log` entry to an existing note (gated like a write). |
+| `brain_capture` | `content:write` | Quick-capture a dated line into the caller's private monthly log (`log/YYYY-MM.md` in their personal space). |
+| `brain_folders` | `content:read` | The registered shared-brain folders visible to the caller, with visibility, their level, and can-write; unregistered folders stay member-open. |
 
 ---
 
@@ -182,6 +205,7 @@ Marketing/blog authoring. Super-admin only.
 | Module | Tools | State |
 |---|---|---|
 | events | 9 | ✅ live |
+| brain | 8 | ✅ live |
 | identity | 3 | ⏸ parked |
 | profile | 2 | ⏸ parked |
 | directory | 12 | ⏸ parked |
@@ -192,7 +216,7 @@ Marketing/blog authoring. Super-admin only.
 | resources | 7 | ⏸ parked |
 | blog | 2 | ⏸ parked |
 | analytics | 2 | ⏸ parked |
-| **Total** | **69** | **9 live / 60 parked** |
+| **Total** | **77** | **17 live / 60 parked** |
 
 ---
 

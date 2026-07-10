@@ -14,7 +14,7 @@ import { coerceMoves } from './shared/reorganize'
 import type { ReorganizePlan } from './shared/types'
 import { listRaw, type Brain } from './store'
 
-interface ChatMessage {
+export interface ChatMessage {
   role: 'system' | 'user'
   content: string
 }
@@ -57,7 +57,8 @@ export function aiModelName(): string {
 }
 
 // One chat completion over the OpenAI-compatible REST API. Throws if unconfigured.
-async function chat(messages: ChatMessage[]): Promise<string> {
+// Exported for the other AI passes (enrichment in ./enrich.ts).
+export async function chat(messages: ChatMessage[]): Promise<string> {
   const config = resolveConfig()
   if (!config) {
     throw new Error('AI is not configured: set GEMINI_API_KEY, or GEMMA_API_KEY + GEMMA_BASE_URL.')
@@ -87,7 +88,7 @@ function stripReasoning(text: string): string {
 }
 
 // Extract and parse the first JSON object from model output (tolerates fences/prose).
-function extractJsonObject(raw: string): unknown {
+export function extractJsonObject(raw: string): unknown {
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
   const body = fenced ? fenced[1] : raw
   const start = body.indexOf('{')

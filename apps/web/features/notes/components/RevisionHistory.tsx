@@ -5,13 +5,12 @@
 // reverts the note to that snapshot (recorded as a new 'restore' revision).
 
 import { useEffect, useState } from 'react'
-import { notesApi, type Scope } from '../lib/notesApi'
+import { notesApi } from '../lib/notesApi'
 import { formatRelativeTime } from '@/lib/notes/shared/time'
 import type { NoteRevision } from '@/lib/notes/shared/types'
 
 interface RevisionHistoryProps {
   communityId: string
-  scope: Scope
   path: string
   onRestored: () => void
   onClose: () => void
@@ -24,19 +23,19 @@ const ORIGIN_LABEL: Record<string, string> = {
   baseline: 'Baseline',
 }
 
-export function RevisionHistory({ communityId, scope, path, onRestored, onClose }: RevisionHistoryProps) {
+export function RevisionHistory({ communityId, path, onRestored, onClose }: RevisionHistoryProps) {
   const [revisions, setRevisions] = useState<NoteRevision[] | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    notesApi.history(communityId, scope, path).then(({ revisions: r }) => setRevisions(r)).catch(() => setRevisions([]))
-  }, [communityId, scope, path])
+    notesApi.history(communityId, path).then(({ revisions: r }) => setRevisions(r)).catch(() => setRevisions([]))
+  }, [communityId, path])
 
   const restore = async (id: string) => {
     setBusy(true)
     try {
-      await notesApi.restoreRevision(communityId, scope, path, id)
+      await notesApi.restoreRevision(communityId, path, id)
       onRestored()
       onClose()
     } finally {
