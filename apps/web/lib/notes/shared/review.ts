@@ -8,7 +8,6 @@ import type { NoteFrontmatter, NoteMeta, RawNote } from './types'
 import { joinFrontmatter, normalizeKey, parseFrontmatter, splitFrontmatter } from './markdown'
 import { computeReferences, linkFirstMention } from './references'
 import { relatedNotes } from './related'
-import { toDateString } from './noteLog'
 
 export interface ReviewThresholds {
   staleDays: number
