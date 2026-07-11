@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { Alert, Button, EmptyState, Input, TabNav } from '@/components/ui';
+import { useConsoleAction } from '@/components/console/ConsoleSaveContext';
 
 interface Submission {
   id: string;
@@ -22,7 +24,9 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterStatus>('pending');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
   const [reviewNote, setReviewNote] = useState<Record<string, string>>({});
+  const runAction = useConsoleAction();
 
   const load = useCallback(async (status: FilterStatus) => {
     setLoading(true);
@@ -39,16 +43,21 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
   useEffect(() => { load(filter); }, [load, filter]);
 
   const handleAction = async (submissionId: string, action: 'approve' | 'reject') => {
+    setActionError('');
     setActionLoading(submissionId);
     try {
-      const res = await fetch(`/api/communities/${communityId}/submissions/${submissionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, reviewNote: reviewNote[submissionId] ?? '' }),
+      await runAction(async () => {
+        const res = await fetch(`/api/communities/${communityId}/submissions/${submissionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, reviewNote: reviewNote[submissionId] ?? '' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `Failed to ${action}`);
+        setSubmissions(prev => prev.filter(s => s.id !== submissionId));
       });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error); return; }
-      setSubmissions(prev => prev.filter(s => s.id !== submissionId));
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Action failed');
     } finally {
       setActionLoading(null);
     }
@@ -80,28 +89,24 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
   return (
     <div className="space-y-4">
       {/* Filter tabs */}
-      <div className="flex gap-1 border-b border-border-subtle">
-        {(['pending', 'approved', 'rejected'] as FilterStatus[]).map(s => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition border-b-2 -mb-px ${
-              filter === s
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-text-muted hover:text-text-secondary'
-            }`}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+      <TabNav
+        tabs={[
+          { id: 'pending', label: 'Pending' },
+          { id: 'approved', label: 'Approved' },
+          { id: 'rejected', label: 'Rejected' },
+        ]}
+        activeTab={filter}
+        onTabChange={id => setFilter(id as FilterStatus)}
+      />
+
+      {actionError && (
+        <Alert variant="error" onDismiss={() => setActionError('')}>{actionError}</Alert>
+      )}
 
       {loading ? (
         <div className="py-8 text-center text-sm text-text-muted">Loading…</div>
       ) : submissions.length === 0 ? (
-        <div className="py-12 text-center text-sm text-text-muted">
-          No {filter} submissions
-        </div>
+        <EmptyState title={`No ${filter} submissions`} />
       ) : (
         <div className="space-y-3">
           {submissions.map(sub => (
@@ -109,10 +114,10 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                       sub.contentType === 'node'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-purple-100 text-purple-700'
+                        ? 'bg-blue-500/10 text-blue-600'
+                        : 'bg-purple-500/10 text-purple-600'
                     }`}>
                       {sub.contentType}
                     </span>
@@ -127,29 +132,31 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
                 </div>
 
                 {filter === 'pending' && (
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <input
+                  <div className="flex w-44 flex-shrink-0 flex-col gap-2">
+                    <Input
                       type="text"
                       placeholder="Optional note…"
                       value={reviewNote[sub.id] ?? ''}
                       onChange={e => setReviewNote(prev => ({ ...prev, [sub.id]: e.target.value }))}
-                      className="px-2 py-1 text-xs border border-border-default rounded-lg bg-surface-1 text-text-primary placeholder:text-text-muted focus:outline-none w-40"
+                      className="!px-2.5 !py-1.5 !text-xs"
                     />
                     <div className="flex gap-2">
-                      <button
+                      <Button
+                        variant="pill-primary"
                         onClick={() => handleAction(sub.id, 'approve')}
                         disabled={actionLoading === sub.id}
-                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition"
+                        className="flex-1 !px-3 !py-1.5 !text-xs"
                       >
                         Approve
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="pill-secondary"
                         onClick={() => handleAction(sub.id, 'reject')}
                         disabled={actionLoading === sub.id}
-                        className="flex-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-100 text-red-700 hover:bg-red-200 disabled:opacity-50 transition"
+                        className="flex-1 !bg-red-500/10 !px-3 !py-1.5 !text-xs !text-red-600"
                       >
                         Reject
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -157,8 +164,8 @@ export default function SubmissionsPanel({ communityId }: { communityId: string 
                 {filter !== 'pending' && (
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
                     sub.status === 'approved'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
+                      ? 'bg-brand-green/15 text-brand-dark-green'
+                      : 'bg-red-500/10 text-red-600'
                   }`}>
                     {sub.status}
                   </span>

@@ -106,6 +106,7 @@ export interface CommunityDesignConfig {
 // empty config means "everything on" — see lib/features.tsx#isFeatureEnabled.
 export interface CommunityFeatureConfig {
   enabled?: Record<string, boolean>;
+  directoryPrivate?: boolean; // true = directory is admins-only (hidden from members)
 }
 
 export interface Community {

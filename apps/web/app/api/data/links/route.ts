@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession, isAdmin, communityReadForbidden } from '@/lib/auth';
+import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
 import { upsertLink, removeLink } from '@/lib/graph/links';
 import type { NBLink } from '@/lib/types';
 import { logger } from '@/lib/logger';
@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
     // reads of someone else's `me:<userId>` community.
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (await communityReadForbidden(session.userId, communityId)) {
+    if (
+      (await communityReadForbidden(session.userId, communityId)) ||
+      (await directoryAccessForbidden(session.userId, communityId, session.email))
+    ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

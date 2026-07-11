@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { getSession, isSuperAdmin } from '@/lib/session';
+import { directoryAccessForbidden } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
 /**
@@ -72,6 +73,12 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ results: [] });
     }
 
+    // A community with an admins-only directory doesn't expose its nodes to
+    // non-admin members through the picker either.
+    if (communityId && (await directoryAccessForbidden(session.userId, communityId, session.email))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const isAny = type.toLowerCase() === 'any'; // 'any' = search every node kind (the link picker)
     const like = `%${q}%`;
 
@@ -87,6 +94,15 @@ export async function GET(req: NextRequest) {
     // Never surface nodes that live in another user's personal space (private
     // `me:<userId>` communities). Null-community nodes have no owner and pass.
     const personalClause = Prisma.sql` AND (c.personal_owner_id IS NULL OR c.personal_owner_id = ${session.userId})`;
+    // Cross-community searches skip nodes in communities whose directory is
+    // admins-only, unless the caller administers that community (super-admins
+    // see everything).
+    const privateDirectoryClause = isSuperAdmin(session.email)
+      ? Prisma.empty
+      : Prisma.sql` AND (c.id IS NULL OR c.feature_config->>'directoryPrivate' IS DISTINCT FROM 'true' OR EXISTS (
+          SELECT 1 FROM user_communities uc
+          WHERE uc.community_id = c.id AND uc.user_id = ${session.userId} AND uc.role = 'admin'
+        ))`;
 
     const rows = await prisma.$queryRaw<SearchRow[]>`
       SELECT
@@ -102,7 +118,7 @@ export async function GET(req: NextRequest) {
         c.name AS community_name
       FROM nodes n
       LEFT JOIN communities c ON c.id = n.community_id
-      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}${personalClause}
+      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}${personalClause}${privateDirectoryClause}
       ORDER BY n.name ASC
       LIMIT 30
     `;

@@ -7,7 +7,7 @@ import { useCreateModal } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
-import { enabledFeatures } from "@/lib/features";
+import { visibleFeatures } from "@/lib/features";
 import { shellEntranceStyle } from "@/lib/contexts/SidebarContext";
 import type { CommunityFeatureConfig } from "@/lib/types";
 
@@ -42,6 +42,7 @@ const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const PANEL_W = 256; // /context tree panel width — keep in sync with NotesWorkspace
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
+const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const DOCKED_H = "calc(100dvh - 88px)"; // full docked height — from navbar bottom (64px) to a 24px gap above the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
@@ -64,7 +65,7 @@ export default function Sidebar() {
   // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
-  const { currentCommunity } = useCommunity();
+  const { currentCommunity, isAdmin } = useCommunity();
   const { setHost } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
@@ -72,10 +73,11 @@ export default function Sidebar() {
   const ease = "cubic-bezier(0.25, 0.1, 0.25, 1)";
 
   // Nav items come from the feature registry, filtered to the community's
-  // enabled surfaces (empty config → everything on). See lib/features.tsx.
+  // enabled surfaces (empty config → everything on) and to what this user may
+  // see (an admins-only directory is hidden from members). See lib/features.tsx.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   // Messages lives in the top navbar (beside the profile icon), not the rail.
-  const allNav = enabledFeatures(featureConfig).filter(({ key }) => key !== "messages");
+  const allNav = visibleFeatures(featureConfig, isAdmin).filter(({ key }) => key !== "messages");
   const activeIndex = allNav.findIndex(({ href }) => pathname === href);
 
   // On /context (always) and /channels (wide viewports only) the rail docks into a
@@ -93,8 +95,11 @@ export default function Sidebar() {
   }, []);
   const dockedContext = pathname.startsWith("/context");
   const dockedChannels = pathname.startsWith("/channels") && wide;
-  const docked = dockedContext || dockedChannels;
-  const panelW = dockedChannels ? CHANNELS_PANEL_W : PANEL_W;
+  // The Community Console docks its section list here too (exact match so
+  // /admin/resources keeps the plain floating rail).
+  const dockedAdmin = pathname === "/admin" && wide;
+  const docked = dockedContext || dockedChannels || dockedAdmin;
+  const panelW = dockedChannels ? CHANNELS_PANEL_W : dockedAdmin ? ADMIN_PANEL_W : PANEL_W;
 
   // Un-docked height of the floating card: a concrete px value (not h-full) so the
   // card hugs its icon rail and can transition into the docked full height. Seed from

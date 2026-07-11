@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'pill-primary' | 'pill-secondary' | 'danger-text';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'pill-primary' | 'pill-secondary' | 'pill-danger' | 'danger-text';
 type ButtonSize = 'sm' | 'md';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -17,6 +17,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   ghost: 'text-gray-600 border border-gray-200 hover:bg-gray-50',
   'pill-primary': 'bg-brand-green text-white rounded-full hover:opacity-90 active:translate-y-[1px] shadow-soft disabled:cursor-not-allowed disabled:opacity-60',
   'pill-secondary': 'bg-brand-light-bg text-brand-green rounded-full',
+  'pill-danger': 'bg-red-600 text-white rounded-full hover:bg-red-700 active:translate-y-[1px] shadow-soft disabled:cursor-not-allowed disabled:opacity-60',
   'danger-text': 'text-red-600 hover:text-red-800 disabled:text-gray-400',
 };
 
@@ -35,7 +36,7 @@ export default function Button({
   className,
   ...props
 }: ButtonProps) {
-  const isPill = variant === 'pill-primary' || variant === 'pill-secondary';
+  const isPill = variant === 'pill-primary' || variant === 'pill-secondary' || variant === 'pill-danger';
   const isDangerText = variant === 'danger-text';
 
   const sizeClass = isPill

@@ -3,6 +3,7 @@ import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logActivity } from '@/lib/activityLog';
+import { sanitizeFeatureConfig } from '@/lib/featureAccess';
 
 /**
  * PUT: Update community settings (admin only)
@@ -19,18 +20,23 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, location, tags, designConfig, featureConfig, visibility } = body as {
+  const { name, description, country, location, tags, designConfig, featureConfig, visibility } = body as {
     name?: string;
     description?: string;
+    country?: string | null;
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
-    featureConfig?: { enabled?: Record<string, boolean> };
+    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean };
     visibility?: string;
   };
 
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+  }
+
+  if (country !== undefined && country !== null && typeof country !== 'string') {
+    return NextResponse.json({ error: 'country must be a string' }, { status: 400 });
   }
 
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {
@@ -50,7 +56,7 @@ export async function PUT(
     }
   }
 
-  // Validate featureConfig if provided — must be { enabled: { [key]: boolean } }
+  // Validate featureConfig if provided — must be { enabled?: { [key]: boolean }, directoryPrivate?: boolean }
   if (featureConfig !== undefined) {
     const enabled = featureConfig.enabled;
     if (enabled !== undefined && (typeof enabled !== 'object' || enabled === null || Array.isArray(enabled))) {
@@ -59,6 +65,9 @@ export async function PUT(
     if (enabled && Object.values(enabled).some((v) => typeof v !== 'boolean')) {
       return NextResponse.json({ error: 'featureConfig.enabled values must be booleans' }, { status: 400 });
     }
+    if (featureConfig.directoryPrivate !== undefined && typeof featureConfig.directoryPrivate !== 'boolean') {
+      return NextResponse.json({ error: 'featureConfig.directoryPrivate must be a boolean' }, { status: 400 });
+    }
   }
 
   const updated = await prisma.community.update({
@@ -66,10 +75,11 @@ export async function PUT(
     data: {
       ...(name !== undefined && { name: name.trim() }),
       ...(description !== undefined && { description }),
+      ...(country !== undefined && { country: country || null }),
       ...(location !== undefined && { location: location || null }),
       ...(tags !== undefined && { tags }),
       ...(designConfig !== undefined && { designConfig: designConfig as object }),
-      ...(featureConfig !== undefined && { featureConfig: featureConfig as object }),
+      ...(featureConfig !== undefined && { featureConfig: sanitizeFeatureConfig(featureConfig) as object }),
       ...(visibility !== undefined && { visibility }),
     },
   });
@@ -89,6 +99,7 @@ export async function PUT(
       id: updated.id,
       name: updated.name,
       description: updated.description,
+      country: updated.country,
       location: updated.location,
       tags: updated.tags,
       designConfig: updated.designConfig,

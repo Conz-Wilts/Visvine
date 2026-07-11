@@ -1,6 +1,8 @@
 import prisma from '@/lib/prisma';
 import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { isForeignPersonalSpace } from '@/lib/communities/personalSpace';
+import { isDirectoryPrivate } from '@/lib/featureAccess';
+import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
  * Checks whether a user has admin access to a community.
@@ -40,6 +42,27 @@ export async function communityReadForbidden(
     select: { personalOwnerId: true },
   });
   return community ? isForeignPersonalSpace(community.personalOwnerId, userId) : false;
+}
+
+/**
+ * DB-backed guard for directory/graph reads: returns true when the community's
+ * directory is marked admins-only (`featureConfig.directoryPrivate`) and the
+ * caller is not an admin of it. Unknown communities return false — the caller's
+ * own not-found/empty handling takes over.
+ */
+export async function directoryAccessForbidden(
+  userId: string,
+  communityId: string,
+  email?: string | null,
+): Promise<boolean> {
+  const community = await prisma.community.findUnique({
+    where: { id: communityId },
+    select: { featureConfig: true },
+  });
+  if (!community) return false;
+  const config = (community.featureConfig ?? {}) as CommunityFeatureConfig;
+  if (!isDirectoryPrivate(config)) return false;
+  return !(await isAdmin(userId, communityId, email));
 }
 
 /**

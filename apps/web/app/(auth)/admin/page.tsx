@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import MembersPanel from '@/components/admin/MembersPanel';
@@ -9,26 +9,75 @@ import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
 import ActivityLogPanel from '@/components/admin/ActivityLogPanel';
 import TypesTab from '@/components/data/TypesTab';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
-import CommunityDesignPanel from '@/components/admin/CommunityDesignPanel';
-import { PageTitle, LoadingText, TabNav, Alert } from '@/components/ui';
-import { useState } from 'react';
+import CommunityToolsPanel from '@/components/admin/CommunityToolsPanel';
+import ConsoleShell, { type ConsoleSection } from '@/components/console/ConsoleShell';
+import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
 
-type Tab = 'general' | 'design' | 'members' | 'submissions' | 'activity' | 'types' | 'analytics';
+function AdminConsole({ community, onSaved }: {
+  community: Community;
+  onSaved: (updated: Partial<Community>) => void;
+}) {
+  const [pendingMembers, setPendingMembers] = useState(0);
 
-/** Clean framed surface for the settings-style tabs (forms, member list). */
-function Panel({ className = '', children }: { className?: string; children: React.ReactNode }) {
+  // Seed the Members badge without opening the section.
+  useEffect(() => {
+    let active = true;
+    fetch(`/api/communities/${community.id}/members`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (active && data?.members) {
+          setPendingMembers(data.members.filter((m: { status: string }) => m.status === 'pending').length);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [community.id]);
+
+  const handlePendingCount = useCallback((count: number) => setPendingMembers(count), []);
+
+  const sections: ConsoleSection[] = [
+    { id: 'general', label: 'General', group: 'Settings', width: 'form' },
+    { id: 'tools', label: 'Features', group: 'Settings', width: 'form' },
+    { id: 'members', label: 'Members', group: 'People', width: 'wide', badge: pendingMembers },
+    { id: 'types', label: 'Types', group: 'Content', width: 'form' },
+    { id: 'submissions', label: 'Submissions', group: 'Content', width: 'wide' },
+    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide' },
+    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide' },
+  ];
+
   return (
-    <div className={`rounded-2xl border border-border-subtle bg-surface-1 shadow-soft ${className}`}>
-      {children}
-    </div>
+    <ConsoleShell
+      title="Community Console"
+      subtitle={<>Manage <span className="font-medium text-text-secondary">{community.name}</span> — changes save automatically.</>}
+      sections={sections}
+      renderSection={(id) => {
+        switch (id) {
+          case 'general':
+            return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
+          case 'tools':
+            return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
+          case 'members':
+            return <MembersPanel communityId={community.id} onPendingCountChange={handlePendingCount} />;
+          case 'types':
+            return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
+          case 'submissions':
+            return <SubmissionsPanel communityId={community.id} />;
+          case 'activity':
+            return <ActivityLogPanel communityId={community.id} />;
+          case 'analytics':
+            return <AnalyticsPanel communityId={community.id} />;
+          default:
+            return null;
+        }
+      }}
+    />
   );
 }
 
 export default function AdminPage() {
   const { currentCommunity, isAdmin, loading, refreshCommunity } = useCommunity();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>('general');
   const [localCommunity, setLocalCommunity] = useState<Community | null>(null);
 
   useEffect(() => {
@@ -61,78 +110,20 @@ export default function AdminPage() {
   const community = localCommunity ?? currentCommunity;
 
   return (
-    <div className="w-full">
-      <div className="w-full max-w-6xl mx-auto px-6 py-8">
-        <PageTitle
-          title="Community Console"
-          subtitle={<>Manage <span className="font-medium">{community.name}</span></>}
-          className="pt-0"
-        />
-
-        <div data-tour="console-tabs">
-          <TabNav
-            className="mb-8"
-            center
-            tabs={[
-              { id: 'general', label: 'General' },
-              { id: 'design', label: 'Design' },
-              { id: 'members', label: 'Members' },
-              { id: 'submissions', label: 'Submissions' },
-              { id: 'activity', label: 'Activity Log' },
-              { id: 'types', label: 'Types' },
-              { id: 'analytics', label: 'Analytics' },
-            ]}
-            activeTab={activeTab}
-            onTabChange={id => setActiveTab(id as Tab)}
-          />
+    <Suspense
+      fallback={
+        <div className="w-full px-6 py-8">
+          <LoadingText text="Loading…" />
         </div>
-
-        {/* Settings-style tabs sit in a single clean card; dashboard-style
-            tabs (submissions / activity / analytics) render their own cards
-            straight onto the page background. */}
-        {activeTab === 'general' && (
-          <Panel className="max-w-xl mx-auto p-6 sm:p-8">
-            <CommunitySettingsPanel
-              community={community}
-              onSaved={updated => {
-                setLocalCommunity(prev => prev ? { ...prev, ...updated } : prev);
-                refreshCommunity();
-              }}
-            />
-          </Panel>
-        )}
-        {activeTab === 'design' && (
-          <Panel className="max-w-2xl mx-auto p-6 sm:p-8">
-            <CommunityDesignPanel
-              community={community}
-              onSaved={updated => {
-                setLocalCommunity(prev => prev ? { ...prev, ...updated } : prev);
-                refreshCommunity();
-              }}
-            />
-          </Panel>
-        )}
-        {activeTab === 'members' && (
-          <Panel className="p-6">
-            <MembersPanel communityId={community.id} />
-          </Panel>
-        )}
-        {activeTab === 'types' && (
-          <TypesTab
-            key={`${community.id}-${JSON.stringify(community.nodeTypes)}`}
-            communityId={community.id}
-          />
-        )}
-        {activeTab === 'submissions' && (
-          <SubmissionsPanel communityId={community.id} />
-        )}
-        {activeTab === 'activity' && (
-          <ActivityLogPanel communityId={community.id} />
-        )}
-        {activeTab === 'analytics' && (
-          <AnalyticsPanel communityId={community.id} />
-        )}
-      </div>
-    </div>
+      }
+    >
+      <AdminConsole
+        community={community}
+        onSaved={updated => {
+          setLocalCommunity(prev => prev ? { ...prev, ...updated } : prev);
+          refreshCommunity();
+        }}
+      />
+    </Suspense>
   );
 }

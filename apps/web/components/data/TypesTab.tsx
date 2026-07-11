@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { DEFAULT_NODE_TYPES, DEFAULT_LINK_TYPES, aliasesForType } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig, LinkTypeConfig } from '@/lib/types';
+import { Alert, SettingsCard } from '@/components/ui';
+import { useConsoleSave } from '@/components/console/ConsoleSaveContext';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -428,14 +430,7 @@ function LinkTypesSection({ linkTypes, onSave, saving }: {
   const toggleDirected = (name: string) => onSave(linkTypes.map(t => t.name === name ? { ...t, directed: !t.directed } : t));
 
   return (
-    <div className="space-y-3 pt-2">
-      <div>
-        <h3 className="text-base font-semibold text-text-primary">Link types</h3>
-        <p className="text-sm text-text-muted mt-0.5">
-          Relationship types admins can pick when connecting nodes. Click a dot to recolour, the arrow to toggle directed (→) vs undirected (—). System types (used by RSVPs, events and intros) can&apos;t be removed.
-        </p>
-      </div>
-
+    <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {linkTypes.map(t => (
           <div
@@ -556,6 +551,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { report } = useConsoleSave();
 
   useEffect(() => {
     if (currentCommunity?.nodeTypes) setTypes(currentCommunity.nodeTypes);
@@ -567,6 +563,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     if (!currentCommunity) return;
     setSaving(true);
     setError(null);
+    report('saving');
     try {
       const res = await fetch('/api/data/communities', {
         method: 'PUT',
@@ -577,8 +574,10 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
       await refreshCommunity();
+      report('saved');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error saving');
+      report('error');
     } finally {
       setSaving(false);
     }
@@ -597,6 +596,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     setLinkTypes(next); // optimistic; refreshCommunity reconciles
     setSaving(true);
     setError(null);
+    report('saving');
     try {
       const res = await fetch('/api/data/communities', {
         method: 'PUT',
@@ -607,8 +607,10 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
       await refreshCommunity();
+      report('saved');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error saving');
+      report('error');
     } finally {
       setSaving(false);
     }
@@ -619,43 +621,45 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
   }
 
   return (
-    <div className="p-6 max-w-2xl space-y-4">
-      <div>
-        <h3 className="text-base font-semibold text-text-primary">Types & Aliases</h3>
-        <p className="text-sm text-text-muted mt-0.5">
-          Click a type to expand it and add community-specific aliases with custom colours.
+    <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+      {error && <Alert variant="error" onDismiss={() => setError(null)} className="xl:col-span-2">{error}</Alert>}
+
+      <SettingsCard
+        title="Types & aliases"
+        description="Click a type to expand it and add community-specific aliases with custom colours."
+        bodyClassName="space-y-4"
+      >
+        <div className="space-y-2">
+          {DEFAULT_NODE_TYPES.map(defaultType => {
+            const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
+            return (
+              <TypeSection
+                key={liveType.name}
+                typeName={liveType.name}
+                typeColor={liveType.color}
+                aliases={aliasesForType(aliases, liveType.name)}
+                allAliases={aliases}
+                onAddAlias={handleAddAlias}
+                onRemoveAlias={handleRemoveAlias}
+                onUpdateAliasColor={handleUpdateAliasColor}
+                onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
+                saving={saving}
+              />
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-text-muted">
+          Aliases appear in place of the base type label on node cards and graph tooltips.
         </p>
-      </div>
+      </SettingsCard>
 
-      {error && <p className="text-sm text-red-500">{error}</p>}
-
-      <div className="space-y-2">
-        {DEFAULT_NODE_TYPES.map(defaultType => {
-          const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
-          return (
-            <TypeSection
-              key={liveType.name}
-              typeName={liveType.name}
-              typeColor={liveType.color}
-              aliases={aliasesForType(aliases, liveType.name)}
-              allAliases={aliases}
-              onAddAlias={handleAddAlias}
-              onRemoveAlias={handleRemoveAlias}
-              onUpdateAliasColor={handleUpdateAliasColor}
-              onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
-              saving={saving}
-            />
-          );
-        })}
-      </div>
-
-      <p className="text-xs text-text-muted pt-1">
-        Aliases appear in place of the base type label on node cards and graph tooltips.
-      </p>
-
-      <div className="border-t border-border-subtle !mt-6" />
-
-      <LinkTypesSection linkTypes={linkTypes} onSave={saveLinkTypes} saving={saving} />
+      <SettingsCard
+        title="Link types"
+        description="Relationship types admins can pick when connecting nodes. Click a dot to recolour, the arrow to toggle directed (→) vs undirected (—). System types (used by RSVPs, events and intros) can't be removed."
+      >
+        <LinkTypesSection linkTypes={linkTypes} onSave={saveLinkTypes} saving={saving} />
+      </SettingsCard>
     </div>
   );
 }

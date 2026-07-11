@@ -6,7 +6,7 @@ import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/lib/contexts/HeaderContext";
 import Navbar from "@/components/layout/Navbar";
 import { CommunityProvider, useCommunity } from "@/lib/contexts/CommunityContext";
-import { FEATURES, isFeatureEnabled, enabledFeatures } from "@/lib/features";
+import { FEATURES, canAccessFeature, visibleFeatures } from "@/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
 import type { CommunityFeatureConfig } from "@/lib/types";
 import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/CommunityDesignContext";
@@ -20,11 +20,12 @@ import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 import TourLauncher from "@/features/onboarding/TourLauncher";
 
-// If the community has switched off the feature whose page is currently open,
-// bounce to the first feature that's still enabled (directory by default). The
+// If this user can't open the feature whose page is currently on screen —
+// either the community switched it off, or the directory is admins-only and
+// they're a member — bounce to the first feature they can still see. The
 // matching feature must own the path prefix — so /directory/foo is guarded too.
 function useFeatureRouteGuard() {
-  const { currentCommunity, loading } = useCommunity();
+  const { currentCommunity, loading, isAdmin } = useCommunity();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -34,11 +35,11 @@ function useFeatureRouteGuard() {
     const onFeature = FEATURES.find(
       (f) => pathname === f.href || pathname.startsWith(f.href + "/")
     );
-    if (onFeature && !isFeatureEnabled(config, onFeature.key)) {
-      const fallback = enabledFeatures(config)[0]?.href ?? "/";
+    if (onFeature && !canAccessFeature(config, onFeature.key, isAdmin)) {
+      const fallback = visibleFeatures(config, isAdmin).filter((f) => f.key !== "messages")[0]?.href ?? "/";
       router.replace(fallback);
     }
-  }, [currentCommunity, loading, pathname, router]);
+  }, [currentCommunity, loading, isAdmin, pathname, router]);
 }
 
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {

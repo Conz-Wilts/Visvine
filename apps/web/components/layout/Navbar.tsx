@@ -68,9 +68,12 @@ export default function Navbar() {
         }}
       />
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
-        {/* Left: logo + community selector + community management cog.
-            Nudged right so it clears the 64px rail column below it. */}
-        <div className="flex items-center gap-3 pl-12">
+        {/* Left: community selector + community management cog. The selector's avatar
+            is pulled left to sit directly ABOVE the sidebar rail's icon column: the
+            rail centers a 40px icon at ICON_LEFT (17px) from the viewport edge, and the
+            selector button's own px-3 (12px) + the grid's px-6 (24px) would otherwise
+            land the avatar at 36px — so a -19px nudge aligns the two icon columns. */}
+        <div className="flex items-center gap-3" style={{ marginLeft: -19 }}>
           <div data-tour="community-switcher">
             <CommunitySelector />
           </div>

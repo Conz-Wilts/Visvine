@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { EmptyState } from '@/components/ui';
 
 interface LogEntry {
   id: string;
@@ -24,12 +25,12 @@ const ACTION_ICONS: Record<string, string> = {
 };
 
 const ACTION_COLORS: Record<string, string> = {
-  member_added: 'bg-green-100 text-green-800',
-  member_removed: 'bg-red-100 text-red-800',
-  role_changed: 'bg-blue-100 text-blue-800',
-  submission_approved: 'bg-green-100 text-green-800',
-  submission_rejected: 'bg-orange-100 text-orange-800',
-  settings_updated: 'bg-purple-100 text-purple-800',
+  member_added: 'bg-brand-green/15 text-brand-dark-green',
+  member_removed: 'bg-red-500/10 text-red-600',
+  role_changed: 'bg-blue-500/10 text-blue-600',
+  submission_approved: 'bg-brand-green/15 text-brand-dark-green',
+  submission_rejected: 'bg-orange-500/10 text-orange-600',
+  settings_updated: 'bg-purple-500/10 text-purple-600',
 };
 
 function formatDetails(entry: LogEntry): string {
@@ -66,9 +67,10 @@ export default function ActivityLogPanel({ communityId }: { communityId: string 
 
   if (logs.length === 0) {
     return (
-      <div className="py-12 text-center text-sm text-text-muted">
-        No activity yet. Actions taken in this panel will appear here.
-      </div>
+      <EmptyState
+        title="No activity yet"
+        description="Admin actions in this community will appear here."
+      />
     );
   }
 
@@ -88,7 +90,7 @@ export default function ActivityLogPanel({ communityId }: { communityId: string 
         <p className="text-sm text-text-muted">{logs.length} recent events</p>
         <button
           onClick={load}
-          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+          className="text-xs font-medium text-text-muted transition-colors hover:text-text-primary"
         >
           Refresh
         </button>

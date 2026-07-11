@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useCreateModal } from '@/lib/contexts/CreateModalContext';
@@ -33,14 +34,26 @@ export default function CommunitySelector({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The dropdown is portalled to <body> (so it escapes the sidebar rail's
+  // overflow-hidden clip); this anchors it to the trigger's viewport position.
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) setMenuPos({ top: rect.bottom + 8, left: rect.left });
+  }, [isOpen]);
 
   // Close the dropdown when clicking anywhere outside it (including other top-bar items).
   useEffect(() => {
     if (!isOpen) return;
     const handlePointerDown = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setIsOpen(false);
     };
     document.addEventListener('mousedown', handlePointerDown);
     return () => document.removeEventListener('mousedown', handlePointerDown);
@@ -66,6 +79,7 @@ export default function CommunitySelector({
     <div className="relative" ref={containerRef}>
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         onClick={() => setIsOpen(!isOpen)}
         className={
           iconOnly
@@ -91,8 +105,12 @@ export default function CommunitySelector({
         )}
       </button>
 
-      {isOpen && (
-        <div className="absolute left-0 mt-2 w-80 bg-surface-1 rounded-2xl shadow-xl border border-border-subtle z-50 overflow-hidden">
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={menuRef}
+          className="fixed w-80 bg-surface-1 rounded-2xl shadow-xl border border-border-subtle z-[60] overflow-hidden"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
             {/* Search Input */}
             <div className="p-3 border-b border-border-subtle">
               <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 shadow-sm focus-within:border-brand-green transition-colors">
@@ -159,7 +177,8 @@ export default function CommunitySelector({
                 Discover Communities
               </Link>
             </div>
-          </div>
+          </div>,
+        document.body
       )}
     </div>
   );

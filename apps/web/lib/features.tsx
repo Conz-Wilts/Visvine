@@ -1,5 +1,17 @@
 import type { ReactNode } from 'react';
 import type { CommunityFeatureConfig } from '@/lib/types';
+import { canAccessFeature, isFeatureEnabled } from '@/lib/featureAccess';
+
+// Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
+// tests can import it without this module's icons. Re-exported here so UI code
+// keeps a single import point.
+export {
+  CORE_FEATURE_KEYS,
+  isFeatureEnabled,
+  isDirectoryPrivate,
+  canAccessFeature,
+  sanitizeFeatureConfig,
+} from '@/lib/featureAccess';
 
 /**
  * Community feature registry — the single source of truth for the optional
@@ -13,7 +25,7 @@ export interface FeatureDef {
   href: string;
   description: string; // shown on the launcher card
   icon: ReactNode;
-  core?: boolean;      // always on, not toggleable
+  core?: boolean;      // always on, not toggleable — keep in sync with featureAccess.ts#CORE_FEATURE_KEYS
 }
 
 const iconClass = 'h-5 w-5 shrink-0';
@@ -24,6 +36,7 @@ export const FEATURES: FeatureDef[] = [
     label: 'Directory',
     href: '/directory',
     description: 'A searchable graph & table of everyone and everything in the community.',
+    core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <circle cx="18" cy="5" r="3" />
@@ -91,18 +104,15 @@ export const FEATURES: FeatureDef[] = [
   },
 ];
 
-/**
- * Is `key` enabled for a community? A feature is enabled unless
- * `featureConfig.enabled[key]` is explicitly `false` — so existing communities
- * (empty config) keep every surface by default.
- */
-export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefined, key: string): boolean {
-  const enabled = config?.enabled;
-  if (!enabled || enabled[key] === undefined) return true;
-  return enabled[key] !== false;
-}
-
 /** The features (in registry order) that should appear in the nav for a community. */
 export function enabledFeatures(config: CommunityFeatureConfig | null | undefined): FeatureDef[] {
   return FEATURES.filter((f) => isFeatureEnabled(config, f.key));
+}
+
+/** The features (in registry order) a given user should see in the nav. */
+export function visibleFeatures(
+  config: CommunityFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): FeatureDef[] {
+  return FEATURES.filter((f) => canAccessFeature(config, f.key, isAdmin));
 }
