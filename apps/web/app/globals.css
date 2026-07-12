@@ -183,6 +183,43 @@ a:hover {
   animation: fadeIn 0.3s ease-out;
 }
 
+/* Profile skill chips — staggered pop-in (delay set inline per chip). */
+@keyframes chip-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.chip-pop {
+  animation: chip-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Profile experience timeline — entries rise in sequence while the spine
+   draws downward. Delays set inline per entry. */
+@keyframes exp-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.exp-rise {
+  animation: exp-rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes timeline-draw {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+.timeline-draw {
+  transform-origin: top;
+  animation: timeline-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Soft pulse behind the "current role" timeline dot. */
+@keyframes dot-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pulse-color, rgba(34,197,94,0.45)); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.dot-pulse {
+  animation: dot-pulse 2.2s ease-out infinite;
+}
+
 /* Dropdown menu entrance — quick fade + settle (table type selector, etc.) */
 @keyframes dropdown-pop {
   from { opacity: 0; transform: translateY(-4px) scale(0.98); }
@@ -197,6 +234,10 @@ a:hover {
   .animate-pulse,
   .profile-enter,
   .profile-content-fade,
+  .chip-pop,
+  .exp-rise,
+  .timeline-draw,
+  .dot-pulse,
   .dropdown-pop,
   [style*="animation: shimmer"] {
     animation: none !important;

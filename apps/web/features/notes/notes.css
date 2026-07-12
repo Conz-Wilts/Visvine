@@ -93,13 +93,15 @@
   gap: 8px;
   margin: 0 0 4px;
   padding-bottom: 8px;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
-  color: var(--color-text-muted, #6b7280);
+  color: var(--color-text-primary, #1f2937);
 }
 .notes-ref-count {
   font-weight: 500;
-  opacity: 0.6;
+  font-size: 14px;
+  color: var(--color-text-muted, #6b7280);
+  opacity: 0.8;
 }
 .notes-ref-block {
   padding: 12px 0;
@@ -114,7 +116,7 @@
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--color-brand-dark-green, #2f7a3e);
   cursor: pointer;
@@ -122,9 +124,22 @@
 .notes-ref-from:hover {
   text-decoration: underline;
 }
-.notes-ref-date {
+/* The reference's date, centred inside a full-width rule — a chat-style day
+ * divider above each reference instead of a date squeezed next to the title. */
+.notes-ref-date-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
   font-size: 11px;
   color: var(--color-text-muted, #6b7280);
+}
+.notes-ref-date-divider::before,
+.notes-ref-date-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border-subtle, #e5e7eb);
 }
 .notes-ref-excerpt {
   margin: 0;
@@ -188,38 +203,25 @@
   text-decoration: underline dotted;
 }
 
-/* Directory-entity mentions render as [[ ⬛ Name ]] — an avatar square inside the
- * brackets, before the name. Decoration-only (EntityChip): the avatar + opening
- * [[ are a widget; the name is the link text (.entity-link); the closing ]] is a
- * CSS ::after. The stored markdown stays a plain [Name](/people/slug.md) link. */
+/* Directory-entity mentions render as `⬛ Name` — a small photo avatar before the
+ * name, only when the entity actually has an image (no initials fallback, no
+ * bracket clutter). Decoration-only (EntityChip): the avatar is a widget; the
+ * name is the link text (.entity-link). The stored markdown stays a plain
+ * [Name](/people/slug.md) link. */
 .notes-editor .entity-chip-widget {
-  /* Plain inline (not a vertical-shifted flex box) so the opening `[[` sits on the
-   * text baseline, level with the closing `]]`. Only the avatar is nudged down to
-   * sit centred on the text — the brackets stay on the baseline. */
   display: inline;
   white-space: nowrap;
   user-select: none;
   cursor: pointer;
 }
-.notes-editor .entity-bracket {
-  color: var(--color-text-muted, #6b7280);
-  margin-right: 0.15em;
-}
 .notes-editor .entity-avatar {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
   object-fit: cover;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1;
-  color: #fff;
-  vertical-align: -0.22em;
-  margin-right: 0.2em;
+  display: inline-block;
+  vertical-align: -0.28em;
+  margin-right: 0.3em;
 }
 .notes-editor a:has(.entity-link) {
   text-decoration: none;
@@ -229,11 +231,6 @@
   color: var(--color-brand-dark-green, #2f7a3e);
   font-weight: 500;
   cursor: pointer;
-}
-.notes-editor .entity-link::after {
-  content: ']]';
-  margin-left: 0.1em;
-  color: var(--color-text-muted, #6b7280);
 }
 .notes-editor a:has(.entity-link):hover .entity-link {
   text-decoration: underline;

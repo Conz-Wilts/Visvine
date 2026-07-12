@@ -43,9 +43,17 @@ function titleOf(path: string, metas: NoteMeta[]): string {
   return path.replace(/\.md$/i, '').split('/').pop() ?? path
 }
 
-// The blank-line-delimited paragraph that contains `index`. Falls back to the
-// whole body when there are no blank lines.
+// The passage that contains `index`: for list items and headings, just that line
+// (a long list has no blank lines, so the paragraph rule would swallow the whole
+// list); otherwise the blank-line-delimited paragraph, falling back to the whole
+// body when there are no blank lines.
 function blockAround(body: string, index: number): string {
+  const lineStart = body.lastIndexOf('\n', index - 1) + 1
+  const lineEndRel = body.indexOf('\n', index)
+  const lineEnd = lineEndRel === -1 ? body.length : lineEndRel
+  const line = body.slice(lineStart, lineEnd)
+  if (/^\s*(?:#{1,6}\s|(?:[-*+]|\d+[.)])\s)/.test(line)) return line
+
   const before = body.lastIndexOf('\n\n', index)
   const start = before === -1 ? 0 : before + 2
   const afterRel = body.indexOf('\n\n', index)
@@ -53,11 +61,27 @@ function blockAround(body: string, index: number): string {
   return body.slice(start, end)
 }
 
-// Turn a raw block into its excerpt: strip markdown link syntax to display text
-// and collapse runs of whitespace. The whole block is kept — no truncation — so
-// the reference shows the full passage it came from.
+// Turn a raw block into its excerpt: strip markdown syntax down to plain display
+// text (headings, list/task markers, blockquotes, emphasis, inline code, images,
+// links) and collapse runs of whitespace. The whole block is kept — no truncation
+// — so the reference shows the full passage it came from.
 function makeExcerpt(block: string): string {
-  return block.replace(LINK_RE, '$1').replace(/\s+/g, ' ').trim()
+  return (
+    block
+      .split('\n')
+      // Line prefixes: heading hashes, blockquote '>', list bullets / numbers,
+      // and task-list checkboxes — stripped before lines are joined.
+      .map((line) => line.replace(/^\s*(?:#{1,6}\s+|(?:>\s*)+|(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)/, ''))
+      .join(' ')
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1') // images → alt text
+      .replace(LINK_RE, '$1') // links → link text
+      .replace(/(\*\*|__)(.+?)\1/g, '$2') // bold
+      .replace(/(?<![\w*])(\*|_)([^*_]+)\1(?![\w*])/g, '$2') // italic
+      .replace(/~~(.+?)~~/g, '$1') // strikethrough
+      .replace(/`([^`]+)`/g, '$1') // inline code
+      .replace(/\s+/g, ' ')
+      .trim()
+  )
 }
 
 // Replace every markdown-link span with same-length spaces, so a title search

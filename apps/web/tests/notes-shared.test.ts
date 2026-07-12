@@ -110,6 +110,27 @@ test('computeReferences finds linked + unlinked mentions', () => {
   assert.equal(refs.unlinked[0].fromPath, 'b.md')
 })
 
+test('computeReferences excerpts strip markdown and scope list items to their line', () => {
+  const notes = [
+    note('canva.md', '---\ntitle: Canva\n---\n\nThe design tool.'),
+    note(
+      'list.md',
+      '---\ntitle: List\n---\n\n## Portfolio (2)\n- [Canva](canva.md) — Active · **Series F**\n- [Other](other.md) — Exited',
+    ),
+    note('heading.md', '---\ntitle: Heading\n---\n\n## About [Canva](canva.md) and `tools`\n\nBody.'),
+    note('quote.md', '---\ntitle: Quote\n---\n\n> Canva is *great* and I have not linked it.'),
+  ]
+  const refs = computeReferences(notes, 'canva.md', buildNoteIndex(notes))
+  const fromList = refs.linked.find((r) => r.fromPath === 'list.md')!
+  // Just the list item's own line — not the heading or sibling items — with the
+  // bullet, link syntax, and bold markers stripped.
+  assert.equal(fromList.excerpt, 'Canva — Active · Series F')
+  const fromHeading = refs.linked.find((r) => r.fromPath === 'heading.md')!
+  assert.equal(fromHeading.excerpt, 'About Canva and tools')
+  const fromQuote = refs.unlinked.find((r) => r.fromPath === 'quote.md')!
+  assert.equal(fromQuote.excerpt, 'Canva is great and I have not linked it.')
+})
+
 test('linkFirstMention turns a plain mention into a link', () => {
   const out = linkFirstMention('I love Canva a lot.', 'Canva', 'canva.md')
   assert.equal(out, 'I love [Canva](/canva.md) a lot.')

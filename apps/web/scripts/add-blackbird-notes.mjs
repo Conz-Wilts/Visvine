@@ -397,13 +397,28 @@ for (const o of orgs) {
 }
 
 // companies/exits.md + graveyard.md
+// exitDetails in the research JSON is a structured object ({type, acquirer,
+// year, amount, ticker}) — render it as a short human line, never interpolate
+// the object itself (that prints "[object Object]").
+function fmtExit(d) {
+  if (!d) return null;
+  if (typeof d === 'string') return d;
+  const year = d.year ? ` (${d.year})` : '';
+  const t = String(d.type || '').toLowerCase();
+  if (t.includes('ipo')) return `IPO${d.ticker ? ` — ${d.ticker}` : ''}${year}`;
+  if (t.includes('merger')) return `${d.acquirer ? `Merged with ${d.acquirer}` : 'Merger'}${year}`;
+  if (t.includes('shutdown')) return `Shut down${year}`;
+  if (d.acquirer) return `Acquired by ${d.acquirer}${year}`;
+  return d.type ? `${d.type}${year}` : null;
+}
+
 const exits = orgs.filter((o) => o.c.status === 'Exited' || o.c.status === 'IPO').sort(cmpName);
 note(shared, 'companies/exits.md', { type: 'Index', title: 'Exits', tags: ['portfolio', 'exits'] }, `
 # Exits
 
 Realised outcomes — acquisitions and public listings (${exits.length}).
 
-${exits.map((o) => `- ${companyLink(o)} — ${o.c.status}${o.c.exitDetails ? ` · ${o.c.exitDetails}` : ''}`).join('\n')}
+${exits.map((o) => { let d = fmtExit(o.c.exitDetails); if (d && d.startsWith(o.c.status)) d = d.slice(o.c.status.length).replace(/^\s*—\s*/, '').trim() || null; return `- ${companyLink(o)} — ${o.c.status}${d ? ` · ${d}` : ''}`; }).join('\n')}
 
 Back to ${link('Portfolio', '/companies/index.md')} · ${link('Fund roll-up', '/data/fund-roll-up.md')}
 `);

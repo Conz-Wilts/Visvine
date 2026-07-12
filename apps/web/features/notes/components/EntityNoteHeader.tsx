@@ -10,7 +10,6 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowUpRight, ChevronDown } from 'lucide-react'
-import { getAvatarColor, getInitials } from '@/lib/avatarUtils'
 import { useNodeProfile } from '@/hooks/useNodeProfile'
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader'
 import ProfileHero from '@/components/profile/ProfileHero'
@@ -44,26 +43,21 @@ export function EntityNoteHeader({ nodeId, name, subtitle, imageUrl, onAddToPers
 
   return (
     <div className="mb-6">
-      {/* Identity card — the clean, collapsed view: square image + name + headline. */}
+      {/* Identity card — the clean, collapsed view: name + headline, with the
+          square image only when the entity actually has one (no initials fallback). */}
       <div className="flex items-center gap-5 rounded-2xl border border-border-subtle bg-surface-1 px-5 py-4 shadow-soft">
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imageUrl}
             alt={name}
-            className="h-20 w-20 flex-none rounded-2xl object-cover ring-1 ring-border-subtle"
+            className="h-16 w-16 flex-none rounded-2xl object-cover ring-1 ring-border-subtle"
           />
-        ) : (
-          <div
-            className={`flex h-20 w-20 flex-none items-center justify-center rounded-2xl text-2xl font-semibold text-white ${getAvatarColor(name)}`}
-          >
-            {getInitials(name)}
-          </div>
-        )}
+        ) : null}
 
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[2.5rem] font-semibold leading-[1.1] tracking-tight text-text-primary">{name}</h1>
-          {subtitle ? <p className="mt-1 truncate text-base text-text-secondary">{subtitle}</p> : null}
+          <h1 className="truncate text-3xl font-semibold leading-tight tracking-tight text-text-primary">{name}</h1>
+          {subtitle ? <p className="mt-1 line-clamp-2 text-sm text-text-secondary">{subtitle}</p> : null}
         </div>
 
         <div className="flex flex-none items-center gap-1.5">

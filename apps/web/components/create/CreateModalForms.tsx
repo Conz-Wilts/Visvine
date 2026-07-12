@@ -69,6 +69,18 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
+    id: 'channel',
+    label: 'Channel',
+    description: 'A feed channel in your community',
+    color: '#e0685f',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h17M3 16h17" />
+      </svg>
+    ),
+  },
+  {
     id: 'community',
     label: 'Community',
     description: 'A new community workspace',

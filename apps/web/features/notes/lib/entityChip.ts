@@ -1,20 +1,19 @@
 // Tiptap extension that renders directory-entity links (people/<slug>.md,
-// companies/<slug>.md) as an inline avatar chip — `[[ ⬛ Name ]]`. Like the
-// Hashtag extension it is decoration-only: the stored markdown stays a plain OKF
-// link `[Name](/people/<slug>.md)`, and we only layer a ProseMirror decoration
-// (an avatar widget + a class) over each entity link, recomputed on change.
+// companies/<slug>.md) as an inline mention — `⬛ Name`, where the avatar square
+// only appears when the entity has a real photo. Like the Hashtag extension it
+// is decoration-only: the stored markdown stays a plain OKF link
+// `[Name](/people/<slug>.md)`, and we only layer a ProseMirror decoration
+// (an optional avatar widget + a class) over each entity link, recomputed on change.
 //
-// The opening `[[ ` and the avatar square live in a widget placed before the
-// link; the name is the link text (class `entity-link`); the closing ` ]]` is a
-// CSS ::after on `.entity-link`. Entity data is supplied by the caller via
-// `getEntity(path)` (a ref into the community node map), and a
+// The avatar (photo entities only) lives in a widget placed before the link; the
+// name is the link text (class `entity-link`). Entity data is supplied by the
+// caller via `getEntity(path)` (a ref into the community node map), and a
 // `setMeta('entityChipRefresh')` transaction forces a recompute once that map loads.
 
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as PMNode, Mark } from '@tiptap/pm/model'
-import { getInitials, getAvatarColor } from '@/lib/avatarUtils'
 import { parseEntityHref } from '@/lib/notes/entities'
 
 export interface ChipEntity {
@@ -39,32 +38,18 @@ function linkHref(marks: readonly Mark[]): string | null {
   return typeof href === 'string' ? href : null
 }
 
-// Build the avatar square element: an <img> when the entity has a photo, else a
-// colored initials square — mirrors components/ui/Avatar.tsx (size "chip").
-function buildAvatar(entity: ChipEntity): HTMLElement {
-  if (entity.image_url) {
-    const img = document.createElement('img')
-    img.src = entity.image_url
-    img.alt = entity.name
-    img.className = 'entity-avatar'
-    return img
-  }
-  const div = document.createElement('span')
-  div.className = `entity-avatar entity-avatar--initials ${getAvatarColor(entity.name)}`
-  div.textContent = getInitials(entity.name)
-  return div
-}
-
+// Build the avatar widget — only for entities with a real photo; entities
+// without one render as a plain styled name (no initials fallback).
 function buildWidget(entity: ChipEntity, path: string, kindClass: string): HTMLElement {
   const wrap = document.createElement('span')
   wrap.className = `entity-chip-widget ${kindClass}`
   wrap.setAttribute('contenteditable', 'false')
   wrap.setAttribute('data-path', path)
-  const open = document.createElement('span')
-  open.className = 'entity-bracket'
-  open.textContent = '[['
-  wrap.appendChild(open)
-  wrap.appendChild(buildAvatar(entity))
+  const img = document.createElement('img')
+  img.src = entity.image_url as string
+  img.alt = entity.name
+  img.className = 'entity-avatar'
+  wrap.appendChild(img)
   return wrap
 }
 
@@ -81,12 +66,14 @@ function buildDecorations(doc: PMNode, getEntity: EntityChipOptions['getEntity']
     const start = pos
     const end = pos + node.nodeSize
     const kindClass = entity.type.toLowerCase().startsWith('org') ? 'entity-company' : 'entity-person'
-    decorations.push(
-      Decoration.widget(start, () => buildWidget(entity, path, kindClass), {
-        side: -1,
-        key: `entity:${path}:${start}`,
-      }),
-    )
+    if (entity.image_url) {
+      decorations.push(
+        Decoration.widget(start, () => buildWidget(entity, path, kindClass), {
+          side: -1,
+          key: `entity:${path}:${start}`,
+        }),
+      )
+    }
     decorations.push(Decoration.inline(start, end, { class: `entity-link ${kindClass}`, 'data-path': path }))
   })
   return DecorationSet.create(doc, decorations)

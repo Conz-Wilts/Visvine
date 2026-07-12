@@ -53,11 +53,13 @@ function Reference({
 }) {
   return (
     <div className="notes-ref-block">
+      <div className="notes-ref-date-divider">
+        <span>{formatDate(refItem.date)}</span>
+      </div>
       <div className="notes-ref-head-row">
         <button type="button" className="notes-ref-from" onClick={() => onOpenNote(refItem.fromPath)}>
           {refItem.fromTitle}
         </button>
-        <span className="notes-ref-date">{formatDate(refItem.date)}</span>
       </div>
       <p className="notes-ref-excerpt">{highlight(refItem.excerpt, title)}</p>
     </div>

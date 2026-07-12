@@ -1,8 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import { Camera, Loader2 } from 'lucide-react';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
+import { uploadImage, validateImageFile } from '@/lib/imageUpload';
+import { getInitials } from '@/lib/avatarUtils';
+import { matchCountryInLocation } from '@/lib/countries';
+import CountryFlag from '../CountryFlag';
 import type { FullProfile } from '@/lib/profileTypes';
 
 interface Props {
@@ -17,7 +23,11 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
   const [subtitle, setSubtitle] = useState(profile.subtitle ?? '');
   const [location, setLocation] = useState(profile.location ?? '');
   const [pronouns, setPronouns] = useState(profile.pronouns ?? '');
+  const [imageUrl, setImageUrl] = useState(profile.imageUrl ?? null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -25,8 +35,30 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
       setSubtitle(profile.subtitle ?? '');
       setLocation(profile.location ?? '');
       setPronouns(profile.pronouns ?? '');
+      setImageUrl(profile.imageUrl ?? null);
+      setUploadError(null);
     }
   }, [open, profile]);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const invalid = validateImageFile(file);
+    if (invalid) { setUploadError(invalid); return; }
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const url = await uploadImage('person', profile.id, file);
+      setImageUrl(url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const detectedCountry = matchCountryInLocation(location);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +69,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
         subtitle: subtitle.trim() || null,
         location: location.trim() || null,
         pronouns: pronouns.trim() || null,
+        ...(imageUrl !== (profile.imageUrl ?? null) && { imageUrl }),
       });
       onClose();
     } finally {
@@ -47,6 +80,34 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
   return (
     <EditModal title="Edit intro" open={open} onClose={onClose}>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Photo */}
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="relative group w-20 h-20 flex-none rounded-2xl overflow-hidden ring-1 ring-gray-200 focus:outline-none focus:ring-2 focus:ring-brand-dark-green/40"
+            aria-label="Change profile photo"
+          >
+            {imageUrl ? (
+              <Image src={imageUrl} alt={name} width={80} height={80} className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center text-2xl font-bold text-white bg-gray-400">
+                {getInitials(name || profile.name)}
+              </span>
+            )}
+            <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+            </span>
+          </button>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-brand-black">Profile photo</p>
+            <p className="text-xs text-brand-grey mt-0.5">JPG, PNG or WebP — up to 10MB.</p>
+            {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
+          </div>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-brand-grey mb-1">Name *</label>
           <input
@@ -75,6 +136,11 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             placeholder="City, Country"
             className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
           />
+          <p className="text-xs text-brand-grey mt-1">
+            {detectedCountry
+              ? <><CountryFlag location={location} className="align-[-2px] mr-1" />{detectedCountry.name} detected — the flag shows next to your location.</>
+              : 'End with a country (e.g. “Auckland, New Zealand”) to show a flag.'}
+          </p>
         </div>
         <div>
           <label className="block text-xs font-medium text-brand-grey mb-1">Pronouns</label>

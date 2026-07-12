@@ -175,15 +175,10 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Identity */}
       <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
-        {isChannel ? (
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-green/15">
-            <Hash className="h-7 w-7 text-brand-dark-green" />
-          </div>
-        ) : (
-          <Avatar name={conversation.name} size="xl" className="!h-16 !w-16 !text-lg" />
-        )}
-        <p className="mt-3 text-base font-semibold text-text-primary">
-          {isChannel ? `#${conversation.name}` : conversation.name}
+        {!isChannel && <Avatar name={conversation.name} size="xl" className="!h-16 !w-16 !text-lg" />}
+        <p className={`flex items-center gap-1 text-base font-semibold text-text-primary ${isChannel ? '' : 'mt-3'}`}>
+          {isChannel && <Hash className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />}
+          <span>{conversation.name}</span>
         </p>
         <p className="mt-0.5 text-xs text-text-muted">
           {conversation.participants.length} member{conversation.participants.length === 1 ? '' : 's'}

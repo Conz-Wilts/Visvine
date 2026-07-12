@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  MapPin, ExternalLink, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
-  Pencil, Plus, Share2, Building2, Sparkles, Wrench, Network as NetworkIcon,
-  Check, ChevronDown, ChevronUp,
+  MapPin, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
+  Pencil, Plus, Share2, Sparkles, Wrench,
+  Check, ChevronDown, ChevronUp, Briefcase, Camera, Loader2,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useProfile } from '@/hooks/useProfile';
@@ -14,18 +14,26 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
-import { computeProfileCompletion } from '@/lib/profileTypes';
+import {
+  computeProfileCompletion, getExperience, sortExperience,
+  formatYearMonth, formatDuration, type ExperienceEntry,
+} from '@/lib/profileTypes';
+import { matchCountryInLocation } from '@/lib/countries';
+import CountryFlag from './CountryFlag';
+import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
 import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
+import EditExperienceModal from './edit/EditExperienceModal';
+import CommunitiesModal, { type ProfileCommunity } from './CommunitiesModal';
 
-type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | null;
+type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'experience' | 'communities' | null;
 /** Which edit modal completes each profile-strength item. */
 const COMPLETION_MODAL: Record<string, Exclude<ModalState, null>> = {
   photo: 'basicInfo', headline: 'basicInfo', about: 'about',
-  location: 'basicInfo', skills: 'skills', contact: 'contact',
+  location: 'basicInfo', experience: 'experience', skills: 'skills', contact: 'contact',
 };
 
 const hostname = (url?: string | null) => {
@@ -49,14 +57,34 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const { data: nodeData } = useNodeProfile(nodeId);
   const [modal, setModal] = useState<ModalState>(null);
   const [copied, setCopied] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [profileCommunities, setProfileCommunities] = useState<ProfileCommunity[]>([]);
 
-  // The API can return the same person twice (one row per link between a pair).
-  const connections = useMemo(() => {
-    const seen = new Set<string>();
-    return (nodeData?.connections ?? []).filter((c) => !seen.has(c.id) && !!seen.add(c.id));
-  }, [nodeData?.connections]);
+  // Communities shown on the profile: managed (admin) ones always, member ones
+  // only when the owner has toggled them visible. Owner receives the full list
+  // (for the toggles); everyone else gets the pre-filtered visible set.
+  useEffect(() => {
+    let cancelled = false;
+    setProfileCommunities([]);
+    fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`)
+      .then((res) => (res.ok ? res.json() : { communities: [] }))
+      .then((data) => { if (!cancelled) setProfileCommunities(data.communities ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [nodeId]);
 
-  const hasConnections = connections.length > 0;
+  const toggleCommunityVisibility = useCallback(async (communityId: string, showOnProfile: boolean) => {
+    const res = await fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ communityId, showOnProfile }),
+    });
+    if (!res.ok) return;
+    setProfileCommunities((prev) => prev.map((c) =>
+      c.id === communityId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
+    ));
+  }, [nodeId]);
 
   const isOwner = !!(session?.user?.nodeId && session.user.nodeId === nodeId);
 
@@ -64,6 +92,20 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     navigator.clipboard?.writeText(window.location.href)
       .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
       .catch(() => {});
+  };
+
+  const changeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !profile) return;
+    if (validateImageFile(file)) return; // invalid type/size — modal path shows errors, hero path just no-ops
+    setAvatarUploading(true);
+    try {
+      const url = await uploadImage('person', profile.id, file);
+      await updateBasicInfo({ imageUrl: url });
+    } catch { /* keep previous avatar */ } finally {
+      setAvatarUploading(false);
+    }
   };
 
   // Aliases ("Founder", "Investor", …) carry a per-community colour; when this
@@ -80,6 +122,11 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const savedThemeId = profile?.metadata?.themeColor as string | undefined;
   const theme = savedThemeId ? getPalette(savedThemeId) : systemPalette;
 
+  const experience = useMemo(
+    () => (profile ? sortExperience(getExperience(profile)) : []),
+    [profile],
+  );
+
   if (loading) return <ProfileSkeletonLoader mode="fullpage" />;
   if (error || !profile) {
     return (
@@ -91,12 +138,18 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     );
   }
 
-  const connectionCount = connections.length;
-  const communityCount = nodeData?.communityCount ?? 1;
-  const memberYear = profile.createdAt ? new Date(profile.createdAt).getFullYear() : null;
+  // Prefer the profile-visible community list; fall back to the shared-count
+  // for graph-only people with no linked user.
+  const visibleCommunityCount = profileCommunities.filter((c) => c.visible).length;
+  const communityCount = profileCommunities.length > 0 ? visibleCommunityCount : (nodeData?.communityCount ?? 1);
+  const communitiesClickable = profileCommunities.length > 0;
+  const joinedLabel = profile.createdAt
+    ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+    : null;
+  const hasCountry = !!matchCountryInLocation(profile.location);
   const { score, sections: completionSections } = computeProfileCompletion(profile);
   const missing = Object.entries(completionSections).filter(([, s]) => !s.complete);
-  const hasContact = !!(profile.email || profile.phone || profile.website || profile.linkedinUrl || profile.twitterUrl);
+  const hasContact = !!(profile.email || profile.phone || profile.linkedinUrl || profile.twitterUrl);
 
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
@@ -107,57 +160,35 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
-      {/* ══ IDENTITY HERO — its own floating card ══ */}
-      <section data-tour="profile-hero" className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-clip">
-        {/* cover band */}
-        <div
-          className="relative h-24 sm:h-28"
-          style={{
-            background: [
-              'radial-gradient(circle at 18% -30%, rgba(255,255,255,0.22), transparent 55%)',
-              `linear-gradient(120deg, ${theme.base}, ${theme.dark})`,
-            ].join(', '),
-          }}
-        >
-          <div className="absolute inset-0 opacity-20"
-               style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.3) 1px, transparent 1.4px)', backgroundSize: '20px 20px' }} />
+      {/* ══ IDENTITY HERO — avatar and identity as separate floating cards ══ */}
+      <div className="flex flex-col sm:flex-row gap-5 items-stretch">
+        {/* avatar card */}
+        <div className="relative w-52 h-52 sm:w-[272px] sm:h-[272px] flex-none self-start rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
+          {profile.imageUrl ? (
+            <Image src={profile.imageUrl} alt={profile.name} width={272} height={272} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-6xl sm:text-7xl font-bold text-white"
+                 style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
+              {getInitials(profile.name)}
+            </div>
+          )}
+          {isOwner && (
+            <button onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}
+                    aria-label="Change profile photo"
+                    className={`absolute inset-0 flex items-center justify-center bg-black/45 text-white transition-opacity ${avatarUploading ? 'opacity-100' : 'opacity-0 hover:opacity-100 focus-visible:opacity-100'}`}>
+              {avatarUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6" />}
+            </button>
+          )}
         </div>
+        {isOwner && <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={changeAvatar} />}
 
-        <div className="px-5 sm:px-8 pb-5">
-          {/* avatar + actions */}
-          <div className="flex flex-wrap items-end justify-between gap-3 -mt-12 sm:-mt-14">
-            <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex-none rounded-2xl overflow-hidden ring-4 ring-surface-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
-              {profile.imageUrl ? (
-                <Image src={profile.imageUrl} alt={profile.name} width={112} height={112} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-3xl sm:text-4xl font-bold text-white"
-                     style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
-                  {getInitials(profile.name)}
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap justify-end items-center gap-2 pb-1">
-              <button onClick={shareProfile}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-                <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
-              </button>
-              {isOwner ? (
-                <button onClick={() => setModal('basicInfo')}
-                  data-tour="profile-edit"
-                  className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
-                  style={{ background: theme.base }}>
-                  <Pencil className="w-4 h-4 flex-none" /> Edit profile
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          {/* identity */}
-          <div className="mt-4">
+        {/* identity card */}
+        <section data-tour="profile-hero" className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-5">
+          {/* identity — every fact appears exactly once on this page */}
+          <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
-              <h1 className="text-2xl sm:text-[27px] font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
+              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
               {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
               {aliasName && (
                 <span
@@ -179,7 +210,12 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
               {profile.location && (
-                <span className="inline-flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{profile.location}</span>
+                <span className="inline-flex items-center gap-1.5">
+                  {hasCountry
+                    ? <CountryFlag location={profile.location} />
+                    : <MapPin className="w-3.5 h-3.5" />}
+                  {profile.location}
+                </span>
               )}
               {profile.website && (
                 <a href={profile.website} target="_blank" rel="noopener noreferrer"
@@ -187,21 +223,44 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   <Globe2 className="w-3.5 h-3.5" />{hostname(profile.website)}
                 </a>
               )}
-              {memberYear && (
-                <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {memberYear}</span>
+              {joinedLabel && (
+                <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {joinedLabel}</span>
               )}
             </div>
           </div>
 
-          {/* stat strip */}
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 mt-5 pt-4 border-t border-border-subtle">
-            <StatItem value={connectionCount} label={connectionCount === 1 ? 'Connection' : 'Connections'}
-                      onClick={hasConnections ? () => jump('network') : undefined} accent={theme.dark} />
-            <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'} />
-            {memberYear && <StatItem value={memberYear} label="Member since" />}
+          <div className="flex flex-wrap items-center gap-2 flex-none">
+            <button onClick={shareProfile}
+              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
+              {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
+            </button>
+            {isOwner ? (
+              <button onClick={() => setModal('basicInfo')}
+                data-tour="profile-edit"
+                className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
+                style={{ background: theme.base }}>
+                <Pencil className="w-4 h-4 flex-none" /> Edit profile
+              </button>
+            ) : null}
           </div>
-        </div>
-      </section>
+          </div>
+
+          {/* stat strip — pinned to the card's bottom edge */}
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 mt-auto pt-4 border-t border-border-subtle">
+            <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'}
+                      onClick={communitiesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
+            {experience.length > 0 && (
+              <StatItem value={experience.length} label={experience.length === 1 ? 'Role' : 'Roles'}
+                        onClick={() => jump('experience')} accent={theme.dark} />
+            )}
+            {profile.tags.length > 0 && (
+              <StatItem value={profile.tags.length} label={profile.tags.length === 1 ? 'Skill' : 'Skills'}
+                        onClick={() => jump('skills')} accent={theme.dark} />
+            )}
+          </div>
+        </section>
+      </div>
 
       {/* ══ TWO-COLUMN BODY — separate floating cards ══ */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] gap-5 xl:gap-6">
@@ -217,14 +276,27 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                 : <p className="text-sm text-text-muted italic">No bio yet.</p>}
           </SectionCard>
 
+          {/* Experience */}
+          {(experience.length > 0 || isOwner) && (
+            <SectionCard id="experience" icon={<Briefcase className="w-4 h-4" />} title="Experience"
+                         badge={experience.length > 0 ? experience.length : undefined} theme={theme}
+                         scrollMargin={sectionScrollMargin} isOwner={isOwner}
+                         addLabel={experience.length === 0} onEdit={() => setModal('experience')}>
+              {experience.length > 0
+                ? <ExperienceTimeline entries={experience} theme={theme} />
+                : <AddPrompt theme={theme} label="Add your career history" onClick={() => setModal('experience')} />}
+            </SectionCard>
+          )}
+
           {/* Skills */}
           <SectionCard id="skills" icon={<Wrench className="w-4 h-4" />} title="Skills & expertise" theme={theme}
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} addLabel onEdit={() => setModal('skills')}>
             {profile.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {profile.tags.map((tag) => (
-                  <span key={tag} className="px-3 py-1.5 rounded-full text-[13px] font-medium border"
-                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}33` }}>
+                {profile.tags.map((tag, i) => (
+                  <span key={tag}
+                        className="chip-pop px-3 py-1.5 rounded-full text-[13px] font-medium border transition-transform duration-150 hover:-translate-y-0.5"
+                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}33`, animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}
                   </span>
                 ))}
@@ -234,44 +306,10 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
               : <p className="text-sm text-text-muted italic">No skills listed.</p>}
           </SectionCard>
 
-          {/* Network */}
-          {hasConnections && (
-            <SectionCard id="network" icon={<NetworkIcon className="w-4 h-4" />} title="Network" badge={connectionCount}
-                         theme={theme} scrollMargin={sectionScrollMargin} isOwner={false}>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-2.5">
-                {connections.slice(0, 12).map((c) => (
-                  <a key={c.id} href={`/directory/${encodeURIComponent(c.id)}`}
-                     className="flex items-center gap-3 p-2.5 rounded-xl border border-border-subtle hover:bg-surface-2 hover:border-border-default transition-colors">
-                    {c.image_url
-                      ? <img src={c.image_url} alt={c.name} className="w-10 h-10 rounded-lg object-cover flex-none" />
-                      : <span className="w-10 h-10 rounded-lg bg-surface-3 text-text-muted flex items-center justify-center text-sm font-semibold flex-none">{getInitials(c.name)}</span>}
-                    <span className="min-w-0">
-                      <span className="block text-[13.5px] font-semibold text-text-primary truncate">{c.name}</span>
-                      {c.subtitle && <span className="block text-xs text-text-muted truncate">{c.subtitle}</span>}
-                    </span>
-                  </a>
-                ))}
-              </div>
-              {connectionCount > 12 && (
-                <p className="mt-3 text-xs text-text-muted">Showing 12 of {connectionCount} connections</p>
-              )}
-            </SectionCard>
-          )}
         </div>
 
         {/* RAIL */}
         <div className={`flex flex-col gap-4 lg:sticky ${railStick} self-start`}>
-          {/* At a glance */}
-          <RailCard title="At a glance">
-            <div className="flex flex-col gap-3.5">
-              {profile.location && <KV icon={<MapPin className="w-4 h-4" />} label="Location" value={profile.location} />}
-              {profile.website && <KV icon={<Globe2 className="w-4 h-4" />} label="Website" value={hostname(profile.website)} href={profile.website} theme={theme} />}
-              <KV icon={<Building2 className="w-4 h-4" />} label="Communities" value={`${communityCount} shared`} />
-              {profile.createdAt && <KV icon={<Calendar className="w-4 h-4" />} label="Member since"
-                value={new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} />}
-            </div>
-          </RailCard>
-
           {/* Owner: profile strength with quick-fix shortcuts */}
           {isOwner && score < 100 && (
             <RailCard title="Profile strength">
@@ -296,7 +334,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             </RailCard>
           )}
 
-          {/* Contact */}
+          {/* Contact — email/phone/socials only; location, website & joined live in the hero */}
           <SectionCard id="contact" icon={<Mail className="w-4 h-4" />} title="Contact" theme={theme}
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('contact')}>
             {hasContact ? (
@@ -305,11 +343,10 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   {profile.email && <ContactRow icon={<Mail className="w-4 h-4" />} href={`mailto:${profile.email}`} text={profile.email} />}
                   {profile.phone && <ContactRow icon={<Phone className="w-4 h-4" />} href={`tel:${profile.phone}`} text={profile.phone} />}
                 </div>
-                {(profile.linkedinUrl || profile.twitterUrl || profile.website) && (
+                {(profile.linkedinUrl || profile.twitterUrl) && (
                   <div className="flex gap-2 mt-2.5">
                     {profile.linkedinUrl && <SocialBtn href={profile.linkedinUrl} theme={theme} label="LinkedIn"><Linkedin className="w-4 h-4" /></SocialBtn>}
                     {profile.twitterUrl && <SocialBtn href={profile.twitterUrl} theme={theme} label="X / Twitter"><Twitter className="w-4 h-4" /></SocialBtn>}
-                    {profile.website && <SocialBtn href={profile.website} theme={theme} label="Website"><ExternalLink className="w-4 h-4" /></SocialBtn>}
                   </div>
                 )}
               </>
@@ -325,6 +362,62 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
       {modal === 'about' && <EditAboutModal open onClose={() => setModal(null)} bio={profile.bio} onSave={updateBasicInfo} />}
       {modal === 'skills' && <EditSkillsModal open onClose={() => setModal(null)} tags={profile.tags} onSave={updateBasicInfo} />}
       {modal === 'contact' && <EditContactModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
+      {modal === 'experience' && <EditExperienceModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
+      {modal === 'communities' && (
+        <CommunitiesModal open onClose={() => setModal(null)} communities={profileCommunities}
+                          isOwner={isOwner} personName={profile.name} theme={theme}
+                          onToggle={isOwner ? toggleCommunityVisibility : undefined} />
+      )}
+    </div>
+  );
+}
+
+/* ── experience timeline ──────────────────────────────────────────────────── */
+
+function ExperienceTimeline({ entries, theme }: { entries: ExperienceEntry[]; theme: ThemePalette }) {
+  return (
+    <div className="relative">
+      {/* spine — draws downward on entry */}
+      <div className="timeline-draw absolute left-[17px] top-2 bottom-2 w-px"
+           style={{ background: `linear-gradient(to bottom, ${theme.base}66, ${theme.base}1a)` }} />
+      <ol className="flex flex-col gap-5">
+        {entries.map((entry, i) => {
+          const isCurrent = !!entry.current && !entry.end;
+          return (
+            <li key={entry.id} className="exp-rise relative flex gap-4" style={{ animationDelay: `${i * 90}ms` }}>
+              {/* org dot */}
+              <span className={`relative z-[1] w-9 h-9 flex-none rounded-xl grid place-items-center text-[11px] font-bold ring-4 ring-surface-1 ${isCurrent ? 'dot-pulse' : ''}`}
+                    style={cssVars({
+                      '--pulse-color': `${theme.base}55`,
+                    })}>
+                <span className="absolute inset-0 rounded-xl" style={{ background: theme.light, border: `1px solid ${theme.base}33` }} />
+                <span className="relative" style={{ color: theme.dark }}>{getInitials(entry.org)}</span>
+              </span>
+
+              <div className="min-w-0 pt-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-[14.5px] font-bold text-text-primary leading-snug">{entry.title}</h3>
+                  {isCurrent && (
+                    <span className="inline-flex items-center h-[20px] px-2 rounded-md text-[11px] font-semibold"
+                          style={{ background: theme.light, color: theme.dark }}>
+                      Current
+                    </span>
+                  )}
+                </div>
+                <p className="text-[13.5px] text-text-secondary mt-0.5">{entry.org}</p>
+                <p className="text-xs text-text-muted mt-1">
+                  {formatYearMonth(entry.start)} – {entry.end ? formatYearMonth(entry.end) : 'Present'}
+                  {formatDuration(entry.start, entry.end) && <> · {formatDuration(entry.start, entry.end)}</>}
+                  {entry.location && <> · <CountryFlag location={entry.location} className="w-[15px] h-[11px] align-[-1px] mr-0.5" />{entry.location}</>}
+                </p>
+                {entry.description && (
+                  <p className="text-[13px] text-text-secondary leading-relaxed mt-1.5 max-w-[64ch] whitespace-pre-line">{entry.description}</p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -381,20 +474,6 @@ function RailCard({ title, children }: { title: string; children: React.ReactNod
     <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 py-4">
       <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-3.5">{title}</div>
       {children}
-    </div>
-  );
-}
-
-function KV({ icon, label, value, href, theme }: { icon: React.ReactNode; label: string; value: string; href?: string; theme?: ThemePalette }) {
-  return (
-    <div className="flex items-start gap-3 text-sm">
-      <span className="text-text-muted mt-0.5 flex-none">{icon}</span>
-      <div className="min-w-0">
-        <div className="text-xs text-text-muted">{label}</div>
-        {href
-          ? <a href={href} target="_blank" rel="noopener noreferrer" className="font-semibold truncate block hover:underline" style={{ color: theme?.dark }}>{value}</a>
-          : <div className="font-semibold text-text-primary">{value}</div>}
-      </div>
     </div>
   );
 }

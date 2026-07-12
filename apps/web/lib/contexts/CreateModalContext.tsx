@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from 'react';
 
-export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'context';
+export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'context' | 'channel';
 
 interface CreateModalContextValue {
   isOpen: boolean;

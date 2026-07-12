@@ -59,6 +59,26 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
+  // Real shared-community count: communities where both the viewer and the
+  // profile's linked user are active members. Nodes without a linked user
+  // exist in exactly their own community.
+  let communityCount = 1;
+  if (nodeId.startsWith('person:')) {
+    const person = await prisma.person.findUnique({ where: { id: nodeId }, select: { userId: true } });
+    if (person?.userId) {
+      communityCount = Math.max(1, await prisma.userCommunity.count({
+        where: {
+          userId: person.userId,
+          status: 'active',
+          community: {
+            personalOwnerId: null, // personal spaces aren't communities
+            userCommunities: { some: { userId: session.userId, status: 'active' } },
+          },
+        },
+      }));
+    }
+  }
+
   const resolvedConnections = linksWithNodes.map(l => ({
     id: l.connected_id,
     name: l.connected_name ?? l.connected_id,
@@ -86,7 +106,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         createdAt: node.createdAt.toISOString(),
       },
       connectionCount: linksWithNodes.length,
-      communityCount: 1,
+      communityCount,
       connections: resolvedConnections,
     },
     {

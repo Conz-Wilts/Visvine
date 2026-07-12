@@ -211,3 +211,58 @@ export function getCountry(code: string): Country | undefined {
   return COUNTRIES.find(c => c.code === code);
 }
 
+// Common shorthand people type into free-text location fields that doesn't
+// match the official COUNTRIES names.
+const COUNTRY_ALIASES: Record<string, string> = {
+  'usa': 'US', 'united states': 'US', 'united states of america': 'US', 'america': 'US',
+  'uk': 'GB', 'united kingdom': 'GB', 'england': 'GB', 'scotland': 'GB', 'wales': 'GB', 'britain': 'GB', 'great britain': 'GB',
+  'uae': 'AE', 'united arab emirates': 'AE',
+  'nz': 'NZ', 'aotearoa': 'NZ',
+  'south korea': 'KR', 'korea': 'KR',
+  'holland': 'NL', 'the netherlands': 'NL',
+  'czechia': 'CZ',
+  'roc': 'TW', 'taiwan': 'TW',
+  'hong kong': 'HK', 'hk': 'HK',
+  'singapore': 'SG',
+};
+
+// Aliases not present in COUNTRIES (territories rendered with their own flag).
+const EXTRA_COUNTRIES: Country[] = [
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'TW', name: 'Taiwan' },
+];
+
+/**
+ * Best-effort country detection from a free-text location ("Auckland, New
+ * Zealand" → NZ). Checks the segment after the last comma first, then the
+ * whole string, against country names, ISO codes and common aliases.
+ */
+export function matchCountryInLocation(location?: string | null): Country | undefined {
+  if (!location) return undefined;
+  const candidates: string[] = [];
+  const parts = location.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length > 1) candidates.push(parts[parts.length - 1]);
+  candidates.push(location.trim(), ...parts);
+
+  const all = [...COUNTRIES, ...EXTRA_COUNTRIES];
+  for (const candidate of candidates) {
+    const lower = candidate.toLowerCase();
+    const aliased = COUNTRY_ALIASES[lower];
+    if (aliased) return getCountry(aliased) ?? EXTRA_COUNTRIES.find(c => c.code === aliased);
+    const byName = all.find(c => c.name.toLowerCase() === lower);
+    if (byName) return byName;
+    // Bare ISO code, but only when clearly used as one ("Wellington, NZ").
+    if (/^[A-Za-z]{2}$/.test(candidate) && parts.length > 1) {
+      const byCode = all.find(c => c.code === candidate.toUpperCase());
+      if (byCode) return byCode;
+    }
+  }
+  return undefined;
+}
+
+/** Flag emoji for a free-text location, or empty string when undetectable. */
+export function locationFlag(location?: string | null): string {
+  const country = matchCountryInLocation(location);
+  return country ? countryCodeToFlag(country.code) : '';
+}
+

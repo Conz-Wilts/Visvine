@@ -51,12 +51,14 @@ const EVENT_FINDER_ICON = (
 export default function CreateModal() {
   const router = useRouter();
   const { isOpen, defaultType, close } = useCreateModal();
-  const { currentCommunity, refreshCommunity } = useCommunity();
+  const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
 
   // The "Create new" grid: the registry's grid types, minus any whose feature is
-  // off for this community (Context appears only where the notes feature is on).
+  // off for this community (Context appears only where the notes feature is on;
+  // Channel only for community admins where the channels feature is on).
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
+  const channelsEnabled = isFeatureEnabled(featureConfig, 'channels');
 
   // Context also requires write access to this community's brain root: check the
   // folder registry's gate when the modal opens. Personal spaces (`me:`) are
@@ -86,7 +88,10 @@ export default function CreateModal() {
   }, [isOpen, notesEnabled, isPersonalSpace, currentCommunity]);
 
   const gridOptions = TYPE_OPTIONS.filter(
-    (o) => o.inGrid && (o.id !== 'context' || (notesEnabled && brainWritable)),
+    (o) =>
+      o.inGrid &&
+      (o.id !== 'context' || (notesEnabled && brainWritable)) &&
+      (o.id !== 'channel' || (channelsEnabled && isAdmin)),
   );
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
@@ -223,6 +228,13 @@ export default function CreateModal() {
     if (t === 'context') {
       handleClose();
       router.push('/context?new=note');
+      return;
+    }
+    // Channels aren't created here either — hand off to the Channels page, which
+    // auto-opens its channel-creation form (see ?new=channel in MessagesClient).
+    if (t === 'channel') {
+      handleClose();
+      router.push('/channels?new=channel');
       return;
     }
     setSelectedType(t);

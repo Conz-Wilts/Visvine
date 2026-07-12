@@ -16,15 +16,8 @@ import ProfilePageContent from '@/components/profile/ProfilePageContent';
 // ── Person nodes → LinkedIn profile ──────────────────────────────────────────
 
 function PersonProfilePage({ nodeId }: { nodeId: string }) {
-  const router = useRouter();
   return (
     <div className="profile-enter w-full max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-10">
-      <button
-        onClick={() => router.back()}
-        className="flex items-center gap-1.5 mb-4 text-sm font-medium text-text-muted hover:text-text-primary transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" /> Back
-      </button>
       {/* No outer card wrapper — ProfilePageContent renders separate floating
           cards directly on the page background, matching the event detail page. */}
       <ProfilePageContent nodeId={nodeId} />

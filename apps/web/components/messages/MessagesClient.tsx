@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
 import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle } from 'lucide-react';
@@ -101,6 +102,17 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
   const [showChannelForm, setShowChannelForm] = useState(false);
+  // Arriving with ?new=channel (from the global "Create new → Channel" tile)
+  // opens the channel-creation form straight away; the param is cleared so a
+  // refresh doesn't re-open it.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (channelsVariant && searchParams.get('new') === 'channel') {
+      setShowChannelForm(true);
+      router.replace(basePath);
+    }
+  }, [channelsVariant, searchParams, router, basePath]);
   const [channelName, setChannelName] = useState('');
   const [channelDescription, setChannelDescription] = useState('');
   const [creatingChannel, setCreatingChannel] = useState(false);
@@ -896,23 +908,14 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   // the docked panel) and pad the thread to clear the docked card.
   const dockChannels = channelsVariant && isWide && Boolean(host);
 
-  // The docked panel's own header: title, New-channel button, and channel search.
-  // Only rendered inside the Sidebar dock (the page's centered controls cover the
+  // The docked panel's own header: title and channel search. Channel creation
+  // lives in the global sidebar "+" (Create new → Channel), not here. Only
+  // rendered inside the Sidebar dock (the page's centered controls cover the
   // un-docked cases).
   const channelControls = channelsVariant ? (
     <div className="space-y-2 px-3 pb-2 pt-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-text-primary">Channels</span>
-        {communityCtx?.isAdmin && (
-          <button
-            type="button"
-            onClick={() => setShowChannelForm((v) => !v)}
-            className="flex items-center gap-1 rounded-full bg-brand-green px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm transition-opacity hover:opacity-90 active:scale-95"
-          >
-            <Plus className="h-3 w-3" strokeWidth={2.5} />
-            New
-          </button>
-        )}
       </div>
       <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
         <Search className="h-4 w-4 shrink-0 text-text-muted" />
@@ -949,18 +952,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         <div />
         <PageTitle title={channelsVariant ? 'Channels' : 'Messages'} />
         <div className="justify-self-end">
-          {activeTab === 'channels' ? (
-            communityCtx?.isAdmin && (
-              <button
-                type="button"
-                onClick={() => setShowChannelForm((v) => !v)}
-                className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-                <span className="hidden sm:inline">New Channel</span>
-              </button>
-            )
-          ) : (
+          {/* Channel creation lives in the global sidebar "+" (Create new →
+              Channel) — no header button on the channels variant. */}
+          {activeTab !== 'channels' && (
             <button
               type="button"
               onClick={() => setShowNewChatModal(true)}
@@ -1089,7 +1083,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     <p className="mt-1 text-xs text-text-muted">
                       {activeTab === 'channels'
                         ? (communityCtx?.isAdmin
-                          ? 'Create the first channel with the + button above.'
+                          ? 'Create the first channel with the + button in the sidebar.'
                           : 'Channels created by your community admins will appear here.')
                         : 'Start one with the + button above.'}
                     </p>
@@ -1100,6 +1094,30 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                   <div className="px-2.5 py-1">
                     {filteredConversations.map((conversation) => {
                       const isActive = selectedConversationId === conversation.id;
+                      const hasUnread = conversation.unreadCount > 0 && !isActive;
+                      if (conversation.type === 'CHANNEL') {
+                        // Slack-style channel row: just "# name", no logo tile or preview
+                        return (
+                          <button
+                            key={conversation.id}
+                            type="button"
+                            onClick={() => handleSelectConversation(conversation.id)}
+                            className={`group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-150 ${
+                              isActive ? 'bg-brand-green/10' : 'hover:bg-surface-2'
+                            }`}
+                          >
+                            <Hash className={`h-4 w-4 shrink-0 ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`} strokeWidth={2} />
+                            <p className={`min-w-0 flex-1 truncate text-sm ${isActive || hasUnread ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary'}`}>
+                              {conversation.name}
+                            </p>
+                            {hasUnread && (
+                              <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      }
                       return (
                         <button
                           key={conversation.id}
@@ -1111,24 +1129,24 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                         >
                           <div className="relative shrink-0">
                             <Avatar name={conversation.name} />
-                            {conversation.unreadCount > 0 && !isActive && (
+                            {hasUnread && (
                               <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
                             )}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-2">
                               <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
-                                {conversation.type === 'CHANNEL' ? `#${conversation.name}` : conversation.name}
+                                {conversation.name}
                               </p>
                               <span className="shrink-0 text-[11px] text-text-muted">
                                 {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
                               </span>
                             </div>
                             <div className="mt-0.5 flex items-center justify-between gap-2">
-                              <p className={`truncate text-xs ${conversation.unreadCount > 0 && !isActive ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
+                              <p className={`truncate text-xs ${hasUnread ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
                                 {conversation.lastMessage?.text ?? 'No messages yet'}
                               </p>
-                              {conversation.unreadCount > 0 && !isActive && (
+                              {hasUnread && (
                                 <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                                   {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
                                 </span>
@@ -1150,13 +1168,11 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     {browsableChannels.map((channel) => (
                       <div
                         key={channel.id}
-                        className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 transition-colors hover:bg-surface-2"
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2"
                       >
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-sm font-semibold text-text-muted">
-                          #
-                        </div>
+                        <Hash className="mt-0.5 h-4 w-4 shrink-0 self-start text-text-muted" strokeWidth={2} />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-text-secondary">#{channel.name}</p>
+                          <p className="truncate text-sm font-normal text-text-secondary">{channel.name}</p>
                           <p className="truncate text-xs text-text-muted">
                             {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
                           </p>
@@ -1264,12 +1280,17 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                       <ArrowLeft className="h-5 w-5" />
                     </button>
                   )}
-                  <div className="hidden sm:block">
-                    <Avatar name={selectedConversation.name} size="lg" />
-                  </div>
+                  {selectedConversation.type !== 'CHANNEL' && (
+                    <div className="hidden sm:block">
+                      <Avatar name={selectedConversation.name} size="lg" />
+                    </div>
+                  )}
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-text-primary">
-                      {selectedConversation.type === 'CHANNEL' ? `#${selectedConversation.name}` : selectedConversation.name}
+                    <p className="flex items-center gap-1 truncate text-sm font-semibold text-text-primary">
+                      {selectedConversation.type === 'CHANNEL' && (
+                        <Hash className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+                      )}
+                      <span className="truncate">{selectedConversation.name}</span>
                     </p>
                     <p className="truncate text-xs text-text-muted">
                       {selectedConversation.type === 'CHANNEL'
