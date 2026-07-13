@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import ChatInterface from '@/components/chat/ChatInterface';
 import SearchAndFilters from '@/components/dashboard/SearchAndFilters';
 import NodeGrid from '@/components/dashboard/NodeGrid';
@@ -13,7 +13,9 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
-import type { NBNode, CommunityAlias } from '@/lib/types';
+import type { NBNode, CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
+import { isFeatureEnabled } from '@/lib/featureAccess';
+import { parseDirectoryView, type DirectoryView } from '@/lib/directoryView';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { PageTitle } from '@/components/ui';
@@ -27,7 +29,18 @@ const DirectoryGraphView = dynamic(() => import('@/components/dashboard/Director
   ),
 });
 
-type DirectoryView = 'grid' | 'table' | 'graph';
+// Same rationale for the Context view: Tiptap + the notes stack stay off the
+// grid/table bundle until the view is opened.
+const EmbeddedNotesWorkspace = dynamic(
+  () => import('@/features/notes/components/NotesWorkspace').then((m) => m.NotesWorkspace),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading context…</div>
+    ),
+  },
+);
+
 type SortOrder = 'az' | 'za';
 
 // Maps a directory node into the full DirectoryItem shape the grid/table consume.
@@ -49,9 +62,8 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
   };
 }
 
-export default function DashboardPage() {
+function DashboardPageInner() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [currentView, setCurrentView] = useState<DirectoryView>('grid');
   const [graphChatValue, setGraphChatValue] = useState('');
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set());
   const [filterAliases, setFilterAliases] = useState<Set<string>>(new Set());
@@ -61,19 +73,44 @@ export default function DashboardPage() {
   const savedFilterTypesRef = useRef<Set<string> | null>(null);
   const { setHeaderRight } = useHeader();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
-  const { isAdmin } = useCommunity();
+  const { isAdmin, currentCommunity } = useCommunity();
+
+  // The active view lives in the URL (?view=…) so the Context view is
+  // deep-linkable/refreshable and /context can redirect here. Absent/junk →
+  // grid; context while the notes tool is disabled → grid.
+  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
+  const currentView = parseDirectoryView(searchParams.get('view'), notesEnabled);
   const isGraphView = currentView === 'graph';
+  const isContextView = currentView === 'context';
+  // Graph + context own their surface: fixed-height container, no page header.
+  const isImmersiveView = isGraphView || isContextView;
+
+  const applyView = useCallback((next: DirectoryView) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'grid') params.delete('view');
+    else params.set('view', next);
+    // Context-only params don't survive leaving the view.
+    if (next !== 'context') {
+      params.delete('file');
+      params.delete('new');
+    }
+    const q = params.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [searchParams, router, pathname]);
 
   useEffect(() => {
     document.body.dataset.graphView = isGraphView ? 'true' : 'false';
-    document.body.style.overflow = isGraphView ? 'hidden' : '';
+    document.body.style.overflow = isImmersiveView ? 'hidden' : '';
     return () => {
       delete document.body.dataset.graphView;
       document.body.style.overflow = '';
     };
-  }, [isGraphView]);
+  }, [isGraphView, isImmersiveView]);
 
   useEffect(() => { setGraphChatValue(searchTerm); }, [searchTerm]);
 
@@ -116,8 +153,8 @@ export default function DashboardPage() {
         savedFilterTypesRef.current = null;
       }
     }
-    setCurrentView(next);
-  }, [currentView, filterTypes, presentTypes]);
+    applyView(next);
+  }, [currentView, filterTypes, presentTypes, applyView]);
 
   const items = useMemo<DirectoryItem[]>(() =>
     nodes.map(toDirectoryItem),
@@ -182,23 +219,23 @@ export default function DashboardPage() {
   // View toggle lives in the navbar, to the left of the profile icon.
   useEffect(() => {
     setHeaderRight(
-      <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} />
+      <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} showContext={notesEnabled} />
     );
     return () => setHeaderRight(null);
-  }, [currentView, handleViewChange, setHeaderRight]);
+  }, [currentView, handleViewChange, notesEnabled, setHeaderRight]);
 
   return (
     <div
       className="relative w-full"
       data-tour="directory-canvas"
-      style={isGraphView
+      style={isImmersiveView
         ? { height: 'calc(100vh - 5rem - 3rem)', overflow: 'hidden' }
         : { minHeight: 'calc(100dvh - 56px)' }
       }
     >
 
-      {/* ── Non-graph header: title + filters + view toggle ── */}
-      {!isGraphView && (
+      {/* ── Non-immersive header: title + filters + view toggle ── */}
+      {!isImmersiveView && (
         <>
           <PageTitle title="Directory" />
 
@@ -289,8 +326,18 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── Context view — the embedded notes workspace. Its tree docks into the
+           global Sidebar (ContextPanelContext), the body carries the notes
+           graph/editor. Mounted only while active, mirroring the graph view, so
+           the Tiptap bundle, ⌘P shortcuts, and portal stay scoped here. ── */}
+      {isContextView && (
+        <div className="absolute inset-0">
+          <EmbeddedNotesWorkspace embedded />
+        </div>
+      )}
+
       {/* ── Grid / Table content ── */}
-      {!isGraphView && (
+      {!isImmersiveView && (
         <div className="w-full px-6 pt-4 pb-8">
           <div className="flex flex-col gap-5">
 
@@ -326,5 +373,14 @@ export default function DashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  // Suspense boundary: the inner page reads useSearchParams (?view=/?file=).
+  return (
+    <Suspense fallback={null}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }

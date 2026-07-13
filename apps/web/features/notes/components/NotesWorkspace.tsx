@@ -1,10 +1,13 @@
 'use client'
 
 // The notes workspace: orchestrates the sidebar tree, the editor, and the
-// backlinks/related rail for the CURRENT community's single brain. Personal
-// vs community context is no longer a toggle — a user's personal notes live in
-// their personal-space community (`me:<userId>`), and this workspace simply
-// points at whichever community's Context page you're on. Owns all data
+// backlinks/related rail for the CURRENT community's single brain. It renders
+// as the directory's Context view (`embedded` — /directory?view=context; the
+// old /context route redirects there). Personal vs community context is not a
+// toggle — a user's personal notes live in their personal-space community
+// (`me:<userId>`), and this workspace simply points at whichever community
+// you're in. Entity context notes (people/…, companies/…) never open here:
+// openNote routes them to their entity's profile Context tab. Owns all data
 // loading (plain fetch + state, Visvine convention) and refreshes the index
 // after mutations. Markdown is the source of truth end to end.
 
@@ -14,10 +17,11 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { useHeader } from '@/lib/contexts/HeaderContext'
-import { useCommunityGraphData } from '@/hooks/useCommunityGraphData'
 import { ViewToggle, type ViewToggleOption } from '@/components/ui'
-import { entityNotePath, entityStub } from '@/lib/notes/entities'
+import { entityNotePath, entityStub, resolveEntityNode } from '@/lib/notes/entities'
+import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { notesApi, type RegistryResponse } from '../lib/notesApi'
+import { BrainGateCard } from './BrainGateCard'
 import { NoteSidebar, type FolderBadge } from './NoteSidebar'
 import { NoteEditor } from './NoteEditor'
 import { NoteSearchBox } from './NoteSearchBox'
@@ -42,9 +46,10 @@ import '../notes.css'
 // one reliable signal that "this Context page is my personal space".
 const PERSONAL_ID_PREFIX = 'me:'
 
-// The Context tree no longer positions itself: the global Sidebar owns a full-height
-// docked card on /context and exposes a portal host (ContextPanelContext) where we
-// mount <NoteSidebar>, so the icon rail + tree read as one container. We only reserve
+// The Context tree no longer positions itself: the global Sidebar owns a
+// full-height docked card while this workspace is mounted (it requests the dock
+// via ContextPanelContext) and exposes a portal host where we mount
+// <NoteSidebar>, so the icon rail + tree read as one container. We only reserve
 // the editor's left padding so it clears that card. PANEL_W (256) mirrors the host's
 // width in Sidebar.tsx; the 268/52px offsets = PANEL_W + a 12px gap / the collapsed
 // reopen button + a gutter. The page content sits inside <main>, which already pads
@@ -77,11 +82,42 @@ function defaultNoteContent(title: string): string {
   return `---\ntype: Note\ntitle: ${title}\ntags: []\n---\n\n`
 }
 
-export function NotesWorkspace() {
+// The workspace's Graph/Editor/Raw pill options — rendered into the navbar on
+// /context and inline (chrome row) when embedded in the directory.
+const WORKSPACE_VIEW_OPTIONS: ViewToggleOption<'graph' | 'editor' | 'raw'>[] = [
+  {
+    id: 'graph',
+    label: 'Graph',
+    icon: (
+      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7a3 3 0 116 0 3 3 0 01-6 0zM3 17a3 3 0 116 0 3 3 0 01-6 0zM15 17a3 3 0 116 0 3 3 0 01-6 0zM9.5 9.5l-3 5M14.5 9.5l3 5" />
+      </svg>
+    ),
+  },
+  {
+    id: 'editor',
+    label: 'Editor',
+    icon: (
+      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'raw',
+    label: 'Raw',
+    icon: (
+      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+      </svg>
+    ),
+  },
+]
+
+export function NotesWorkspace({ embedded = false }: { embedded?: boolean }) {
   const { currentCommunity, joinedCommunities } = useCommunity()
-  const { host, collapsed, setCollapsed } = useContextPanel()
+  const { host, collapsed, setDockRequested } = useContextPanel()
   const { setHeaderRight, setHeaderContent } = useHeader()
-  const { graphData: directoryGraph } = useCommunityGraphData()
   const communityId = currentCommunity?.id ?? null
   const isPersonalSpace = communityId?.startsWith(PERSONAL_ID_PREFIX) ?? false
   const router = useRouter()
@@ -89,26 +125,9 @@ export function NotesWorkspace() {
   const searchParams = useSearchParams()
 
   // Directory entities (person/org nodes) usable in `[[ ]]` mentions: the picker
-  // list + a path→entity map the chip decoration reads. Built from the cached
-  // community graph (all nodes), keyed by each entity's canonical note path.
-  const { entities, entityByPath } = useMemo(() => {
-    const list: PickerEntity[] = []
-    const map = new Map<string, PickerEntity>()
-    for (const n of directoryGraph.nodes) {
-      const path = entityNotePath({ id: n.id, type: n.type })
-      if (!path) continue
-      const e: PickerEntity = {
-        id: n.id,
-        name: n.name,
-        type: n.type,
-        image_url: n.image_url ?? null,
-        subtitle: n.subtitle ?? null,
-      }
-      list.push(e)
-      map.set(path, e)
-    }
-    return { entities: list, entityByPath: map }
-  }, [directoryGraph])
+  // list + a path→entity map the chip decoration reads (shared with the profile
+  // Context tab via useDirectoryEntities).
+  const { entities, entityByPath } = useDirectoryEntities()
 
   const [aiConfigured, setAiConfigured] = useState(false)
 
@@ -212,9 +231,22 @@ export function NotesWorkspace() {
   useEffect(() => {
     if (searchParams.get('new') === 'note') {
       setPendingNewNote(true)
-      router.replace(pathname)
+      // Strip only the `new` param — clobbering the whole query string would
+      // nuke the directory's ?view=context (and any ?file=) when embedded.
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete('new')
+      const q = params.toString()
+      router.replace(q ? `${pathname}?${q}` : pathname)
     }
   }, [searchParams, pathname, router])
+
+  // Embedded (directory Context view): ask the Sidebar to open the docked tree
+  // column while mounted; release it on unmount (leaving the view or the page).
+  useEffect(() => {
+    if (!embedded) return
+    setDockRequested(true)
+    return () => setDockRequested(false)
+  }, [embedded, setDockRequested])
 
   // AI availability (once).
   useEffect(() => {
@@ -304,26 +336,86 @@ export function NotesWorkspace() {
     [communityId],
   )
 
+  // --- URL sync (embedded only): ?file=<path> mirrors the open note, making
+  // notes addressable — deep links, refresh, and back/forward all restore the
+  // open note inside the directory's Context view. ---------------------------
+  const searchParamsRef = useRef(searchParams)
+  searchParamsRef.current = searchParams
+  // Mirror of selectedPath for the read-back effect's loop guard (the URL echo
+  // of an openNote() must not re-open the note it just came from).
+  const selectedPathRef = useRef(selectedPath)
+  selectedPathRef.current = selectedPath
+
+  const writeFileParam = useCallback(
+    (file: string | null) => {
+      if (!embedded) return
+      const params = new URLSearchParams(searchParamsRef.current.toString())
+      if (file) params.set('file', file)
+      else params.delete('file')
+      const q = params.toString()
+      router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false })
+    },
+    [embedded, pathname, router],
+  )
+
   // Reload the index whenever the community changes, landing on the graph screen
-  // with no note open (notes are opened from there).
+  // with no note open (notes are opened from there). Only an actual community
+  // SWITCH clears ?file= — on first mount it may carry a deep link that the
+  // read-back effect below is about to honour.
+  const prevCommunityRef = useRef<string | null>(null)
   useEffect(() => {
+    const isSwitch = prevCommunityRef.current !== null && prevCommunityRef.current !== communityId
+    prevCommunityRef.current = communityId
     setSelectedPath(null)
     setContent('')
     setReferences(null)
     setRelated(null)
     setView('graph')
+    if (isSwitch) writeFileParam(null)
     loadIndex(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadIndex])
 
   // Open a note into the editor (the one entry point used by search, the sidebar,
-  // pickers, the graph, and in-note links). Drop any stale error so a leftover
-  // toast (e.g. from a prior failed open) doesn't follow you on.
-  const openNote = useCallback((path: string) => {
+  // pickers, the graph, and in-note links). Entity context notes don't open here
+  // at all — they ARE their entity's profile context, so they route to the
+  // profile's Context tab. An entity-shaped path whose node isn't in the loaded
+  // directory map (deleted node, other community's copy, map still loading)
+  // falls back to the plain in-workspace editor so no click ever dead-ends.
+  const openNote = useCallback(
+    (path: string) => {
+      const entityNodeId = resolveEntityNode(path, entityByPathRef.current)
+      if (entityNodeId) {
+        router.push(`/directory/${encodeURIComponent(entityNodeId)}?tab=context`)
+        return
+      }
+      setError(null)
+      setSelectedPath(path)
+      setView('editor')
+      writeFileParam(path)
+    },
+    [router, writeFileParam],
+  )
+
+  // Deep links / back-forward: an externally-changed ?file= opens that note
+  // (entity paths hand off to the profile tab like every other open). Also
+  // re-applies after the community-arrival reset above — the community object
+  // resolves async on a cold load, and its reset would otherwise clobber the
+  // deep-linked selection back to the graph (hence the communityId dep; this
+  // effect is declared after the reset so it runs later in the same flush).
+  useEffect(() => {
+    if (!embedded) return
+    const file = searchParams.get('file')
+    if (!file || file === selectedPathRef.current) return
+    const entityNodeId = resolveEntityNode(file, entityByPathRef.current)
+    if (entityNodeId) {
+      router.replace(`/directory/${encodeURIComponent(entityNodeId)}?tab=context`)
+      return
+    }
     setError(null)
-    setSelectedPath(path)
+    setSelectedPath(file)
     setView('editor')
-  }, [])
+  }, [embedded, searchParams, communityId, router])
 
   // Fulfil a pending "new context" intent: create an untitled "New note" (with a
   // numeric suffix if one already exists) and open it straight in the editor.
@@ -626,44 +718,19 @@ export function NotesWorkspace() {
   // profile icon — sharing the directory's animated brand-green ViewToggle so the
   // two read as the same control. All three options are always shown; picking
   // Editor/Raw with no note open lands on the "select a note" placeholder.
+  // Embedded: the navbar belongs to the directory's own 4-way switcher, so the
+  // pill renders inline in the view body instead (see the chrome row below).
   useEffect(() => {
-    const viewOptions: ViewToggleOption<'graph' | 'editor' | 'raw'>[] = [
-      {
-        id: 'graph',
-        label: 'Graph',
-        icon: (
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7a3 3 0 116 0 3 3 0 01-6 0zM3 17a3 3 0 116 0 3 3 0 01-6 0zM15 17a3 3 0 116 0 3 3 0 01-6 0zM9.5 9.5l-3 5M14.5 9.5l3 5" />
-          </svg>
-        ),
-      },
-      {
-        id: 'editor',
-        label: 'Editor',
-        icon: (
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-          </svg>
-        ),
-      },
-      {
-        id: 'raw',
-        label: 'Raw',
-        icon: (
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-          </svg>
-        ),
-      },
-    ]
-    setHeaderRight(<ViewToggle options={viewOptions} value={view} onChange={setView} />)
+    if (embedded) return
+    setHeaderRight(<ViewToggle options={WORKSPACE_VIEW_OPTIONS} value={view} onChange={setView} />)
     return () => setHeaderRight(null)
-  }, [view, setHeaderRight])
+  }, [embedded, view, setHeaderRight])
 
   // Brain actions ride in the navbar's centre slot rather than a page row, so the
   // editor sits flush under the navbar with no intervening chrome for the note
-  // text to scroll behind.
+  // text to scroll behind. (Embedded: inline chrome row instead.)
   useEffect(() => {
+    if (embedded) return
     setHeaderContent(
       <div className="flex items-center justify-center gap-2">
         {isPersonalSpace && selectedPath && (
@@ -676,11 +743,15 @@ export function NotesWorkspace() {
     )
     return () => setHeaderContent(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPersonalSpace, aiConfigured, selectedPath, isCommunityAdmin, setHeaderContent])
+  }, [embedded, isPersonalSpace, aiConfigured, selectedPath, isCommunityAdmin, setHeaderContent])
+
+  // Embedded, the page supplies a fixed-height box (like the graph view);
+  // standalone /context sizes itself against the viewport.
+  const rootHeight = embedded ? 'h-full' : 'h-[calc(100dvh-120px)]'
 
   if (!currentCommunity) {
     return (
-      <div className="flex h-[calc(100dvh-56px)] w-full items-center justify-center">
+      <div className={`flex w-full items-center justify-center ${embedded ? 'h-full' : 'h-[calc(100dvh-56px)]'}`}>
         <p className="text-text-muted">Select a community to view notes.</p>
       </div>
     )
@@ -696,7 +767,7 @@ export function NotesWorkspace() {
   // the workspace with a friendly request-access state (root gate, folderId '').
   if (gatedOut) {
     return (
-      <div className={`relative flex h-[calc(100dvh-120px)] w-full flex-col ${contentPad}`}>
+      <div className={`relative flex ${rootHeight} w-full flex-col ${contentPad}`}>
         {error && (
           <div className="mx-auto mt-3 flex max-w-3xl items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <span>{error}</span>
@@ -704,35 +775,34 @@ export function NotesWorkspace() {
           </div>
         )}
         <div className="flex flex-1 items-center justify-center px-8">
-          <div className="flex max-w-md flex-col items-center gap-3 rounded-2xl border border-border-subtle bg-surface-1 px-8 py-10 text-center shadow-float">
-            <span className="text-3xl" aria-hidden="true">🔒</span>
-            <h2 className="text-base font-semibold text-text-primary">This community's brain is private</h2>
-            <p className="text-sm text-text-secondary">
-              Access to {currentCommunity.name}'s shared notes is limited. Request access and an admin will review it.
-            </p>
-            {brainRequestPending ? (
-              <span className="rounded-full bg-surface-2 px-3 py-1.5 text-xs font-semibold text-text-muted">
-                Request pending — an admin will review it
-              </span>
-            ) : (
-              <button
-                onClick={requestBrainAccess}
-                disabled={requestingAccess}
-                className="rounded-xl bg-brand-green px-4 py-2 text-sm font-semibold text-brand-black hover:brightness-95 disabled:opacity-40"
-              >
-                {requestingAccess ? 'Requesting…' : 'Request access'}
-              </button>
-            )}
-          </div>
+          <BrainGateCard
+            communityName={currentCommunity.name}
+            pending={brainRequestPending}
+            requesting={requestingAccess}
+            onRequest={requestBrainAccess}
+          />
         </div>
       </div>
     )
   }
 
   return (
-    <div className={`relative flex h-[calc(100dvh-120px)] w-full flex-col ${contentPad}`}
+    <div className={`relative flex ${rootHeight} w-full flex-col ${contentPad}`}
       style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
     >
+      {/* Embedded chrome: the navbar belongs to the directory's 4-way view
+          switcher, so the workspace's own pill + brain actions render inline. */}
+      {embedded && (
+        <div className="flex flex-none items-center justify-end gap-2 px-4 pb-1 pt-2">
+          {isPersonalSpace && selectedPath && (
+            <GhostAction onClick={() => setPromoteOpen(true)} title="Share this note to a community's brain">↑ Share</GhostAction>
+          )}
+          {aiConfigured && (
+            <GhostAction onClick={() => setReorganizeOpen(true)} title="Reorganize with AI">✨ Reorganize</GhostAction>
+          )}
+          <ViewToggle options={WORKSPACE_VIEW_OPTIONS} value={view} onChange={setView} />
+        </div>
+      )}
       {error && (
         <div className="mx-auto mt-3 flex max-w-3xl items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{error}</span>
@@ -769,11 +839,12 @@ export function NotesWorkspace() {
 
       {/* Context tree — rendered INTO the global Sidebar's docked card (it owns the
           rail + tree container chrome); we just supply the tree content via a portal.
-          host is null off /context, when collapsed, or below lg (no docked card). */}
+          host is null when the dock isn't open (undocked, collapsed, or below lg). */}
       {host && !collapsed && tree &&
         createPortal(
-          // Fade the tree in: the Sidebar column unfolds immediately on /context, but
-          // this content lands once its data resolves — the fade smooths that arrival.
+          // Fade the tree in: the Sidebar column unfolds as soon as the dock is
+          // requested, but this content lands once its data resolves — the fade
+          // smooths that arrival.
           <div className="h-full min-h-0" style={{ animation: 'fadeIn 0.3s ease-out' }}>
             <NoteSidebar
               bare
@@ -798,9 +869,13 @@ export function NotesWorkspace() {
           spans to ~viewport bottom; the editor floats its own toolbar over the
           note. Search/Graph keep the boxed surface below the navbar. */}
       {(view === 'editor' || view === 'raw') && selectedPath ? (
-        <div className="relative -mt-24" style={{ height: 'calc(100dvh - 16px)' }}>
+        <div
+          className={embedded ? 'relative min-h-0 flex-1' : 'relative -mt-24'}
+          style={embedded ? undefined : { height: 'calc(100dvh - 16px)' }}
+        >
           <NoteEditor
             key={selectedPath}
+            variant={embedded ? 'boxed' : 'floating'}
             path={selectedPath}
             meta={selectedMeta}
             notes={noteRefs}
@@ -813,7 +888,6 @@ export function NotesWorkspace() {
             entities={entities}
             entityByPath={entityByPath}
             onEnsureEntityNote={onEnsureEntityNote}
-            onAddToPersonal={onAddToPersonal}
             onSave={handleSave}
             onOpenNote={openNote}
             onShowHistory={() => setHistoryOpen(true)}

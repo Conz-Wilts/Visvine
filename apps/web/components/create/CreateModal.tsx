@@ -223,11 +223,12 @@ export default function CreateModal() {
   };
 
   const handleTypeSelect = (t: CreateableType) => {
-    // Context isn't created here — it lives at /context. Close and hand off to the
-    // notes workspace, which auto-opens its New-note dialog (see ?new=note).
+    // Context isn't created here — it lives in the Directory's Context view.
+    // Close and hand off to the embedded notes workspace, which auto-creates a
+    // "New note" (see ?new=note).
     if (t === 'context') {
       handleClose();
-      router.push('/context?new=note');
+      router.push('/directory?view=context&new=note');
       return;
     }
     // Channels aren't created here either — hand off to the Channels page, which

@@ -27,6 +27,13 @@
   padding-top: 150px;
 }
 
+/* Boxed variant (the directory Context view): the toolbar pill floats at the
+ * top of the fixed-height box (top-2), so the column only needs enough
+ * head-room to clear it — not the navbar bleed of the floating layout. */
+.notes-column--boxed {
+  padding-top: 64px;
+}
+
 /* The note title — rendered above the body from frontmatter, in heading style so
  * every note opens with a clear, prominent title. The body no longer carries a
  * duplicate `# Title` line, so this is the single source of the visible title. */

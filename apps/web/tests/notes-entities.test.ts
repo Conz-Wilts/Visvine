@@ -6,6 +6,7 @@ import {
   parseEntityHref,
   entityKindOfPath,
   entityStub,
+  resolveEntityNode,
 } from '../lib/notes/entities';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
 
@@ -65,4 +66,29 @@ test('entityStub escapes tricky names so frontmatter still parses', () => {
   assert.equal(fm.type, 'Company');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
   assert.deepEqual(fm.tags, ['company']);
+});
+
+test('resolveEntityNode resolves through the node map, never by string surgery', () => {
+  // Org ids are NOT uniform ('org:halter' in seeds, 'organization:<slug>' from
+  // the create modal), so the same companies/ path can back either id shape —
+  // only the map (built by entityNotePath over real nodes) can invert it.
+  const seedOrg = { id: 'org:halter', type: 'organization' };
+  const modalOrg = { id: 'organization:halter', type: 'Organization' };
+  assert.equal(entityNotePath(seedOrg), 'companies/halter.md');
+  assert.equal(entityNotePath(modalOrg), 'companies/halter.md');
+
+  const viaSeed = new Map([[entityNotePath(seedOrg)!, { id: seedOrg.id }]]);
+  const viaModal = new Map([[entityNotePath(modalOrg)!, { id: modalOrg.id }]]);
+  assert.equal(resolveEntityNode('companies/halter.md', viaSeed), 'org:halter');
+  assert.equal(resolveEntityNode('companies/halter.md', viaModal), 'organization:halter');
+
+  const people = new Map([['people/craig-piggott.md', { id: 'person:craig-piggott' }]]);
+  assert.equal(resolveEntityNode('people/craig-piggott.md', people), 'person:craig-piggott');
+  // Entity-shaped path with no node in the map (deleted node / other community /
+  // map still loading) → null, so callers fall back to opening in place.
+  assert.equal(resolveEntityNode('people/unknown.md', people), null);
+  // Non-entity paths are never resolved, whatever the map contains.
+  assert.equal(resolveEntityNode('notes/welcome.md', new Map([['notes/welcome.md', { id: 'x' }]])), null);
+  // Tolerates a missing map.
+  assert.equal(resolveEntityNode('people/craig-piggott.md', null), null);
 });

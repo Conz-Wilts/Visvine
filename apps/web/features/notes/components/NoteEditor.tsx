@@ -32,7 +32,6 @@ import {
 } from 'lucide-react'
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
-import { EntityNoteHeader } from './EntityNoteHeader'
 import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
 import { parseEntityHref } from '@/lib/notes/entities'
@@ -64,8 +63,6 @@ interface NoteEditorProps {
   entities?: PickerEntity[]
   entityByPath?: Map<string, PickerEntity>
   onEnsureEntityNote?: (entity: PickerEntity) => Promise<string>
-  // Keep a private copy of an entity context note in the user's personal brain.
-  onAddToPersonal?: (path: string) => void
   onSave: (path: string, content: string, origin?: string) => void
   onOpenNote: (path: string) => void
   onOpenTag?: (tag: string) => void
@@ -73,6 +70,16 @@ interface NoteEditorProps {
   onShowHistory?: () => void
   exportHref?: string
   onDelete?: () => void
+  // Layout variant:
+  //  - 'floating' (default): the /context-era full-bleed layout — the note is
+  //    its own scroll surface bleeding up behind the navbar, toolbar pinned at
+  //    top-[88px].
+  //  - 'boxed': inside a fixed-height box (the directory Context view) — same
+  //    internal scroll, but the toolbar pins to the top of the box.
+  //  - 'embedded': the profile Context tab — natural page flow (the page owns
+  //    scrolling), no entity header / big title (the profile above the tab IS
+  //    the identity), toolbar as a sticky in-flow row.
+  variant?: 'floating' | 'boxed' | 'embedded'
 }
 
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
@@ -116,14 +123,16 @@ export function NoteEditor({
   entities,
   entityByPath,
   onEnsureEntityNote,
-  onAddToPersonal,
   onSave,
   onOpenNote,
   onOpenTag,
   onShowHistory,
   exportHref,
   onDelete,
+  variant = 'floating',
 }: NoteEditorProps) {
+  const embedded = variant === 'embedded'
+  const floating = variant === 'floating'
   const [rawContent, setRawContent] = useState(initialContent)
   const [linkPickerOpen, setLinkPickerOpen] = useState(false)
   // Viewport rect of the caret when `[[` opened the picker, so it can dock just
@@ -384,43 +393,109 @@ export function NoteEditor({
     }
   }, [editor, refactoring, flush])
 
-  // Title and entity id come from the note's OWN frontmatter (parsed from the
-  // loaded content), falling back to the index `meta`. Deriving from content means
-  // the entity card still renders when the open note isn't in the current brain's
-  // index — e.g. a shared company note opened from the personal brain (meta is null).
-  const ownFrontmatter = useMemo(() => parseFrontmatter(initialContent), [initialContent])
+  // The title shown above the body: index meta, else the note's own frontmatter
+  // (parsed from content — so notes outside this brain's index still title).
+  // Entity context notes normally never open here (the workspace routes them to
+  // their profile's Context tab); the rare fallback (unresolvable node) renders
+  // the plain title like any other note.
   const noteTitle = (meta?.title?.trim() || titleFromContent(initialContent, path)) ?? path
 
-  // Entity context notes (a directory person/company, carrying a `node:` id in
-  // frontmatter) open with an identity card + expandable profile instead of the
-  // plain title. Avatar/headline come from the cached directory entity, keyed by
-  // the note path; the node id (for the embed + deep-link) comes from frontmatter.
-  const rawNode = meta?.frontmatter?.node ?? ownFrontmatter.node
-  const entityNodeId = rawNode ? String(rawNode) : null
-  const entity = entityNodeId ? (entityByPath?.get(path) ?? null) : null
+  // The formatting pill and the ⋯ actions menu are shared between two layouts:
+  // floating overlays in the full workspace, a sticky in-flow row when embedded
+  // (the profile Context tab scrolls with the page, so overlays can't anchor).
+  const formatPill =
+    canEdit && mode === 'wysiwyg' && editor ? (
+      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
+        <BlockTypeSelect editor={editor} />
+        <Divider />
+        <ToolbarButton label="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
+          <BoldIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton label="Italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
+          <ItalicIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <Divider />
+        <ToolbarButton label="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
+          <ListIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton label="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
+          <ListOrderedIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton label="Checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
+          <ListChecksIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <Divider />
+        <ToolbarButton label="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
+          <QuoteIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton label="Code" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
+          <CodeIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          label="Table"
+          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        >
+          <TableIcon className="h-4 w-4" />
+        </ToolbarButton>
+        {aiConfigured && (
+          <>
+            <Divider />
+            <button
+              type="button"
+              onClick={refactor}
+              disabled={refactoring}
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-brand-dark-green transition hover:bg-brand-light-bg disabled:opacity-50"
+            >
+              <SparklesIcon className="h-3.5 w-3.5" />
+              {refactoring ? 'Refactoring…' : 'Refactor'}
+            </button>
+          </>
+        )}
+      </div>
+    ) : null
+
+  const actionsMenu =
+    onShowHistory || exportHref || onDelete ? (
+      <NoteActionsMenu onShowHistory={onShowHistory} exportHref={exportHref} onDelete={onDelete} />
+    ) : null
 
   return (
-    <div className="relative h-full">
-      {/* Body, references, and freshness line are the full-height scroll surface:
-          the note fills the editor and scrolls up behind the floating toolbar and
-          the translucent navbar. Nothing boxes it — only overflow clips it. */}
-      <div className="h-full overflow-y-auto">
-        <div className="notes-column notes-column--floating">
-          {mode === 'wysiwyg' &&
-            (entityNodeId ? (
-              // Entity context note: identity card + expandable directory profile.
-              <EntityNoteHeader
-                nodeId={entityNodeId}
-                name={entity?.name ?? noteTitle}
-                subtitle={entity?.subtitle ?? null}
-                imageUrl={entity?.image_url ?? null}
-                onAddToPersonal={onAddToPersonal ? () => onAddToPersonal(path) : undefined}
-              />
-            ) : (
-              // The note title — rendered as the page heading from frontmatter, so
-              // every note opens with a styled title and the body carries none.
-              <h1 className="notes-title">{noteTitle}</h1>
-            ))}
+    <div className={embedded ? 'relative' : 'relative h-full'}>
+      {/* Embedded: the pill + actions ride a sticky row that clears the navbar
+          (top-16) and the profile tab bar (h-12 sticky at top-20) as the page
+          scrolls. In the workspace they're absolute overlays instead (below). */}
+      {embedded && (formatPill || actionsMenu) && (
+        <div className="pointer-events-none sticky top-32 z-30 mb-4 flex items-center justify-center gap-2">
+          {formatPill}
+          {actionsMenu && <div className="pointer-events-auto">{actionsMenu}</div>}
+        </div>
+      )}
+      {embedded && error && (
+        <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
+            ✕
+          </button>
+        </div>
+      )}
+      {/* Body, references, and freshness line. Workspace: the full-height scroll
+          surface — the note fills the editor and scrolls up behind the floating
+          toolbar and the translucent navbar. Embedded: natural height, the page
+          owns the scroll. */}
+      <div className={embedded ? '' : 'h-full overflow-y-auto'}>
+        <div
+          className={
+            floating
+              ? 'notes-column notes-column--floating'
+              : embedded
+                ? 'notes-column'
+                : 'notes-column notes-column--boxed'
+          }
+        >
+          {/* The note title — rendered as the page heading from frontmatter, so
+              every note opens with a styled title and the body carries none.
+              (Embedded/profile tab: the profile above IS the identity.) */}
+          {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
           {mode === 'wysiwyg' ? (
             <EditorContent editor={editor} />
           ) : (
@@ -447,71 +522,32 @@ export function NoteEditor({
         )}
       </div>
 
-      {/* Floating formatting toolbar — pinned just below the navbar, centred over
-          the note. The wrapper ignores pointer events so the empty area lets clicks
-          fall through to the text; only the pill itself is interactive. */}
-      {canEdit && mode === 'wysiwyg' && editor && (
-        <div className="pointer-events-none absolute inset-x-0 top-[88px] z-30 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
-            <BlockTypeSelect editor={editor} />
-            <Divider />
-            <ToolbarButton label="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
-              <BoldIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton label="Italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
-              <ItalicIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <Divider />
-            <ToolbarButton label="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
-              <ListIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton label="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
-              <ListOrderedIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton label="Checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
-              <ListChecksIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <Divider />
-            <ToolbarButton label="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
-              <QuoteIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton label="Code" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
-              <CodeIcon className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton
-              label="Table"
-              onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-            >
-              <TableIcon className="h-4 w-4" />
-            </ToolbarButton>
-            {aiConfigured && (
-              <>
-                <Divider />
-                <button
-                  type="button"
-                  onClick={refactor}
-                  disabled={refactoring}
-                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-brand-dark-green transition hover:bg-brand-light-bg disabled:opacity-50"
-                >
-                  <SparklesIcon className="h-3.5 w-3.5" />
-                  {refactoring ? 'Refactoring…' : 'Refactor'}
-                </button>
-              </>
-            )}
-          </div>
+      {/* Floating formatting toolbar (workspace only) — pinned just below the
+          navbar, centred over the note. The wrapper ignores pointer events so the
+          empty area lets clicks fall through to the text; only the pill itself is
+          interactive. Embedded mode renders the same pill in the sticky row above. */}
+      {!embedded && formatPill && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 ${
+            floating ? 'top-[88px]' : 'top-2'
+          }`}
+        >
+          {formatPill}
         </div>
       )}
 
-      {/* Floating note actions — a ⋯ "more" menu (History / Download / Delete)
-          pinned top-right, above the note, never in a toolbar row. */}
-      {(onShowHistory || exportHref || onDelete) && (
-        <div className="absolute right-4 top-[88px] z-40">
-          <NoteActionsMenu onShowHistory={onShowHistory} exportHref={exportHref} onDelete={onDelete} />
-        </div>
+      {/* Floating note actions (workspace only) — a ⋯ "more" menu (History /
+          Download / Delete) pinned top-right, above the note. */}
+      {!embedded && actionsMenu && (
+        <div className={`absolute right-4 z-40 ${floating ? 'top-[88px]' : 'top-2'}`}>{actionsMenu}</div>
       )}
 
-      {error && (
-        <div className="pointer-events-none absolute inset-x-0 top-[140px] z-30 flex justify-center px-4">
+      {!embedded && error && (
+        <div
+          className={`pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 ${
+            floating ? 'top-[140px]' : 'top-16'
+          }`}
+        >
           <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             <span>{error}</span>
             <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">

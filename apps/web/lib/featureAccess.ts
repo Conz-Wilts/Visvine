@@ -13,6 +13,15 @@ import type { CommunityFeatureConfig } from '@/lib/types';
 export const CORE_FEATURE_KEYS: string[] = ['directory'];
 
 /**
+ * Feature keys that stay toggleable but carry NO sidebar nav item:
+ * - `messages` lives in the top navbar beside the profile icon.
+ * - `notes` (label "Context") merged into the Directory — it surfaces as the
+ *   directory's Context view and the Context tab on entity profiles, not as a
+ *   destination of its own.
+ */
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages', 'notes'];
+
+/**
  * Is `key` enabled for a community? Core features are always enabled; any other
  * feature is enabled unless `featureConfig.enabled[key]` is explicitly `false` —
  * so existing communities (empty config) keep every surface by default.

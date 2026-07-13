@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CORE_FEATURE_KEYS,
+  NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
@@ -31,6 +32,15 @@ describe('isFeatureEnabled', () => {
 
   it('lists directory as the only core feature', () => {
     assert.deepEqual(CORE_FEATURE_KEYS, ['directory']);
+  });
+
+  it('hides messages and notes from the nav rail while keeping them toggleable', () => {
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages', 'notes']);
+    // Nav-hidden ≠ disabled: notes stays a normal toggle (it gates the
+    // directory's Context view + the profile Context tabs).
+    assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
+    assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), false);
+    assert.equal(canAccessFeature({ enabled: { notes: true } }, 'notes', false), true);
   });
 });
 

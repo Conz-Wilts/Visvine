@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { FEATURES, isFeatureEnabled, isDirectoryPrivate, visibleFeatures } from '@/lib/features';
+import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, visibleFeatures } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
 import { SettingsCard } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
@@ -67,8 +67,11 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   };
 
   const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate };
-  // What a regular member's sidebar rail shows with the current config.
-  const memberRail = visibleFeatures(currentConfig, false).filter(f => f.key !== 'messages');
+  // What a regular member's sidebar rail shows with the current config
+  // (messages + notes are toggleable but nav-less — see NAV_HIDDEN_FEATURE_KEYS).
+  const memberRail = visibleFeatures(currentConfig, false).filter(
+    f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)
+  );
   const messagesOn = isFeatureEnabled(currentConfig, 'messages');
 
   return (

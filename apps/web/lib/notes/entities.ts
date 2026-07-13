@@ -56,6 +56,21 @@ export function entityKindOfPath(path: string): EntityKind | null {
   return null
 }
 
+// Resolve an entity-note path back to its directory node id via the loaded node
+// map. Node ids are NOT reconstructible from paths by string surgery — the org
+// prefix varies ('org:halter' in seeds vs 'organization:<slug>' from the create
+// modal) and idSlug is lossy — so the map, built by entityNotePath over real
+// nodes, is the only sound reverse direction. Null for non-entity paths and for
+// entity paths whose node isn't in the map (deleted node, other community,
+// directory still loading) — callers fall back to opening the note in place.
+export function resolveEntityNode(
+  path: string,
+  entityByPath: ReadonlyMap<string, { id: string }> | null | undefined,
+): string | null {
+  if (!entityKindOfPath(path)) return null
+  return entityByPath?.get(path)?.id ?? null
+}
+
 // Default markdown for an auto-created entity context note. Carries the directory
 // `node:` id in frontmatter so the note view can link back to the directory profile.
 export function entityStub(node: EntityNodeLike): string {

@@ -2,15 +2,21 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 
-export type ProfileTab = 'about' | 'connections' | 'communities' | 'activity';
+export type ProfileTab = 'about' | 'connections' | 'communities' | 'activity' | 'context';
 
-interface TabConfig {
+export interface TabConfig {
   id: ProfileTab;
   label: string;
   count?: number;
 }
 
-function getTabsForType(nodeType: string, connectionCount: number, communityCount: number, activityCount: number): TabConfig[] {
+function getTabsForType(
+  nodeType: string,
+  connectionCount: number,
+  communityCount: number,
+  activityCount: number,
+  showContextTab: boolean
+): TabConfig[] {
   const aboutTab: TabConfig = { id: 'about', label: 'About' };
   const activityTab: TabConfig = { id: 'activity', label: 'Activity' };
 
@@ -35,7 +41,15 @@ function getTabsForType(nodeType: string, connectionCount: number, communityCoun
   };
 
   const noCommunitiesTypes = new Set(['Event', 'Group']);
-  const tabs: TabConfig[] = [aboutTab, connectionsTab];
+  const tabs: TabConfig[] = [aboutTab];
+
+  // Context sits right after About: an entity's notes are a first-class facet
+  // of its profile, not an afterthought behind the connection lists.
+  if (showContextTab) {
+    tabs.push({ id: 'context', label: 'Context' });
+  }
+
+  tabs.push(connectionsTab);
 
   if (!noCommunitiesTypes.has(nodeType) && communityCount > 0) {
     tabs.push(communitiesTab);
@@ -52,9 +66,14 @@ interface ProfileTabBarProps {
   nodeType: string;
   activeTab: ProfileTab;
   onTabChange: (tab: ProfileTab) => void;
-  connectionCount: number;
-  communityCount: number;
+  connectionCount?: number;
+  communityCount?: number;
   activityCount?: number;
+  /** Append a Context tab to the type-derived tab set (entity nodes only). */
+  showContextTab?: boolean;
+  /** Explicit tab set, overriding getTabsForType — used by the person profile
+   *  for its two-tab Profile | Context header. */
+  tabs?: TabConfig[];
   /** Override sticky offset — defaults to top-20 (80px navbar). Pass 'top-0' for full-screen mode. */
   stickyTop?: string;
 }
@@ -63,14 +82,18 @@ export default function ProfileTabBar({
   nodeType,
   activeTab,
   onTabChange,
-  connectionCount,
-  communityCount,
+  connectionCount = 0,
+  communityCount = 0,
   activityCount = 0,
+  showContextTab = false,
+  tabs: tabsOverride,
   stickyTop = 'top-20',
 }: ProfileTabBarProps) {
   const tabs = useMemo(
-    () => getTabsForType(nodeType, connectionCount, communityCount, activityCount),
-    [nodeType, connectionCount, communityCount, activityCount]
+    () =>
+      tabsOverride ??
+      getTabsForType(nodeType, connectionCount, communityCount, activityCount, showContextTab),
+    [tabsOverride, nodeType, connectionCount, communityCount, activityCount, showContextTab]
   );
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });

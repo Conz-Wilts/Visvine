@@ -56,15 +56,16 @@ const TOUR_STEPS: TourStep[] = [
     align: 'center',
   },
   {
-    // The notes feature's registry key is "notes" (its nav label is "Context"),
-    // so the Sidebar renders data-tour="nav-notes".
+    // Context lives inside the Directory now: the 4th option on the view
+    // toggle (data-tour="view-toggle" on SearchAndFilters) plus a Context tab
+    // on every person/organization profile.
     leg: 'directory',
-    selector: '[data-tour="nav-notes"]',
-    title: 'Context: your personal brain',
+    selector: '[data-tour="view-toggle"]',
+    title: 'Context: your community brain',
     description:
-      'Capture private notes and everything you learn about the people you meet. Link people and ideas with [[ ]] to build up your own map, and only you can see your personal notes.',
-    side: 'right',
-    align: 'start',
+      'Flip the directory to the Context view to capture notes about the people and companies here. Link them with [[ ]] to build up your map — every person and organization also carries its context right on its profile.',
+    side: 'bottom',
+    align: 'end',
   },
   {
     leg: 'directory',

@@ -10,7 +10,6 @@ import { useRouter } from 'next/navigation';
  */
 export default function InviteActions({
   token,
-  communityId,
   initialStatus,
 }: {
   token: string;
@@ -25,7 +24,7 @@ export default function InviteActions({
   if (status === 'active') {
     return (
       <button
-        onClick={() => router.push(`/directory?community=${encodeURIComponent(communityId)}`)}
+        onClick={() => router.push('/directory')}
         className="mt-6 w-full rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
       >
         Open community

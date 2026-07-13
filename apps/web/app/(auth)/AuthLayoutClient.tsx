@@ -7,6 +7,7 @@ import { HeaderProvider } from "@/lib/contexts/HeaderContext";
 import Navbar from "@/components/layout/Navbar";
 import { CommunityProvider, useCommunity } from "@/lib/contexts/CommunityContext";
 import { FEATURES, canAccessFeature, visibleFeatures } from "@/lib/features";
+import { NAV_HIDDEN_FEATURE_KEYS } from "@/lib/featureAccess";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
 import type { CommunityFeatureConfig } from "@/lib/types";
 import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/CommunityDesignContext";
@@ -36,7 +37,8 @@ function useFeatureRouteGuard() {
       (f) => pathname === f.href || pathname.startsWith(f.href + "/")
     );
     if (onFeature && !canAccessFeature(config, onFeature.key, isAdmin)) {
-      const fallback = visibleFeatures(config, isAdmin).filter((f) => f.key !== "messages")[0]?.href ?? "/";
+      const fallback =
+        visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key))[0]?.href ?? "/";
       router.replace(fallback);
     }
   }, [currentCommunity, loading, isAdmin, pathname, router]);
@@ -45,16 +47,12 @@ function useFeatureRouteGuard() {
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { backgroundStyle } = useCommunityDesign();
   const { expanded } = useSidebar();
-  const pathname = usePathname();
   useFeatureRouteGuard();
 
-  // /context owns its own scroll (fixed-height panels; the editor deliberately
-  // bleeds up behind the navbar via a negative margin), so its <main> must NOT be
-  // a scroll container — `overflow-visible` preserves that bleed exactly. Every
-  // other page scrolls, and we want that scroll to live in <main> — not on the
-  // document — so the green scrollbar starts BELOW the fixed navbar instead of
-  // running up its right edge to the top of the viewport.
-  const contextView = pathname.startsWith('/context'); // scroll owned by the page
+  // Every page scrolls inside <main> — not on the document — so the green
+  // scrollbar starts BELOW the fixed navbar instead of running up its right
+  // edge to the top of the viewport. (/context, which used to own its scroll
+  // via an overflow-visible special case, is a redirect now.)
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-brand-bg" style={backgroundStyle}>
@@ -71,7 +69,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
           <main> is the scroll container (mt-16 sits it below the fixed navbar), so
           its scrollbar starts under the navbar rather than at the viewport top. */}
       <main
-        className={`flex-1 mt-16 pt-4 pb-6 scroll-pt-32 ${contextView ? 'overflow-visible' : 'overflow-y-auto'}`}
+        className="flex-1 mt-16 pt-4 pb-6 scroll-pt-32 overflow-y-auto"
         style={{
           paddingLeft: (expanded ? EXPANDED_W : COLLAPSED_W) + 24,
           scrollbarGutter: 'stable',

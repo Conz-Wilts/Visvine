@@ -1,24 +1,16 @@
-'use client'
+import { redirect } from 'next/navigation'
+import { contextRedirectUrl } from '@/lib/notes/contextRedirect'
 
 /**
- * Notes — a community-scoped, DB-backed markdown knowledge surface. Each
- * community has a shared "Community brain" (all members) and each member has a
- * personal brain; the workspace toggles between them. Notes are markdown with
- * YAML frontmatter, OKF [[links]], a force-directed link graph, backlinks,
- * related-notes, revision history, trash, and optional AI assist — ported from
- * the blackbird-brain app into Visvine's design system. See lib/notes/* for the
- * store + pure logic and app/api/notes/* for the REST surface.
+ * /context is retired — Context merged into the Directory. The notes workspace
+ * now renders as the directory's Context view (/directory?view=context) and
+ * each entity's context note lives on its profile (/directory/<id>?tab=context).
+ * This server redirect keeps every old deep link (incl. ?new=note) working.
  */
-
-import { Suspense } from 'react'
-import { NotesWorkspace } from '@/features/notes/components/NotesWorkspace'
-
-export default function NotesPage() {
-  // Suspense boundary: NotesWorkspace reads useSearchParams (the ?new=note hand-off
-  // from the global "Create new → Context" tile).
-  return (
-    <Suspense fallback={null}>
-      <NotesWorkspace />
-    </Suspense>
-  )
+export default async function ContextRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(contextRedirectUrl(await searchParams))
 }
