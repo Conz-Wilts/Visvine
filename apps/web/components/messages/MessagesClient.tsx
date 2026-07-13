@@ -369,34 +369,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
   }, []);
 
-  // Web push subscription (best-effort; only if VAPID configured server-side)
-  useEffect(() => {
-    (async () => {
-      if (typeof window === 'undefined') return;
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-      try {
-        const res = await fetch('/api/push/subscribe');
-        const { publicKey } = await res.json();
-        if (!publicKey) return;
-        const permission = Notification.permission === 'default'
-          ? await Notification.requestPermission()
-          : Notification.permission;
-        if (permission !== 'granted') return;
-        const reg = await navigator.serviceWorker.register('/sw.js');
-        const existing = await reg.pushManager.getSubscription();
-        const sub = existing ?? await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: publicKey,
-        });
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sub.toJSON()),
-        });
-      } catch { /* ignore */ }
-    })();
-  }, []);
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -505,14 +477,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           const normalized: SerializedMessage = { ...payload.message, isOwn: payload.message.sender.id === currentUser.id };
           if (payload.conversationId === selectedConversationRef.current) {
             setMessages((prev) => prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]);
-            // Report delivered immediately
-            if (!normalized.isOwn) {
-              void fetch(`/api/messages/conversations/${payload.conversationId}/messages/${normalized.id}/delivery`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ state: 'delivered' }),
-              }).catch(() => {});
-            }
             // Smart auto-scroll: only if user is near bottom, else show pill
             if (atBottomRef.current || normalized.isOwn) {
               requestAnimationFrame(() => {

@@ -1,7 +1,7 @@
 'use client'
 
-// Obsidian-style canvas force graph for a brain: notes are dots (sized gently by
-// degree), resolved OKF links are thin faint lines. A live d3-force simulation —
+// Obsidian-style canvas force graph for a brain: notes are uniform dots,
+// resolved OKF links are thin faint lines. A live d3-force simulation —
 // seeded from the shared graphLayout engine so it only "breathes into place" —
 // animates the settle; labels fade in below dots as you zoom; hovering a note
 // lights it and its neighbors while the rest dims with a smooth tween. Nodes are
@@ -27,7 +27,6 @@ import type { GraphData } from '@/lib/notes/shared/types'
 interface SimNode extends SimulationNodeDatum {
   id: string
   label: string
-  degree: number
   radius: number
 }
 interface SimLink {
@@ -369,9 +368,8 @@ export function NotesGraph({ graph, selectedPath, onOpenNote }: NotesGraphProps)
     // Seed positions from the deterministic layout engine so the live sim only
     // has to relax, not untangle — the settle reads as a short breathe-in and
     // the layout stays stable-ish across visits.
-    const radiusOf = (degree: number) => Math.min(C.maxRadius, C.minRadius + Math.sqrt(degree) * 1.5)
     const seed = layoutGraph(
-      graph.nodes.map((n) => ({ id: n.id, r: radiusOf(n.degree) })),
+      graph.nodes.map((n) => ({ id: n.id, r: C.nodeRadius })),
       graph.links.map((l) => ({ source: l.source, target: l.target })),
       { width: 1000, height: 700, idealEdgeLength: C.linkDistance, nodePadding: 4 },
     )
@@ -393,8 +391,7 @@ export function NotesGraph({ graph, selectedPath, onOpenNote }: NotesGraphProps)
       return {
         id: n.id,
         label: n.label,
-        degree: n.degree,
-        radius: radiusOf(n.degree),
+        radius: C.nodeRadius,
         x: (p?.x ?? cx) - cx,
         y: (p?.y ?? cy) - cy,
       }
@@ -425,8 +422,7 @@ export function NotesGraph({ graph, selectedPath, onOpenNote }: NotesGraphProps)
         'link',
         forceLink<SimNode, SimLink & { index?: number }>(links)
           .id((d) => d.id)
-          .distance(C.linkDistance)
-          .strength(C.linkStrength),
+          .distance(C.linkDistance),
       )
       .force('charge', forceManyBody<SimNode>().strength(C.chargeStrength).distanceMax(C.chargeDistanceMax))
       .force('x', forceX<SimNode>(0).strength(C.centerStrength))

@@ -22,7 +22,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
   const [name, setName] = useState(profile.name);
   const [subtitle, setSubtitle] = useState(profile.subtitle ?? '');
   const [location, setLocation] = useState(profile.location ?? '');
-  const [pronouns, setPronouns] = useState(profile.pronouns ?? '');
   const [imageUrl, setImageUrl] = useState(profile.imageUrl ?? null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -34,7 +33,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
       setName(profile.name);
       setSubtitle(profile.subtitle ?? '');
       setLocation(profile.location ?? '');
-      setPronouns(profile.pronouns ?? '');
       setImageUrl(profile.imageUrl ?? null);
       setUploadError(null);
     }
@@ -68,7 +66,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
         name: name.trim(),
         subtitle: subtitle.trim() || null,
         location: location.trim() || null,
-        pronouns: pronouns.trim() || null,
         ...(imageUrl !== (profile.imageUrl ?? null) && { imageUrl }),
       });
       onClose();
@@ -141,15 +138,6 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
               ? <><CountryFlag location={location} className="align-[-2px] mr-1" />{detectedCountry.name} detected — the flag shows next to your location.</>
               : 'End with a country (e.g. “Auckland, New Zealand”) to show a flag.'}
           </p>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-brand-grey mb-1">Pronouns</label>
-          <input
-            value={pronouns}
-            onChange={(e) => setPronouns(e.target.value)}
-            placeholder="e.g. they/them"
-            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
-          />
         </div>
         <ModalFooter onCancel={onClose} saving={saving} />
       </form>

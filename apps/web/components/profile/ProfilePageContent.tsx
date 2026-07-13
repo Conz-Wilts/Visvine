@@ -184,12 +184,13 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
         {/* identity card */}
         <section data-tour="profile-hero" className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 mb-5">
+          {/* my-auto centers the identity block against the tall avatar card,
+              pushing the stat strip to the bottom edge */}
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
           {/* identity — every fact appears exactly once on this page */}
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
               <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
-              {profile.pronouns && <span className="text-sm text-text-muted">{profile.pronouns}</span>}
               {aliasName && (
                 <span
                   className={`inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border ${aliasColor ? '' : 'bg-surface-2 text-text-muted border-border-subtle'}`}
@@ -247,7 +248,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           </div>
 
           {/* stat strip — pinned to the card's bottom edge */}
-          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 mt-auto pt-4 border-t border-border-subtle">
+          <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
             <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'}
                       onClick={communitiesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
             {experience.length > 0 && (

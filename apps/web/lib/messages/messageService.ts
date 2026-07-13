@@ -14,7 +14,6 @@ import {
 } from './serializers';
 import { takeToken } from './rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
-import { sendPushToUser } from '@/lib/webpush';
 
 export async function listMessagesForConversation(
   currentUserId: string,
@@ -155,35 +154,8 @@ export async function sendMessage(
 
   const message = serializeMessage(fullMessage, currentUserId, members);
 
-  // Create delivery rows for all recipients (fire-and-forget)
-  const recipientIds = members.map((m) => m.userId).filter((id) => id !== currentUserId);
-  if (recipientIds.length) {
-    void prisma.messageDelivery.createMany({
-      data: recipientIds.map((userId) => ({ messageId, userId })),
-      skipDuplicates: true,
-    }).catch(() => {});
-  }
-
   // Link previews (fire-and-forget, best-effort)
   void attachPreviewsToMessage(messageId, payload.text).catch(() => {});
-
-  // Web push to recipients whose member is not muted
-  void (async () => {
-    const mutedFilter = new Set(
-      members
-        .filter((m) => m.mutedUntil && m.mutedUntil.getTime() > Date.now())
-        .map((m) => m.userId),
-    );
-    for (const uid of recipientIds) {
-      if (mutedFilter.has(uid)) continue;
-      void sendPushToUser(uid, {
-        title: fullMessage.sender.name,
-        body: payload.text.slice(0, 140),
-        url: `/messages/${conversationId}`,
-        tag: conversationId,
-      }).catch(() => {});
-    }
-  })();
 
   return {
     message,

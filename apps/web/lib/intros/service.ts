@@ -23,7 +23,6 @@ import {
   sendIntroConnectedEmail,
   sendIntroDeclinedEmail,
 } from '@/lib/email/introEmails';
-import { sendPushToUser } from '@/lib/webpush';
 import { getMutuals } from './mutuals';
 import type { ConversationIntroContext, IntroInbox, IntroNodeSummary, IntroRequestDTO, IntroStatus } from './types';
 import type { CreateIntroInput, IntroActionInput } from '@/lib/schemas/introSchemas';
@@ -365,16 +364,7 @@ async function notifyDeclined(intro: IntroRequest): Promise<void> {
 
   await Promise.all(recipients.flatMap((recipient) => {
     if (!recipient) return [];
-    // Push and email are independent — send them concurrently.
     const sends: Promise<unknown>[] = [];
-    if (recipient.userId) {
-      sends.push(sendPushToUser(recipient.userId, {
-        title: 'Introduction declined',
-        body: `${declinerName} has politely declined the request for the intro.`,
-        url: '/messages?tab=intros',
-        tag: `intro-declined-${intro.id}`,
-      }).catch(() => {}));
-    }
     if (recipient.email) {
       sends.push(sendIntroDeclinedEmail({
         to: recipient.email,

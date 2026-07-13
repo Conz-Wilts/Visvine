@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
       columnType: column_type,
       options: options ?? undefined,
       position: count,
-      isGlobal: true,
     },
   });
 

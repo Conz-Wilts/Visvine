@@ -96,7 +96,6 @@ function DmProfile({ conversation, currentUserId }: { conversation: Conversation
       <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
         <Avatar name={displayName} imageUrl={imageUrl} size="xl" className="!h-16 !w-16 !text-lg" />
         <p className="mt-3 text-base font-semibold text-text-primary">{displayName}</p>
-        {person?.pronouns && <p className="text-xs text-text-muted">{person.pronouns}</p>}
         {person?.subtitle && <p className="mt-1 text-sm text-text-secondary">{person.subtitle}</p>}
         {person?.openToWork && (
           <span className="mt-2 rounded-full bg-brand-green/15 px-2.5 py-1 text-[11px] font-semibold text-brand-dark-green">

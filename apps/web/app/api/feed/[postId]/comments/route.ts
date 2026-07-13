@@ -13,7 +13,7 @@ export async function POST(
   }
 
   const { postId } = await params;
-  const { content, mentions, parentId } = await req.json();
+  const { content, parentId } = await req.json();
 
   if (!content?.trim()) {
     return NextResponse.json({ error: 'content required' }, { status: 400 });
@@ -38,14 +38,6 @@ export async function POST(
       authorId: session.userId,
       parentId: parentId || null,
       content: content.trim(),
-      mentions: mentions?.length
-        ? {
-            create: mentions.map((userId: string) => ({
-              mentionedUserId: userId,
-              postId,
-            })),
-          }
-        : undefined,
     },
     include: {
       author: {

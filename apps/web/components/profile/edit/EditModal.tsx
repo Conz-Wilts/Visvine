@@ -17,7 +17,14 @@ export default function EditModal({ title, open, onClose, children, size = 'md' 
 
   if (!open) return null;
 
-  const maxW = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg';
+  // Scale with the viewport: never narrower than the old fixed cap, grow as a
+  // share of screen width on large monitors, with a sane upper bound.
+  const maxW =
+    size === 'sm'
+      ? 'max-w-[clamp(24rem,30vw,32rem)]'
+      : size === 'lg'
+        ? 'max-w-[clamp(42rem,55vw,68rem)]'
+        : 'max-w-[clamp(32rem,42vw,52rem)]';
 
   return (
     <div

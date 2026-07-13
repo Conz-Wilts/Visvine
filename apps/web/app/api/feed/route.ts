@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { communityId, content, imageUrls, mentions } = body;
+  const { communityId, content, imageUrls } = body;
 
   if (!communityId || !content?.trim()) {
     return NextResponse.json({ error: 'communityId and content required' }, { status: 400 });
@@ -98,13 +98,6 @@ export async function POST(req: NextRequest) {
             create: imageUrls.map((url: string, i: number) => ({
               imageUrl: url,
               position: i,
-            })),
-          }
-        : undefined,
-      mentions: mentions?.length
-        ? {
-            create: mentions.map((userId: string) => ({
-              mentionedUserId: userId,
             })),
           }
         : undefined,

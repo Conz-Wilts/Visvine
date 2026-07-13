@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useCreateModal } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
@@ -23,10 +23,9 @@ import type { CommunityFeatureConfig } from "@/lib/types";
  *  Expanded (200px): icon same spot, label revealed
  *  Transition: ONLY container width animates. Zero instant flips.
  *
- * On /context the rail extends into a full-height card that ALSO hosts the notes
- * tree (the page portals its tree into the host div below via ContextPanelContext),
- * so the icon rail + tree read as one connected container. Everywhere else it's
- * just the floating icon rail.
+ * The card always spans navbar → viewport bottom. On /context it ALSO hosts the
+ * notes tree (the page portals its tree into the host div below via
+ * ContextPanelContext), so the icon rail + tree read as one connected container.
  */
 
 // Exported so the Navbar seam/fillet and the AuthLayout content padding track the
@@ -44,20 +43,9 @@ const PANEL_W = 256; // /context tree panel width — keep in sync with NotesWor
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
-const DOCKED_H = "calc(100dvh - 88px)"; // full docked height — from navbar bottom (64px) to a 24px gap above the viewport bottom
+const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
 const RAIL_GAP = 8; // gap between the Create block and the nav list
-
-// Natural height of the collapsed icon rail (Create row + nav rows). Used as the
-// concrete un-docked height so the floating card hugs its content instead of
-// running full-height, and so the card can *transition* its height into the docked
-// full height (CSS can't animate to/from `auto`/`h-full`). Seeds the initial render;
-// railRef re-measures the real DOM on mount so this stays correct if the layout changes.
-function railHeightFor(navCount: number): number {
-  const rows = navCount + 1; // + the "More" grid row that lives inside the nav list
-  const navH = rows * ICON_SIZE + Math.max(0, rows - 1) * ITEM_GAP;
-  return RAIL_PAD_Y * 2 + ICON_SIZE /* Create row */ + RAIL_GAP + navH;
-}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -100,17 +88,6 @@ export default function Sidebar() {
   const dockedAdmin = pathname === "/admin" && wide;
   const docked = dockedContext || dockedChannels || dockedAdmin;
   const panelW = dockedChannels ? CHANNELS_PANEL_W : dockedAdmin ? ADMIN_PANEL_W : PANEL_W;
-
-  // Un-docked height of the floating card: a concrete px value (not h-full) so the
-  // card hugs its icon rail and can transition into the docked full height. Seed from
-  // the layout math, then trust the measured DOM (re-measures when nav-item count
-  // changes). Independent of the hover-expand — expanding widens, never heightens.
-  const railRef = useRef<HTMLDivElement>(null);
-  const [railHeight, setRailHeight] = useState(() => railHeightFor(allNav.length));
-  useEffect(() => {
-    const h = railRef.current?.offsetHeight ?? 0;
-    if (h > 0) setRailHeight(h);
-  }, [allNav.length]);
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).
@@ -249,33 +226,25 @@ export default function Sidebar() {
   // navigation — identical placement (card top flush under the navbar at 64px =
   // top-16) and the same entrance animation, never re-mounting. The top edge and
   // top-right corner are squared off (no top border) so the rail reads as one
-  // continuous L-shaped shell with the navbar. On /context the card just grows
-  // full-height and gains the notes-tree column beside the rail; the page portals
-  // its <NoteSidebar> into the host below.
+  // continuous L-shaped shell with the navbar. On /context the card gains the
+  // notes-tree column beside the rail; the page portals its <NoteSidebar> into
+  // the host below.
   return (
     <aside
       className="fixed left-0 top-16 z-40"
       style={entranceStyle}
     >
-      {/* The card's height is explicit (not h-full) so it can transition between the
-          collapsed rail height and the docked full height when entering /context.
-          Flush against the left screen edge: no left padding, and the left corners /
-          border are dropped so it reads as attached to the side rather than floating. */}
+      {/* The card always runs from the navbar to the bottom of the viewport, flush
+          against the left/bottom screen edges: those corners and borders are dropped
+          so it reads as attached to the shell rather than floating. */}
       <div
-        className="flex overflow-hidden rounded-l-none rounded-tr-none rounded-br-2xl border border-l-0 border-t-0 border-border-subtle bg-white"
-        style={{
-          height: docked ? DOCKED_H : railHeight,
-          transition: `height ${dur} ${ease}`,
-        }}
+        className="flex overflow-hidden border-r border-border-subtle bg-white"
+        style={{ height: RAIL_H }}
       >
         {/* Icon rail column — hover-expands; the only width that animates. Hover
-            lives here (not the aside) so hovering the tree never expands the rail.
-            self-start keeps it at its natural height instead of stretching to fill
-            the docked card, so railRef always measures the true collapsed height
-            (the card's bg/border still spans full height when docked). */}
+            lives here (not the aside) so hovering the tree never expands the rail. */}
         <div
-          ref={railRef}
-          className="relative flex shrink-0 flex-col overflow-hidden self-start"
+          className="relative flex shrink-0 flex-col overflow-hidden"
           style={{
             width: expanded ? EXPANDED_W : COLLAPSED_W,
             paddingTop: RAIL_PAD_Y,
