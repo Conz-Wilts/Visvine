@@ -1,7 +1,7 @@
 'use client'
 
 // The note editor: a Tiptap WYSIWYG surface (markdown round-tripped via
-// tiptap-markdown) whose Edit/Raw mode is driven from the workspace view-pill.
+// tiptap-markdown) whose Edit/Raw mode is driven by the surface's Editor/Raw toggle.
 // Markdown is the source of truth, so the frontmatter prefix is split off on load
 // and re-attached on save, the body is what's edited, and `[[` opens a note picker
 // that inserts an OKF [title](/path.md) link. Body, references, and the freshness
@@ -54,7 +54,7 @@ interface NoteEditorProps {
   initialContent: string
   canEdit: boolean
   aiConfigured: boolean
-  // Edit/Raw mode, owned by the workspace view-pill ('editor' → wysiwyg, 'raw' → raw).
+  // Edit/Raw mode, owned by the surface's Editor/Raw toggle (NoteModeToggle).
   mode: 'wysiwyg' | 'raw'
   references: References | null
   related: RelatedNote[] | null

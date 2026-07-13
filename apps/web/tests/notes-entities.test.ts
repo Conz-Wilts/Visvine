@@ -7,6 +7,7 @@ import {
   entityKindOfPath,
   entityStub,
   resolveEntityNode,
+  entityMentionPaths,
 } from '../lib/notes/entities';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
 
@@ -46,6 +47,33 @@ test('path <-> node id round trips', () => {
   assert.equal(entityKindOfPath(path), 'person');
   assert.equal(entityKindOfPath('companies/halter.md'), 'company');
   assert.equal(entityKindOfPath('notes/welcome.md'), null);
+});
+
+test('entityMentionPaths extracts entity-note links from the body only', () => {
+  const md =
+    '---\ntitle: Halter\nnode: "org:halter"\ntags: [company]\n---\n\n' +
+    'Founded by [Craig Piggott](/people/craig-piggott.md). Backed by ' +
+    '[Blackbird](https://blackbird.vc) — see [thesis](/notes/thesis.md) and ' +
+    '[Craig Piggott](/people/craig-piggott.md) again.\n';
+  // External links and non-entity notes are ignored; duplicates collapse.
+  assert.deepEqual(entityMentionPaths('companies/halter.md', md), ['people/craig-piggott.md']);
+});
+
+test('entityMentionPaths resolves relative links and excludes self-links', () => {
+  const md =
+    'Peer: [Aquila](aquila.md). Self: [Halter](/companies/halter.md). ' +
+    'Person: [Craig](../people/craig-piggott.md).\n';
+  assert.deepEqual(entityMentionPaths('companies/halter.md', md), [
+    'companies/aquila.md',
+    'people/craig-piggott.md',
+  ]);
+});
+
+test('entityMentionPaths returns [] for notes with no entity mentions', () => {
+  assert.deepEqual(entityMentionPaths('companies/halter.md', 'Just prose, no links.'), []);
+  assert.deepEqual(entityMentionPaths('notes/welcome.md', '[Craig](/people/craig-piggott.md)'), [
+    'people/craig-piggott.md',
+  ]); // non-entity notes still extract — the sync layer decides whether to act
 });
 
 test('entityStub produces parseable frontmatter carrying the node id', () => {

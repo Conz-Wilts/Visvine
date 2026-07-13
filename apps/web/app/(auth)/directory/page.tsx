@@ -13,8 +13,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
-import type { NBNode, CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
-import { isFeatureEnabled } from '@/lib/featureAccess';
+import type { NBNode, CommunityAlias } from '@/lib/types';
 import { parseDirectoryView, type DirectoryView } from '@/lib/directoryView';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
@@ -28,18 +27,6 @@ const DirectoryGraphView = dynamic(() => import('@/components/dashboard/Director
     <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading graph…</div>
   ),
 });
-
-// Same rationale for the Context view: Tiptap + the notes stack stay off the
-// grid/table bundle until the view is opened.
-const EmbeddedNotesWorkspace = dynamic(
-  () => import('@/features/notes/components/NotesWorkspace').then((m) => m.NotesWorkspace),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading context…</div>
-    ),
-  },
-);
 
 type SortOrder = 'az' | 'za';
 
@@ -77,28 +64,19 @@ function DashboardPageInner() {
   const searchParams = useSearchParams();
 
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
-  const { isAdmin, currentCommunity } = useCommunity();
+  const { isAdmin } = useCommunity();
 
-  // The active view lives in the URL (?view=…) so the Context view is
-  // deep-linkable/refreshable and /context can redirect here. Absent/junk →
-  // grid; context while the notes tool is disabled → grid.
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
-  const currentView = parseDirectoryView(searchParams.get('view'), notesEnabled);
+  // The active view lives in the URL (?view=…) so views are deep-linkable and
+  // refreshable. Absent/junk → grid.
+  const currentView = parseDirectoryView(searchParams.get('view'));
   const isGraphView = currentView === 'graph';
-  const isContextView = currentView === 'context';
-  // Graph + context own their surface: fixed-height container, no page header.
-  const isImmersiveView = isGraphView || isContextView;
+  // The graph owns its surface: fixed-height container, no page header.
+  const isImmersiveView = isGraphView;
 
   const applyView = useCallback((next: DirectoryView) => {
     const params = new URLSearchParams(searchParams.toString());
     if (next === 'grid') params.delete('view');
     else params.set('view', next);
-    // Context-only params don't survive leaving the view.
-    if (next !== 'context') {
-      params.delete('file');
-      params.delete('new');
-    }
     const q = params.toString();
     router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
   }, [searchParams, router, pathname]);
@@ -219,10 +197,10 @@ function DashboardPageInner() {
   // View toggle lives in the navbar, to the left of the profile icon.
   useEffect(() => {
     setHeaderRight(
-      <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} showContext={notesEnabled} />
+      <SearchAndFilters currentView={currentView} onViewChange={handleViewChange} />
     );
     return () => setHeaderRight(null);
-  }, [currentView, handleViewChange, notesEnabled, setHeaderRight]);
+  }, [currentView, handleViewChange, setHeaderRight]);
 
   return (
     <div
@@ -323,16 +301,6 @@ function DashboardPageInner() {
       {isGraphView && (
         <div className="overflow-hidden rounded-xl absolute inset-0 px-6">
           <DirectoryGraphView searchTerm={searchTerm} />
-        </div>
-      )}
-
-      {/* ── Context view — the embedded notes workspace. Its tree docks into the
-           global Sidebar (ContextPanelContext), the body carries the notes
-           graph/editor. Mounted only while active, mirroring the graph view, so
-           the Tiptap bundle, ⌘P shortcuts, and portal stay scoped here. ── */}
-      {isContextView && (
-        <div className="absolute inset-0">
-          <EmbeddedNotesWorkspace embedded />
         </div>
       )}
 

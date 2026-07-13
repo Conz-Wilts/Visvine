@@ -43,7 +43,10 @@ const pool = new pg.Pool({ connectionString });
 const COMM = 'community:blackbird-ventures';
 const SHARED = 'shared';
 const RESET = process.argv.includes('--reset');
-const FOUNDER_NOTE_MODE = 'lead'; // 'lead' | 'all' | 'none'
+// 'all': every founder gets a people/<slug>.md note. Context notes are the
+// source of graph links now (origin 'context'), so every founder must be
+// mentioned from an entity note for the founder↔company edges to exist.
+const FOUNDER_NOTE_MODE = 'all'; // 'lead' | 'all' | 'none'
 
 // ---- taxonomy (kept in sync with add-blackbird-ventures.mjs CRM columns) -----
 

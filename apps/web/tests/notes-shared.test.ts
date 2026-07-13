@@ -1,5 +1,5 @@
 // Unit tests for the reused note pure-logic layer (ported from blackbird-brain
-// into lib/notes/shared). These lock the index/graph/backlink/related/search/
+// into lib/notes/shared). These lock the index/tree/backlink/related/search/
 // merge behavior the whole notes feature is built on. Run with the repo's node
 // test runner: node --import tsx --test tests/notes-shared.test.ts
 import test from 'node:test'
@@ -13,11 +13,10 @@ import {
   extractHashtags,
   resolveOkfLink,
 } from '../lib/notes/shared/markdown'
-import { buildNoteIndex, buildTree, buildGraph, filterGraph } from '../lib/notes/shared/graph'
+import { buildNoteIndex, buildTree } from '../lib/notes/shared/graph'
 import { computeReferences, linkFirstMention } from '../lib/notes/shared/references'
 import { relatedNotes } from '../lib/notes/shared/related'
 import { searchNotes } from '../lib/notes/shared/search'
-import { collectTags, linkInsights } from '../lib/notes/shared/insights'
 import { decideMerge } from '../lib/notes/shared/merge'
 import { coerceMoves } from '../lib/notes/shared/reorganize'
 import type { RawNote } from '../lib/notes/shared/types'
@@ -81,18 +80,6 @@ test('buildTree nests folders then notes', () => {
   assert.ok(folder)
   assert.ok(folder.children!.some((c) => c.path === 'portfolio/canva.md'))
   assert.ok(tree.children!.some((c) => c.kind === 'note' && c.path === 'index.md'))
-})
-
-test('buildGraph counts degree and filterGraph narrows by focus depth', () => {
-  const idx = buildNoteIndex(vault())
-  const graph = buildGraph(idx)
-  assert.equal(graph.nodes.length, 3)
-  assert.equal(graph.links.length, 2) // index→canva and canva→index both resolve (one directed edge each)
-  const canva = graph.nodes.find((n) => n.id === 'portfolio/canva.md')!
-  assert.ok(canva.degree >= 1)
-  const focused = filterGraph(graph, { focus: 'index.md', depth: 1 })
-  assert.ok(focused.nodes.some((n) => n.id === 'portfolio/canva.md'))
-  assert.ok(!focused.nodes.some((n) => n.id === 'portfolio/orphan.md'))
 })
 
 // --- references --------------------------------------------------------------
@@ -164,17 +151,6 @@ test('searchNotes uses AND semantics and returns snippets', () => {
   assert.equal(res[0].path, 'a.md')
   assert.ok(res[0].snippet.includes('quick'))
   assert.equal(searchNotes(docs, '').length, 0)
-})
-
-// --- insights ----------------------------------------------------------------
-
-test('collectTags counts and linkInsights finds orphans + hubs', () => {
-  const idx = buildNoteIndex(vault())
-  const tags = collectTags(idx)
-  assert.ok(tags.some((t) => t.tag === 'portfolio' && t.count === 1))
-  const ins = linkInsights(idx)
-  assert.ok(ins.orphans.some((o) => o.path === 'portfolio/orphan.md'))
-  assert.ok(ins.hubs.length >= 1)
 })
 
 // --- merge -------------------------------------------------------------------

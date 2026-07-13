@@ -20,6 +20,8 @@ import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types
 import { notesApi, type RegistryResponse } from '../lib/notesApi'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
+import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
+import { RevisionHistory } from './RevisionHistory'
 import { BrainGateCard } from './BrainGateCard'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
@@ -72,6 +74,10 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [mode, setMode] = useState<NoteMode>('wysiwyg')
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // Bumped after a revision restore so the load effect re-reads the note.
+  const [reloadKey, setReloadKey] = useState(0)
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const loadSeq = useRef(0)
@@ -130,6 +136,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     setNoteExists(false)
     setReferences(null)
     setRelated(null)
+    setMode('wysiwyg')
     readNoteWithStatus(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
       setRead(r)
@@ -146,7 +153,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     notesApi.list(communityId).then((l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
-  }, [communityId, path])
+  }, [communityId, path, reloadKey])
 
   useEffect(() => {
     if (!toast) return
@@ -194,17 +201,14 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     [communityId],
   )
 
-  // Links inside the note: another entity → that entity's Context tab; a plain
-  // note → the directory's Context view with the note opened.
+  // Links inside the note: another entity → that entity's Context tab. Context
+  // has no standalone surface anymore, so a link to a non-entity note has
+  // nowhere to open — ignore it rather than dead-end on a 404.
   const handleOpenNote = useCallback(
     (p: string) => {
       const targetId = resolveEntityNode(p, entityByPath)
-      if (targetId === nodeId) return
-      if (targetId) {
-        router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
-        return
-      }
-      router.push(`/directory?view=context&file=${encodeURIComponent(p)}`)
+      if (!targetId || targetId === nodeId) return
+      router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
     },
     [entityByPath, nodeId, router],
   )
@@ -248,8 +252,9 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     }
   }, [myPersonalCommunityId, path, node, nodeId])
 
-  // Delete = clear this entity's context (soft-delete; restorable from the
-  // workspace trash). The panel drops back to the empty state.
+  // Delete = clear this entity's context (soft-delete; the row survives in the
+  // notes trash table, but there is no trash UI anymore — restore is a data
+  // operation). The panel drops back to the empty state.
   const handleDelete = useCallback(async () => {
     if (!communityId || !path) return
     try {
@@ -307,16 +312,19 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
         </div>
       )}
 
-      {!isPersonalSpace && myPersonalCommunityId && (
-        <div className="mb-2 flex justify-end">
-          <button
-            type="button"
-            onClick={addToPersonal}
-            title="Keep a private copy of this context note in your personal space"
-            className="rounded-full border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
-          >
-            Add to my notes
-          </button>
+      {(showEditor || (!isPersonalSpace && myPersonalCommunityId)) && (
+        <div className="mb-2 flex items-center justify-end gap-2">
+          {!isPersonalSpace && myPersonalCommunityId && (
+            <button
+              type="button"
+              onClick={addToPersonal}
+              title="Keep a private copy of this context note in your personal space"
+              className="rounded-full border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
+            >
+              Add to my notes
+            </button>
+          )}
+          {showEditor && <NoteModeToggle value={mode} onChange={setMode} />}
         </div>
       )}
 
@@ -334,7 +342,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
             </p>
           )}
           <NoteEditor
-            key={path}
+            key={`${path}:${reloadKey}`}
             variant="embedded"
             path={path}
             meta={openMeta}
@@ -342,7 +350,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
             initialContent={read.status === 'ok' ? read.content : stubContent}
             canEdit={canWrite}
             aiConfigured={aiConfigured}
-            mode="wysiwyg"
+            mode={mode}
             references={references}
             related={related}
             entities={entities}
@@ -350,6 +358,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
             onEnsureEntityNote={ensureEntityNote}
             onSave={handleSave}
             onOpenNote={handleOpenNote}
+            onShowHistory={noteExists ? () => setHistoryOpen(true) : undefined}
             exportHref={noteExists ? notesApi.exportUrl(communityId, path) : undefined}
             onDelete={noteExists && canWrite ? handleDelete : undefined}
           />
@@ -359,6 +368,15 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
           <p className="text-base font-semibold text-text-secondary">No shared context for {node.name} yet.</p>
           <p className="text-sm text-text-muted">Members with write access can start this entity&apos;s context note.</p>
         </div>
+      )}
+
+      {historyOpen && (
+        <RevisionHistory
+          communityId={communityId}
+          path={path}
+          onRestored={() => setReloadKey((k) => k + 1)}
+          onClose={() => setHistoryOpen(false)}
+        />
       )}
     </div>
   )

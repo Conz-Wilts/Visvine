@@ -4,6 +4,8 @@
 // about the entity is a real note — graph, backlinks, and search all work with
 // no special-casing. No fs/DOM access, so this is unit-testable like lib/notes/shared/*.
 
+import { splitFrontmatter, extractMarkdownLinks, resolveOkfLink } from './shared/markdown'
+
 export type EntityKind = 'person' | 'company'
 
 // The minimal shape we need off a directory node (NBNode-compatible).
@@ -69,6 +71,21 @@ export function resolveEntityNode(
 ): string | null {
   if (!entityKindOfPath(path)) return null
   return entityByPath?.get(path)?.id ?? null
+}
+
+// The entity-note paths a note's body links to (people/… & companies/…),
+// excluding the note itself. Frontmatter is ignored; each `[[Mention]]` is an
+// ordinary OKF markdown link, so this is just link extraction + the entity
+// namespace filter. Pure — feeds the context-link sync (lib/notes/entityLinks.ts).
+export function entityMentionPaths(notePath: string, content: string): string[] {
+  const { body } = splitFrontmatter(content)
+  const out = new Set<string>()
+  for (const href of extractMarkdownLinks(body)) {
+    const resolved = resolveOkfLink(href, notePath)
+    const entity = resolved ? parseEntityHref(resolved) : null
+    if (entity && entity !== notePath) out.add(entity)
+  }
+  return [...out]
 }
 
 // Default markdown for an auto-created entity context note. Carries the directory

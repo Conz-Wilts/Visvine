@@ -14,6 +14,8 @@ interface ViewToggleProps<T extends string> {
   onChange: (id: T) => void
   /** Extra classes for the outer container (e.g. to override height). */
   className?: string
+  /** 'sm' fits compact chrome rows (profile tab header); 'md' is the page-level default. */
+  size?: 'md' | 'sm'
 }
 
 function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
@@ -29,7 +31,7 @@ function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
  * The option set may change at runtime (options appearing/disappearing); the
  * pill re-measures and slides to wherever the active option lands.
  */
-export default function ViewToggle<T extends string>({ options, value, onChange, className = '' }: ViewToggleProps<T>) {
+export default function ViewToggle<T extends string>({ options, value, onChange, className = '', size = 'md' }: ViewToggleProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
   const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
   const [pillStyle, setPillStyle] = useState<{ left: number; width: number } | null>(null)
@@ -59,11 +61,15 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
   return (
     <div
       ref={containerRef}
-      className={`relative flex items-center gap-1 rounded-2xl border border-border-default bg-transparent p-1 h-12 ${className}`}
+      className={`relative flex items-center gap-1 border border-border-default bg-transparent ${
+        size === 'sm' ? 'h-9 rounded-xl p-0.5' : 'h-12 rounded-2xl p-1'
+      } ${className}`}
     >
       {pillStyle && (
         <span
-          className="absolute top-1 bottom-1 rounded-xl bg-brand-green shadow-sm"
+          className={`absolute bg-brand-green shadow-sm ${
+            size === 'sm' ? 'top-0.5 bottom-0.5 rounded-lg' : 'top-1 bottom-1 rounded-xl'
+          }`}
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
@@ -81,9 +87,9 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
             buttonRefs.current[i] = el
           }}
           onClick={() => onChange(o.id)}
-          className={`relative z-10 flex h-10 items-center gap-1.5 rounded-xl px-3 text-xs font-semibold transition-colors duration-200 ${
-            value === o.id ? 'text-white' : 'text-text-muted hover:text-text-secondary'
-          }`}
+          className={`relative z-10 flex items-center gap-1.5 font-semibold transition-colors duration-200 ${
+            size === 'sm' ? 'h-7 rounded-lg px-2.5 text-[11px]' : 'h-10 rounded-xl px-3 text-xs'
+          } ${value === o.id ? 'text-white' : 'text-text-muted hover:text-text-secondary'}`}
         >
           {o.icon}
           {o.label}

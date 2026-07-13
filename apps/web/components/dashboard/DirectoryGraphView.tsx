@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import GraphWithTable, { type GraphLayoutData } from '@/components/graph/GraphWithTable';
 import { useCommunityGraphData } from '@/hooks/useCommunityGraphData';
 import { findBestMatchingNodeId } from '@/lib/graphUtils';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
 import type { CommunityAlias } from '@/lib/types';
 
 // The graph view unmounts whenever the user switches to grid/table, so keep the
@@ -28,8 +27,7 @@ interface DirectoryGraphViewProps {
 export default function DirectoryGraphView({
   searchTerm,
 }: DirectoryGraphViewProps) {
-  const { graphData, loading, error, community, refresh } = useCommunityGraphData();
-  const { isAdmin, currentCommunity } = useCommunity();
+  const { graphData, loading, error, community } = useCommunityGraphData();
 
   // ── Saved layout (per community) ───────────────────────────────────────────
   // undefined = still loading, null = none saved, object = restore it.
@@ -106,10 +104,6 @@ export default function DirectoryGraphView({
         communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
         initialLayout={layout ?? null}
         onPersistLayout={handlePersistLayout}
-        communityId={community?.id}
-        canEdit={isAdmin}
-        linkTypes={currentCommunity?.linkTypes}
-        onLinkCreated={refresh}
       />
     </>
   );

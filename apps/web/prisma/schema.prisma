@@ -21,7 +21,7 @@ model Community {
   nodeTypes        Json?                    @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏢\", \"name\": \"Organization\", \"color\": \"#9333ea\", \"shape\": \"hexagon\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}, {\"icon\": \"👥\", \"name\": \"Group\", \"color\": \"#0ea5e9\", \"shape\": \"rectangle\"}]") @map("node_types")
   emoji            String?
   communityAliases Json?                    @default("[]") @map("community_aliases")
-  linkTypes        Json?                    @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}]") @map("link_types")
+  linkTypes        Json?                    @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country          String?
   crmSettings      Json                     @default("{}") @map("crm_settings")
   designConfig     Json                     @default("{}") @map("design_config")
@@ -213,8 +213,8 @@ model Link {
   // Provenance + dedup (see docs/link-management-design.md). `pairKey` is the
   // normalized "minId|maxId" of the two endpoints so A->B and B->A dedup as one
   // edge; always computed by lib/graph/links.ts upsertLink, never raw-written blank.
-  origin       String     @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | import
-  originRef    String?    @map("origin_ref") // Attendee.id / IntroRequest.id / event node id — for symmetric auto-undo
+  origin       String     @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | context | import
+  originRef    String?    @map("origin_ref") // Attendee.id / IntroRequest.id / event node id / context-note path — for symmetric auto-undo
   createdBy    String?    @map("created_by") // userId for manual links; null for system/auto
   updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
   pairKey      String     @map("pair_key")

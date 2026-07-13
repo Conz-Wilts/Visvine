@@ -2,9 +2,8 @@
 
 // Directory entities (person/org nodes) usable in `[[ ]]` mentions and for
 // entity-note resolution: the picker list + a canonical-note-path → entity map,
-// built from the cached community graph (all nodes). Extracted from
-// NotesWorkspace so the profile Context tab (EntityContextPanel) resolves the
-// exact same map the workspace does.
+// built from the cached community graph (all nodes). Consumed by the profile
+// Context tab (EntityContextPanel).
 
 import { useMemo } from 'react'
 import { useCommunityGraphData } from '@/hooks/useCommunityGraphData'

@@ -8,14 +8,12 @@
 import type {
   NoteMeta,
   TreeNode,
-  GraphData,
   References,
   NoteRevision,
   TrashEntry,
   RelatedNote,
   ReorganizePlan,
 } from '@/lib/notes/shared/types'
-import type { LinkInsights, TagCount } from '@/lib/notes/shared/insights'
 import type {
   Folder,
   FolderLevel,
@@ -124,10 +122,6 @@ export const notesApi = {
 
   list: (c: string) => getJson<{ notes: NoteMeta[]; pinned: string[] }>(`/api/notes?${qs(c)}`),
   tree: (c: string) => getJson<{ tree: TreeNode }>(`/api/notes/tree?${qs(c)}`),
-  graph: (c: string) =>
-    getJson<{ graph: GraphData; insights: LinkInsights; tags: TagCount[] }>(
-      `/api/notes/graph?${qs(c)}`,
-    ),
 
   read: (c: string, path: string) =>
     getJson<{ content: string }>(`/api/notes/item?${qs(c, { path })}`),

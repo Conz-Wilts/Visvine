@@ -41,7 +41,6 @@ const ICON_LEFT = 17; // (COLLAPSED_W - 2px border - ICON_SIZE) / 2 — centers 
 const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
-const PANEL_W = 256; // notes tree panel width — keep in sync with NotesWorkspace
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
@@ -56,7 +55,7 @@ export default function Sidebar() {
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
   const { currentCommunity, isAdmin } = useCommunity();
-  const { setHost, dockRequested } = useContextPanel();
+  const { setHost } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
   const dur = reduced ? "0s" : "0.32s";
@@ -66,19 +65,19 @@ export default function Sidebar() {
   // enabled surfaces (empty config → everything on) and to what this user may
   // see (an admins-only directory is hidden from members). See lib/features.tsx.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  // Messages lives in the top navbar; Context lives inside the Directory
-  // (?view=context + profile tabs) — both are toggleable but nav-less.
+  // Messages lives in the top navbar; Context lives on entity profiles
+  // (Context tabs) — both are toggleable but nav-less.
   const allNav = visibleFeatures(featureConfig, isAdmin).filter(
     ({ key }) => !NAV_HIDDEN_FEATURE_KEYS.includes(key)
   );
   const activeIndex = allNav.findIndex(({ href }) => pathname === href);
 
-  // On dock request (the directory's Context view) and on /channels (wide
-  // viewports only) the rail docks into a full-height card hosting a side panel
-  // — the notes tree or the channel list. The page then portals its panel
-  // content into the host below via ContextPanelContext.
-  // Channels stays un-docked below DOCK_MIN_WIDTH so a 300px panel doesn't crowd the
-  // thread on narrow screens (the page keeps its own inline list there instead).
+  // On /channels and /admin (wide viewports only) the rail docks into a
+  // full-height card hosting a side panel — the channel list or the console
+  // sections. The page then portals its panel content into the host below via
+  // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
+  // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
+  // own inline list there instead).
   const [wide, setWide] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`);
@@ -87,16 +86,12 @@ export default function Sidebar() {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  // The notes tree docks on request: the directory's Context view sets
-  // `dockRequested` while its embedded workspace is mounted. (/context itself
-  // is a redirect now — no pathname gate needed.)
-  const dockedContext = dockRequested;
   const dockedChannels = pathname.startsWith("/channels") && wide;
   // The Community Console docks its section list here too (exact match so
   // /admin/resources keeps the plain floating rail).
   const dockedAdmin = pathname === "/admin" && wide;
-  const docked = dockedContext || dockedChannels || dockedAdmin;
-  const panelW = dockedChannels ? CHANNELS_PANEL_W : dockedAdmin ? ADMIN_PANEL_W : PANEL_W;
+  const docked = dockedChannels || dockedAdmin;
+  const panelW = dockedAdmin ? ADMIN_PANEL_W : CHANNELS_PANEL_W;
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).
@@ -235,9 +230,9 @@ export default function Sidebar() {
   // navigation — identical placement (card top flush under the navbar at 64px =
   // top-16) and the same entrance animation, never re-mounting. The top edge and
   // top-right corner are squared off (no top border) so the rail reads as one
-  // continuous L-shaped shell with the navbar. While the dock is requested (the
-  // directory's Context view) the card gains the notes-tree column beside the
-  // rail; the embedded workspace portals its <NoteSidebar> into the host below.
+  // continuous L-shaped shell with the navbar. On the docked routes the card
+  // gains a panel column beside the rail; the page portals its panel content
+  // into the host below.
   return (
     <aside
       className="fixed left-0 top-16 z-40"
@@ -279,7 +274,7 @@ export default function Sidebar() {
             className="absolute left-0 top-0 h-full w-px bg-border-default"
             style={{ opacity: docked ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
           />
-          {/* Portal host: the page (NotesWorkspace / MessagesClient) mounts its panel
+          {/* Portal host: the page (MessagesClient / ConsoleShell) mounts its panel
               here. Inner width tracks the active route's panel so the content is
               revealed by the clipping column rather than reflowing as it opens. */}
           <div ref={setHost} className="h-full min-h-0" style={{ width: panelW }} />

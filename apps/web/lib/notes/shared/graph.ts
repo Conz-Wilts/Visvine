@@ -1,5 +1,5 @@
-// Pure functions that turn raw notes into the enriched index, the sidebar tree,
-// and the force-directed graph. No fs/DOM access so this is unit-testable.
+// Pure functions that turn raw notes into the enriched index and the sidebar
+// tree. No fs/DOM access so this is unit-testable.
 // Link extraction follows the OKF (Open Knowledge Format) v0.1 spec — notes
 // link to each other via standard markdown links, not [[wikilinks]] or #tags.
 
@@ -14,10 +14,7 @@ import {
 import type {
   RawNote,
   NoteMeta,
-  TreeNode,
-  GraphData,
-  GraphNode,
-  GraphLink
+  TreeNode
 } from './types'
 
 function stripExtension(path: string): string {
@@ -148,93 +145,3 @@ function sortChildren(node: TreeNode): void {
   }
 }
 
-// Build the force-directed graph: every note is a node, every resolved OKF
-// markdown link is a 'link' edge. Folders are not represented — a note nobody
-// has linked yet simply sits on its own.
-export function buildGraph(metas: NoteMeta[]): GraphData {
-  const links: GraphLink[] = []
-  const degree = new Map<string, number>()
-  const bump = (id: string): void => {
-    degree.set(id, (degree.get(id) ?? 0) + 1)
-  }
-  const validPath = new Set(metas.map((m) => m.path))
-
-  for (const meta of metas) {
-    for (const target of meta.linkTargets) {
-      if (!validPath.has(target)) {
-        continue
-      }
-      links.push({ source: meta.path, target, kind: 'link' })
-      bump(meta.path)
-      bump(target)
-    }
-  }
-
-  const nodes: GraphNode[] = metas.map((meta) => ({
-    id: meta.path,
-    label: meta.title,
-    kind: 'note',
-    degree: degree.get(meta.path) ?? 0
-  }))
-
-  return { nodes, links }
-}
-
-export interface GraphFilter {
-  // Keep only notes whose folder equals this (or is nested under it). "" / null = all.
-  folder?: string | null
-  // Keep only nodes within `depth` hops of `focus` along graph edges. null = all.
-  focus?: string | null
-  depth?: number | null
-}
-
-// Narrow a graph to a folder and/or a neighbourhood around a focus node. Pure:
-// returns a new GraphData whose links only ever connect surviving nodes.
-export function filterGraph(graph: GraphData, filter: GraphFilter): GraphData {
-  const folder = filter.folder?.trim() || null
-  const focus = filter.focus ?? null
-  const depth = filter.depth ?? null
-
-  let keep = new Set(graph.nodes.map((n) => n.id))
-
-  if (folder) {
-    const prefix = `${folder}/`
-    keep = new Set(
-      graph.nodes
-        .filter((n) => {
-          const f = n.id.includes('/') ? n.id.slice(0, n.id.lastIndexOf('/')) : ''
-          return f === folder || n.id.startsWith(prefix)
-        })
-        .map((n) => n.id)
-    )
-  }
-
-  if (focus && depth != null && keep.has(focus)) {
-    // BFS over edges among the folder-surviving nodes, out to `depth` hops.
-    const adj = new Map<string, Set<string>>()
-    for (const link of graph.links) {
-      if (!keep.has(link.source) || !keep.has(link.target)) continue
-      ;(adj.get(link.source) ?? adj.set(link.source, new Set()).get(link.source)!).add(link.target)
-      ;(adj.get(link.target) ?? adj.set(link.target, new Set()).get(link.target)!).add(link.source)
-    }
-    const reached = new Set<string>([focus])
-    let frontier = [focus]
-    for (let hop = 0; hop < depth; hop++) {
-      const next: string[] = []
-      for (const node of frontier) {
-        for (const neighbour of adj.get(node) ?? []) {
-          if (!reached.has(neighbour)) {
-            reached.add(neighbour)
-            next.push(neighbour)
-          }
-        }
-      }
-      frontier = next
-    }
-    keep = reached
-  }
-
-  const nodes = graph.nodes.filter((n) => keep.has(n.id))
-  const links = graph.links.filter((l) => keep.has(l.source) && keep.has(l.target))
-  return { nodes, links }
-}

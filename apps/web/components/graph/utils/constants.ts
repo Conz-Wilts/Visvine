@@ -74,48 +74,4 @@ export const OBSIDIAN_PHYSICS = {
   rectCollideStrength: 0.45,
 } as const;
 
-// Obsidian Graph View physics + presentation at true dot scale (4–12px circles,
-// not 140×215 cards — OBSIDIAN_PHYSICS above is the same shape scaled ~20× for
-// card geometry). Used by the notes graph (features/notes/NotesGraph).
-export const NOTES_GRAPH = {
-  // Forces — tuned for breathing room: strong long-range repulsion + soft links
-  // so hub fans spread into open rings instead of crunching into dense discs.
-  // Link strength is deliberately NOT set: d3's default (1 / min(degree of
-  // endpoints)) lets hub spokes relax outward instead of stretching straight
-  // lines across the whole graph, while leaf-to-leaf links stay tight.
-  linkDistance: 90,
-  chargeStrength: -300,
-  chargeDistanceMax: 1200,
-  centerStrength: 0.02, // forceX/forceY soft pull toward origin
-  collidePadding: 6, // forceCollide radius = node radius + this
-  alpha: 1, // full-energy settle so the seed layout can actually untangle
-  alphaDecay: 0.0228,
-  alphaMin: 0.001,
-  velocityDecay: 0.35,
-  dragAlphaTarget: 0.3, // sim reheat while a node is being dragged
-  ticksBeforeReveal: 6,
-  // All dots the same size — uniform reads calmer than degree-scaled sizing.
-  nodeRadius: 6.5,
-  // Labels fade in with zoom, relative to the fitted overview zoom: invisible
-  // at the fit, fading in from fitK × start-factor to fully opaque at
-  // fitK × end-factor (both capped by the absolute Ks so labels always appear
-  // by then on tiny graphs). Font size is screen-constant (divided by zoom k).
-  labelFadeStartFitFactor: 1.35,
-  labelFadeEndFitFactor: 2.2,
-  labelFadeStartMaxK: 2.0,
-  labelFadeEndMaxK: 3.2,
-  labelFontSize: 11,
-  labelOffsetY: 6, // screen px below the dot's edge
-  // Hover highlight: hovered node + neighbors stay lit, the rest fades to the
-  // dimmed alphas over hoverTransitionMs (and back on leave).
-  hoverTransitionMs: 200,
-  dimmedNodeAlpha: 0.12,
-  dimmedLinkAlpha: 0.04,
-  highlightLinkAlpha: 0.9,
-  baseLinkAlpha: 0.1, // faint at rest — dense graphs read as structure, not scribble
-  baseLinkWidth: 1, // screen px (divided by zoom k, floored at 0.3)
-  hoverScale: 1.25, // hovered dot grows to this multiple
-  hoverHitPadding: 6, // screen px of extra hit-test slop around a dot
-  clickSlopPx: 5, // press+release within this = click, beyond = drag
-} as const;
 

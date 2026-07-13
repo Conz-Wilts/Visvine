@@ -11,7 +11,6 @@ import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
-import { notesApi } from '@/features/notes/lib/notesApi';
 import MatchPanel from './MatchPanel';
 import {
   TYPE_OPTIONS,
@@ -54,44 +53,14 @@ export default function CreateModal() {
   const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
 
   // The "Create new" grid: the registry's grid types, minus any whose feature is
-  // off for this community (Context appears only where the notes feature is on;
-  // Channel only for community admins where the channels feature is on).
+  // off for this community (Channel only for community admins where the
+  // channels feature is on). Context isn't created here — an entity's context
+  // note lives on its profile's Context tab and is created on first save.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
   const channelsEnabled = isFeatureEnabled(featureConfig, 'channels');
 
-  // Context also requires write access to this community's brain root: check the
-  // folder registry's gate when the modal opens. Personal spaces (`me:`) are
-  // always writable by their owner; while the check is in flight (or on failure)
-  // the tile stays hidden rather than offering a create that would 403.
-  const isPersonalSpace = currentCommunity?.id.startsWith('me:') ?? false;
-  const [brainWritable, setBrainWritable] = useState(false);
-  useEffect(() => {
-    if (!isOpen || !notesEnabled || !currentCommunity) return;
-    if (isPersonalSpace) {
-      setBrainWritable(true);
-      return;
-    }
-    let alive = true;
-    setBrainWritable(false);
-    notesApi
-      .getRegistry(currentCommunity.id)
-      .then((r) => {
-        if (alive) setBrainWritable(r.gate.canWrite);
-      })
-      .catch(() => {
-        if (alive) setBrainWritable(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [isOpen, notesEnabled, isPersonalSpace, currentCommunity]);
-
   const gridOptions = TYPE_OPTIONS.filter(
-    (o) =>
-      o.inGrid &&
-      (o.id !== 'context' || (notesEnabled && brainWritable)) &&
-      (o.id !== 'channel' || (channelsEnabled && isAdmin)),
+    (o) => o.inGrid && (o.id !== 'channel' || (channelsEnabled && isAdmin)),
   );
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
@@ -223,15 +192,7 @@ export default function CreateModal() {
   };
 
   const handleTypeSelect = (t: CreateableType) => {
-    // Context isn't created here — it lives in the Directory's Context view.
-    // Close and hand off to the embedded notes workspace, which auto-creates a
-    // "New note" (see ?new=note).
-    if (t === 'context') {
-      handleClose();
-      router.push('/directory?view=context&new=note');
-      return;
-    }
-    // Channels aren't created here either — hand off to the Channels page, which
+    // Channels aren't created here — hand off to the Channels page, which
     // auto-opens its channel-creation form (see ?new=channel in MessagesClient).
     if (t === 'channel') {
       handleClose();

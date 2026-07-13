@@ -3,10 +3,8 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { GraphData, NBNode, NodeTypeConfig, CommunityAlias, LinkTypeConfig, getNodeTypeConfig } from '@/lib/types';
+import { GraphData, NBNode, NodeTypeConfig, CommunityAlias, getNodeTypeConfig } from '@/lib/types';
 import GraphDataTables from './GraphDataTables';
-import ConnectMenu from './ConnectMenu';
-import { clearGraphCache } from '@/hooks/useCommunityGraphData';
 import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS } from './utils/constants';
 import { layoutGraph } from '@/lib/graph-layout/graphLayout';
 import { placeIncrementally } from './utils/incrementalLayout';
@@ -57,14 +55,6 @@ interface GraphWithTableProps {
   initialLayout?: GraphLayoutData | null;
   /** Called (already debounced by the canvas) when the layout should be saved. */
   onPersistLayout?: (layout: GraphLayoutData) => void;
-  /** Current community id — enables admin link creation from the graph. */
-  communityId?: string;
-  /** Whether the viewer may create links (admin). Gates the right-click menu. */
-  canEdit?: boolean;
-  /** Community-configured relationship types for the link picker. */
-  linkTypes?: LinkTypeConfig[];
-  /** Called after a manual link is created so the parent can refresh the graph. */
-  onLinkCreated?: () => void;
 }
 
 // Re-export types for consumers that import from this file
@@ -87,35 +77,9 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   communityAliases,
   initialLayout,
   onPersistLayout,
-  communityId,
-  canEdit,
-  linkTypes,
-  onLinkCreated,
 }) => {
   const router = useRouter();
   const [selectedNode, setSelectedNode] = useState<NBNode | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ node: SimNode; x: number; y: number } | null>(null);
-
-  // Manual link create from the right-click menu: POST through the unified link
-  // endpoint, bust the graph cache, and ask the parent to refresh.
-  const handleCreateLink = useCallback(async (sourceId: string, targetId: string, relationship: string) => {
-    if (!communityId) return;
-    try {
-      const res = await fetch('/api/data/links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link: { source: sourceId, target: targetId, relationship }, community_id: communityId }),
-      });
-      if (!res.ok) {
-        console.error('create link failed', res.status, await res.text().catch(() => ''));
-        return;
-      }
-      clearGraphCache(communityId);
-      onLinkCreated?.();
-    } catch (e) {
-      console.error('create link error', e);
-    }
-  }, [communityId, onLinkCreated]);
 
   // Persistent storage for node positions across renders
   const localSavedPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -403,7 +367,6 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             // should not re-persist.
             persistOnRestore={serverSeed === null && (incrementalLayout !== null || engineLayout !== null)}
             onPersistLayout={handlePersistLayout}
-            onNodeContextMenu={canEdit && communityId ? (node, x, y) => setContextMenu({ node, x, y }) : undefined}
             onRerunLayout={() => {
               setRecomputedHash(graphDataHash);
               setRerollNonce(n => n + 1);
@@ -412,17 +375,6 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             }}
           />
         </div>
-        {contextMenu && canEdit && communityId && (
-          <ConnectMenu
-            source={{ id: String(contextMenu.node.id), name: contextMenu.node.name }}
-            communityId={communityId}
-            linkTypes={linkTypes}
-            anchor={{ x: contextMenu.x, y: contextMenu.y }}
-            onClose={() => setContextMenu(null)}
-            onViewProfile={() => handleNodeDoubleClick(contextMenu.node)}
-            onCreate={(targetId, relationship) => handleCreateLink(String(contextMenu.node.id), targetId, relationship)}
-          />
-        )}
       </div>
     );
   }

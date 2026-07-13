@@ -124,9 +124,9 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
                         onClick={() => select(s.id)}
                         aria-current={s.id === active ? 'page' : undefined}
                         className={clsx(
-                          'flex w-full items-center gap-2 rounded-full px-4 py-2.5 text-left text-base transition-colors',
+                          'flex w-full items-center gap-2 rounded-full px-4 py-2.5 text-left text-sm font-medium transition-colors',
                           s.id === active
-                            ? 'bg-brand-green font-medium text-white shadow-md'
+                            ? 'bg-brand-green text-white shadow-md'
                             : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
                         )}
                       >
@@ -178,7 +178,7 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
                 type="button"
                 onClick={() => select(s.id)}
                 className={clsx(
-                  'flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-base font-medium transition-colors',
+                  'flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors',
                   s.id === active
                     ? 'bg-brand-green text-white shadow-md'
                     : 'bg-surface-2 text-text-secondary hover:text-text-primary',

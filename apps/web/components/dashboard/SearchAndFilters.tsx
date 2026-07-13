@@ -6,8 +6,6 @@ import type { DirectoryView } from '@/lib/directoryView'
 interface SearchAndFiltersProps {
   currentView: DirectoryView
   onViewChange: (view: DirectoryView) => void
-  /** Show the Context option (the community has the notes tool enabled). */
-  showContext?: boolean
 }
 
 const VIEWS: ViewToggleOption<DirectoryView>[] = [
@@ -38,24 +36,12 @@ const VIEWS: ViewToggleOption<DirectoryView>[] = [
       </svg>
     ),
   },
-  {
-    id: 'context',
-    // Same document glyph as the Context feature tile (lib/features.tsx) so the
-    // toggle, console card, and Create tile stay one visual family.
-    label: 'Context',
-    icon: (
-      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-      </svg>
-    ),
-  },
 ]
 
-export default function SearchAndFilters({ currentView, onViewChange, showContext = true }: SearchAndFiltersProps) {
-  const options = showContext ? VIEWS : VIEWS.filter((v) => v.id !== 'context')
+export default function SearchAndFilters({ currentView, onViewChange }: SearchAndFiltersProps) {
   return (
     <span data-tour="view-toggle" className="inline-flex">
-      <ViewToggle options={options} value={currentView} onChange={onViewChange} />
+      <ViewToggle options={VIEWS} value={currentView} onChange={onViewChange} />
     </span>
   )
 }

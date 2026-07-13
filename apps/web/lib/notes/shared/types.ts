@@ -59,27 +59,6 @@ export interface TreeNode {
 // back to their default alphabetical order, appended after the listed ones.
 export type ManualOrder = Record<string, string[]>
 
-export type GraphNodeKind = 'note'
-
-export interface GraphNode {
-  id: string // brain-relative note path
-  label: string
-  kind: GraphNodeKind
-  degree: number // number of connected edges (drives node size)
-}
-
-// 'link' = an explicit OKF markdown link between notes.
-export interface GraphLink {
-  source: string
-  target: string
-  kind: 'link'
-}
-
-export interface GraphData {
-  nodes: GraphNode[]
-  links: GraphLink[]
-}
-
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.
 export interface TrashEntry {
   id: string // the note row id

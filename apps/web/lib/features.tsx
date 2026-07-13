@@ -51,11 +51,12 @@ export const FEATURES: FeatureDef[] = [
   {
     key: 'notes',
     label: 'Context',
-    // /context redirects into the Directory; the key stays toggleable but has
-    // no nav item of its own (NAV_HIDDEN_FEATURE_KEYS) — it surfaces as the
-    // directory's Context view and the Context tab on entity profiles.
-    href: '/context',
-    description: 'Community notes and context — the Context view in the Directory, and a Context tab on every person and organization profile.',
+    // Context has no page of its own — the key stays toggleable but has no nav
+    // item (NAV_HIDDEN_FEATURE_KEYS); it surfaces only as the Context tab on
+    // entity profiles. href points at the Directory (where those profiles live)
+    // so nothing ever links to a dead route.
+    href: '/directory',
+    description: 'Community notes and context — a Context tab on every person and organization profile.',
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

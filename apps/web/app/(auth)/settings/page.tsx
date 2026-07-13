@@ -196,7 +196,7 @@ export default function SettingsPage() {
                 </span>
               </span>
               <div className="min-w-0">
-                <p className={`text-xs font-semibold truncate ${isActive ? '' : 'text-text-secondary'}`}>{item.label}</p>
+                <p className={`text-sm font-medium truncate ${isActive ? '' : 'text-text-secondary'}`}>{item.label}</p>
                 <p className={`text-[10px] truncate opacity-70 ${isActive ? '' : 'text-text-muted'}`}>{item.description}</p>
               </div>
             </button>
