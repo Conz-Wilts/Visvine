@@ -24,7 +24,7 @@ export const COMPANIES_DIR = 'companies'
 export function entityKindOf(type: string | null | undefined): EntityKind | null {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
-  if (t.startsWith('org') || t === 'company' || t === 'companies') return 'company'
+  if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'company'
   return null
 }
 

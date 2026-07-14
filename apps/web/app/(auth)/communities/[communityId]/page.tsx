@@ -20,6 +20,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
 import { FileTypeIcon, FILE_LABEL, formatBytes } from '@/components/resources/resourceUi';
 
@@ -445,7 +446,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
                       {community.nodeTypes!.slice(0, 6).map((nt) => (
                         <span key={nt.name} className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold border"
                               style={{ background: `${nt.color}14`, color: nt.color, borderColor: `${nt.color}40` }}>
-                          {nt.icon && <span>{nt.icon}</span>}{nt.name}
+                          {nt.name}
                         </span>
                       ))}
                     </div>
@@ -610,7 +611,7 @@ function MemberRow({ member, theme, badge }: { member: OverviewMember; theme: Th
     <>
       {member.image
         ? <img src={member.image} alt={member.name} className="w-9 h-9 rounded-xl object-cover flex-none" />
-        : <span className="w-9 h-9 rounded-xl bg-surface-3 text-text-muted flex items-center justify-center text-xs font-bold flex-none">{getInitials(member.name)}</span>}
+        : <span className="w-9 h-9 rounded-xl overflow-hidden flex-none"><PersonSilhouette color={theme.base} /></span>}
       <span className="min-w-0 flex-1">
         <b className="block text-[13.5px] font-bold text-text-primary truncate">{member.name}</b>
         {member.subtitle && <span className="block text-xs text-text-muted truncate">{member.subtitle}</span>}
@@ -633,9 +634,8 @@ function MemberAvatar({ member, theme }: { member: OverviewMember; theme: ThemeP
   const inner = member.image
     ? <img src={member.image} alt={member.name} title={member.name} className="w-full aspect-square rounded-2xl object-cover" />
     : (
-      <span className="w-full aspect-square rounded-2xl flex items-center justify-center text-xs font-bold text-white"
-            title={member.name} style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
-        {getInitials(member.name)}
+      <span className="block w-full aspect-square rounded-2xl overflow-hidden" title={member.name}>
+        <PersonSilhouette color={theme.base} />
       </span>
     );
   return member.personId

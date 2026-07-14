@@ -56,21 +56,13 @@ export default function NodeTypeDetailsSection({ node }: Props) {
       );
 
     case 'Organization':
+    case 'Group':
       return (
         <div>
           <DetailRow label="Founded" value={meta.founded as string} />
           <DetailRow label="HQ" value={node.location} />
           <DetailRow label="Mission" value={meta.mission as string} />
           <DetailRow label="Members" value={meta.memberCount as string} />
-        </div>
-      );
-
-    case 'Group':
-      return (
-        <div>
-          <DetailRow label="Group Type" value={meta.groupType as string} />
-          <DetailRow label="Membership" value={meta.membership as string} />
-          <DetailRow label="Founded" value={meta.founded as string} />
         </div>
       );
 

@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import { communityReadForbidden } from '@/lib/auth';
@@ -11,6 +12,28 @@ import { communityReadForbidden } from '@/lib/auth';
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
 };
+
+const MAX_TAGS = 30;
+const MAX_TAG_LEN = 40;
+
+/** Normalise an incoming tag list: coerce to trimmed strings, drop blanks,
+ *  cap length, dedupe case-insensitively (first spelling wins), cap count. */
+function cleanTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    if (typeof raw !== 'string') continue;
+    const tag = raw.trim().slice(0, MAX_TAG_LEN);
+    if (!tag) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length >= MAX_TAGS) break;
+  }
+  return out;
+}
 
 export async function GET(request: NextRequest, context: RouteContext) {
   const session = await getSession();
@@ -115,4 +138,60 @@ export async function GET(request: NextRequest, context: RouteContext) {
       },
     }
   );
+}
+
+/**
+ * PATCH /api/nodes/[nodeId] — update an entity's tags from its context note.
+ * Body: { communityId, tags }. Gated on active membership of the node's own
+ * community (the same audience that can read/write the community brain); tags
+ * are shared collaborative metadata, so any member with write access may edit.
+ */
+export async function PATCH(request: NextRequest, context: RouteContext) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { nodeId } = await context.params;
+  const body = await request.json().catch(() => ({}));
+  const { communityId } = body as { communityId?: string };
+  if (!communityId) {
+    return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+  }
+  if (!('tags' in body)) {
+    return NextResponse.json({ error: 'tags is required' }, { status: 400 });
+  }
+  const tags = cleanTags(body.tags);
+
+  const node = await prisma.node.findUnique({
+    where: { id: nodeId },
+    select: { communityId: true },
+  });
+  if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+
+  // The note (and thus its tags) live in the node's own community brain; a
+  // mismatched community would edit a misbound entity.
+  if (node.communityId !== communityId) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+  if (await communityReadForbidden(session.userId, communityId)) {
+    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  }
+
+  // Active membership of the community is the write gate.
+  const membership = await prisma.userCommunity.findFirst({
+    where: { userId: session.userId, communityId, status: 'active' },
+    select: { id: true },
+  });
+  if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // Update the graph node; keep Person.tags in sync so the person profile's
+  // Skills section stays consistent with the same underlying tag list.
+  await prisma.$transaction([
+    prisma.node.update({ where: { id: nodeId }, data: { tags } }),
+    ...(nodeId.startsWith('person:')
+      ? [prisma.person.updateMany({ where: { id: nodeId }, data: { tags } })]
+      : []),
+  ]);
+
+  revalidateTag('graph-data-v2');
+  return NextResponse.json({ tags });
 }

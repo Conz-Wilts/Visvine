@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { VirtuosoGrid, type GridComponents } from 'react-virtuoso'
 import NodeCard from './NodeCard'
 import type { DirectoryItem } from './types'
@@ -147,6 +147,30 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
   if (!coordinatorRef.current) coordinatorRef.current = createRevealCoordinator()
   const coordinator = coordinatorRef.current
 
+  // The page doesn't scroll on the window — the auth shell's <main> is the scroll
+  // container. Point VirtuosoGrid at that element via customScrollParent; with
+  // the window scroller (which never scrolls here) it only mounts the first
+  // screenful of cards. We must resolve <main> BEFORE mounting VirtuosoGrid:
+  // mounting it with an undefined parent makes Virtuoso build its own internal
+  // scroller (which collapses to 0px inside our flex layout), and swapping the
+  // prop afterwards doesn't tear that scroller down. So a sentinel resolves the
+  // scroll parent in a layout effect and the grid stays gated until it's known.
+  // Callback ref (not useEffect): the sentinel only mounts once data has loaded
+  // and the grid branch renders, which is a later render than NodeGrid's first
+  // mount. A [] effect would run before the sentinel exists and never re-run; a
+  // callback ref fires exactly when the node attaches.
+  const [scrollParent, setScrollParent] = useState<HTMLElement | null>(null)
+  const sentinelCallbackRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    let el: HTMLElement | null = node.parentElement
+    while (el) {
+      const overflowY = getComputedStyle(el).overflowY
+      if (overflowY === 'auto' || overflowY === 'scroll') break
+      el = el.parentElement
+    }
+    setScrollParent(el)
+  }, [])
+
   const idSignature = useMemo(() => items.map(i => i.id).join(','), [items])
   const prevSignatureRef = useRef<string | null>(null)
   // Derive-during-render reset so the coordinator is cleared before the new
@@ -166,19 +190,29 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
     return <EmptyState title="No entries" description="No entries found. Try adjusting your filters." />
   }
 
-  // Viewport-windowed grid: only the cards on screen are mounted. Uses the page
-  // (window) scroller so it behaves like the previous full-page grid.
+  // Viewport-windowed grid: only the cards on screen are mounted. The sentinel
+  // resolves the scroll parent; until it does, render skeletons (a layout effect
+  // resolves it before the first paint, so this is effectively invisible).
   return (
-    <VirtuosoGrid
-      useWindowScroll
-      data={items}
-      components={gridComponents}
-      computeItemKey={(_, item) => item.id}
-      itemContent={(_, item) => (
-        <RevealCard id={item.id} coordinator={coordinator}>
-          <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} communityAliases={communityAliases} />
-        </RevealCard>
+    <>
+      <div ref={sentinelCallbackRef} style={{ display: 'none' }} />
+      {scrollParent === null ? (
+        <div style={GRID_STYLE} className="w-full">
+          {Array.from({ length: 12 }).map((_, i) => <NodeCardSkeleton key={i} />)}
+        </div>
+      ) : (
+        <VirtuosoGrid
+          customScrollParent={scrollParent}
+          data={items}
+          components={gridComponents}
+          computeItemKey={(_, item) => item.id}
+          itemContent={(_, item) => (
+            <RevealCard id={item.id} coordinator={coordinator}>
+              <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} communityAliases={communityAliases} />
+            </RevealCard>
+          )}
+        />
       )}
-    />
+    </>
   )
 }

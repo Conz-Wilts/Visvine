@@ -18,11 +18,10 @@ const COMM = 'community:nz-ecosystem';
 const COMM_NAME = 'NZ Startup Ecosystem';
 
 const NODE_TYPES = [
-  { icon: '👤', name: 'Person',       color: '#2563eb', shape: 'rectangle' },
-  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'rectangle' },
-  { icon: '📅', name: 'Event',        color: '#ef4444', shape: 'rectangle' },
-  { icon: '👥', name: 'Group',        color: '#0ea5e9', shape: 'rectangle' },
-  { icon: '🌐', name: 'Community',    color: '#10b981', shape: 'square'   },
+  { icon: '👤', name: 'Person',    color: '#2563eb', shape: 'rectangle' },
+  { icon: '👥', name: 'Group',     color: '#9333ea', shape: 'rectangle' },
+  { icon: '📅', name: 'Event',     color: '#ef4444', shape: 'rectangle' },
+  { icon: '🌐', name: 'Community', color: '#10b981', shape: 'square'   },
   { icon: '📦', name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
@@ -155,8 +154,8 @@ try {
   for (const o of ORGS) {
     const r = await client.query(`
       INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
-      VALUES ($1, 'organization', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
-      ON CONFLICT (id) DO UPDATE SET type = 'organization', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+      VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata, updated_at = NOW()
       RETURNING id, name`,
       [o.id, o.name, o.subtitle, o.location, o.url, o.tags, JSON.stringify(o.metadata ?? {}), COMM]);

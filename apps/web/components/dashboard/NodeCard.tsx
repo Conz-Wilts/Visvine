@@ -2,9 +2,11 @@ import React from 'react'
 import { DirectoryItem } from './types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
-import { getNodeTypeConfig, findAlias } from '@/lib/types'
+import { getNodeTypeConfig, getNodeGlyph, findAlias } from '@/lib/types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
 import Badge from '@/components/ui/Badge'
+import PersonSilhouette from '@/components/ui/PersonSilhouette'
+import GroupSilhouette from '@/components/ui/GroupSilhouette'
 import { useProfileCache } from '@/lib/contexts/ProfileContext'
 
 interface DirectoryCardProps {
@@ -53,6 +55,14 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         </div>
+      ) : isPerson ? (
+        <div className="h-[180px] shrink-0">
+          <PersonSilhouette color={typeColor} />
+        </div>
+      ) : getNodeGlyph(item.type) === 'group' ? (
+        <div className="h-[180px] shrink-0">
+          <GroupSilhouette color={typeColor} />
+        </div>
       ) : (
         <div className="h-[180px] shrink-0 flex items-center justify-center group-hover:brightness-105 transition-all" style={getHeaderBgStyle(typeColor)}>
           <span className="text-2xl font-bold text-white drop-shadow-sm">
@@ -73,8 +83,8 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
           {displaySubtitle ?? ''}
         </p>
 
-        {/* Type badge */}
-        <Badge variant="type-pill" color={typeColor} className="mt-1 mb-2">
+        {/* Type badge — pinned to bottom center */}
+        <Badge variant="type-pill" color={typeColor} className="mt-auto mb-2">
           {item.alias ?? (item.type.charAt(0).toUpperCase() + item.type.slice(1))}
         </Badge>
       </div>

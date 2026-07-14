@@ -19,6 +19,7 @@
     "db:notes-vault": "node scripts/import-notes-vault.mjs",
     "db:blackbird:notes": "node scripts/add-blackbird-notes.mjs",
     "db:identities:backfill": "tsx scripts/backfill-identities.ts",
+    "db:rename-org-to-group": "tsx scripts/rename-organization-to-group.ts",
     "db:context-links:backfill": "tsx scripts/backfill-context-links.ts"
   },
   "dependencies": {

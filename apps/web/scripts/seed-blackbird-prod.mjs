@@ -82,12 +82,12 @@ const COMM_DESC =
   'This community maps its portfolio companies and the founders behind them.';
 
 const NODE_TYPES = [
-  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'square' },
+  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Organization' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Group' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
   { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
@@ -367,7 +367,7 @@ try {
       const col = COLUMNS[i];
       const r = await client.query(
         `INSERT INTO community_columns (community_id, column_key, column_name, column_type, options, position, node_type, created_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'organization', NOW())
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'Group', NOW())
          ON CONFLICT (community_id, column_key) DO UPDATE SET column_name = EXCLUDED.column_name,
            column_type = EXCLUDED.column_type, options = EXCLUDED.options, position = EXCLUDED.position,
            node_type = EXCLUDED.node_type
@@ -412,8 +412,8 @@ try {
       };
       await client.query(
         `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
-         VALUES ($1, 'organization', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-         ON CONFLICT (id) DO UPDATE SET type = 'organization', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+         VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
            location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
            metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
         [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],

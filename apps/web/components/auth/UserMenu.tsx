@@ -8,6 +8,7 @@ import { useTheme } from "@/lib/contexts/ThemeContext";
 import { useFullProfile } from "@/lib/contexts/FullProfileContext";
 import { Moon, Sun } from "lucide-react";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import PersonSilhouette from "@/components/ui/PersonSilhouette";
 
 export default function UserMenu() {
   const { data: session, isPending } = useSession();
@@ -20,15 +21,12 @@ export default function UserMenu() {
   useClickOutside(menuRef, () => setOpen(false));
 
   if (isPending) {
-    return <div className="w-12 h-12 rounded-xl bg-surface-3 animate-pulse shrink-0" />;
+    return <div className="w-10 h-10 rounded-xl bg-surface-3 animate-pulse shrink-0" />;
   }
 
   if (!session) return null;
 
   const { user } = session;
-  const initials = user.name
-    ? user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-    : "?";
 
   async function handleSignOut() {
     setOpen(false);
@@ -42,15 +40,13 @@ export default function UserMenu() {
       {/* Avatar button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-12 h-12 rounded-xl overflow-hidden border-2 border-brand-green hover:border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
+        className="w-10 h-10 rounded-xl overflow-hidden border-2 border-brand-green hover:border-brand-green transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-green"
         aria-label="Account menu"
       >
         {user.image ? (
-          <Image src={user.image} alt={user.name ?? "Profile"} width={48} height={48} className="w-full h-full object-cover" />
+          <Image src={user.image} alt={user.name ?? "Profile"} width={40} height={40} className="w-full h-full object-cover" />
         ) : (
-          <span className="w-full h-full flex items-center justify-center bg-brand-green text-white text-xs font-semibold">
-            {initials}
-          </span>
+          <PersonSilhouette />
         )}
       </button>
 

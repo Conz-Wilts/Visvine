@@ -42,7 +42,7 @@ const COMM_DESC =
   'This community maps its portfolio companies and the founders behind them.';
 
 const NODE_TYPES = [
-  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'square' },
+  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
@@ -50,7 +50,7 @@ const NODE_TYPES = [
 // everywhere (Types & Aliases console, directory cells, node cards), so we use
 // the canonical capitalized base-type names here.
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Organization' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Group' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
   { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
@@ -307,11 +307,10 @@ try {
   for (let i = 0; i < COLUMNS.length; i++) {
     const col = COLUMNS[i];
     const r = await client.query(
-      `INSERT INTO community_columns (community_id, column_key, column_name, column_type, options, position, node_type, created_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'organization', NOW())
+      `INSERT INTO community_columns (community_id, column_key, column_name, column_type, options, position, created_at)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
        ON CONFLICT (community_id, column_key) DO UPDATE SET column_name = EXCLUDED.column_name,
-         column_type = EXCLUDED.column_type, options = EXCLUDED.options, position = EXCLUDED.position,
-         node_type = EXCLUDED.node_type
+         column_type = EXCLUDED.column_type, options = EXCLUDED.options, position = EXCLUDED.position
        RETURNING id`,
       [COMM, col.key, col.name, col.type, col.options ? JSON.stringify(col.options) : null, i],
     );
@@ -352,8 +351,8 @@ try {
     };
     await client.query(
       `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
-       VALUES ($1, 'organization', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET type = 'organization', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+       VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+       ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
          metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
@@ -386,23 +385,11 @@ try {
   }
   console.log(`  ✓ ${persons.length} founders`);
 
-  // 5. founded links (guarded against missing endpoints + duplicates)
-  console.log('\n--- Inserting founded links ---');
-  let linkCount = 0;
-  for (const l of links) {
-    const dup = await client.query(
-      'SELECT 1 FROM links WHERE source_id = $1 AND target_id = $2 AND relationship = $3',
-      [l.sourceId, l.targetId, 'founded'],
-    );
-    if (dup.rowCount > 0) continue;
-    await client.query(
-      `INSERT INTO links (source_id, target_id, relationship, since, community_id, metadata, created_at)
-       VALUES ($1, $2, 'founded', $3, $4, '{}'::jsonb, NOW())`,
-      [l.sourceId, l.targetId, l.since, COMM],
-    );
-    linkCount++;
-  }
-  console.log(`  ✓ ${linkCount} new founded links (${links.length} total)`);
+  // 5. Directory links are NOT written here anymore. Founder↔company edges are
+  // derived from the shared-brain context notes (origin 'context', relationship
+  // 'mentioned') seeded by add-blackbird-notes.mjs and materialised by
+  // scripts/backfill-context-links.ts. See docs/link-management-design.md.
+  void links; // computed above for reference only; no longer inserted
 
   // 6. CRM column values (organization nodes)
   console.log('\n--- Inserting CRM column values ---');
@@ -434,7 +421,7 @@ try {
   console.log('\n--- Company status breakdown ---');
   console.table((await client.query(
     `SELECT metadata->>'status' AS status, COUNT(*)::int AS count FROM nodes
-     WHERE community_id = $1 AND type = 'organization' GROUP BY 1 ORDER BY 1`, [COMM],
+     WHERE community_id = $1 AND type = 'Group' GROUP BY 1 ORDER BY 1`, [COMM],
   )).rows);
 
   console.log('\n--- Link breakdown ---');

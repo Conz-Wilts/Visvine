@@ -63,7 +63,7 @@ export function registerDirectoryTools(server: McpServer): void {
         );
         const orgs = (data.nodes ?? []).filter((n) => {
           const t = (n.type ?? "").toLowerCase();
-          return t === "organization" || t === "company" || t === "org";
+          return t === "organization" || t === "company" || t === "org" || t === "group";
         });
         return { organizations: orgs, count: orgs.length };
       }),

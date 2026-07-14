@@ -10,11 +10,12 @@ import type { CommunityFeatureConfig } from '@/lib/types';
  * Feature keys that are always on and can never be persisted off. Must stay in
  * sync with the `core: true` entries in lib/features.tsx#FEATURES.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages'];
 
 /**
- * Feature keys that stay toggleable but carry NO sidebar nav item:
- * - `messages` lives in the top navbar beside the profile icon.
+ * Feature keys that carry NO sidebar nav item:
+ * - `messages` is always on (core) and lives in the top navbar beside the
+ *   profile icon, so it never appears in the sidebar or the console toggles.
  * - `notes` (label "Context") merged into the Directory — it surfaces as the
  *   directory's Context view and the Context tab on entity profiles, not as a
  *   destination of its own.

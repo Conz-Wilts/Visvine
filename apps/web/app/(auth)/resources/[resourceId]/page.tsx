@@ -19,7 +19,7 @@ import ChangeProposalDialog from '@/components/resources/ChangeProposalDialog';
 import {
   FileTypeIcon, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
 } from '@/components/resources/resourceUi';
-import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
 import {
   Download, Share2, Trash2, Bookmark, MessageSquare, GitPullRequest, Info,
@@ -212,7 +212,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
                 <span className="inline-flex items-center gap-1.5">
                   {detail.uploader.image
                     ? <img src={detail.uploader.image} alt="" className="w-4 h-4 rounded-md object-cover" />
-                    : <span className="w-4 h-4 rounded-md bg-surface-3 grid place-items-center text-[8px] font-bold">{getInitials(detail.uploader.name)}</span>}
+                    : <span className="w-4 h-4 rounded-md overflow-hidden"><PersonSilhouette /></span>}
                   Uploaded by{' '}
                   {detail.uploader.personId
                     ? <Link href={`/directory/${encodeURIComponent(detail.uploader.personId)}`} className="font-semibold text-text-secondary hover:underline">{detail.uploader.name}</Link>
@@ -390,8 +390,8 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
           comments.map((c) => (
             <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
               <div className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-md bg-surface-3 text-text-muted grid place-items-center text-[10px] font-bold flex-none">
-                  {getInitials(c.author)}
+                <span className="w-6 h-6 rounded-md overflow-hidden flex-none">
+                  <PersonSilhouette />
                 </span>
                 <b className="text-[13px] font-bold text-text-primary truncate">{c.author}</b>
                 <span className="text-[11px] text-text-muted ml-auto flex-none">{timeAgo(c.createdAt)}</span>
@@ -505,7 +505,7 @@ function DetailsTab({ resource, uploader }: { resource: Resource; uploader: Uplo
           <div className="flex items-center gap-2">
             {uploader.image
               ? <img src={uploader.image} alt="" className="w-6 h-6 rounded-md object-cover" />
-              : <span className="w-6 h-6 rounded-md bg-surface-3 grid place-items-center text-[10px] font-bold text-text-muted">{getInitials(uploader.name)}</span>}
+              : <span className="w-6 h-6 rounded-md overflow-hidden"><PersonSilhouette /></span>}
             {uploader.personId
               ? <Link href={`/directory/${encodeURIComponent(uploader.personId)}`} className="text-sm font-semibold text-text-primary hover:underline">{uploader.name}</Link>
               : <span className="text-sm font-semibold text-text-primary">{uploader.name}</span>}

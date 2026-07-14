@@ -40,7 +40,7 @@ function getTabsForType(
     label: `Communities (${communityCount})`,
   };
 
-  const noCommunitiesTypes = new Set(['Event', 'Group']);
+  const noCommunitiesTypes = new Set(['Event']);
   const tabs: TabConfig[] = [aboutTab];
 
   // Context sits right after About: an entity's notes are a first-class facet
@@ -74,8 +74,13 @@ interface ProfileTabBarProps {
   /** Explicit tab set, overriding getTabsForType — used by the person profile
    *  for its two-tab Profile | Context header. */
   tabs?: TabConfig[];
-  /** Override sticky offset — defaults to top-20 (80px navbar). Pass 'top-0' for full-screen mode. */
+  /** Override sticky offset — defaults to top-20 (80px navbar). Inside the
+   *  (auth) <main> scroll container pass '-top-4 -mt-4' to cancel its pt-4 so
+   *  the bar sits flush under the navbar (at rest and pinned) with no
+   *  see-through gap and no shift when it pins. */
   stickyTop?: string;
+  /** Optional control pinned to the right of the tab row (e.g. the note Editor/Raw toggle). */
+  rightSlot?: React.ReactNode;
 }
 
 export default function ProfileTabBar({
@@ -88,6 +93,7 @@ export default function ProfileTabBar({
   showContextTab = false,
   tabs: tabsOverride,
   stickyTop = 'top-20',
+  rightSlot,
 }: ProfileTabBarProps) {
   const tabs = useMemo(
     () =>
@@ -126,36 +132,41 @@ export default function ProfileTabBar({
       className={`sticky ${stickyTop} z-20 bg-surface-1 border-b border-border-subtle`}
       style={{ scrollPaddingTop: '128px' }}
     >
-      <div
-        role="tablist"
-        aria-label="Profile sections"
-        className="relative flex overflow-x-auto"
-      >
-        {tabs.map((tab, idx) => (
-          <button
-            key={tab.id}
-            ref={(el) => { tabRefs.current[idx] = el; }}
-            role="tab"
-            id={`tab-${tab.id}`}
-            aria-selected={activeTab === tab.id}
-            aria-controls={`panel-${tab.id}`}
-            onClick={() => onTabChange(tab.id)}
-            onKeyDown={(e) => handleKeyDown(e, idx)}
-            className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
-              activeTab === tab.id
-                ? 'text-brand-black'
-                : 'text-brand-grey hover:text-brand-black'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-
-        {/* Animated green underline indicator */}
+      {/* The sticky bar (and its bottom border) spans the full content pane;
+          the tab row inside stays aligned to the page's content container. */}
+      <div className="mx-auto flex w-full max-w-5xl items-center px-4 sm:px-6 xl:max-w-6xl">
         <div
-          className="absolute bottom-0 h-0.5 bg-brand-green transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
-        />
+          role="tablist"
+          aria-label="Profile sections"
+          className="relative flex flex-1 overflow-x-auto"
+        >
+          {tabs.map((tab, idx) => (
+            <button
+              key={tab.id}
+              ref={(el) => { tabRefs.current[idx] = el; }}
+              role="tab"
+              id={`tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`panel-${tab.id}`}
+              onClick={() => onTabChange(tab.id)}
+              onKeyDown={(e) => handleKeyDown(e, idx)}
+              className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
+                activeTab === tab.id
+                  ? 'text-brand-black'
+                  : 'text-brand-grey hover:text-brand-black'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+
+          {/* Animated green underline indicator */}
+          <div
+            className="absolute bottom-0 h-0.5 bg-brand-green transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+          />
+        </div>
+        {rightSlot && <div className="flex-none pl-3">{rightSlot}</div>}
       </div>
     </div>
   );

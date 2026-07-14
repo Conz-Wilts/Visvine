@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MapPin } from 'lucide-react';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import type { OnboardingData } from '@/app/onboarding/OnboardingWizard';
 
 interface Props {
@@ -50,8 +51,8 @@ export default function DoneStep({ data, personName, onComplete }: Props) {
           {data.imageUrl ? (
             <img src={data.imageUrl} alt={personName} className="w-12 h-12 rounded-xl object-cover" />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-brand-light-bg flex items-center justify-center">
-              <span className="text-lg font-semibold text-brand-dark-green">{personName.charAt(0)}</span>
+            <div className="w-12 h-12 rounded-xl overflow-hidden">
+              <PersonSilhouette />
             </div>
           )}
           <div className="min-w-0">

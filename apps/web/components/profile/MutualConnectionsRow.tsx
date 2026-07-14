@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
-import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 
 export interface MutualConnection {
   id: string;
@@ -36,13 +36,7 @@ export default function MutualConnectionsRow({ mutualConnections }: MutualConnec
             {conn.imageUrl ? (
               <img src={conn.imageUrl} alt={conn.name} className="w-full h-full object-cover" />
             ) : (
-              <div
-                className="w-full h-full flex items-center justify-center text-xs font-semibold text-white"
-                style={{ backgroundColor: getTypeColor(conn.nodeType ?? 'People') }}
-                aria-hidden="true"
-              >
-                {getInitials(conn.name)}
-              </div>
+              <PersonSilhouette color={getTypeColor(conn.nodeType ?? 'Person')} />
             )}
           </div>
         ))}

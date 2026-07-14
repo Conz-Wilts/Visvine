@@ -100,7 +100,7 @@ const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="console-tabs"]',
     title: 'Your Community Console',
     description:
-      'This is where you run your community and manage all your connections: invite and manage members, change the look & feel, review submissions and see activity. Next, let’s look at your own profile.',
+      'This is where you run your community and manage all your connections: invite and manage members, change the look & feel, and see activity. Next, let’s look at your own profile.',
     side: 'bottom',
     align: 'center',
   },

@@ -23,7 +23,7 @@ import { DeleteEventModal } from '@/components/events/DeleteEventModal';
 import { copyToClipboard } from '@/lib/utils';
 import { useTheme } from '@/lib/contexts/ThemeContext';
 import { type ThemePalette } from '@/lib/profileTheme';
-import { getInitials, getAvatarColor } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import {
   formatEventDateRange, formatEventDateShort, formatEventTime, getEventStatus,
   missingRequiredAnswers, startsInLabel, RESPONSE_LABELS,
@@ -761,7 +761,7 @@ function GuestChip({ guest }: { guest: GuestPreview }) {
     <>
       {guest.imageUrl
         ? <img src={guest.imageUrl} alt="" className="w-5 h-5 rounded-md object-cover flex-none" />
-        : <span className={`w-5 h-5 rounded-md ${getAvatarColor(guest.name)} text-white flex items-center justify-center text-[9px] font-bold flex-none`}>{getInitials(guest.name)}</span>}
+        : <span className="w-5 h-5 rounded-md overflow-hidden flex-none"><PersonSilhouette /></span>}
       <span className="truncate max-w-[14ch]">{guest.name}</span>
     </>
   );

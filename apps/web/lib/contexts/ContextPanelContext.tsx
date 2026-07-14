@@ -17,6 +17,11 @@ interface ContextPanelValue {
   setHost: (el: HTMLElement | null) => void;
   collapsed: boolean;
   setCollapsed: (v: boolean) => void;
+  // A query-param-gated route (the directory graph view) can't be pathname-docked
+  // in the Sidebar like /channels, so it raises this flag instead: the Sidebar
+  // opens its panel column and the requesting page portals its tree into the host.
+  dockRequested: boolean;
+  setDockRequested: (v: boolean) => void;
 }
 
 const ContextPanelContext = createContext<ContextPanelValue>({
@@ -24,13 +29,18 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setHost: () => {},
   collapsed: false,
   setCollapsed: () => {},
+  dockRequested: false,
+  setDockRequested: () => {},
 });
 
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [dockRequested, setDockRequested] = useState(false);
   return (
-    <ContextPanelContext.Provider value={{ host, setHost, collapsed, setCollapsed }}>
+    <ContextPanelContext.Provider
+      value={{ host, setHost, collapsed, setCollapsed, dockRequested, setDockRequested }}
+    >
       {children}
     </ContextPanelContext.Provider>
   );

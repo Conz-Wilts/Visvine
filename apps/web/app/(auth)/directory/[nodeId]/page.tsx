@@ -10,13 +10,13 @@ import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf } from '@/lib/notes/entities';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
-import ProfileHero from '@/components/profile/ProfileHero';
 import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
-import ProfileAboutPanel from '@/components/profile/ProfileAboutPanel';
+import { NoteModeToggle, type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import ConnectionsGrid from '@/components/profile/ConnectionsGrid';
 import CommunitiesPanel from '@/components/profile/CommunitiesPanel';
 import ActivityFeed from '@/components/profile/ActivityFeed';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
+import NodeProfileContent from '@/components/profile/NodeProfileContent';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a tab
 // actually renders it (same rationale as the directory's deferred graph view).
@@ -79,6 +79,9 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const { currentCommunity, loading: communityLoading } = useCommunity();
   const contextAvailable = useContextTabAvailable(node);
   const [wantsContext, setTabParam] = useProfileTabParam();
+  // Note editor view-mode lifted here so its Editor/Raw toggle rides the tab bar.
+  const [mode, setMode] = useState<NoteMode>('wysiwyg');
+  const [editorActive, setEditorActive] = useState(false);
 
   const activeTab: ProfileTab = wantsContext && contextAvailable ? 'context' : 'about';
   // Deep link to ?tab=context while community/node data still resolves: hold a
@@ -94,21 +97,36 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   }, [wantsContext, contextAvailable, communityLoading, nodeLoading, currentCommunity, node, setTabParam]);
 
   return (
-    <div className="profile-enter w-full max-w-5xl xl:max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-10">
+    // Full-width shell: the sticky bars' divider lines run edge to edge across
+    // the pane; non-context content re-applies the centered container below.
+    <div className="profile-enter w-full pb-10">
+      {/* ProfileTabBar must be a DIRECT child of the tall page container so its
+          `sticky` has scroll range — a thin wrapper would confine it and it'd
+          scroll away. Spacing below the tabs lives on the content instead.
+          stickyTop is "-top-4 -mt-4" (not top-0): the <main> scroll container
+          has pt-4 and sticky offsets resolve from below that padding — top-0
+          would pin the bar 16px short of the navbar, letting content show in
+          the gap. -mt-4 pulls the bar over that padding at rest too, so it
+          sits flush under the navbar and never shifts when it pins. */}
       {contextAvailable && (
-        <div className="mb-6">
-          <ProfileTabBar nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} />
-        </div>
+        <ProfileTabBar
+          nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
+          rightSlot={activeTab === 'context' && editorActive
+            ? <NoteModeToggle value={mode} onChange={setMode} />
+            : undefined}
+        />
       )}
+      <div className={contextAvailable && activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
       {stillResolving ? (
         <ProfileSkeletonLoader mode="fullpage" />
       ) : activeTab === 'context' ? (
-        <EntityContextPanel nodeId={nodeId} />
+        <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
       ) : (
         /* No outer card wrapper — ProfilePageContent renders separate floating
            cards directly on the page background, matching the event detail page. */
         <ProfilePageContent nodeId={nodeId} />
       )}
+      </div>
     </div>
   );
 }
@@ -121,6 +139,8 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   const contextAvailable = useContextTabAvailable(node);
   const [wantsContext, setTabParam] = useProfileTabParam();
   const [activeTab, setActiveTab] = useState<ProfileTab>(wantsContext ? 'context' : 'about');
+  const [mode, setMode] = useState<NoteMode>('wysiwyg');
+  const [editorActive, setEditorActive] = useState(false);
   const router = useRouter();
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
@@ -139,16 +159,16 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     }
   }, [activeTab, loading, data, contextAvailable, changeTab]);
 
-  if (loading) return <ProfileSkeletonLoader mode="fullpage" />;
+  if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
 
   if (error || !data) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
         <div className="text-5xl">😕</div>
-        <h2 className="text-xl font-semibold text-brand-black">Profile not found</h2>
+        <h2 className="text-xl font-semibold text-text-primary">Profile not found</h2>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border-default rounded-xl hover:bg-surface-2 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Go back
         </button>
@@ -167,69 +187,45 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     timestamp: conn.since || nodeData.createdAt || new Date().toISOString(),
   }));
 
+  // Tabs mirror the person profile's top bar — the entity view lives under a
+  // "Profile" tab, Context/lists are peers. Connection label follows node type.
+  const connectionLabels: Record<string, string> = {
+    Startup: 'Team', Organization: 'Members', Group: 'Members', Event: 'Attendees', Investor: 'Portfolio',
+  };
+  const connectionLabel = connectionLabels[nodeData.type] ?? 'Connections';
+  const tabs: TabConfig[] = [{ id: 'about', label: 'Profile' }];
+  if (contextAvailable) tabs.push({ id: 'context', label: 'Context' });
+  tabs.push({ id: 'connections', label: `${connectionLabel} (${connectionCount})` });
+  if (nodeData.type !== 'Event' && communityCount > 0) {
+    tabs.push({ id: 'communities', label: `Communities (${communityCount})` });
+  }
+  if (activityItems.length >= 3) tabs.push({ id: 'activity', label: 'Activity' });
+
   return (
-    <div className="profile-enter w-full max-w-5xl mx-auto px-6">
-      <div className="px-6 pt-4 pb-2">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 text-sm text-brand-grey hover:text-brand-black transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" /> Back
-        </button>
-      </div>
-      <ProfileHero
-        node={nodeData} mode="fullpage" ctaState="idle"
-        connectionCount={connectionCount} communityCount={communityCount}
-        mutualConnections={[]}
-        onConnectionsClick={() => changeTab('connections')}
-        onCommunitiesClick={() => changeTab('communities')}
+    // Full-width shell (see PersonProfilePage) — divider lines run edge to edge.
+    <div className="profile-enter w-full pb-10">
+      {/* Direct child of the tall page container so `sticky` actually pins —
+          a thin wrapper would confine it. Spacing below lives on the panel.
+          "-top-4 -mt-4" cancels <main>'s pt-4 both at rest and when pinned, so
+          the bar sits flush under the navbar and never shifts on scroll. */}
+      <ProfileTabBar
+        nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
+        rightSlot={activeTab === 'context' && editorActive
+          ? <NoteModeToggle value={mode} onChange={setMode} />
+          : undefined}
       />
-      <div className="mt-8">
-        <ProfileTabBar
-          nodeType={nodeData.type} activeTab={activeTab} onTabChange={changeTab}
-          connectionCount={connectionCount} communityCount={communityCount}
-          activityCount={activityItems.length}
-          showContextTab={contextAvailable}
-        />
-      </div>
-      <div role="tabpanel" className="px-6 py-6">
+
+      <div role="tabpanel" className={activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
         {activeTab === 'about' && (
-          <div className="flex flex-col lg:flex-row gap-10 max-w-5xl">
-            <div className="flex-shrink-0 lg:w-80">
-              <ProfileAboutPanel node={nodeData} />
-            </div>
-            {connections.length > 0 && (
-              <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-brand-black mb-4">
-                  Connections ({connectionCount})
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {connections.slice(0, 6).map((conn) => {
-                    const words = conn.name.trim().split(/\s+/);
-                    const initials = words.length === 1
-                      ? words[0].substring(0, 2).toUpperCase()
-                      : (words[0][0] + words[words.length - 1][0]).toUpperCase();
-                    return (
-                      <div key={conn.id} className="flex flex-col items-center gap-2 p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-gray-200 transition-colors cursor-pointer">
-                        {conn.image_url
-                          ? <img src={conn.image_url} alt={conn.name} className="w-14 h-[72px] rounded-xl object-cover" />
-                          : <div className="w-14 h-[72px] rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-semibold">{initials}</div>
-                        }
-                        <p className="text-xs font-medium text-brand-black text-center line-clamp-1">{conn.name}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-                {connectionCount > 6 && (
-                  <button onClick={() => changeTab('connections')} className="mt-4 text-xs font-medium text-brand-dark-green hover:underline">
-                    View all {connectionCount} connections →
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          <NodeProfileContent
+            nodeId={nodeId}
+            onConnectionsClick={() => changeTab('connections')}
+            onCommunitiesClick={() => changeTab('communities')}
+          />
         )}
-        {activeTab === 'context' && contextAvailable && <EntityContextPanel nodeId={nodeId} />}
+        {activeTab === 'context' && contextAvailable && (
+          <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
+        )}
         {activeTab === 'connections' && <ConnectionsGrid connections={connections} nodeType={nodeData.type} />}
         {activeTab === 'communities' && <CommunitiesPanel communities={communities} />}
         {activeTab === 'activity' && <ActivityFeed items={activityItems} />}

@@ -13,6 +13,8 @@ import type { PickerEntity } from '../components/NotePicker'
 export interface DirectoryEntities {
   entities: PickerEntity[]
   entityByPath: Map<string, PickerEntity>
+  /** Every distinct tag used across the community, sorted — powers the tag picker. */
+  allTags: string[]
 }
 
 export function useDirectoryEntities(): DirectoryEntities {
@@ -21,7 +23,13 @@ export function useDirectoryEntities(): DirectoryEntities {
   return useMemo(() => {
     const list: PickerEntity[] = []
     const map = new Map<string, PickerEntity>()
+    // Dedupe tags case-insensitively, keeping the first spelling encountered.
+    const tagByKey = new Map<string, string>()
     for (const n of graphData.nodes) {
+      for (const tag of n.tags ?? []) {
+        const key = tag.trim().toLowerCase()
+        if (key && !tagByKey.has(key)) tagByKey.set(key, tag.trim())
+      }
       const path = entityNotePath({ id: n.id, type: n.type })
       if (!path) continue
       const e: PickerEntity = {
@@ -34,6 +42,7 @@ export function useDirectoryEntities(): DirectoryEntities {
       list.push(e)
       map.set(path, e)
     }
-    return { entities: list, entityByPath: map }
+    const allTags = [...tagByKey.values()].sort((a, b) => a.localeCompare(b))
+    return { entities: list, entityByPath: map, allTags }
   }, [graphData])
 }

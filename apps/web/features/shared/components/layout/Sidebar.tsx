@@ -43,6 +43,7 @@ const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
+export const CONTEXT_PANEL_W = 300; // directory graph Context tree panel — keep in sync with the graph page inset
 const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
@@ -55,7 +56,7 @@ export default function Sidebar() {
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
   const { currentCommunity, isAdmin } = useCommunity();
-  const { setHost } = useContextPanel();
+  const { setHost, dockRequested } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
   const dur = reduced ? "0s" : "0.32s";
@@ -90,8 +91,11 @@ export default function Sidebar() {
   // The Community Console docks its section list here too (exact match so
   // /admin/resources keeps the plain floating rail).
   const dockedAdmin = pathname === "/admin" && wide;
-  const docked = dockedChannels || dockedAdmin;
-  const panelW = dockedAdmin ? ADMIN_PANEL_W : CHANNELS_PANEL_W;
+  // The directory graph view raises dockRequested (already wide-gated by the
+  // requesting page) to dock its Context tree beside the rail.
+  const dockedContext = dockRequested && wide;
+  const docked = dockedChannels || dockedAdmin || dockedContext;
+  const panelW = dockedAdmin ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { getShadowProfilePreview } from "@/lib/crm/claimService";
+import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { ClaimActions } from "./ClaimActions";
 
 interface ClaimPageProps {
@@ -48,10 +49,8 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
               className="rounded-xl object-cover flex-shrink-0"
             />
           ) : (
-            <div className="w-16 h-16 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-2xl font-semibold text-blue-600">
-                {profile.name.charAt(0).toUpperCase()}
-              </span>
+            <div className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0">
+              <PersonSilhouette />
             </div>
           )}
 

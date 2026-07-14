@@ -72,7 +72,8 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   const memberRail = visibleFeatures(currentConfig, false).filter(
     f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)
   );
-  const messagesOn = isFeatureEnabled(currentConfig, 'messages');
+  // Messages is always on and lives in the top bar — never shown as a toggle.
+  const toolFeatures = FEATURES.filter(f => f.key !== 'messages');
 
   return (
     <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-2">
@@ -82,7 +83,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
         description="Choose which tools members of this community can use. Click a tool to see what it does."
         bodyClassName="divide-y divide-border-subtle"
       >
-        {FEATURES.map(feature => {
+        {toolFeatures.map(feature => {
           const isCore = feature.core === true;
           const expanded = expandedKey === feature.key;
           return (
@@ -108,9 +109,6 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                       </svg>
                     </span>
                     {isCore && <span className="block text-xs text-text-muted">Always on</span>}
-                    {feature.key === 'messages' && (
-                      <span className="block text-xs text-text-muted">Appears in the top bar, not the sidebar</span>
-                    )}
                   </span>
                 </button>
                 <Toggle
@@ -183,7 +181,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                 Admins also see: Directory (admins only)
               </p>
             )}
-            {messagesOn && <p>Messages appears in the top bar.</p>}
+            <p>Messages appears in the top bar.</p>
           </div>
         </div>
       </SettingsCard>

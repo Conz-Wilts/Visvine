@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import MembersPanel from '@/components/admin/MembersPanel';
-import SubmissionsPanel from '@/components/admin/SubmissionsPanel';
 import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
 import ActivityLogPanel from '@/components/admin/ActivityLogPanel';
 import TypesTab from '@/components/data/TypesTab';
@@ -41,7 +40,6 @@ function AdminConsole({ community, onSaved }: {
     { id: 'tools', label: 'Features', group: 'Settings', width: 'form' },
     { id: 'members', label: 'Members', group: 'People', width: 'wide', badge: pendingMembers },
     { id: 'types', label: 'Types', group: 'Content', width: 'form' },
-    { id: 'submissions', label: 'Submissions', group: 'Content', width: 'wide' },
     { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide' },
     { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide' },
   ];
@@ -61,8 +59,6 @@ function AdminConsole({ community, onSaved }: {
             return <MembersPanel communityId={community.id} onPendingCountChange={handlePendingCount} />;
           case 'types':
             return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
-          case 'submissions':
-            return <SubmissionsPanel communityId={community.id} />;
           case 'activity':
             return <ActivityLogPanel communityId={community.id} />;
           case 'analytics':

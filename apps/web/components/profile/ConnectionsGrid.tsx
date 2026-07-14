@@ -4,6 +4,9 @@ import React, { useState, useMemo } from 'react';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import type { ProfileConnection } from '@/hooks/useNodeProfile';
 import { getInitials } from '@/lib/avatarUtils';
+import { getNodeGlyph } from '@/lib/types';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import GroupSilhouette from '@/components/ui/GroupSilhouette';
 
 interface ConnectionsGridProps {
   connections: ProfileConnection[];
@@ -120,6 +123,14 @@ function ConnectionCard({ conn }: { conn: ProfileConnection }) {
     <div className="flex flex-col items-center gap-2 p-3 bg-surface-2 rounded-xl border border-border-subtle hover:border-border-default hover:shadow-soft hover:scale-[1.01] transition-all duration-150 cursor-pointer">
       {conn.image_url ? (
         <img src={conn.image_url} alt={conn.name} className="w-16 h-16 rounded-xl object-cover" />
+      ) : getNodeGlyph(conn.type) === 'person' ? (
+        <div className="w-16 h-16 rounded-xl overflow-hidden" aria-hidden="true">
+          <PersonSilhouette color={typeColor} />
+        </div>
+      ) : getNodeGlyph(conn.type) === 'group' ? (
+        <div className="w-16 h-16 rounded-xl overflow-hidden" aria-hidden="true">
+          <GroupSilhouette color={typeColor} />
+        </div>
       ) : (
         <div
           className="w-16 h-16 rounded-xl flex items-center justify-center text-base font-semibold text-white"

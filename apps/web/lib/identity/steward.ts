@@ -160,7 +160,7 @@ export async function splitNodeToNewIdentity(
   if (!node) return { ok: false, error: 'node not found' };
 
   const t = node.type.toLowerCase();
-  const kind = t === 'organization' || t === 'organisation' || t === 'org' ? 'organization' : 'person';
+  const kind = t === 'organization' || t === 'organisation' || t === 'org' || t === 'group' ? 'organization' : 'person';
   const meta = (node.metadata as Record<string, unknown>) ?? {};
   const oldIdentityId = node.identityId;
 

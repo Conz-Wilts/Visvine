@@ -100,6 +100,9 @@ export interface CommunityDesignConfig {
     main?: CommunityDesignFont;    // titles — replaces ABC Ginto Rounded
     utility?: CommunityDesignFont; // body — replaces Open Sauce One
   };
+  // Community-wide tag → base-colour registry (key = lower-cased tag). Set once
+  // when a tag is first created; keeps a tag's colour consistent everywhere.
+  tagColors?: Record<string, string>;
 }
 
 // Which optional community surfaces (directory, channels, events, …) are
@@ -309,12 +312,10 @@ export interface DirectoryItem {
 // even before a community config has loaded. This is what prevents the
 // "everything is grey on first paint" race condition.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
-  { name: 'Community',    color: '#10b981', shape: 'square'    },
-  { name: 'Person',       color: '#2563eb', shape: 'rectangle' },
-  { name: 'Organization', color: '#9333ea', shape: 'square'    },
-  { name: 'Event',        color: '#ef4444', shape: 'rectangle' },
-  { name: 'Group',        color: '#0ea5e9', shape: 'rectangle' },
-  { name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
+  { name: 'Person',   color: '#2563eb', shape: 'rectangle' },
+  { name: 'Group',    color: '#9333ea', shape: 'square'    },
+  { name: 'Event',    color: '#ef4444', shape: 'rectangle' },
+  { name: 'Resource', color: '#f59e0b', shape: 'rectangle' },
 ];
 
 // (NODE_COLORS removed — all type→colour resolution goes through the
@@ -323,24 +324,57 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
 /**
  * Get node type configuration for a specific type within a community
  */
+// Legacy/synonym type names that map onto a canonical base type. Keeps nodes
+// still stored (or cached) as "organization" rendering identically to "Group"
+// after the Organization→Group rename, so un-migrated or stale-cache data never
+// falls through to the grey "unknown type" placeholder.
+const TYPE_SYNONYMS: Record<string, string> = {
+  organization: 'group',
+  organisation: 'group',
+  org: 'group',
+};
+
 export function getNodeTypeConfig(
   type: string,
   communityNodeTypes?: NodeTypeConfig[]
 ): NodeTypeConfig {
   const normalized = type.toLowerCase();
+  const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
 
-  // Check community-specific overrides first (case-insensitive)
+  // Check community-specific overrides first (case-insensitive), matching either
+  // the raw type or its canonical synonym.
   if (communityNodeTypes) {
-    const config = communityNodeTypes.find(t => t.name.toLowerCase() === normalized);
+    const config = communityNodeTypes.find(t => {
+      const n = t.name.toLowerCase();
+      return n === normalized || n === canonical;
+    });
     if (config) return config;
   }
 
   // Always fall back to DEFAULT_NODE_TYPES before giving up
-  const defaultConfig = DEFAULT_NODE_TYPES.find(t => t.name.toLowerCase() === normalized);
+  const defaultConfig = DEFAULT_NODE_TYPES.find(t => {
+    const n = t.name.toLowerCase();
+    return n === normalized || n === canonical;
+  });
   if (defaultConfig) return defaultConfig;
 
   // Truly unknown type — capitalize for display
   return { name: type.charAt(0).toUpperCase() + type.slice(1), color: '#6b7280', shape: 'rectangle' };
+}
+
+/**
+ * The avatar-fallback glyph a node type should draw when it has no image. People
+ * get the person silhouette; groups/organisations get the cluster silhouette.
+ * Any other type returns null and the caller falls back to name initials. This is
+ * a clean SVG-glyph system — deliberately not emoji.
+ */
+export function getNodeGlyph(type: string | null | undefined): 'person' | 'group' | null {
+  if (!type) return null;
+  const normalized = type.toLowerCase();
+  const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
+  if (canonical === 'person' || canonical === 'people') return 'person';
+  if (canonical === 'group') return 'group';
+  return null;
 }
 
 /**
@@ -354,7 +388,11 @@ export function aliasesForType(
 ): CommunityAlias[] {
   if (!type) return [];
   const t = type.toLowerCase();
-  return (aliases ?? []).filter((a) => a.nodeType.toLowerCase() === t);
+  const canonical = TYPE_SYNONYMS[t] ?? t;
+  return (aliases ?? []).filter((a) => {
+    const n = a.nodeType.toLowerCase();
+    return n === t || n === canonical;
+  });
 }
 
 /**

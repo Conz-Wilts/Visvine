@@ -2,6 +2,54 @@
  * Canvas drawing utilities for graph rendering
  */
 
+import { PERSON_SILHOUETTE_PATH, GROUP_SILHOUETTE_PATH } from '@/lib/avatarUtils';
+
+// Reuse a single Path2D for each glyph across every node draw.
+const personSilhouettePath = new Path2D(PERSON_SILHOUETTE_PATH);
+const groupSilhouettePath = new Path2D(GROUP_SILHOUETTE_PATH);
+
+/**
+ * Draw the shared person-silhouette avatar fallback (the 24×24 glyph) centred at
+ * (cx, cy), scaled so the glyph spans `glyphSize` px. Caller draws the white
+ * backing shape first; this fills the silhouette in `color`.
+ */
+export function drawPersonSilhouette(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  glyphSize: number,
+  color: string
+): void {
+  const scale = glyphSize / 24;
+  ctx.save();
+  ctx.translate(cx - glyphSize / 2, cy - glyphSize / 2);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = color;
+  ctx.fill(personSilhouettePath);
+  ctx.restore();
+}
+
+/**
+ * Draw the shared group-silhouette avatar fallback (the 24×24 cluster glyph)
+ * centred at (cx, cy), scaled so the glyph spans `glyphSize` px. Group counterpart
+ * to drawPersonSilhouette; caller draws the white backing shape first.
+ */
+export function drawGroupSilhouette(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  glyphSize: number,
+  color: string
+): void {
+  const scale = glyphSize / 24;
+  ctx.save();
+  ctx.translate(cx - glyphSize / 2, cy - glyphSize / 2);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = color;
+  ctx.fill(groupSilhouettePath);
+  ctx.restore();
+}
+
 /**
  * Draw wrapped text across multiple lines
  * @param ctx - Canvas rendering context

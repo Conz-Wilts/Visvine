@@ -80,6 +80,12 @@ interface NoteEditorProps {
   //    scrolling), no entity header / big title (the profile above the tab IS
   //    the identity), toolbar as a sticky in-flow row.
   variant?: 'floating' | 'boxed' | 'embedded'
+  // Embedded only: content rendered directly below the sticky toolbar and above
+  // the note body (the entity header card), so it scrolls up behind the toolbar.
+  headerSlot?: React.ReactNode
+  // Embedded only: extra controls pinned to the right of the attached toolbar
+  // bar (e.g. an "Add to my notes" button).
+  toolbarExtras?: React.ReactNode
 }
 
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
@@ -130,6 +136,8 @@ export function NoteEditor({
   exportHref,
   onDelete,
   variant = 'floating',
+  headerSlot,
+  toolbarExtras,
 }: NoteEditorProps) {
   const embedded = variant === 'embedded'
   const floating = variant === 'floating'
@@ -403,9 +411,9 @@ export function NoteEditor({
   // The formatting pill and the ⋯ actions menu are shared between two layouts:
   // floating overlays in the full workspace, a sticky in-flow row when embedded
   // (the profile Context tab scrolls with the page, so overlays can't anchor).
-  const formatPill =
+  const formatControls =
     canEdit && mode === 'wysiwyg' && editor ? (
-      <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
+      <>
         <BlockTypeSelect editor={editor} />
         <Divider />
         <ToolbarButton label="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
@@ -451,76 +459,103 @@ export function NoteEditor({
             </button>
           </>
         )}
-      </div>
+      </>
     ) : null
+  // Floating (workspace) layout wraps the controls in a rounded pill; the
+  // embedded profile bar renders them flat, attached under the tabs.
+  const formatPill = formatControls ? (
+    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
+      {formatControls}
+    </div>
+  ) : null
 
   const actionsMenu =
     onShowHistory || exportHref || onDelete ? (
       <NoteActionsMenu onShowHistory={onShowHistory} exportHref={exportHref} onDelete={onDelete} />
     ) : null
 
-  return (
-    <div className={embedded ? 'relative' : 'relative h-full'}>
-      {/* Embedded: the pill + actions ride a sticky row that clears the navbar
-          (top-16) and the profile tab bar (h-12 sticky at top-20) as the page
-          scrolls. In the workspace they're absolute overlays instead (below). */}
-      {embedded && (formatPill || actionsMenu) && (
-        <div className="pointer-events-none sticky top-32 z-30 mb-4 flex items-center justify-center gap-2">
-          {formatPill}
-          {actionsMenu && <div className="pointer-events-auto">{actionsMenu}</div>}
-        </div>
-      )}
-      {embedded && error && (
-        <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
-            ✕
-          </button>
-        </div>
-      )}
-      {/* Body, references, and freshness line. Workspace: the full-height scroll
-          surface — the note fills the editor and scrolls up behind the floating
-          toolbar and the translucent navbar. Embedded: natural height, the page
-          owns the scroll. */}
-      <div className={embedded ? '' : 'h-full overflow-y-auto'}>
-        <div
-          className={
-            floating
-              ? 'notes-column notes-column--floating'
-              : embedded
-                ? 'notes-column'
-                : 'notes-column notes-column--boxed'
-          }
-        >
-          {/* The note title — rendered as the page heading from frontmatter, so
-              every note opens with a styled title and the body carries none.
-              (Embedded/profile tab: the profile above IS the identity.) */}
-          {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
-          {mode === 'wysiwyg' ? (
-            <EditorContent editor={editor} />
-          ) : (
-            <textarea
-              value={rawContent}
-              onChange={(e) => onRawChange(e.target.value)}
-              readOnly={!canEdit}
-              spellCheck={false}
-              className="h-full min-h-[55vh] w-full resize-none bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none"
-            />
-          )}
-        </div>
-
-        {mode === 'wysiwyg' && (
-          <>
-            <LinkedReferences references={references} related={related} title={noteTitle} onOpenNote={onOpenNote} />
-            {meta && (
-              <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
-                {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
-                Edited {formatRelativeTime(meta.mtime, Date.now())}
-              </div>
-            )}
-          </>
+  // The note body + references, shared by both layouts as a stable JSX element
+  // (a const, NOT a nested component, so the editor is never remounted).
+  const bodyContent = (
+    <div className={embedded ? '' : 'h-full overflow-y-auto'}>
+      <div
+        className={
+          floating
+            ? 'notes-column notes-column--floating'
+            : embedded
+              ? 'notes-column'
+              : 'notes-column notes-column--boxed'
+        }
+      >
+        {/* The note title — rendered as the page heading from frontmatter, so
+            every note opens with a styled title and the body carries none.
+            (Embedded/profile tab: the profile above IS the identity.) */}
+        {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
+        {mode === 'wysiwyg' ? (
+          <EditorContent editor={editor} />
+        ) : (
+          <textarea
+            value={rawContent}
+            onChange={(e) => onRawChange(e.target.value)}
+            readOnly={!canEdit}
+            spellCheck={false}
+            className="h-full min-h-[55vh] w-full resize-none bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none"
+          />
         )}
       </div>
+
+      {mode === 'wysiwyg' && (
+        <>
+          <LinkedReferences references={references} related={related} title={noteTitle} onOpenNote={onOpenNote} />
+          {meta && (
+            <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
+              {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
+              Edited {formatRelativeTime(meta.mtime, Date.now())}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+
+  return (
+    <div className={embedded ? 'relative' : 'relative h-full'}>
+      {/* Embedded: a flat full-width toolbar bar attached under the profile tab
+          bar (sticky -top-4, h-12). It carries the format controls (left) plus
+          any extras + the ⋯ actions (right); the note scrolls up behind it. In
+          the workspace these are absolute overlays instead (below). top-8, not
+          top-12: sticky offsets resolve below the <main> scroll container's
+          pt-4, so 32px + that 16px padding lands flush under the 48px tab bar. */}
+      {embedded && (formatControls || actionsMenu || toolbarExtras) && (
+        <div className="sticky top-8 z-30 border-b border-border-subtle bg-surface-1">
+          <div className="mx-auto flex max-w-3xl items-center gap-1 px-1 py-1.5">
+            <div className="flex flex-1 items-center gap-1 overflow-x-auto">{formatControls}</div>
+            {(toolbarExtras || actionsMenu) && (
+              <div className="flex flex-none items-center gap-2 pl-2">
+                {toolbarExtras}
+                {actionsMenu}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Scrolling content lives in its own z-0 layer so it is guaranteed to
+          slide UNDER the sticky toolbar (z-30) and tab bar (z-20) — it can never
+          paint over them, so nothing "pops up" above the toolbar on scroll. */}
+      {embedded ? (
+        <div className="relative z-0 pt-4">
+          {headerSlot}
+          {error && (
+            <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <span>{error}</span>
+              <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
+            </div>
+          )}
+          {bodyContent}
+        </div>
+      ) : (
+        bodyContent
+      )}
 
       {/* Floating formatting toolbar (workspace only) — pinned just below the
           navbar, centred over the note. The wrapper ignores pointer events so the

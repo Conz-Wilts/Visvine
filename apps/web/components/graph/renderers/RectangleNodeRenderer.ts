@@ -2,18 +2,11 @@
  * Rectangle node renderer for Person, Investor, Event, and Group nodes
  */
 
-import { NBNode } from '@/lib/types';
-import { drawWrappedText, roundRect } from '../utils/canvasUtils';
+import { NBNode, getNodeGlyph } from '@/lib/types';
+import { getInitials } from '@/lib/avatarUtils';
+import { drawWrappedText, roundRect, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
-import { getInitials } from '@/lib/avatarUtils';
-
-// Append two-char hex alpha (0-255) onto a 6-digit hex colour. Falls back to the
-// colour itself if it isn't a recognisable hex string.
-function withAlpha(hex: string, alpha: number): string {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
-  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
-}
 
 /**
  * Draw a rectangle-shaped node card on canvas
@@ -153,28 +146,28 @@ export function drawRectangleNode(
 
     ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
   } else {
-    // Coloured placeholder + initials when there's no image — matches the directory
-    // card style so the graph view stays visually consistent with the card grid.
-    if (lod === 'full') {
-      const headerGradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
-      headerGradient.addColorStop(0, withAlpha(borderColor, 0.8));
-      headerGradient.addColorStop(1, borderColor);
-      ctx.fillStyle = headerGradient;
-    } else {
-      ctx.fillStyle = borderColor;
-    }
+    // White header + coloured type glyph when there's no image — matches the
+    // directory card style so the graph view stays visually consistent. People get
+    // the person silhouette, groups the cluster silhouette, everything else the
+    // name initials.
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
-    // Initials centred in the placeholder area
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 22px Inter, system-ui, -apple-system';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(
-      getInitials(node.name ?? ''),
-      headerX + headerWidth / 2,
-      headerY + headerHeight / 2
-    );
+    const cx = headerX + headerWidth / 2;
+    const cy = headerY + headerHeight / 2;
+    const glyphSize = Math.min(headerWidth, headerHeight) * 0.55;
+    const glyph = getNodeGlyph(node.type);
+    if (glyph === 'group') {
+      drawGroupSilhouette(ctx, cx, cy, glyphSize, borderColor);
+    } else if (glyph === 'person') {
+      drawPersonSilhouette(ctx, cx, cy, glyphSize, borderColor);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = borderColor;
+      ctx.font = `700 ${Math.round(Math.min(headerWidth, headerHeight) * 0.32)}px Inter, system-ui, -apple-system`;
+      ctx.fillText(getInitials(node.name ?? ''), cx, cy);
+    }
   }
 
   ctx.restore();

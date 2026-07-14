@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Check } from 'lucide-react';
-import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import type { MutualConnection } from '@/lib/intros/types';
 
 /** A selectable "you both know X" candidate introducer. */
@@ -28,8 +28,8 @@ export default function MutualConnectionCard({
       {mutual.imageUrl ? (
         <img src={mutual.imageUrl} alt={mutual.name} className="w-11 h-11 rounded-xl object-cover flex-none" />
       ) : (
-        <span className="w-11 h-11 rounded-xl bg-surface-3 text-text-muted flex items-center justify-center text-sm font-bold flex-none">
-          {getInitials(mutual.name)}
+        <span className="w-11 h-11 rounded-xl overflow-hidden flex-none">
+          <PersonSilhouette />
         </span>
       )}
       <span className="min-w-0 flex-1">

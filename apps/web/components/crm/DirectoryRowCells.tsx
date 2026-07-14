@@ -5,10 +5,12 @@ import { Loader2, Upload, Plus, Share2 } from 'lucide-react';
 import type { AdminProfileNode } from '@/app/api/communities/[communityId]/admin/profiles/route';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types';
-import { getNodeTypeConfig, findAlias } from '@/lib/types';
+import { getNodeTypeConfig, getNodeGlyph, findAlias } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import { getInitials } from '@/components/dashboard/utils';
 import { Badge } from '@/components/ui';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import GroupSilhouette from '@/components/ui/GroupSilhouette';
 import type { CrmValueMap } from '@/hooks/useCrmColumns';
 import CellEditor from './CellEditor';
 import { renderProfileCell, type ProfileColumn } from './profileColumns';
@@ -115,6 +117,10 @@ function DirectoryRowCells({
           >
             {imgSrc ? (
               <img src={imgSrc} alt={item.name} loading="lazy" decoding="async" className="h-8 w-8 object-cover" />
+            ) : getNodeGlyph(item.type) === 'person' ? (
+              <PersonSilhouette color={getTypeColor(item.type)} />
+            ) : getNodeGlyph(item.type) === 'group' ? (
+              <GroupSilhouette color={getTypeColor(item.type)} />
             ) : (
               <div className="h-8 w-8 flex items-center justify-center text-sm font-semibold text-white" style={{ backgroundColor: getTypeColor(item.type) }}>
                 {getInitials(item.name)}

@@ -15,14 +15,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useNodeProfile } from '@/hooks/useNodeProfile'
+import { findAlias } from '@/lib/types'
+import { getTypeColor } from '@/components/dashboard/typeStyles'
+import { hexToPalette } from '@/lib/profileTheme'
+import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
 import { notesApi, type RegistryResponse } from '../lib/notesApi'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
-import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
+import { type NoteMode } from './NoteModeToggle'
 import { RevisionHistory } from './RevisionHistory'
 import { BrainGateCard } from './BrainGateCard'
+import { TagCombobox } from './TagCombobox'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
 
@@ -53,7 +58,22 @@ async function readNoteWithStatus(communityId: string, path: string): Promise<No
   }
 }
 
-export function EntityContextPanel({ nodeId }: { nodeId: string }) {
+interface EntityContextPanelProps {
+  nodeId: string
+  // Editor view mode is lifted to the profile page so its Editor/Raw toggle can
+  // live in the tab bar; the panel reports whether an editor is on screen so the
+  // page knows when to show that toggle.
+  mode?: NoteMode
+  onModeChange?: (mode: NoteMode) => void
+  onEditorActiveChange?: (active: boolean) => void
+}
+
+export function EntityContextPanel({
+  nodeId,
+  mode = 'wysiwyg',
+  onModeChange,
+  onEditorActiveChange,
+}: EntityContextPanelProps) {
   const router = useRouter()
   const { currentCommunity } = useCommunity()
   const communityId = currentCommunity?.id ?? null
@@ -61,7 +81,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
 
   const { data: profileData, loading: nodeLoading } = useNodeProfile(nodeId)
   const node = profileData?.node ?? null
-  const { entities, entityByPath } = useDirectoryEntities()
+  const { entities, entityByPath, allTags } = useDirectoryEntities()
 
   const path = node ? entityNotePath({ id: nodeId, type: node.type }) : null
 
@@ -74,12 +94,17 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [mode, setMode] = useState<NoteMode>('wysiwyg')
   const [historyOpen, setHistoryOpen] = useState(false)
   // Bumped after a revision restore so the load effect re-reads the note.
   const [reloadKey, setReloadKey] = useState(0)
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
+  // Entity tags shown in the header — seeded from the node, edited in place.
+  const [tags, setTags] = useState<string[]>([])
+  const [addingTag, setAddingTag] = useState(false)
+  const [tagSaving, setTagSaving] = useState(false)
+  // Colours registered this session (before the community config refetches).
+  const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
 
   const gatedOut = !isPersonalSpace && registry !== null && !registry.gate.canRead
@@ -136,7 +161,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     setNoteExists(false)
     setReferences(null)
     setRelated(null)
-    setMode('wysiwyg')
+    onModeChange?.('wysiwyg')
     readNoteWithStatus(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
       setRead(r)
@@ -153,7 +178,7 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     notesApi.list(communityId).then((l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
-  }, [communityId, path, reloadKey])
+  }, [communityId, path, reloadKey, onModeChange])
 
   useEffect(() => {
     if (!toast) return
@@ -268,6 +293,79 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
     }
   }, [communityId, path])
 
+  // Seed the header tags from the node whenever it (re)loads.
+  useEffect(() => {
+    setTags(node?.tags ?? [])
+    setAddingTag(false)
+  }, [node?.id, node?.tags])
+
+  // Persist a tag change to the entity's graph node (shared metadata). Optimistic:
+  // the header updates immediately and rolls back if the write is rejected.
+  const saveTags = useCallback(
+    async (next: string[], prev: string[]) => {
+      if (!communityId) return
+      setTags(next)
+      setTagSaving(true)
+      try {
+        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ communityId, tags: next }),
+        })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save tags')
+        const { tags: saved } = (await res.json()) as { tags: string[] }
+        setTags(saved)
+      } catch (err) {
+        setTags(prev)
+        setError(err instanceof Error ? err.message : 'Failed to save tags')
+      } finally {
+        setTagSaving(false)
+      }
+    },
+    [communityId, nodeId],
+  )
+
+  const addTag = useCallback((raw: string) => {
+    const tag = raw.trim()
+    if (!tag) return
+    if (tags.some((t) => t.toLowerCase() === tag.toLowerCase())) return
+    void saveTags([...tags, tag], tags)
+  }, [tags, saveTags])
+
+  // Create a brand-new tag with a chosen colour: register the colour on the
+  // community (best-effort — the tag still adds if colour save fails) and add it.
+  const createTag = useCallback((raw: string, color: string) => {
+    const tag = raw.trim()
+    if (!tag || !communityId) return
+    setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
+    void fetch(`/api/communities/${encodeURIComponent(communityId)}/tag-colors`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag, color }),
+    }).catch(() => {})
+    addTag(tag)
+  }, [communityId, addTag])
+
+  const removeTag = useCallback(
+    (tag: string) => { void saveTags(tags.filter((t) => t !== tag), tags) },
+    [tags, saveTags],
+  )
+
+  // Whether a note editor is on screen (mirrors `showEditor` below) — the page
+  // shows the Editor/Raw toggle in the tab bar only while it is.
+  const editorShown =
+    !!node && !!path &&
+    !(node?.community_id && node.community_id !== communityId) &&
+    !gatedOut &&
+    read !== null && read.status !== 'error' &&
+    (noteExists || canWrite)
+  useEffect(() => {
+    onEditorActiveChange?.(editorShown)
+  }, [editorShown, onEditorActiveChange])
+  // Report inactive on unmount (e.g. leaving the Context tab) so a stale toggle
+  // doesn't linger in the tab bar.
+  useEffect(() => () => onEditorActiveChange?.(false), [onEditorActiveChange])
+
   // ── Render states ───────────────────────────────────────────────────────────
 
   if (!communityId || (!node && nodeLoading)) {
@@ -297,8 +395,102 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
   const readFailed = read?.status === 'error'
   const showEditor = !loadingNote && !readFailed && (noteExists || canWrite)
 
+  // Alias colour wins over the base type colour (same rule as the profile hero).
+  const aliasColor = findAlias(currentCommunity?.communityAliases, node.alias, node.type)?.color
+  const theme = hexToPalette(aliasColor ?? getTypeColor(node.type, currentCommunity?.nodeTypes))
+  const canEditTags = showEditor && canWrite
+  // Community tags not already on this entity power the picker's suggestions.
+  const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
+  const tagSuggestions = allTags.filter((t) => !tagsLower.has(t.toLowerCase()))
+  // Tag colour registry: community-saved colours + those registered this session.
+  const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
+
+  // The entity header (avatar, name, alias chip, tags). No card chrome — it
+  // renders directly on the page so it reads as one surface with the note, and
+  // its width/padding mirror .notes-column (760px / 28px) so it lines up with
+  // the note text. In the editor state it rides below the sticky toolbar (via
+  // NoteEditor's headerSlot); in the other states it renders on the page.
+  const headerCard = (
+    <div className="mx-auto mb-2 w-full max-w-[760px] px-7">
+      <div className="flex items-center gap-4">
+        {/* Only a real image earns the avatar slot — a placeholder silhouette
+            would just re-introduce visual chrome the header is shedding. */}
+        {node.image_url && (
+          <span className="h-20 w-20 flex-none overflow-hidden rounded-xl border border-border-subtle bg-surface-1">
+            <img src={node.image_url} alt={node.name} className="h-full w-full object-cover" />
+          </span>
+        )}
+        <div className="min-w-0">
+          {/* The name IS the note title here (embedded NoteEditor hides its own
+              .notes-title), so it matches that scale: 2.5rem / 600 / tight. */}
+          <h2 className="truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+          <span className="mt-1 inline-flex items-center rounded-md border px-2 py-0.5 text-[11.5px] font-semibold"
+                style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
+            {node.alias ?? node.type}
+          </span>
+        </div>
+      </div>
+
+      {(tags.length > 0 || canEditTags) && (
+        <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
+          {tags.map((tag) => {
+            const pal = tagPalette(tag, tagColors)
+            return (
+              <span key={tag}
+                    className="group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium text-white"
+                    style={{ background: pal.base }}>
+                {tag}
+                {canEditTags && (
+                  <button type="button" onClick={() => removeTag(tag)} disabled={tagSaving}
+                          aria-label={`Remove ${tag}`}
+                          className="-mr-0.5 rounded-full opacity-60 transition hover:opacity-100 disabled:opacity-30">
+                    ×
+                  </button>
+                )}
+              </span>
+            )
+          })}
+
+          {canEditTags && (addingTag ? (
+            <TagCombobox
+              suggestions={tagSuggestions}
+              existing={tagsLower}
+              registry={tagColors}
+              accentBase={theme.base}
+              onAdd={addTag}
+              onCreate={createTag}
+              onClose={() => setAddingTag(false)}
+            />
+          ) : (
+            <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
+                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-default px-2.5 py-1 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] disabled:opacity-40"
+                    style={{ ['--accent' as string]: theme.dark }}>
+              + Add tag
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  // Keep-a-private-copy affordance — rides the attached toolbar bar's right side.
+  const addToNotesButton = !isPersonalSpace && myPersonalCommunityId ? (
+    <button
+      type="button"
+      onClick={addToPersonal}
+      title="Keep a private copy of this context note in your personal space"
+      className="whitespace-nowrap rounded-full border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
+    >
+      Add to my notes
+    </button>
+  ) : null
+
   return (
     <div className="pb-10">
+      {/* Header renders here only outside the editor state; in the editor it
+          rides NoteEditor's headerSlot, just under the sticky toolbar. */}
+      {!showEditor && headerCard}
+
       {error && (
         <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           <span>{error}</span>
@@ -309,22 +501,6 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
         <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between rounded-lg border border-brand-green/30 bg-brand-light-bg px-3 py-2 text-sm text-brand-dark-green">
           <span>{toast}</span>
           <button onClick={() => setToast(null)} className="ml-2 text-brand-dark-green/60 hover:text-brand-dark-green">✕</button>
-        </div>
-      )}
-
-      {(showEditor || (!isPersonalSpace && myPersonalCommunityId)) && (
-        <div className="mb-2 flex items-center justify-end gap-2">
-          {!isPersonalSpace && myPersonalCommunityId && (
-            <button
-              type="button"
-              onClick={addToPersonal}
-              title="Keep a private copy of this context note in your personal space"
-              className="rounded-full border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
-            >
-              Add to my notes
-            </button>
-          )}
-          {showEditor && <NoteModeToggle value={mode} onChange={setMode} />}
         </div>
       )}
 
@@ -344,6 +520,8 @@ export function EntityContextPanel({ nodeId }: { nodeId: string }) {
           <NoteEditor
             key={`${path}:${reloadKey}`}
             variant="embedded"
+            headerSlot={headerCard}
+            toolbarExtras={addToNotesButton}
             path={path}
             meta={openMeta}
             notes={noteRefs}

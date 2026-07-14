@@ -6,7 +6,7 @@ import { Camera, Loader2 } from 'lucide-react';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from '../CountryFlag';
 import type { FullProfile } from '@/lib/profileTypes';
@@ -89,9 +89,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
             {imageUrl ? (
               <Image src={imageUrl} alt={name} width={80} height={80} className="w-full h-full object-cover" />
             ) : (
-              <span className="w-full h-full flex items-center justify-center text-2xl font-bold text-white bg-gray-400">
-                {getInitials(name || profile.name)}
-              </span>
+              <PersonSilhouette />
             )}
             <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity">
               {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}

@@ -1,6 +1,6 @@
 /**
- * Square node renderer — an image-forward rounded card used for Organization and
- * Community nodes.
+ * Square node renderer — an image-forward rounded card used for Organization
+ * nodes.
  *
  * The image fills the majority of the card (a large header that spans the full
  * width), with a compact strip below holding the name and the alias chip. The
@@ -9,9 +9,9 @@
  * changed from the old "small centred image + type tag" composition.
  */
 
-import { NBNode } from '@/lib/types';
+import { NBNode, getNodeGlyph } from '@/lib/types';
 import type { CanvasTheme } from './RectangleNodeRenderer';
-import { drawWrappedText, roundRect } from '../utils/canvasUtils';
+import { drawWrappedText, roundRect, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
@@ -30,9 +30,9 @@ function capitalize(value: string): string {
 const CHIP_RADIUS = 6;
 
 /**
- * Draw an image-forward rounded card on canvas. Used for the Organization and
- * Community node types: a square image fills the width, with a name + alias-chip
- * caption strip below.
+ * Draw an image-forward rounded card on canvas. Used for the Organization node
+ * type: a square image fills the width, with a name + alias-chip caption strip
+ * below.
  */
 export function drawSquareNode(
   ctx: CanvasRenderingContext2D,
@@ -161,11 +161,21 @@ export function drawSquareNode(
     }
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `700 ${Math.round(headerHeight * 0.32)}px Inter, system-ui, -apple-system`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(getInitials(node.name ?? ''), headerX + headerWidth / 2, headerY + headerHeight / 2);
+    // White type glyph on the coloured header; fall back to name initials.
+    const cx = headerX + headerWidth / 2;
+    const cy = headerY + headerHeight / 2;
+    const glyph = getNodeGlyph(node.type);
+    if (glyph === 'group') {
+      drawGroupSilhouette(ctx, cx, cy, headerHeight * 0.6, '#ffffff');
+    } else if (glyph === 'person') {
+      drawPersonSilhouette(ctx, cx, cy, headerHeight * 0.6, '#ffffff');
+    } else {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `700 ${Math.round(headerHeight * 0.32)}px Inter, system-ui, -apple-system`;
+      ctx.fillText(getInitials(node.name ?? ''), cx, cy);
+    }
   }
 
   ctx.restore();

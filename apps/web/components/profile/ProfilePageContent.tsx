@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   MapPin, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
-  Pencil, Plus, Share2, Sparkles, Wrench,
-  Check, ChevronDown, ChevronUp, Briefcase, Camera, Loader2,
+  Pencil, Plus, Share2,
+  Check, ChevronDown, ChevronUp, Camera, Loader2,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useProfile } from '@/hooks/useProfile';
@@ -14,6 +14,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import {
   computeProfileCompletion, getExperience, sortExperience,
   formatYearMonth, formatDuration, type ExperienceEntry,
@@ -21,6 +22,7 @@ import {
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from './CountryFlag';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
+import { StatItem, SectionCard, RailCard, AddPrompt, cssVars } from './profileCards';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
@@ -40,9 +42,6 @@ const hostname = (url?: string | null) => {
   if (!url) return '';
   try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
 };
-
-/** Typed helper for inline CSS custom properties (CSSProperties rejects arbitrary keys). */
-const cssVars = (vars: Record<`--${string}`, string>): React.CSSProperties => vars as React.CSSProperties;
 
 interface ProfilePageContentProps {
   nodeId: string;
@@ -163,14 +162,11 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
       {/* ══ IDENTITY HERO — avatar and identity as separate floating cards ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* avatar card */}
-        <div className="relative w-52 h-52 sm:w-[272px] sm:h-[272px] flex-none self-start rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
+        <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
           {profile.imageUrl ? (
-            <Image src={profile.imageUrl} alt={profile.name} width={272} height={272} className="w-full h-full object-cover" />
+            <Image src={profile.imageUrl} alt={profile.name} width={240} height={240} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-6xl sm:text-7xl font-bold text-white"
-                 style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
-              {getInitials(profile.name)}
-            </div>
+            <PersonSilhouette color={theme.base} />
           )}
           {isOwner && (
             <button onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}
@@ -268,7 +264,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
           {/* About */}
-          <SectionCard id="about" icon={<Sparkles className="w-4 h-4" />} title="About" theme={theme}
+          <SectionCard id="about" title="About"
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('about')}>
             {profile.bio
               ? <BioText bio={profile.bio} theme={theme} />
@@ -279,8 +275,8 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
           {/* Experience */}
           {(experience.length > 0 || isOwner) && (
-            <SectionCard id="experience" icon={<Briefcase className="w-4 h-4" />} title="Experience"
-                         badge={experience.length > 0 ? experience.length : undefined} theme={theme}
+            <SectionCard id="experience" title="Experience"
+                         badge={experience.length > 0 ? experience.length : undefined}
                          scrollMargin={sectionScrollMargin} isOwner={isOwner}
                          addLabel={experience.length === 0} onEdit={() => setModal('experience')}>
               {experience.length > 0
@@ -290,7 +286,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           )}
 
           {/* Skills */}
-          <SectionCard id="skills" icon={<Wrench className="w-4 h-4" />} title="Skills & expertise" theme={theme}
+          <SectionCard id="skills" title="Skills & expertise"
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} addLabel onEdit={() => setModal('skills')}>
             {profile.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -336,7 +332,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           )}
 
           {/* Contact — email/phone/socials only; location, website & joined live in the hero */}
-          <SectionCard id="contact" icon={<Mail className="w-4 h-4" />} title="Contact" theme={theme}
+          <SectionCard id="contact" title="Contact"
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('contact')}>
             {hasContact ? (
               <>
@@ -425,60 +421,6 @@ function ExperienceTimeline({ entries, theme }: { entries: ExperienceEntry[]; th
 
 /* ── small presentational helpers ─────────────────────────────────────────── */
 
-function StatItem({ value, label, onClick, accent }: { value: number; label: string; onClick?: () => void; accent?: string }) {
-  const inner = (
-    <>
-      <b className="text-[15px] font-bold font-open-sauce text-text-primary tabular-nums">{value}</b>
-      <span className="text-[13px] text-text-muted">{label}</span>
-    </>
-  );
-  return onClick ? (
-    <button onClick={onClick}
-            className="group inline-flex items-baseline gap-1.5 hover:text-[color:var(--accent-dark)] transition-colors"
-            style={cssVars({ '--accent-dark': accent ?? 'inherit' })}>
-      {inner}
-    </button>
-  ) : (
-    <div className="inline-flex items-baseline gap-1.5">{inner}</div>
-  );
-}
-
-function SectionCard({ id, icon, title, badge, theme, isOwner, onEdit, addLabel, scrollMargin, children }: {
-  id: string; icon: React.ReactNode; title: string; badge?: number; theme: ThemePalette;
-  isOwner: boolean; onEdit?: () => void; addLabel?: boolean; scrollMargin: string; children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className={`bg-surface-1 border border-border-subtle rounded-2xl shadow-soft ${scrollMargin}`}>
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
-        <h2 className="flex items-center gap-2.5 text-[15px] font-bold font-open-sauce text-text-primary">
-          <span className="w-7 h-7 rounded-lg grid place-items-center flex-none"
-                style={{ background: theme.light, color: theme.dark }}>
-            {icon}
-          </span>
-          {title}
-          {badge !== undefined && <span className="text-[13px] font-medium text-text-muted">{badge}</span>}
-        </h2>
-        {isOwner && onEdit && (
-          <button onClick={onEdit}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors">
-            {addLabel ? <Plus className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}{addLabel ? 'Add' : 'Edit'}
-          </button>
-        )}
-      </div>
-      <div className="px-5 pb-5">{children}</div>
-    </section>
-  );
-}
-
-function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 py-4">
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-text-muted mb-3.5">{title}</div>
-      {children}
-    </div>
-  );
-}
-
 function ContactRow({ icon, href, text }: { icon: React.ReactNode; href: string; text: string }) {
   return (
     <a href={href} className="flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors">
@@ -494,16 +436,6 @@ function SocialBtn({ href, theme, label, children }: { href: string; theme: Them
        style={cssVars({ '--accent-dark': theme.dark })}>
       {children}
     </a>
-  );
-}
-
-function AddPrompt({ theme, label, onClick }: { theme: ThemePalette; label: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick}
-      className="w-full py-4 border-[1.5px] border-dashed border-border-default rounded-xl text-sm text-text-muted hover:text-[color:var(--accent-dark)] hover:border-[color:var(--accent)] flex items-center justify-center gap-1.5 transition-colors"
-      style={cssVars({ '--accent': theme.base, '--accent-dark': theme.dark })}>
-      <Plus className="w-4 h-4" /> {label}
-    </button>
   );
 }
 

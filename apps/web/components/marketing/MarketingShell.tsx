@@ -10,6 +10,7 @@ import {
 } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import PersonSilhouette from "@/components/ui/PersonSilhouette";
 import { usePathname, useRouter } from "next/navigation";
 import Vines from "@/components/marketing/Vines";
 import SignInModal from "@/components/auth/SignInModal";
@@ -89,14 +90,6 @@ export default function MarketingShell({
   }
 
   const user = session?.user;
-  const initials = user?.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
-    : "?";
 
   return (
     <main className="font-ginto relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
@@ -169,9 +162,7 @@ export default function MarketingShell({
                       referrerPolicy="no-referrer"
                     />
                   ) : (
-                    <span className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-700 text-xs font-semibold">
-                      {initials}
-                    </span>
+                    <PersonSilhouette />
                   )}
                 </button>
                 {avatarOpen && (

@@ -12,7 +12,7 @@ import type { IdentityKind } from '@/lib/identity/match';
 function identityKindFor(type: string): IdentityKind | null {
   const t = type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';
-  if (t === 'organization' || t === 'organisation' || t === 'org') return 'organization';
+  if (t === 'organization' || t === 'organisation' || t === 'org' || t === 'group') return 'organization';
   return null;
 }
 
@@ -102,8 +102,6 @@ export async function POST(request: NextRequest) {
     const userIsAdmin = session ? await isAdmin(session.userId, community_id, session.email) : false;
 
     if (!userIsAdmin) {
-      // TODO: Implement content submission approval workflow
-      // For now, non-admins cannot create nodes
       return NextResponse.json({ error: 'Admin access required to create nodes' }, { status: 403 });
     }
 

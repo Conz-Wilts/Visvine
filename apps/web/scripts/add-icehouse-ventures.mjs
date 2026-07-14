@@ -36,22 +36,22 @@ const COMM = community.id;
 // type plus a community-specific alias label (mirrors Blackbird), so collapse
 // the custom types onto base types and carry the label across as the alias.
 const TYPE_REMAP = {
-  Investor:     { type: 'organization', alias: 'Investor' },
-  Startup:      { type: 'organization', alias: 'Startup'  },
-  Person:       { type: 'person',       alias: null },
-  Organization: { type: 'organization', alias: null },
+  Investor:     { type: 'Group', alias: 'Investor' },
+  Startup:      { type: 'Group', alias: 'Startup'  },
+  Person:       { type: 'person', alias: null },
+  Organization: { type: 'Group', alias: null },
 };
 
 // Base node types shown in the Types & Aliases console.
 const NODE_TYPES = [
-  { icon: '🏢', name: 'Organization', color: '#9333ea', shape: 'square' },
+  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
 // `nodeType` matching is case-insensitive across the app; use canonical names.
 const COMMUNITY_ALIASES = [
-  { name: 'Investor', color: '#0ea5e9', nodeType: 'Organization' },
-  { name: 'Startup',  color: '#f59e0b', nodeType: 'Organization' },
+  { name: 'Investor', color: '#0ea5e9', nodeType: 'Group' },
+  { name: 'Startup',  color: '#f59e0b', nodeType: 'Group' },
 ];
 
 const pool = new pg.Pool({ connectionString });

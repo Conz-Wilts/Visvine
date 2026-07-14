@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
-import { getInitials } from '@/lib/avatarUtils';
+import PersonSilhouette from '@/components/ui/PersonSilhouette';
 
 interface ProfileAvatarProps {
   name: string;
@@ -31,9 +31,8 @@ export default function ProfileAvatar({
   isOwner,
   onClick,
 }: ProfileAvatarProps) {
-  const { dim, text } = SIZE_CLASSES[size];
+  const { dim } = SIZE_CLASSES[size];
   const typeColor = accentColor ?? getTypeColor(nodeType);
-  const initials = getInitials(name);
 
   return (
     <div
@@ -61,13 +60,7 @@ export default function ProfileAvatar({
         />
       ) : (
         <>
-          <div
-            className={`w-full h-full flex items-center justify-center font-bold text-white ${text}`}
-            style={{ backgroundColor: typeColor }}
-            aria-hidden="true"
-          >
-            {initials}
-          </div>
+          <PersonSilhouette color={typeColor} />
           <span className="sr-only">Profile photo of {name} (no image)</span>
         </>
       )}

@@ -16,6 +16,8 @@ import { getNodeTypeConfig, DEFAULT_NODE_TYPES } from '@/lib/types';
 import type { NBNode, CommunityAlias } from '@/lib/types';
 import { parseDirectoryView, type DirectoryView } from '@/lib/directoryView';
 import { useHeader } from '@/lib/contexts/HeaderContext';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { FilterDropdown, SortDropdown } from '@/components/dashboard/FilterDropdown';
 import { PageTitle } from '@/components/ui';
 
@@ -27,6 +29,13 @@ const DirectoryGraphView = dynamic(() => import('@/components/dashboard/Director
     <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading graph…</div>
   ),
 });
+
+// The context sidebar (community brain tree) overlays the graph. Deferred for the
+// same reason as the graph — grid/table users never pay for the notes stack.
+const GraphContextSidebar = dynamic(
+  () => import('@/features/notes/components/GraphContextSidebar').then((m) => m.GraphContextSidebar),
+  { ssr: false, loading: () => null },
+);
 
 type SortOrder = 'az' | 'za';
 
@@ -65,6 +74,9 @@ function DashboardPageInner() {
 
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
   const { isAdmin } = useCommunity();
+  // True while the Context tree is docked into the Sidebar (graph view, wide
+  // viewport, notes enabled) — the graph insets to clear the docked panel.
+  const { dockRequested } = useContextPanel();
 
   // The active view lives in the URL (?view=…) so views are deep-linkable and
   // refreshable. Absent/junk → grid.
@@ -299,8 +311,15 @@ function DashboardPageInner() {
            one cheap redraw instead of keeping the whole graph warm behind the
            grid. ── */}
       {isGraphView && (
-        <div className="overflow-hidden rounded-xl absolute inset-0 px-6">
+        <div
+          className="overflow-hidden rounded-xl absolute inset-0 px-6"
+          style={{
+            paddingLeft: dockRequested ? CONTEXT_PANEL_W + 24 : undefined,
+            transition: 'padding-left 0.32s cubic-bezier(0.25, 0.1, 0.25, 1)',
+          }}
+        >
           <DirectoryGraphView searchTerm={searchTerm} />
+          <GraphContextSidebar />
         </div>
       )}
 

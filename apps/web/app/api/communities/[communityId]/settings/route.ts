@@ -70,6 +70,21 @@ export async function PUT(
     }
   }
 
+  // The tag-colour registry lives in designConfig but is written by members via
+  // the tag-colors route; preserve it when a design-settings save omits it so an
+  // admin saving the design panel can't wipe every tag's colour.
+  let designConfigToWrite = designConfig;
+  if (designConfig !== undefined && (designConfig as Record<string, unknown>).tagColors === undefined) {
+    const existing = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { designConfig: true },
+    });
+    const existingTagColors = (existing?.designConfig as Record<string, unknown> | null)?.tagColors;
+    if (existingTagColors !== undefined) {
+      designConfigToWrite = { ...(designConfig as Record<string, unknown>), tagColors: existingTagColors };
+    }
+  }
+
   const updated = await prisma.community.update({
     where: { id: communityId },
     data: {
@@ -78,7 +93,7 @@ export async function PUT(
       ...(country !== undefined && { country: country || null }),
       ...(location !== undefined && { location: location || null }),
       ...(tags !== undefined && { tags }),
-      ...(designConfig !== undefined && { designConfig: designConfig as object }),
+      ...(designConfig !== undefined && { designConfig: designConfigToWrite as object }),
       ...(featureConfig !== undefined && { featureConfig: sanitizeFeatureConfig(featureConfig) as object }),
       ...(visibility !== undefined && { visibility }),
     },

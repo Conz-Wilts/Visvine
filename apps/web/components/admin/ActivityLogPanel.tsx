@@ -19,8 +19,6 @@ const ACTION_ICONS: Record<string, string> = {
   member_added: '👤',
   member_removed: '🚫',
   role_changed: '🔄',
-  submission_approved: '✅',
-  submission_rejected: '❌',
   settings_updated: '⚙️',
 };
 
@@ -28,8 +26,6 @@ const ACTION_COLORS: Record<string, string> = {
   member_added: 'bg-brand-green/15 text-brand-dark-green',
   member_removed: 'bg-red-500/10 text-red-600',
   role_changed: 'bg-blue-500/10 text-blue-600',
-  submission_approved: 'bg-brand-green/15 text-brand-dark-green',
-  submission_rejected: 'bg-orange-500/10 text-orange-600',
   settings_updated: 'bg-purple-500/10 text-purple-600',
 };
 
@@ -37,10 +33,6 @@ function formatDetails(entry: LogEntry): string {
   const d = entry.details as Record<string, unknown>;
   if (entry.action === 'role_changed' && d.newRole) return `→ ${d.newRole}`;
   if (entry.action === 'member_added' && d.role) return `as ${d.role}`;
-  if (entry.action === 'submission_approved' && d.contentType) return `(${d.contentType})`;
-  if (entry.action === 'submission_rejected' && d.contentType) {
-    return d.reviewNote ? `(${d.contentType}) — "${d.reviewNote}"` : `(${d.contentType})`;
-  }
   if (entry.action === 'settings_updated' && Array.isArray(d.fields)) return d.fields.join(', ');
   return '';
 }

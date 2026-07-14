@@ -25,7 +25,7 @@ import type { IdentityKind } from '../lib/identity/match';
 function kindFor(type: string): IdentityKind | null {
   const t = type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';
-  if (t === 'organization' || t === 'organisation' || t === 'org') return 'organization';
+  if (t === 'organization' || t === 'organisation' || t === 'org' || t === 'group') return 'organization';
   return null;
 }
 

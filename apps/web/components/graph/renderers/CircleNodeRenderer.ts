@@ -2,17 +2,12 @@
  * Circle node renderer for circular node types
  */
 
-import { NBNode } from '@/lib/types';
+import { NBNode, getNodeGlyph } from '@/lib/types';
+import { getInitials } from '@/lib/avatarUtils';
 import type { CanvasTheme } from './RectangleNodeRenderer';
-import { drawWrappedText } from '../utils/canvasUtils';
+import { drawWrappedText, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
-import { getInitials } from '@/lib/avatarUtils';
-
-function withAlpha(hex: string, alpha: number): string {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
-  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
-}
 
 /**
  * Draw a circle-shaped node on canvas
@@ -127,16 +122,8 @@ export function drawCircleNode(
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // Coloured placeholder + initials when there's no image
-    if (lod === 'full') {
-      const gradient = ctx.createRadialGradient(innerCenterX, innerCenterY, 0, innerCenterX, innerCenterY, innerRadius);
-      gradient.addColorStop(0, withAlpha(borderColor, 0.8));
-      gradient.addColorStop(1, borderColor);
-      ctx.fillStyle = gradient;
-    } else {
-      ctx.fillStyle = borderColor;
-    }
-
+    // White disc + person silhouette in the accent colour when there's no image
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -147,17 +134,18 @@ export function drawCircleNode(
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
 
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `700 ${Math.round(innerRadius * 0.7)}px Inter, system-ui, -apple-system`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(
-      getInitials(node.name ?? ''),
-      innerCenterX,
-      innerCenterY
-    );
-    ctx.restore();
+    const glyph = getNodeGlyph(node.type);
+    if (glyph === 'group') {
+      drawGroupSilhouette(ctx, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
+    } else if (glyph === 'person') {
+      drawPersonSilhouette(ctx, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
+    } else {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = borderColor;
+      ctx.font = `700 ${Math.round(innerRadius * 0.7)}px Inter, system-ui, -apple-system`;
+      ctx.fillText(getInitials(node.name ?? ''), innerCenterX, innerCenterY);
+    }
   }
 
   // Content layout

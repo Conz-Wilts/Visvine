@@ -75,8 +75,6 @@ export async function POST(request: NextRequest) {
     const userIsAdmin = session ? await isAdmin(session.userId, community_id, session.email) : false;
 
     if (!userIsAdmin) {
-      // TODO: Implement content submission approval workflow
-      // For now, non-admins cannot create links
       return NextResponse.json({ error: 'Admin access required to create links' }, { status: 403 });
     }
 
