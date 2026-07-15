@@ -17,9 +17,19 @@ interface AuthContextValue {
 // `useAuth` if/when a consumer needs it.
 const [AuthContext] = createSafeContext<AuthContextValue>("Auth");
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+interface AuthProviderProps {
+  children: ReactNode;
+  /**
+   * Server-resolved session (or null when known signed-out). When provided,
+   * the mount fetch of /api/auth/session is skipped. Omit for the standalone
+   * client-only behavior.
+   */
+  initialSession?: Session | null;
+}
+
+export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   const router = useRouter();
-  const { data: session, isPending: isLoading } = useSession();
+  const { data: session, isPending: isLoading } = useSession(initialSession);
 
   const handleSignOut = useCallback(async () => {
     await signOutClient();

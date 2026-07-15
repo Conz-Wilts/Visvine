@@ -22,16 +22,37 @@ export { useCommunity };
 
 const CURRENT_COMMUNITY_KEY = 'nb_current_community';
 
-export function CommunityProvider({ children }: { children: ReactNode }) {
-  const [communities, setCommunities] = useState<Community[]>([]);
+/** Minimal membership shape needed to hydrate the provider server-side. */
+export interface InitialMembership {
+  id: string;
+  role: string;
+}
+
+interface CommunityProviderProps {
+  children: ReactNode;
+  /**
+   * Server-fetched hydration data (same shapes the /api/data/communities and
+   * /api/user/communities routes return). When BOTH are provided the mount
+   * fetch is skipped entirely; revalidation paths (refreshCommunity, etc.)
+   * still fetch as before. Omit both for the standalone client-only behavior.
+   */
+  initialCommunities?: Community[];
+  initialMemberships?: InitialMembership[];
+}
+
+export function CommunityProvider({ children, initialCommunities, initialMemberships }: CommunityProviderProps) {
+  const hasInitialData = initialCommunities !== undefined && initialMemberships !== undefined;
+  const [communities, setCommunities] = useState<Community[]>(initialCommunities ?? []);
   // Map of communityId → role for the current user
-  const [membershipRoles, setMembershipRoles] = useState<Map<string, string>>(new Map());
+  const [membershipRoles, setMembershipRoles] = useState<Map<string, string>>(
+    () => new Map((initialMemberships ?? []).map(m => [m.id, m.role]))
+  );
   // Read localStorage synchronously so graph data can start fetching on first render
   const [currentCommunityId, setCurrentCommunityId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     try { return localStorage.getItem(CURRENT_COMMUNITY_KEY); } catch { return null; }
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
 
   const loadAllCommunities = useCallback(async () => {
@@ -53,6 +74,9 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Server already hydrated both lists — no mount fetch needed. Revalidation
+    // paths (refreshCommunity, joinCommunity, ...) still fetch on demand.
+    if (hasInitialData) return;
     const init = async () => {
       setLoading(true);
       try {
@@ -64,7 +88,7 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       }
     };
     init();
-  }, [loadAllCommunities, loadUserCommunities]);
+  }, [hasInitialData, loadAllCommunities, loadUserCommunities]);
 
   const setCurrentCommunity = useCallback((communityId: string) => {
     setCurrentCommunityId(communityId);

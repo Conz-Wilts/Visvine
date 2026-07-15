@@ -15,11 +15,18 @@ export interface Session {
   user: SessionUser;
 }
 
-export function useSession() {
-  const [data, setData] = useState<Session | null>(null);
-  const [isPending, setIsPending] = useState(true);
+/**
+ * Client session hook. Pass `initialData` (server-resolved session, or null
+ * for "known signed-out") to skip the mount fetch entirely; omit it for the
+ * standalone fetch-on-mount behavior.
+ */
+export function useSession(initialData?: Session | null) {
+  const hasInitial = initialData !== undefined;
+  const [data, setData] = useState<Session | null>(initialData ?? null);
+  const [isPending, setIsPending] = useState(!hasInitial);
 
   useEffect(() => {
+    if (hasInitial) return;
     fetch("/api/auth/session")
       .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
@@ -27,7 +34,7 @@ export function useSession() {
         setIsPending(false);
       })
       .catch(() => setIsPending(false));
-  }, []);
+  }, [hasInitial]);
 
   return { data, isPending };
 }

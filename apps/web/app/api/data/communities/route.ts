@@ -5,6 +5,7 @@ import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
+import { listVisibleCommunities } from '@/lib/communities/queries';
 
 /**
  * GET: Fetch all communities
@@ -14,77 +15,7 @@ export async function GET() {
     const session = await requireSession();
     if (session instanceof Response) return session;
 
-    const superAdmin = isSuperAdmin(session.email);
-
-    const data = await prisma.community.findMany({
-      // Visibility rules (super-admins see everything):
-      //  - Personal spaces (personalOwnerId set) are private to their owner.
-      //  - Private communities (visibility 'private') are hidden from Discover /
-      //    other users' lists unless the user is already an active member.
-      //  - Public communities are visible to everyone.
-      where: superAdmin
-        ? undefined
-        : {
-            AND: [
-              // Not someone else's personal space.
-              {
-                OR: [
-                  { personalOwnerId: null },
-                  { personalOwnerId: session.userId },
-                ],
-              },
-              // Public, or the caller is an active member of it.
-              {
-                OR: [
-                  { visibility: 'public' },
-                  { personalOwnerId: session.userId },
-                  {
-                    userCommunities: {
-                      some: { userId: session.userId, status: 'active' },
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        country: true,
-        location: true,
-        tags: true,
-        memberCount: true,
-        createdAt: true,
-        imageUrl: true,
-        communityAliases: true,
-        linkTypes: true,
-        designConfig: true,
-        featureConfig: true,
-        visibility: true,
-      },
-      orderBy: { name: 'asc' },
-    });
-
-    // Prisma returns camelCase fields already via @map
-    const communities: Community[] = data.map(c => ({
-      id: c.id,
-      name: c.name,
-      description: c.description ?? '',
-      country: c.country ?? undefined,
-      location: c.location ?? undefined,
-      tags: c.tags ?? [],
-      memberCount: c.memberCount,
-      dataFile: '',
-      createdAt: c.createdAt.toISOString(),
-      imageUrl: c.imageUrl ?? undefined,
-      nodeTypes: undefined as unknown as Community['nodeTypes'],
-      communityAliases: (c.communityAliases as unknown as CommunityAlias[]) ?? [],
-      linkTypes: (c.linkTypes as unknown) as Community['linkTypes'],
-      designConfig: (c.designConfig as unknown as Community['designConfig']) ?? undefined,
-      featureConfig: (c.featureConfig as unknown as Community['featureConfig']) ?? undefined,
-      visibility: (c.visibility as 'public' | 'private') ?? 'public',
-    }));
+    const communities = await listVisibleCommunities(session);
 
     return NextResponse.json(
       { communities },

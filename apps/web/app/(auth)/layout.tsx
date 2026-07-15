@@ -1,9 +1,52 @@
-// Server component — can export route segment config
+// Server component — can export route segment config.
+// MUST stay dynamic: everything below is derived from the caller's session
+// cookie, so no per-route caching may be added here (it would leak one user's
+// communities to another).
 export const dynamic = 'force-dynamic';
 export const dynamicParams = true;
 
 import AuthLayoutClient from './AuthLayoutClient';
+import { getSession, isSuperAdmin } from '@/lib/session';
+import { listVisibleCommunities, listUserCommunities } from '@/lib/communities/queries';
+import type { Session } from '@/lib/auth-client';
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
-  return <AuthLayoutClient>{children}</AuthLayoutClient>;
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  // Resolve the session and community data server-side so the client shell
+  // hydrates with data instead of waterfalling paint → JS → API round-trips.
+  // Shapes match what /api/auth/session, /api/data/communities and
+  // /api/user/communities return, so provider state is identical either way.
+  const session = await getSession();
+
+  if (!session) {
+    // Signed out (middleware normally redirects before this renders). Pass an
+    // explicit null session so the client doesn't re-fetch it, but leave the
+    // community props undefined — the provider keeps its old client-side path.
+    return <AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient>;
+  }
+
+  const [communities, memberships] = await Promise.all([
+    listVisibleCommunities(session),
+    listUserCommunities(session),
+  ]);
+
+  const initialSession: Session = {
+    user: {
+      id: session.userId,
+      name: session.name,
+      email: session.email,
+      image: session.image,
+      nodeId: session.personId,
+      isSuperAdmin: isSuperAdmin(session.email),
+    },
+  };
+
+  return (
+    <AuthLayoutClient
+      initialSession={initialSession}
+      initialCommunities={communities}
+      initialMemberships={memberships.map(m => ({ id: m.id, role: m.role }))}
+    >
+      {children}
+    </AuthLayoutClient>
+  );
 }

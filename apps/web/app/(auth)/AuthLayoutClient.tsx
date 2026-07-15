@@ -19,6 +19,9 @@ import { ContextPanelProvider } from "@/lib/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 import TourLauncher from "@/features/onboarding/TourLauncher";
+import type { Community } from "@/lib/types";
+import type { Session } from "@/lib/auth-client";
+import type { InitialMembership } from "@/lib/contexts/CommunityContext";
 
 // If this user can't open the feature whose page is currently on screen —
 // either the community switched it off, or the directory is admins-only and
@@ -87,11 +90,24 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function AuthLayoutClient({ children }: { children: React.ReactNode }) {
+interface AuthLayoutClientProps {
+  children: React.ReactNode;
+  /** Server-hydrated data from the (auth) layout — skips the mount fetch waterfall. */
+  initialSession?: Session | null;
+  initialCommunities?: Community[];
+  initialMemberships?: InitialMembership[];
+}
+
+export default function AuthLayoutClient({
+  children,
+  initialSession,
+  initialCommunities,
+  initialMemberships,
+}: AuthLayoutClientProps) {
   return (
-    <AuthProvider>
+    <AuthProvider initialSession={initialSession}>
     <ThemeProvider>
-      <CommunityProvider>
+      <CommunityProvider initialCommunities={initialCommunities} initialMemberships={initialMemberships}>
         <CommunityDesignProvider>
         <ProfileProvider>
           <HeaderProvider>
