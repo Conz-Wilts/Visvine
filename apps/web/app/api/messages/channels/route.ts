@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { listChannelsForCommunity } from '@/lib/messages/service';
+import { listChannelsForCommunity, listChannelSpaces } from '@/lib/messages/service';
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,9 +18,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
     }
 
-    const channels = await listChannelsForCommunity(user.id, communityId);
+    const [channels, spaces] = await Promise.all([
+      listChannelsForCommunity(user.id, communityId),
+      listChannelSpaces(communityId),
+    ]);
 
-    return NextResponse.json({ channels });
+    return NextResponse.json({ channels, spaces });
   } catch (error) {
     return handleMessagingError(error);
   }

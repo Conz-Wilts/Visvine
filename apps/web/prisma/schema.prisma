@@ -48,6 +48,7 @@ model Community {
   // --- restored: messaging / intros ---
   introRequests IntroRequest[]
   channels      Conversation[]
+  channelSpaces ChannelSpace[]
 
   @@index([personalOwnerId])
   @@map("communities")
@@ -299,6 +300,7 @@ model User {
   postReactions           PostReaction[]        @relation("PostReactor")
   postCommentReactions    PostCommentReaction[] @relation("CommentReactor")
   messageReactions        MessageReaction[]     @relation("ReactionAuthor")
+  messageStars            MessageStar[]         @relation("StarAuthor")
 
   @@map("user")
 }
@@ -720,21 +722,43 @@ model Conversation {
   name        String?
   description String?
   avatarUrl   String?              @map("avatar_url")
+  /// Emoji icon for CHANNEL conversations. Null = default hashtag icon.
+  icon        String?
   dmKey       String?              @unique @map("dm_key")
   /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
   communityId String?              @map("community_id")
+  /// Optional grouping of CHANNEL conversations into a community "space" section.
+  spaceId     String?              @map("space_id")
   createdById String               @map("created_by_id")
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
   members     ConversationMember[]
   community   Community?           @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  space       ChannelSpace?        @relation(fields: [spaceId], references: [id], onDelete: SetNull)
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
 
   @@index([type])
   @@index([updatedAt])
   @@index([communityId, type])
+  @@index([spaceId])
   @@map("conversations")
+}
+
+/// A named section grouping a community's channels in the channel rail
+/// (Circle-style "spaces"). Deleting a space unfiles its channels (spaceId → null).
+model ChannelSpace {
+  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String         @map("community_id")
+  name        String
+  emoji       String?
+  position    Int            @default(0)
+  createdAt   DateTime       @default(now()) @map("created_at")
+  community   Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  channels    Conversation[]
+
+  @@index([communityId, position])
+  @@map("channel_spaces")
 }
 
 model ConversationMember {
@@ -774,6 +798,7 @@ model Message {
   mentions        MessageMention[]
   reactions       MessageReaction[]
   linkPreviews    MessageLinkPreview[]
+  stars           MessageStar[]
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
@@ -820,6 +845,20 @@ model MessageReaction {
   @@unique([messageId, userId, emoji])
   @@index([messageId])
   @@map("message_reactions")
+}
+
+/// Per-user "saved message" bookmark (Slack-style starring).
+model MessageStar {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  messageId String   @map("message_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation("StarAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId, createdAt])
+  @@map("message_stars")
 }
 
 model LinkPreview {

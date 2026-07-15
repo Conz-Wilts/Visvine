@@ -66,6 +66,9 @@ export const MESSAGE_INCLUDE = {
       linkPreview: true,
     },
   },
+  stars: {
+    select: { userId: true },
+  },
 } satisfies Prisma.MessageInclude;
 
 export type MessageWithRelations = Prisma.MessageGetPayload<{
@@ -177,6 +180,7 @@ export function serializeMessage(
       imageUrl: lp.linkPreview.imageUrl,
       siteName: lp.linkPreview.siteName,
     })),
+    starred: message.stars.some((star) => star.userId === currentUserId),
   };
 }
 
@@ -233,6 +237,8 @@ export function serializeConversation(
     name: getConversationDisplayName(conversation, currentUserId),
     description: conversation.description,
     avatarUrl: getConversationAvatar(conversation, currentUserId),
+    icon: conversation.icon,
+    spaceId: conversation.spaceId,
     participants: conversation.members.map((member) => ({
       id: member.user.id,
       name: member.user.name,

@@ -13,6 +13,13 @@ import type { CommunityFeatureConfig } from '@/lib/types';
 export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages'];
 
 /**
+ * Every key in the registry, in its default (registry) order. Must stay in sync
+ * with lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
+ * reject unknown keys from a client-submitted `order`.
+ */
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'messages'];
+
+/**
  * Feature keys that carry NO sidebar nav item:
  * - `messages` is always on (core) and lives in the top navbar beside the
  *   profile icon, so it never appears in the sidebar or the console toggles.
@@ -54,13 +61,33 @@ export function canAccessFeature(
 }
 
 /**
+ * Sort `keys` into the community's configured display order: keys listed in
+ * `config.order` come first, in that order; anything unlisted keeps its original
+ * (registry) order behind them. Keys the caller didn't ask for are never added,
+ * so this is safe to run over an already-filtered list. An absent or empty
+ * `order` leaves `keys` exactly as given.
+ */
+export function sortFeatureKeys(
+  config: CommunityFeatureConfig | null | undefined,
+  keys: string[],
+): string[] {
+  const order = config?.order;
+  if (!order || order.length === 0) return [...keys];
+  const ranked = order.filter((key) => keys.includes(key));
+  const rest = keys.filter((key) => !ranked.includes(key));
+  return [...ranked, ...rest];
+}
+
+/**
  * Normalize a client-submitted featureConfig into the persisted shape: only the
  * known keys, core features stripped from `enabled` (they can never be off),
- * and `directoryPrivate` kept only when it's a boolean.
+ * `directoryPrivate` kept only when it's a boolean, and `order` reduced to known
+ * keys with duplicates dropped.
  */
 export function sanitizeFeatureConfig(input: {
   enabled?: Record<string, boolean>;
   directoryPrivate?: unknown;
+  order?: unknown;
 }): CommunityFeatureConfig {
   const out: CommunityFeatureConfig = {};
   if (input.enabled) {
@@ -72,6 +99,18 @@ export function sanitizeFeatureConfig(input: {
   }
   if (typeof input.directoryPrivate === 'boolean') {
     out.directoryPrivate = input.directoryPrivate;
+  }
+  if (Array.isArray(input.order)) {
+    // Unknown or repeated keys would silently reshuffle the nav, so drop them
+    // rather than persist them.
+    const seen = new Set<string>();
+    const order: string[] = [];
+    for (const key of input.order) {
+      if (typeof key !== 'string' || !ALL_FEATURE_KEYS.includes(key) || seen.has(key)) continue;
+      seen.add(key);
+      order.push(key);
+    }
+    if (order.length > 0) out.order = order;
   }
   return out;
 }

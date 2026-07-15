@@ -10,7 +10,7 @@
  */
 
 import { memo, useEffect, useRef, useState } from 'react';
-import { Smile, Reply, Pencil, Trash2 } from 'lucide-react';
+import { Smile, Reply, Pencil, Trash2, Star, Pin } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
@@ -227,9 +227,13 @@ export interface MessageRowProps {
   onEdit: (messageId: string, text: string) => void;
   onDelete: (messageId: string) => void;
   onScrollToMessage?: (messageId: string) => void;
+  /** Toggle the current user's private star (saved message). */
+  onToggleStar?: (messageId: string) => void;
+  /** Toggle the conversation-wide pin (any member may pin, Slack-style). */
+  onTogglePin?: (messageId: string) => void;
 }
 
-function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, onReaction, onEdit, onDelete, onScrollToMessage }: MessageRowProps) {
+function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, onReaction, onEdit, onDelete, onScrollToMessage, onToggleStar, onTogglePin }: MessageRowProps) {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text);
@@ -325,13 +329,27 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 📌 Pinned
               </span>
             )}
+            {message.starred && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                <Star className="h-2.5 w-2.5 fill-current" /> Saved
+              </span>
+            )}
           </div>
         )}
 
-        {/* Pinned badge for grouped messages (the header line carries it otherwise) */}
-        {!showHeader && message.pinnedAt && (
-          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-            📌 Pinned
+        {/* Pinned/saved badges for grouped messages (the header line carries them otherwise) */}
+        {!showHeader && (message.pinnedAt || message.starred) && (
+          <span className="inline-flex items-center gap-1">
+            {message.pinnedAt && (
+              <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                📌 Pinned
+              </span>
+            )}
+            {message.starred && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                <Star className="h-2.5 w-2.5 fill-current" /> Saved
+              </span>
+            )}
           </span>
         )}
 
@@ -430,6 +448,26 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           >
             <Reply className="h-4 w-4" />
           </button>
+          {onToggleStar && (
+            <button
+              type="button"
+              onClick={() => onToggleStar(message.id)}
+              className={`rounded-md p-1.5 hover:bg-surface-2 ${message.starred ? 'text-amber-500' : 'text-text-muted hover:text-text-secondary'}`}
+              title={message.starred ? 'Remove from saved' : 'Save for later'}
+            >
+              <Star className={`h-4 w-4 ${message.starred ? 'fill-current' : ''}`} />
+            </button>
+          )}
+          {onTogglePin && (
+            <button
+              type="button"
+              onClick={() => onTogglePin(message.id)}
+              className={`rounded-md p-1.5 hover:bg-surface-2 ${message.pinnedAt ? 'text-yellow-600 dark:text-yellow-400' : 'text-text-muted hover:text-text-secondary'}`}
+              title={message.pinnedAt ? 'Unpin from conversation' : 'Pin to conversation'}
+            >
+              <Pin className={`h-4 w-4 ${message.pinnedAt ? 'fill-current' : ''}`} />
+            </button>
+          )}
           {canEdit && (
             <button
               type="button"

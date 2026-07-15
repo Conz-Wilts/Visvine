@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   // `state` is reflected back from the OAuth request, so guard it as a
   // relative path before using it as a redirect target (avoids open redirect).
-  const callbackUrl = state ? safeRelativePath(decodeURIComponent(state)) : "/directory";
+  const callbackUrl = state ? safeRelativePath(decodeURIComponent(state)) : "/home";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const redirectUri = `${appUrl}/api/auth/callback/google`;
 

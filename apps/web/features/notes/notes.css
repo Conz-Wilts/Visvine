@@ -100,13 +100,14 @@
   gap: 8px;
   margin: 0 0 4px;
   padding-bottom: 8px;
-  font-size: 17px;
+  font-size: 22px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary, #1f2937);
 }
 .notes-ref-count {
   font-weight: 500;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--color-text-muted, #6b7280);
   opacity: 0.8;
 }

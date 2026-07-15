@@ -6,8 +6,7 @@ import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/lib/contexts/HeaderContext";
 import Navbar from "@/components/layout/Navbar";
 import { CommunityProvider, useCommunity } from "@/lib/contexts/CommunityContext";
-import { FEATURES, canAccessFeature, visibleFeatures } from "@/lib/features";
-import { NAV_HIDDEN_FEATURE_KEYS } from "@/lib/featureAccess";
+import { FEATURES, canAccessFeature, defaultLandingHref } from "@/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
 import type { CommunityFeatureConfig } from "@/lib/types";
 import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/CommunityDesignContext";
@@ -37,9 +36,7 @@ function useFeatureRouteGuard() {
       (f) => pathname === f.href || pathname.startsWith(f.href + "/")
     );
     if (onFeature && !canAccessFeature(config, onFeature.key, isAdmin)) {
-      const fallback =
-        visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key))[0]?.href ?? "/";
-      router.replace(fallback);
+      router.replace(defaultLandingHref(config, isAdmin));
     }
   }, [currentCommunity, loading, isAdmin, pathname, router]);
 }

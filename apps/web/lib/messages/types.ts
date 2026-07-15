@@ -75,6 +75,10 @@ export interface ConversationSummary {
   name: string;
   description?: string | null;
   avatarUrl: string | null;
+  /** Channel emoji icon — null renders the default hashtag. */
+  icon?: string | null;
+  /** Channel space (section) this channel is filed under, if any. */
+  spaceId?: string | null;
   participants: ConversationParticipant[];
   lastMessage: SerializedMessage | null;
   unreadCount: number;
@@ -87,8 +91,29 @@ export interface ChannelDirectoryEntry {
   id: string;
   name: string;
   description: string | null;
+  icon: string | null;
+  spaceId: string | null;
   memberCount: number;
   isMember: boolean;
+}
+
+/** A named section grouping channels in the rail (Circle-style space). */
+export interface ChannelSpaceEntry {
+  id: string;
+  name: string;
+  emoji: string | null;
+  position: number;
+}
+
+/** A pinned or saved message shown in the channel header panels. */
+export interface SavedMessageEntry {
+  id: string;
+  conversationId: string;
+  conversationName: string;
+  text: string;
+  senderName: string;
+  createdAt: string;
+  pinnedAt: string | null;
 }
 
 export interface ConversationMessagesPage {

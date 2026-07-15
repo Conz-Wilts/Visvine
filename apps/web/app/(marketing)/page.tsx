@@ -4,7 +4,7 @@ import HomeCtas from "@/components/marketing/HomeCtas";
 
 export default async function Home() {
   const session = await getSession();
-  if (session) redirect("/directory");
+  if (session) redirect("/home");
 
   return (
     <section className="flex-1 flex flex-col items-center justify-center px-5 sm:px-10 md:px-16 lg:px-24 py-10 sm:py-14 text-center">

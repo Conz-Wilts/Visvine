@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, visibleFeatures } from '@/lib/features';
+import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, sortFeatureKeys, visibleFeatures } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
 import { SettingsCard } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
@@ -36,6 +36,33 @@ const LockIcon = () => (
     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5a1.5 1.5 0 011.5 1.5v6a1.5 1.5 0 01-1.5 1.5H6.75a1.5 1.5 0 01-1.5-1.5v-6a1.5 1.5 0 011.5-1.5z" />
   </svg>
 );
+const GripIcon = () => (
+  <svg {...iconProps} className="h-4 w-4" strokeWidth={1.5}>
+    <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" />
+    <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
+    <circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
+  </svg>
+);
+
+/** Move `key` one slot up (-1) or down (+1); returns the list unchanged at the ends. */
+function moveKey(order: string[], key: string, delta: -1 | 1): string[] {
+  const from = order.indexOf(key);
+  const to = from + delta;
+  if (from === -1 || to < 0 || to >= order.length) return order;
+  const next = [...order];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
+
+/** Move `key` so it sits at `targetKey`'s slot, sliding the rest along. */
+function reorderTo(order: string[], key: string, targetKey: string): string[] {
+  const from = order.indexOf(key);
+  const to = order.indexOf(targetKey);
+  if (from === -1 || to === -1 || from === to) return order;
+  const next = [...order];
+  next.splice(to, 0, ...next.splice(from, 1));
+  return next;
+}
 
 export default function CommunityToolsPanel({ community, onSaved }: Props) {
   const savedConfig = (community.featureConfig ?? {}) as CommunityFeatureConfig;
@@ -48,6 +75,12 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   );
   const [directoryPrivate, setDirectoryPrivate] = useState(isDirectoryPrivate(savedConfig));
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // Messages is always on and lives in the top bar — never a toggle, never ordered.
+  const [order, setOrder] = useState<string[]>(() =>
+    sortFeatureKeys(savedConfig, FEATURES.filter(f => f.key !== 'messages').map(f => f.key))
+  );
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const { queue } = useConsoleAutosave(async (patch) => {
     const res = await fetch(`/api/communities/${community.id}/settings`, {
@@ -60,35 +93,80 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
     onSaved(data.community);
   });
 
-  const commit = (nextEnabled: Record<string, boolean>, nextDirectoryPrivate: boolean) => {
+  // The PUT replaces featureConfig wholesale, so every save must carry the
+  // complete config — never just the field that changed.
+  const commit = (
+    nextEnabled: Record<string, boolean>,
+    nextDirectoryPrivate: boolean,
+    nextOrder: string[],
+  ) => {
     setEnabled(nextEnabled);
     setDirectoryPrivate(nextDirectoryPrivate);
-    queue({ featureConfig: { enabled: nextEnabled, directoryPrivate: nextDirectoryPrivate } });
+    setOrder(nextOrder);
+    queue({
+      featureConfig: { enabled: nextEnabled, directoryPrivate: nextDirectoryPrivate, order: nextOrder },
+    });
   };
 
-  const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate };
+  const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate, order };
   // What a regular member's sidebar rail shows with the current config
   // (messages + notes are toggleable but nav-less — see NAV_HIDDEN_FEATURE_KEYS).
   const memberRail = visibleFeatures(currentConfig, false).filter(
     f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)
   );
-  // Messages is always on and lives in the top bar — never shown as a toggle.
-  const toolFeatures = FEATURES.filter(f => f.key !== 'messages');
+  const toolFeatures = order.map(key => FEATURES.find(f => f.key === key)!);
+  // The rail's first entry is where members land — call that out on the row that
+  // owns it, since it's the non-obvious consequence of reordering.
+  const landingKey = memberRail[0]?.key ?? null;
+
+  const handleDrop = (targetKey: string) => {
+    if (draggingKey && draggingKey !== targetKey) {
+      commit(enabled, directoryPrivate, reorderTo(order, draggingKey, targetKey));
+    }
+    setDraggingKey(null);
+    setDragOverKey(null);
+  };
 
   return (
     <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-2">
       <SettingsCard
         icon={<ToolsIcon />}
         title="Tools"
-        description="Choose which tools members of this community can use. Click a tool to see what it does."
+        description="Choose which tools members of this community can use, and drag to reorder them. The first tool members can see is where they land. Click a tool to see what it does."
         bodyClassName="divide-y divide-border-subtle"
       >
-        {toolFeatures.map(feature => {
+        {toolFeatures.map((feature, index) => {
           const isCore = feature.core === true;
           const expanded = expandedKey === feature.key;
+          const isDragging = draggingKey === feature.key;
+          const isDragOver = dragOverKey === feature.key && draggingKey !== feature.key;
           return (
-            <div key={feature.key} className="py-3 first:pt-0 last:pb-0">
+            <div
+              key={feature.key}
+              onDragOver={e => { e.preventDefault(); setDragOverKey(feature.key); }}
+              onDrop={e => { e.preventDefault(); handleDrop(feature.key); }}
+              className={`py-3 first:pt-0 last:pb-0 transition-opacity ${isDragging ? 'opacity-40' : ''} ${
+                isDragOver ? 'border-t-2 border-brand-green' : ''
+              }`}
+            >
               <div className="flex items-center gap-3">
+                {/* Drag handle. It's also a button so the list stays operable by
+                    keyboard — native HTML5 drag has no keyboard equivalent. */}
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={() => setDraggingKey(feature.key)}
+                  onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
+                  onKeyDown={e => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    e.preventDefault();
+                    commit(enabled, directoryPrivate, moveKey(order, feature.key, e.key === 'ArrowUp' ? -1 : 1));
+                  }}
+                  aria-label={`Reorder ${feature.label} (position ${index + 1} of ${toolFeatures.length}) — use arrow keys`}
+                  className="shrink-0 cursor-grab rounded text-text-muted transition-colors hover:text-text-secondary focus-visible:text-text-secondary active:cursor-grabbing"
+                >
+                  <GripIcon />
+                </button>
                 <button
                   type="button"
                   onClick={() => setExpandedKey(expanded ? null : feature.key)}
@@ -107,6 +185,11 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                       </svg>
+                      {feature.key === landingKey && (
+                        <span className="rounded-full bg-brand-green/15 px-2 py-0.5 text-[10px] font-medium text-brand-green">
+                          Members land here
+                        </span>
+                      )}
                     </span>
                     {isCore && <span className="block text-xs text-text-muted">Always on</span>}
                   </span>
@@ -114,7 +197,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                 <Toggle
                   checked={isCore ? true : enabled[feature.key] !== false}
                   disabled={isCore}
-                  onChange={on => commit({ ...enabled, [feature.key]: on }, directoryPrivate)}
+                  onChange={on => commit({ ...enabled, [feature.key]: on }, directoryPrivate, order)}
                   aria-label={`Toggle ${feature.label}`}
                 />
               </div>
@@ -138,7 +221,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                   </span>
                   <Toggle
                     checked={directoryPrivate}
-                    onChange={on => commit(enabled, on)}
+                    onChange={on => commit(enabled, on, order)}
                     aria-label="Make directory admins-only"
                   />
                 </div>

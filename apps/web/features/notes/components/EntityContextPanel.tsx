@@ -12,6 +12,7 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useNodeProfile } from '@/hooks/useNodeProfile'
@@ -22,10 +23,16 @@ import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
 import { notesApi, type RegistryResponse } from '../lib/notesApi'
+import {
+  cachedFetch,
+  contextKeys,
+  invalidateContextCache,
+  readNote,
+  type NoteRead,
+} from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
-import { RevisionHistory } from './RevisionHistory'
 import { BrainGateCard } from './BrainGateCard'
 import { TagCombobox } from './TagCombobox'
 import type { PickerEntity } from './NotePicker'
@@ -33,30 +40,9 @@ import '../notes.css'
 
 const PERSONAL_ID_PREFIX = 'me:'
 
-type NoteRead =
-  | { status: 'ok'; content: string }
-  | { status: 'missing' }
-  | { status: 'error'; message: string }
-
-// Status-aware single-note read: the shared notesApi.read collapses every
-// failure into one thrown Error, but this panel must treat "no note yet" (404,
-// editable empty state) differently from a transient failure (read-only error
-// state — never risk upserting the stub over content we simply failed to load).
-async function readNoteWithStatus(communityId: string, path: string): Promise<NoteRead> {
-  try {
-    const params = new URLSearchParams({ communityId, path })
-    const res = await fetch(`/api/notes/item?${params.toString()}`)
-    if (res.status === 404) return { status: 'missing' }
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string }
-      return { status: 'error', message: data.error || `Request failed (${res.status})` }
-    }
-    const { content } = (await res.json()) as { content: string }
-    return { status: 'ok', content }
-  } catch {
-    return { status: 'error', message: 'Failed to load the context note' }
-  }
-}
+// The status-aware note read lives in contextPrefetch (readNote) so profile
+// pages can start it before this panel mounts; all reads here go through that
+// shared cache and land instantly when the prefetch already ran.
 
 interface EntityContextPanelProps {
   nodeId: string
@@ -87,16 +73,21 @@ export function EntityContextPanel({
 
   const [aiConfigured, setAiConfigured] = useState(false)
   const [registry, setRegistry] = useState<RegistryResponse | null>(null)
+  // The toolbar and the note text are one visual unit, but they read different
+  // fetches: the text needs only the note, while the format controls need
+  // `canWrite` (registry) and the Refactor button needs `aiConfigured` (config).
+  // Whichever lands second used to pop in after the other. These track "answered"
+  // — NOT "answered with a value" — so the panel can hold one skeleton until all
+  // of it is in and paint once. A failed fetch resolves them too, or the skeleton
+  // would hang forever on the error path (both effects swallow into a null/false).
+  const [registryDone, setRegistryDone] = useState(false)
+  const [configDone, setConfigDone] = useState(false)
   const [read, setRead] = useState<NoteRead | null>(null)
   const [noteExists, setNoteExists] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  // Bumped after a revision restore so the load effect re-reads the note.
-  const [reloadKey, setReloadKey] = useState(0)
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
   // Entity tags shown in the header — seeded from the node, edited in place.
@@ -110,13 +101,22 @@ export function EntityContextPanel({
   const gatedOut = !isPersonalSpace && registry !== null && !registry.gate.canRead
 
   useEffect(() => {
-    notesApi.config().then((c) => setAiConfigured(c.aiConfigured)).catch(() => {})
+    cachedFetch(contextKeys.config(), () => notesApi.config())
+      .then((c) => setAiConfigured(c.aiConfigured))
+      .catch(() => {})
+      .finally(() => setConfigDone(true))
   }, [])
 
   useEffect(() => {
     setRegistry(null)
+    setRegistryDone(false)
     if (!communityId) return
-    notesApi.getRegistry(communityId).then(setRegistry).catch(() => setRegistry(null))
+    let stale = false
+    cachedFetch(contextKeys.registry(communityId), () => notesApi.getRegistry(communityId))
+      .then((r) => { if (!stale) setRegistry(r) })
+      .catch(() => { if (!stale) setRegistry(null) })
+      .finally(() => { if (!stale) setRegistryDone(true) })
+    return () => { stale = true }
   }, [communityId])
 
   // When gated out, surface the viewer's own pending root-gate request (same
@@ -162,29 +162,27 @@ export function EntityContextPanel({
     setReferences(null)
     setRelated(null)
     onModeChange?.('wysiwyg')
-    readNoteWithStatus(communityId, path).then((r) => {
+    readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
       setRead(r)
       setNoteExists(r.status === 'ok')
       if (r.status === 'ok') {
-        notesApi.references(communityId, path).then(({ references: refs }) => {
+        cachedFetch(contextKeys.references(communityId, path), () =>
+          notesApi.references(communityId, path),
+        ).then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
-        notesApi.related(communityId, path).then(({ related: rel }) => {
+        cachedFetch(contextKeys.related(communityId, path), () =>
+          notesApi.related(communityId, path),
+        ).then(({ related: rel }) => {
           if (loadSeq.current === seq) setRelated(rel)
         }).catch(() => {})
       }
     })
-    notesApi.list(communityId).then((l) => {
+    cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).then((l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
-  }, [communityId, path, reloadKey, onModeChange])
-
-  useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 3500)
-    return () => clearTimeout(t)
-  }, [toast])
+  }, [communityId, path, onModeChange])
 
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
   const openMeta = useMemo(() => notesIndex.find((n) => n.path === path) ?? null, [notesIndex, path])
@@ -215,10 +213,20 @@ export function EntityContextPanel({
       if (!communityId) return
       try {
         await notesApi.write(communityId, p, body, origin)
+        // Drop the prefetch cache's view of this note so a remount re-reads the
+        // saved content instead of the pre-save snapshot.
+        invalidateContextCache(
+          contextKeys.read(communityId, p),
+          contextKeys.references(communityId, p),
+          contextKeys.related(communityId, p),
+          contextKeys.list(communityId),
+        )
         setNoteExists(true)
         setError(null)
-        notesApi.references(communityId, p).then(({ references: refs }) => setReferences(refs)).catch(() => {})
-        notesApi.related(communityId, p).then(({ related: rel }) => setRelated(rel)).catch(() => {})
+        cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
+          .then(({ references: refs }) => setReferences(refs)).catch(() => {})
+        cachedFetch(contextKeys.related(communityId, p), () => notesApi.related(communityId, p))
+          .then(({ related: rel }) => setRelated(rel)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
@@ -248,6 +256,8 @@ export function EntityContextPanel({
       if (!communityId) throw new Error('No community')
       try {
         await notesApi.create(communityId, p, entityStub(entity))
+        // The target entity's note may be cached as "missing" from a prefetch.
+        invalidateContextCache(contextKeys.read(communityId, p), contextKeys.list(communityId))
       } catch (err) {
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
@@ -255,43 +265,6 @@ export function EntityContextPanel({
     },
     [communityId],
   )
-
-  // Keep a private copy in the viewer's personal space (me:<userId>) — the
-  // affordance EntityNoteHeader used to carry.
-  const myPersonalCommunityId = registry ? `${PERSONAL_ID_PREFIX}${registry.me.userId}` : null
-  const addToPersonal = useCallback(async () => {
-    if (!myPersonalCommunityId || !path || !node) return
-    try {
-      await notesApi.create(
-        myPersonalCommunityId,
-        path,
-        entityStub({ id: nodeId, type: node.type, name: node.name, subtitle: node.subtitle ?? null }),
-      )
-      setToast(`Added ${node.name} to your personal notes`)
-    } catch (err) {
-      if (err instanceof Error && /already exists/i.test(err.message)) {
-        setToast(`${node.name} is already in your notes`)
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to add to your personal notes')
-      }
-    }
-  }, [myPersonalCommunityId, path, node, nodeId])
-
-  // Delete = clear this entity's context (soft-delete; the row survives in the
-  // notes trash table, but there is no trash UI anymore — restore is a data
-  // operation). The panel drops back to the empty state.
-  const handleDelete = useCallback(async () => {
-    if (!communityId || !path) return
-    try {
-      await notesApi.remove(communityId, path)
-      setRead({ status: 'missing' })
-      setNoteExists(false)
-      setReferences(null)
-      setRelated(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete')
-    }
-  }, [communityId, path])
 
   // Seed the header tags from the node whenever it (re)loads.
   useEffect(() => {
@@ -351,13 +324,21 @@ export function EntityContextPanel({
     [tags, saveTags],
   )
 
+  // Every answer the editor's first paint depends on: the note itself, the
+  // registry behind canWrite (skipped in personal spaces, which are always
+  // writable), and the config behind the Refactor button. They're separate
+  // requests, so gating the whole surface on all three is what keeps the text,
+  // the toolbar and the tags from landing on three different commits.
+  const dataReady = read !== null && (isPersonalSpace || registryDone) && configDone
+
   // Whether a note editor is on screen (mirrors `showEditor` below) — the page
-  // shows the Editor/Raw toggle in the tab bar only while it is.
+  // shows the Editor/Raw toggle in the tab bar only while it is, so it has to
+  // read the same gate or the toggle arrives ahead of the bar it belongs to.
   const editorShown =
     !!node && !!path &&
     !(node?.community_id && node.community_id !== communityId) &&
     !gatedOut &&
-    read !== null && read.status !== 'error' &&
+    dataReady && read !== null && read.status !== 'error' &&
     (noteExists || canWrite)
   useEffect(() => {
     onEditorActiveChange?.(editorShown)
@@ -391,7 +372,9 @@ export function EntityContextPanel({
     )
   }
 
-  const loadingNote = read === null
+  // Hold one skeleton until `dataReady`, so the note text can't beat its own
+  // toolbar onto the screen.
+  const loadingNote = !dataReady
   const readFailed = read?.status === 'error'
   const showEditor = !loadingNote && !readFailed && (noteExists || canWrite)
 
@@ -405,13 +388,17 @@ export function EntityContextPanel({
   // Tag colour registry: community-saved colours + those registered this session.
   const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
 
-  // The entity header (avatar, name, alias chip, tags). No card chrome — it
+  // The entity header (avatar, name, type + tag rows). No card chrome — it
   // renders directly on the page so it reads as one surface with the note, and
   // its width/padding mirror .notes-column (760px / 28px) so it lines up with
-  // the note text. In the editor state it rides below the sticky toolbar (via
-  // NoteEditor's headerSlot); in the other states it renders on the page.
+  // the note text. In the editor state it leads the scrolling content (via
+  // NoteEditor's headerSlot), sliding up under the tab bar's attached toolbar;
+  // in the other states it renders on the page.
+  //
+  // Layout mirrors blackbird-brain's context header: a title with real top
+  // breathing room, then a labelled "Type" square chip and "Tags" pill row.
   const headerCard = (
-    <div className="mx-auto mb-2 w-full max-w-[760px] px-7">
+    <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       <div className="flex items-center gap-4">
         {/* Only a real image earns the avatar slot — a placeholder silhouette
             would just re-introduce visual chrome the header is shedding. */}
@@ -420,70 +407,67 @@ export function EntityContextPanel({
             <img src={node.image_url} alt={node.name} className="h-full w-full object-cover" />
           </span>
         )}
-        <div className="min-w-0">
-          {/* The name IS the note title here (embedded NoteEditor hides its own
-              .notes-title), so it matches that scale: 2.5rem / 600 / tight. */}
-          <h2 className="truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
-          <span className="mt-1 inline-flex items-center rounded-md border px-2 py-0.5 text-[11.5px] font-semibold"
-                style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
+        {/* The name IS the note title here (embedded NoteEditor hides its own
+            .notes-title), so it matches that scale: 2.5rem / 600 / tight. */}
+        <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+      </div>
+
+      {/* Type row — micro-label above a single solid square chip in the entity's
+          alias/type colour (read-only here; the type is owned by the graph). */}
+      <div className="mt-5">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Type</span>
+        <div className="mt-1.5">
+          <span className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-semibold text-white"
+                style={{ background: theme.base }}>
             {node.alias ?? node.type}
           </span>
         </div>
       </div>
 
       {(tags.length > 0 || canEditTags) && (
-        <div className="mt-3.5 flex flex-wrap items-center gap-1.5">
-          {tags.map((tag) => {
-            const pal = tagPalette(tag, tagColors)
-            return (
-              <span key={tag}
-                    className="group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[13px] font-medium text-white"
-                    style={{ background: pal.base }}>
-                {tag}
-                {canEditTags && (
-                  <button type="button" onClick={() => removeTag(tag)} disabled={tagSaving}
-                          aria-label={`Remove ${tag}`}
-                          className="-mr-0.5 rounded-full opacity-60 transition hover:opacity-100 disabled:opacity-30">
-                    ×
-                  </button>
-                )}
-              </span>
-            )
-          })}
+        <div className="mt-4">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Tags</span>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {tags.map((tag) => {
+              const pal = tagPalette(tag, tagColors)
+              return (
+                <span key={tag}
+                      className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
+                      style={{ background: pal.base }}>
+                  <span className="truncate">{tag}</span>
+                  {canEditTags && (
+                    <button type="button" onClick={() => removeTag(tag)} disabled={tagSaving}
+                            aria-label={`Remove ${tag}`}
+                            className="rounded-full p-0.5 opacity-60 transition hover:opacity-100 disabled:opacity-30">
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </span>
+              )
+            })}
 
-          {canEditTags && (addingTag ? (
-            <TagCombobox
-              suggestions={tagSuggestions}
-              existing={tagsLower}
-              registry={tagColors}
-              accentBase={theme.base}
-              onAdd={addTag}
-              onCreate={createTag}
-              onClose={() => setAddingTag(false)}
-            />
-          ) : (
-            <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
-                    className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-default px-2.5 py-1 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] disabled:opacity-40"
-                    style={{ ['--accent' as string]: theme.dark }}>
+            {canEditTags && (addingTag ? (
+              <TagCombobox
+                suggestions={tagSuggestions}
+                existing={tagsLower}
+                registry={tagColors}
+                accentBase={theme.base}
+                onAdd={addTag}
+                onCreate={createTag}
+                onClose={() => setAddingTag(false)}
+              />
+            ) : (
+              <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
+                      className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] disabled:opacity-40"
+                      style={{ ['--accent' as string]: theme.dark }}>
               + Add tag
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>
   )
-
-  // Keep-a-private-copy affordance — rides the attached toolbar bar's right side.
-  const addToNotesButton = !isPersonalSpace && myPersonalCommunityId ? (
-    <button
-      type="button"
-      onClick={addToPersonal}
-      title="Keep a private copy of this context note in your personal space"
-      className="whitespace-nowrap rounded-full border border-border-subtle bg-surface-1 px-3 py-1.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
-    >
-      Add to my notes
-    </button>
-  ) : null
 
   return (
     <div className="pb-10">
@@ -497,13 +481,6 @@ export function EntityContextPanel({
           <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
-      {toast && (
-        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between rounded-lg border border-brand-green/30 bg-brand-light-bg px-3 py-2 text-sm text-brand-dark-green">
-          <span>{toast}</span>
-          <button onClick={() => setToast(null)} className="ml-2 text-brand-dark-green/60 hover:text-brand-dark-green">✕</button>
-        </div>
-      )}
-
       {loadingNote ? (
         <PanelSkeleton />
       ) : readFailed ? (
@@ -518,10 +495,9 @@ export function EntityContextPanel({
             </p>
           )}
           <NoteEditor
-            key={`${path}:${reloadKey}`}
+            key={path}
             variant="embedded"
             headerSlot={headerCard}
-            toolbarExtras={addToNotesButton}
             path={path}
             meta={openMeta}
             notes={noteRefs}
@@ -536,9 +512,6 @@ export function EntityContextPanel({
             onEnsureEntityNote={ensureEntityNote}
             onSave={handleSave}
             onOpenNote={handleOpenNote}
-            onShowHistory={noteExists ? () => setHistoryOpen(true) : undefined}
-            exportHref={noteExists ? notesApi.exportUrl(communityId, path) : undefined}
-            onDelete={noteExists && canWrite ? handleDelete : undefined}
           />
         </>
       ) : (
@@ -546,15 +519,6 @@ export function EntityContextPanel({
           <p className="text-base font-semibold text-text-secondary">No shared context for {node.name} yet.</p>
           <p className="text-sm text-text-muted">Members with write access can start this entity&apos;s context note.</p>
         </div>
-      )}
-
-      {historyOpen && (
-        <RevisionHistory
-          communityId={communityId}
-          path={path}
-          onRestored={() => setReloadKey((k) => k + 1)}
-          onClose={() => setHistoryOpen(false)}
-        />
       )}
     </div>
   )

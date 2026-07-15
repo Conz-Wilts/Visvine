@@ -25,6 +25,7 @@
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",
     "@google-cloud/storage": "^7.19.0",
+    "@heroicons/react": "^2.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^7.3.0",

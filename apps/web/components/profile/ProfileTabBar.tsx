@@ -1,8 +1,14 @@
 'use client';
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
+import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext';
 
 export type ProfileTab = 'about' | 'connections' | 'communities' | 'activity' | 'context';
+
+// One motion for everything the bar does on a tab change: the indicator slides
+// and the attached region opens on the same render, so they must share a curve
+// and duration to read as a single gesture. Keep them on this const.
+const TAB_MOTION = 'duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]';
 
 export interface TabConfig {
   id: ProfileTab;
@@ -79,8 +85,11 @@ interface ProfileTabBarProps {
    *  the bar sits flush under the navbar (at rest and pinned) with no
    *  see-through gap and no shift when it pins. */
   stickyTop?: string;
-  /** Optional control pinned to the right of the tab row (e.g. the note Editor/Raw toggle). */
-  rightSlot?: React.ReactNode;
+  /** Open the region below the tab row that the active tab's content portals its
+   *  own bar into (the note toolbar on Context — see TabBarSlotContext). Drive it
+   *  straight off tab state: it opens in step with the indicator, and whatever
+   *  fills it can arrive later without moving the line. */
+  attachedOpen?: boolean;
 }
 
 export default function ProfileTabBar({
@@ -93,8 +102,9 @@ export default function ProfileTabBar({
   showContextTab = false,
   tabs: tabsOverride,
   stickyTop = 'top-20',
-  rightSlot,
+  attachedOpen = false,
 }: ProfileTabBarProps) {
+  const { setHost } = useTabBarSlot();
   const tabs = useMemo(
     () =>
       tabsOverride ??
@@ -128,12 +138,14 @@ export default function ProfileTabBar({
   }
 
   return (
-    <div
-      className={`sticky ${stickyTop} z-20 bg-surface-1 border-b border-border-subtle`}
-      style={{ scrollPaddingTop: '128px' }}
-    >
-      {/* The sticky bar (and its bottom border) spans the full content pane;
-          the tab row inside stays aligned to the page's content container. */}
+    <div className={`sticky ${stickyTop} z-20 -ml-6 border-b border-border-subtle bg-surface-1 pl-6`}>
+      {/* -ml-6/pl-6 bleeds the bar left into <main>'s 24px gutter so its bottom
+          border starts at the sidebar's right edge (continuing the navbar seam)
+          while the inner box — and so the tab row — stays put. The gutter is
+          padding on the scrollport, not overflow, so nothing is clipped.
+          That border is the ONLY line under the bar, attached region included —
+          it travels down because this box grows, not because a second bar with
+          its own line appears. */}
       <div className="mx-auto flex w-full max-w-5xl items-center px-4 sm:px-6 xl:max-w-6xl">
         <div
           role="tablist"
@@ -162,11 +174,26 @@ export default function ProfileTabBar({
 
           {/* Animated green underline indicator */}
           <div
-            className="absolute bottom-0 h-0.5 bg-brand-green transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            className={`absolute bottom-0 h-0.5 bg-brand-green transition-all ${TAB_MOTION}`}
             style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
           />
         </div>
-        {rightSlot && <div className="flex-none pl-3">{rightSlot}</div>}
+      </div>
+
+      {/* The attached region. Always mounted — a conditional mount would snap
+          open with no transition — and animated 0fr↔1fr on the same const as the
+          indicator, off the same tab state, so the pair moves as one gesture.
+          The host reserves its full h-12 from the first frame, so a portalled
+          bar that only arrives once its data lands drops in without shifting the
+          line that just travelled down to meet it. */}
+      <div
+        className={`grid transition-[grid-template-rows] ${TAB_MOTION} motion-reduce:transition-none ${
+          attachedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div ref={setHost} className="h-12" />
+        </div>
       </div>
     </div>
   );

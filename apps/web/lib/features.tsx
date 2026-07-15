@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { CommunityFeatureConfig } from '@/lib/types';
-import { canAccessFeature, isFeatureEnabled } from '@/lib/featureAccess';
+import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, isFeatureEnabled, sortFeatureKeys } from '@/lib/featureAccess';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
 // tests can import it without this module's icons. Re-exported here so UI code
@@ -8,9 +8,11 @@ import { canAccessFeature, isFeatureEnabled } from '@/lib/featureAccess';
 export {
   CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
+  ALL_FEATURE_KEYS,
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
+  sortFeatureKeys,
   sanitizeFeatureConfig,
 } from '@/lib/featureAccess';
 
@@ -110,15 +112,41 @@ export const FEATURES: FeatureDef[] = [
   },
 ];
 
-/** The features (in registry order) that should appear in the nav for a community. */
-export function enabledFeatures(config: CommunityFeatureConfig | null | undefined): FeatureDef[] {
-  return FEATURES.filter((f) => isFeatureEnabled(config, f.key));
+/** Sort a filtered feature list into the community's configured display order. */
+function inConfiguredOrder(
+  config: CommunityFeatureConfig | null | undefined,
+  features: FeatureDef[],
+): FeatureDef[] {
+  const keys = sortFeatureKeys(config, features.map((f) => f.key));
+  return keys.map((key) => features.find((f) => f.key === key)!);
 }
 
-/** The features (in registry order) a given user should see in the nav. */
+/**
+ * The features that should appear in the nav for a community, in the admin's
+ * configured order (registry order when the community has never reordered).
+ */
+export function enabledFeatures(config: CommunityFeatureConfig | null | undefined): FeatureDef[] {
+  return inConfiguredOrder(config, FEATURES.filter((f) => isFeatureEnabled(config, f.key)));
+}
+
+/** The features a given user should see in the nav, in the configured order. */
 export function visibleFeatures(
   config: CommunityFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {
-  return FEATURES.filter((f) => canAccessFeature(config, f.key, isAdmin));
+  return inConfiguredOrder(config, FEATURES.filter((f) => canAccessFeature(config, f.key, isAdmin)));
+}
+
+/**
+ * Where a user lands when they enter a community: the first nav tab they can
+ * actually see. Falls back to the directory — it's core, so the only way to have
+ * no visible tab at all is an admins-only directory seen by a member with every
+ * other feature switched off.
+ */
+export function defaultLandingHref(
+  config: CommunityFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): string {
+  const nav = visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
+  return nav[0]?.href ?? '/directory';
 }

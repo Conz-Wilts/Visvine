@@ -6,14 +6,15 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useHeader } from '@/lib/contexts/HeaderContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf } from '@/lib/notes/entities';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
 import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
 import { NoteModeToggle, type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import ConnectionsGrid from '@/components/profile/ConnectionsGrid';
-import CommunitiesPanel from '@/components/profile/CommunitiesPanel';
+import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
+import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 import ActivityFeed from '@/components/profile/ActivityFeed';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
 import NodeProfileContent from '@/components/profile/NodeProfileContent';
@@ -64,6 +65,18 @@ function useProfileTabParam(): [boolean, (tab: ProfileTab) => void] {
   return [wantsContext, setTabParam];
 }
 
+// The note editor's Editor/Raw toggle rides the navbar's right slot, where the
+// directory's own view toggle lives — selectors sit in one place app-wide. Only
+// mounted while the Context tab's editor is actually up.
+function useNoteModeHeaderControl(active: boolean, mode: NoteMode, onChange: (m: NoteMode) => void) {
+  const { setHeaderRight } = useHeader();
+  useEffect(() => {
+    if (!active) return;
+    setHeaderRight(<NoteModeToggle value={mode} onChange={onChange} />);
+    return () => setHeaderRight(null);
+  }, [active, mode, onChange, setHeaderRight]);
+}
+
 // ── Person nodes → LinkedIn profile (+ Context tab) ──────────────────────────
 
 const PERSON_TABS: TabConfig[] = [
@@ -79,11 +92,15 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const { currentCommunity, loading: communityLoading } = useCommunity();
   const contextAvailable = useContextTabAvailable(node);
   const [wantsContext, setTabParam] = useProfileTabParam();
-  // Note editor view-mode lifted here so its Editor/Raw toggle rides the tab bar.
+  // Note editor view-mode lifted here so its Editor/Raw toggle rides the navbar.
   const [mode, setMode] = useState<NoteMode>('wysiwyg');
   const [editorActive, setEditorActive] = useState(false);
 
   const activeTab: ProfileTab = wantsContext && contextAvailable ? 'context' : 'about';
+  // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
+  // as the profile knows the tab exists, so clicking over paints immediately.
+  usePrefetchEntityContext(nodeId, node, contextAvailable);
+  useNoteModeHeaderControl(activeTab === 'context' && editorActive, mode, setMode);
   // Deep link to ?tab=context while community/node data still resolves: hold a
   // skeleton instead of flashing the profile and then swapping.
   const stillResolving = wantsContext && !contextAvailable && (communityLoading || nodeLoading || !currentCommunity);
@@ -99,35 +116,37 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   return (
     // Full-width shell: the sticky bars' divider lines run edge to edge across
     // the pane; non-context content re-applies the centered container below.
-    <div className="profile-enter w-full pb-10">
-      {/* ProfileTabBar must be a DIRECT child of the tall page container so its
-          `sticky` has scroll range — a thin wrapper would confine it and it'd
-          scroll away. Spacing below the tabs lives on the content instead.
-          stickyTop is "-top-4 -mt-4" (not top-0): the <main> scroll container
-          has pt-4 and sticky offsets resolve from below that padding — top-0
-          would pin the bar 16px short of the navbar, letting content show in
-          the gap. -mt-4 pulls the bar over that padding at rest too, so it
-          sits flush under the navbar and never shifts when it pins. */}
-      {contextAvailable && (
-        <ProfileTabBar
-          nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
-          rightSlot={activeTab === 'context' && editorActive
-            ? <NoteModeToggle value={mode} onChange={setMode} />
-            : undefined}
-        />
-      )}
-      <div className={contextAvailable && activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
-      {stillResolving ? (
-        <ProfileSkeletonLoader mode="fullpage" />
-      ) : activeTab === 'context' ? (
-        <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
-      ) : (
-        /* No outer card wrapper — ProfilePageContent renders separate floating
-           cards directly on the page background, matching the event detail page. */
-        <ProfilePageContent nodeId={nodeId} />
-      )}
+    // The provider spans the tab bar and the panel so the Context tab's editor
+    // can portal its toolbar into the tab bar's attached region.
+    <TabBarSlotProvider>
+      <div className="profile-enter w-full pb-10">
+        {/* ProfileTabBar must be a DIRECT child of the tall page container so its
+            `sticky` has scroll range — a thin wrapper would confine it and it'd
+            scroll away. Spacing below the tabs lives on the content instead.
+            stickyTop is "-top-4 -mt-4" (not top-0): the <main> scroll container
+            has pt-4 and sticky offsets resolve from below that padding — top-0
+            would pin the bar 16px short of the navbar, letting content show in
+            the gap. -mt-4 pulls the bar over that padding at rest too, so it
+            sits flush under the navbar and never shifts when it pins. */}
+        {contextAvailable && (
+          <ProfileTabBar
+            nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
+            attachedOpen={activeTab === 'context'}
+          />
+        )}
+        <div className={contextAvailable && activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        {stillResolving ? (
+          <ProfileSkeletonLoader mode="fullpage" />
+        ) : activeTab === 'context' ? (
+          <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
+        ) : (
+          /* No outer card wrapper — ProfilePageContent renders separate floating
+             cards directly on the page background, matching the event detail page. */
+          <ProfilePageContent nodeId={nodeId} />
+        )}
+        </div>
       </div>
-    </div>
+    </TabBarSlotProvider>
   );
 }
 
@@ -142,6 +161,10 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   const [mode, setMode] = useState<NoteMode>('wysiwyg');
   const [editorActive, setEditorActive] = useState(false);
   const router = useRouter();
+  // Same warm-start as the person page: prefetch the Context tab's chunk + data
+  // while the user is still on Profile.
+  usePrefetchEntityContext(nodeId, node, contextAvailable);
+  useNoteModeHeaderControl(activeTab === 'context' && contextAvailable && editorActive, mode, setMode);
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
   const changeTab = useCallback(
@@ -152,9 +175,13 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     [setTabParam],
   );
 
-  // A stale context tab (tool off / non-entity node) falls back once resolved.
+  // A tab with no panel behind it falls back to Profile: ?tab=connections and
+  // ?tab=communities are retired links, and context resolves late (tool off /
+  // non-entity node), so it can only be judged once the node has loaded.
   useEffect(() => {
-    if (activeTab === 'context' && !loading && data && !contextAvailable) {
+    const retired = activeTab === 'connections' || activeTab === 'communities';
+    const staleContext = activeTab === 'context' && !loading && data && !contextAvailable;
+    if (retired || staleContext) {
       changeTab('about');
     }
   }, [activeTab, loading, data, contextAvailable, changeTab]);
@@ -176,10 +203,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     );
   }
 
-  const { node: nodeData, connectionCount, communityCount, connections } = data;
-  const communities = nodeData.community_id
-    ? [{ id: nodeData.community_id, name: nodeData.community_id, role: 'member' }]
-    : [];
+  const { node: nodeData, connections } = data;
   const activityItems = connections.slice(0, 10).map((conn, i) => ({
     id: `conn-${i}`,
     type: 'connected' as const,
@@ -188,49 +212,35 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   }));
 
   // Tabs mirror the person profile's top bar — the entity view lives under a
-  // "Profile" tab, Context/lists are peers. Connection label follows node type.
-  const connectionLabels: Record<string, string> = {
-    Startup: 'Team', Organization: 'Members', Group: 'Members', Event: 'Attendees', Investor: 'Portfolio',
-  };
-  const connectionLabel = connectionLabels[nodeData.type] ?? 'Connections';
+  // "Profile" tab, Context is its peer.
   const tabs: TabConfig[] = [{ id: 'about', label: 'Profile' }];
   if (contextAvailable) tabs.push({ id: 'context', label: 'Context' });
-  tabs.push({ id: 'connections', label: `${connectionLabel} (${connectionCount})` });
-  if (nodeData.type !== 'Event' && communityCount > 0) {
-    tabs.push({ id: 'communities', label: `Communities (${communityCount})` });
-  }
   if (activityItems.length >= 3) tabs.push({ id: 'activity', label: 'Activity' });
 
   return (
     // Full-width shell (see PersonProfilePage) — divider lines run edge to edge.
-    <div className="profile-enter w-full pb-10">
-      {/* Direct child of the tall page container so `sticky` actually pins —
-          a thin wrapper would confine it. Spacing below lives on the panel.
-          "-top-4 -mt-4" cancels <main>'s pt-4 both at rest and when pinned, so
-          the bar sits flush under the navbar and never shifts on scroll. */}
-      <ProfileTabBar
-        nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
-        rightSlot={activeTab === 'context' && editorActive
-          ? <NoteModeToggle value={mode} onChange={setMode} />
-          : undefined}
-      />
+    // Provider spans tab bar + panel so the Context editor's toolbar can portal
+    // into the tab bar's attached region.
+    <TabBarSlotProvider>
+      <div className="profile-enter w-full pb-10">
+        {/* Direct child of the tall page container so `sticky` actually pins —
+            a thin wrapper would confine it. Spacing below lives on the panel.
+            "-top-4 -mt-4" cancels <main>'s pt-4 both at rest and when pinned, so
+            the bar sits flush under the navbar and never shifts on scroll. */}
+        <ProfileTabBar
+          nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
+          attachedOpen={activeTab === 'context' && contextAvailable}
+        />
 
-      <div role="tabpanel" className={activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
-        {activeTab === 'about' && (
-          <NodeProfileContent
-            nodeId={nodeId}
-            onConnectionsClick={() => changeTab('connections')}
-            onCommunitiesClick={() => changeTab('communities')}
-          />
-        )}
-        {activeTab === 'context' && contextAvailable && (
-          <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
-        )}
-        {activeTab === 'connections' && <ConnectionsGrid connections={connections} nodeType={nodeData.type} />}
-        {activeTab === 'communities' && <CommunitiesPanel communities={communities} />}
-        {activeTab === 'activity' && <ActivityFeed items={activityItems} />}
+        <div role="tabpanel" className={activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+          {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
+          {activeTab === 'context' && contextAvailable && (
+            <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
+          )}
+          {activeTab === 'activity' && <ActivityFeed items={activityItems} />}
+        </div>
       </div>
-    </div>
+    </TabBarSlotProvider>
   );
 }
 

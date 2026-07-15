@@ -9,27 +9,25 @@
 // the note (matches blackbird-brain). Saves are debounced and bubbled up via onSave.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { Markdown } from 'tiptap-markdown'
+// Toolbar icons match blackbird-brain's EditorToolbar: Heroicons outline for the
+// formatting marks, lucide TextQuote for the quote button.
 import {
-  Bold as BoldIcon,
-  Italic as ItalicIcon,
-  List as ListIcon,
-  ListOrdered as ListOrderedIcon,
-  ListChecks as ListChecksIcon,
-  Quote as QuoteIcon,
-  Code2 as CodeIcon,
-  Table as TableIcon,
-  Sparkles as SparklesIcon,
-  MoreHorizontal as MoreIcon,
-  History as HistoryIcon,
-  Download as DownloadIcon,
-  Trash2 as TrashIcon,
-} from 'lucide-react'
+  BoldIcon,
+  ItalicIcon,
+  ListBulletIcon,
+  NumberedListIcon,
+  CheckCircleIcon,
+  CodeBracketIcon,
+  TableCellsIcon,
+} from '@heroicons/react/24/outline'
+import { TextQuote as QuoteIcon, Sparkles as SparklesIcon } from 'lucide-react'
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
 import { NotePicker, type PickerEntity } from './NotePicker'
@@ -38,6 +36,7 @@ import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { formatRelativeTime } from '@/lib/notes/shared/time'
 import { notesApi } from '../lib/notesApi'
+import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
@@ -66,10 +65,6 @@ interface NoteEditorProps {
   onSave: (path: string, content: string, origin?: string) => void
   onOpenNote: (path: string) => void
   onOpenTag?: (tag: string) => void
-  // Note-level actions surfaced in the toolbar (omit to hide).
-  onShowHistory?: () => void
-  exportHref?: string
-  onDelete?: () => void
   // Layout variant:
   //  - 'floating' (default): the /context-era full-bleed layout — the note is
   //    its own scroll surface bleeding up behind the navbar, toolbar pinned at
@@ -83,9 +78,6 @@ interface NoteEditorProps {
   // Embedded only: content rendered directly below the sticky toolbar and above
   // the note body (the entity header card), so it scrolls up behind the toolbar.
   headerSlot?: React.ReactNode
-  // Embedded only: extra controls pinned to the right of the attached toolbar
-  // bar (e.g. an "Add to my notes" button).
-  toolbarExtras?: React.ReactNode
 }
 
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
@@ -132,12 +124,8 @@ export function NoteEditor({
   onSave,
   onOpenNote,
   onOpenTag,
-  onShowHistory,
-  exportHref,
-  onDelete,
   variant = 'floating',
   headerSlot,
-  toolbarExtras,
 }: NoteEditorProps) {
   const embedded = variant === 'embedded'
   const floating = variant === 'floating'
@@ -148,8 +136,12 @@ export function NoteEditor({
   const [linkAnchor, setLinkAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   const [refactoring, setRefactoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Embedded only: the tab bar's attached region is our toolbar's home, and it
+  // opened when the tab did (see TabBarSlotContext).
+  const { host: toolbarHost } = useTabBarSlot()
 
   const prefixRef = useRef('')
+  const rawRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef(path)
   const originRef = useRef<string>('edit')
   const pendingRef = useRef<string | null>(null)
@@ -305,6 +297,16 @@ export function NoteEditor({
     prevModeRef.current = mode
   }, [mode, editor, rawContent, canEdit, queueSave])
 
+  // Embedded raw: grow the textarea to its content so the page owns the scroll.
+  // A fixed-height textarea would scroll inside the 760px writing column, putting
+  // its scrollbar mid-screen instead of at the window edge.
+  useEffect(() => {
+    const el = rawRef.current
+    if (!el || !embedded || mode !== 'raw') return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [rawContent, mode, embedded])
+
   // Flush any pending edit on unmount.
   useEffect(() => flush, [flush])
 
@@ -408,9 +410,9 @@ export function NoteEditor({
   // the plain title like any other note.
   const noteTitle = (meta?.title?.trim() || titleFromContent(initialContent, path)) ?? path
 
-  // The formatting pill and the ⋯ actions menu are shared between two layouts:
-  // floating overlays in the full workspace, a sticky in-flow row when embedded
-  // (the profile Context tab scrolls with the page, so overlays can't anchor).
+  // The formatting pill is shared between two layouts: a floating overlay in
+  // the full workspace, a sticky in-flow row when embedded (the profile Context
+  // tab scrolls with the page, so overlays can't anchor).
   const formatControls =
     canEdit && mode === 'wysiwyg' && editor ? (
       <>
@@ -424,26 +426,26 @@ export function NoteEditor({
         </ToolbarButton>
         <Divider />
         <ToolbarButton label="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
-          <ListIcon className="h-4 w-4" />
+          <ListBulletIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton label="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
-          <ListOrderedIcon className="h-4 w-4" />
+          <NumberedListIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton label="Checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
-          <ListChecksIcon className="h-4 w-4" />
+          <CheckCircleIcon className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
         <ToolbarButton label="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
-          <QuoteIcon className="h-4 w-4" />
+          <QuoteIcon size={16} />
         </ToolbarButton>
         <ToolbarButton label="Code" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
-          <CodeIcon className="h-4 w-4" />
+          <CodeBracketIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label="Table"
           onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         >
-          <TableIcon className="h-4 w-4" />
+          <TableCellsIcon className="h-4 w-4" />
         </ToolbarButton>
         {aiConfigured && (
           <>
@@ -469,11 +471,6 @@ export function NoteEditor({
     </div>
   ) : null
 
-  const actionsMenu =
-    onShowHistory || exportHref || onDelete ? (
-      <NoteActionsMenu onShowHistory={onShowHistory} exportHref={exportHref} onDelete={onDelete} />
-    ) : null
-
   // The note body + references, shared by both layouts as a stable JSX element
   // (a const, NOT a nested component, so the editor is never remounted).
   const bodyContent = (
@@ -495,11 +492,14 @@ export function NoteEditor({
           <EditorContent editor={editor} />
         ) : (
           <textarea
+            ref={rawRef}
             value={rawContent}
             onChange={(e) => onRawChange(e.target.value)}
             readOnly={!canEdit}
             spellCheck={false}
-            className="h-full min-h-[55vh] w-full resize-none bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none"
+            className={`w-full resize-none overflow-hidden bg-transparent font-mono text-sm leading-relaxed text-text-primary focus:outline-none ${
+              embedded ? '' : 'h-full min-h-[55vh]'
+            }`}
           />
         )}
       </div>
@@ -520,31 +520,33 @@ export function NoteEditor({
 
   return (
     <div className={embedded ? 'relative' : 'relative h-full'}>
-      {/* Embedded: a flat full-width toolbar bar attached under the profile tab
-          bar (sticky -top-4, h-12). It carries the format controls (left) plus
-          any extras + the ⋯ actions (right); the note scrolls up behind it. In
-          the workspace these are absolute overlays instead (below). top-8, not
-          top-12: sticky offsets resolve below the <main> scroll container's
-          pt-4, so 32px + that 16px padding lands flush under the 48px tab bar. */}
-      {embedded && (formatControls || actionsMenu || toolbarExtras) && (
-        <div className="sticky top-8 z-30 border-b border-border-subtle bg-surface-1">
-          <div className="mx-auto flex max-w-3xl items-center gap-1 px-1 py-1.5">
-            <div className="flex flex-1 items-center gap-1 overflow-x-auto">{formatControls}</div>
-            {(toolbarExtras || actionsMenu) && (
-              <div className="flex flex-none items-center gap-2 pl-2">
-                {toolbarExtras}
-                {actionsMenu}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Embedded: the format controls ride the profile tab bar's attached
+          region, portalled into the host it exposes (TabBarSlotContext) — the
+          bar is part of that sticky box, not a second bar below it, so the pair
+          shares one border and pins as one unit. In the workspace this is an
+          absolute overlay instead (below).
+
+          No motion of our own: the region opened off the tab change long before
+          we mounted, and it already reserves our exact height, so the controls
+          just appear — on the same commit as the note text, which is the point.
+          A fade here would only re-invent the lag it was meant to hide.
+
+          No host means no toolbar: `embedded` is only used by EntityContextPanel
+          under the profile pages, which provide one. */}
+      {embedded && toolbarHost && createPortal(
+        <div className="mx-auto flex h-12 max-w-3xl items-center gap-1 px-1">
+          <div className="flex flex-1 items-center gap-1 overflow-x-auto">{formatControls}</div>
+        </div>,
+        toolbarHost,
       )}
       {/* Scrolling content lives in its own z-0 layer so it is guaranteed to
-          slide UNDER the sticky toolbar (z-30) and tab bar (z-20) — it can never
+          slide UNDER the tab bar + its attached toolbar (z-20) — it can never
           paint over them, so nothing "pops up" above the toolbar on scroll. */}
       {embedded ? (
         <div className="relative z-0 pt-4">
-          {headerSlot}
+          {/* Raw mode shows the note's own frontmatter — title, type and tags are
+              right there in the text, so the header card would just repeat them. */}
+          {mode === 'wysiwyg' && headerSlot}
           {error && (
             <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               <span>{error}</span>
@@ -569,12 +571,6 @@ export function NoteEditor({
         >
           {formatPill}
         </div>
-      )}
-
-      {/* Floating note actions (workspace only) — a ⋯ "more" menu (History /
-          Download / Delete) pinned top-right, above the note. */}
-      {!embedded && actionsMenu && (
-        <div className={`absolute right-4 z-40 ${floating ? 'top-[88px]' : 'top-2'}`}>{actionsMenu}</div>
       )}
 
       {!embedded && error && (
@@ -695,91 +691,4 @@ function BlockTypeSelect({ editor }: { editor: Editor }) {
 
 function Divider() {
   return <span className="mx-1 h-5 w-px bg-border-subtle" />
-}
-
-// The note-level actions (History / Download / Delete), collapsed behind a ⋯
-// button so the floating toolbar stays a single small target. Closes on outside
-// click or Escape.
-function NoteActionsMenu({
-  onShowHistory,
-  exportHref,
-  onDelete,
-}: {
-  onShowHistory?: () => void
-  exportHref?: string
-  onDelete?: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        aria-label="More actions"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="More"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex h-9 w-9 items-center justify-center rounded-xl border border-border-subtle bg-surface-1 shadow-sm transition hover:bg-surface-2 ${
-          open ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary'
-        }`}
-      >
-        <MoreIcon className="h-4 w-4" />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float">
-          {onShowHistory && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                onShowHistory()
-              }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
-            >
-              <HistoryIcon className="h-4 w-4" /> History
-            </button>
-          )}
-          {exportHref && (
-            <a
-              href={exportHref}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2.5 px-3 py-2 text-sm text-text-secondary transition hover:bg-surface-2 hover:text-text-primary"
-            >
-              <DownloadIcon className="h-4 w-4" /> Download
-            </a>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                onDelete()
-              }}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-red-500 transition hover:bg-red-50"
-            >
-              <TrashIcon className="h-4 w-4" /> Delete
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function GET(req: NextRequest) {
-  const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") ?? "/directory";
+  const callbackUrl = req.nextUrl.searchParams.get("callbackUrl") ?? "/home";
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const redirectUri = `${appUrl}/api/auth/callback/google`;
 

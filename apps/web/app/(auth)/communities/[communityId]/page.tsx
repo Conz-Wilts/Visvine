@@ -144,6 +144,12 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
   const active = useScrollSpy(visibleSections);
   const jump = (id: Section) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  // Entering the community lands on whichever tab its admin put first, so this
+  // goes through the /home resolver. The switch must happen before the push —
+  // /home reads the current community to pick the tab.
+  const openCommunity = () => { setCurrentCommunity(communityId); router.push('/home'); };
+  // Links that specifically mean "show me the network" still go straight to the
+  // directory, whatever the community's landing tab is.
   const openDirectory = () => { setCurrentCommunity(communityId); router.push('/directory'); };
 
   const share = () => {
@@ -271,10 +277,10 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
           <div className="flex flex-wrap items-center gap-2.5 mt-4">
             {isMember ? (
               <>
-                <button onClick={openDirectory}
+                <button onClick={openCommunity}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition hover:opacity-95 active:scale-[0.99]"
                   style={{ background: theme.base }}>
-                  <NetworkIcon className="w-4 h-4" /> Open directory
+                  <NetworkIcon className="w-4 h-4" /> Open community
                 </button>
                 <button onClick={share}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">

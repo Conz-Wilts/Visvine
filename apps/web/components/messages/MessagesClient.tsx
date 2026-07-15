@@ -4,19 +4,22 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle } from 'lucide-react';
+import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle, ChevronDown, ChevronRight, Pin, Star } from 'lucide-react';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useMessageHeights } from '@/hooks/useMessageHeights';
 import type {
   ChannelDirectoryEntry,
+  ChannelSpaceEntry,
   ConversationSummary,
   RealtimeEvent,
+  SavedMessageEntry,
   SerializedMessage,
   SerializedReplyTo,
 } from '@/lib/messages/types';
 import NewChatModal from './NewChatModal';
+import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow, { formatChatTimestamp, mergeMessages } from './MessageRow';
 import ProfilePanel from './ProfilePanel';
@@ -100,6 +103,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [introItems, setIntroItems] = useState<IntroItem[]>([]);
   const [introsLoading, setIntrosLoading] = useState(true);
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
+  const [channelSpaces, setChannelSpaces] = useState<ChannelSpaceEntry[]>([]);
+  // Collapsed rail sections, persisted per browser (keyed by space id, '__none__' = unfiled).
+  const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
   const [showChannelForm, setShowChannelForm] = useState(false);
   // Arriving with ?new=channel (from the global "Create new → Channel" tile)
@@ -115,7 +121,19 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   }, [channelsVariant, searchParams, router, basePath]);
   const [channelName, setChannelName] = useState('');
   const [channelDescription, setChannelDescription] = useState('');
+  const [channelIcon, setChannelIcon] = useState<string | null>(null);
+  const [channelSpaceId, setChannelSpaceId] = useState('');
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [creatingChannel, setCreatingChannel] = useState(false);
+  // Inline "new space" form in the channel rail (community admins only).
+  const [showSpaceForm, setShowSpaceForm] = useState(false);
+  const [spaceName, setSpaceName] = useState('');
+  const [creatingSpace, setCreatingSpace] = useState(false);
+  // Channel-header extras: emoji-icon picker + pinned/saved dropdown panels.
+  const [showHeaderIconPicker, setShowHeaderIconPicker] = useState(false);
+  const [headerPanel, setHeaderPanel] = useState<'pins' | 'saved' | null>(null);
+  const [panelItems, setPanelItems] = useState<SavedMessageEntry[]>([]);
+  const [panelLoading, setPanelLoading] = useState(false);
   const [threadIntro, setThreadIntro] = useState<ConversationIntroContext | null>(null);
   const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
   const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
@@ -235,8 +253,25 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       if (!res.ok) return;
       const payload = await res.json();
       setChannelDirectory(payload.channels ?? []);
+      setChannelSpaces(payload.spaces ?? []);
     } catch { /* best-effort */ }
   }, [communityId]);
+
+  // Collapsed rail sections survive reloads (client-only read to avoid SSR mismatch).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('visvine.channels.collapsed');
+      if (raw) setCollapsedSpaces(JSON.parse(raw));
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggleSpaceCollapsed = useCallback((key: string) => {
+    setCollapsedSpaces((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem('visvine.channels.collapsed', JSON.stringify(next)); } catch { /* best-effort */ }
+      return next;
+    });
+  }, []);
 
   const fetchIntros = useCallback(async () => {
     try {
@@ -403,6 +438,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     // Search is per-conversation — reset it on switch.
     setMessageSearch('');
     setShowMessageSearch(false);
+    setHeaderPanel(null);
+    setShowHeaderIconPicker(false);
     lastAppliedSearchRef.current = '';
     messagesFilteredRef.current = false;
     setTypingUsers({});
@@ -493,7 +530,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         if (payload.type === 'message.updated') {
           if (payload.conversationId === selectedConversationRef.current) {
             const updated = { ...payload.message, isOwn: payload.message.sender.id === currentUser.id };
-            setMessages((prev) => prev.map((m) => m.id === updated.id ? updated : m));
+            // `starred` is per-user but the broadcast is serialized for the editor —
+            // keep the local flag so someone else's edit doesn't clear your star.
+            setMessages((prev) => prev.map((m) => m.id === updated.id ? { ...updated, starred: m.starred } : m));
           }
         }
         if (payload.type === 'message.deleted') {
@@ -634,12 +673,16 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           communityId,
           name: channelName.trim(),
           description: channelDescription.trim() || undefined,
+          icon: channelIcon ?? undefined,
+          spaceId: channelSpaceId || undefined,
         }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error ?? 'Unable to create the channel');
       setChannelName('');
       setChannelDescription('');
+      setChannelIcon(null);
+      setChannelSpaceId('');
       setShowChannelForm(false);
       await fetchConversations(conversationSearch);
       await fetchChannels();
@@ -648,6 +691,80 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       setError((createError as Error).message || 'Unable to create the channel.');
     } finally {
       setCreatingChannel(false);
+    }
+  };
+
+  const handleCreateSpace = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!communityId || !spaceName.trim() || creatingSpace) return;
+    try {
+      setCreatingSpace(true);
+      const response = await fetch('/api/messages/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ communityId, name: spaceName.trim() }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Unable to create the space');
+      setSpaceName('');
+      setShowSpaceForm(false);
+      await fetchChannels();
+    } catch (createError) {
+      setError((createError as Error).message || 'Unable to create the space.');
+    } finally {
+      setCreatingSpace(false);
+    }
+  };
+
+  /** PATCH the open channel (icon / space) and refresh everything that shows it. */
+  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; spaceId?: string | null }) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
+    try {
+      const response = await fetch(`/api/messages/conversations/${conversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? 'Unable to update the channel');
+      setActiveConversation(payload.conversation);
+      await fetchConversations(conversationSearch);
+      await fetchChannels();
+    } catch (e) {
+      setError((e as Error).message || 'Unable to update the channel.');
+    }
+  }, [conversationSearch, fetchChannels, fetchConversations]);
+
+  const openHeaderPanel = useCallback(async (panel: 'pins' | 'saved') => {
+    if (headerPanel === panel) {
+      setHeaderPanel(null);
+      return;
+    }
+    setHeaderPanel(panel);
+    setPanelItems([]);
+    setPanelLoading(true);
+    try {
+      const url = panel === 'pins'
+        ? `/api/messages/conversations/${selectedConversationRef.current}/pins`
+        : '/api/messages/starred';
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const payload = await res.json();
+      setPanelItems(payload.messages ?? []);
+    } catch {
+      setPanelItems([]);
+    } finally {
+      setPanelLoading(false);
+    }
+  }, [headerPanel]);
+
+  const handlePanelItemClick = (item: SavedMessageEntry) => {
+    setHeaderPanel(null);
+    if (item.conversationId === selectedConversationRef.current) {
+      handleScrollToMessage(item.id);
+    } else {
+      handleSelectConversation(item.conversationId);
     }
   };
 
@@ -737,6 +854,36 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emoji }),
       });
+    } catch { /* best-effort */ }
+  }, []);
+
+  const handleToggleStar = useCallback(async (messageId: string) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
+    // Optimistic flip — stars are private, so no realtime echo will correct us.
+    setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred: !m.starred } : m));
+    try {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/star`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error();
+      const { starred } = await res.json();
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred } : m));
+    } catch {
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred: !m.starred } : m));
+    }
+  }, []);
+
+  const handleTogglePin = useCallback(async (messageId: string) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
+    try {
+      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/pin`, {
+        method: 'POST',
+      });
+      if (!res.ok) return;
+      const { pinnedAt } = await res.json();
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinnedAt } : m));
     } catch { /* best-effort */ }
   }, []);
 
@@ -838,6 +985,33 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       .filter((ch) => !ch.isMember && !joined.has(ch.id))
       .filter((ch) => !q || ch.name.toLowerCase().includes(q) || (ch.description?.toLowerCase().includes(q) ?? false));
   }, [channelDirectory, conversations, conversationSearch]);
+
+  // Circle-style rail sections: one per space (joined + browsable channels filed
+  // there), then an unfiled bucket. Sections with nothing to show are skipped.
+  const channelSections = useMemo(() => {
+    const joined = filteredConversations.filter((c) => c.type === 'CHANNEL');
+    const spaceIds = new Set(channelSpaces.map((s) => s.id));
+    const sections: Array<{
+      key: string;
+      name: string;
+      emoji: string | null;
+      joined: ConversationSummary[];
+      browsable: ChannelDirectoryEntry[];
+    }> = [];
+    for (const space of channelSpaces) {
+      const joinedHere = joined.filter((c) => c.spaceId === space.id);
+      const browsableHere = browsableChannels.filter((ch) => ch.spaceId === space.id);
+      if (joinedHere.length || browsableHere.length) {
+        sections.push({ key: space.id, name: space.name, emoji: space.emoji, joined: joinedHere, browsable: browsableHere });
+      }
+    }
+    const joinedUnfiled = joined.filter((c) => !c.spaceId || !spaceIds.has(c.spaceId));
+    const browsableUnfiled = browsableChannels.filter((ch) => !ch.spaceId || !spaceIds.has(ch.spaceId));
+    if (joinedUnfiled.length || browsableUnfiled.length) {
+      sections.push({ key: '__none__', name: 'Channels', emoji: null, joined: joinedUnfiled, browsable: browsableUnfiled });
+    }
+    return sections;
+  }, [filteredConversations, browsableChannels, channelSpaces]);
 
   const filteredIntroItems = useMemo(() => {
     const q = conversationSearch.trim().toLowerCase();
@@ -979,14 +1153,35 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           {/* Channel creation (community admins only) */}
           {activeTab === 'channels' && showChannelForm && (
             <form onSubmit={handleCreateChannel} className="space-y-2 border-b border-border-subtle px-4 py-3">
-              <input
-                value={channelName}
-                onChange={(e) => setChannelName(e.target.value)}
-                placeholder="Channel name"
-                autoFocus
-                maxLength={80}
-                className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
-              />
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowIconPicker((v) => !v)}
+                    title="Channel icon (default #)"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-border-default bg-surface-1 text-text-secondary transition-colors hover:border-brand-green/40"
+                  >
+                    <ChannelIcon icon={channelIcon} className="h-4 w-4" />
+                  </button>
+                  {showIconPicker && (
+                    <div className="absolute left-0 top-10 z-30">
+                      <EmojiIconPicker
+                        onSelect={(emoji) => setChannelIcon(emoji)}
+                        onClear={channelIcon ? () => setChannelIcon(null) : undefined}
+                        onClose={() => setShowIconPicker(false)}
+                      />
+                    </div>
+                  )}
+                </div>
+                <input
+                  value={channelName}
+                  onChange={(e) => setChannelName(e.target.value)}
+                  placeholder="Channel name"
+                  autoFocus
+                  maxLength={80}
+                  className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+                />
+              </div>
               <input
                 value={channelDescription}
                 onChange={(e) => setChannelDescription(e.target.value)}
@@ -994,10 +1189,24 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 maxLength={500}
                 className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
               />
+              {channelSpaces.length > 0 && (
+                <select
+                  value={channelSpaceId}
+                  onChange={(e) => setChannelSpaceId(e.target.value)}
+                  className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-green/40 focus:outline-none"
+                >
+                  <option value="">No space</option>
+                  {channelSpaces.map((space) => (
+                    <option key={space.id} value={space.id}>
+                      {space.emoji ? `${space.emoji} ` : ''}{space.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); }}
+                  onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelSpaceId(''); setShowIconPicker(false); }}
                   className="rounded-full px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
                 >
                   Cancel
@@ -1054,34 +1263,11 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                   </div>
                 )}
 
-                {!conversationsLoading && filteredConversations.length > 0 && (
+                {!conversationsLoading && activeTab !== 'channels' && filteredConversations.length > 0 && (
                   <div className="px-2.5 py-1">
                     {filteredConversations.map((conversation) => {
                       const isActive = selectedConversationId === conversation.id;
                       const hasUnread = conversation.unreadCount > 0 && !isActive;
-                      if (conversation.type === 'CHANNEL') {
-                        // Slack-style channel row: just "# name", no logo tile or preview
-                        return (
-                          <button
-                            key={conversation.id}
-                            type="button"
-                            onClick={() => handleSelectConversation(conversation.id)}
-                            className={`group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-150 ${
-                              isActive ? 'bg-brand-green/10' : 'hover:bg-surface-2'
-                            }`}
-                          >
-                            <Hash className={`h-4 w-4 shrink-0 ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`} strokeWidth={2} />
-                            <p className={`min-w-0 flex-1 truncate text-sm ${isActive || hasUnread ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary'}`}>
-                              {conversation.name}
-                            </p>
-                            {hasUnread && (
-                              <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                                {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      }
                       return (
                         <button
                           key={conversation.id}
@@ -1123,34 +1309,143 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                   </div>
                 )}
 
-                {/* Channel directory: community channels the user hasn't joined yet */}
-                {activeTab === 'channels' && browsableChannels.length > 0 && (
+                {/* ── Channels tab: sections grouped by space (Circle-style) ── */}
+                {!conversationsLoading && activeTab === 'channels' && channelSections.length > 0 && (
                   <div className="px-2.5 py-1">
-                    <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-                      Browse channels
-                    </p>
-                    {browsableChannels.map((channel) => (
-                      <div
-                        key={channel.id}
-                        className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2"
-                      >
-                        <Hash className="mt-0.5 h-4 w-4 shrink-0 self-start text-text-muted" strokeWidth={2} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-normal text-text-secondary">{channel.name}</p>
-                          <p className="truncate text-xs text-text-muted">
-                            {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
-                          </p>
+                    {channelSections.map((section) => {
+                      const hasSpaces = channelSpaces.length > 0;
+                      const collapsed = hasSpaces && Boolean(collapsedSpaces[section.key]);
+                      const sectionUnread = section.joined.reduce(
+                        (sum, c) => sum + (selectedConversationId === c.id ? 0 : c.unreadCount),
+                        0,
+                      );
+                      return (
+                        <div key={section.key} className="pb-1.5">
+                          {hasSpaces && (
+                            <button
+                              type="button"
+                              onClick={() => toggleSpaceCollapsed(section.key)}
+                              className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-2"
+                            >
+                              {collapsed
+                                ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />
+                                : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />}
+                              <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-text-muted group-hover:text-text-secondary">
+                                {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                              </span>
+                              {collapsed && sectionUnread > 0 && (
+                                <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                  {sectionUnread > 99 ? '99+' : sectionUnread}
+                                </span>
+                              )}
+                            </button>
+                          )}
+                          {!collapsed && (
+                            <>
+                              {section.joined.map((conversation) => {
+                                const isActive = selectedConversationId === conversation.id;
+                                const hasUnread = conversation.unreadCount > 0 && !isActive;
+                                return (
+                                  <button
+                                    key={conversation.id}
+                                    type="button"
+                                    onClick={() => handleSelectConversation(conversation.id)}
+                                    className={`group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-150 ${
+                                      isActive ? 'bg-brand-green/10' : 'hover:bg-surface-2'
+                                    }`}
+                                  >
+                                    <ChannelIcon
+                                      icon={conversation.icon}
+                                      className={`h-4 w-4 ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
+                                    />
+                                    <p className={`min-w-0 flex-1 truncate text-sm ${isActive || hasUnread ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary'}`}>
+                                      {conversation.name}
+                                    </p>
+                                    {hasUnread && (
+                                      <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                        {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                              {section.browsable.length > 0 && (
+                                <>
+                                  {!hasSpaces && (
+                                    <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                                      Browse channels
+                                    </p>
+                                  )}
+                                  {section.browsable.map((channel) => (
+                                    <div
+                                      key={channel.id}
+                                      className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2"
+                                    >
+                                      <ChannelIcon icon={channel.icon} className="mt-0.5 h-4 w-4 self-start text-text-muted" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-normal text-text-secondary">{channel.name}</p>
+                                        <p className="truncate text-xs text-text-muted">
+                                          {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
+                                        </p>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleJoinChannel(channel.id)}
+                                        disabled={joiningChannelId === channel.id}
+                                        className="shrink-0 rounded-full border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                                      >
+                                        {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
+                                      </button>
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </>
+                          )}
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── New space (community admins) ── */}
+                {activeTab === 'channels' && communityCtx?.isAdmin && (
+                  <div className="px-2.5 pt-1">
+                    {showSpaceForm ? (
+                      <form onSubmit={handleCreateSpace} className="flex items-center gap-1.5 px-3 py-1">
+                        <input
+                          value={spaceName}
+                          onChange={(e) => setSpaceName(e.target.value)}
+                          placeholder="Space name"
+                          autoFocus
+                          maxLength={80}
+                          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!spaceName.trim() || creatingSpace}
+                          className="shrink-0 rounded-full bg-brand-green px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                        >
+                          {creatingSpace ? '…' : 'Add'}
+                        </button>
                         <button
                           type="button"
-                          onClick={() => void handleJoinChannel(channel.id)}
-                          disabled={joiningChannelId === channel.id}
-                          className="shrink-0 rounded-full border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                          onClick={() => { setShowSpaceForm(false); setSpaceName(''); }}
+                          className="shrink-0 text-text-muted hover:text-text-secondary"
                         >
-                          {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
+                          <X className="h-3.5 w-3.5" />
                         </button>
-                      </div>
-                    ))}
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowSpaceForm(true)}
+                        className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
+                      >
+                        <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                        New space
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -1233,7 +1528,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           {selectedConversation && (
             <>
               {/* Conversation header */}
-              <header className="flex items-center justify-between gap-3 px-5 py-3">
+              <header className="relative flex items-center justify-between gap-3 px-5 py-3">
                 <div className="flex min-w-0 flex-1 items-center gap-3">
                   {isMobile && (
                     <button
@@ -1252,7 +1547,29 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                   <div className="min-w-0">
                     <p className="flex items-center gap-1 truncate text-sm font-semibold text-text-primary">
                       {selectedConversation.type === 'CHANNEL' && (
-                        <Hash className="h-4 w-4 shrink-0" strokeWidth={2.5} />
+                        isAdmin ? (
+                          <span className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setShowHeaderIconPicker((v) => !v)}
+                              title="Change channel icon"
+                              className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-2"
+                            >
+                              <ChannelIcon icon={selectedConversation.icon} className="h-4 w-4" />
+                            </button>
+                            {showHeaderIconPicker && (
+                              <span className="absolute left-0 top-7 z-30">
+                                <EmojiIconPicker
+                                  onSelect={(emoji) => void updateSelectedChannel({ icon: emoji })}
+                                  onClear={selectedConversation.icon ? () => void updateSelectedChannel({ icon: null }) : undefined}
+                                  onClose={() => setShowHeaderIconPicker(false)}
+                                />
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <ChannelIcon icon={selectedConversation.icon} className="h-4 w-4" />
+                        )
                       )}
                       <span className="truncate">{selectedConversation.name}</span>
                     </p>
@@ -1268,6 +1585,38 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {/* Move channel between spaces (community/channel admins) */}
+                  {selectedConversation.type === 'CHANNEL' && isAdmin && channelSpaces.length > 0 && (
+                    <select
+                      value={selectedConversation.spaceId ?? ''}
+                      onChange={(e) => void updateSelectedChannel({ spaceId: e.target.value || null })}
+                      title="Move to space"
+                      className="hidden max-w-36 rounded-lg border border-border-subtle bg-surface-1 px-2 py-1.5 text-xs text-text-secondary focus:border-brand-green/40 focus:outline-none md:block"
+                    >
+                      <option value="">No space</option>
+                      {channelSpaces.map((space) => (
+                        <option key={space.id} value={space.id}>
+                          {space.emoji ? `${space.emoji} ` : ''}{space.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void openHeaderPanel('pins')}
+                    className={`rounded-lg p-2 transition-colors ${headerPanel === 'pins' ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                    title="Pinned messages"
+                  >
+                    <Pin className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void openHeaderPanel('saved')}
+                    className={`rounded-lg p-2 transition-colors ${headerPanel === 'saved' ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
+                    title="Saved messages"
+                  >
+                    <Star className="h-4 w-4" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowMessageSearch((v) => !v)}
@@ -1310,6 +1659,48 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                     </button>
                   )}
                 </div>
+
+                {/* Pinned / saved dropdown panel */}
+                {headerPanel && (
+                  <div className="custom-scrollbar absolute right-4 top-full z-30 max-h-96 w-80 overflow-y-auto rounded-2xl border border-border-subtle bg-surface-1 p-2 shadow-float">
+                    <div className="flex items-center justify-between px-2 pb-1 pt-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                        {headerPanel === 'pins' ? 'Pinned in this conversation' : 'Your saved messages'}
+                      </p>
+                      <button type="button" onClick={() => setHeaderPanel(null)} className="text-text-muted hover:text-text-secondary">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    {panelLoading && (
+                      <p className="px-2 py-4 text-center text-xs text-text-muted">Loading…</p>
+                    )}
+                    {!panelLoading && panelItems.length === 0 && (
+                      <p className="px-2 py-4 text-center text-xs text-text-muted">
+                        {headerPanel === 'pins'
+                          ? 'Nothing pinned yet — hover a message and hit the pin.'
+                          : 'Nothing saved yet — hover a message and hit the star.'}
+                      </p>
+                    )}
+                    {!panelLoading && panelItems.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handlePanelItemClick(item)}
+                        className="block w-full rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-2"
+                      >
+                        <p className="truncate text-xs font-semibold text-text-primary">
+                          {item.senderName}
+                          <span className="font-normal text-text-muted">
+                            {' · '}{formatChatTimestamp(item.createdAt)}
+                            {headerPanel === 'saved' && item.conversationId !== selectedConversationId
+                              ? ` · ${item.conversationName}` : ''}
+                          </span>
+                        </p>
+                        <p className="mt-0.5 line-clamp-2 text-xs text-text-secondary">{item.text || '(attachment)'}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </header>
 
               {/* In-conversation search */}
@@ -1434,6 +1825,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                             onEdit={handleEdit}
                             onDelete={handleDelete}
                             onScrollToMessage={handleScrollToMessage}
+                            onToggleStar={handleToggleStar}
+                            onTogglePin={handleTogglePin}
                           />
                         </div>
                       );

@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     personId: person.id,
   });
 
-  const dest = callbackUrl === "/" ? "/directory" : callbackUrl;
+  const dest = callbackUrl === "/" ? "/home" : callbackUrl;
   const redirectTo = postAuthTarget(person.hasOnboarded, dest);
   return setSessionCookie(json({ redirectTo }, 200), token);
 }

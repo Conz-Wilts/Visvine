@@ -13,8 +13,8 @@ export default async function OnboardingPage() {
     where: { userId: session.userId },
   });
 
-  if (!person) redirect('/directory');
-  if (person.hasOnboarded) redirect('/directory');
+  if (!person) redirect('/home');
+  if (person.hasOnboarded) redirect('/home');
 
   return (
     <OnboardingWizard

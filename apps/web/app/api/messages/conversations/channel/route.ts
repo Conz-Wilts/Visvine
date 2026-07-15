@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       parsed.data.communityId,
       parsed.data.name,
       parsed.data.description,
+      parsed.data.icon,
+      parsed.data.spaceId,
     );
 
     return NextResponse.json({ conversation }, { status: 201 });

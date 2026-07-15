@@ -111,6 +111,11 @@ export interface CommunityDesignConfig {
 export interface CommunityFeatureConfig {
   enabled?: Record<string, boolean>;
   directoryPrivate?: boolean; // true = directory is admins-only (hidden from members)
+  // Feature keys in display order. Unlisted keys fall in after, in registry
+  // order, so an absent `order` reproduces the registry's own order — see
+  // lib/featureAccess.ts#sortFeatureKeys. The first visible entry is also the
+  // tab members land on when they enter the community.
+  order?: string[];
 }
 
 export interface Community {

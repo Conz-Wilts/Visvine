@@ -83,13 +83,13 @@ export async function GET(req: NextRequest) {
 
   // Parse state to get mobile deep-link redirect info
   let mobileRedirectUri: string | undefined;
-  let callbackUrl = "/directory";
+  let callbackUrl = "/home";
 
   if (stateParam) {
     try {
       const state = JSON.parse(decodeURIComponent(stateParam));
       mobileRedirectUri = state.redirectUri;
-      callbackUrl = state.callbackUrl || "/directory";
+      callbackUrl = state.callbackUrl || "/home";
     } catch (e) {
       logger.error('api.auth.callback.mobile.parse_state.failed', { err: e });
     }

@@ -27,7 +27,7 @@ export async function PUT(
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
-    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean };
+    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; order?: string[] };
     visibility?: string;
   };
 
@@ -56,7 +56,8 @@ export async function PUT(
     }
   }
 
-  // Validate featureConfig if provided — must be { enabled?: { [key]: boolean }, directoryPrivate?: boolean }
+  // Validate featureConfig if provided — must be
+  // { enabled?: { [key]: boolean }, directoryPrivate?: boolean, order?: string[] }
   if (featureConfig !== undefined) {
     const enabled = featureConfig.enabled;
     if (enabled !== undefined && (typeof enabled !== 'object' || enabled === null || Array.isArray(enabled))) {
@@ -67,6 +68,13 @@ export async function PUT(
     }
     if (featureConfig.directoryPrivate !== undefined && typeof featureConfig.directoryPrivate !== 'boolean') {
       return NextResponse.json({ error: 'featureConfig.directoryPrivate must be a boolean' }, { status: 400 });
+    }
+    const order = featureConfig.order;
+    if (order !== undefined && !Array.isArray(order)) {
+      return NextResponse.json({ error: 'featureConfig.order must be an array' }, { status: 400 });
+    }
+    if (order && order.some((v) => typeof v !== 'string')) {
+      return NextResponse.json({ error: 'featureConfig.order values must be strings' }, { status: 400 });
     }
   }
 

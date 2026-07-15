@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
 import type {
   ConversationMessagesPage,
+  SavedMessageEntry,
   SerializedMessage,
 } from './types';
 import {
@@ -258,6 +259,98 @@ export async function toggleReaction(
 
   const memberIds = membership.conversation.members.map((m) => m.userId);
   return { added: !existingReaction, memberIds };
+}
+
+/** Toggle a per-user star (saved message) — Slack-style bookmarking. */
+export async function toggleStar(
+  currentUserId: string,
+  conversationId: string,
+  messageId: string,
+): Promise<{ starred: boolean }> {
+  await ensureConversationMember(conversationId, currentUserId);
+
+  const existing = await prisma.message.findUnique({ where: { id: messageId }, select: { conversationId: true } });
+  if (!existing || existing.conversationId !== conversationId) {
+    throw new MessagingError(404, 'Message not found');
+  }
+
+  const existingStar = await prisma.messageStar.findUnique({
+    where: { messageId_userId: { messageId, userId: currentUserId } },
+  });
+
+  if (existingStar) {
+    await prisma.messageStar.delete({ where: { id: existingStar.id } });
+  } else {
+    await prisma.messageStar.create({
+      data: { messageId, userId: currentUserId },
+    });
+  }
+
+  return { starred: !existingStar };
+}
+
+type SavedMessageRecord = Prisma.MessageGetPayload<{
+  include: {
+    sender: { select: { name: true } };
+    conversation: { select: { id: true; name: true } };
+  };
+}>;
+
+function serializeSavedMessage(message: SavedMessageRecord): SavedMessageEntry {
+  return {
+    id: message.id,
+    conversationId: message.conversation.id,
+    conversationName: message.conversation.name?.trim() || 'Conversation',
+    text: message.deletedAt ? '' : message.text.slice(0, 300),
+    senderName: message.sender.name,
+    createdAt: message.createdAt.toISOString(),
+    pinnedAt: message.pinnedAt?.toISOString() ?? null,
+  };
+}
+
+/** All pinned messages in a conversation, newest pin first. */
+export async function listPinnedMessages(
+  currentUserId: string,
+  conversationId: string,
+): Promise<SavedMessageEntry[]> {
+  await ensureConversationMember(conversationId, currentUserId);
+
+  const records = await prisma.message.findMany({
+    where: { conversationId, pinnedAt: { not: null }, deletedAt: null },
+    include: {
+      sender: { select: { name: true } },
+      conversation: { select: { id: true, name: true } },
+    },
+    orderBy: { pinnedAt: 'desc' },
+    take: 50,
+  });
+
+  return records.map(serializeSavedMessage);
+}
+
+/** The user's starred (saved) messages across all their conversations, newest star first. */
+export async function listStarredMessages(currentUserId: string): Promise<SavedMessageEntry[]> {
+  const stars = await prisma.messageStar.findMany({
+    where: {
+      userId: currentUserId,
+      message: {
+        deletedAt: null,
+        conversation: { members: { some: { userId: currentUserId } } },
+      },
+    },
+    include: {
+      message: {
+        include: {
+          sender: { select: { name: true } },
+          conversation: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100,
+  });
+
+  return stars.map((star) => serializeSavedMessage(star.message));
 }
 
 export async function markConversationRead(

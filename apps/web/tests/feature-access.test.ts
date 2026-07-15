@@ -1,17 +1,19 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ALL_FEATURE_KEYS,
   CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
+  sortFeatureKeys,
   sanitizeFeatureConfig,
 } from '../lib/featureAccess';
 
-// The registry keys from lib/features.tsx (not imported here — that module
-// carries JSX icons the node test runner can't evaluate).
-const ALL_KEYS = ['directory', 'notes', 'channels', 'events', 'resources', 'messages'];
+// The registry keys from lib/features.tsx — mirrored in featureAccess.ts so the
+// node test runner never has to evaluate that module's JSX icons.
+const ALL_KEYS = ALL_FEATURE_KEYS;
 
 describe('isFeatureEnabled', () => {
   it('defaults every feature on with an empty/missing config', () => {
@@ -85,6 +87,49 @@ describe('canAccessFeature', () => {
   });
 });
 
+describe('sortFeatureKeys', () => {
+  const NAV = ['directory', 'channels', 'events', 'resources'];
+
+  it('leaves the registry order alone when no order is configured', () => {
+    assert.deepEqual(sortFeatureKeys(null, NAV), NAV);
+    assert.deepEqual(sortFeatureKeys({}, NAV), NAV);
+    assert.deepEqual(sortFeatureKeys({ order: [] }, NAV), NAV);
+  });
+
+  it('applies a full configured order', () => {
+    const order = ['events', 'resources', 'directory', 'channels'];
+    assert.deepEqual(sortFeatureKeys({ order }, NAV), order);
+  });
+
+  it('puts listed keys first and keeps the rest in registry order behind them', () => {
+    assert.deepEqual(sortFeatureKeys({ order: ['events'] }, NAV), [
+      'events', 'directory', 'channels', 'resources',
+    ]);
+  });
+
+  it('ignores ordered keys the caller did not ask for', () => {
+    // `notes` is a real key but not in this (already-filtered) nav list, and
+    // `bogus` is not a key at all — neither may appear in the output.
+    assert.deepEqual(sortFeatureKeys({ order: ['notes', 'bogus', 'events'] }, NAV), [
+      'events', 'directory', 'channels', 'resources',
+    ]);
+  });
+
+  it('does not mutate the input list', () => {
+    const keys = [...NAV];
+    sortFeatureKeys({ order: ['resources'] }, keys);
+    assert.deepEqual(keys, NAV);
+  });
+
+  it('drops a key from the output when it is filtered out upstream', () => {
+    // A disabled feature never reaches sortFeatureKeys, so a stale order entry
+    // for it must not resurrect it.
+    assert.deepEqual(sortFeatureKeys({ order: ['events', 'directory'] }, ['directory', 'channels']), [
+      'directory', 'channels',
+    ]);
+  });
+});
+
 describe('sanitizeFeatureConfig', () => {
   it('strips core features from enabled so directory can never be persisted off', () => {
     const out = sanitizeFeatureConfig({ enabled: { directory: false, events: false, notes: true } });
@@ -101,5 +146,33 @@ describe('sanitizeFeatureConfig', () => {
   it('drops unknown top-level keys', () => {
     const out = sanitizeFeatureConfig({ enabled: { events: true }, extra: 1 } as never);
     assert.deepEqual(Object.keys(out).sort(), ['enabled']);
+  });
+
+  it('keeps a valid order', () => {
+    const order = ['events', 'directory', 'channels'];
+    assert.deepEqual(sanitizeFeatureConfig({ order }).order, order);
+  });
+
+  it('strips unknown and duplicate keys from order, keeping first occurrence', () => {
+    assert.deepEqual(
+      sanitizeFeatureConfig({ order: ['events', 'bogus', 'events', 'directory'] }).order,
+      ['events', 'directory'],
+    );
+  });
+
+  it('omits order when it is absent, not an array, or has nothing usable left', () => {
+    assert.equal('order' in sanitizeFeatureConfig({}), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: 'events' }), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: {} }), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: [] }), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: [1, null, 'bogus'] }), false);
+  });
+
+  it('keeps core keys in order — order is about placement, not enablement', () => {
+    // `enabled` strips core keys (they can never be off), but a core feature
+    // still has to be placeable, so `order` must retain it.
+    assert.deepEqual(sanitizeFeatureConfig({ order: ['channels', 'directory'] }).order, [
+      'channels', 'directory',
+    ]);
   });
 });

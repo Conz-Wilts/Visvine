@@ -1,6 +1,6 @@
 import { ConversationMemberRole, ConversationType, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import type { ChannelDirectoryEntry, ConversationSummary } from './types';
+import type { ChannelDirectoryEntry, ChannelSpaceEntry, ConversationSummary } from './types';
 import { createDmKey } from './utils';
 import {
   CONVERSATION_INCLUDE,
@@ -248,6 +248,8 @@ export async function createChannelConversation(
   communityId: string,
   name: string,
   description?: string,
+  icon?: string,
+  spaceId?: string,
 ): Promise<ConversationSummary> {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
@@ -258,11 +260,17 @@ export async function createChannelConversation(
     throw new MessagingError(404, 'Community not found');
   }
 
+  if (spaceId) {
+    await ensureSpaceInCommunity(spaceId, communityId);
+  }
+
   const created = await prisma.conversation.create({
     data: {
       type: ConversationType.CHANNEL,
       name: name.trim(),
       description: description?.trim() || null,
+      icon: icon ?? null,
+      spaceId: spaceId ?? null,
       communityId,
       createdById: currentUserId,
       members: {
@@ -301,6 +309,8 @@ export async function listChannelsForCommunity(
       id: true,
       name: true,
       description: true,
+      icon: true,
+      spaceId: true,
       _count: { select: { members: true } },
       members: {
         where: { userId },
@@ -314,9 +324,91 @@ export async function listChannelsForCommunity(
     id: channel.id,
     name: channel.name?.trim() || 'Unnamed channel',
     description: channel.description,
+    icon: channel.icon,
+    spaceId: channel.spaceId,
     memberCount: channel._count.members,
     isMember: channel.members.length > 0,
   }));
+}
+
+// ─── Channel spaces (Circle-style sections) ─────────────────────────────────
+
+function serializeSpace(space: { id: string; name: string; emoji: string | null; position: number }): ChannelSpaceEntry {
+  return { id: space.id, name: space.name, emoji: space.emoji, position: space.position };
+}
+
+async function ensureSpaceInCommunity(spaceId: string, communityId: string) {
+  const space = await prisma.channelSpace.findUnique({
+    where: { id: spaceId },
+    select: { id: true, communityId: true },
+  });
+  if (!space || space.communityId !== communityId) {
+    throw new MessagingError(404, 'Space not found in this community');
+  }
+}
+
+export async function listChannelSpaces(communityId: string): Promise<ChannelSpaceEntry[]> {
+  const spaces = await prisma.channelSpace.findMany({
+    where: { communityId },
+    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
+  });
+  return spaces.map(serializeSpace);
+}
+
+export async function createChannelSpace(
+  communityId: string,
+  name: string,
+  emoji?: string,
+): Promise<ChannelSpaceEntry> {
+  const community = await prisma.community.findUnique({
+    where: { id: communityId },
+    select: { id: true },
+  });
+  if (!community) {
+    throw new MessagingError(404, 'Community not found');
+  }
+  const last = await prisma.channelSpace.findFirst({
+    where: { communityId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  const created = await prisma.channelSpace.create({
+    data: {
+      communityId,
+      name: name.trim(),
+      emoji: emoji ?? null,
+      position: (last?.position ?? -1) + 1,
+    },
+  });
+  return serializeSpace(created);
+}
+
+export async function updateChannelSpace(
+  spaceId: string,
+  payload: { name?: string; emoji?: string | null; position?: number },
+): Promise<ChannelSpaceEntry> {
+  const existing = await prisma.channelSpace.findUnique({ where: { id: spaceId } });
+  if (!existing) {
+    throw new MessagingError(404, 'Space not found');
+  }
+  const updated = await prisma.channelSpace.update({
+    where: { id: spaceId },
+    data: {
+      ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
+      ...(payload.emoji !== undefined ? { emoji: payload.emoji } : {}),
+      ...(payload.position !== undefined ? { position: payload.position } : {}),
+    },
+  });
+  return serializeSpace(updated);
+}
+
+/** Delete a space — its channels are unfiled (spaceId → null), not deleted. */
+export async function deleteChannelSpace(spaceId: string): Promise<void> {
+  const existing = await prisma.channelSpace.findUnique({ where: { id: spaceId }, select: { id: true } });
+  if (!existing) {
+    throw new MessagingError(404, 'Space not found');
+  }
+  await prisma.channelSpace.delete({ where: { id: spaceId } });
 }
 
 /** Join a community channel (any member of the channel's community can join). */
@@ -521,7 +613,7 @@ export async function leaveConversation(currentUserId: string, conversationId: s
 export async function updateGroupConversation(
   currentUserId: string,
   conversationId: string,
-  payload: { name?: string; avatarUrl?: string | null },
+  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; spaceId?: string | null },
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
@@ -533,14 +625,42 @@ export async function updateGroupConversation(
     throw new MessagingError(403, 'Only admins can update group details');
   }
 
+  const isChannel = membership.conversation.type === ConversationType.CHANNEL;
+
+  if ((payload.icon !== undefined || payload.spaceId !== undefined) && !isChannel) {
+    throw new MessagingError(400, 'Icons and spaces only apply to channels');
+  }
+
+  if (payload.spaceId) {
+    const communityId = membership.conversation.communityId;
+    if (!communityId) {
+      throw new MessagingError(400, 'Channel has no community');
+    }
+    await ensureSpaceInCommunity(payload.spaceId, communityId);
+  }
+
   const updates: Prisma.ConversationUpdateInput = {};
 
   if (payload.name !== undefined) {
     updates.name = payload.name.trim();
   }
 
+  if (payload.description !== undefined) {
+    updates.description = payload.description?.trim() || null;
+  }
+
   if (payload.avatarUrl !== undefined) {
     updates.avatarUrl = payload.avatarUrl;
+  }
+
+  if (payload.icon !== undefined) {
+    updates.icon = payload.icon;
+  }
+
+  if (payload.spaceId !== undefined) {
+    updates.space = payload.spaceId
+      ? { connect: { id: payload.spaceId } }
+      : { disconnect: true };
   }
 
   if (Object.keys(updates).length === 0) {

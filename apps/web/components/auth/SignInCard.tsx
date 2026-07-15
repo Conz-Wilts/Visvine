@@ -19,7 +19,7 @@ type Mode = "signin" | "signup";
  * field, show/hide toggle, inputs preserved on error, mode toggle link.
  */
 export default function SignInCard({
-  callbackUrl = "/directory",
+  callbackUrl = "/home",
   error,
   devAuthEnabled,
   initialMode = "signin",
@@ -81,7 +81,7 @@ export default function SignInCard({
       // raw callbackUrl prop so an attacker-supplied ?callbackUrl can't drive
       // this client-side navigation off-site.
       setDone(true);
-      window.location.assign(data.redirectTo ?? "/directory");
+      window.location.assign(data.redirectTo ?? "/home");
     } catch {
       setFormError("Network error. Please try again.");
       setSubmitting(false);
