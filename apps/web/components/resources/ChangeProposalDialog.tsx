@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Modal from '@/components/ui/Modal';
 
 export default function ChangeProposalDialog({
   resourceId,
@@ -41,8 +42,14 @@ export default function ChangeProposalDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm">
+    <Modal
+      onClose={onClose}
+      closeOnBackdrop={false}
+      closeOnEscape={false}
+      overlayClassName="items-center justify-center bg-black/40"
+      maxWidth="max-w-sm"
+      panelClassName="bg-white rounded-xl shadow-xl p-6"
+    >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Propose Change — {cellRef}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -73,7 +80,6 @@ export default function ChangeProposalDialog({
             {submitting ? 'Submitting...' : 'Propose Change'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

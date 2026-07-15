@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { Community } from '@/lib/types';
+import { createSafeContext } from './createSafeContext';
 
 interface CommunityContextValue {
   communities: Community[];
@@ -16,7 +17,8 @@ interface CommunityContextValue {
   isAdmin: boolean;
 }
 
-const CommunityContext = createContext<CommunityContextValue | undefined>(undefined);
+const [CommunityContext, useCommunity] = createSafeContext<CommunityContextValue>('Community');
+export { useCommunity };
 
 const CURRENT_COMMUNITY_KEY = 'nb_current_community';
 
@@ -134,12 +136,4 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       {children}
     </CommunityContext.Provider>
   );
-}
-
-export function useCommunity() {
-  const context = useContext(CommunityContext);
-  if (!context) {
-    throw new Error('useCommunity must be used within CommunityProvider');
-  }
-  return context;
 }

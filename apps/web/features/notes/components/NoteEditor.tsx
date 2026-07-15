@@ -33,7 +33,7 @@ import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { formatRelativeTime } from '@/lib/notes/shared/time'
+import { timeAgo } from '@/lib/date'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
@@ -509,7 +509,7 @@ export function NoteEditor({
           {meta && (
             <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
               {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
-              Edited {formatRelativeTime(meta.mtime, Date.now())}
+              Edited {timeAgo(meta.mtime, { style: 'long' })}
             </div>
           )}
         </>

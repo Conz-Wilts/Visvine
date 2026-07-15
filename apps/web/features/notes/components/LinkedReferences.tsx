@@ -7,6 +7,7 @@
 
 import { type ReactNode } from 'react'
 import type { References, LinkedReference, UnlinkedReference, RelatedNote } from '@/lib/notes/shared/types'
+import { formatDate } from '@/lib/date'
 
 interface Props {
   references: References | null
@@ -36,10 +37,6 @@ function highlight(text: string, needle: string): ReactNode[] {
   }
   if (last < text.length) out.push(text.slice(last))
   return out
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 function Reference({

@@ -7,6 +7,7 @@ import { COUNTRIES, countryCodeToFlag, getCountry } from '@/lib/countries';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { Alert, Button, ConfirmDialog, Field, Input, Textarea, SettingsCard, inputBaseClass } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import CommunityImageUpload from '@/components/community/CommunityImageUpload';
 
 interface Props {
@@ -185,13 +186,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
 
   // Every edit saves itself: text fields debounce, pickers persist instantly.
   const { queue, flush } = useConsoleAutosave(async (patch) => {
-    const res = await fetch(`/api/communities/${community.id}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? 'Failed to save');
+    const data = await fetchJsonBody<{ community: Partial<Community> }>(`/api/communities/${community.id}/settings`, 'PUT', patch);
     onSaved(data.community);
   });
 
@@ -207,10 +202,10 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
 
   const handleDelete = async () => {
     setDeleteError('');
-    const res = await fetch(`/api/data/communities?id=${community.id}`, { method: 'DELETE' });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setDeleteError(data.error ?? 'Failed to delete community');
+    try {
+      await fetchJson(`/api/data/communities?id=${community.id}`, { method: 'DELETE' });
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete community');
       setConfirmDelete(false);
       return;
     }

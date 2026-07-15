@@ -20,25 +20,9 @@ import type {
   SerializedLinkPreview,
 } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
+import { formatChatTimestamp, formatTime } from '@/lib/date';
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
-
-export function formatChatTimestamp(value: string | null | undefined) {
-  if (!value) return '';
-  const date = new Date(value);
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) {
-    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-function formatTimeOnly(value: string) {
-  return new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
 
 export function mergeMessages(messages: SerializedMessage[]) {
   const seen = new Set<string>();
@@ -287,7 +271,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
       ) : (
         <div className="relative w-9 shrink-0">
           <span className="absolute right-0 top-1 hidden text-[10px] leading-none text-text-muted group-hover:block">
-            {formatTimeOnly(message.createdAt)}
+            {formatTime(message.createdAt)}
           </span>
         </div>
       )}

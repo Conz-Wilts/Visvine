@@ -1,6 +1,7 @@
 'use client';
 
-import { createContext, useContext, useState } from 'react';
+import { useState } from 'react';
+import { createSafeContext } from './createSafeContext';
 
 export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'channel';
 
@@ -11,7 +12,8 @@ interface CreateModalContextValue {
   close: () => void;
 }
 
-const CreateModalContext = createContext<CreateModalContextValue | null>(null);
+const [CreateModalContext, useCreateModal] = createSafeContext<CreateModalContextValue>('CreateModal');
+export { useCreateModal };
 
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,10 +34,4 @@ export function CreateModalProvider({ children }: { children: React.ReactNode })
       {children}
     </CreateModalContext.Provider>
   );
-}
-
-export function useCreateModal() {
-  const ctx = useContext(CreateModalContext);
-  if (!ctx) throw new Error('useCreateModal must be used within CreateModalProvider');
-  return ctx;
 }

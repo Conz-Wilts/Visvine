@@ -6,6 +6,7 @@ import { Alert, Avatar, Button, ConfirmDialog, Field, Input, SearchInput, Settin
 import Select from '@/components/ui/Select';
 import Dropdown from '@/components/ui/Dropdown';
 import { useConsoleAction } from '@/components/console/ConsoleSaveContext';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 
 interface Member {
   id: string;
@@ -61,9 +62,7 @@ function InviteLinkRow({ communityId }: { communityId: string }) {
     setConfirmRegenerate(false);
     try {
       await runAction(async () => {
-        const res = await fetch(`/api/communities/${communityId}/invite`, { method: 'POST' });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Failed to regenerate link');
+        const data = await fetchJson<{ url?: string }>(`/api/communities/${communityId}/invite`, { method: 'POST' });
         setUrl(data.url ?? '');
       });
     } catch { /* status pill shows the failure */ }
@@ -122,15 +121,14 @@ function InviteModal({ communityId, onAdded, onClose }: {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch(`/api/communities/${communityId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), role }),
+      const data = await fetchJsonBody<{ member: Member }>(`/api/communities/${communityId}/members`, 'POST', {
+        email: email.trim(),
+        role,
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Failed to add member'); return; }
       onAdded(data.member);
       onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add member');
     } finally {
       setLoading(false);
     }
@@ -195,9 +193,7 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/communities/${communityId}/members`);
-      if (!res.ok) throw new Error('Failed to load members');
-      const data = await res.json();
+      const data = await fetchJson<{ members: Member[] }>(`/api/communities/${communityId}/members`);
       setMembers(data.members);
     } catch {
       setError('Failed to load members');
@@ -237,33 +233,19 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
 
   const updateRole = (userId: string, role: string) =>
     memberAction(userId, async () => {
-      const res = await fetch(`/api/communities/${communityId}/members/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to update role');
+      const data = await fetchJsonBody<{ member: Member }>(`/api/communities/${communityId}/members/${userId}`, 'PUT', { role });
       setMembers(prev => prev.map(m => m.userId === userId ? { ...m, role: data.member.role } : m));
     });
 
   const approveMember = (userId: string) =>
     memberAction(userId, async () => {
-      const res = await fetch(`/api/communities/${communityId}/members/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'active' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to approve');
+      await fetchJsonBody(`/api/communities/${communityId}/members/${userId}`, 'PUT', { status: 'active' });
       setMembers(prev => prev.map(m => m.userId === userId ? { ...m, status: 'active' } : m));
     });
 
   const removeMember = (userId: string) =>
     memberAction(userId, async () => {
-      const res = await fetch(`/api/communities/${communityId}/members/${userId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Failed to remove');
+      await fetchJson(`/api/communities/${communityId}/members/${userId}`, { method: 'DELETE' });
       setMembers(prev => prev.filter(m => m.userId !== userId));
     });
 

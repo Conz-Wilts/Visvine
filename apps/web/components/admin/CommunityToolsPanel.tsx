@@ -6,6 +6,7 @@ import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate
 import Toggle from '@/components/ui/Toggle';
 import { SettingsCard } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
+import { fetchJsonBody } from '@/lib/fetchJson';
 
 interface Props {
   community: Community;
@@ -83,13 +84,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const { queue } = useConsoleAutosave(async (patch) => {
-    const res = await fetch(`/api/communities/${community.id}/settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? 'Failed to save');
+    const data = await fetchJsonBody<{ community: Partial<Community> }>(`/api/communities/${community.id}/settings`, 'PUT', patch);
     onSaved(data.community);
   });
 

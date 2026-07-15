@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useCallback } from 'react';
+import React, { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { createSafeContext } from './createSafeContext';
 
 interface FullProfileContextValue {
   /**
@@ -12,7 +13,8 @@ interface FullProfileContextValue {
   openProfile: (nodeId: string) => void;
 }
 
-const FullProfileContext = createContext<FullProfileContextValue | null>(null);
+const [FullProfileContext, useFullProfile] = createSafeContext<FullProfileContextValue>('FullProfile');
+export { useFullProfile };
 
 export function FullProfileProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -27,10 +29,4 @@ export function FullProfileProvider({ children }: { children: React.ReactNode })
       {children}
     </FullProfileContext.Provider>
   );
-}
-
-export function useFullProfile() {
-  const ctx = useContext(FullProfileContext);
-  if (!ctx) throw new Error('useFullProfile must be used inside FullProfileProvider');
-  return ctx;
 }

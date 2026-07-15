@@ -10,6 +10,7 @@ import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
+import Modal from '@/components/ui/Modal';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
 import MatchPanel from './MatchPanel';
 import {
@@ -80,7 +81,6 @@ export default function CreateModal() {
   const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
 
   const nameRef = useRef<HTMLInputElement | null>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
   // Cross-community finder — one search per addable node type. Inactive types
   // have an empty name, so their hook short-circuits without fetching.
@@ -175,16 +175,6 @@ export default function CreateModal() {
       return () => clearTimeout(t);
     }
   }, [step]);
-
-  // Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
-    };
-    if (isOpen) window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
 
   const handleClose = () => {
     close();
@@ -407,22 +397,19 @@ export default function CreateModal() {
         </div>
       )}
 
-      {/* Backdrop */}
-      <div
-        ref={overlayRef}
-        className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-        onClick={(e) => { if (e.target === overlayRef.current) handleClose(); }}
+      {/* Backdrop + panel shell */}
+      <Modal
+        onClose={handleClose}
+        overlayClassName="items-center justify-center p-4"
+        overlayStyle={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+        maxWidth={
+          step === 1 && (selectedType === 'person' || selectedType === 'resource' || selectedType === 'event')
+            ? 'max-w-3xl'
+            : 'max-w-sm'
+        }
+        panelClassName="relative rounded-2xl border border-border-subtle bg-surface-1 shadow-2xl"
+        panelStyle={{ animation: 'modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both' }}
       >
-        {/* Panel */}
-        <div
-          className={`relative w-full rounded-2xl border border-border-subtle bg-surface-1 shadow-2xl ${
-            step === 1 && (selectedType === 'person' || selectedType === 'resource' || selectedType === 'event')
-              ? 'max-w-3xl'
-              : 'max-w-sm'
-          }`}
-          style={{ animation: 'modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both' }}
-        >
           {/* Header */}
           {step < 3 && (
             <div className="relative flex items-center justify-center px-6 pt-6 pb-4 border-b border-border-subtle">
@@ -566,8 +553,7 @@ export default function CreateModal() {
               </button>
             </div>
           )}
-        </div>
-      </div>
+      </Modal>
 
       <style>{`
         @keyframes modalIn {

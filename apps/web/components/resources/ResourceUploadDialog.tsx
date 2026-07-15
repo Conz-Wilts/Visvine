@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef } from 'react';
+import Modal from '@/components/ui/Modal';
 
 export default function ResourceUploadDialog({
   communityId,
@@ -40,8 +41,14 @@ export default function ResourceUploadDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
+    <Modal
+      onClose={onClose}
+      closeOnBackdrop={false}
+      closeOnEscape={false}
+      overlayClassName="items-center justify-center bg-black/40"
+      maxWidth="max-w-md"
+      panelClassName="bg-white rounded-xl shadow-xl p-6"
+    >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Upload Resource</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -57,7 +64,6 @@ export default function ResourceUploadDialog({
         </div>
         <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
-      </div>
-    </div>
+    </Modal>
   );
 }

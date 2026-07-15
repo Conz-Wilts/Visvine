@@ -11,16 +11,6 @@ export const MESSAGE_TABS: { id: MessageTab; label: string; icon: React.ElementT
   { id: 'intros', label: 'Intros', icon: Sparkles },
 ];
 
-export function formatDateLabel(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) return 'Today';
-  const y = new Date(now); y.setDate(now.getDate() - 1);
-  if (d.toDateString() === y.toDateString()) return 'Yesterday';
-  const sameYear = d.getFullYear() === now.getFullYear();
-  return d.toLocaleDateString([], sameYear ? { month: 'long', day: 'numeric' } : { year: 'numeric', month: 'long', day: 'numeric' });
-}
-
 function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
   const b = btn.getBoundingClientRect();
   const c = container.getBoundingClientRect();

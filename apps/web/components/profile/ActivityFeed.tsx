@@ -16,6 +16,8 @@ interface ActivityFeedProps {
   loading?: boolean;
 }
 
+// Intentionally local (not lib/date.ts): this surface's hybrid output
+// ("Just now" / "N hours ago" / "Mar 5" / "Mar 2024") matches no shared style.
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   const now = new Date();

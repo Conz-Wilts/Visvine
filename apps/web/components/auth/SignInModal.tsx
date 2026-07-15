@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Modal from "@/components/ui/Modal";
 import SignInCard from "@/components/auth/SignInCard";
 
 /**
@@ -24,59 +25,48 @@ export default function SignInModal({
   error?: string;
   initialMode?: "signin" | "signup";
 }) {
-  // Close on Escape and lock background scroll while the popup is open.
+  // Lock background scroll while the popup is open (Escape is handled by Modal).
   useEffect(() => {
     if (!open) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKeyDown);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = prevOverflow;
     };
-  }, [open, onClose]);
-
-  if (!open) return null;
+  }, [open]);
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Sign in"
-      onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-      style={{ animation: "fadeIn 0.2s ease-out" }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      ariaLabel="Sign in"
+      maxWidth="max-w-sm"
+      overlayClassName="items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      overlayStyle={{ animation: "fadeIn 0.2s ease-out" }}
+      panelClassName="card-rise relative"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="card-rise relative w-full max-w-sm"
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-md hover:text-gray-900 active:scale-95 transition-all"
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-md hover:text-gray-900 active:scale-95 transition-all"
-        >
-          <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
-            <path
-              d="M5 5l10 10M15 5L5 15"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <SignInCard
-          key={initialMode}
-          initialMode={initialMode}
-          devAuthEnabled={devAuthEnabled}
-          callbackUrl={callbackUrl}
-          error={error}
-        />
-      </div>
-    </div>
+        <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
+          <path
+            d="M5 5l10 10M15 5L5 15"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+      <SignInCard
+        key={initialMode}
+        initialMode={initialMode}
+        devAuthEnabled={devAuthEnabled}
+        callbackUrl={callbackUrl}
+        error={error}
+      />
+    </Modal>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { createContext, ReactNode } from "react";
+import React, { ReactNode } from "react";
+import { createSafeContext } from "@/lib/contexts/createSafeContext";
 import { useSession, signOut as signOutClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import type { Session, SessionUser } from "@/lib/auth-client";
@@ -12,7 +13,9 @@ interface AuthContextValue {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+// No consumer hook is exported today; the guarded hook can be exposed as
+// `useAuth` if/when a consumer needs it.
+const [AuthContext] = createSafeContext<AuthContextValue>("Auth");
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();

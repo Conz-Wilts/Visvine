@@ -21,11 +21,13 @@ import type {
 import NewChatModal from './NewChatModal';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
-import MessageRow, { formatChatTimestamp, mergeMessages } from './MessageRow';
+import MessageRow, { mergeMessages } from './MessageRow';
+import { formatChatTimestamp, formatDateLabel } from '@/lib/date';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
 import Avatar from '@/components/ui/Avatar';
 import PageTitle from '@/components/ui/PageTitle';
-import { MessagesTabSelector, MESSAGE_TABS, formatDateLabel, type MessageTab } from './messagesTabs';
+import { MessagesTabSelector, MESSAGE_TABS, type MessageTab } from './messagesTabs';
 import {
   IntroBanner,
   IntroRequestCard,
@@ -630,13 +632,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   /** Open (or lazily create) the DM with a person node — the connected-intro CTA. */
   const openConversationWithNode = async (nodeId: string) => {
     try {
-      const response = await fetch('/api/messages/conversations/dm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodeId }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Unable to open the conversation');
+      const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/dm', 'POST', { nodeId });
       await fetchConversations(conversationSearch);
       setActiveTab('direct');
       handleSelectConversation(payload.conversation.id);
@@ -648,9 +644,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const handleJoinChannel = async (channelId: string) => {
     try {
       setJoiningChannelId(channelId);
-      const response = await fetch(`/api/messages/conversations/${channelId}/join`, { method: 'POST' });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error ?? 'Unable to join the channel');
+      await fetchJson(`/api/messages/conversations/${channelId}/join`, { method: 'POST' });
       await fetchConversations(conversationSearch);
       await fetchChannels();
       handleSelectConversation(channelId);
@@ -666,19 +660,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     if (!communityId || !channelName.trim() || creatingChannel) return;
     try {
       setCreatingChannel(true);
-      const response = await fetch('/api/messages/conversations/channel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          communityId,
-          name: channelName.trim(),
-          description: channelDescription.trim() || undefined,
-          icon: channelIcon ?? undefined,
-          spaceId: channelSpaceId || undefined,
-        }),
+      const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/channel', 'POST', {
+        communityId,
+        name: channelName.trim(),
+        description: channelDescription.trim() || undefined,
+        icon: channelIcon ?? undefined,
+        spaceId: channelSpaceId || undefined,
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Unable to create the channel');
       setChannelName('');
       setChannelDescription('');
       setChannelIcon(null);
@@ -699,13 +687,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     if (!communityId || !spaceName.trim() || creatingSpace) return;
     try {
       setCreatingSpace(true);
-      const response = await fetch('/api/messages/spaces', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ communityId, name: spaceName.trim() }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Unable to create the space');
+      await fetchJsonBody('/api/messages/spaces', 'POST', { communityId, name: spaceName.trim() });
       setSpaceName('');
       setShowSpaceForm(false);
       await fetchChannels();
@@ -721,13 +703,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
     try {
-      const response = await fetch(`/api/messages/conversations/${conversationId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Unable to update the channel');
+      const payload = await fetchJsonBody<{ conversation: ConversationSummary }>(`/api/messages/conversations/${conversationId}`, 'PATCH', patch);
       setActiveConversation(payload.conversation);
       await fetchConversations(conversationSearch);
       await fetchChannels();
@@ -769,16 +745,10 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   };
 
   const handleIntroAction = async (id: string, action: IntroAction, endorsement?: string) => {
-    const response = await fetch(`/api/intros/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, endorsement }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error ?? 'Action failed');
+    const payload = await fetchJsonBody<{ conversationId?: string } | null>(`/api/intros/${id}`, 'PATCH', { action, endorsement });
     await fetchIntros();
     // Accepting seeds a DM — drop the user straight into the new conversation.
-    if (action === 'accept' && payload.conversationId) {
+    if (action === 'accept' && payload?.conversationId) {
       await fetchConversations(conversationSearch);
       setActiveTab('direct');
       handleSelectConversation(payload.conversationId);
@@ -822,13 +792,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     });
 
     try {
-      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const respPayload = await response.json();
-      if (!response.ok) throw new Error(respPayload.error ?? 'Failed to send message');
+      const respPayload = await fetchJsonBody<{ message: SerializedMessage }>(`/api/messages/conversations/${selectedConversationId}/messages`, 'POST', payload);
       const sent: SerializedMessage = { ...respPayload.message, isOwn: respPayload.message.sender.id === currentUser.id };
       // The SSE stream may have already delivered this message — drop the
       // optimistic copy instead of replacing it, or the id appears twice.
@@ -928,11 +892,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     const prompt = selectedConversation?.type === 'CHANNEL' ? 'Leave this channel?' : 'Leave this group chat?';
     if (!window.confirm(prompt)) return;
     try {
-      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/leave`, { method: 'POST' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error ?? 'Failed to leave group');
-      }
+      await fetchJson(`/api/messages/conversations/${selectedConversationId}/leave`, { method: 'POST' });
       handleBackToList();
       await fetchConversations(conversationSearch, false);
     } catch (e) { setError((e as Error).message || 'Unable to leave group.'); }
@@ -944,13 +904,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     const nextName = window.prompt(label, selectedConversation.name);
     if (!nextName?.trim()) return;
     try {
-      const response = await fetch(`/api/messages/conversations/${selectedConversationId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nextName.trim() }),
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? 'Failed to rename group');
+      const payload = await fetchJsonBody<{ conversation: ConversationSummary }>(`/api/messages/conversations/${selectedConversationId}`, 'PATCH', { name: nextName.trim() });
       await fetchConversations(conversationSearch);
       setActiveConversation(payload.conversation);
     } catch (e) { setError((e as Error).message || 'Unable to rename group.'); }
@@ -961,9 +915,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     const target = selectedConversation.participants.find((p) => p.id === memberUserId);
     if (!target || !window.confirm(`Remove ${target.name} from the group?`)) return;
     try {
-      const response = await fetch(`/api/messages/conversations/${selectedConversationId}/members/${memberUserId}`, { method: 'DELETE' });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error ?? 'Failed to remove member');
+      await fetchJson(`/api/messages/conversations/${selectedConversationId}/members/${memberUserId}`, { method: 'DELETE' });
       await fetchConversations(conversationSearch);
       await loadMessages(selectedConversationId, { query: messageSearch });
     } catch (e) { setError((e as Error).message || 'Unable to remove member.'); }

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Reply, Trash2, SmilePlus, Lock } from 'lucide-react';
-import { formatDistanceToNow } from '@/lib/feedUtils';
+import { timeAgo } from '@/lib/date';
 import type { BlogCommentData, BlogCommentReactionData } from './types';
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥', '🎉', '👀'];
@@ -80,7 +80,7 @@ export default function BlogCommentItem({
               {displayName}
             </span>
             <span className="text-[11px] text-neutral-400">
-              {formatDistanceToNow(comment.createdAt)}
+              {timeAgo(comment.createdAt, { style: 'compact' })}
             </span>
             {comment.isPrivate && isAdmin && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">

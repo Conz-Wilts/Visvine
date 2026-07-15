@@ -8,7 +8,7 @@ import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { EventComposer } from '@/components/events/EventComposer';
-import { DeleteEventModal } from '@/components/events/DeleteEventModal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import type { NBEvent } from '@/lib/types';
 
 export default function EditEventPage({ params }: { params: Promise<{ eventId: string }> }) {
@@ -18,6 +18,7 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!currentCommunity) return;
@@ -45,15 +46,30 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
         initialEvent={event}
         onDelete={() => setConfirmingDelete(true)}
       />
-      {confirmingDelete && (
-        <DeleteEventModal
-          eventTitle={event.title}
-          eventId={event.id}
-          communityId={currentCommunity.id}
-          onClose={() => setConfirmingDelete(false)}
-          onSuccess={() => router.push('/events')}
-        />
-      )}
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete Event"
+        body={<>Are you sure you want to delete <span className="font-semibold text-text-primary">{event.title}</span>? This action cannot be undone.</>}
+        confirmLabel="Delete Event"
+        destructive
+        error={deleteError}
+        closeOnBackdrop={false}
+        closeOnEscape={false}
+        onConfirm={async () => {
+          setDeleteError(null);
+          try {
+            const response = await fetch(`/api/events/${event.id}?communityId=${currentCommunity.id}`, { method: 'DELETE' });
+            if (!response.ok) {
+              const data = await response.json();
+              throw new Error(data.error || 'Failed to delete event');
+            }
+            router.push('/events');
+          } catch (err) {
+            setDeleteError(err instanceof Error ? err.message : 'Failed to delete event');
+          }
+        }}
+        onClose={() => { setConfirmingDelete(false); setDeleteError(null); }}
+      />
     </>
   );
 }

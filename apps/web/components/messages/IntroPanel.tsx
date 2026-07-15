@@ -21,6 +21,7 @@ import {
   MessageCircle, Sparkles, UserCheck, XCircle,
 } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
+import { timeAgo } from '@/lib/date';
 import type {
   ConversationIntroContext, IntroInbox, IntroNodeSummary, IntroRequestDTO, IntroStatus,
 } from '@/lib/intros/types';
@@ -59,15 +60,6 @@ function introCounterpart({ intro, role }: IntroItem): IntroNodeSummary | null {
   if (role === 'requester') return intro.targetNode;
   if (role === 'target') return intro.requesterNode;
   return null;
-}
-
-function timeAgo(iso: string) {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (s < 60) return 'now';
-  if (s < 3600) return `${Math.floor(s / 60)}m`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h`;
-  if (s < 604800) return `${Math.floor(s / 86400)}d`;
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function firstName(name?: string | null) {
@@ -202,7 +194,7 @@ export function IntroRequestCard({ item, onAction, onOpenConversation }: {
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-sm font-semibold text-text-primary">{introTitle(item)}</p>
               <StatusPill intro={intro} />
-              <span className="text-[11px] text-text-muted">{timeAgo(intro.updatedAt)}</span>
+              <span className="text-[11px] text-text-muted">{timeAgo(intro.updatedAt, { style: 'minimal' })}</span>
             </div>
             <p className="mt-0.5 text-xs text-text-muted">{introSubtitle(item)}</p>
             {role === 'target' && intro.endorsement && (

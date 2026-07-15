@@ -12,7 +12,8 @@
  * visible in FullProfileOverlay without a page reload or graph-cache bust.
  */
 
-import React, { createContext, useContext, useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { createSafeContext } from './createSafeContext';
 import type { FullProfile } from '@/lib/profileTypes';
 
 interface ProfileCacheEntry {
@@ -34,7 +35,8 @@ interface ProfileContextValue {
   version: number;
 }
 
-const ProfileContext = createContext<ProfileContextValue | null>(null);
+const [ProfileContext, useProfileCache] = createSafeContext<ProfileContextValue>('Profile', 'useProfileCache');
+export { useProfileCache };
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const cacheRef = useRef<Map<string, ProfileCacheEntry>>(new Map());
@@ -73,10 +75,4 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       {children}
     </ProfileContext.Provider>
   );
-}
-
-export function useProfileCache() {
-  const ctx = useContext(ProfileContext);
-  if (!ctx) throw new Error('useProfileCache must be used inside ProfileProvider');
-  return ctx;
 }

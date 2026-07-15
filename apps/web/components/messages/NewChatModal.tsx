@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Alert, SearchInput, Badge } from '@/components/ui';
+import { Avatar, Alert, SearchInput, Badge, Modal } from '@/components/ui';
+import { fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,13 +128,7 @@ export default function NewChatModal({
 
       if (activeMode === 'dm') {
         if (!selectedDmUserId) { setError('Select someone to message.'); return; }
-        const res = await fetch('/api/messages/conversations/dm', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: selectedDmUserId }),
-        });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error ?? 'Failed to create direct message');
+        const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/dm', 'POST', { userId: selectedDmUserId });
         onConversationSelected(payload.conversation.id);
         onClose();
         return;
@@ -142,13 +137,10 @@ export default function NewChatModal({
       if (activeMode === 'group') {
         if (!groupName.trim()) { setError('Give your group a name.'); return; }
         if (selectedGroupMembers.size === 0) { setError('Add at least one member.'); return; }
-        const res = await fetch('/api/messages/conversations/group', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: groupName.trim(), memberIds: Array.from(selectedGroupMembers) }),
+        const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/group', 'POST', {
+          name: groupName.trim(),
+          memberIds: Array.from(selectedGroupMembers),
         });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error ?? 'Failed to create group');
         onConversationSelected(payload.conversation.id);
         onClose();
         return;
@@ -157,13 +149,9 @@ export default function NewChatModal({
       // addMembers mode
       if (!addMembersConversationId) { setError('Conversation ID is required.'); return; }
       if (selectedGroupMembers.size === 0) { setError('Pick at least one person to add.'); return; }
-      const res = await fetch(`/api/messages/conversations/${addMembersConversationId}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memberIds: Array.from(selectedGroupMembers) }),
+      await fetchJsonBody(`/api/messages/conversations/${addMembersConversationId}/members`, 'POST', {
+        memberIds: Array.from(selectedGroupMembers),
       });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? 'Failed to add members');
       onMembersUpdated?.();
       onClose();
     } catch (e) {
@@ -198,14 +186,13 @@ export default function NewChatModal({
     : selectedGroupMembers.size > 0;
 
   return (
-    /* Backdrop */
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Modal
+      onClose={onClose}
+      closeOnEscape={false}
+      overlayClassName="items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
+      maxWidth="sm:max-w-lg"
+      panelClassName="flex h-[90dvh] flex-col overflow-hidden rounded-t-3xl bg-surface-1 shadow-2xl sm:h-auto sm:max-h-[85dvh] sm:rounded-2xl"
     >
-      {/* Modal panel */}
-      <div className="flex h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-surface-1 shadow-2xl sm:h-auto sm:max-h-[85dvh] sm:max-w-lg sm:rounded-2xl">
-
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <div>
@@ -488,7 +475,6 @@ export default function NewChatModal({
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

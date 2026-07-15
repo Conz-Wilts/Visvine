@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
+import { createSafeContext } from './createSafeContext';
 
 export interface ColorTheme {
   id: string;
@@ -107,7 +108,8 @@ interface ThemeContextValue {
   toggleDark: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+const [ThemeContext, useTheme] = createSafeContext<ThemeContextValue>('Theme');
+export { useTheme };
 
 // Blend two hex colors: mix `hex` into `base` at `amount` (0–1)
 function blendHex(base: string, hex: string, amount: number): string {
@@ -213,10 +215,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       {children}
     </ThemeContext.Provider>
   );
-}
-
-export function useTheme() {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
-  return ctx;
 }

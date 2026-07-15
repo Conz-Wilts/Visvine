@@ -21,6 +21,12 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   /** Require typing this exact text (e.g. the community name) to enable confirm. */
   confirmText?: string;
+  /** Error message shown under the body (e.g. when the confirm action failed). */
+  error?: React.ReactNode;
+  /** Close when the dim backdrop is clicked (default true). */
+  closeOnBackdrop?: boolean;
+  /** Close on the Escape key (default true). */
+  closeOnEscape?: boolean;
   onConfirm: () => void | Promise<void>;
   onClose: () => void;
 }
@@ -32,6 +38,9 @@ export default function ConfirmDialog({
   confirmLabel = 'Confirm',
   destructive = false,
   confirmText,
+  error,
+  closeOnBackdrop = true,
+  closeOnEscape = true,
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
@@ -40,7 +49,7 @@ export default function ConfirmDialog({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEscapeKey(() => {
-    if (open && !busy) onClose();
+    if (open && !busy && closeOnEscape) onClose();
   });
 
   useEffect(() => {
@@ -73,10 +82,19 @@ export default function ConfirmDialog({
       aria-modal="true"
       aria-label={title}
     >
-      <div className="absolute inset-0 bg-black/40" onClick={() => !busy && onClose()} />
+      <div
+        className="absolute inset-0 bg-black/40"
+        onClick={() => closeOnBackdrop && !busy && onClose()}
+      />
       <div className="relative w-full max-w-md rounded-2xl border border-border-subtle bg-surface-1 p-6 shadow-float">
         <h3 className="font-ginto text-lg font-medium text-text-primary">{title}</h3>
         {body && <div className="mt-2 text-sm leading-relaxed text-text-secondary">{body}</div>}
+
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+            {error}
+          </div>
+        )}
 
         {confirmText && (
           <div className="mt-4">

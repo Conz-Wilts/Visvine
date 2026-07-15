@@ -5,6 +5,7 @@ import StatCard from '@/components/analytics/StatCard';
 import LineChart from '@/components/analytics/LineChart';
 import BarChart from '@/components/analytics/BarChart';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
+import { timeAgo } from '@/lib/date';
 
 interface AnalyticsData {
   stats: {
@@ -39,16 +40,6 @@ function formatAction(action: string): string {
   return action
     .replace(/_/g, ' ')
     .replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function timeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
 }
 
 export default function AnalyticsPanel({ communityId }: { communityId: string }) {
@@ -292,7 +283,7 @@ export default function AnalyticsPanel({ communityId }: { communityId: string })
                       </p>
                     </div>
                     <span className="text-xs text-text-muted flex-shrink-0 mt-0.5 tabular-nums">
-                      {timeAgo(item.createdAt)}
+                      {timeAgo(item.createdAt, { style: 'short' })}
                     </span>
                   </div>
                 ))}

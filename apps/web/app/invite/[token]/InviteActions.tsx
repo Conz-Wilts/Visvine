@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { fetchJsonBody } from '@/lib/fetchJson';
 
 /**
  * Join button for the invite landing page. Posts the token to
@@ -44,14 +45,8 @@ export default function InviteActions({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/communities/join-via-invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error ?? 'Could not join');
-      setStatus(body.status === 'active' ? 'active' : 'pending');
+      const body = await fetchJsonBody<{ status?: string } | null>('/api/communities/join-via-invite', 'POST', { token });
+      setStatus(body?.status === 'active' ? 'active' : 'pending');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not join');
     } finally {

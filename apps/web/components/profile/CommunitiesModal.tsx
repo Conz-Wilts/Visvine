@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { X, ShieldCheck, Lock, Users } from 'lucide-react';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import Modal from '@/components/ui/Modal';
 import { getInitials } from '@/lib/avatarUtils';
 import type { ThemePalette } from '@/lib/profileTheme';
 
@@ -31,7 +31,6 @@ interface Props {
 }
 
 export default function CommunitiesModal({ open, onClose, communities, isOwner, personName, theme, onToggle }: Props) {
-  useEscapeKey(onClose, open);
   const [busy, setBusy] = useState<string | null>(null);
 
   if (!open) return null;
@@ -46,12 +45,12 @@ export default function CommunitiesModal({ open, onClose, communities, isOwner, 
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    <Modal
+      open={open}
+      onClose={onClose}
+      maxWidth="max-w-lg"
+      panelClassName="bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl flex flex-col max-h-[85vh]"
     >
-      <div className="w-full max-w-lg bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl flex flex-col max-h-[85vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
           <h2 className="text-base font-bold font-open-sauce text-text-primary">Communities</h2>
           <button onClick={onClose} aria-label="Close"
@@ -114,8 +113,7 @@ export default function CommunitiesModal({ open, onClose, communities, isOwner, 
             </p>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

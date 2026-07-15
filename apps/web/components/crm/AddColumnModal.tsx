@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Lock, Globe, X, Plus, Trash2 } from 'lucide-react';
+import Modal from '@/components/ui/Modal';
 
 export type CrmColumnType = 'text' | 'date' | 'select' | 'tags' | 'url';
 
@@ -108,12 +109,14 @@ export default function AddColumnModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={handleClose} />
-
-      {/* Modal */}
-      <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+    <Modal
+      open={isOpen}
+      onClose={handleClose}
+      closeOnEscape={false}
+      overlayClassName="items-center justify-center bg-black/50"
+      maxWidth="max-w-lg"
+      panelClassName="relative bg-white rounded-xl shadow-xl mx-4"
+    >
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-gray-100">
           <div>
@@ -325,7 +328,6 @@ export default function AddColumnModal({
             {saving ? 'Saving…' : source === 'private' ? 'Add Private Column' : 'Submit Request'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
