@@ -32,8 +32,8 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory as the only core feature', () => {
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory']);
+  it('lists directory and messages as the core features', () => {
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'messages']);
   });
 
   it('hides messages and notes from the nav rail while keeping them toggleable', () => {

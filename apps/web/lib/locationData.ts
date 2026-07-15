@@ -1,7 +1,7 @@
 // Major world cities for location autocomplete — "City, Country" format
 // Sorted roughly by prominence so top matches feel LinkedIn-like
 
-export const LOCATIONS: string[] = [
+const LOCATIONS: string[] = [
   // United States
   'New York, United States',
   'Los Angeles, United States',

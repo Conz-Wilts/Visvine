@@ -11,7 +11,6 @@ export { MessagingError } from './serializers';
 
 export {
   listConversationsForUser,
-  getConversationSummaryForUser,
   createDmConversation,
   createGroupConversation,
   createChannelConversation,
@@ -43,7 +42,5 @@ export {
 
 export {
   searchConversationsAndMessages,
-  searchUsers,
   searchUsersAndDirectory,
-  type DirectoryPerson,
 } from './searchService';

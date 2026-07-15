@@ -94,7 +94,7 @@ export async function listConversationsForUser(userId: string, searchQuery?: str
     .sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt)));
 }
 
-export async function getConversationSummaryForUser(userId: string, conversationId: string): Promise<ConversationSummary> {
+async function getConversationSummaryForUser(userId: string, conversationId: string): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, userId);
   const unreadCount = await getUnreadCount(conversationId, userId, membership.lastReadAt);
 

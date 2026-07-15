@@ -1,7 +1,7 @@
 import type { ConversationMemberRole, ConversationType } from '@prisma/client';
 import type { ConversationIntroContext } from '@/lib/intros/types';
 
-export interface ConversationParticipant {
+interface ConversationParticipant {
   id: string;
   name: string;
   email: string;
@@ -10,13 +10,13 @@ export interface ConversationParticipant {
   lastReadAt: string | null;
 }
 
-export interface SerializedMessageImage {
+interface SerializedMessageImage {
   id: string;
   imageUrl: string;
   position: number;
 }
 
-export interface SerializedMessageMention {
+interface SerializedMessageMention {
   id: string;
   mentionedUserId: string | null;
   mentionedNodeId: string | null;
@@ -125,30 +125,30 @@ export interface ConversationMessagesPage {
   intro?: ConversationIntroContext | null;
 }
 
-export interface RealtimeMessageEvent {
+interface RealtimeMessageEvent {
   type: 'message.new';
   conversationId: string;
   message: SerializedMessage;
 }
 
-export interface RealtimeMessageUpdatedEvent {
+interface RealtimeMessageUpdatedEvent {
   type: 'message.updated';
   conversationId: string;
   message: SerializedMessage;
 }
 
-export interface RealtimeMessageDeletedEvent {
+interface RealtimeMessageDeletedEvent {
   type: 'message.deleted';
   conversationId: string;
   messageId: string;
 }
 
-export interface RealtimeConversationEvent {
+interface RealtimeConversationEvent {
   type: 'conversation.updated';
   conversationId: string;
 }
 
-export interface RealtimeTypingEvent {
+interface RealtimeTypingEvent {
   type: 'typing';
   conversationId: string;
   userId: string;
@@ -156,7 +156,7 @@ export interface RealtimeTypingEvent {
   isTyping: boolean;
 }
 
-export interface RealtimeReactionEvent {
+interface RealtimeReactionEvent {
   type: 'reaction.added' | 'reaction.removed';
   conversationId: string;
   messageId: string;

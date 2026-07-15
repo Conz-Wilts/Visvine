@@ -13,16 +13,6 @@ export function heartbeat(userId: string) {
   lastSeen.set(userId, Date.now());
 }
 
-export function isOnline(userId: string): boolean {
-  const t = lastSeen.get(userId);
-  return t !== undefined && Date.now() - t < ONLINE_TTL_MS;
-}
-
-export function lastSeenAt(userId: string): Date | null {
-  const t = lastSeen.get(userId);
-  return t ? new Date(t) : null;
-}
-
 export function presenceSnapshot(userIds: string[]): Record<string, { online: boolean; lastSeen: string | null }> {
   const result: Record<string, { online: boolean; lastSeen: string | null }> = {};
   for (const id of userIds) {

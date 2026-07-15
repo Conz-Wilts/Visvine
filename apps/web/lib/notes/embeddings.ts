@@ -5,7 +5,7 @@
 // stage silently drops out of the fused search.
 
 const EMBED_MODEL = 'gemini-embedding-001'
-export const EMBED_DIMENSIONS = 768
+const EMBED_DIMENSIONS = 768
 const BATCH_SIZE = 64
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 

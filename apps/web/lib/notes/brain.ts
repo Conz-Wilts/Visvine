@@ -18,7 +18,7 @@ import type { BrainPrincipal } from './shared/brainTypes'
 import { ensureBrainGate, resolveRegistry } from './registry'
 
 // Kept for route/client compat; every scope now resolves to the shared brain.
-export type Scope = 'shared' | 'personal'
+type Scope = 'shared' | 'personal'
 
 export interface ResolvedBrain extends Brain {
   scope: Scope

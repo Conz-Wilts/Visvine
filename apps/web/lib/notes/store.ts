@@ -16,9 +16,7 @@ import type {
   NoteRevision,
   NoteRevisionOrigin,
   TrashEntry,
-  TreeNode,
 } from './shared/types'
-import { buildNoteIndex, buildTree } from './shared/graph'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
 
 export interface Brain {
@@ -118,42 +116,6 @@ export async function readNoteOrNull(brain: Brain, path: string): Promise<string
 export async function getNoteCreatedBy(brain: Brain, path: string): Promise<string | null> {
   const row = await findLive(brain, sanitizePath(path))
   return row?.createdBy ?? null
-}
-
-// The sidebar tree, grafting explicitly-created empty folders onto the
-// note-derived structure (notes already imply their ancestor folders).
-export async function tree(brain: Brain): Promise<TreeNode> {
-  const [raw, folders] = await Promise.all([listRaw(brain), listFolders(brain)])
-  const root = buildTree(buildNoteIndex(raw))
-  for (const folder of folders) ensureFolderPath(root, folder)
-  sortChildren(root)
-  return root
-}
-
-function ensureFolderPath(root: TreeNode, folderPath: string): void {
-  const segments = folderPath.split('/').filter(Boolean)
-  let cur = root
-  let acc = ''
-  for (const seg of segments) {
-    acc = acc ? `${acc}/${seg}` : seg
-    cur.children ??= []
-    let child = cur.children.find((c) => c.kind === 'folder' && c.path === acc)
-    if (!child) {
-      child = { name: seg, path: acc, kind: 'folder', children: [] }
-      cur.children.push(child)
-    }
-    cur = child
-  }
-}
-
-// Folders first, then notes, each alphabetically (mirrors graph.ts:sortChildren).
-function sortChildren(node: TreeNode): void {
-  if (!node.children) return
-  node.children.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
-    return (a.title ?? a.name).localeCompare(b.title ?? b.name)
-  })
-  for (const child of node.children) sortChildren(child)
 }
 
 // --- writes ------------------------------------------------------------------

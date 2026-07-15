@@ -1,4 +1,4 @@
-export interface BlogCommentAuthor {
+interface BlogCommentAuthor {
   id: string;
   name: string;
   image: string | null;

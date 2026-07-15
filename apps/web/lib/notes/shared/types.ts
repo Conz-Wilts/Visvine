@@ -5,11 +5,9 @@
 // Keep this file free of Node/DOM imports so it runs on the server and the client.
 
 import type { RelatedNote } from './related'
-import type { MergeStatus, MergeDecision } from './merge'
 
 export type { RelatedNote }
 export type { References, LinkedReference, UnlinkedReference } from './references'
-export type { MergeStatus, MergeDecision }
 
 // The subset of YAML frontmatter the app reasons about. Any other keys are kept
 // verbatim via the index signature. Fields follow the OKF v0.1 convention.
@@ -54,11 +52,6 @@ export interface TreeNode {
   children?: TreeNode[]
 }
 
-// Manual sidebar order: parent-folder POSIX path ("" = brain root) -> the ordered
-// child base-names the user dragged into place. Names absent from the array fall
-// back to their default alphabetical order, appended after the listed ones.
-export type ManualOrder = Record<string, string[]>
-
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.
 export interface TrashEntry {
   id: string // the note row id
@@ -100,16 +93,4 @@ export interface MoveProposal {
 export interface ReorganizePlan {
   summary: string
   moves: MoveProposal[]
-}
-
-// --- Notes meta --------------------------------------------------------------
-
-export interface NotesInfo {
-  noteCount: number
-}
-
-// Which optional affordances to surface this session. Mirrors blackbird's
-// AppConfig but only the bits the web build still needs (AI on/off).
-export interface NotesConfig {
-  aiConfigured: boolean // an LLM backend is configured — refactor/reorganize work
 }

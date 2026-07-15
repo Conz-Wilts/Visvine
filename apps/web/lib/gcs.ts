@@ -36,7 +36,7 @@ export const RESOURCES_BUCKET = () => requireEnv('GCS_RESOURCES_BUCKET');
 // ---------------------------------------------------------------------------
 // Image variants generated on every profile/community image upload
 // ---------------------------------------------------------------------------
-export type AvatarSize = 'original' | 'avatar-lg' | 'avatar-md' | 'avatar-sm';
+type AvatarSize = 'original' | 'avatar-lg' | 'avatar-md' | 'avatar-sm';
 
 const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }> = [
   { name: 'original',   size: 1080, quality: 82 },
@@ -168,4 +168,4 @@ export async function getSignedUrl(
 // mediaUrl module so server and client stay in lockstep — this is a thin
 // server-side alias kept for the existing `@/lib/gcs` import sites.
 // ---------------------------------------------------------------------------
-export { getMediaProxyUrl as getMediaUrl, normalizeImageUrl } from './mediaUrl';
+export { getMediaProxyUrl as getMediaUrl } from './mediaUrl';

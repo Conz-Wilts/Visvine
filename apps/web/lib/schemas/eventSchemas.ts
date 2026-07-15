@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 // Form field schema
-export const formFieldSchema = z.object({
+const formFieldSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   type: z.enum(['text', 'textarea', 'email', 'select', 'checkbox', 'url', 'linkedin', 'company']),
@@ -15,12 +15,9 @@ export const formFieldSchema = z.object({
 });
 
 // Shared enums
-export const rsvpStatusEnum = z.enum([
-  'invited', 'pending', 'going', 'registered', 'waitlisted', 'cancelled', 'checked_in', 'no_show',
-]);
-export const rsvpResponseEnum = z.enum(['going', 'maybe', 'declined']);
+const rsvpResponseEnum = z.enum(['going', 'maybe', 'declined']);
 
-// Rebuild fields shared by eventSchema + eventCreateInputSchema (all optional, metadata-backed)
+// Rebuild fields for eventCreateInputSchema (all optional, metadata-backed)
 const eventRebuildFields = {
   coverImageUrl: z.string().optional(),
   theme: z.object({ color: z.string().optional() }).optional(),
@@ -31,65 +28,6 @@ const eventRebuildFields = {
   allowPlusOnes: z.number().int().min(0).max(20).optional(),
   allowedResponses: z.array(rsvpResponseEnum).optional(),
 };
-
-// Event schema
-export const eventSchema = z.object({
-  id: z.string().regex(/^event:.+/),
-  communityId: z.string().min(1),
-  title: z.string().min(1).max(200),
-  description: z.string().max(5000).optional(),
-  startAt: z.string().datetime(),
-  endAt: z.string().datetime().optional(),
-  timezone: z.string().optional(),
-  location: z.object({
-    label: z.string(),
-    address: z.string().optional(),
-    lat: z.number().optional(),
-    lon: z.number().optional(),
-  }).optional(),
-  hosts: z.array(z.string()),
-  organizerEmail: z.string().email().optional(),
-  capacity: z.number().int().positive().optional(),
-  visibility: z.enum(['public', 'community', 'private']),
-  form: z.object({
-    enabled: z.boolean(),
-    slug: z.string(),
-    schema: z.array(formFieldSchema),
-    domainAllowlist: z.array(z.string()).optional(),
-    requireApproval: z.boolean().optional(),
-  }),
-  analytics: z.object({
-    views: z.number().int().min(0),
-    rsvpCount: z.number().int().min(0),
-    checkinCount: z.number().int().min(0),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-  }),
-  ...eventRebuildFields,
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
-// Attendee schema
-export const attendeeSchema = z.object({
-  id: z.string().regex(/^attendee:.+/),
-  eventId: z.string().regex(/^event:.+/),
-  // Optional: loginless guests have no Person node, so personId may be '' / absent.
-  personId: z.string().optional(),
-  name: z.string().max(200).optional(),
-  email: z.string().email().optional(),
-  linkedinUrl: z.string().url().optional(),
-  companyName: z.string().optional(),
-  roleTitle: z.string().optional(),
-  answers: z.record(z.string(), z.union([z.string(), z.boolean()])).optional(),
-  status: rsvpStatusEnum,
-  response: rsvpResponseEnum.optional(),
-  plusOnes: z.number().int().min(0).max(20).optional(),
-  plusOneNames: z.array(z.string().max(200)).optional(),
-  invitedBy: z.string().optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-  checkinAt: z.string().datetime().optional(),
-});
 
 // RSVP submission schema (what the guest submits via the public form)
 export const rsvpSubmissionSchema = z.object({
@@ -162,10 +100,4 @@ export const eventUpdateInputSchema = eventCreateInputSchema
       })
       .optional(),
   });
-
-// Types inferred from schemas
-export type FormFieldInput = z.infer<typeof formFieldSchema>;
-export type EventInput = z.infer<typeof eventCreateInputSchema>;
-export type EventUpdateInput = z.infer<typeof eventUpdateInputSchema>;
-export type RSVPSubmission = z.infer<typeof rsvpSubmissionSchema>;
 

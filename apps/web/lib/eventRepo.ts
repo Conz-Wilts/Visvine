@@ -220,7 +220,7 @@ export async function getCommunityNodes(communityId: string): Promise<NBNode[]> 
   }
 }
 
-export async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
+async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
   try {
     return await unstable_cache(
       () => fetchCommunityLinks(communityId),
@@ -354,7 +354,7 @@ export async function deleteEvent(communityId: string, eventId: string): Promise
   revalidateTag('graph-data-v2');
 }
 
-export async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
+async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
   const event = await getEvent(communityId, eventId);
   if (event) {
     event.analytics = { ...event.analytics, ...updates, updatedAt: new Date().toISOString() };
@@ -393,7 +393,7 @@ function attendeeToWritable(a: NBAttendee) {
   };
 }
 
-export async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
+async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
   const writable = attendeeToWritable(attendee);
   await prisma.attendee.upsert({
     where: { id: attendee.id },

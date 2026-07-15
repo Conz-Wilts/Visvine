@@ -55,7 +55,7 @@ export async function generateClaimToken(
 /**
  * Verifies a claim token's signature and expiry. Returns the payload or null.
  */
-export async function verifyClaimToken(
+async function verifyClaimToken(
   token: string
 ): Promise<ClaimTokenPayload | null> {
   try {

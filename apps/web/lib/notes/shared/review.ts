@@ -71,7 +71,7 @@ function baseName(p: string): string {
 }
 
 /** Resolve a broken link href to a unique existing note by basename. */
-export function resolveBrokenLink(
+function resolveBrokenLink(
   href: string,
   metas: NoteMeta[],
 ): { to: string } | { ambiguous: true } | { none: true } {
@@ -140,7 +140,7 @@ export function checkStaleness(metas: NoteMeta[], now: number, staleDays: number
 }
 
 /** Unlinked mentions: unambiguous title matches are auto-linked; ambiguous ones flagged. */
-export function checkUnlinkedMentions(
+function checkUnlinkedMentions(
   raws: RawNote[],
   metas: NoteMeta[],
 ): { fixes: AutoFix[]; issues: Issue[] } {
@@ -172,7 +172,7 @@ export function checkUnlinkedMentions(
 }
 
 /** Duplicate candidates (full pass): near-identical notes → flag for a merge. */
-export function checkDuplicates(metas: NoteMeta[], raws: RawNote[], sim: number): Issue[] {
+function checkDuplicates(metas: NoteMeta[], raws: RawNote[], sim: number): Issue[] {
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
   const docs = metas.map((m) => ({ path: m.path, title: m.title, body: bodyByPath.get(m.path) ?? '' }))
   const out: Issue[] = []
@@ -194,7 +194,7 @@ export function checkDuplicates(metas: NoteMeta[], raws: RawNote[], sim: number)
 }
 
 /** Oversized notes (full pass): flag for a split at H2 boundaries. */
-export function checkOversized(raws: RawNote[], oversizeChars: number): Issue[] {
+function checkOversized(raws: RawNote[], oversizeChars: number): Issue[] {
   const out: Issue[] = []
   for (const r of raws) {
     const body = splitFrontmatter(r.content).body

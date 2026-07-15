@@ -14,7 +14,7 @@ export interface RateLimitConfig {
   refillPerSec: number;
 }
 
-export const MESSAGE_SEND_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 2 };
+const MESSAGE_SEND_LIMIT: RateLimitConfig = { capacity: 20, refillPerSec: 2 };
 
 export function takeToken(key: string, cfg: RateLimitConfig = MESSAGE_SEND_LIMIT): { ok: boolean; retryAfterMs: number } {
   const now = Date.now();

@@ -96,7 +96,7 @@ export function readNote(communityId: string, path: string): Promise<NoteRead> {
 
 /** Fire every request the Context tab's first paint depends on. Fire-and-forget:
  *  results land in the cache; nothing here throws. */
-export function prefetchEntityContext(communityId: string, path: string) {
+function prefetchEntityContext(communityId: string, path: string) {
   void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
   void cachedFetch(contextKeys.registry(communityId), () => notesApi.getRegistry(communityId)).catch(() => {})
   void cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).catch(() => {})

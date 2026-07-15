@@ -7,7 +7,7 @@ import { useSession } from '@/lib/auth-client';
 
 export type CrmColumnType = 'text' | 'date' | 'select' | 'tags' | 'url';
 
-export interface PrivateColumn {
+interface PrivateColumn {
   id: string;
   columnKey: string;
   columnName: string;
@@ -16,7 +16,7 @@ export interface PrivateColumn {
   position: number;
 }
 
-export interface CommunityColumn {
+interface CommunityColumn {
   id: string;
   columnKey: string;
   columnName: string;
@@ -25,7 +25,7 @@ export interface CommunityColumn {
   position: number;
 }
 
-export interface PendingRequest {
+interface PendingRequest {
   id: string;
   columnKey: string;
   columnName: string;

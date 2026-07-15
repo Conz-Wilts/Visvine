@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, ReactNode } from "react";
 import { useSession, signOut as signOutClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import type { Session, SessionUser } from "@/lib/auth-client";
@@ -36,12 +36,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within AuthProvider");
-  }
-  return context;
 }

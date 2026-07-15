@@ -212,7 +212,7 @@ function LinkPreviewCard({ preview }: { preview: SerializedLinkPreview }) {
 
 // ─── Message row ─────────────────────────────────────────────────────────────
 
-export interface MessageRowProps {
+interface MessageRowProps {
   message: SerializedMessage;
   /** First message of a sender group — renders the avatar + name/time header. */
   showHeader?: boolean;

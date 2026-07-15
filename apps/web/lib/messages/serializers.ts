@@ -185,7 +185,7 @@ export function serializeMessage(
 }
 
 /** Lightweight serializer for conversation list (last message only, no rich relations) */
-export function serializeMessageLight(
+function serializeMessageLight(
   message: Prisma.MessageGetPayload<{ include: { sender: { select: { id: true; name: true; image: true } } } }>,
   currentUserId: string,
   members: ConversationWithContext['members'],

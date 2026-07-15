@@ -4,27 +4,9 @@
 // registry. Routes typically call resolveBrain() (lib/notes/brain.ts) first and
 // derive the principal from its result.
 
-import type { SessionPayload } from '@/lib/session'
 import { personalCommunityId } from '@/lib/onboarding/personalCommunity'
 import type { BrainPrincipal } from './shared/brainTypes'
 import { EMPTY_REGISTRY } from './shared/brainTypes'
-import { resolveRegistry } from './registry'
-
-/** The principal for a session already resolved against a community. */
-export async function principalFor(
-  session: SessionPayload,
-  communityId: string,
-  communityAdmin: boolean,
-): Promise<BrainPrincipal> {
-  return {
-    userId: session.userId,
-    email: session.email ?? '',
-    name: session.name ?? 'Unknown',
-    communityId,
-    communityAdmin,
-    folders: await resolveRegistry(communityId),
-  }
-}
 
 /**
  * The principal for a user acting inside their OWN personal-space community
@@ -44,18 +26,5 @@ export function personalPrincipal(identity: {
     communityId: personalCommunityId(identity.userId),
     communityAdmin: true,
     folders: EMPTY_REGISTRY,
-  }
-}
-
-/** The internal maintenance principal (review/enrichment) — sees and writes all. */
-export function systemPrincipal(communityId: string): BrainPrincipal {
-  return {
-    userId: 'system',
-    email: 'system@visvine',
-    name: 'Brain maintenance',
-    communityId,
-    communityAdmin: true,
-    folders: EMPTY_REGISTRY,
-    system: true,
   }
 }

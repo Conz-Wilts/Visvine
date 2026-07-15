@@ -10,7 +10,7 @@ export type FolderLevel = 'read' | 'write' | 'admin'
 /** public = every community member can read; private = members-only. */
 export type FolderVisibility = 'public' | 'private'
 
-export interface FolderMember {
+interface FolderMember {
   userId: string
   /** Display name/email snapshots for the admin UI (identity is userId). */
   name?: string

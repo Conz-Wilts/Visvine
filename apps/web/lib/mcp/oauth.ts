@@ -9,7 +9,7 @@ import { REFRESH_TTL_SECONDS } from "@/lib/mcp/tokens";
 
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export function randomToken(bytes = 32): string {
+function randomToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString("base64url");
 }
 

@@ -79,14 +79,3 @@ export function createVectorStage(brain: Brain): VectorStage {
     },
   }
 }
-
-/** Drop cached vectors for paths that no longer exist live (rename/delete hygiene). */
-export async function pruneEmbeddings(brain: Brain, livePaths: string[]): Promise<void> {
-  await prisma.communityNoteEmbedding.deleteMany({
-    where: {
-      communityId: brain.communityId,
-      ownerKey: brain.ownerKey,
-      ...(livePaths.length ? { path: { notIn: livePaths } } : {}),
-    },
-  })
-}

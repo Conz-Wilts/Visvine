@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { NBNode } from '@/lib/types';
 
-export interface ProfileConnection {
+interface ProfileConnection {
   id: string;
   name: string;
   type: string;

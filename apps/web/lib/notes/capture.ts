@@ -11,7 +11,7 @@ import { formatCaptureEntry } from './shared/noteLog'
 import { joinFrontmatter } from './shared/markdown'
 import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
 
-export function monthlyLogPath(now: number): string {
+function monthlyLogPath(now: number): string {
   const d = new Date(now)
   return `log/${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}.md`
 }

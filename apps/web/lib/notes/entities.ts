@@ -16,8 +16,8 @@ export interface EntityNodeLike {
   subtitle?: string | null
 }
 
-export const PEOPLE_DIR = 'people'
-export const COMPANIES_DIR = 'companies'
+const PEOPLE_DIR = 'people'
+const COMPANIES_DIR = 'companies'
 
 // Map a node `type` to an entity kind (null for events/resources/etc.). Liberal
 // so it copes with 'person'/'people' and 'organization'/'org'/'company'.

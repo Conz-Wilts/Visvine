@@ -8,7 +8,7 @@ const URL_REGEX = /(https?:\/\/[^\s<>"']+)/g;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 500_000;
 
-export function extractUrls(text: string): string[] {
+function extractUrls(text: string): string[] {
   return Array.from(new Set(text.match(URL_REGEX) ?? []));
 }
 
@@ -36,7 +36,7 @@ function pickTitle(html: string): string | undefined {
   return m?.[1]?.trim();
 }
 
-export async function fetchLinkPreview(url: string) {
+async function fetchLinkPreview(url: string) {
   let parsed: URL;
   try { parsed = new URL(url); } catch { return null; }
   if (!['http:', 'https:'].includes(parsed.protocol)) return null;

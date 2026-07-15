@@ -7,7 +7,7 @@
 import prisma from '@/lib/prisma'
 import type { Brain } from './store'
 
-export async function readText(brain: Brain, name: string): Promise<string | null> {
+async function readText(brain: Brain, name: string): Promise<string | null> {
   const row = await prisma.communityBrainFile.findUnique({
     where: {
       brain_file_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, name },
@@ -17,7 +17,7 @@ export async function readText(brain: Brain, name: string): Promise<string | nul
   return row?.content ?? null
 }
 
-export async function writeText(brain: Brain, name: string, content: string): Promise<void> {
+async function writeText(brain: Brain, name: string, content: string): Promise<void> {
   await prisma.communityBrainFile.upsert({
     where: {
       brain_file_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, name },

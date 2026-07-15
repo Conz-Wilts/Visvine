@@ -32,7 +32,7 @@ export async function resolveRegistry(communityId: string): Promise<FoldersConfi
   return cfg && Array.isArray(cfg.folders) ? cfg : EMPTY_REGISTRY
 }
 
-export async function saveRegistry(communityId: string, cfg: FoldersConfig): Promise<void> {
+async function saveRegistry(communityId: string, cfg: FoldersConfig): Promise<void> {
   await writeJson(sharedBrain(communityId), FILE, cfg)
 }
 

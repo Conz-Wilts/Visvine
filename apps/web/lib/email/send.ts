@@ -9,7 +9,7 @@
 
 import { logger } from '@/lib/logger';
 
-export interface EmailAttachment {
+interface EmailAttachment {
   filename: string;
   /** base64-encoded file content */
   content: string;
@@ -22,10 +22,6 @@ export interface SendEmailArgs {
   html: string;
   replyTo?: string;
   attachments?: EmailAttachment[];
-}
-
-export function isEmailConfigured(): boolean {
-  return !!process.env.RESEND_API_KEY;
 }
 
 export async function sendEmail(args: SendEmailArgs): Promise<boolean> {

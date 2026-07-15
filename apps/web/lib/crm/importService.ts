@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { FieldDefinition } from "@/lib/schemas/crm";
 import { parseCsvRows } from "@/lib/crm/csv";
 
-export type ImportOutcome =
+type ImportOutcome =
   | "created"
   | "matched_shadow"
   | "matched_active"

@@ -84,12 +84,12 @@ export const TYPE_OPTIONS: TypeOption[] = [
 
 // ─── Shared styles ──────────────────────────────────────────────────────────
 
-export const inputClass =
+const inputClass =
   'w-full px-3 py-2 rounded-lg border border-border-default bg-surface-2 text-text-primary text-sm placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition-all';
 
 // ─── Field Components ───────────────────────────────────────────────────────
 
-export function Field({
+function Field({
   label,
   required,
   children,
@@ -158,7 +158,7 @@ export interface PersonFormData {
 
 // ─── Location Autocomplete ──────────────────────────────────────────────────
 
-export function LocationAutocomplete({
+function LocationAutocomplete({
   value,
   onChange,
 }: {

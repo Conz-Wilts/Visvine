@@ -115,20 +115,6 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
   return root
 }
 
-// Apply a saved manual order to a list of sibling nodes. Nodes whose `name` is
-// listed in `names` come first, in that order; any node not listed keeps its
-// incoming order (the caller's default sort) and is appended after. Pure —
-// returns a new array, never mutates. Stale names (no matching node) are ignored.
-export function orderByManual(nodes: TreeNode[], names: string[] | undefined): TreeNode[] {
-  if (!names || names.length === 0) return nodes
-  const rank = new Map(names.map((name, i) => [name, i]))
-  const listed = nodes
-    .filter((n) => rank.has(n.name))
-    .sort((a, b) => rank.get(a.name)! - rank.get(b.name)!)
-  const rest = nodes.filter((n) => !rank.has(n.name))
-  return [...listed, ...rest]
-}
-
 // Folders first, then notes, each alphabetically.
 function sortChildren(node: TreeNode): void {
   if (!node.children) {

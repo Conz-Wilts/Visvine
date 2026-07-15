@@ -35,7 +35,7 @@ export type McpScope = (typeof MCP_SCOPES)[number];
 
 const SCOPE_SET: ReadonlySet<string> = new Set(MCP_SCOPES);
 
-export function isValidScope(scope: string): scope is McpScope {
+function isValidScope(scope: string): scope is McpScope {
   return SCOPE_SET.has(scope);
 }
 

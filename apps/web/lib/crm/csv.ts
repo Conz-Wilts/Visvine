@@ -7,7 +7,7 @@
  */
 
 /** Split a single CSV line into trimmed fields, honouring quotes. */
-export function splitCsvLine(line: string): string[] {
+function splitCsvLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;

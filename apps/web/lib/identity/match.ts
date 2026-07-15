@@ -53,7 +53,7 @@ export type Decision =
   | 'suggested' // Tier C — a possible match exists; NOT attached, queued for review
   | 'created'; // no candidate cleared the bar — a fresh identity
 
-export type Tier = 'A' | 'B' | 'C';
+type Tier = 'A' | 'B' | 'C';
 
 export interface CandidateScore {
   tier: Tier | null; // null = not a match at all
@@ -61,7 +61,7 @@ export interface CandidateScore {
   reason: string;
 }
 
-export interface ScoredCandidate {
+interface ScoredCandidate {
   identityId: string;
   canonicalName: string;
   score: CandidateScore;
@@ -79,8 +79,8 @@ export interface MatchResult {
 
 // Confidence cutoffs. >= AUTO links automatically; >= SUGGEST is surfaced for a
 // human; below SUGGEST is ignored (treated as a different entity).
-export const AUTO_THRESHOLD = 0.9;
-export const SUGGEST_THRESHOLD = 0.55;
+const AUTO_THRESHOLD = 0.9;
+const SUGGEST_THRESHOLD = 0.55;
 
 /** Convert raw input into normalized signals. */
 export function toSignals(input: ResolveInput): IdentitySignals {

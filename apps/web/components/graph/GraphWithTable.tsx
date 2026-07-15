@@ -57,9 +57,6 @@ interface GraphWithTableProps {
   onPersistLayout?: (layout: GraphLayoutData) => void;
 }
 
-// Re-export types for consumers that import from this file
-export type { SimNode, SimLink };
-
 /* ============================================================================
    MAIN WRAPPER COMPONENT
    ============================================================================ */

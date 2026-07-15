@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": ["scripts/**/*.{ts,mjs}", "tests/**/*.test.ts"],
+  "project": ["app/**", "components/**", "features/**", "hooks/**", "lib/**", "scripts/**", "tests/**"],
+  "ignore": [
+    "lib/mcp/tools/identity.ts",
+    "lib/mcp/tools/directory.ts",
+    "lib/mcp/tools/crm.ts",
+    "lib/mcp/tools/resources.ts",
+    "lib/mcp/tools/blog.ts",
+    "lib/mcp/tools/analytics.ts",
+    "lib/mcp/tools/profile.ts",
+    "lib/mcp/tools/_helpers.ts"
+  ],
+  "ignoreDependencies": [
+    "@types/google.maps",
+    "eslint",
+    "eslint-config-next",
+    "eslint-plugin-react-hooks",
+    "@next/eslint-plugin-next"
+  ]
+}

@@ -127,31 +127,6 @@ export function calculateMessageHeight(
 }
 
 /**
- * Batch-calculate heights for an array of messages.
- * prepare() is called once per unique text; layout() is pure arithmetic.
- */
-export function calculateMessageHeights(
-  messages: SerializedMessage[],
-  options: MessageHeightOptions,
-): number[] {
-  return messages.map((msg) => calculateMessageHeight(msg, options));
-}
-
-/**
- * Get total height of all messages. Useful for scroll calculations.
- */
-export function calculateTotalHeight(
-  messages: SerializedMessage[],
-  options: MessageHeightOptions,
-): number {
-  let total = 0;
-  for (const msg of messages) {
-    total += calculateMessageHeight(msg, options);
-  }
-  return total;
-}
-
-/**
  * Clear the pretext preparation cache.
  * Call when font changes or on memory pressure.
  */

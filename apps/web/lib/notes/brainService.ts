@@ -127,11 +127,6 @@ export function writeDenial(p: BrainPrincipal, brain: Brain, path: string): stri
     : `You don't have write access to "${folder?.name ?? folderId}".`
 }
 
-/** Locked folders are frozen for AI maintenance passes (review fixes, enrichment). */
-export function isFrozenForMaintenance(p: BrainPrincipal, path: string): boolean {
-  return folderById(p.folders, folderIdOfPath(path))?.locked === true
-}
-
 /** Gated whole-note write, recording revision history. */
 export async function writeGated(
   p: BrainPrincipal,
@@ -209,7 +204,7 @@ export async function moveGated(
 }
 
 /** Rewrite every note that links to `fromPath` so it points at `toPath`. */
-export async function rewriteInboundLinks(
+async function rewriteInboundLinks(
   brain: Brain,
   fromPath: string,
   toPath: string,

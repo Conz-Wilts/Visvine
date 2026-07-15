@@ -11,7 +11,7 @@ import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
 import type { FolderLevel } from '@/lib/notes/shared/brainTypes'
 
 /** Registry-derived adornments for a TOP-LEVEL folder row (shared brain only). */
-export interface FolderBadge {
+interface FolderBadge {
   private: boolean
   locked?: boolean
   /** The viewer's own level in the folder, shown as a small chip. */

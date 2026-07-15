@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-export interface ActivityItem {
+interface ActivityItem {
   id: string;
   type: 'connected' | 'joined_community' | 'event_attendance' | 'profile_updated';
   description: string;

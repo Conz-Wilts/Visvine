@@ -2,7 +2,7 @@
 export type NodeType = string;
 
 // Shape options for node rendering
-export type NodeShape = 'rectangle' | 'hexagon' | 'circle' | 'square';
+type NodeShape = 'rectangle' | 'hexagon' | 'circle' | 'square';
 
 // Configuration for a node type
 export interface NodeTypeConfig {
@@ -36,7 +36,7 @@ export interface NBNode {
   lastFix?: Record<string, number>;
 }
 
-export type RelationshipType =
+type RelationshipType =
   | 'works_at'
   | 'founded'
   | 'invested_in'
@@ -72,19 +72,7 @@ export interface GraphData {
   links: NBLink[];
 }
 
-export interface DiagnosticResult {
-  name: string;
-  pass: boolean;
-  details?: string;
-}
-
-export interface DiagnosticReport {
-  results: DiagnosticResult[];
-  allPass: boolean;
-  failExamples: unknown[];
-}
-
-export interface CommunityDesignFont {
+interface CommunityDesignFont {
   name: string;
   url: string;
   format: 'woff2' | 'truetype' | 'opentype';
@@ -154,22 +142,13 @@ export interface LinkTypeConfig {
   system?: boolean;   // attended | hosting | introduced — auto-flows depend on these (recolor-only, can't delete)
 }
 
-export interface CommunitiesRegistry {
-  communities: Community[];
-}
-
-export interface UserCommunityPreferences {
-  joinedCommunities: string[];
-  currentCommunity: string | null;
-}
-
 // Event types
 export type EventVisibility = 'public' | 'community' | 'private';
 // Operational lifecycle. 'registered' is legacy (read as 'going' via normalizeStatus).
 export type RSVPStatus = 'invited' | 'pending' | 'going' | 'registered' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
 // The guest's intent, independent of the operational status above.
 export type RSVPResponse = 'going' | 'maybe' | 'declined';
-export type FormFieldType = 'text' | 'textarea' | 'email' | 'select' | 'checkbox' | 'url' | 'linkedin' | 'company';
+type FormFieldType = 'text' | 'textarea' | 'email' | 'select' | 'checkbox' | 'url' | 'linkedin' | 'company';
 
 export interface FormField {
   id: string;
@@ -251,8 +230,8 @@ export interface EventsData {
 }
 
 // Resource types
-export type ResourceFileType = 'pdf' | 'xlsx' | 'csv' | 'docx' | 'image';
-export type ResourceChangeStatus = 'pending' | 'approved' | 'rejected';
+type ResourceFileType = 'pdf' | 'xlsx' | 'csv' | 'docx' | 'image';
+type ResourceChangeStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Resource {
   id: string;
@@ -411,14 +390,6 @@ export function findAlias(
 ): CommunityAlias | undefined {
   if (!name) return undefined;
   return aliasesForType(aliases, type).find((a) => a.name === name);
-}
-
-/**
- * Get all available node types for a community
- */
-export function getNodeTypes(communityNodeTypes?: NodeTypeConfig[]): string[] {
-  const nodeTypes = communityNodeTypes || DEFAULT_NODE_TYPES;
-  return nodeTypes.map((t) => t.name);
 }
 
 // Canonical relationship (edge) types and their default colours. A community

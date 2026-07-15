@@ -10,7 +10,7 @@ import Dropdown, {
 } from '@/components/ui/Dropdown';
 
 // ── Multi-select filter dropdown ──────────────────────────────────────────────
-export interface SubOption {
+interface SubOption {
   value: string;
   label: string;
   count?: number;

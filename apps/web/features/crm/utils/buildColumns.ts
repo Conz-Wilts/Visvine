@@ -1,7 +1,7 @@
 import { FieldDefinition } from "@/lib/schemas/crm";
 import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 
-export type ColumnLayer = "public" | "private";
+type ColumnLayer = "public" | "private";
 
 export interface ColumnDef {
   key: string;

@@ -16,18 +16,17 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { Markdown } from 'tiptap-markdown'
-// Toolbar icons match blackbird-brain's EditorToolbar: Heroicons outline for the
-// formatting marks, lucide TextQuote for the quote button.
 import {
-  BoldIcon,
-  ItalicIcon,
-  ListBulletIcon,
-  NumberedListIcon,
-  CheckCircleIcon,
-  CodeBracketIcon,
-  TableCellsIcon,
-} from '@heroicons/react/24/outline'
-import { TextQuote as QuoteIcon, Sparkles as SparklesIcon } from 'lucide-react'
+  Bold as BoldIcon,
+  Italic as ItalicIcon,
+  List as ListBulletIcon,
+  ListOrdered as NumberedListIcon,
+  CircleCheck as CheckCircleIcon,
+  Code as CodeBracketIcon,
+  Table2 as TableCellsIcon,
+  TextQuote as QuoteIcon,
+  Sparkles as SparklesIcon,
+} from 'lucide-react'
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
 import { NotePicker, type PickerEntity } from './NotePicker'

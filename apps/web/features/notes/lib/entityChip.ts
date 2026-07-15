@@ -16,7 +16,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as PMNode, Mark } from '@tiptap/pm/model'
 import { parseEntityHref } from '@/lib/notes/entities'
 
-export interface ChipEntity {
+interface ChipEntity {
   id: string
   name: string
   type: string
@@ -30,7 +30,7 @@ export interface EntityChipOptions {
   getEntity: (path: string) => ChipEntity | null
 }
 
-export const entityChipKey = new PluginKey('entityChip')
+const entityChipKey = new PluginKey('entityChip')
 
 function linkHref(marks: readonly Mark[]): string | null {
   const link = marks.find((m) => m.type.name === 'link')

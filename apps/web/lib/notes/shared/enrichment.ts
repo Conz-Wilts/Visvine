@@ -5,8 +5,6 @@
 // writes. In Visvine the sources are the CALLER's own personal brain (never
 // another user's), preserving the personal-space privacy contract.
 
-import { normalizeKey } from './markdown'
-
 export interface EnrichmentSource {
   path: string
   type?: string
@@ -49,18 +47,6 @@ export function selectEnrichmentCandidates(
     .filter((s) => ledger.seen[s.path] !== s.sha256)
     .filter((s) => s.text.trim().length > 0)
     .map((s) => ({ sourcePath: s.path, type: s.type, title: s.title, text: s.text, sha256: s.sha256 }))
-}
-
-/** Group candidates describing the same concept (by normalized title) so a batch merges rather than fragments. */
-export function groupCandidates(candidates: EnrichmentCandidate[]): EnrichmentCandidate[][] {
-  const groups = new Map<string, EnrichmentCandidate[]>()
-  for (const c of candidates) {
-    const key = normalizeKey(c.title)
-    const arr = groups.get(key) ?? []
-    arr.push(c)
-    groups.set(key, arr)
-  }
-  return [...groups.values()]
 }
 
 export interface EnrichmentOutput {

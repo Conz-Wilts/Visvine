@@ -11,7 +11,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { mcpResourceUrl } from "@/lib/mcp/config";
 import { serializeScopes } from "@/lib/mcp/scopes";
 
-export const ACCESS_TTL_SECONDS = 60 * 60; // 1 hour
+const ACCESS_TTL_SECONDS = 60 * 60; // 1 hour
 export const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function secret(): Uint8Array {

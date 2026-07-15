@@ -1,4 +1,3 @@
-export type AvatarSize = 'avatar-sm' | 'avatar-md' | 'avatar-lg' | 'original';
 export type ImageEntityType = 'card' | 'person' | 'community' | 'event';
 
 /**
@@ -54,10 +53,6 @@ export async function deleteImage(entityType: ImageEntityType, entityId: string)
 // ---------------------------------------------------------------------------
 // Legacy shims — callers that haven't been updated yet pass nodeId for cards
 // ---------------------------------------------------------------------------
-export async function uploadNodeImage(nodeId: string, file: File): Promise<string> {
-  return uploadImage('card', nodeId, file);
-}
-
 export async function uploadCroppedNodeImage(
   nodeId: string,
   blob: Blob,

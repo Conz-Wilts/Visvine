@@ -6,7 +6,7 @@
 //
 // Only the 'conflict' case needs the AI merge; the others resolve deterministically here.
 
-export type MergeStatus =
+type MergeStatus =
   | 'in-sync' // ours === theirs already — nothing to do
   | 'up-to-date' // the brain copy is unchanged since base — nothing to pull
   | 'fast-forward' // only the member changed; accept theirs wholesale

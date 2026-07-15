@@ -23,7 +23,7 @@ import { entityKindOfPath, entityMentionPaths, entityNotePath } from './entities
 // store can call into this module without a circular import.
 const SHARED_OWNER_KEY = 'shared'
 
-export const CONTEXT_RELATIONSHIP = 'mentioned'
+const CONTEXT_RELATIONSHIP = 'mentioned'
 export const CONTEXT_ORIGIN = 'context'
 
 interface BrainRef {

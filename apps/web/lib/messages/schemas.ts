@@ -46,10 +46,6 @@ export const updateSpaceSchema = z.object({
   position: z.number().int().min(0).optional(),
 });
 
-export const mutateMemberSchema = z.object({
-  userId: z.string().min(1),
-});
-
 export const sendMessageSchema = z.object({
   text: z.string().trim().min(1).max(4000),
   attachmentUrl: z.string().url().optional(),

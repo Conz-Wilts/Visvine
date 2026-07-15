@@ -28,7 +28,7 @@ import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 
 /** A registered folder as the registry endpoint returns it: annotated with the
  *  caller's own level + capability booleans (computed server-side). */
-export type RegistryFolder = Folder & {
+type RegistryFolder = Folder & {
   myLevel?: FolderLevel
   canWrite: boolean
   canAdmin: boolean
@@ -37,7 +37,7 @@ export type RegistryFolder = Folder & {
 /** The brain gate (root registry entry, id ''): whether the community's brain is
  *  admin-gated at all and whether the CALLER may read it. `canRead: false` means
  *  the caller sees an empty brain and should request access (folderId ''). */
-export interface BrainGate {
+interface BrainGate {
   gated: boolean
   canRead: boolean
   /** Whether the caller may write at the brain root (create root-level notes). */
@@ -70,13 +70,13 @@ export type PromoteResult =
   | { status: 'proposed'; proposalId: string }
   | { status: 'denied'; reason: string }
 
-export interface ReviewIssue {
+interface ReviewIssue {
   path: string
   kind: string
   detail: string
 }
 
-export interface ReviewAutoFix {
+interface ReviewAutoFix {
   kind: string
   path: string
   [key: string]: unknown

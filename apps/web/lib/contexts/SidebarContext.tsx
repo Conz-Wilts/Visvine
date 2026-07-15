@@ -19,7 +19,7 @@ interface SidebarContextValue {
  * flowing into place. `transform` uses a gentle overshoot spring; `opacity`
  * a plain ease-out that finishes a touch earlier.
  */
-export const SHELL_ENTRANCE = {
+const SHELL_ENTRANCE = {
   spring: "cubic-bezier(0.34, 1.56, 0.64, 1)",
   transformDur: "0.55s",
   opacityDur: "0.4s",

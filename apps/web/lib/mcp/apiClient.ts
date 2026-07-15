@@ -94,7 +94,10 @@ export async function callApiText(
   return res.text();
 }
 
-/** POST a multipart/form-data body (e.g. CSV import) to an internal route. */
+/**
+ * POST a multipart/form-data body (e.g. CSV import) to an internal route.
+ * @public used by the parked MCP tool modules (lib/mcp/tools/crm.ts)
+ */
 export async function callApiForm<T = unknown>(
   ctx: McpContext,
   path: string,

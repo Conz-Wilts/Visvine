@@ -1,19 +1,16 @@
 import type { ReactNode } from 'react';
 import type { CommunityFeatureConfig } from '@/lib/types';
-import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, isFeatureEnabled, sortFeatureKeys } from '@/lib/featureAccess';
+import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, sortFeatureKeys } from '@/lib/featureAccess';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
 // tests can import it without this module's icons. Re-exported here so UI code
 // keeps a single import point.
 export {
-  CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
-  ALL_FEATURE_KEYS,
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
   sortFeatureKeys,
-  sanitizeFeatureConfig,
 } from '@/lib/featureAccess';
 
 /**
@@ -119,14 +116,6 @@ function inConfiguredOrder(
 ): FeatureDef[] {
   const keys = sortFeatureKeys(config, features.map((f) => f.key));
   return keys.map((key) => features.find((f) => f.key === key)!);
-}
-
-/**
- * The features that should appear in the nav for a community, in the admin's
- * configured order (registry order when the community has never reordered).
- */
-export function enabledFeatures(config: CommunityFeatureConfig | null | undefined): FeatureDef[] {
-  return inConfiguredOrder(config, FEATURES.filter((f) => isFeatureEnabled(config, f.key)));
 }
 
 /** The features a given user should see in the nav, in the configured order. */

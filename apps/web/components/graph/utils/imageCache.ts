@@ -64,20 +64,6 @@ export function loadImage(url: string): HTMLImageElement | null {
 }
 
 /**
- * Get a cached image synchronously (returns null if not cached)
- */
-export function getCachedImage(url: string): HTMLImageElement | null {
-  return imageCache.get(url) || null;
-}
-
-/**
- * Check if an image is currently loading
- */
-export function isImageLoading(url: string): boolean {
-  return loadingImages.has(url);
-}
-
-/**
  * Preload multiple images
  * Returns a promise that resolves when all images are loaded
  */
@@ -93,21 +79,4 @@ export async function preloadImages(urls: string[]): Promise<void> {
       return loadingImages.get(url);
     })
   );
-}
-
-/**
- * Clear the entire image cache
- */
-export function clearImageCache(): void {
-  imageCache.clear();
-  loadingImages.clear();
-  failedImages.clear();
-}
-
-/**
- * Remove a specific image from cache (useful when image is updated)
- */
-export function invalidateImage(url: string): void {
-  imageCache.delete(url);
-  failedImages.delete(url);
 }

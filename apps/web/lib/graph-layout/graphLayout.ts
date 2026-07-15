@@ -48,7 +48,7 @@
 
 /* ============================== Public API =============================== */
 
-export type NodeId = string | number;
+type NodeId = string | number;
 
 export interface GraphNodeInput {
   id: NodeId;
@@ -107,7 +107,7 @@ export interface LayoutOptions {
   onProgress?: (snapshot: LayoutSnapshot) => void;
 }
 
-export interface PositionedNode {
+interface PositionedNode {
   id: NodeId;
   x: number;
   y: number;
@@ -119,12 +119,12 @@ export interface PositionedNode {
   r: number;
 }
 
-export interface LayoutEdgeOutput {
+interface LayoutEdgeOutput {
   source: NodeId;
   target: NodeId;
 }
 
-export interface LayoutStats {
+interface LayoutStats {
   elapsedMs: number;
   /** Total force iterations across all components. */
   forceIterations: number;
@@ -163,7 +163,7 @@ export interface LayoutResult {
   stats: LayoutStats;
 }
 
-export interface LayoutSnapshot {
+interface LayoutSnapshot {
   nodes: PositionedNode[];
   phase: 'initialize' | 'forces' | 'overlap' | 'crossings' | 'compose';
   /** Approximate completion in [0, 1]. */
