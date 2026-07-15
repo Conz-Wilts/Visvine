@@ -12,7 +12,7 @@ import {
   getUnreadCount,
   serializeConversation,
   serializeMessage,
-} from './serializers';
+} from './core';
 import { takeToken } from './rateLimit';
 import { attachPreviewsToMessage } from '@/lib/linkPreview';
 
@@ -379,8 +379,4 @@ export async function getConversationMemberIds(conversationId: string): Promise<
   });
 
   return members.map((member) => member.userId);
-}
-
-export async function assertConversationMembership(currentUserId: string, conversationId: string): Promise<void> {
-  await ensureConversationMember(conversationId, currentUserId);
 }

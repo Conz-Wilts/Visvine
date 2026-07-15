@@ -1,11 +1,14 @@
 /**
- * Messaging service — barrel re-export for backwards compatibility.
+ * Messaging service — public barrel for lib/messages.
  * Implementation split into:
- *   - serializers.ts    (types, constants, serialization helpers)
+ *   - core.ts           (MessagingError, shared query constants, membership guard,
+ *                        unread counts, serialization helpers)
  *   - conversationService.ts (conversation CRUD)
  *   - messageService.ts (message CRUD, reactions, read tracking)
  *   - searchService.ts  (search, user lookup, directory)
  */
+
+export { ensureConversationMember } from './core';
 
 export {
   listConversationsForUser,
@@ -35,7 +38,6 @@ export {
   listStarredMessages,
   markConversationRead,
   getConversationMemberIds,
-  assertConversationMembership,
 } from './messageService';
 
 export {

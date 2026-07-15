@@ -1,5 +1,5 @@
 import prisma from '@/lib/prisma';
-import type { ConversationSummary } from './types';
+import type { ConversationSummary, DirectoryPerson } from './types';
 import { listConversationsForUser } from './conversationService';
 
 export async function searchConversationsAndMessages(currentUserId: string, query: string) {
@@ -133,15 +133,6 @@ export async function searchUsers(currentUserId: string, query?: string) {
   });
 
   return users;
-}
-
-export interface DirectoryPerson {
-  id: string;
-  name: string;
-  subtitle: string | null;
-  email: string | null;
-  imageUrl: string | null;
-  communityName: string | null;
 }
 
 export async function searchUsersAndDirectory(

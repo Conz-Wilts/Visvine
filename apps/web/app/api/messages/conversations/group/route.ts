@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createGroupSchema } from '@/lib/messages/schemas';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { createGroupConversation, getConversationMemberIds } from '@/lib/messages/service';
+import { createGroupConversation, getConversationMemberIds } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function POST(request: NextRequest) {

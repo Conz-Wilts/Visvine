@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { searchConversationsAndMessages } from '@/lib/messages/service';
+import { searchConversationsAndMessages } from '@/lib/messages';
 
 export async function GET(request: NextRequest) {
   try {

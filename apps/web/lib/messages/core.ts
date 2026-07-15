@@ -37,7 +37,7 @@ export const CONVERSATION_INCLUDE = {
   },
 };
 
-export type ConversationWithContext = Prisma.ConversationGetPayload<{
+type ConversationWithContext = Prisma.ConversationGetPayload<{
   include: typeof CONVERSATION_INCLUDE;
 }>;
 
@@ -71,7 +71,7 @@ export const MESSAGE_INCLUDE = {
   },
 } satisfies Prisma.MessageInclude;
 
-export type MessageWithRelations = Prisma.MessageGetPayload<{
+type MessageWithRelations = Prisma.MessageGetPayload<{
   include: typeof MESSAGE_INCLUDE;
 }>;
 

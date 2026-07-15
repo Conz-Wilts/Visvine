@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { updateGroupSchema } from '@/lib/messages/schemas';
-import { getConversationMemberIds, updateGroupConversation } from '@/lib/messages/service';
+import { getConversationMemberIds, updateGroupConversation } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function PATCH(

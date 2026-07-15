@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { createDmSchema } from '@/lib/messages/schemas';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { createDmConversation } from '@/lib/messages/service';
+import { createDmConversation } from '@/lib/messages';
 
 export async function POST(request: NextRequest) {
   try {

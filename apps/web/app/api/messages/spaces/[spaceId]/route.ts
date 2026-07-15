@@ -3,7 +3,7 @@ import prisma from '@/lib/prisma';
 import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { updateSpaceSchema } from '@/lib/messages/schemas';
-import { updateChannelSpace, deleteChannelSpace } from '@/lib/messages/service';
+import { updateChannelSpace, deleteChannelSpace } from '@/lib/messages';
 import { isAdmin } from '@/lib/auth';
 
 async function requireSpaceAdmin(userId: string, email: string, spaceId: string) {

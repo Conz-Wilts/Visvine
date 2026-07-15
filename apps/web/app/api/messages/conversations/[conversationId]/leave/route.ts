@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { assertConversationMembership, getConversationMemberIds, leaveConversation } from '@/lib/messages/service';
+import { ensureConversationMember, getConversationMemberIds, leaveConversation } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 
 export async function POST(
@@ -16,7 +16,7 @@ export async function POST(
     }
 
     const { conversationId } = await params;
-    await assertConversationMembership(user.id, conversationId);
+    await ensureConversationMember(conversationId, user.id);
     const memberIdsBeforeLeave = await getConversationMemberIds(conversationId);
 
     await leaveConversation(user.id, conversationId);

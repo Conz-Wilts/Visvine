@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { sendMessageSchema } from '@/lib/messages/schemas';
-import { listMessagesForConversation, sendMessage } from '@/lib/messages/service';
+import { listMessagesForConversation, sendMessage } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 import { getIntroContextForUsers } from '@/lib/intros/service';
 

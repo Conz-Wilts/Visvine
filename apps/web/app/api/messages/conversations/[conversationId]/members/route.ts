@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { getConversationMemberIds, addMembersToGroup } from '@/lib/messages/service';
+import { getConversationMemberIds, addMembersToGroup } from '@/lib/messages';
 import { publishToUsers } from '@/lib/messages/realtime';
 import { z } from 'zod';
 

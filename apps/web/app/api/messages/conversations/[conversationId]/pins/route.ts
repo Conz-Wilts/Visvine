@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { listPinnedMessages } from '@/lib/messages/service';
+import { listPinnedMessages } from '@/lib/messages';
 
 /** All pinned messages in a conversation (members only). */
 export async function GET(

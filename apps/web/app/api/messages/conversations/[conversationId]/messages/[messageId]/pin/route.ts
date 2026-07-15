@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/lib/messages/auth';
 import prisma from '@/lib/prisma';
 import { publishToUsers } from '@/lib/messages/realtime';
-import { getConversationMemberIds } from '@/lib/messages/service';
+import { getConversationMemberIds } from '@/lib/messages';
 
 export async function POST(
   _req: NextRequest,

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { listStarredMessages } from '@/lib/messages/service';
+import { listStarredMessages } from '@/lib/messages';
 
 /** The current user's saved (starred) messages across all conversations. */
 export async function GET() {

@@ -8,7 +8,7 @@ import {
   ensureConversationMember,
   getUnreadCount,
   serializeConversation,
-} from './serializers';
+} from './core';
 
 export async function listConversationsForUser(userId: string, searchQuery?: string): Promise<ConversationSummary[]> {
   const query = searchQuery?.trim();

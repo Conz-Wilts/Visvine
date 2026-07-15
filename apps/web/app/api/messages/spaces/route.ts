@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
 import { createSpaceSchema } from '@/lib/messages/schemas';
-import { createChannelSpace, listChannelSpaces } from '@/lib/messages/service';
+import { createChannelSpace, listChannelSpaces } from '@/lib/messages';
 import { isAdmin } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {

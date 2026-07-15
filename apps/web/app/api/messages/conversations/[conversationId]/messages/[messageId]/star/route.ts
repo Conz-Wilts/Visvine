@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { toggleStar } from '@/lib/messages/service';
+import { toggleStar } from '@/lib/messages';
 
 /** Toggle a per-user star (saved message). No realtime fan-out — stars are private. */
 export async function POST(
