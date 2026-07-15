@@ -1,5 +1,7 @@
 import type { CSSProperties } from 'react';
+import Image from 'next/image';
 import { getInitials } from '@/lib/avatarUtils';
+import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import PersonSilhouette from './PersonSilhouette';
 
 // Square avatars (rounded-xl/lg) — matches profile imagery across the app
@@ -12,6 +14,16 @@ const SIZE_CLASSES = {
   chip: 'h-7 w-7 rounded-lg',
   lg: 'h-11 w-11 rounded-xl',
   xl: 'h-12 w-12 rounded-xl',
+};
+
+/** Intrinsic pixel size per built-in size (next/image width/height). */
+const SIZE_PX: Record<keyof typeof SIZE_CLASSES, number> = {
+  xs: 24,
+  sm: 32,
+  md: 36,
+  chip: 28,
+  lg: 44,
+  xl: 48,
 };
 
 /** Initials text size per built-in size (only used with fallback="initials"). */
@@ -42,6 +54,12 @@ interface AvatarProps {
    * (e.g. CommunityAvatar) reuse this component.
    */
   sizeClassName?: string;
+  /**
+   * Intrinsic pixel size for next/image when `sizeClassName` overrides the
+   * built-in size map (which otherwise derives it). Square avatars only need
+   * one number.
+   */
+  pixelSize?: number;
   /** Inline styles forwarded to the rendered element. */
   style?: CSSProperties;
 }
@@ -54,16 +72,34 @@ export default function Avatar({
   className = '',
   fallback = 'silhouette',
   sizeClassName,
+  pixelSize,
   style,
 }: AvatarProps) {
   const cls = sizeClassName ?? SIZE_CLASSES[size];
   if (imageUrl) {
+    // Local blob previews / inline data URLs can't go through next/image.
+    if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
+      return (
+        <img
+          src={imageUrl}
+          alt={name}
+          className={`${cls} object-cover shrink-0 ${className}`}
+          style={style}
+        />
+      );
+    }
+    const px = pixelSize ?? SIZE_PX[size];
     return (
-      <img
+      <Image
         src={imageUrl}
         alt={name}
+        width={px}
+        height={px}
         className={`${cls} object-cover shrink-0 ${className}`}
         style={style}
+        // Hosts outside next.config remotePatterns (e.g. the server-only GCS
+        // CDN hostname) render unoptimized rather than throwing.
+        unoptimized={!isOptimizableImageUrl(imageUrl)}
       />
     );
   }

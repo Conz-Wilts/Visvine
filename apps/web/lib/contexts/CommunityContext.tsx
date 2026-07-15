@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { Community } from '@/lib/types';
 import { createSafeContext } from './createSafeContext';
 
@@ -34,14 +34,14 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadAllCommunities = async () => {
+  const loadAllCommunities = useCallback(async () => {
     const res = await fetch('/api/data/communities');
     if (!res.ok) throw new Error('Failed to load communities');
     const data = await res.json();
     setCommunities(data.communities || []);
-  };
+  }, []);
 
-  const loadUserCommunities = async () => {
+  const loadUserCommunities = useCallback(async () => {
     const res = await fetch('/api/user/communities');
     if (!res.ok) return; // unauthenticated — leave empty
     const data = await res.json();
@@ -50,7 +50,7 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       roles.set(c.id, c.role);
     }
     setMembershipRoles(roles);
-  };
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -64,14 +64,14 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       }
     };
     init();
-  }, []);
+  }, [loadAllCommunities, loadUserCommunities]);
 
-  const setCurrentCommunity = (communityId: string) => {
+  const setCurrentCommunity = useCallback((communityId: string) => {
     setCurrentCommunityId(communityId);
     try { localStorage.setItem(CURRENT_COMMUNITY_KEY, communityId); } catch {}
-  };
+  }, []);
 
-  const joinCommunity = async (communityId: string, alias?: string) => {
+  const joinCommunity = useCallback(async (communityId: string, alias?: string) => {
     const res = await fetch(`/api/communities/${communityId}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -82,9 +82,9 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       throw new Error(data.detail || data.error || 'Failed to join community');
     }
     setMembershipRoles(prev => new Map(prev).set(communityId, 'member'));
-  };
+  }, []);
 
-  const leaveCommunity = async (communityId: string) => {
+  const leaveCommunity = useCallback(async (communityId: string) => {
     const res = await fetch(`/api/communities/${communityId}/join`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to leave community');
     setMembershipRoles(prev => {
@@ -98,41 +98,61 @@ export function CommunityProvider({ children }: { children: ReactNode }) {
       setCurrentCommunityId(next);
       try { if (next) localStorage.setItem(CURRENT_COMMUNITY_KEY, next); else localStorage.removeItem(CURRENT_COMMUNITY_KEY); } catch {}
     }
-  };
+  }, [currentCommunityId, membershipRoles]);
 
-  const refreshCommunity = async () => {
+  const refreshCommunity = useCallback(async () => {
     await Promise.all([loadAllCommunities(), loadUserCommunities()]);
-  };
+  }, [loadAllCommunities, loadUserCommunities]);
 
-  const joinedCommunities = communities
-    .filter(c => membershipRoles.has(c.id))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const joinedCommunities = useMemo(
+    () =>
+      communities
+        .filter(c => membershipRoles.has(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [communities, membershipRoles]
+  );
 
   // Use the stored selection when it still resolves; otherwise fall back to the
   // first joined community. This lands a brand-new user in their personal space
   // even when localStorage was never written (e.g. onboarding skipped that step).
-  const currentCommunity =
-    communities.find(c => c.id === currentCommunityId) ?? joinedCommunities[0] ?? null;
+  const currentCommunity = useMemo(
+    () => communities.find(c => c.id === currentCommunityId) ?? joinedCommunities[0] ?? null,
+    [communities, currentCommunityId, joinedCommunities]
+  );
 
   // Derive isAdmin from the resolved current community (super-admins already
   // mapped to 'admin' server-side).
   const isAdmin = currentCommunity ? membershipRoles.get(currentCommunity.id) === 'admin' : false;
 
+  const value = useMemo<CommunityContextValue>(
+    () => ({
+      communities,
+      currentCommunity,
+      joinedCommunities,
+      setCurrentCommunity,
+      joinCommunity,
+      leaveCommunity,
+      refreshCommunity,
+      loading,
+      error,
+      isAdmin,
+    }),
+    [
+      communities,
+      currentCommunity,
+      joinedCommunities,
+      setCurrentCommunity,
+      joinCommunity,
+      leaveCommunity,
+      refreshCommunity,
+      loading,
+      error,
+      isAdmin,
+    ]
+  );
+
   return (
-    <CommunityContext.Provider
-      value={{
-        communities,
-        currentCommunity,
-        joinedCommunities,
-        setCurrentCommunity,
-        joinCommunity,
-        leaveCommunity,
-        refreshCommunity,
-        loading,
-        error,
-        isAdmin,
-      }}
-    >
+    <CommunityContext.Provider value={value}>
       {children}
     </CommunityContext.Provider>
   );

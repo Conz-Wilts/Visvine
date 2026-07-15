@@ -88,12 +88,18 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
     load();
   }, [load]);
 
-  // background refresh while the tab is open
+  // background refresh while the tab is open — paused while hidden, with one
+  // immediate catch-up reload when the tab becomes visible again.
   const loadRef = useRef(load);
   loadRef.current = load;
   useEffect(() => {
-    const t = setInterval(() => loadRef.current(), 15_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void loadRef.current();
+    }, 15_000);
+    const onVis = () => { if (document.visibilityState === 'visible') void loadRef.current(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, []);
 
   const counts = useMemo(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createSafeContext } from './createSafeContext';
 
@@ -24,8 +24,10 @@ export function FullProfileProvider({ children }: { children: React.ReactNode })
     [router]
   );
 
+  const value = useMemo<FullProfileContextValue>(() => ({ openProfile }), [openProfile]);
+
   return (
-    <FullProfileContext.Provider value={{ openProfile }}>
+    <FullProfileContext.Provider value={value}>
       {children}
     </FullProfileContext.Provider>
   );

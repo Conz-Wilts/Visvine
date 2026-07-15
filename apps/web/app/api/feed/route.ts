@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
 
+// Caps on nested fan-out per post. The only current consumer of GET /api/feed
+// is the MCP `list_feed` tool (lib/mcp/tools/feed.ts) — there is no web UI
+// rendering comments inline yet — so a moderate cap is safe. Totals are still
+// available for a future "view all" affordance: `_count.comments` on each post
+// (all comments incl. replies) and `_count.replies` on each top-level comment.
+const COMMENTS_PER_POST = 20;
+const REPLIES_PER_COMMENT = 20;
+
 // GET /api/feed?communityId=xxx&cursor=xxx&limit=20
 export async function GET(req: NextRequest) {
   const session = await requireApiSession();
@@ -34,7 +42,10 @@ export async function GET(req: NextRequest) {
       reactions: { select: { userId: true, emoji: true } },
       comments: {
         where: { parentId: null },
-        orderBy: { createdAt: 'asc' },
+        // Fetch the LATEST top-level comments (desc + take), reversed below so
+        // the response stays chronological-ascending like before.
+        orderBy: { createdAt: 'desc' },
+        take: COMMENTS_PER_POST,
         include: {
           author: {
             select: {
@@ -45,8 +56,10 @@ export async function GET(req: NextRequest) {
             },
           },
           reactions: { select: { userId: true, emoji: true } },
+          _count: { select: { replies: true } },
           replies: {
             orderBy: { createdAt: 'asc' },
+            take: REPLIES_PER_COMMENT,
             include: {
               author: {
                 select: {
@@ -68,6 +81,9 @@ export async function GET(req: NextRequest) {
   const hasMore = posts.length > limit;
   const items = hasMore ? posts.slice(0, limit) : posts;
   const nextCursor = hasMore ? items[items.length - 1].id : null;
+
+  // Restore ascending order within each post's capped comment window.
+  for (const post of items) post.comments.reverse();
 
   return NextResponse.json({ posts: items, nextCursor });
 }

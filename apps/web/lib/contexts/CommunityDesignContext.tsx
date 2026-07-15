@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { useCommunity } from './CommunityContext';
 import type { CommunityDesignConfig } from '@/lib/types';
 
@@ -93,19 +93,27 @@ export function CommunityDesignProvider({ children }: { children: React.ReactNod
   }, [currentCommunity?.id, designConfig]);
 
   // Compute background style
-  const backgroundStyle: React.CSSProperties = {};
-  const bg = designConfig?.background;
-  if (bg?.type === 'solid' && bg.color) {
-    backgroundStyle.backgroundColor = bg.color;
-  } else if (bg?.type === 'image' && bg.imageUrl) {
-    backgroundStyle.backgroundImage = `url('${bg.imageUrl}')`;
-    backgroundStyle.backgroundSize = 'cover';
-    backgroundStyle.backgroundPosition = 'center';
-    backgroundStyle.backgroundAttachment = 'fixed';
-  }
+  const backgroundStyle = useMemo(() => {
+    const style: React.CSSProperties = {};
+    const bg = designConfig?.background;
+    if (bg?.type === 'solid' && bg.color) {
+      style.backgroundColor = bg.color;
+    } else if (bg?.type === 'image' && bg.imageUrl) {
+      style.backgroundImage = `url('${bg.imageUrl}')`;
+      style.backgroundSize = 'cover';
+      style.backgroundPosition = 'center';
+      style.backgroundAttachment = 'fixed';
+    }
+    return style;
+  }, [designConfig]);
+
+  const value = useMemo<CommunityDesignContextValue>(
+    () => ({ designConfig, backgroundStyle }),
+    [designConfig, backgroundStyle]
+  );
 
   return (
-    <CommunityDesignContext.Provider value={{ designConfig, backgroundStyle }}>
+    <CommunityDesignContext.Provider value={value}>
       {children}
     </CommunityDesignContext.Provider>
   );

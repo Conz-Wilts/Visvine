@@ -10,6 +10,35 @@
 const DIRECT_GCS_RE = /^https?:\/\/storage\.googleapis\.com\/[^/]+\//;
 
 /**
+ * Remote hosts that are declared in next.config.ts `images.remotePatterns`,
+ * i.e. safe to pass through the next/image optimizer. Relative URLs
+ * (the /api/media/ proxy) are always optimizable — same-origin needs no
+ * remotePatterns entry.
+ *
+ * Anything else (arbitrary link-preview hosts, the GCS CDN host which is only
+ * known server-side via GCS_CDN_HOSTNAME) should render with
+ * `unoptimized` so next/image doesn't throw on an unconfigured hostname.
+ */
+const OPTIMIZABLE_HOSTS = new Set([
+  'lh3.googleusercontent.com',
+  'storage.googleapis.com',
+]);
+
+/**
+ * True when a URL can go through the next/image optimizer (relative
+ * same-origin path, or a host listed in next.config remotePatterns).
+ * data:/blob: URLs return false — those must stay raw <img>.
+ */
+export function isOptimizableImageUrl(url: string): boolean {
+  if (url.startsWith('/')) return true;
+  try {
+    return OPTIMIZABLE_HOSTS.has(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build a proxy URL for a GCS media object path.
  * On the server, uses GCS_CDN_BASE_URL if configured; otherwise falls back to
  * the /api/media/ proxy (works on both client and server).

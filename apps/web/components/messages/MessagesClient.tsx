@@ -166,6 +166,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const lastAppliedSearchRef = useRef('');
   // Mirror of `messages` for stable callbacks that only need to read it.
   const messagesRef = useRef<SerializedMessage[]>([]);
+  // Mirror of `conversations` so the SSE handler can check membership without
+  // resubscribing on every list change.
+  const conversationsRef = useRef<ConversationSummary[]>([]);
+  // Trailing-debounced full conversation-list refetch for SSE events the list
+  // can't patch locally (e.g. a brand-new conversation) — coalesces bursts so
+  // a flood of events costs at most one refetch per second.
+  const conversationsRefetchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Whether the current `messages` state came from a search-filtered fetch.
   // State alone can't tell: after clearing the search box the filtered rows
   // linger until the debounced unfiltered reload lands, and caching them as
@@ -367,17 +374,24 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
   useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { conversationsRef.current = conversations; }, [conversations]);
   useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
   useEffect(() => {
     if (channelsVariant) return; // locked to 'channels'
     if (initialTab && initialTab !== 'channels') setActiveTab(initialTab);
   }, [initialTab, channelsVariant]);
 
-  // Intro inbox: load on mount, refresh on a slow poll (no SSE channel for intros).
+  // Intro inbox: load on mount, refresh on a slow poll (no SSE channel for
+  // intros). Skipped while the tab is hidden; catches up on return.
   useEffect(() => {
     void fetchIntros();
-    const t = setInterval(() => void fetchIntros(), 60_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      void fetchIntros();
+    }, 60_000);
+    const onVis = () => { if (document.visibilityState === 'visible') void fetchIntros(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchIntros]);
 
   // Channel directory: refresh whenever the Channels tab is shown.
@@ -396,11 +410,15 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Presence heartbeat every 30s while tab open
+  // Presence heartbeat every 30s while the tab is visible; a hidden tab stays
+  // quiet and beats once immediately when it becomes visible again.
   useEffect(() => {
     const beat = () => { void fetch('/api/presence/heartbeat', { method: 'POST' }).catch(() => {}); };
     beat();
-    const iv = setInterval(beat, 30_000);
+    const iv = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      beat();
+    }, 30_000);
     const onVis = () => { if (document.visibilityState === 'visible') beat(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
@@ -509,12 +527,22 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   useEffect(() => {
     const typingTimers = typingTimersRef.current;
     const source = new EventSource('/api/messages/stream');
+    // One trailing full refetch per ~1s window — reserved for events the
+    // sidebar can't patch from the payload (unknown conversation, renames).
+    const scheduleConversationsRefetch = () => {
+      if (conversationsRefetchTimerRef.current) return;
+      conversationsRefetchTimerRef.current = setTimeout(() => {
+        conversationsRefetchTimerRef.current = null;
+        void fetchConversations(conversationSearch);
+      }, 1000);
+    };
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data) as RealtimeEvent;
         if (payload.type === 'message.new') {
           const normalized: SerializedMessage = { ...payload.message, isOwn: payload.message.sender.id === currentUser.id };
-          if (payload.conversationId === selectedConversationRef.current) {
+          const isActiveConversation = payload.conversationId === selectedConversationRef.current;
+          if (isActiveConversation) {
             setMessages((prev) => prev.some((m) => m.id === normalized.id) ? prev : [...prev, normalized]);
             // Smart auto-scroll: only if user is near bottom, else show pill
             if (atBottomRef.current || normalized.isOwn) {
@@ -527,7 +555,26 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               setAnnounce(`${normalized.sender.name}: ${normalized.text.slice(0, 80)}`);
             }
           }
-          void fetchConversations(conversationSearch);
+          // Patch the sidebar entry in place from the event payload instead of
+          // refetching the whole list (heavy include) on every message. The
+          // server sets conversation.updatedAt to the message's createdAt and
+          // orders by updatedAt desc, so mirroring that here keeps the local
+          // ordering identical. Only an unknown conversation (e.g. a brand-new
+          // DM) needs the debounced full refetch.
+          if (conversationsRef.current.some((c) => c.id === payload.conversationId)) {
+            setConversations((prev) => prev
+              .map((c) => c.id === payload.conversationId
+                ? {
+                    ...c,
+                    lastMessage: normalized,
+                    updatedAt: normalized.createdAt,
+                    unreadCount: !normalized.isOwn && !isActiveConversation ? c.unreadCount + 1 : c.unreadCount,
+                  }
+                : c)
+              .sort((a, b) => Number(new Date(b.updatedAt)) - Number(new Date(a.updatedAt))));
+          } else {
+            scheduleConversationsRefetch();
+          }
         }
         if (payload.type === 'message.updated') {
           if (payload.conversationId === selectedConversationRef.current) {
@@ -571,7 +618,9 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
             }));
           }
         }
-        if (payload.type === 'conversation.updated') void fetchConversations(conversationSearch);
+        // conversation.updated carries no data (rename, membership change) —
+        // a refetch is required, but coalesced so bursts can't stampede.
+        if (payload.type === 'conversation.updated') scheduleConversationsRefetch();
         if (payload.type === 'typing') {
           if (payload.userId === currentUser.id || payload.conversationId !== selectedConversationRef.current) return;
           if (!payload.isTyping) {
@@ -591,7 +640,15 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       } catch { /* ignore malformed */ }
     };
     source.onerror = () => {};
-    return () => { source.close(); typingTimers.forEach(clearTimeout); typingTimers.clear(); };
+    return () => {
+      source.close();
+      typingTimers.forEach(clearTimeout);
+      typingTimers.clear();
+      if (conversationsRefetchTimerRef.current) {
+        clearTimeout(conversationsRefetchTimerRef.current);
+        conversationsRefetchTimerRef.current = null;
+      }
+    };
   }, [conversationSearch, currentUser.id, fetchConversations, markConversationRead]);
 
   // Typing composer side-effect

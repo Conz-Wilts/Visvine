@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
   });
 
-  // Signed URLs stored in DB expire after 15 min — regenerate from gcsPath on every fetch.
+  // Signed URLs stored in DB expire after 15 min — refresh from gcsPath on each
+  // fetch (getSignedUrl serves from an in-memory TTL cache when still fresh).
   const withFreshUrls = await Promise.all(
     resources.map(async (r) => {
       const meta = r.metadata as Record<string, unknown> | null;

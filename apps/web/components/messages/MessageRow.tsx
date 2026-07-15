@@ -9,9 +9,10 @@
  * reads as one continuous feed.
  */
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Smile, Reply, Pencil, Trash2, Star, Pin } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import Image from 'next/image';
+import ReactMarkdown, { type Options as ReactMarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import type {
@@ -20,6 +21,7 @@ import type {
   SerializedLinkPreview,
 } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
+import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import { formatChatTimestamp, formatTime } from '@/lib/date';
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -72,31 +74,40 @@ const mdSanitizeSchema = {
   tagNames: (defaultSchema.tagNames ?? []).filter((t) => t !== 'img'),
 };
 
-function MarkdownMessage({ text }: { text: string }) {
+// Hoisted to module scope: fresh plugin arrays / components maps per render
+// defeat react-markdown's internal memoization and force a full re-parse of
+// every visible message whenever the virtualized list re-renders.
+const MD_REMARK_PLUGINS: ReactMarkdownOptions['remarkPlugins'] = [remarkGfm];
+const MD_REHYPE_PLUGINS: ReactMarkdownOptions['rehypePlugins'] = [[rehypeSanitize, mdSanitizeSchema]];
+const MD_COMPONENTS: ReactMarkdownOptions['components'] = {
+  p: ({ children }) => <p className="whitespace-pre-wrap">{applyMentions(children)}</p>,
+  li: ({ children }) => <li className="ml-5 list-disc">{applyMentions(children)}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{applyMentions(children)}</strong>,
+  em: ({ children }) => <em className="italic">{applyMentions(children)}</em>,
+  code: ({ children }) => <code className="rounded bg-surface-3 px-1 py-0.5 font-mono text-[13px]">{children}</code>,
+  pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-md bg-surface-3 p-2 font-mono text-[13px]">{children}</pre>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline hover:opacity-80">
+      {children}
+    </a>
+  ),
+  blockquote: ({ children }) => <blockquote className="my-1 border-l-[3px] border-border-default pl-2 text-text-secondary">{children}</blockquote>,
+};
+
+// memo()'d so a MessageRow re-render with unchanged text (reactions, hover
+// state, read receipts) never re-runs the remark/rehype parse pipeline.
+const MarkdownMessage = memo(function MarkdownMessage({ text }: { text: string }) {
   if (!text) return null;
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[[rehypeSanitize, mdSanitizeSchema]]}
-      components={{
-        p: ({ children }) => <p className="whitespace-pre-wrap">{applyMentions(children)}</p>,
-        li: ({ children }) => <li className="ml-5 list-disc">{applyMentions(children)}</li>,
-        strong: ({ children }) => <strong className="font-semibold">{applyMentions(children)}</strong>,
-        em: ({ children }) => <em className="italic">{applyMentions(children)}</em>,
-        code: ({ children }) => <code className="rounded bg-surface-3 px-1 py-0.5 font-mono text-[13px]">{children}</code>,
-        pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-md bg-surface-3 p-2 font-mono text-[13px]">{children}</pre>,
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline hover:opacity-80">
-            {children}
-          </a>
-        ),
-        blockquote: ({ children }) => <blockquote className="my-1 border-l-[3px] border-border-default pl-2 text-text-secondary">{children}</blockquote>,
-      }}
+      remarkPlugins={MD_REMARK_PLUGINS}
+      rehypePlugins={MD_REHYPE_PLUGINS}
+      components={MD_COMPONENTS}
     >
       {text}
     </ReactMarkdown>
   );
-}
+});
 
 // ─── Quick emoji picker ──────────────────────────────────────────────────────
 
@@ -131,10 +142,19 @@ function EmojiPicker({ onSelect, onClose }: { onSelect: (emoji: string) => void;
 
 // ─── Media ───────────────────────────────────────────────────────────────────
 
+// Only http(s)/relative URLs may go through next/image — optimistic sends or
+// previews could theoretically carry blob:/data: sources, which must stay <img>.
+function isNextImageSrc(url: string): boolean {
+  return url.startsWith('/') || url.startsWith('https://') || url.startsWith('http://');
+}
+
 function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
   if (!images?.length) return null;
 
   if (images.length === 1) {
+    // Kept as a raw <img>: layout is intrinsic-size driven (natural size
+    // capped by max-h-64/max-w-sm) and stored messages carry no width/height
+    // metadata, so next/image can't reproduce it without a fixed container.
     return (
       <img
         src={images[0].imageUrl}
@@ -148,13 +168,25 @@ function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
   return (
     <div className="mt-1.5 grid max-w-md grid-cols-2 gap-1">
       {images.slice(0, 4).map((img, i) => (
-        <div key={img.id} className="relative">
-          <img
-            src={img.imageUrl}
-            alt=""
-            className="h-32 w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
-            loading="lazy"
-          />
+        <div key={img.id} className="relative h-32">
+          {isNextImageSrc(img.imageUrl) ? (
+            <Image
+              src={img.imageUrl}
+              alt=""
+              fill
+              // Cells are half of a max-w-md (28rem) grid → ≤ ~220px each.
+              sizes="(max-width: 480px) 50vw, 220px"
+              className="rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              unoptimized={!isOptimizableImageUrl(img.imageUrl)}
+            />
+          ) : (
+            <img
+              src={img.imageUrl}
+              alt=""
+              className="h-32 w-full rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+              loading="lazy"
+            />
+          )}
           {i === 3 && images.length > 4 && (
             <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 text-white text-lg font-bold">
               +{images.length - 4}
@@ -225,6 +257,14 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
   // Channels render messages as flat feed rows; DMs keep the bubble cards.
   const feed = variant === 'feed';
+
+  // Keyed on the text content: local state changes (emoji picker, edit mode)
+  // reuse the same element, so React bails out of re-rendering the markdown
+  // subtree entirely.
+  const markdownBody = useMemo(
+    () => (message.text ? <MarkdownMessage text={message.text} /> : null),
+    [message.text],
+  );
 
   const isDeleted = Boolean(message.deletedAt);
   const isEdited = Boolean(message.editedAt);
@@ -374,7 +414,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           <>
             {message.text && (
               <div className="text-[15px] leading-relaxed text-text-primary [&_a]:underline [&_p]:whitespace-pre-wrap">
-                <MarkdownMessage text={message.text} />
+                {markdownBody}
                 {isEdited && <span className="ml-1 text-[11px] italic text-text-muted">(edited)</span>}
               </div>
             )}

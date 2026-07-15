@@ -1,6 +1,6 @@
 "use client";
 
-import React, { ReactNode } from "react";
+import React, { ReactNode, useCallback, useMemo } from "react";
 import { createSafeContext } from "@/lib/contexts/createSafeContext";
 import { useSession, signOut as signOutClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
@@ -21,21 +21,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { data: session, isPending: isLoading } = useSession();
 
-  const handleSignOut = async () => {
+  const handleSignOut = useCallback(async () => {
     await signOutClient();
     router.push("/");
     router.refresh();
-  };
+  }, [router]);
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user: session?.user ?? null,
+      session: session ?? null,
+      isLoading,
+      signOut: handleSignOut,
+    }),
+    [session, isLoading, handleSignOut]
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user: session?.user ?? null,
-        session: session ?? null,
-        isLoading,
-        signOut: handleSignOut,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

@@ -12,7 +12,7 @@
  * visible in FullProfileOverlay without a page reload or graph-cache bust.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { createSafeContext } from './createSafeContext';
 import type { FullProfile } from '@/lib/profileTypes';
 
@@ -70,8 +70,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     bump();
   }, [bump]);
 
+  const value = useMemo<ProfileContextValue>(
+    () => ({ getCached, setCache, patchCache, version }),
+    [getCached, setCache, patchCache, version]
+  );
+
   return (
-    <ProfileContext.Provider value={{ getCached, setCache, patchCache, version }}>
+    <ProfileContext.Provider value={value}>
       {children}
     </ProfileContext.Provider>
   );

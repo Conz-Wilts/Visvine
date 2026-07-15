@@ -20,6 +20,14 @@ const SIZE_CLASSES = {
   xl: 'w-16 h-16 text-2xl',
 };
 
+/** Intrinsic px matching SIZE_CLASSES, forwarded so next/image knows the size. */
+const SIZE_PX: Record<keyof typeof SIZE_CLASSES, number> = {
+  sm: 24,
+  md: 32,
+  lg: 48,
+  xl: 64,
+};
+
 export default function CommunityAvatar({ name, imageUrl, size = 'md', rounded = 'rounded-xl', className = '' }: CommunityAvatarProps) {
   return (
     <Avatar
@@ -28,6 +36,7 @@ export default function CommunityAvatar({ name, imageUrl, size = 'md', rounded =
       fallback="initials"
       // Rounded square to match the profile/person avatar style, rather than a circle.
       sizeClassName={`${rounded} ${SIZE_CLASSES[size]}`}
+      pixelSize={SIZE_PX[size]}
       className={className}
       // Callers stretch the avatar with w-full/h-full utilities that would otherwise
       // lose to the fixed size classes; inline styles guarantee the stretch wins.

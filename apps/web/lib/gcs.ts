@@ -143,21 +143,48 @@ export async function uploadBlogImage(
 }
 
 // ---------------------------------------------------------------------------
-// Generate a signed URL (15-minute expiry) for private GCS objects
+// Generate a signed URL (15-minute expiry) for private GCS objects.
+//
+// In-memory TTL cache: signing is a crypto operation per object and the
+// resources list re-signs every row on every GET. A cached URL is reused while
+// it still has >5 min of life left, so a 15-min URL is served from cache for
+// ~10 min. Bounded FIFO eviction keeps the map from growing unbounded.
+// Per-process only (each serverless instance has its own map) — that's fine,
+// it's purely an optimization and misses just re-sign.
 // ---------------------------------------------------------------------------
+const SIGNED_URL_CACHE_MAX_ENTRIES = 500;
+const SIGNED_URL_MIN_REMAINING_MS = 5 * 60 * 1000;
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
 export async function getSignedUrl(
   bucketName: string,
   objectPath: string,
   expiresInMs = 15 * 60 * 1000
 ): Promise<string> {
+  const key = `${bucketName}/${objectPath}`;
+  const now = Date.now();
+
+  const cached = signedUrlCache.get(key);
+  if (cached && cached.expiresAt - now > SIGNED_URL_MIN_REMAINING_MS) {
+    return cached.url;
+  }
+  if (cached) signedUrlCache.delete(key);
+
   const storage = getStorage();
   const [url] = await storage
     .bucket(bucketName)
     .file(objectPath)
     .getSignedUrl({
       action: 'read',
-      expires: Date.now() + expiresInMs,
+      expires: now + expiresInMs,
     });
+
+  signedUrlCache.set(key, { url, expiresAt: now + expiresInMs });
+  if (signedUrlCache.size > SIGNED_URL_CACHE_MAX_ENTRIES) {
+    // Map preserves insertion order — evict the oldest entry.
+    const oldest = signedUrlCache.keys().next().value;
+    if (oldest !== undefined) signedUrlCache.delete(oldest);
+  }
   return url;
 }
 
