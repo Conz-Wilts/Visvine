@@ -82,3 +82,6 @@ supabase_data_dump.sql
 # See docs/SETUP.md §6.
 tmp/fixtures/
 *.dump
+
+# stray root screenshots
+/*.png
