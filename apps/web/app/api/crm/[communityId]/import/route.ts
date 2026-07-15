@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireApiSession } from "@/lib/api/route";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { parseCSV, processImport } from "@/lib/crm/importService";
 import { checkImportRateLimit } from "@/lib/crm/rateLimit";
@@ -12,8 +12,8 @@ const MAX_ROWS = 1000;
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 

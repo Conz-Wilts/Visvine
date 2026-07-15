@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession, isAdmin, isSuperAdmin } from '@/lib/auth';
-import { logger } from '@/lib/logger';
+import { isAdmin, isSuperAdmin } from '@/lib/auth';
+import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { listSuggestions, mergeIdentities, splitNodeToNewIdentity } from '@/lib/identity/steward';
 import { confirmIdentity, rejectIdentityMatch } from '@/lib/identity/resolve';
 
@@ -23,8 +23,8 @@ async function canStewardNode(
  */
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     let communityIds: string[] | null = null;
     if (!isSuperAdmin(session.email)) {
@@ -39,8 +39,7 @@ export async function GET() {
     const suggestions = await listSuggestions({ communityIds });
     return NextResponse.json({ suggestions });
   } catch (err) {
-    logger.error('api.identities.review.get.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.identities.review.get.failed');
   }
 }
 
@@ -53,8 +52,8 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const body = await request.json();
     const { action, nodeId } = body as { action: string; nodeId?: string };
@@ -104,7 +103,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: `unknown action: ${action}` }, { status: 400 });
   } catch (err) {
-    logger.error('api.identities.review.post.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.identities.review.post.failed');
   }
 }

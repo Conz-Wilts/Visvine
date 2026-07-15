@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { isSuperAdmin } from '@/lib/session';
 import { directoryAccessForbidden } from '@/lib/auth';
-import { logger } from '@/lib/logger';
+import { handleApiError, requireApiSession } from '@/lib/api/route';
 
 /**
  * Maps a CreateModal node type to the set of (lowercased) DB `type` values that
@@ -52,10 +52,8 @@ function fieldScore(r: SearchRow): number {
  */
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const q = req.nextUrl.searchParams.get('q')?.trim();
     const field = req.nextUrl.searchParams.get('field') || 'name';
@@ -162,7 +160,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ results });
   } catch (err) {
-    logger.error('api.nodes.search.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.nodes.search.failed');
   }
 }

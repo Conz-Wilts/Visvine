@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getEventBySlug } from '@/lib/eventRepo';
 import { makeICS } from '@/lib/eventUtils';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -26,7 +26,6 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    logger.error('api.public.ics.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.public.ics.failed');
   }
 }

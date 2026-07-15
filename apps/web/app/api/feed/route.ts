@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 
 // GET /api/feed?communityId=xxx&cursor=xxx&limit=20
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { searchParams } = new URL(req.url);
   const communityId = searchParams.get('communityId');
@@ -76,10 +74,8 @@ export async function GET(req: NextRequest) {
 
 // POST /api/feed - create a new post
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { communityId, content, imageUrls } = body;

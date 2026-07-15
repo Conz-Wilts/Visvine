@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { getEvent, setAttendeeStatus, removeAttendee } from '@/lib/eventRepo';
 import { requireEventManager } from '@/lib/eventAuth';
 import type { RSVPStatus } from '@/lib/types';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ eventId: string; attendeeId: string }>;
@@ -57,8 +57,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ attendee: updated });
   } catch (error) {
-    logger.error('api.events.attendee.patch.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.events.attendee.patch.failed');
   }
 }
 
@@ -81,7 +80,6 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    logger.error('api.events.attendee.delete.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.events.attendee.delete.failed');
   }
 }

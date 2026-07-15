@@ -9,6 +9,7 @@ import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
 import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { requireEventManager } from '@/lib/eventAuth';
+import { handleApiError } from '@/lib/api/route';
 import { logger } from '@/lib/logger';
 
 type RouteContext = {
@@ -130,11 +131,7 @@ export async function POST(
     if (error instanceof EventFullError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    logger.error('api.events.rsvp.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.rsvp.failed');
   }
 }
 
@@ -189,11 +186,7 @@ export async function GET(
 
     return NextResponse.json({ attendees: attendeesWithPersons });
   } catch (error) {
-    logger.error('api.events.attendees.list.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.attendees.list.failed');
   }
 }
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import { isAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 // GET /api/crm/column-requests?community_id=X
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const communityId = req.nextUrl.searchParams.get('community_id');
   if (!communityId) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
@@ -30,8 +30,8 @@ export async function GET(req: NextRequest) {
 
 // POST /api/crm/column-requests
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { community_id, column_name, column_type, options, description, from_private_column_id } = body;
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
 
 // PUT /api/crm/column-requests — admin approve/reject
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { id, status, reviewer_note } = body;

@@ -7,8 +7,6 @@
  *   - searchService.ts  (search, user lookup, directory)
  */
 
-export { MessagingError } from './serializers';
-
 export {
   listConversationsForUser,
   createDmConversation,

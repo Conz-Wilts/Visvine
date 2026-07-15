@@ -11,7 +11,7 @@ import { getEvent, getAttendees, setAttendeeStatus, removeAttendee } from '@/lib
 import { requireEventManager } from '@/lib/eventAuth';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import type { RSVPStatus } from '@/lib/types';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = { params: Promise<{ eventId: string }> };
 
@@ -92,7 +92,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ updated });
   } catch (error) {
-    logger.error('api.events.attendees.bulk.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.events.attendees.bulk.failed');
   }
 }

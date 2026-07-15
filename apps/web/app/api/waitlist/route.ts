@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { requireSession, isSuperAdmin } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { isSuperAdmin } from "@/lib/session";
+import { requireApiSession, forbiddenResponse } from "@/lib/api/route";
 import { takeToken } from "@/lib/messages/rateLimit";
 
 export async function POST(request: Request) {
@@ -69,10 +71,10 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const session = await requireSession();
-  if (session instanceof Response) return session;
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   if (!isSuperAdmin(session.email)) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+    return forbiddenResponse();
   }
 
   const entries = await prisma.waitlistEntry.findMany({

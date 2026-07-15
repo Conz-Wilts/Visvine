@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
-import { logger } from '@/lib/logger';
+import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { tryResolveIdentity, confirmIdentity, type ResolveResult } from '@/lib/identity/resolve';
 import type { IdentityKind } from '@/lib/identity/match';
 
@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
 
     // A personal space's directory is private to its owner — don't let any other
     // authenticated user read it by passing its `me:<userId>` community id.
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
     if (
       (await communityReadForbidden(session.userId, communityId)) ||
       (await directoryAccessForbidden(session.userId, communityId, session.email))
@@ -69,8 +69,7 @@ export async function GET(request: NextRequest) {
     const nodes: NBNode[] = rows.map(nodeRowToNBNode);
     return NextResponse.json({ nodes });
   } catch (err) {
-    logger.error('api.data.nodes.get.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.nodes.get.failed');
   }
 }
 
@@ -160,8 +159,7 @@ export async function POST(request: NextRequest) {
     // inline confirmation; null when the type has no identity or an explicit pick won.
     return NextResponse.json({ node: nodeRowToNBNode(row), resolution }, { status: 201 });
   } catch (err) {
-    logger.error('api.data.nodes.post.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.nodes.post.failed');
   }
 }
 
@@ -219,8 +217,7 @@ export async function PUT(request: NextRequest) {
     revalidateTag('graph-data-v2');
     return NextResponse.json({ node: nodeRowToNBNode(row) });
   } catch (err) {
-    logger.error('api.data.nodes.put.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.nodes.put.failed');
   }
 }
 
@@ -247,7 +244,6 @@ export async function DELETE(request: NextRequest) {
     revalidateTag('graph-data-v2');
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error('api.data.nodes.delete.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.nodes.delete.failed');
   }
 }

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { deleteResourceFile, getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
-import { getSession } from '@/lib/session';
+import { requireApiSession, parseBody } from '@/lib/api/route';
 import { z } from 'zod';
 
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const community_id = req.nextUrl.searchParams.get('community_id');
   if (!community_id) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
@@ -45,13 +45,13 @@ const CreateResourceSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
-  const parsed = CreateResourceSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+  const body = await parseBody(req, CreateResourceSchema);
+  if (body instanceof NextResponse) return body;
 
-  const { communityId, name, fileType, fileUrl, fileSize, metadata } = parsed.data;
+  const { communityId, name, fileType, fileUrl, fileSize, metadata } = body;
   const resource = await prisma.resource.create({
     data: { communityId, name, fileType, fileUrl, fileSize: fileSize ?? 0, uploadedBy: session.userId, metadata: (metadata ?? {}) as Record<string, string> },
   });
@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });

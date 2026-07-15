@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 /**
  * GET: Fetch all communities
@@ -96,11 +96,7 @@ export async function GET() {
       }
     );
   } catch (err) {
-    logger.error('api.data.communities.get.failed', { err });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(err, 'api.data.communities.get.failed');
   }
 }
 
@@ -156,11 +152,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ community: createdCommunity }, { status: 201 });
   } catch (err) {
-    logger.error('api.data.communities.post.failed', { err });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(err, 'api.data.communities.post.failed');
   }
 }
 
@@ -228,11 +220,7 @@ export async function PUT(request: NextRequest) {
     revalidateTag('graph-data');
     return NextResponse.json({ community: updatedCommunity });
   } catch (err) {
-    logger.error('api.data.communities.put.failed', { err });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(err, 'api.data.communities.put.failed');
   }
 }
 
@@ -276,10 +264,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error('api.data.communities.delete.failed', { err });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(err, 'api.data.communities.delete.failed');
   }
 }

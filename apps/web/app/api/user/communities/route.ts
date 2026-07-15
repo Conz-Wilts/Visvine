@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { isSuperAdmin } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import prisma from '@/lib/prisma';
 
 /**
  * GET: Return all communities the current user has joined
  */
 export async function GET() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const superAdmin = isSuperAdmin(session.email);
 

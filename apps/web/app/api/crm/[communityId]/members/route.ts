@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireApiSession } from "@/lib/api/route";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { listCommunityMembers } from "@/lib/crm/memberService";
 import { MemberListQuerySchema, CreateShadowMemberSchema } from "@/lib/schemas/crm";
@@ -10,8 +10,8 @@ import prisma from "@/lib/prisma";
 type RouteContext = { params: Promise<{ communityId: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 
@@ -43,8 +43,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 

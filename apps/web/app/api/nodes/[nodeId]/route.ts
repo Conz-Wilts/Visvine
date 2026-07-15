@@ -6,8 +6,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
 import { communityReadForbidden } from '@/lib/auth';
+import { requireApiSession } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
@@ -36,8 +36,8 @@ function cleanTags(input: unknown): string[] {
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { nodeId } = await context.params;
 
@@ -147,8 +147,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
  * are shared collaborative metadata, so any member with write access may edit.
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { nodeId } = await context.params;
   const body = await request.json().catch(() => ({}));

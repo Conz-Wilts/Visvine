@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireApiSession } from "@/lib/api/route";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { PublicFieldPatchSchema } from "@/lib/schemas/crm";
 import { Prisma } from "@prisma/client";
@@ -9,8 +9,8 @@ import { revalidateTag } from "next/cache";
 type RouteContext = { params: Promise<{ communityId: string; userId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId, userId } = await params;
 

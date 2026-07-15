@@ -8,7 +8,7 @@ import { getEvent, upsertEvent, getAttendees, deleteEvent } from '@/lib/eventRep
 import { requireEventManager, requireCommunityMember } from '@/lib/eventAuth';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ eventId: string }>;
@@ -154,11 +154,7 @@ export async function GET(
       ...(attendeeList && { attendees: attendeeList }),
     });
   } catch (error) {
-    logger.error('api.events.get.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.get.failed');
   }
 }
 
@@ -220,11 +216,7 @@ export async function PATCH(
 
     return NextResponse.json(updatedEvent);
   } catch (error) {
-    logger.error('api.events.update.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.update.failed');
   }
 }
 
@@ -268,11 +260,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, message: 'Event deleted successfully' });
   } catch (error) {
-    logger.error('api.events.delete.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.delete.failed');
   }
 }
 

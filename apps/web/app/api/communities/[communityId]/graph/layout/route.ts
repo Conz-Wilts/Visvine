@@ -11,8 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession, isSuperAdmin } from '@/lib/session';
-import { logger } from '@/lib/logger';
+import { isSuperAdmin } from '@/lib/session';
+import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -21,8 +21,8 @@ type RouteContext = {
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest, context: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await context.params;
 
@@ -36,8 +36,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       headers: { 'Cache-Control': 'private, max-age=5' },
     });
   } catch (error) {
-    logger.error('api.community.graph.layout.get.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.community.graph.layout.get.failed');
   }
 }
 
@@ -84,8 +83,8 @@ function sanitizePositions(raw: unknown): Positions | null {
 }
 
 export async function PUT(request: NextRequest, context: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await context.params;
 
@@ -97,7 +96,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       where: { userId_communityId: { userId: session.userId, communityId } },
       select: { id: true },
     });
-    if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!membership) return forbiddenResponse();
   }
 
   let body: unknown;
@@ -125,7 +124,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     });
     return NextResponse.json({ ok: true });
   } catch (error) {
-    logger.error('api.community.graph.layout.put.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.community.graph.layout.put.failed');
   }
 }

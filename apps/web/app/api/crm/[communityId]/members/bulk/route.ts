@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { parseBody, requireApiSession } from "@/lib/api/route";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { revalidateTag } from "next/cache";
 import { Prisma } from "@prisma/client";
@@ -29,9 +29,8 @@ const BulkActionSchema = z.discriminatedUnion("action", [
 ]);
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await getSession();
-  if (!session)
-    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 
@@ -51,14 +50,10 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     throw e;
   }
 
-  const body = BulkActionSchema.safeParse(await req.json());
-  if (!body.success)
-    return NextResponse.json(
-      { error: "invalid_body" },
-      { status: 400 }
-    );
+  const body = await parseBody(req, BulkActionSchema);
+  if (body instanceof NextResponse) return body;
 
-  const data = body.data;
+  const data = body;
   let affected = 0;
 
   if (data.action === "update_private") {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadProfileImage, deleteProfileImage, getMediaUrl } from '@/lib/gcs';
-import { requireSession } from '@/lib/session';
+import { requireApiSession, handleApiError } from '@/lib/api/route';
 import type { ImageEntityType } from '@/lib/imageUpload';
 import { logger } from '@/lib/logger';
 
@@ -42,8 +42,8 @@ function buildPrefix(entityType: ImageEntityType, entityId: string): string {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireSession();
-    if (session instanceof Response) return session;
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -103,8 +103,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url, gcsPath, baseUrl }, { status: 201 });
   } catch (error) {
-    logger.error('api.upload.failed', { err: error });
-    return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
+    return handleApiError(error, 'api.upload.failed');
   }
 }
 
@@ -114,8 +113,8 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await requireSession();
-    if (session instanceof Response) return session;
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const { searchParams } = new URL(request.url);
 
@@ -135,7 +134,6 @@ export async function DELETE(request: NextRequest) {
     await deleteProfileImage(buildPrefix(entityType, entityId));
     return NextResponse.json({ success: true });
   } catch (error) {
-    logger.error('api.upload.delete.failed', { err: error });
-    return NextResponse.json({ error: 'Failed to delete image' }, { status: 500 });
+    return handleApiError(error, 'api.upload.delete.failed');
   }
 }

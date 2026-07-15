@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import prisma from '@/lib/prisma';
 
 type CommunityValueMap = Record<string, Record<string, { value: string | null; contributedBy: { id: string; name: string; image: string | null } | null }>>;
@@ -33,8 +33,8 @@ async function buildCommunityValues(communityId: string, nodeIds: string[]): Pro
 // publicly browsable, so the community directory layer is readable by any
 // signed-in user.
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const communityId = req.nextUrl.searchParams.get('community_id');
   const nodeIds = req.nextUrl.searchParams.getAll('node_ids[]');
@@ -48,8 +48,8 @@ export async function GET(req: NextRequest) {
 // Same read as GET, but the id list rides in the body so fetching values for
 // many nodes at once never blows past URL/header length limits.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json().catch(() => null);
   const communityId: unknown = body?.community_id;
@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
 
 // PUT /api/crm/community-values
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { community_id, node_id, column_key, column_id, value } = body;

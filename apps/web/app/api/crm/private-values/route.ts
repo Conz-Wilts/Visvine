@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import prisma from '@/lib/prisma';
 
 async function buildPrivateValues(userId: string, nodeIds: string[]): Promise<Record<string, Record<string, string | null>>> {
@@ -30,8 +30,8 @@ async function buildPrivateValues(userId: string, nodeIds: string[]): Promise<Re
 // Private values are global — no community_id filter needed.
 // Optional community_id accepted for backwards compat but ignored.
 export async function GET(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const nodeIds = req.nextUrl.searchParams.getAll('node_ids[]');
   return NextResponse.json({ values: await buildPrivateValues(session.userId, nodeIds) });
@@ -41,8 +41,8 @@ export async function GET(req: NextRequest) {
 // Same read as GET, but the id list rides in the body so fetching values for
 // many nodes at once never blows past URL/header length limits.
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json().catch(() => null);
   const nodeIds: string[] = Array.isArray(body?.node_ids) ? body.node_ids : [];
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
 // PUT /api/crm/private-values
 export async function PUT(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { node_id, column_id, value } = body;

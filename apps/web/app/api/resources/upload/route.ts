@@ -3,13 +3,13 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { uploadResourceFile, RESOURCES_BUCKET, getSignedUrl } from '@/lib/gcs';
-import { requireSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp', '.tiff', '.heic', '.heif', '.ico']);
 
 export async function POST(req: NextRequest) {
-  const session = await requireSession();
-  if (session instanceof Response) return session;
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const formData = await req.formData();
   const file = formData.get('file') as File | null;

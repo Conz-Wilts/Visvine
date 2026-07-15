@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireApiSession } from "@/lib/api/route";
 import { PublicFieldPatchSchema } from "@/lib/schemas/crm";
 import { Prisma } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = PublicFieldPatchSchema.safeParse(await req.json());
   if (!body.success)

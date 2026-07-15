@@ -8,8 +8,8 @@ import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData, upsertEvent } from '@/lib/eventRepo';
 import { upsertLink } from '@/lib/graph/links';
 import { requireCommunityMember } from '@/lib/eventAuth';
+import { handleApiError } from '@/lib/api/route';
 import type { NBEvent } from '@/lib/types';
-import { logger } from '@/lib/logger';
 
 /**
  * POST /api/events - Create a new event (any community member; creator becomes a host)
@@ -100,11 +100,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
-    logger.error('api.events.create.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.create.failed');
   }
 }
 
@@ -171,11 +167,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ events: eventsWithStats });
   } catch (error) {
-    logger.error('api.events.list.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.list.failed');
   }
 }
 

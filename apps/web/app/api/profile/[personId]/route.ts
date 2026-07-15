@@ -7,14 +7,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 
 type RouteContext = { params: Promise<{ personId: string }> };
 
 export async function GET(_req: NextRequest, context: RouteContext) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { personId } = await context.params;
 
@@ -77,8 +77,8 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
 export async function PATCH(req: NextRequest, context: RouteContext) {
   const { personId } = await context.params;
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   // Verify ownership
   const person = await prisma.person.findUnique({
@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   });
   if (!person) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (person.userId !== session.userId) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return forbiddenResponse();
   }
 
   const body = await req.json();

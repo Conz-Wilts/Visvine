@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 
 async function assertMember(resourceId: string, userId: string) {
   const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { communityId: true } });
@@ -14,8 +14,8 @@ async function assertMember(resourceId: string, userId: string) {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ resourceId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
   const check = await assertMember(resourceId, session.userId);
   if (check.error) return check.error;
@@ -28,8 +28,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ reso
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ resourceId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
   const check = await assertMember(resourceId, session.userId);
   if (check.error) return check.error;
@@ -42,8 +42,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ res
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ resourceId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   const { resourceId } = await params;
   const check = await assertMember(resourceId, session.userId);
   if (check.error) return check.error;

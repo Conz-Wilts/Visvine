@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { requireSession, isSuperAdmin } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { isSuperAdmin } from "@/lib/session";
+import { requireApiSession, forbiddenResponse } from "@/lib/api/route";
 import { uploadBlogImage, getMediaUrl } from "@/lib/gcs";
 import { slugify } from "@/lib/blog/slug";
 
@@ -15,10 +17,10 @@ const ALLOWED: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  const session = await requireSession();
-  if (session instanceof Response) return session;
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   if (!isSuperAdmin(session.email)) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+    return forbiddenResponse();
   }
 
   const form = await request.formData();

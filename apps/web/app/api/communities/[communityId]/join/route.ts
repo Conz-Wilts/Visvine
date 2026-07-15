@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import { isForeignPersonalSpace } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -10,8 +10,8 @@ import { aliasesForType, type CommunityAlias } from '@/lib/types';
  * POST: Current user joins a community (self-service)
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ communityId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 
@@ -104,8 +104,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
  * DELETE: Current user leaves a community (self-service)
  */
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ communityId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { communityId } = await params;
 

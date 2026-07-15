@@ -12,6 +12,7 @@ import { rsvpMessage } from '@/lib/eventCopy';
 import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { takeToken } from '@/lib/messages/rateLimit';
 import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -72,7 +73,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (error instanceof EventFullError) {
       return NextResponse.json({ error: error.message }, { status: 409 });
     }
-    logger.error('api.public.rsvp.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.public.rsvp.failed');
   }
 }

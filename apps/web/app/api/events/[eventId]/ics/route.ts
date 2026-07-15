@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getEvent } from '@/lib/eventRepo';
 import { makeICS } from '@/lib/eventUtils';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ eventId: string }>;
@@ -48,11 +48,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    logger.error('api.events.ics.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.events.ics.failed');
   }
 }
 

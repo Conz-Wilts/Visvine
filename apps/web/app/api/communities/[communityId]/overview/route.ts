@@ -6,18 +6,18 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { isSuperAdmin } from '@/lib/session';
+import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { getEventsData } from '@/lib/eventRepo';
 import { normalizeStatus, isEventPast } from '@/lib/eventUtils';
-import { logger } from '@/lib/logger';
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ communityId: string }> },
 ) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const { communityId } = await params;
     const community = await prisma.community.findUnique({
@@ -114,7 +114,6 @@ export async function GET(
       lastPostAt: null,
     });
   } catch (error) {
-    logger.error('api.communities.overview.failed', { err: error });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(error, 'api.communities.overview.failed');
   }
 }

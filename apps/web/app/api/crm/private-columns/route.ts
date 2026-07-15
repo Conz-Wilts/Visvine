@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import prisma from '@/lib/prisma';
 
 // GET /api/crm/private-columns — returns ALL user's global private columns
 // Optional: ?community_id=X for backwards compat (filters to that community's legacy columns too)
 export async function GET(_req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const columns = await prisma.privateColumn.findMany({
     where: { userId: session.userId },
@@ -18,8 +18,8 @@ export async function GET(_req: NextRequest) {
 
 // POST /api/crm/private-columns
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { column_name, column_type, options, community_id } = body;
@@ -51,8 +51,8 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/crm/private-columns?id=X
 export async function DELETE(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const id = req.nextUrl.searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -68,8 +68,8 @@ export async function DELETE(req: NextRequest) {
 
 // PATCH /api/crm/private-columns
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { id, column_name, options } = body;

@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
 import { upsertLink, removeLink } from '@/lib/graph/links';
 import type { NBLink } from '@/lib/types';
-import { logger } from '@/lib/logger';
+import { handleApiError, requireApiSession } from '@/lib/api/route';
 
 /**
  * GET: Fetch all links for a community
@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
 
     // A personal space's relationship graph is private to its owner — block
     // reads of someone else's `me:<userId>` community.
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
     if (
       (await communityReadForbidden(session.userId, communityId)) ||
       (await directoryAccessForbidden(session.userId, communityId, session.email))
@@ -47,8 +47,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ links });
   } catch (err) {
-    logger.error('api.data.links.get.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.links.get.failed');
   }
 }
 
@@ -103,8 +102,7 @@ export async function POST(request: NextRequest) {
       },
     }, { status: 201 });
   } catch (err) {
-    logger.error('api.data.links.post.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.links.post.failed');
   }
 }
 
@@ -165,8 +163,7 @@ export async function PUT(request: NextRequest) {
       },
     });
   } catch (err) {
-    logger.error('api.data.links.put.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.links.put.failed');
   }
 }
 
@@ -198,7 +195,6 @@ export async function DELETE(request: NextRequest) {
     revalidateTag('graph-data-v2');
     return NextResponse.json({ success: true });
   } catch (err) {
-    logger.error('api.data.links.delete.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.data.links.delete.failed');
   }
 }

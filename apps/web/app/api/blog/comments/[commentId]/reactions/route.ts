@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 
 type Params = { params: Promise<{ commentId: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { commentId } = await params;
   const { emoji } = await req.json();

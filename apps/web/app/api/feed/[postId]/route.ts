@@ -1,16 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 
 // DELETE /api/feed/[postId]
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ postId: string }> }
 ) {
-  const session = await getSession();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { postId } = await params;
 

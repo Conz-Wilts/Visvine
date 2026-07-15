@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { assertCrmPermission, PermissionError } from '@/lib/crm/permissions';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ resourceId: string; changeId: string }> }) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { resourceId, changeId } = await params;
   const change = await prisma.resourceChange.findUnique({
@@ -19,7 +19,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ reso
   try {
     await assertCrmPermission(session.userId, session.email, change.resource.communityId, 'manage_members');
   } catch (e) {
-    if (e instanceof PermissionError) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (e instanceof PermissionError) return forbiddenResponse();
     throw e;
   }
 

@@ -10,6 +10,7 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { getSession } from '@/lib/session';
+import { parseBody, requireApiSession } from '@/lib/api/route';
 import { provisionPersonalCommunity } from '@/lib/onboarding/personalCommunity';
 import { z } from 'zod';
 
@@ -56,8 +57,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const person = await prisma.person.findUnique({
     where: { userId: session.userId },
@@ -65,13 +66,13 @@ export async function PATCH(req: NextRequest) {
   });
   if (!person) return NextResponse.json({ error: 'Person not found' }, { status: 404 });
 
-  const parsed = OnboardingPatchSchema.safeParse(await req.json());
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+  const body = await parseBody(req, OnboardingPatchSchema);
+  if (body instanceof NextResponse) return body;
 
   const {
     name, subtitle, bio, location, website, linkedinUrl, twitterUrl,
     phone, pronouns, tags, imageUrl,
-  } = parsed.data;
+  } = body;
 
   const updated = await prisma.person.update({
     where: { id: person.id },
@@ -124,8 +125,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST() {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   await prisma.person.update({
     where: { userId: session.userId },

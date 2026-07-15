@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import { getStorage, MEDIA_BUCKET, getMediaUrl } from '@/lib/gcs';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 const ALLOWED_EXTENSIONS = ['.woff2', '.ttf', '.otf'];
 const ALLOWED_MIME_TYPES = [
@@ -85,7 +85,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url, name: fontName, format }, { status: 201 });
   } catch (error) {
-    logger.error('api.upload.font.failed', { err: error });
-    return NextResponse.json({ error: 'Failed to upload font' }, { status: 500 });
+    return handleApiError(error, 'api.upload.font.failed');
   }
 }

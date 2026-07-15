@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
-import { getSession, isSuperAdmin } from '@/lib/session';
+import { isSuperAdmin } from '@/lib/session';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 
 /**
  * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
@@ -11,8 +12,8 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ resourceId: string }> },
 ) {
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const { resourceId } = await params;
   const resource = await prisma.resource.findUnique({
@@ -27,7 +28,7 @@ export async function GET(
   });
   const superAdmin = isSuperAdmin(session.email);
   if (!membership && !superAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return forbiddenResponse();
   }
   const role = superAdmin ? 'admin' : membership?.role ?? null;
 

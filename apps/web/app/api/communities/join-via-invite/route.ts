@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { logActivity } from '@/lib/activityLog';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 /**
  * POST /api/communities/join-via-invite — accept a community invite link.
@@ -58,7 +58,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ status: 'pending', communityId: community.id, communityName: community.name });
   } catch (err) {
-    logger.error('api.communities.join_via_invite.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.communities.join_via_invite.failed');
   }
 }

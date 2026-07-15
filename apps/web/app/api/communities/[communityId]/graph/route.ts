@@ -5,8 +5,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityGraphData } from '@/lib/eventRepo';
 import { normalizeNode, normalizeLink } from '@/lib/graphUtils';
-import { logger } from '@/lib/logger';
-import { getSession, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
+import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
+import { communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -21,13 +21,13 @@ export async function GET(
   try {
     const { communityId } = await context.params;
 
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
     if (
       (await communityReadForbidden(session.userId, communityId)) ||
       (await directoryAccessForbidden(session.userId, communityId, session.email))
     ) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return forbiddenResponse();
     }
 
     const graphData = await getCommunityGraphData(communityId);
@@ -46,10 +46,6 @@ export async function GET(
       }
     );
   } catch (error) {
-    logger.error('api.community.graph.failed', { err: error });
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, 'api.community.graph.failed');
   }
 }

@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/session';
+import { requireApiSession } from '@/lib/api/route';
 import { communityReadForbidden } from '@/lib/auth';
 import { isHexColor, tagKey } from '@/lib/tagColors';
 
@@ -19,8 +19,8 @@ export async function PATCH(
   { params }: { params: Promise<{ communityId: string }> },
 ) {
   const { communityId } = await params;
-  const session = await getSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json().catch(() => ({}));
   const { tag, color } = body as { tag?: string; color?: string };

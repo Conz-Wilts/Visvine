@@ -1,15 +1,17 @@
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { requireSession, isSuperAdmin } from "@/lib/session";
+import { NextResponse } from "next/server";
+import { isSuperAdmin } from "@/lib/session";
+import { requireApiSession, forbiddenResponse } from "@/lib/api/route";
 import { slugify } from "@/lib/blog/slug";
 import { EMPTY_DOC } from "@/lib/blog/tiptap";
 
 // Create a new draft post and return its id + slug.
 export async function POST(request: Request) {
-  const session = await requireSession();
-  if (session instanceof Response) return session;
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
   if (!isSuperAdmin(session.email)) {
-    return Response.json({ error: "Forbidden" }, { status: 403 });
+    return forbiddenResponse();
   }
 
   let body: { title?: string } = {};

@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
-import { logger } from '@/lib/logger';
+import { handleApiError } from '@/lib/api/route';
 
 /**
  * POST /api/communities — user-facing community creation.
@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    logger.error('api.communities.create.failed', { err });
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleApiError(err, 'api.communities.create.failed');
   }
 }

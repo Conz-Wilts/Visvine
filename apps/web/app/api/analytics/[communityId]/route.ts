@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { getSession } from '@/lib/auth';
+import { requireApiSession } from '@/lib/api/route';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -37,10 +37,8 @@ export async function GET(
   { params }: { params: Promise<{ communityId: string }> }
 ) {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const session = await requireApiSession();
+    if (session instanceof NextResponse) return session;
 
     const { communityId } = await params;
     const { searchParams } = new URL(request.url);
