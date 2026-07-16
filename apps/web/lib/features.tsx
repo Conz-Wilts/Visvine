@@ -85,6 +85,18 @@ export const FEATURES: FeatureDef[] = [
     ),
   },
   {
+    key: 'tasks',
+    label: 'Tasks',
+    href: '/tasks',
+    description: 'A kanban board for planning and tracking the community’s work.',
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M8 7v9M12 7v5M16 7v7" />
+      </svg>
+    ),
+  },
+  {
     key: 'resources',
     label: 'Resources',
     href: '/resources',

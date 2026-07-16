@@ -80,6 +80,23 @@ export async function getAdminSession(communityId: string): Promise<SessionPaylo
 }
 
 /**
+ * Session + active-membership gate, as a value (not a Response). Returns the
+ * session payload if the caller is an active member of the community (or a
+ * super admin), otherwise null — pending members and non-members both get null.
+ * Mirrors getAdminSession for member-level routes (e.g. the Tasks board).
+ */
+export async function getMemberSession(communityId: string): Promise<SessionPayload | null> {
+  const session = await getSession();
+  if (!session) return null;
+  if (isSuperAdmin(session.email)) return session;
+  const membership = await prisma.userCommunity.findUnique({
+    where: { userId_communityId: { userId: session.userId, communityId } },
+    select: { status: true },
+  });
+  return membership?.status === 'active' ? session : null;
+}
+
+/**
  * Returns the current session or null. Convenience re-export so routes
  * only need to import from one auth module.
  */

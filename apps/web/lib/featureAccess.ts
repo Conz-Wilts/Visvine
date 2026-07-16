@@ -17,7 +17,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages'];
  * with lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
  * reject unknown keys from a client-submitted `order`.
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'messages'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'tasks', 'resources', 'messages'];
 
 /**
  * Feature keys that carry NO sidebar nav item:
