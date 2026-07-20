@@ -4,6 +4,12 @@
 
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils';
 
+// Append an alpha channel to a 6-digit hex color; passes anything else through.
+export function withAlpha(hex: string, alpha: number): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
+}
+
 // Reuse a single Path2D for each glyph across every node draw.
 const glyphPaths = Object.fromEntries(
   Object.entries(NODE_GLYPH_PATHS).map(([glyph, path]) => [glyph, new Path2D(path)])

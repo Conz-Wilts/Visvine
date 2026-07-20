@@ -20,7 +20,7 @@ interface UseMessageActionsArgs {
 }
 
 /**
- * Per-message actions (react, star, pin, edit, delete, scroll-to). These are
+ * Per-message actions (react, star, edit, delete, scroll-to). These are
  * passed to every (memoized) MessageRow — keep them stable via useCallback +
  * refs or the memo never holds and each state change re-parses markdown for
  * all visible rows.
@@ -59,19 +59,6 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     }
   }, [selectedConversationRef, setMessages]);
 
-  const handleTogglePin = useCallback(async (messageId: string) => {
-    const conversationId = selectedConversationRef.current;
-    if (!conversationId) return;
-    try {
-      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/pin`, {
-        method: 'POST',
-      });
-      if (!res.ok) return;
-      const { pinnedAt } = await res.json();
-      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, pinnedAt } : m));
-    } catch { /* best-effort */ }
-  }, [selectedConversationRef, setMessages]);
-
   const handleEdit = useCallback(async (messageId: string, text: string) => {
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
@@ -108,5 +95,5 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     }
   }, [virtuosoRef]);
 
-  return { handleReaction, handleToggleStar, handleTogglePin, handleEdit, handleDelete, handleScrollToMessage };
+  return { handleReaction, handleToggleStar, handleEdit, handleDelete, handleScrollToMessage };
 }

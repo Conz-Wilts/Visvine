@@ -7,11 +7,19 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { Hash } from 'lucide-react';
+import { Hash, Newspaper } from 'lucide-react';
 
-export function ChannelIcon({ icon, className = 'h-4 w-4' }: { icon?: string | null; className?: string }) {
+export function ChannelIcon({ icon, fallback = 'hash', className = 'h-4 w-4' }: {
+  icon?: string | null;
+  /** Glyph when no emoji icon is set — 'feed' marks feed-style channels. */
+  fallback?: 'hash' | 'feed';
+  className?: string;
+}) {
   if (icon) {
     return <span className={`inline-flex shrink-0 items-center justify-center leading-none ${className}`} style={{ fontSize: '0.9em' }}>{icon}</span>;
+  }
+  if (fallback === 'feed') {
+    return <Newspaper className={`shrink-0 ${className}`} strokeWidth={2} />;
   }
   return <Hash className={`shrink-0 ${className}`} strokeWidth={2} />;
 }

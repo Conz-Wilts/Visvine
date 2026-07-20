@@ -9,8 +9,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Globe, Linkedin, Twitter, MapPin, Mail, UserPlus, Pencil, LogOut, X, Hash } from 'lucide-react';
-import type { ConversationSummary } from '@/lib/messages/types';
+import { Globe, Linkedin, Twitter, MapPin, Mail, UserPlus, Pencil, LogOut, X, Hash, MessageCircle, Newspaper } from 'lucide-react';
+import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
 
 interface PersonProfile {
@@ -41,6 +41,10 @@ export interface ProfilePanelProps {
   onRename: () => void;
   onLeave: () => void;
   onRemoveMember: (memberUserId: string) => void;
+  /** Change a channel's rendering style (chat thread vs feed cards); admin-only UI. */
+  onChangeViewMode?: (mode: ChannelViewMode) => void;
+  /** When set (docked Slack-style pane), the header gains a close button. */
+  onClose?: () => void;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -167,8 +171,9 @@ function DmProfile({ conversation, currentUserId }: { conversation: Conversation
   );
 }
 
-function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember }: ProfilePanelProps) {
+function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember, onChangeViewMode }: ProfilePanelProps) {
   const isChannel = conversation.type === 'CHANNEL';
+  const viewMode: ChannelViewMode = conversation.viewMode ?? 'CHAT';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -186,6 +191,35 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
           <p className="mt-2 text-sm leading-relaxed text-text-secondary">{conversation.description}</p>
         )}
       </div>
+
+      {/* View style (channel admins): chat thread vs feed cards — lossless
+          rendering switch over the same messages, flip any time. */}
+      {isChannel && isAdmin && onChangeViewMode && (
+        <div className="space-y-1.5 px-5 pb-4">
+          <SectionLabel>View style</SectionLabel>
+          <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
+            {([
+              { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle },
+              { mode: 'FEED' as const, label: 'Feed', icon: Newspaper },
+            ]).map(({ mode, label, icon: Icon }) => {
+              const active = viewMode === mode;
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => { if (!active) onChangeViewMode(mode); }}
+                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Members */}
       <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-3">
@@ -249,15 +283,31 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
 }
 
 export default function ProfilePanel(props: ProfilePanelProps) {
-  const { conversation } = props;
+  const { conversation, onClose } = props;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="px-6 pt-5">
-        <p className="text-sm font-semibold text-text-primary">
-          {conversation.type === 'DM' ? 'Profile' : 'Details'}
-        </p>
-      </div>
+      {onClose ? (
+        <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
+          <p className="text-sm font-semibold text-text-primary">
+            {conversation.type === 'DM' ? 'Profile' : 'Details'}
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+            aria-label="Close details"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="px-6 pt-5">
+          <p className="text-sm font-semibold text-text-primary">
+            {conversation.type === 'DM' ? 'Profile' : 'Details'}
+          </p>
+        </div>
+      )}
       {conversation.type === 'DM'
         ? <DmProfile conversation={conversation} currentUserId={props.currentUserId} />
         : <GroupDetails {...props} />}

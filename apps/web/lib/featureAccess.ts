@@ -76,15 +76,35 @@ export function sortFeatureKeys(
 }
 
 /**
+ * The feature keys a community has tucked into the sidebar's "More" popup —
+ * deduped and reduced to known, nav-bearing keys. Membership only: the caller
+ * still filters by `canAccessFeature` and orders via `sortFeatureKeys`.
+ */
+export function moreFeatureKeys(config: CommunityFeatureConfig | null | undefined): string[] {
+  const more = config?.more;
+  if (!more || more.length === 0) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const key of more) {
+    if (!ALL_FEATURE_KEYS.includes(key) || NAV_HIDDEN_FEATURE_KEYS.includes(key) || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
+}
+
+/**
  * Normalize a client-submitted featureConfig into the persisted shape: only the
  * known keys, core features stripped from `enabled` (they can never be off),
- * `directoryPrivate` kept only when it's a boolean, and `order` reduced to known
- * keys with duplicates dropped.
+ * `directoryPrivate` kept only when it's a boolean, and `order`/`more` reduced
+ * to known keys with duplicates dropped (`more` also drops nav-hidden keys —
+ * they have no sidebar row to tuck away).
  */
 export function sanitizeFeatureConfig(input: {
   enabled?: Record<string, boolean>;
   directoryPrivate?: unknown;
   order?: unknown;
+  more?: unknown;
 }): CommunityFeatureConfig {
   const out: CommunityFeatureConfig = {};
   if (input.enabled) {
@@ -108,6 +128,21 @@ export function sanitizeFeatureConfig(input: {
       order.push(key);
     }
     if (order.length > 0) out.order = order;
+  }
+  if (Array.isArray(input.more)) {
+    const seen = new Set<string>();
+    const more: string[] = [];
+    for (const key of input.more) {
+      if (
+        typeof key !== 'string' ||
+        !ALL_FEATURE_KEYS.includes(key) ||
+        NAV_HIDDEN_FEATURE_KEYS.includes(key) ||
+        seen.has(key)
+      ) continue;
+      seen.add(key);
+      more.push(key);
+    }
+    if (more.length > 0) out.more = more;
   }
   return out;
 }

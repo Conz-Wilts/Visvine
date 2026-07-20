@@ -250,6 +250,7 @@ export async function createChannelConversation(
   description?: string,
   icon?: string,
   spaceId?: string,
+  viewMode?: 'CHAT' | 'FEED',
 ): Promise<ConversationSummary> {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
@@ -270,6 +271,7 @@ export async function createChannelConversation(
       name: name.trim(),
       description: description?.trim() || null,
       icon: icon ?? null,
+      viewMode: viewMode ?? 'CHAT',
       spaceId: spaceId ?? null,
       communityId,
       createdById: currentUserId,
@@ -310,6 +312,7 @@ export async function listChannelsForCommunity(
       name: true,
       description: true,
       icon: true,
+      viewMode: true,
       spaceId: true,
       _count: { select: { members: true } },
       members: {
@@ -325,6 +328,7 @@ export async function listChannelsForCommunity(
     name: channel.name?.trim() || 'Unnamed channel',
     description: channel.description,
     icon: channel.icon,
+    viewMode: channel.viewMode,
     spaceId: channel.spaceId,
     memberCount: channel._count.members,
     isMember: channel.members.length > 0,
@@ -613,7 +617,7 @@ export async function leaveConversation(currentUserId: string, conversationId: s
 export async function updateGroupConversation(
   currentUserId: string,
   conversationId: string,
-  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; spaceId?: string | null },
+  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; spaceId?: string | null; viewMode?: 'CHAT' | 'FEED' },
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
@@ -627,8 +631,8 @@ export async function updateGroupConversation(
 
   const isChannel = membership.conversation.type === ConversationType.CHANNEL;
 
-  if ((payload.icon !== undefined || payload.spaceId !== undefined) && !isChannel) {
-    throw new MessagingError(400, 'Icons and spaces only apply to channels');
+  if ((payload.icon !== undefined || payload.spaceId !== undefined || payload.viewMode !== undefined) && !isChannel) {
+    throw new MessagingError(400, 'Icons, spaces and view styles only apply to channels');
   }
 
   if (payload.spaceId) {
@@ -655,6 +659,10 @@ export async function updateGroupConversation(
 
   if (payload.icon !== undefined) {
     updates.icon = payload.icon;
+  }
+
+  if (payload.viewMode !== undefined) {
+    updates.viewMode = payload.viewMode;
   }
 
   if (payload.spaceId !== undefined) {

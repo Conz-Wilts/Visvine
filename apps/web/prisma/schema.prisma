@@ -825,6 +825,8 @@ model Conversation {
   avatarUrl   String?              @map("avatar_url")
   /// Emoji icon for CHANNEL conversations. Null = default hashtag icon.
   icon        String?
+  /// How a CHANNEL renders: classic chat thread or social-feed post cards.
+  viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
   dmKey       String?              @unique @map("dm_key")
   /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
   communityId String?              @map("community_id")
@@ -1072,5 +1074,11 @@ enum ConversationType {
 enum ConversationMemberRole {
   MEMBER
   ADMIN
+}
+
+/// How a CHANNEL conversation renders: classic chat thread or social-feed post cards.
+enum ChannelViewMode {
+  CHAT
+  FEED
 }
 

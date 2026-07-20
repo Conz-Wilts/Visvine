@@ -40,7 +40,7 @@ interface AvatarProps {
   name: string;
   imageUrl?: string | null;
   size?: keyof typeof SIZE_CLASSES;
-  /** Tint for the silhouette fallback. Defaults to brand green when omitted. */
+  /** Tint for the silhouette fallback. Defaults to the theme accent when omitted. */
   accentColor?: string;
   className?: string;
   /**

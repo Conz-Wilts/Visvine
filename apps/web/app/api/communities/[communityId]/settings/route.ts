@@ -27,7 +27,7 @@ export async function PUT(
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
-    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; order?: string[] };
+    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; order?: string[]; more?: string[] };
     visibility?: string;
   };
 
@@ -57,7 +57,7 @@ export async function PUT(
   }
 
   // Validate featureConfig if provided — must be
-  // { enabled?: { [key]: boolean }, directoryPrivate?: boolean, order?: string[] }
+  // { enabled?: { [key]: boolean }, directoryPrivate?: boolean, order?: string[], more?: string[] }
   if (featureConfig !== undefined) {
     const enabled = featureConfig.enabled;
     if (enabled !== undefined && (typeof enabled !== 'object' || enabled === null || Array.isArray(enabled))) {
@@ -75,6 +75,13 @@ export async function PUT(
     }
     if (order && order.some((v) => typeof v !== 'string')) {
       return NextResponse.json({ error: 'featureConfig.order values must be strings' }, { status: 400 });
+    }
+    const more = featureConfig.more;
+    if (more !== undefined && !Array.isArray(more)) {
+      return NextResponse.json({ error: 'featureConfig.more must be an array' }, { status: 400 });
+    }
+    if (more && more.some((v) => typeof v !== 'string')) {
+      return NextResponse.json({ error: 'featureConfig.more values must be strings' }, { status: 400 });
     }
   }
 

@@ -7,6 +7,7 @@ import {
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
+  moreFeatureKeys,
   sortFeatureKeys,
   sanitizeFeatureConfig,
 } from '../lib/featureAccess';
@@ -174,5 +175,50 @@ describe('sanitizeFeatureConfig', () => {
     assert.deepEqual(sanitizeFeatureConfig({ order: ['channels', 'directory'] }).order, [
       'channels', 'directory',
     ]);
+  });
+
+  it('keeps a valid more list, dropping unknowns, duplicates and nav-hidden keys', () => {
+    assert.deepEqual(
+      sanitizeFeatureConfig({ more: ['events', 'bogus', 'events', 'messages', 'resources'] }).more,
+      ['events', 'resources'],
+    );
+  });
+
+  it('omits more when it is absent, not an array, or has nothing usable left', () => {
+    assert.equal('more' in sanitizeFeatureConfig({}), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: 'events' }), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: [] }), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: [1, null, 'bogus', 'messages'] }), false);
+  });
+
+  it('keeps core and disabled feature keys in more — placement, not enablement', () => {
+    // A disabled tool keeps its More slot for when it's re-enabled, and core
+    // `directory` may be tucked away just like any other rail item.
+    assert.deepEqual(
+      sanitizeFeatureConfig({ enabled: { events: false }, more: ['events', 'directory'] }).more,
+      ['events', 'directory'],
+    );
+  });
+});
+
+describe('moreFeatureKeys', () => {
+  it('is empty for a missing or empty config', () => {
+    assert.deepEqual(moreFeatureKeys(null), []);
+    assert.deepEqual(moreFeatureKeys({}), []);
+    assert.deepEqual(moreFeatureKeys({ more: [] }), []);
+  });
+
+  it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
+    assert.deepEqual(
+      moreFeatureKeys({ more: ['events', 'bogus', 'events', 'messages', 'notes'] }),
+      ['events', 'notes'],
+    );
+  });
+
+  it('keeps a disabled feature key — enablement is filtered by the caller', () => {
+    assert.deepEqual(
+      moreFeatureKeys({ enabled: { events: false }, more: ['events'] }),
+      ['events'],
+    );
   });
 });

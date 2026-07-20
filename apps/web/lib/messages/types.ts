@@ -1,5 +1,8 @@
 import type { ConversationMemberRole, ConversationType } from '@prisma/client';
 
+/** How a channel renders: classic chat thread or social-feed post cards. */
+export type ChannelViewMode = 'CHAT' | 'FEED';
+
 interface ConversationParticipant {
   id: string;
   name: string;
@@ -76,6 +79,8 @@ export interface ConversationSummary {
   avatarUrl: string | null;
   /** Channel emoji icon — null renders the default hashtag. */
   icon?: string | null;
+  /** Channel rendering style — absent means 'CHAT' (classic thread). */
+  viewMode?: ChannelViewMode;
   /** Channel space (section) this channel is filed under, if any. */
   spaceId?: string | null;
   participants: ConversationParticipant[];
@@ -101,6 +106,7 @@ export interface ChannelDirectoryEntry {
   name: string;
   description: string | null;
   icon: string | null;
+  viewMode: ChannelViewMode;
   spaceId: string | null;
   memberCount: number;
   isMember: boolean;

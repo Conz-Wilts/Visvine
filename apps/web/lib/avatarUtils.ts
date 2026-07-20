@@ -2,8 +2,13 @@
  * Shared avatar utility functions used across messaging, directory, and community components.
  */
 
-/** Brand green — default tint for person silhouettes with no type/accent context. */
-export const BRAND_GREEN = '#78d870';
+/**
+ * Default tint for silhouettes with no type/accent context. Routed through the
+ * theme variable so the user's chosen accent colour applies (ThemeContext
+ * overrides --color-brand-green at runtime); the hex is only the pre-hydration
+ * fallback. DOM-only — canvas fillStyle can't resolve var().
+ */
+export const THEME_ACCENT = 'var(--color-brand-green, #78d870)';
 
 /**
  * SVG path for the person-silhouette avatar fallback (24×24 viewBox).

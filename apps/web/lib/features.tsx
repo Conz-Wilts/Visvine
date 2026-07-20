@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { CommunityFeatureConfig } from '@/lib/types';
-import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, sortFeatureKeys } from '@/lib/featureAccess';
+import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, moreFeatureKeys, sortFeatureKeys } from '@/lib/featureAccess';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
 // tests can import it without this module's icons. Re-exported here so UI code
@@ -10,6 +10,7 @@ export {
   isFeatureEnabled,
   isDirectoryPrivate,
   canAccessFeature,
+  moreFeatureKeys,
   sortFeatureKeys,
 } from '@/lib/featureAccess';
 
@@ -135,15 +136,45 @@ export function visibleFeatures(
 }
 
 /**
- * Where a user lands when they enter a community: the first nav tab they can
- * actually see. Falls back to the directory — it's core, so the only way to have
- * no visible tab at all is an admins-only directory seen by a member with every
- * other feature switched off.
+ * The nav features split between the sidebar rail and its "More" popup. Both
+ * lists exclude nav-hidden features (messages) and keep the configured display
+ * order; `more` membership comes from `featureConfig.more`.
+ */
+function navFeatures(
+  config: CommunityFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): FeatureDef[] {
+  return visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
+}
+
+/** The features a given user sees as sidebar rail rows, in configured order. */
+export function railFeatures(
+  config: CommunityFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): FeatureDef[] {
+  const more = moreFeatureKeys(config);
+  return navFeatures(config, isAdmin).filter((f) => !more.includes(f.key));
+}
+
+/** The features a given user sees inside the "More" popup, in configured order. */
+export function moreFeatures(
+  config: CommunityFeatureConfig | null | undefined,
+  isAdmin: boolean,
+): FeatureDef[] {
+  const more = moreFeatureKeys(config);
+  return navFeatures(config, isAdmin).filter((f) => more.includes(f.key));
+}
+
+/**
+ * Where a user lands when they enter a community: the first rail tab they can
+ * actually see, else the first "More" tool if everything's tucked away. Falls
+ * back to the directory — it's core, so the only way to have no visible tab at
+ * all is an admins-only directory seen by a member with every other feature
+ * switched off.
  */
 export function defaultLandingHref(
   config: CommunityFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): string {
-  const nav = visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
-  return nav[0]?.href ?? '/directory';
+  return railFeatures(config, isAdmin)[0]?.href ?? moreFeatures(config, isAdmin)[0]?.href ?? '/directory';
 }

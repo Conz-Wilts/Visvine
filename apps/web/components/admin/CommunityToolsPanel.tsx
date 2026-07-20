@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, sortFeatureKeys, visibleFeatures } from '@/lib/features';
+import { FEATURES, isFeatureEnabled, isDirectoryPrivate, moreFeatureKeys, moreFeatures, railFeatures, sortFeatureKeys } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
 import { SettingsSection } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
@@ -31,6 +31,14 @@ const GripIcon = () => (
     <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" />
     <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
     <circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
+  </svg>
+);
+// 3x3 dot grid — same glyph as the sidebar's "More" item.
+const MoreDotsIcon = ({ className = 'h-4 w-4' }: { className?: string }) => (
+  <svg className={className} fill="currentColor" viewBox="0 0 24 24">
+    <circle cx="5" cy="5" r="1.6" /><circle cx="12" cy="5" r="1.6" /><circle cx="19" cy="5" r="1.6" />
+    <circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" />
+    <circle cx="5" cy="19" r="1.6" /><circle cx="12" cy="19" r="1.6" /><circle cx="19" cy="19" r="1.6" />
   </svg>
 );
 
@@ -69,6 +77,9 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   const [order, setOrder] = useState<string[]>(() =>
     sortFeatureKeys(savedConfig, FEATURES.filter(f => f.key !== 'messages').map(f => f.key))
   );
+  // Keys tucked into the sidebar's "More" popup. Membership only — order still
+  // comes from `order` above.
+  const [more, setMore] = useState<string[]>(() => moreFeatureKeys(savedConfig));
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
 
   // FLIP reorder animation: snapshot every [data-flip-key] element's position
@@ -196,7 +207,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
     }
     setDraggingKey(null);
     if (orderRef.current.join() !== drag.initialOrder.join()) {
-      commit(enabled, directoryPrivate, orderRef.current);
+      commit(enabled, directoryPrivate, orderRef.current, more);
     }
   };
 
@@ -211,31 +222,33 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
     nextEnabled: Record<string, boolean>,
     nextDirectoryPrivate: boolean,
     nextOrder: string[],
+    nextMore: string[],
   ) => {
     setEnabled(nextEnabled);
     setDirectoryPrivate(nextDirectoryPrivate);
     setOrder(nextOrder);
+    setMore(nextMore);
     queue({
-      featureConfig: { enabled: nextEnabled, directoryPrivate: nextDirectoryPrivate, order: nextOrder },
+      featureConfig: { enabled: nextEnabled, directoryPrivate: nextDirectoryPrivate, order: nextOrder, more: nextMore },
     });
   };
 
-  const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate, order };
-  // What a regular member's sidebar rail shows with the current config
-  // (messages is toggleable but nav-less — see NAV_HIDDEN_FEATURE_KEYS).
-  const memberRail = visibleFeatures(currentConfig, false).filter(
-    f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)
-  );
+  const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate, order, more };
+  // What a regular member's sidebar shows with the current config, split into
+  // the rail and the "More" popup (messages is toggleable but nav-less).
+  const memberRail = railFeatures(currentConfig, false);
+  const memberMore = moreFeatures(currentConfig, false);
   const toolFeatures = order.map(key => FEATURES.find(f => f.key === key)!);
   // The rail's first entry is where members land — call that out on the row that
-  // owns it, since it's the non-obvious consequence of reordering.
-  const landingKey = memberRail[0]?.key ?? null;
+  // owns it, since it's the non-obvious consequence of reordering. With every
+  // tool tucked into More, they land on the first More tool instead.
+  const landingKey = memberRail[0]?.key ?? memberMore[0]?.key ?? null;
 
   return (
     <div ref={flipRoot} className="w-full space-y-8">
       <SettingsSection
         title="Tools"
-        description="Choose which tools members of this community can use, and drag to reorder them. The first tool members can see is where they land. Click a tool to see what it does."
+        description="Choose which tools members of this community can use, and drag to reorder them. The first tool members can see is where they land. Click a tool to see what it does. Use the dot-grid button to tuck a tool into the sidebar's More popup and keep the rail compact."
       >
         <div className="divide-y divide-border-subtle">
         {toolFeatures.map((feature, index) => {
@@ -265,7 +278,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
                     e.preventDefault();
                     captureFlip(feature.key);
-                    commit(enabled, directoryPrivate, moveKey(order, feature.key, e.key === 'ArrowUp' ? -1 : 1));
+                    commit(enabled, directoryPrivate, moveKey(order, feature.key, e.key === 'ArrowUp' ? -1 : 1), more);
                   }}
                   aria-label={`Reorder ${feature.label} (position ${index + 1} of ${toolFeatures.length}) — use arrow keys`}
                   className="shrink-0 cursor-grab touch-none rounded text-text-muted transition-colors hover:text-text-secondary focus-visible:text-text-secondary active:cursor-grabbing"
@@ -299,10 +312,33 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                     {isCore && <span className="block text-xs text-text-muted">Always on</span>}
                   </span>
                 </button>
+                {/* Tuck into / pull out of the sidebar's "More" popup. Placement,
+                    not enablement — works for core tools too. */}
+                <button
+                  type="button"
+                  onClick={() =>
+                    commit(
+                      enabled,
+                      directoryPrivate,
+                      order,
+                      more.includes(feature.key) ? more.filter(k => k !== feature.key) : [...more, feature.key],
+                    )
+                  }
+                  aria-pressed={more.includes(feature.key)}
+                  aria-label={`Show ${feature.label} in the sidebar's More popup`}
+                  title={more.includes(feature.key) ? 'In More — click to show in the sidebar' : 'Move into the sidebar’s More popup'}
+                  className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+                    more.includes(feature.key)
+                      ? 'bg-brand-green/15 text-brand-green'
+                      : 'text-text-muted hover:bg-surface-2/60 hover:text-text-secondary'
+                  }`}
+                >
+                  <MoreDotsIcon />
+                </button>
                 <Toggle
                   checked={isCore ? true : enabled[feature.key] !== false}
                   disabled={isCore}
-                  onChange={on => commit({ ...enabled, [feature.key]: on }, directoryPrivate, order)}
+                  onChange={on => commit({ ...enabled, [feature.key]: on }, directoryPrivate, order, more)}
                   aria-label={`Toggle ${feature.label}`}
                 />
               </div>
@@ -326,7 +362,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                   </span>
                   <Toggle
                     checked={directoryPrivate}
-                    onChange={on => commit(enabled, on, order)}
+                    onChange={on => commit(enabled, on, order, more)}
                     aria-label="Make directory admins-only"
                   />
                 </div>
@@ -354,7 +390,12 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                 {f.icon}
               </span>
             ))}
-            {memberRail.length === 0 && (
+            {memberMore.length > 0 && (
+              <span title="More" className="grid h-10 w-10 place-items-center rounded-lg text-text-secondary">
+                <MoreDotsIcon className="h-5 w-5" />
+              </span>
+            )}
+            {memberRail.length === 0 && memberMore.length === 0 && (
               <span className="px-2 py-1 text-center text-[10px] text-text-muted">No tools</span>
             )}
           </div>
@@ -363,6 +404,12 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
               {memberRail.map(f => (
                 <li key={f.key} data-flip-key={`label:${f.key}`} className="flex h-10 items-center text-sm text-text-secondary">{f.label}</li>
               ))}
+              {memberMore.length > 0 && (
+                <li className="flex h-10 items-center gap-1.5 text-sm text-text-secondary">
+                  More
+                  <span className="text-xs text-text-muted">({memberMore.map(f => f.label).join(', ')})</span>
+                </li>
+              )}
             </ul>
             {directoryPrivate && (
               <p className="flex items-center gap-1.5">

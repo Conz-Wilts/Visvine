@@ -1,7 +1,7 @@
-import { BRAND_GREEN, PERSON_SILHOUETTE_PATH } from '@/lib/avatarUtils';
+import { THEME_ACCENT, PERSON_SILHOUETTE_PATH } from '@/lib/avatarUtils';
 
 interface PersonSilhouetteProps {
-  /** Fill colour of the silhouette (the accent/theme colour). Defaults to brand green. */
+  /** Fill colour of the silhouette (the accent/theme colour). Defaults to the theme accent. */
   color?: string;
   className?: string;
 }
@@ -11,7 +11,7 @@ interface PersonSilhouetteProps {
  * accent/theme-coloured fill, shown when no profile image is available. Fills
  * its parent, so the parent controls shape (rounding) and size.
  */
-export default function PersonSilhouette({ color = BRAND_GREEN, className = '' }: PersonSilhouetteProps) {
+export default function PersonSilhouette({ color = THEME_ACCENT, className = '' }: PersonSilhouetteProps) {
   return (
     <div
       className={`flex h-full w-full items-center justify-center ${className}`}

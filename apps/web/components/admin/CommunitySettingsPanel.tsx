@@ -347,7 +347,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
                 suggestions={tagSuggestions}
                 existing={tagsLower}
                 registry={tagColors}
-                accentBase="#78d870"
+                accentBase="var(--color-brand-green, #78d870)"
                 onAdd={addTag}
                 onCreate={createTag}
                 onClose={() => setAddingTag(false)}

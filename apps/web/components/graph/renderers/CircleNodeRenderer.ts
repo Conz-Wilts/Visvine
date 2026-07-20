@@ -122,8 +122,8 @@ export function drawCircleNode(
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // White disc + person silhouette in the accent colour when there's no image
-    ctx.fillStyle = '#ffffff';
+    // Accent-coloured disc + white silhouette when there's no image
+    ctx.fillStyle = borderColor;
     ctx.beginPath();
     ctx.arc(innerCenterX, innerCenterY, innerRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -136,11 +136,11 @@ export function drawCircleNode(
 
     const glyph = getNodeGlyph(node.type);
     if (glyph) {
-      drawGlyphSilhouette(ctx, glyph, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
+      drawGlyphSilhouette(ctx, glyph, innerCenterX, innerCenterY, innerRadius * 1.2, '#ffffff');
     } else {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = borderColor;
+      ctx.fillStyle = '#ffffff';
       ctx.font = `700 ${Math.round(innerRadius * 0.7)}px Inter, system-ui, -apple-system`;
       ctx.fillText(getInitials(node.name ?? ''), innerCenterX, innerCenterY);
     }

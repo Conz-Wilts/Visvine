@@ -17,6 +17,7 @@
     "db:fresh": "node ../../scripts/guard-local-db.mjs && pnpm dlx prisma@7.4.0 db push --force-reset --accept-data-loss && node scripts/apply-sql-functions.mjs && tsx prisma/seed.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:dev:notes": "node scripts/add-local-dev-notes.mjs",
+    "db:dev:full": "node scripts/add-local-dev-full.mjs && tsx scripts/backfill-context-links.ts community:local-dev",
     "db:notes-vault": "node scripts/import-notes-vault.mjs",
     "db:blackbird:notes": "node scripts/add-blackbird-notes.mjs",
     "db:identities:backfill": "tsx scripts/backfill-identities.ts",

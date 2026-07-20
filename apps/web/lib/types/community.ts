@@ -34,6 +34,11 @@ export interface CommunityFeatureConfig {
   // lib/featureAccess.ts#sortFeatureKeys. The first visible entry is also the
   // tab members land on when they enter the community.
   order?: string[];
+  // Feature keys tucked into the sidebar's "More" popup instead of the rail.
+  // Membership only — display order still comes from `order`. Placement, not
+  // enablement: a disabled feature listed here simply doesn't show, and keeps
+  // its slot for when it's re-enabled — see lib/featureAccess.ts#moreFeatureKeys.
+  more?: string[];
 }
 
 export interface Community {

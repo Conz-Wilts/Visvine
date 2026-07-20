@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
-import { Plus, ImagePlus, X, AtSign, Link2, Send, Smile, Reply } from 'lucide-react';
+import { Plus, ImagePlus, X, AtSign, Link2, Send, Smile } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
@@ -37,7 +37,7 @@ interface MessageComposerProps {
   variant?: 'full' | 'slim';
   /** Shown as the slim composer's leading avatar. */
   currentUser?: { name: string; image: string | null };
-  /** Overrides the textarea placeholder (e.g. "Message #general…"). */
+  /** Overrides the textarea placeholder (e.g. "general…"). */
   placeholder?: string;
 }
 
@@ -359,21 +359,20 @@ export default function MessageComposer({
           Drop images to attach
         </div>
       )}
-      {/* Slim (channel) composer reads in a centered feed-width column. */}
-      <div className={slim ? 'mx-auto w-full max-w-3xl' : 'contents'}>
+      {/* Slim (channel) composer spans the full Slack-style feed width. */}
+      <div className={slim ? 'w-full' : 'contents'}>
       {typingLabel && (
         <p className="mb-1.5 px-1 text-xs text-text-muted italic">{typingLabel}</p>
       )}
 
       {/* Reply preview */}
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border-l-[3px] border-brand-green bg-surface-3/60 px-3 py-2">
-          <Reply className="h-3.5 w-3.5 shrink-0 text-brand-green" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-brand-green">{replyTo.senderName}</p>
-            <p className="truncate text-xs text-text-muted">{replyTo.text}</p>
-          </div>
-          <button type="button" onClick={onCancelReply} className="text-text-muted hover:text-text-secondary">
+        <div className="mb-2 flex items-center gap-2 border-l-4 border-border-default py-0.5 pl-3">
+          <p className="min-w-0 flex-1 truncate text-[13px] text-text-muted">
+            Replying to <span className="font-bold text-text-secondary">{replyTo.senderName}</span>
+            {'  '}{replyTo.text}
+          </p>
+          <button type="button" onClick={onCancelReply} className="shrink-0 text-text-muted hover:text-text-secondary">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>

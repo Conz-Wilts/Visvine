@@ -11,15 +11,10 @@
 
 import { NBNode, getNodeGlyph } from '@/lib/types';
 import type { CanvasTheme } from './RectangleNodeRenderer';
-import { drawWrappedText, roundRect, drawGlyphSilhouette } from '../utils/canvasUtils';
+import { drawWrappedText, roundRect, drawGlyphSilhouette, withAlpha } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
-
-function withAlpha(hex: string, alpha: number): string {
-  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
-  return hex + Math.round(alpha * 255).toString(16).padStart(2, '0');
-}
 
 // Stored node types are often lowercase ('person'); capitalise for display.
 function capitalize(value: string): string {

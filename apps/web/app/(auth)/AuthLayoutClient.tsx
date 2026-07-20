@@ -47,7 +47,12 @@ function useFeatureRouteGuard() {
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { backgroundStyle } = useCommunityDesign();
   const { expanded } = useSidebar();
+  const pathname = usePathname();
   useFeatureRouteGuard();
+
+  // /channels is a Slack-style full-bleed surface: panels run edge-to-edge and
+  // scroll internally, so the shell drops its gutters and scroll container.
+  const fullBleed = pathname.startsWith("/channels");
 
   // Every page scrolls inside <main> — not on the document — so the green
   // scrollbar starts BELOW the fixed navbar instead of running up its right
@@ -69,16 +74,20 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
           <main> is the scroll container (mt-16 sits it below the fixed navbar), so
           its scrollbar starts under the navbar rather than at the viewport top. */}
       <main
-        className="flex-1 mt-16 pt-4 pb-6 scroll-pt-32 overflow-y-auto"
+        className={fullBleed ? "flex-1 mt-16 overflow-hidden" : "flex-1 mt-16 pt-4 pb-6 scroll-pt-32 overflow-y-auto"}
         style={{
-          paddingLeft: (expanded ? EXPANDED_W : COLLAPSED_W) + 24,
-          scrollbarGutter: 'stable',
+          paddingLeft: (expanded ? EXPANDED_W : COLLAPSED_W) + (fullBleed ? 0 : 24),
+          ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
           transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
         }}
       >
-        <div style={{ minHeight: 'calc(100vh - 5rem - 3rem)' }}>
-          {children}
-        </div>
+        {fullBleed ? (
+          <div className="h-full">{children}</div>
+        ) : (
+          <div style={{ minHeight: 'calc(100vh - 5rem - 3rem)' }}>
+            {children}
+          </div>
+        )}
       </main>
 
       {/* Global create modal */}

@@ -3,11 +3,11 @@
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { Dispatch, ElementType, FormEvent, RefObject, SetStateAction } from 'react';
-import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2, Newspaper } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import { formatChatTimestamp } from '@/lib/date';
-import type { ChannelDirectoryEntry, ChannelSpaceEntry, ConversationSummary } from '@/lib/messages/types';
+import type { ChannelDirectoryEntry, ChannelSpaceEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import type { MessageTab } from './messagesTabs';
 
 /** Circle-style rail section: one per space (joined + browsable channels filed there), then an unfiled bucket. */
@@ -56,6 +56,8 @@ interface ConversationListPanelProps {
   setChannelDescription: (value: string) => void;
   channelIcon: string | null;
   setChannelIcon: (value: string | null) => void;
+  channelViewMode: ChannelViewMode;
+  setChannelViewMode: (value: ChannelViewMode) => void;
   channelSpaceId: string;
   setChannelSpaceId: (value: string) => void;
   showIconPicker: boolean;
@@ -110,6 +112,8 @@ export default function ConversationListPanel({
   setChannelDescription,
   channelIcon,
   setChannelIcon,
+  channelViewMode,
+  setChannelViewMode,
   channelSpaceId,
   setChannelSpaceId,
   showIconPicker,
@@ -286,6 +290,29 @@ export default function ConversationListPanel({
           maxLength={500}
           className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
         />
+        {/* View style: classic chat thread vs social-feed post cards */}
+        <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
+          {([
+            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle, title: 'Classic channel thread' },
+            { mode: 'FEED' as const, label: 'Feed', icon: Newspaper, title: 'Post cards with comments' },
+          ]).map(({ mode, label, icon: Icon, title }) => {
+            const active = channelViewMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                title={title}
+                onClick={() => setChannelViewMode(mode)}
+                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
         {channelSpaces.length > 0 && (
           <select
             value={channelSpaceId}
@@ -303,7 +330,7 @@ export default function ConversationListPanel({
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelSpaceId(''); setShowIconPicker(false); }}
+            onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelViewMode('CHAT'); setChannelSpaceId(''); setShowIconPicker(false); }}
             className="rounded-full px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
           >
             Cancel
@@ -420,40 +447,29 @@ export default function ConversationListPanel({
                 return (
                   <div key={section.key} className="pb-1.5">
                     {editingSpaceId === section.key ? (
-                      <form onSubmit={submitRenameSpace} className="flex items-center gap-1.5 px-2 py-1">
+                      /* Just an input — Enter saves, Escape cancels (no buttons). */
+                      <form onSubmit={submitRenameSpace} className="px-2 py-1">
                         <input
                           value={editingSpaceName}
                           onChange={(e) => setEditingSpaceName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSpaceId(null); setEditingSpaceName(''); } }}
                           autoFocus
+                          disabled={spaceActionBusy}
                           maxLength={80}
-                          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+                          className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
                         />
-                        <button
-                          type="submit"
-                          disabled={!editingSpaceName.trim() || spaceActionBusy}
-                          className="shrink-0 rounded-full bg-brand-green px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                        >
-                          {spaceActionBusy ? '…' : 'Save'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setEditingSpaceId(null); setEditingSpaceName(''); }}
-                          className="shrink-0 text-text-muted hover:text-text-secondary"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
                       </form>
                     ) : (
-                      <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-2">
+                      <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
                         <button
                           type="button"
                           onClick={() => toggleSpaceCollapsed(section.key)}
                           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         >
                           {collapsed
-                            ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />
-                            : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />}
-                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-text-muted group-hover:text-text-secondary">
+                            ? <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />
+                            : <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />}
+                          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-text-secondary group-hover:text-text-primary">
                             {section.emoji ? `${section.emoji} ` : ''}{section.name}
                           </span>
                         </button>
@@ -467,7 +483,7 @@ export default function ConversationListPanel({
                             <button
                               type="button"
                               title="Rename space"
-                              onClick={() => { setEditingSpaceId(section.key); setEditingSpaceName(section.name); }}
+                              onClick={() => { setEditingSpaceId(section.key); setEditingSpaceName(`${section.emoji ? `${section.emoji} ` : ''}${section.name}`); }}
                               className="rounded p-0.5 text-text-muted hover:text-text-secondary"
                             >
                               <Pencil className="h-3 w-3" />
@@ -495,15 +511,19 @@ export default function ConversationListPanel({
                               key={conversation.id}
                               type="button"
                               onClick={() => onSelectConversation(conversation.id)}
-                              className={`group flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors duration-150 ${
-                                isActive ? 'bg-brand-green/10' : 'hover:bg-surface-2'
+                              className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors duration-150 ${
+                                isActive ? 'bg-brand-green text-white' : 'hover:bg-surface-2'
                               }`}
                             >
                               <ChannelIcon
                                 icon={conversation.icon}
-                                className={`h-4 w-4 ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
+                                fallback={conversation.viewMode === 'FEED' ? 'feed' : 'hash'}
+                                className={`h-[18px] w-[18px] ${isActive ? 'text-white' : hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
                               />
-                              <p className={`min-w-0 flex-1 truncate text-sm ${isActive || hasUnread ? 'font-semibold text-text-primary' : 'font-normal text-text-secondary'}`}>
+                              <p className={`min-w-0 flex-1 truncate text-[15px] ${
+                                isActive ? 'font-semibold text-white'
+                                : hasUnread ? 'font-semibold text-text-primary'
+                                : 'font-normal text-text-secondary'}`}>
                                 {conversation.name}
                               </p>
                               {hasUnread && (
@@ -524,11 +544,11 @@ export default function ConversationListPanel({
                             {section.browsable.map((channel) => (
                               <div
                                 key={channel.id}
-                                className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 transition-colors hover:bg-surface-2"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 transition-colors hover:bg-surface-2"
                               >
-                                <ChannelIcon icon={channel.icon} className="mt-0.5 h-4 w-4 self-start text-text-muted" />
+                                <ChannelIcon icon={channel.icon} fallback={channel.viewMode === 'FEED' ? 'feed' : 'hash'} className="mt-0.5 h-[18px] w-[18px] self-start text-text-muted" />
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-normal text-text-secondary">{channel.name}</p>
+                                  <p className="truncate text-[15px] font-normal text-text-secondary">{channel.name}</p>
                                   <p className="truncate text-xs text-text-muted">
                                     {channel.description || `${channel.memberCount} member${channel.memberCount === 1 ? '' : 's'}`}
                                   </p>
@@ -556,38 +576,27 @@ export default function ConversationListPanel({
           {/* ── New space (community admins) ── */}
           {activeTab === 'channels' && communityIsAdmin && (
             <div className="px-2.5 pt-1">
+              {/* Space form is just an input — Enter creates, Escape cancels. */}
               {showSpaceForm ? (
-                <form onSubmit={onCreateSpace} className="flex items-center gap-1.5 px-3 py-1">
+                <form onSubmit={onCreateSpace} className="px-3 py-1">
                   <input
                     value={spaceName}
                     onChange={(e) => setSpaceName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') { setShowSpaceForm(false); setSpaceName(''); } }}
                     placeholder="Space name"
                     autoFocus
+                    disabled={creatingSpace}
                     maxLength={80}
-                    className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+                    className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
                   />
-                  <button
-                    type="submit"
-                    disabled={!spaceName.trim() || creatingSpace}
-                    className="shrink-0 rounded-full bg-brand-green px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
-                  >
-                    {creatingSpace ? '…' : 'Add'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowSpaceForm(false); setSpaceName(''); }}
-                    className="shrink-0 text-text-muted hover:text-text-secondary"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
                 </form>
               ) : (
                 <button
                   type="button"
                   onClick={() => setShowSpaceForm(true)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
                 >
-                  <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
                   New space
                 </button>
               )}

@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useCreateModal } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
-import { visibleFeatures } from "@/lib/features";
-import { NAV_HIDDEN_FEATURE_KEYS } from "@/lib/featureAccess";
+import { railFeatures, moreFeatures } from "@/lib/features";
 import { shellEntranceStyle } from "@/lib/contexts/SidebarContext";
+import Modal from "@/components/ui/Modal";
 import type { CommunityFeatureConfig } from "@/lib/types";
 
 /*
@@ -64,13 +65,22 @@ export default function Sidebar() {
 
   // Nav items come from the feature registry, filtered to the community's
   // enabled surfaces (empty config → everything on) and to what this user may
-  // see (an admins-only directory is hidden from members). See lib/features.tsx.
+  // see (an admins-only directory is hidden from members), then split between
+  // the rail and the "More" popup per featureConfig.more. See lib/features.tsx.
+  // (Messages lives in the top navbar — toggleable but nav-less.)
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  // Messages lives in the top navbar — toggleable but nav-less.
-  const allNav = visibleFeatures(featureConfig, isAdmin).filter(
-    ({ key }) => !NAV_HIDDEN_FEATURE_KEYS.includes(key)
-  );
-  const activeIndex = allNav.findIndex(({ href }) => pathname === href);
+  const allNav = railFeatures(featureConfig, isAdmin);
+  const moreNav = moreFeatures(featureConfig, isAdmin);
+  const moreActive = moreNav.some(({ href }) => pathname === href);
+  const railActiveIndex = allNav.findIndex(({ href }) => pathname === href);
+  // A More tool being active parks the pill on the More row — the last nav slot.
+  const activeIndex = railActiveIndex >= 0 ? railActiveIndex : moreActive ? allNav.length : -1;
+
+  // "More" popup: a centered modal (same shell as the Create-new modal) with a
+  // grid of the tucked-away tools. Modal handles Escape + backdrop dismissal.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Close on navigation (a tool card was clicked, or back/forward).
+  useEffect(() => setMoreOpen(false), [pathname]);
 
   // On /channels, /messages and /admin (wide viewports only) the rail docks
   // into a full-height card hosting a side panel — the channel/conversation
@@ -199,40 +209,52 @@ export default function Sidebar() {
           );
         })}
 
-        {/* "More" — 3x3 grid glyph. No functionality yet (static, non-interactive).
-            Styled like a nav row with the same collapsed tooltip. */}
-        <div className="relative group" data-tour="nav-more">
-          <div
-            className="relative z-10 flex items-center h-10 w-full"
-            style={{ paddingLeft: ICON_LEFT, color: "var(--text-secondary, #374151)" }}
-          >
-            {/* Icon: fixed 40x40 cell, centered — 3x3 grid of 9 dots = "more" */}
-            <span className="relative flex items-center justify-center shrink-0" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
-              <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="5" cy="5" r="1.6" />
-                <circle cx="12" cy="5" r="1.6" />
-                <circle cx="19" cy="5" r="1.6" />
-                <circle cx="5" cy="12" r="1.6" />
-                <circle cx="12" cy="12" r="1.6" />
-                <circle cx="19" cy="12" r="1.6" />
-                <circle cx="5" cy="19" r="1.6" />
-                <circle cx="12" cy="19" r="1.6" />
-                <circle cx="19" cy="19" r="1.6" />
-              </svg>
-            </span>
-            <span className="text-sm font-medium whitespace-nowrap" style={{ marginLeft: LABEL_ML }}>
-              More
-            </span>
-          </div>
-
-          {!expanded && (
-            <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
-              style={{ left: COLLAPSED_W + 4 }}
+        {/* "More" — 3x3 grid glyph. Opens a flyout listing the tools the
+            community tucked out of the rail (featureConfig.more). Hidden when
+            nothing is tucked away. Sits in the same gap-1 column as the nav
+            rows, so the active pill's translateY math covers it too. */}
+        {moreNav.length > 0 && (
+          <div className="relative group" data-tour="nav-more">
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              aria-expanded={moreOpen}
+              aria-haspopup="dialog"
+              className="relative z-10 flex items-center h-10 w-full"
+              style={{
+                paddingLeft: ICON_LEFT,
+                color: moreActive ? "white" : "var(--text-secondary, #374151)",
+                transition: "color 0.3s",
+              }}
             >
-              More
-            </span>
-          )}
-        </div>
+              {/* Icon: fixed 40x40 cell, centered — 3x3 grid of 9 dots = "more" */}
+              <span className="relative flex items-center justify-center shrink-0" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
+                <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                  <circle cx="5" cy="5" r="1.6" />
+                  <circle cx="12" cy="5" r="1.6" />
+                  <circle cx="19" cy="5" r="1.6" />
+                  <circle cx="5" cy="12" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="19" cy="12" r="1.6" />
+                  <circle cx="5" cy="19" r="1.6" />
+                  <circle cx="12" cy="19" r="1.6" />
+                  <circle cx="19" cy="19" r="1.6" />
+                </svg>
+              </span>
+              <span className="text-sm font-medium whitespace-nowrap" style={{ marginLeft: LABEL_ML }}>
+                More
+              </span>
+            </button>
+
+            {!expanded && !moreOpen && (
+              <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
+                style={{ left: COLLAPSED_W + 4 }}
+              >
+                More
+              </span>
+            )}
+          </div>
+        )}
       </nav>
     </>
   );
@@ -291,6 +313,69 @@ export default function Sidebar() {
           <div ref={setHost} className="h-full min-h-0" style={{ width: panelW }} />
         </div>
       </div>
+
+      {/* "More" popup — the same centered modal shell as the Create-new modal,
+          with a grid of the tools tucked out of the rail. Portalled to <body>:
+          the aside's entrance transform would otherwise trap the modal's
+          fixed-position overlay inside the rail. */}
+      {moreOpen &&
+        createPortal(
+        <Modal
+          onClose={() => setMoreOpen(false)}
+          ariaLabel="More tools"
+          overlayClassName="items-center justify-center p-4"
+          overlayStyle={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+          maxWidth="max-w-sm"
+          panelClassName="relative rounded-2xl border border-border-subtle bg-surface-1 shadow-2xl"
+          panelStyle={{ animation: "moreModalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both" }}
+        >
+          {/* Header — mirrors the Create-new modal's centered title + close */}
+          <div className="relative flex items-center justify-center px-6 pt-6 pb-4 border-b border-border-subtle">
+            <h2 className="font-semibold text-text-primary text-base">More tools</h2>
+            <button
+              onClick={() => setMoreOpen(false)}
+              aria-label="Close"
+              className="absolute right-6 w-8 h-8 rounded-full flex items-center justify-center bg-red-400 hover:scale-110 transition-transform"
+            >
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Tool grid — same card layout as the Create-new type selector */}
+          <div className="px-6 py-5">
+            <div className="grid grid-cols-2 gap-3">
+              {moreNav.map(({ key, href, label, icon }) => {
+                const active = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    data-tour={`nav-more-${key}`}
+                    className={`aspect-square flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-center overflow-hidden transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] ${
+                      active
+                        ? "border-brand-green bg-brand-green/10 text-brand-green"
+                        : "border-border-subtle bg-surface-2/40 text-text-secondary hover:border-border-default"
+                    }`}
+                  >
+                    {icon}
+                    <span className="font-semibold text-sm text-text-primary">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes moreModalIn {
+              from { opacity: 0; transform: scale(0.94) translateY(8px); }
+              to   { opacity: 1; transform: scale(1) translateY(0); }
+            }
+          `}</style>
+        </Modal>,
+        document.body,
+      )}
     </aside>
   );
 }

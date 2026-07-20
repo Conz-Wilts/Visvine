@@ -4,7 +4,7 @@
 
 import { NBNode, getNodeGlyph } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
-import { drawWrappedText, roundRect, drawGlyphSilhouette } from '../utils/canvasUtils';
+import { drawWrappedText, roundRect, drawGlyphSilhouette, withAlpha } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 
@@ -146,11 +146,18 @@ export function drawRectangleNode(
 
     ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
   } else {
-    // White header + coloured type glyph when there's no image — matches the
-    // directory card style so the graph view stays visually consistent. Types
+    // Coloured header + white type glyph when there's no image — matches the
+    // org (square) card placeholder so all node types read the same. Types
     // with a glyph (person, group, event, resource) get their silhouette,
     // everything else the name initials.
-    ctx.fillStyle = '#ffffff';
+    if (lod === 'full') {
+      const gradient = ctx.createLinearGradient(headerX, headerY, headerX + headerWidth, headerY + headerHeight);
+      gradient.addColorStop(0, withAlpha(borderColor, 0.8));
+      gradient.addColorStop(1, borderColor);
+      ctx.fillStyle = gradient;
+    } else {
+      ctx.fillStyle = borderColor;
+    }
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
     const cx = headerX + headerWidth / 2;
@@ -158,11 +165,11 @@ export function drawRectangleNode(
     const glyphSize = Math.min(headerWidth, headerHeight) * 0.55;
     const glyph = getNodeGlyph(node.type);
     if (glyph) {
-      drawGlyphSilhouette(ctx, glyph, cx, cy, glyphSize, borderColor);
+      drawGlyphSilhouette(ctx, glyph, cx, cy, glyphSize, '#ffffff');
     } else {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = borderColor;
+      ctx.fillStyle = '#ffffff';
       ctx.font = `700 ${Math.round(Math.min(headerWidth, headerHeight) * 0.32)}px Inter, system-ui, -apple-system`;
       ctx.fillText(getInitials(node.name ?? ''), cx, cy);
     }

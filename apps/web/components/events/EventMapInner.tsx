@@ -26,15 +26,15 @@ function createMarkerIcon(selected: boolean) {
       width: ${selected ? '32px' : '28px'};
       height: ${selected ? '32px' : '28px'};
       border-radius: 50%;
-      background: ${selected ? '#78d870' : '#ffffff'};
-      border: 3px solid #78d870;
+      background: ${selected ? 'var(--color-brand-green, #78d870)' : '#ffffff'};
+      border: 3px solid var(--color-brand-green, #78d870);
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
       display: flex;
       align-items: center;
       justify-content: center;
       transition: all 0.15s;
     ">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${selected ? '#fff' : '#78d870'}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="${selected ? '#fff' : 'var(--color-brand-green, #78d870)'}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
         <circle cx="12" cy="10" r="3"/>
       </svg>
@@ -54,14 +54,14 @@ function createClusterIcon(cluster: any) {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: #78d870;
+      background: var(--color-brand-green, #78d870);
       color: white;
       font-weight: 700;
       font-size: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 2px 8px rgba(120,216,112,0.4);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--color-brand-green, #78d870) 40%, transparent);
       border: 3px solid rgba(255,255,255,0.8);
     ">${count}</div>`,
     iconSize: [40, 40],
