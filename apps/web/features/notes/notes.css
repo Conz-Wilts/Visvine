@@ -9,6 +9,26 @@
   min-height: 55vh;
 }
 
+/* ---------- Compact type scale ----------
+ * Notes read at a working-document size, one step down from the blog's
+ * long-form scale (.blog-prose, globals.css). Scoped overrides only — the
+ * blog keeps its own sizing. */
+.blog-prose.notes-editor {
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.blog-prose.notes-editor p {
+  margin: 0.9rem 0;
+}
+.blog-prose.notes-editor h2 {
+  font-size: 1.3rem;
+  margin: 1.75rem 0 0.6rem;
+}
+.blog-prose.notes-editor h3 {
+  font-size: 1.1rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
 /* ---------- Centred writing column ----------
  * Body, freshness line, and references share one scroll container and one
  * centred 760px column, so the references read as a continuation of the note
@@ -39,7 +59,7 @@
  * duplicate `# Title` line, so this is the single source of the visible title. */
 .notes-title {
   margin: 0 0 0.6rem;
-  font-size: 2.5rem;
+  font-size: 1.75rem;
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -51,11 +71,11 @@
  * Tailwind's preflight flattens unstyled headings to body size. */
 .notes-editor h1 {
   color: #000;
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 600;
   letter-spacing: -0.01em;
   line-height: 1.2;
-  margin: 2.25rem 0 0.75rem;
+  margin: 2rem 0 0.65rem;
 }
 
 /* Freshness line at the very bottom of the note. */
@@ -84,7 +104,8 @@
 
 /* ---------- Linked / unlinked references (Roam-style backlinks) ----------
  * Typographic, not boxed: each reference is a quoted block carrying the source
- * note's title, date, and the passage it appeared in — no cards, no borders. */
+ * note's title, date, and the passage it appeared in — no cards, no borders at
+ * rest. The whole block is a link to the source note; a box surfaces on hover. */
 .notes-references {
   width: 100%;
   max-width: 760px;
@@ -100,19 +121,32 @@
   gap: 8px;
   margin: 0 0 4px;
   padding-bottom: 8px;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--color-text-primary, #1f2937);
 }
 .notes-ref-count {
   font-weight: 500;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--color-text-muted, #6b7280);
   opacity: 0.8;
 }
 .notes-ref-block {
-  padding: 12px 0;
+  padding: 12px 14px;
+  margin: 0 -14px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.notes-ref-block:hover {
+  border-color: var(--color-border-subtle, #e5e7eb);
+  background: color-mix(in srgb, var(--color-border-subtle, #e5e7eb) 22%, transparent);
+}
+.notes-ref-block:focus-visible {
+  outline: 2px solid var(--color-brand-dark-green, #2f7a3e);
+  outline-offset: 2px;
 }
 .notes-ref-head-row {
   display: flex;
@@ -131,6 +165,14 @@
 }
 .notes-ref-from:hover {
   text-decoration: underline;
+}
+.notes-ref-from::before {
+  content: '[[';
+  opacity: 0.4;
+}
+.notes-ref-from::after {
+  content: ']]';
+  opacity: 0.4;
 }
 /* The reference's date, centred inside a full-width rule — a chat-style day
  * divider above each reference instead of a date squeezed next to the title. */
@@ -151,7 +193,7 @@
 }
 .notes-ref-excerpt {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--color-text-primary, #1f2937);
 }
@@ -184,6 +226,14 @@
 .notes-related-item:hover {
   text-decoration: underline;
 }
+.notes-related-item::before {
+  content: '[[';
+  opacity: 0.4;
+}
+.notes-related-item::after {
+  content: ']]';
+  opacity: 0.4;
+}
 
 /* Internal note links render visually wrapped in [[ ]] — brackets that are pure
  * CSS, never part of the stored markdown (which keeps OKF [text](path.md)). */
@@ -211,11 +261,11 @@
   text-decoration: underline dotted;
 }
 
-/* Directory-entity mentions render as `⬛ Name` — a small photo avatar before the
- * name, only when the entity actually has an image (no initials fallback, no
- * bracket clutter). Decoration-only (EntityChip): the avatar is a widget; the
- * name is the link text (.entity-link). The stored markdown stays a plain
- * [Name](/people/slug.md) link. */
+/* Directory-entity mentions render as `⬛ [[Name]]` — a small photo avatar before
+ * the name, only when the entity actually has an image (no initials fallback).
+ * Decoration-only (EntityChip): the avatar is a widget; the name is the link
+ * text (.entity-link), wrapped in the same CSS-only [[ ]] as note links. The
+ * stored markdown stays a plain [Name](/people/slug.md) link. */
 .notes-editor .entity-chip-widget {
   display: inline;
   white-space: nowrap;
@@ -239,6 +289,14 @@
   color: var(--color-brand-dark-green, #2f7a3e);
   font-weight: 500;
   cursor: pointer;
+}
+.notes-editor .entity-link::before {
+  content: '[[';
+  color: var(--color-text-muted, #6b7280);
+}
+.notes-editor .entity-link::after {
+  content: ']]';
+  color: var(--color-text-muted, #6b7280);
 }
 .notes-editor a:has(.entity-link):hover .entity-link {
   text-decoration: underline;

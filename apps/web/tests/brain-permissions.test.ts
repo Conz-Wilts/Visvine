@@ -236,3 +236,24 @@ test('root gate: root admins administer unregistered folders too', () => {
   assert.equal(principalIsFolderAdmin(principal('u-admin', { folders: reg }), 'scratch'), true)
   assert.equal(principalIsFolderAdmin(principal('u-grand', { folders: reg }), 'scratch'), false)
 })
+
+// --- context sources (non-note paths through the same predicates) ------------------
+
+test('source paths in a private folder are invisible to non-members', () => {
+  const stranger = principal('u-stranger')
+  assert.equal(pathVisibleTo('deals/pricing.csv', stranger), false)
+  assert.equal(pathVisibleTo('deals/pricing.csv', principal('u-reader')), true)
+  assert.equal(pathVisibleTo('wiki/handbook.txt', stranger), true) // public folder
+  const sources = [{ path: 'deals/pricing.csv' }, { path: 'wiki/handbook.txt' }]
+  assert.deepEqual(
+    filterVisible(sources, stranger).map((s) => s.path),
+    ['wiki/handbook.txt'],
+  )
+})
+
+test('read-level members cannot write (upload/delete) sources in their folder', () => {
+  assert.equal(principalCanWrite(principal('u-reader'), folderIdOfPath('deals/pricing.csv')), false)
+  assert.equal(principalCanWrite(principal('u-writer'), folderIdOfPath('deals/pricing.csv')), true)
+  // stranger can't write into a private folder at all
+  assert.equal(principalCanWrite(principal('u-stranger'), 'deals'), false)
+})

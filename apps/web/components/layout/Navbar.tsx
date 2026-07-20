@@ -4,8 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CommunitySelector } from "@/features/communities";
 import UserMenu from "@/components/auth/UserMenu";
+import MessagesDropdown from "@/components/messages/MessagesDropdown";
 import { useHeader } from "@/lib/contexts/HeaderContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
+import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useSidebar, shellEntranceStyle } from "@/lib/contexts/SidebarContext";
 import { useSession } from "@/lib/auth-client";
 import { isFeatureEnabled } from "@/lib/features";
@@ -18,12 +20,14 @@ export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
   const { isAdmin, currentCommunity } = useCommunity();
   const { expanded, entered, reduced } = useSidebar();
+  const { dockRequested, contextOpen, setContextOpen } = useContextPanel();
   const { data: session } = useSession();
   const pathname = usePathname();
+  const eventsActive = pathname.startsWith("/events");
+  const adminActive = pathname.startsWith("/admin");
   const canAccessAdmin = isAdmin || session?.user?.isSuperAdmin === true;
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const messagesEnabled = isFeatureEnabled(featureConfig, "messages");
-  const messagesActive = pathname.startsWith("/messages");
 
   return (
     <header
@@ -71,13 +75,38 @@ export default function Navbar() {
               data-tour="community-console"
               aria-label="Community management"
               title="Community management"
-              className="w-12 h-12 rounded-xl flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-surface-2 transition"
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition ${
+                adminActive
+                  ? "text-brand-green hover:text-brand-dark-green"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+              }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </Link>
+          )}
+          {/* Docked-panel toggle — shown whenever the current page has a panel
+              that docks into the sidebar (context tree, console sections). Lives
+              up here so it never gets covered by the expanding sidebar card. */}
+          {dockRequested && (
+            <button
+              type="button"
+              onClick={() => setContextOpen(!contextOpen)}
+              aria-label={contextOpen ? "Hide context" : "Show context"}
+              title={contextOpen ? "Hide context" : "Show context"}
+              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+                contextOpen
+                  ? "text-brand-green hover:text-brand-dark-green"
+                  : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+              }`}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M9 4v16" />
+              </svg>
+            </button>
           )}
         </div>
 
@@ -91,21 +120,24 @@ export default function Navbar() {
         {/* Right: page-injected controls (e.g. directory view toggle) + profile */}
         <div className="flex items-center gap-3">
           {headerRight}
-          {messagesEnabled && (
-            <Link
-              href="/messages"
-              aria-label="Messages"
-              title="Messages"
-              aria-current={messagesActive ? "page" : undefined}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center text-white transition-colors shrink-0 ${
-                messagesActive ? "bg-brand-green" : "hover:bg-surface-2"
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-              </svg>
-            </Link>
-          )}
+          {/* Events discovery is always reachable from the shell, even when the
+              current community has the events feature turned off — public events
+              from other communities remain discoverable. */}
+          <Link
+            href="/events?scope=discover"
+            aria-label="Discover events"
+            title="Discover events"
+            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
+              eventsActive
+                ? "text-brand-green hover:text-brand-dark-green"
+                : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+            }`}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </Link>
+          {messagesEnabled && <MessagesDropdown />}
           <UserMenu />
         </div>
       </div>

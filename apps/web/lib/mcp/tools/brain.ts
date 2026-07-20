@@ -25,6 +25,8 @@ import {
   visibleVault,
   writeGated,
   appendLogGated,
+  listVisibleSources,
+  readSourceVisible,
 } from "@/lib/notes/brainService";
 import { ensureBrainGate, resolveRegistry } from "@/lib/notes/registry";
 import { resolvePersonalBrain } from "@/lib/notes/brain";
@@ -152,7 +154,12 @@ export function registerBrainTools(server: McpServer): void {
         );
         if (hits.length === 0) return "No matching notes.";
         return hits
-          .map((h) => (h.snippet ? `- ${h.title} (${h.path}) — ${h.snippet}` : `- ${h.title} (${h.path})`))
+          .map((h) => {
+            // Source hits are chunks of an uploaded file — readable via
+            // brain_source_read, not brain_read.
+            const label = h.kind === "source" ? `- [source] ${h.title} (${h.path}#${h.seq})` : `- ${h.title} (${h.path})`;
+            return h.snippet ? `${label} — ${h.snippet}` : label;
+          })
           .join("\n");
       }),
   );
@@ -262,7 +269,9 @@ export function registerBrainTools(server: McpServer): void {
       withCtx(extra, "content:write", async (ctx) => {
         const scope = args.scope ?? "personal";
         const { p, brain } = await resolveTarget(ctx, args.community_id, scope);
-        const result = unwrapWrite(await writeGated(p, brain, args.path, args.content));
+        // Agent-originated write: stamp the revision so human vs AI edits stay
+        // distinguishable (McpContext carries no client name — generic 'mcp').
+        const result = unwrapWrite(await writeGated(p, brain, args.path, args.content, "agent", "mcp"));
         return { status: "applied", scope, path: result.path };
       }),
   );
@@ -285,7 +294,7 @@ export function registerBrainTools(server: McpServer): void {
       withCtx(extra, "content:write", async (ctx) => {
         const scope = args.scope ?? "personal";
         const { p, brain } = await resolveTarget(ctx, args.community_id, scope);
-        const result = unwrapWrite(await appendLogGated(p, brain, args.path, args.entry));
+        const result = unwrapWrite(await appendLogGated(p, brain, args.path, args.entry, "agent", "mcp"));
         return { status: "applied", scope, path: result.path };
       }),
   );
@@ -307,6 +316,69 @@ export function registerBrainTools(server: McpServer): void {
         const { p, brain: personal } = await resolveTarget(ctx, args.community_id, "personal");
         const path = await appendCapture(p, personal, args.text, args.refs, args.tags);
         return { status: "applied", scope: "personal", path };
+      }),
+  );
+
+  server.registerTool(
+    "brain_sources_list",
+    {
+      description:
+        "List the Context Sources (uploaded files/tables — csv, markdown, txt) attached to a community brain. Sources are non-note knowledge: they feed brain_search as chunk hits and are readable with brain_source_read, but never appear in the community's graph/workspace. Only sources you're allowed to read are listed. Shared brain by default; scope:'personal' for your own.",
+      inputSchema: {
+        community_id: z.string(),
+        scope: scopeArg,
+        folder_id: z
+          .string()
+          .optional()
+          .describe("Only sources in this top-level folder ('' = brain root)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, "content:read", async (ctx) => {
+        const { p, brain } = await resolveTarget(ctx, args.community_id, args.scope ?? "shared");
+        const sources = await listVisibleSources(p, brain, args.folder_id);
+        if (sources.length === 0) return "No sources.";
+        return sources
+          .map(
+            (s) =>
+              `- ${s.name} (${s.path}) — ${s.kind}, ${s.sizeBytes} bytes, ${s.status}${s.truncated ? ", truncated" : ""}`,
+          )
+          .join("\n");
+      }),
+  );
+
+  server.registerTool(
+    "brain_source_read",
+    {
+      description:
+        "Read the extracted text of one Context Source (uploaded file/table) by its brain path, paged by character offset — call again with a higher offset for more. Shared brain by default; scope:'personal' for your own. Returns a not-accessible message if the source doesn't exist or you can't read it.",
+      inputSchema: {
+        community_id: z.string(),
+        path: z.string().describe("Brain-relative source path, e.g. 'deals/pricing.csv'"),
+        scope: scopeArg,
+        offset: z.number().int().min(0).optional().describe("Character offset (default 0)"),
+        max_chars: z
+          .number()
+          .int()
+          .min(1)
+          .max(100_000)
+          .optional()
+          .describe("Max characters returned (default 20000)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, "content:read", async (ctx) => {
+        const { p, brain } = await resolveTarget(ctx, args.community_id, args.scope ?? "shared");
+        const page = await readSourceVisible(p, brain, args.path, {
+          offsetChars: args.offset,
+          maxChars: args.max_chars,
+        });
+        if (!page) return `No accessible source: ${args.path}`;
+        const offset = args.offset ?? 0;
+        const header = `${page.meta.name} (${page.meta.kind}, chars ${offset}-${offset + page.text.length} of ${page.totalChars})`;
+        return `${header}\n\n${page.text}`;
       }),
   );
 

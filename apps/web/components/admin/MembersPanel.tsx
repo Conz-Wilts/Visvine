@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { UserPlus, Link2, Users } from 'lucide-react';
-import { Alert, Avatar, Button, ConfirmDialog, Field, Input, SearchInput, SettingsCard } from '@/components/ui';
+import { UserPlus } from 'lucide-react';
+import { Alert, Avatar, Button, ConfirmDialog, Field, Input, SearchInput, SettingsSection } from '@/components/ui';
 import Select from '@/components/ui/Select';
 import Dropdown from '@/components/ui/Dropdown';
 import { useConsoleAction } from '@/components/console/ConsoleSaveContext';
@@ -253,16 +253,14 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
   if (error) return <Alert variant="error">{error}</Alert>;
 
   return (
-    <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+    <div className="space-y-8">
       {actionError && (
-        <Alert variant="error" onDismiss={() => setActionError('')} className="xl:col-span-2">{actionError}</Alert>
+        <Alert variant="error" onDismiss={() => setActionError('')}>{actionError}</Alert>
       )}
 
-      <SettingsCard
-        icon={<Link2 className="h-5 w-5" />}
+      <SettingsSection
         title="Invite people"
         description="Share the invite link, or add someone directly by email."
-        className={pendingMembers.length === 0 ? 'xl:col-span-2' : undefined}
         action={
           <Button variant="pill-primary" onClick={() => setShowInvite(true)}>
             <span className="inline-flex items-center gap-1.5">
@@ -273,14 +271,13 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
         }
       >
         <InviteLinkRow communityId={communityId} />
-      </SettingsCard>
+      </SettingsSection>
 
       {/* Pending join requests (from invite links) */}
       {pendingMembers.length > 0 && (
-        <SettingsCard
+        <SettingsSection
           title={`Pending requests (${pendingMembers.length})`}
           description="People who joined via the invite link, waiting for approval."
-          className="border-amber-400/40"
         >
           <div className="space-y-3">
             {pendingMembers.map(member => (
@@ -313,17 +310,15 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
               </div>
             ))}
           </div>
-        </SettingsCard>
+        </SettingsSection>
       )}
 
       {/* Members table */}
-      <SettingsCard
-        icon={<Users className="h-5 w-5" />}
+      <SettingsSection
         title={`Members (${activeMembers.length})`}
         description="Everyone in this community, and their role."
-        bodyClassName="space-y-4"
-        className="xl:col-span-2"
       >
+        <div className="space-y-4">
         {activeMembers.length > 3 && (
           <SearchInput
             value={query}
@@ -390,7 +385,8 @@ export default function MembersPanel({ communityId, onPendingCountChange }: Prop
             </tbody>
           </table>
         </div>
-      </SettingsCard>
+        </div>
+      </SettingsSection>
 
       <ConfirmDialog
         open={confirm !== null}

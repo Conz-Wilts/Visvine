@@ -17,20 +17,22 @@ import TaskItem from '@tiptap/extension-task-item'
 import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table'
 import { Markdown } from 'tiptap-markdown'
 import {
-  Bold as BoldIcon,
-  Italic as ItalicIcon,
-  List as ListBulletIcon,
-  ListOrdered as NumberedListIcon,
-  CircleCheck as CheckCircleIcon,
-  Code as CodeBracketIcon,
-  Table2 as TableCellsIcon,
-  TextQuote as QuoteIcon,
-  Sparkles as SparklesIcon,
-} from 'lucide-react'
+  BoldIcon,
+  ItalicIcon,
+  ListBulletIcon,
+  NumberedListIcon,
+  CheckCircleIcon,
+  CodeBracketIcon,
+  TableCellsIcon,
+  ChevronUpDownIcon as ChevronsUpDownIcon,
+  CheckIcon,
+} from '@heroicons/react/24/outline'
+import { TextQuote as QuoteIcon, Sparkles as SparklesIcon, Star as StarIcon } from 'lucide-react'
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
 import { NotePicker, type PickerEntity } from './NotePicker'
 import { LinkedReferences } from './LinkedReferences'
+import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { timeAgo } from '@/lib/date'
@@ -52,8 +54,10 @@ interface NoteEditorProps {
   initialContent: string
   canEdit: boolean
   aiConfigured: boolean
-  // Edit/Raw mode, owned by the surface's Editor/Raw toggle (NoteModeToggle).
+  // Edit/Raw mode — lifted to the surface; the toolbar's NoteModeToggle drives
+  // it through onModeChange.
   mode: 'wysiwyg' | 'raw'
+  onModeChange?: (mode: NoteMode) => void
   references: References | null
   related: RelatedNote[] | null
   // Directory entities for `[[ ]]` mentions: the picker list + a path→entity map
@@ -115,6 +119,7 @@ export function NoteEditor({
   canEdit,
   aiConfigured,
   mode,
+  onModeChange,
   references,
   related,
   entities,
@@ -135,6 +140,9 @@ export function NoteEditor({
   const [linkAnchor, setLinkAnchor] = useState<{ left: number; top: number; bottom: number } | null>(null)
   const [refactoring, setRefactoring] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Starred flag lives in the note's frontmatter (`starred: true`), so toggling
+  // it rewrites the prefix and saves through the normal path.
+  const [starred, setStarred] = useState(false)
   // Embedded only: the tab bar's attached region is our toolbar's home, and it
   // opened when the tab did (see TabBarSlotContext).
   const { host: toolbarHost } = useTabBarSlot()
@@ -263,6 +271,7 @@ export function NoteEditor({
     const loadedBody = stripLeadingTitleHeading(body, titleFromContent(initialContent, path))
     editor.commands.setContent(loadedBody, { emitUpdate: false })
     setRawContent(initialContent)
+    setStarred(Boolean(parseFrontmatter(initialContent).starred))
     pendingRef.current = null
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current)
@@ -287,6 +296,7 @@ export function NoteEditor({
       loadingRef.current = true
       const { frontmatter, body } = splitFrontmatter(rawContent)
       prefixRef.current = buildPrefix(frontmatter)
+      setStarred(Boolean(parseFrontmatter(rawContent).starred))
       editor.commands.setContent(body, { emitUpdate: false })
       if (canEdit) queueSave(rawContent)
       setTimeout(() => {
@@ -314,7 +324,9 @@ export function NoteEditor({
   }, [editor, canEdit])
 
   // Flag links to missing notes (broken) and tag internal note links so they
-  // render wrapped in [[ ]] via CSS. Re-runs on every edit.
+  // render wrapped in [[ ]] via CSS. Re-runs on every edit, and on note/mode
+  // switches too — those load content via setContent with emitUpdate:false, so
+  // the 'update' listener alone would leave the freshly loaded anchors untagged.
   useEffect(() => {
     if (!editor) return
     const unresolved = new Set(meta?.unresolved ?? [])
@@ -335,7 +347,7 @@ export function NoteEditor({
     return () => {
       editor.off('update', mark)
     }
-  }, [editor, meta])
+  }, [editor, meta, path, initialContent, mode])
 
   // Repaint entity chips when the community node map arrives/changes (the editor
   // isn't recreated, so nudge the decoration plugin to recompute).
@@ -379,6 +391,22 @@ export function NoteEditor({
     },
     [editor, notes],
   )
+
+  // Toggle `starred:` in the frontmatter prefix and save immediately. Only
+  // reachable from the wysiwyg toolbar, so the prefix ref is authoritative.
+  const toggleStar = useCallback(() => {
+    if (!editor || !canEdit) return
+    const next = !starred
+    const { frontmatter } = splitFrontmatter(prefixRef.current)
+    const lines = (frontmatter ?? '')
+      .split('\n')
+      .filter((l) => l.trim() && !/^starred\s*:/i.test(l.trim()))
+    if (next) lines.push('starred: true')
+    prefixRef.current = lines.length ? buildPrefix(lines.join('\n')) : ''
+    setStarred(next)
+    pendingRef.current = prefixRef.current + getMarkdown(editor)
+    flush()
+  }, [editor, canEdit, starred, flush])
 
   const onRawChange = (value: string) => {
     setRawContent(value)
@@ -446,27 +474,41 @@ export function NoteEditor({
         >
           <TableCellsIcon className="h-4 w-4" />
         </ToolbarButton>
-        {aiConfigured && (
-          <>
-            <Divider />
-            <button
-              type="button"
-              onClick={refactor}
-              disabled={refactoring}
-              className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-brand-dark-green transition hover:bg-brand-light-bg disabled:opacity-50"
-            >
-              <SparklesIcon className="h-3.5 w-3.5" />
-              {refactoring ? 'Refactoring…' : 'Refactor'}
-            </button>
-          </>
-        )}
       </>
+    ) : null
+  // Star sits at the far left of the toolbar; Refactor is a filled button pushed
+  // to the far right (both matching the reference layout).
+  const starButton =
+    canEdit && mode === 'wysiwyg' && editor ? (
+      <ToolbarButton label={starred ? 'Unstar note' : 'Star note'} onClick={toggleStar}>
+        <StarIcon className={`h-4 w-4 ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
+      </ToolbarButton>
+    ) : null
+  const refactorButton =
+    canEdit && mode === 'wysiwyg' && editor && aiConfigured ? (
+      <button
+        type="button"
+        onClick={refactor}
+        disabled={refactoring}
+        className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-dark-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+      >
+        <SparklesIcon className="h-3.5 w-3.5" />
+        {refactoring ? 'Refactoring…' : 'Refactor'}
+      </button>
     ) : null
   // Floating (workspace) layout wraps the controls in a rounded pill; the
   // embedded profile bar renders them flat, attached under the tabs.
   const formatPill = formatControls ? (
     <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
+      {starButton}
+      {starButton && <Divider />}
       {formatControls}
+      {refactorButton && (
+        <>
+          <Divider />
+          {refactorButton}
+        </>
+      )}
     </div>
   ) : null
 
@@ -533,8 +575,19 @@ export function NoteEditor({
           No host means no toolbar: `embedded` is only used by EntityContextPanel
           under the profile pages, which provide one. */}
       {embedded && toolbarHost && createPortal(
-        <div className="mx-auto flex h-12 max-w-3xl items-center gap-1 px-1">
-          <div className="flex flex-1 items-center gap-1 overflow-x-auto">{formatControls}</div>
+        /* Controls pinned to the pane's far left, matching the tab row above
+           (ProfileTabBar) — the note column below stays centred on its own. */
+        <div className="flex h-12 w-full items-center gap-1 px-2">
+          {starButton}
+          {starButton && formatControls && <Divider />}
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
+          {/* Right group: Refactor + the Editor/Raw toggle. The toggle renders
+              regardless of canEdit/mode (unlike formatControls, null in raw) so
+              raw mode can always switch back and read-only viewers can peek raw. */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {refactorButton}
+            {onModeChange && <NoteModeToggle value={mode} onChange={onModeChange} size="sm" />}
+          </div>
         </div>,
         toolbarHost,
       )}
@@ -646,45 +699,109 @@ function ToolbarButton({
   )
 }
 
-// Block-type dropdown: switches the current block between paragraph and the
-// three heading levels. Reflects the cursor's active block via editor state
-// (useEditor re-renders on each transaction, so isActive is current).
+// Text-style dropdown (matches blackbird-brain's Apple Notes-style options):
+// Title/Heading/Subheading map to the three heading levels, Body to paragraph,
+// Monospaced to a code block. Custom popover instead of a native <select> so it
+// matches the app's theme. Reflects the cursor's active block via editor state
+// (useEditor re-renders on each transaction, so isActive is current). The menu
+// portals to <body> with fixed positioning — the embedded toolbar strip is an
+// overflow-x-auto row, which would otherwise clip the popover into a scrollbar.
 const BLOCK_TYPES = [
-  { value: 'paragraph', label: 'Paragraph' },
-  { value: 'h1', label: 'Heading 1' },
-  { value: 'h2', label: 'Heading 2' },
-  { value: 'h3', label: 'Heading 3' },
+  { value: 'title', label: 'Title' },
+  { value: 'heading', label: 'Heading' },
+  { value: 'subheading', label: 'Subheading' },
+  { value: 'body', label: 'Body' },
+  { value: 'mono', label: 'Monospaced' },
 ] as const
 
-function BlockTypeSelect({ editor }: { editor: Editor }) {
-  const current = editor.isActive('heading', { level: 1 })
-    ? 'h1'
-    : editor.isActive('heading', { level: 2 })
-      ? 'h2'
-      : editor.isActive('heading', { level: 3 })
-        ? 'h3'
-        : 'paragraph'
+type BlockType = (typeof BLOCK_TYPES)[number]['value']
 
-  const apply = (value: string) => {
+function BlockTypeSelect({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (ref.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    // The menu is fixed-positioned off a snapshot of the trigger's rect, so any
+    // scroll or resize would strand it — just close instead of tracking.
+    const close = () => setOpen(false)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  const current: BlockType = editor.isActive('heading', { level: 1 })
+    ? 'title'
+    : editor.isActive('heading', { level: 2 })
+      ? 'heading'
+      : editor.isActive('heading', { level: 3 })
+        ? 'subheading'
+        : editor.isActive('codeBlock')
+          ? 'mono'
+          : 'body'
+
+  const apply = (value: BlockType) => {
     const chain = editor.chain().focus()
-    if (value === 'paragraph') chain.setParagraph().run()
-    else chain.setHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 }).run()
+    if (value === 'title') chain.setHeading({ level: 1 }).run()
+    else if (value === 'heading') chain.setHeading({ level: 2 }).run()
+    else if (value === 'subheading') chain.setHeading({ level: 3 }).run()
+    else if (value === 'mono') chain.setCodeBlock().run()
+    else chain.setParagraph().run()
+    setOpen(false)
   }
 
+  const currentLabel = BLOCK_TYPES.find((t) => t.value === current)?.label ?? 'Body'
+
   return (
-    <select
-      aria-label="Text style"
-      value={current}
-      onChange={(e) => apply(e.target.value)}
-      onMouseDown={(e) => e.stopPropagation()}
-      className="h-7 cursor-pointer rounded-lg bg-transparent px-2 text-sm text-text-secondary transition hover:bg-surface-2 focus:outline-none"
-    >
-      {BLOCK_TYPES.map((t) => (
-        <option key={t.value} value={t.value}>
-          {t.label}
-        </option>
-      ))}
-    </select>
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label="Text style"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setMenuPos({ top: r.bottom + 4, left: r.left })
+          setOpen((v) => !v)
+        }}
+        className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm text-text-secondary transition hover:bg-surface-2"
+      >
+        {currentLabel}
+        <ChevronsUpDownIcon className="h-3.5 w-3.5 text-text-secondary" />
+      </button>
+      {open && menuPos && createPortal(
+        <div
+          ref={menuRef}
+          style={{ top: menuPos.top, left: menuPos.left }}
+          className="fixed z-50 w-40 rounded-xl border border-border-subtle bg-surface-1 p-1 shadow-sm"
+        >
+          {BLOCK_TYPES.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => apply(t.value)}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-text-primary transition hover:bg-surface-2"
+            >
+              {t.label}
+              {t.value === current && <CheckIcon className="h-4 w-4 text-brand-dark-green" />}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
   )
 }
 

@@ -48,8 +48,22 @@ function Reference({
   title: string
   onOpenNote: (path: string) => void
 }) {
+  // The whole block navigates (blackbird-brain behavior): hover draws a box
+  // around it, click anywhere opens the source note.
+  const open = () => onOpenNote(refItem.fromPath)
   return (
-    <div className="notes-ref-block">
+    <div
+      className="notes-ref-block"
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          open()
+        }
+      }}
+    >
       <div className="notes-ref-date-divider">
         <span>{formatDate(refItem.date)}</span>
       </div>

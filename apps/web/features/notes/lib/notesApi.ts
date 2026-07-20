@@ -23,6 +23,7 @@ import type {
   AuditEntry,
 } from '@/lib/notes/shared/brainTypes'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
+import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 
 // --- brain capability types (registry / review / promote payload shapes) -------
 
@@ -120,7 +121,7 @@ async function sendJson<T>(url: string, method: string, body: unknown): Promise<
 export const notesApi = {
   config: () => getJson<{ aiConfigured: boolean }>('/api/notes/config'),
 
-  list: (c: string) => getJson<{ notes: NoteMeta[]; pinned: string[] }>(`/api/notes?${qs(c)}`),
+  list: (c: string) => getJson<{ notes: NoteMeta[]; starred: string[] }>(`/api/notes?${qs(c)}`),
   tree: (c: string) => getJson<{ tree: TreeNode }>(`/api/notes/tree?${qs(c)}`),
 
   read: (c: string, path: string) =>
@@ -182,8 +183,8 @@ export const notesApi = {
   emptyTrash: (c: string) =>
     sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { communityId: c }),
 
-  pin: (c: string, path: string, pinned: boolean) =>
-    sendJson<{ ok: true }>('/api/notes/pin', 'POST', { communityId: c, path, pinned }),
+  star: (c: string, path: string, starred: boolean) =>
+    sendJson<{ ok: true }>('/api/notes/star', 'POST', { communityId: c, path, starred }),
 
   refactor: (mode: 'note' | 'selection', text: string, instruction?: string) =>
     sendJson<{ result: string }>('/api/notes/ai/refactor', 'POST', { mode, text, instruction }),
@@ -268,4 +269,45 @@ export const notesApi = {
 
   getAudit: (c: string) =>
     getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?communityId=${encodeURIComponent(c)}`),
+
+  // --- context sources (non-note files/tables attached to the brain) -----------
+
+  listSources: (c: string, folderId?: string) =>
+    getJson<{ sources: ContextSourceMeta[] }>(
+      `/api/notes/sources?${qs(c, folderId !== undefined ? { folderId } : undefined)}`,
+    ),
+  /** Multipart upload — communityId travels in the query string (no JSON body). */
+  uploadSource: async (c: string, file: File, folder?: string) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (folder) form.append('folder', folder)
+    const res = await fetch(`/api/notes/sources?${qs(c)}`, { method: 'POST', body: form })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || `Upload failed (${res.status})`)
+    }
+    return res.json() as Promise<{ source: ContextSourceMeta }>
+  },
+  readSource: (c: string, path: string, opts?: { offset?: number; maxChars?: number }) =>
+    getJson<{ source: ContextSourceMeta; text: string; totalChars: number; downloadUrl: string | null }>(
+      `/api/notes/sources/item?${qs(c, {
+        path,
+        ...(opts?.offset !== undefined ? { offset: String(opts.offset) } : {}),
+        ...(opts?.maxChars !== undefined ? { maxChars: String(opts.maxChars) } : {}),
+      })}`,
+    ),
+  reingestSource: (c: string, path: string) =>
+    sendJson<{ source: ContextSourceMeta }>('/api/notes/sources/item', 'POST', {
+      communityId: c,
+      path,
+      action: 'reingest',
+    }),
+  deleteSource: async (c: string, path: string) => {
+    const res = await fetch(`/api/notes/sources?${qs(c, { path })}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
+    }
+    return res.json() as Promise<{ ok: true }>
+  },
 }

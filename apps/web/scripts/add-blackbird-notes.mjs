@@ -360,7 +360,7 @@ for (const s of sectorsPresent) {
   for (const o of list) portfolioBody.push(`- ${companyLink(o)} — ${o.c.status}`);
   portfolioBody.push('');
 }
-note(shared, 'companies/index.md', { type: 'Index', title: 'Portfolio', tags: ['portfolio'] }, portfolioBody.join('\n'), true);
+note(shared, 'companies/index.md', { type: 'Index', title: 'Companies', tags: ['portfolio'] }, portfolioBody.join('\n'), true);
 
 // companies/<slug>.md — one per company (the directory entity note for `[[ ]]`)
 for (const o of orgs) {
@@ -470,7 +470,7 @@ if (FOUNDER_NOTE_MODE !== 'none' && founderSlugByKey.size) {
     .map((key) => ({ key, p: personByKey.get(key), slug: founderSlugByKey.get(key) }))
     .sort((a, b) => a.p.name.localeCompare(b.p.name));
 
-  note(shared, 'people/index.md', { type: 'Index', title: 'Founders', tags: ['founders', 'people'] }, `
+  note(shared, 'people/index.md', { type: 'Index', title: 'People', tags: ['founders', 'people'] }, `
 # Founders
 
 The people building the portfolio (${founderNotes.length} profiled).
@@ -763,14 +763,19 @@ try {
     { ownerKey: adminId, notes: personal },
   ];
 
+  // The starred column is derived from the frontmatter `starred:` flag on every
+  // app write, so seed starred notes with the flag in the frontmatter too.
+  const withStar = (content, starred) =>
+    starred ? content.replace(/^---\n/, '---\nstarred: true\n') : content;
+
   for (const { ownerKey, notes } of brains) {
     for (const n of notes) {
       await client.query(
-        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, pinned, updated_at)
+        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
          ON CONFLICT (community_id, owner_key, path)
-         DO UPDATE SET content = EXCLUDED.content, pinned = EXCLUDED.pinned, updated_at = now()`,
-        [COMM, ownerKey, n.path, n.content, adminId, n.pinned],
+         DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
+        [COMM, ownerKey, n.path, withStar(n.content, n.pinned), adminId, n.pinned],
       );
     }
   }

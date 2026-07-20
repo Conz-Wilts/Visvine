@@ -54,6 +54,10 @@ export async function POST(request: NextRequest) {
       await tx.userCommunity.create({
         data: { userId: session.userId, communityId: id, role: 'admin', status: 'active' },
       });
+      // Every community starts with a default space; admins can rename or delete it.
+      await tx.channelSpace.create({
+        data: { communityId: id, name: 'General', position: 0 },
+      });
       return community;
     });
 

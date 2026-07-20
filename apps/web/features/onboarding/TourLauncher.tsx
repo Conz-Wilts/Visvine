@@ -42,30 +42,30 @@ const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="nav-directory"]',
     title: 'Your directory',
     description:
-      'This is the heart of Visvine: everyone and everything in your community. Explore it as an interactive graph of people and the connections between them, or switch to a searchable table. Two views of the same network.',
+      'This is the heart of Visvine: everyone and everything in your community, as a searchable grid of cards.',
     side: 'right',
     align: 'start',
   },
   {
     leg: 'directory',
     selector: '[data-tour="directory-canvas"]',
-    title: 'Graph, grid & table',
+    title: 'Browse your community',
     description:
-      'Browse people and organisations as cards, flip to a spreadsheet-style table, or open the graph to see how everyone connects. Search and filter from the bar up top to find anyone fast.',
+      'Browse people and organisations as cards. Search and filter from the bar up top to find anyone fast.',
     side: 'top',
     align: 'center',
   },
   {
-    // Context lives inside the Directory now: the 4th option on the view
-    // toggle (data-tour="view-toggle" on SearchAndFilters) plus a Context tab
-    // on every person/organization profile.
+    // Context is its own tool now: the /context page hosts the community
+    // graph plus the notes tree, and every person/organization profile
+    // carries a Context tab.
     leg: 'directory',
-    selector: '[data-tour="view-toggle"]',
+    selector: '[data-tour="nav-notes"]',
     title: 'Context: your community brain',
     description:
-      'Flip the directory to the Context view to capture notes about the people and companies here. Link them with [[ ]] to build up your map — every person and organization also carries its context right on its profile.',
-    side: 'bottom',
-    align: 'end',
+      'Open Context to see the community as an interactive graph and capture notes about the people and companies here. Link them with [[ ]] to build up your map — every profile carries its context too.',
+    side: 'right',
+    align: 'start',
   },
   {
     leg: 'directory',

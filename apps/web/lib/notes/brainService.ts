@@ -8,18 +8,22 @@
 
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Brain, type Actor } from './store'
+import * as sourceStore from './sourceStore'
+import { ingestSource, reingestSource, type IngestInput } from './sources/ingest'
 import { logAudit } from './audit'
 import { createVectorStage } from './vectorStage'
-import { buildNoteIndex } from './shared/graph'
+import { createSourceStage } from './sourceStage'
+import { getVault, vaultFor } from './vaultCache'
 import { splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
-import { filterVisible, pathVisibleTo } from './shared/visibility'
+import { pathVisibleTo } from './shared/visibility'
 import { folderIdOfPath } from './shared/placement'
 import { folderById, memberLevel, principalCanWrite, principalIsSuperAdmin } from './shared/permissions'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
-import type { NoteMeta, RawNote } from './shared/types'
+import type { NoteMeta, NoteRevisionOrigin, RawNote } from './shared/types'
+import type { ContextSourceMeta } from './shared/sourceTypes'
 
 function isShared(brain: Brain): boolean {
   return brain.ownerKey === SHARED_OWNER_KEY
@@ -47,14 +51,11 @@ export interface VisibleVault {
  * The visibility-filtered vault. The index is rebuilt over only the visible raws,
  * so a link into a folder the caller can't read degrades to an unresolved link —
  * no title leak. Personal brains (and admins) see everything unfiltered.
+ * Served from the per-brain vault memo (lib/notes/vaultCache.ts), so the routes
+ * that fan out on a Context-tab open share one corpus load and one index build.
  */
 export async function visibleVault(p: BrainPrincipal, brain: Brain): Promise<VisibleVault> {
-  const raws = await store.listRaw(brain)
-  if (!isShared(brain)) {
-    return { raws, metas: buildNoteIndex(raws) }
-  }
-  const visible = filterVisible(raws, p)
-  return { raws: visible, metas: buildNoteIndex(visible) }
+  return vaultFor(await getVault(brain), p, brain)
 }
 
 /** Whether the principal may read one note path in this brain. */
@@ -98,7 +99,17 @@ export async function searchBrain(
   const { raws, metas } = await visibleVault(p, brain)
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
   const notes = metas.map((meta) => ({ meta, body: bodyByPath.get(meta.path) ?? '' }))
-  const hits = await fusedSearch(notes, query, filters, { k, vector: createVectorStage(brain) })
+  // Context-source chunks rank alongside notes, over only the VISIBLE (and
+  // folder-filtered) source paths — the lens applies before the stage exists.
+  const sourcePaths = (await sourceStore.listSources(brain))
+    .filter((s) => s.status === 'ready' && canReadPath(p, brain, s.path))
+    .filter((s) => filters.folderId === undefined || folderIdOfPath(s.path) === filters.folderId)
+    .map((s) => s.path)
+  const hits = await fusedSearch(notes, query, filters, {
+    k,
+    vector: createVectorStage(brain),
+    sources: createSourceStage(brain, sourcePaths),
+  })
   for (const h of hits) {
     if (isAuditedRead(p, brain, h.path)) {
       void logAudit(p.communityId, { userId: p.userId, name: p.name, action: 'read', path: h.path })
@@ -142,24 +153,35 @@ export async function writeGated(
   return { status: 'applied', path }
 }
 
-/** Gated dated `## Log` append (creating the section when absent). */
+/**
+ * Gated dated `## Log` append (creating the section when absent). AI/agent
+ * appends pass `origin`/`model` so the revision AND the log entry's role are
+ * stamped with how the entry arose — human vs AI edits stay distinguishable.
+ */
 export async function appendLogGated(
   p: BrainPrincipal,
   brain: Brain,
   path: string,
   entry: string,
+  origin: NoteRevisionOrigin = 'edit',
+  model?: string,
 ): Promise<WriteResult> {
   const denial = writeDenial(p, brain, path)
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(brain, path)
-  const role = roleLabel(p, brain, path)
+  const role =
+    origin === 'edit' || origin === 'restore'
+      ? roleLabel(p, brain, path)
+      : model
+        ? `ai: ${model}`
+        : origin
   const md = appendNoteLogEntry(current, {
     date: toDateString(Date.now()),
     actor: p.name,
     role,
     summary: entry,
   })
-  await store.writeNote(brain, path, md, actorOf(p))
+  await store.writeNote(brain, path, md, actorOf(p), origin, model)
   return { status: 'applied', path }
 }
 
@@ -201,6 +223,109 @@ export async function moveGated(
     })
   }
   return { status: 'applied', path: moved }
+}
+
+// --- context sources (non-note files/tables; same gate + lens as notes) ----------
+
+/** The sources the principal may see, optionally restricted to one top-level folder. */
+export async function listVisibleSources(
+  p: BrainPrincipal,
+  brain: Brain,
+  folderId?: string,
+): Promise<ContextSourceMeta[]> {
+  const all = await sourceStore.listSources(brain)
+  return all
+    .filter((s) => canReadPath(p, brain, s.path))
+    .filter((s) => folderId === undefined || folderIdOfPath(s.path) === folderId)
+}
+
+/** Source metadata through the lens — null for absent AND inaccessible alike. */
+export async function getSourceVisible(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+): Promise<ContextSourceMeta | null> {
+  if (!canReadPath(p, brain, path)) return null
+  return sourceStore.getSource(brain, path)
+}
+
+/** Gated upload + ingestion of a new source file. */
+export async function createSourceGated(
+  p: BrainPrincipal,
+  brain: Brain,
+  input: IngestInput,
+): Promise<WriteResult & { source?: ContextSourceMeta }> {
+  const denial = writeDenial(p, brain, input.path)
+  if (denial) return { status: 'denied', reason: denial }
+  const source = await ingestSource(brain, input)
+  if (isShared(brain)) {
+    void logAudit(p.communityId, {
+      userId: p.userId,
+      name: p.name,
+      action: 'write',
+      path: source.path,
+      detail: `source upload (${source.kind}, ${source.sizeBytes} bytes)`,
+    })
+  }
+  return { status: 'applied', path: source.path, source }
+}
+
+/**
+ * A page of a source's extracted text (concatenated chunks) through the lens.
+ * Private-folder reads are audited exactly like note reads.
+ */
+export async function readSourceVisible(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+  opts: { offsetChars?: number; maxChars?: number } = {},
+): Promise<{ meta: ContextSourceMeta; text: string; totalChars: number } | null> {
+  if (!canReadPath(p, brain, path)) return null
+  const row = await sourceStore.findSource(brain, path)
+  if (!row) return null
+  const full = (await sourceStore.listChunkTexts(row.id)).join('\n\n')
+  if (isAuditedRead(p, brain, path)) {
+    void logAudit(p.communityId, { userId: p.userId, name: p.name, action: 'read', path })
+  }
+  const offset = Math.max(0, opts.offsetChars ?? 0)
+  const max = Math.max(1, opts.maxChars ?? 20_000)
+  const meta = (await sourceStore.getSource(brain, path))!
+  return { meta, text: full.slice(offset, offset + max), totalChars: full.length }
+}
+
+/** Gated hard delete of a source (row, chunks, and the GCS object). */
+export async function deleteSourceGated(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+): Promise<WriteResult> {
+  const denial = writeDenial(p, brain, path)
+  if (denial) return { status: 'denied', reason: denial }
+  const existed = await sourceStore.deleteSource(brain, path)
+  if (!existed) return { status: 'denied', reason: `No source at: ${path}` }
+  if (isShared(brain)) {
+    void logAudit(p.communityId, {
+      userId: p.userId,
+      name: p.name,
+      action: 'delete',
+      path,
+      detail: 'source delete',
+    })
+  }
+  return { status: 'applied', path }
+}
+
+/** Gated re-ingestion (retry after failure / embedding-model change). */
+export async function reingestSourceGated(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+): Promise<WriteResult & { source?: ContextSourceMeta }> {
+  const denial = writeDenial(p, brain, path)
+  if (denial) return { status: 'denied', reason: denial }
+  const source = await reingestSource(brain, path)
+  if (!source) return { status: 'denied', reason: `No source at: ${path}` }
+  return { status: 'applied', path, source }
 }
 
 /** Rewrite every note that links to `fromPath` so it points at `toPath`. */

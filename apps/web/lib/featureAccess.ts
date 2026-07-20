@@ -23,11 +23,8 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
  * Feature keys that carry NO sidebar nav item:
  * - `messages` is always on (core) and lives in the top navbar beside the
  *   profile icon, so it never appears in the sidebar or the console toggles.
- * - `notes` (label "Context") merged into the Directory — it surfaces as the
- *   directory's Context view and the Context tab on entity profiles, not as a
- *   destination of its own.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages', 'notes'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages'];
 
 /**
  * Is `key` enabled for a community? Core features are always enabled; any other

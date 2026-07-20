@@ -6,12 +6,13 @@
 // clicked. Profile pages call usePrefetchEntityContext on mount instead, so by
 // the time the user clicks over to Context everything is in flight or done.
 //
-// The cache stores in-flight promises keyed by request, with a short TTL — it's
-// a click-over bridge, not a data store. EntityContextPanel issues its own
-// requests through the same keys, so a prefetch and a panel mount share one
-// network call. Rejected promises evict themselves (an error never sticks), and
-// mutations invalidate their read keys so a save/delete can't resurrect stale
-// content on the next mount.
+// The cache stores promises keyed by request. Within FRESH_MS a key is served
+// as-is (a prefetch and a panel mount share one network call); resolved values
+// are additionally kept for KEEP_MS so swrFetch can paint a re-opened Context
+// tab instantly from the stale value while revalidating in the background.
+// Rejected promises evict themselves (an error never sticks), and mutations
+// invalidate their read keys so a save/delete can't resurrect stale content on
+// the next mount.
 
 import { useEffect } from 'react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
@@ -19,27 +20,79 @@ import { entityNotePath } from '@/lib/notes/entities'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from './notesApi'
 
-const TTL_MS = 60_000
+const FRESH_MS = 60_000 // within this window, don't refetch at all
+const KEEP_MS = 10 * 60_000 // stale values still paint instantly, then revalidate
 
 interface Entry {
   promise: Promise<unknown>
   ts: number
+  /** Set once the promise resolves — what swrFetch serves synchronously. */
+  value?: unknown
+  hasValue?: boolean
 }
 
 const cache = new Map<string, Entry>()
 
-/** Run `fn` once per `key` per TTL window; concurrent/later callers within the
- *  window get the same promise. Rejections evict immediately so a transient
+function startFetch<T>(key: string, fn: () => Promise<T>): Entry {
+  const promise = fn()
+  const entry: Entry = { promise, ts: Date.now() }
+  cache.set(key, entry)
+  promise.then(
+    (value) => {
+      if (cache.get(key) === entry) {
+        entry.value = value
+        entry.hasValue = true
+      }
+    },
+    () => {
+      if (cache.get(key) === entry) cache.delete(key)
+    },
+  )
+  return entry
+}
+
+/** Run `fn` once per `key` per fresh window; concurrent/later callers within
+ *  the window get the same promise. Rejections evict immediately so a transient
  *  failure during prefetch never poisons the panel's own attempt. */
 export function cachedFetch<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const hit = cache.get(key)
-  if (hit && Date.now() - hit.ts < TTL_MS) return hit.promise as Promise<T>
-  const promise = fn()
-  cache.set(key, { promise, ts: Date.now() })
-  promise.catch(() => {
-    if (cache.get(key)?.promise === promise) cache.delete(key)
+  if (hit && Date.now() - hit.ts < FRESH_MS) return hit.promise as Promise<T>
+  return startFetch(key, fn).promise as Promise<T>
+}
+
+/**
+ * Stale-while-revalidate read. A resolved value younger than KEEP_MS is
+ * delivered via `onData` immediately (synchronously — the caller paints with no
+ * spinner); if it's older than FRESH_MS a background refetch follows and
+ * `onData` fires again with the fresh value. Cold cache degrades to a plain
+ * cachedFetch. Returns a promise settling with the freshest value delivered,
+ * so await-style callers keep working; rejections only occur on a cold-cache
+ * fetch failure (a failed background revalidation keeps the stale value).
+ */
+export function swrFetch<T>(key: string, fn: () => Promise<T>, onData: (data: T) => void): Promise<T> {
+  const hit = cache.get(key)
+  const age = hit ? Date.now() - hit.ts : Infinity
+
+  if (hit?.hasValue && age < KEEP_MS) {
+    onData(hit.value as T)
+    if (age < FRESH_MS) return hit.promise as Promise<T>
+    // Stale: revalidate in the background; deliver again when it lands.
+    const next = startFetch(key, fn).promise as Promise<T>
+    return next.then(
+      (value) => {
+        onData(value)
+        return value
+      },
+      () => hit.value as T,
+    )
+  }
+
+  // Cold (or still in flight and fresh): behave like cachedFetch + deliver.
+  const promise = cachedFetch(key, fn)
+  return promise.then((value) => {
+    onData(value)
+    return value
   })
-  return promise
 }
 
 export function invalidateContextCache(...keys: string[]) {
@@ -53,6 +106,7 @@ export const contextKeys = {
   registry: (c: string) => `notes:registry:${c}`,
   read: (c: string, path: string) => `notes:read:${c}:${path}`,
   list: (c: string) => `notes:list:${c}`,
+  tree: (c: string) => `notes:tree:${c}`,
   references: (c: string, path: string) => `notes:refs:${c}:${path}`,
   related: (c: string, path: string) => `notes:related:${c}:${path}`,
 }
@@ -100,17 +154,17 @@ function prefetchEntityContext(communityId: string, path: string) {
   void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
   void cachedFetch(contextKeys.registry(communityId), () => notesApi.getRegistry(communityId)).catch(() => {})
   void cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).catch(() => {})
-  void readNote(communityId, path)
-    .then((r) => {
-      if (r.status !== 'ok') return
-      void cachedFetch(contextKeys.references(communityId, path), () =>
-        notesApi.references(communityId, path),
-      ).catch(() => {})
-      void cachedFetch(contextKeys.related(communityId, path), () =>
-        notesApi.related(communityId, path),
-      ).catch(() => {})
-    })
-    .catch(() => {})
+  void cachedFetch(contextKeys.tree(communityId), () => notesApi.tree(communityId)).catch(() => {})
+  void readNote(communityId, path).catch(() => {})
+  // Fired alongside the read (not after it — no waterfall): both endpoints
+  // return empty results for a missing path, and the panel ignores them when
+  // the read lands as anything but 'ok'.
+  void cachedFetch(contextKeys.references(communityId, path), () =>
+    notesApi.references(communityId, path),
+  ).catch(() => {})
+  void cachedFetch(contextKeys.related(communityId, path), () =>
+    notesApi.related(communityId, path),
+  ).catch(() => {})
 }
 
 /** Profile pages call this on mount: warms the Context tab's JS chunk and data

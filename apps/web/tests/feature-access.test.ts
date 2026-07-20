@@ -36,10 +36,10 @@ describe('isFeatureEnabled', () => {
     assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'messages']);
   });
 
-  it('hides messages and notes from the nav rail while keeping them toggleable', () => {
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages', 'notes']);
-    // Nav-hidden ≠ disabled: notes stays a normal toggle (it gates the
-    // directory's Context view + the profile Context tabs).
+  it('hides only messages from the nav rail while keeping it toggle-exempt', () => {
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages']);
+    // notes ("Context") has its own /context page and rail item now, but stays
+    // a normal toggle (it also gates the profile Context tabs).
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
     assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), false);
     assert.equal(canAccessFeature({ enabled: { notes: true } }, 'notes', false), true);

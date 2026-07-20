@@ -14,13 +14,38 @@ export const PERSON_SILHOUETTE_PATH =
   'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6Z';
 
 /**
- * SVG path for the group/organisation avatar fallback (24×24 viewBox): a cluster
- * of person silhouettes. The canvas group drawer and the <GroupSilhouette>
- * component both draw this so the glyph is identical on the graph and in the DOM.
- * Filled (non-zero winding), so it fills white the same way the person glyph does.
+ * SVG path for the group/organisation avatar fallback (24×24 viewBox): a house —
+ * reads as "community/place" rather than a cluster of people. The canvas glyph
+ * drawer and <TypeSilhouette> both draw this so the glyph is identical on the
+ * graph and in the DOM. Filled (non-zero winding), so it fills white the same
+ * way the person glyph does.
  */
 export const GROUP_SILHOUETTE_PATH =
-  'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3Zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3Zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5Zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5Z';
+  'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
+
+/**
+ * SVG path for the event avatar fallback (24×24 viewBox): a calendar with a
+ * marked date. Drawn identically by <TypeSilhouette> and the canvas renderers.
+ */
+export const EVENT_SILHOUETTE_PATH =
+  'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z';
+
+/**
+ * SVG path for the resource avatar fallback (24×24 viewBox): a document with
+ * text lines. Drawn identically by <TypeSilhouette> and the canvas renderers.
+ */
+export const RESOURCE_SILHOUETTE_PATH =
+  'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z';
+
+/** Node-type glyph → its 24×24 silhouette path (the getNodeGlyph value space). */
+export const NODE_GLYPH_PATHS = {
+  person: PERSON_SILHOUETTE_PATH,
+  group: GROUP_SILHOUETTE_PATH,
+  event: EVENT_SILHOUETTE_PATH,
+  resource: RESOURCE_SILHOUETTE_PATH,
+} as const;
+
+export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;
 
 export function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

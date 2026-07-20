@@ -59,7 +59,7 @@ export async function runReview(
       if (current === undefined) continue
       const next = applyAutoFix(current, fix)
       if (next === current) continue
-      await store.writeNote(brain, fix.path, next, MAINTENANCE_ACTOR)
+      await store.writeNote(brain, fix.path, next, MAINTENANCE_ACTOR, 'maintenance')
       byPath.set(fix.path, next) // later fixes on the same note compose
       applied++
     }

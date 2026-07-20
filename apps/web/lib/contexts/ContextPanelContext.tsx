@@ -8,38 +8,40 @@ import { createContext, useContext, useState, type ReactNode } from "react";
  * connected card. The Sidebar exposes a portal host (`setHost`) inside its
  * docked card; the page owns the panel data and renders into that host via
  * createPortal (e.g. the /channels list or the /admin console sections).
- * `collapsed` is shared so the Sidebar hides the panel column and the page
- * reclaims the freed horizontal space in lockstep. The docks themselves are
- * pathname-gated in the Sidebar.
+ * The docks themselves are pathname-gated in the Sidebar.
  */
 interface ContextPanelValue {
   host: HTMLElement | null;
   setHost: (el: HTMLElement | null) => void;
-  collapsed: boolean;
-  setCollapsed: (v: boolean) => void;
-  // A query-param-gated route (the directory graph view) can't be pathname-docked
-  // in the Sidebar like /channels, so it raises this flag instead: the Sidebar
-  // opens its panel column and the requesting page portals its tree into the host.
+  // A query-param-gated route (the directory Context tab) can't be pathname-docked
+  // in the Sidebar like /channels, so it raises this flag instead: it marks the
+  // notes tree as AVAILABLE to dock. Whether the panel column actually opens is
+  // the user's call via `contextOpen` below.
   dockRequested: boolean;
   setDockRequested: (v: boolean) => void;
+  // User intent: the docked panel starts OPEN and can be closed from the
+  // navbar's panel toggle. Lives here so it survives page-to-page navigation
+  // within a session; a fresh load starts open again.
+  contextOpen: boolean;
+  setContextOpen: (v: boolean) => void;
 }
 
 const ContextPanelContext = createContext<ContextPanelValue>({
   host: null,
   setHost: () => {},
-  collapsed: false,
-  setCollapsed: () => {},
   dockRequested: false,
   setDockRequested: () => {},
+  contextOpen: true,
+  setContextOpen: () => {},
 });
 
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
   const [dockRequested, setDockRequested] = useState(false);
+  const [contextOpen, setContextOpen] = useState(true);
   return (
     <ContextPanelContext.Provider
-      value={{ host, setHost, collapsed, setCollapsed, dockRequested, setDockRequested }}
+      value={{ host, setHost, dockRequested, setDockRequested, contextOpen, setContextOpen }}
     >
       {children}
     </ContextPanelContext.Provider>

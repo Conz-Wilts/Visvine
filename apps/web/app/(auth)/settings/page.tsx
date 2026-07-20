@@ -1,7 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme, COLOR_THEMES, ColorTheme } from '@/lib/contexts/ThemeContext';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { DOCK_MIN_WIDTH } from '@/features/shared/components/layout/Sidebar';
 import Toggle from '@/components/ui/Toggle';
 import {
   User,
@@ -162,70 +165,106 @@ function PlaceholderSection({ label, icon }: { label: string; icon: React.ReactN
 export default function SettingsPage() {
   const [active, setActive] = useState<SettingsSection>('appearance');
   const { theme, isDark } = useTheme();
+  const { host } = useContextPanel();
+
+  // Track the Sidebar's dock breakpoint so both sides flip together.
+  const [wide, setWide] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`);
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  const dockNav = wide && Boolean(host);
+
+  // The section list, rendered into the Sidebar's docked panel — same host the
+  // /channels list and /admin console sections share.
+  const dockedNav = dockNav && host
+    ? createPortal(
+        <div
+          className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface-1 px-3 py-4"
+          style={{ animation: 'fadeIn 0.3s ease-out' }}
+        >
+          <nav aria-label="Settings sections">
+            <div className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Settings
+            </div>
+            <ul className="space-y-1">
+              {NAV_ITEMS.map(item => {
+                const isActive = active === item.id;
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => setActive(item.id)}
+                      aria-current={isActive ? 'page' : undefined}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 w-full group"
+                      style={{
+                        background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : 'transparent',
+                        color: isActive ? theme.accentDark : undefined,
+                      }}
+                    >
+                      <span
+                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
+                        style={{
+                          background: isActive ? theme.accent : undefined,
+                          color: isActive ? 'white' : undefined,
+                        }}
+                      >
+                        <span className={isActive ? '' : 'text-text-muted'}>
+                          {item.icon}
+                        </span>
+                      </span>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium truncate ${isActive ? '' : 'text-text-secondary'}`}>{item.label}</p>
+                        <p className={`text-[10px] truncate opacity-70 ${isActive ? '' : 'text-text-muted'}`}>{item.description}</p>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </div>,
+        host,
+      )
+    : null;
 
   return (
-    <div className="flex min-h-full px-6">
-      {/* ── Sidebar nav ── */}
-      <nav className="w-56 flex-shrink-0 border-r border-border-subtle pt-8 pb-6 px-3 hidden sm:flex flex-col gap-1">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-text-muted px-3 mb-2">
-          Settings
-        </p>
-        {NAV_ITEMS.map(item => {
-          const isActive = active === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActive(item.id)}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 w-full group"
-              style={{
-                background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : 'transparent',
-                color: isActive ? theme.accentDark : undefined,
-              }}
-            >
-              <span
-                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                style={{
-                  background: isActive ? theme.accent : undefined,
-                  color: isActive ? 'white' : undefined,
-                }}
-                // inactive styles via className so dark: works
-                data-inactive={!isActive}
-              >
-                <span className={isActive ? '' : 'text-text-muted'}>
-                  {item.icon}
-                </span>
-              </span>
-              <div className="min-w-0">
-                <p className={`text-sm font-medium truncate ${isActive ? '' : 'text-text-secondary'}`}>{item.label}</p>
-                <p className={`text-[10px] truncate opacity-70 ${isActive ? '' : 'text-text-muted'}`}>{item.description}</p>
-              </div>
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* ── Content ── */}
-      <div className="flex-1 min-w-0 pt-8 pb-10 px-6 sm:px-8 max-w-2xl">
-        {/* Mobile tab bar */}
-        <div className="flex sm:hidden gap-1 mb-6 overflow-x-auto pb-1 -mx-1 px-1">
-          {NAV_ITEMS.map(item => {
-            const isActive = active === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActive(item.id)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all"
-                style={{
-                  background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : undefined,
-                  color: isActive ? theme.accentDark : undefined,
-                }}
-              >
-                <span className={isActive ? '' : 'text-text-muted'}>{item.icon}</span>
-                <span className={isActive ? '' : 'text-text-secondary'}>{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
+    <>
+      {dockedNav}
+      {/* When the section list is docked into the Sidebar, pad left so the content
+          clears the docked card (260px panel + 12px gutter — keep in sync with
+          ADMIN_PANEL_W in Sidebar.tsx). */}
+      <div
+        className={`w-full ${dockNav ? 'pl-[272px]' : ''}`}
+        style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
+      >
+      <div className="min-w-0 pt-4 pb-10 px-6 sm:px-8 max-w-2xl">
+        {/* Narrow fallback: horizontally scrollable pill row above the content */}
+        {!dockNav && (
+          <div className="flex gap-1 mb-6 overflow-x-auto pb-1 -mx-1 px-1">
+            {NAV_ITEMS.map(item => {
+              const isActive = active === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActive(item.id)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all"
+                  style={{
+                    background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : undefined,
+                    color: isActive ? theme.accentDark : undefined,
+                  }}
+                >
+                  <span className={isActive ? '' : 'text-text-muted'}>{item.icon}</span>
+                  <span className={isActive ? '' : 'text-text-secondary'}>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Section heading */}
         <div className="mb-6">
@@ -249,6 +288,7 @@ export default function SettingsPage() {
           <PlaceholderSection label="Privacy" icon={<Eye size={22} />} />
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -17,7 +17,7 @@ import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, getNodeGlyph, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
-import GroupSilhouette from '@/components/ui/GroupSilhouette';
+import TypeSilhouette from '@/components/ui/TypeSilhouette';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import NodeTypeDetailsSection from './NodeTypeDetailsSection';
 import { StatItem, SectionCard, RailCard } from './profileCards';
@@ -88,11 +88,12 @@ export default function NodeProfileContent({ nodeId, onConnectionsClick, onCommu
         <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
           {node.image_url ? (
             <img src={node.image_url} alt={node.name} className="w-full h-full object-cover" />
-          ) : getNodeGlyph(node.type) === 'group' ? (
-            <GroupSilhouette color={theme.base} />
-          ) : (
-            <PersonSilhouette color={theme.base} />
-          )}
+          ) : (() => {
+            const glyph = getNodeGlyph(node.type);
+            return glyph && glyph !== 'person'
+              ? <TypeSilhouette glyph={glyph} color={theme.base} />
+              : <PersonSilhouette color={theme.base} />;
+          })()}
         </div>
 
         {/* identity card */}
@@ -211,9 +212,13 @@ export default function NodeProfileContent({ nodeId, onConnectionsClick, onCommu
                       <img src={conn.image_url} alt={conn.name} className="w-full aspect-square rounded-2xl object-cover" />
                     ) : (
                       <span className="block w-full aspect-square rounded-2xl overflow-hidden">
-                        {getNodeGlyph(conn.type) === 'group'
-                          ? <GroupSilhouette color={getTypeColor(conn.type, currentCommunity?.nodeTypes)} />
-                          : <PersonSilhouette color={getTypeColor(conn.type, currentCommunity?.nodeTypes)} />}
+                        {(() => {
+                          const glyph = getNodeGlyph(conn.type);
+                          const color = getTypeColor(conn.type, currentCommunity?.nodeTypes);
+                          return glyph && glyph !== 'person'
+                            ? <TypeSilhouette glyph={glyph} color={color} />
+                            : <PersonSilhouette color={color} />;
+                        })()}
                       </span>
                     )}
                   </Link>

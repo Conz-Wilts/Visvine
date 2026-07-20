@@ -19,12 +19,13 @@ export async function GET(req: NextRequest) {
 
   const p = await principalOf(brain)
   const { raws, metas } = await visibleVault(p, brain)
+  const metaByPath = new Map(metas.map((m) => [m.path, m]))
   const docs = raws.map((note) => {
-    const meta = metas.find((m) => m.path === note.path)
+    const meta = metaByPath.get(note.path)
     return { path: note.path, title: meta?.title ?? note.path, body: splitFrontmatter(note.content).body }
   })
 
-  const targetMeta = metas.find((m) => m.path === target)
+  const targetMeta = metaByPath.get(target)
   const exclude = new Set<string>([target])
   for (const linked of targetMeta?.linkTargets ?? []) exclude.add(linked)
   for (const m of metas) {

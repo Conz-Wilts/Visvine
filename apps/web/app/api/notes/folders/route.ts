@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   const denial = registeredFolderDenial(brain, p, path)
   if (denial) return fail(denial, 403)
   try {
-    await createFolder(brain, path)
+    await createFolder(brain, path, brain.actor)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return failFromError(err)

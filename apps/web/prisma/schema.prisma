@@ -44,11 +44,11 @@ model Community {
   noteFolders      CommunityNoteFolder[]
   brainFiles       CommunityBrainFile[]
   noteEmbeddings   CommunityNoteEmbedding[]
+  contextSources   ContextSource[]
   taskColumns      TaskColumn[]
   tasks            Task[]
 
-  // --- restored: messaging / intros ---
-  introRequests IntroRequest[]
+  // --- restored: messaging ---
   channels      Conversation[]
   channelSpaces ChannelSpace[]
 
@@ -70,7 +70,7 @@ model CommunityNote {
   ownerKey    String                  @map("owner_key") // 'shared' = community brain; else a userId = personal brain
   path        String // brain-relative POSIX path, e.g. "portfolio/canva.md"
   content     String // full markdown incl. frontmatter (source of truth)
-  pinned      Boolean                 @default(false)
+  starred     Boolean                 @default(false) // synced from frontmatter `starred:` on every write
   createdBy   String                  @map("created_by")
   createdAt   DateTime                @default(now()) @map("created_at")
   updatedAt   DateTime                @updatedAt @map("updated_at")
@@ -93,8 +93,8 @@ model CommunityNoteRevision {
   at          DateTime      @default(now())
   editor      String // display name of who saved it (from the session)
   editorEmail String?       @map("editor_email")
-  origin      String        @default("edit") // edit | ai-refactor | restore | baseline
-  model       String? // LLM model name when origin = ai-refactor
+  origin      String        @default("edit") // edit | ai-refactor | ai-enrich | agent | maintenance | restore | baseline
+  model       String? // LLM model (or agent client) name when AI-originated
   content     String // full snapshot (frontmatter + body) at this save
   note        CommunityNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
@@ -154,6 +154,59 @@ model CommunityNoteEmbedding {
 
   @@unique([communityId, ownerKey, path], name: "embedding_identity")
   @@map("community_note_embeddings")
+}
+
+/// A non-note source (uploaded file/table) attached to a brain. Lives ONLY in
+/// the Context — never a graph Node, never in the workspace/directory. Keyed
+/// (communityId, ownerKey, path) exactly like CommunityNote so the folder gate
+/// and visibility lens apply to sources unchanged; `path` must NOT end in .md
+/// (the note namespace stays disjoint). The original file lives in GCS; the
+/// extracted text lives chunked in ContextSourceChunk.
+model ContextSource {
+  id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String               @map("community_id")
+  ownerKey    String               @map("owner_key") // 'shared' or a userId, same as CommunityNote
+  path        String // brain-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
+  name        String // display filename
+  kind        String // 'csv' | 'markdown' | 'text' (extension point: 'pdf' | 'xlsx')
+  mimeType    String               @map("mime_type")
+  sizeBytes   Int                  @map("size_bytes")
+  gcsPath     String               @map("gcs_path") // object in GCS_RESOURCES_BUCKET
+  status      String               @default("pending") // pending | ready | failed
+  error       String? // failure detail when status = failed
+  truncated   Boolean              @default(false) // extraction hit the text/chunk caps
+  textChars   Int?                 @map("text_chars") // extracted-text length
+  chunkCount  Int                  @default(0) @map("chunk_count")
+  createdBy   String               @map("created_by")
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+  community   Community            @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  chunks      ContextSourceChunk[]
+
+  @@unique([communityId, ownerKey, path], name: "source_identity")
+  @@index([communityId, ownerKey, status])
+  @@map("context_sources")
+}
+
+/// One embedded chunk of a ContextSource. communityId/ownerKey/path are
+/// denormalized from the source so the pgvector ranking query filters without a
+/// join (mirrors community_note_embeddings). `text` is the source of truth for
+/// snippets and paged source reads; `embedding` is written/read via raw SQL.
+model ContextSourceChunk {
+  id          String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sourceId    String                      @map("source_id")
+  communityId String                      @map("community_id")
+  ownerKey    String                      @map("owner_key")
+  path        String
+  seq         Int // 0-based order within the source
+  text        String
+  model       String? // embedding model; null = stored without a vector
+  embedding   Unsupported("vector(768)")?
+  source      ContextSource               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, seq])
+  @@index([communityId, ownerKey, model])
+  @@map("context_source_chunks")
 }
 
 /// A column on a community's Tasks kanban board. One board per community, so
@@ -339,7 +392,7 @@ model User {
   blogComments            BlogComment[]            @relation("BlogCommentAuthor")
   blogCommentReactions    BlogCommentReaction[]    @relation("BlogCommentReactor")
 
-  // --- restored: messaging / feed / intros ---
+  // --- restored: messaging / feed ---
   conversationMemberships ConversationMember[]
   conversationsCreated    Conversation[]        @relation("ConversationCreator")
   messagesSent            Message[]             @relation("MessageSender")
@@ -761,7 +814,7 @@ model OAuthRefreshToken {
 }
 
 // ============================================================
-// Restored features: Channels/Messages, Feed, Intros
+// Restored features: Channels/Messages, Feed
 // ============================================================
 
 model Conversation {
@@ -1021,24 +1074,3 @@ enum ConversationMemberRole {
   ADMIN
 }
 
-model IntroRequest {
-  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId         String    @map("community_id")
-  requesterNodeId     String    @map("requester_node_id")
-  introducerNodeId    String    @map("introducer_node_id")
-  targetNodeId        String    @map("target_node_id")
-  messageToIntroducer String    @map("message_to_introducer")
-  messageToTarget     String    @map("message_to_target")
-  endorsement         String?
-  status              String    @default("pending")
-  declinedBy          String?   @map("declined_by")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  community           Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-
-  @@index([communityId])
-  @@index([introducerNodeId, status])
-  @@index([requesterNodeId])
-  @@index([targetNodeId, status])
-  @@map("intro_requests")
-}

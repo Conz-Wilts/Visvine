@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
 import SaveStatus from '@/components/ui/SaveStatus';
+import { useTheme } from '@/lib/contexts/ThemeContext';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
@@ -30,6 +31,10 @@ export interface ConsoleSection {
   label: string;
   /** Nav group heading, e.g. "Settings", "People". Groups render in first-seen order. */
   group: string;
+  /** Icon shown in the row's leading badge (size 18 works best). */
+  icon: React.ReactNode;
+  /** One-line summary shown under the label in the docked nav. */
+  description: string;
   /** Count badge shown next to the label (hidden when 0/undefined). */
   badge?: number;
   /** 'form' constrains the pane to a comfortable form width; 'wide' uses the full pane. */
@@ -37,21 +42,14 @@ export interface ConsoleSection {
 }
 
 interface ConsoleShellProps {
-  title: string;
-  subtitle?: React.ReactNode;
   sections: ConsoleSection[];
   renderSection: (id: string) => React.ReactNode;
 }
 
-function CountBadge({ count, selected }: { count?: number; selected?: boolean }) {
+function CountBadge({ count }: { count?: number }) {
   if (!count) return null;
   return (
-    <span
-      className={clsx(
-        'ml-auto inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold leading-none',
-        selected ? 'bg-white/25 text-white' : 'bg-amber-400/20 text-amber-700',
-      )}
-    >
+    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-amber-700">
       {count > 99 ? '99+' : count}
     </span>
   );
@@ -62,11 +60,12 @@ function HeaderSaveStatus() {
   return <SaveStatus status={status} onRetry={retry} />;
 }
 
-export default function ConsoleShell({ title, subtitle, sections, renderSection }: ConsoleShellProps) {
+export default function ConsoleShell({ sections, renderSection }: ConsoleShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { host } = useContextPanel();
+  const { theme, isDark } = useTheme();
 
   // Track the Sidebar's dock breakpoint so both sides flip together.
   const [wide, setWide] = useState(true);
@@ -110,6 +109,7 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
           className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface-1 px-3 py-4"
           style={{ animation: 'fadeIn 0.3s ease-out' }}
         >
+          <div className="mb-4 px-4 text-sm font-bold text-text-primary">Community Console</div>
           <nav aria-label="Console sections">
             {groups.map((group) => (
               <div key={group.name} className="mb-5 last:mb-0">
@@ -117,24 +117,42 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
                   {group.name}
                 </div>
                 <ul className="space-y-1">
-                  {group.items.map((s) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        onClick={() => select(s.id)}
-                        aria-current={s.id === active ? 'page' : undefined}
-                        className={clsx(
-                          'flex w-full items-center gap-2 rounded-full px-4 py-2.5 text-left text-sm font-medium transition-colors',
-                          s.id === active
-                            ? 'bg-brand-green text-white shadow-md'
-                            : 'text-text-secondary hover:bg-surface-2 hover:text-text-primary',
-                        )}
-                      >
-                        {s.label}
-                        <CountBadge count={s.badge} selected={s.id === active} />
-                      </button>
-                    </li>
-                  ))}
+                  {group.items.map((s) => {
+                    const isActive = s.id === active;
+                    return (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => select(s.id)}
+                          aria-current={isActive ? 'page' : undefined}
+                          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150"
+                          style={{
+                            background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : 'transparent',
+                            color: isActive ? theme.accentDark : undefined,
+                          }}
+                        >
+                          <span
+                            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors"
+                            style={{
+                              background: isActive ? theme.accent : undefined,
+                              color: isActive ? 'white' : undefined,
+                            }}
+                          >
+                            <span className={isActive ? '' : 'text-text-muted'}>{s.icon}</span>
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className={clsx('truncate text-sm font-medium', !isActive && 'text-text-secondary')}>
+                              {s.label}
+                            </p>
+                            <p className={clsx('truncate text-[10px] opacity-70', !isActive && 'text-text-muted')}>
+                              {s.description}
+                            </p>
+                          </div>
+                          <CountBadge count={s.badge} />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))}
@@ -154,16 +172,7 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
         className={clsx('w-full', dockNav && 'pl-[272px]')}
         style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
       >
-      <div className="w-full max-w-[1600px] mx-auto px-6 py-8">
-        <header className="mb-8 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="font-ginto text-4xl font-normal text-text-primary">{title}</h1>
-            {subtitle && <p className="mt-1.5 text-sm text-text-muted">{subtitle}</p>}
-          </div>
-          <div className="pb-1">
-            <HeaderSaveStatus />
-          </div>
-        </header>
+      <div className="w-full max-w-[1600px] mx-auto pt-4 pb-10 px-6 sm:px-8">
 
         {/* Narrow fallback: horizontally scrollable pill row above the content */}
         {!dockNav && (
@@ -172,29 +181,43 @@ export default function ConsoleShell({ title, subtitle, sections, renderSection 
             className="-mx-6 mb-6 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             aria-label="Console sections"
           >
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => select(s.id)}
-                className={clsx(
-                  'flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                  s.id === active
-                    ? 'bg-brand-green text-white shadow-md'
-                    : 'bg-surface-2 text-text-secondary hover:text-text-primary',
-                )}
-              >
-                {s.label}
-                <CountBadge count={s.badge} selected={s.id === active} />
-              </button>
-            ))}
+            {sections.map((s) => {
+              const isActive = s.id === active;
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => select(s.id)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
+                  style={{
+                    background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : undefined,
+                    color: isActive ? theme.accentDark : undefined,
+                  }}
+                >
+                  <span className={isActive ? '' : 'text-text-muted'}>{s.icon}</span>
+                  <span className={isActive ? '' : 'text-text-secondary'}>{s.label}</span>
+                  <CountBadge count={s.badge} />
+                </button>
+              );
+            })}
           </nav>
         )}
 
+        {/* Compact profile-style heading: active section + autosave status */}
+        <header className="mb-6 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Community Console</p>
+            <h1 className="text-lg font-bold text-text-primary">{activeSection.label}</h1>
+            <p className="text-xs text-text-muted mt-0.5">{activeSection.description}</p>
+          </div>
+          <div className="pt-1 shrink-0">
+            <HeaderSaveStatus />
+          </div>
+        </header>
+
         <main className="min-w-0">
-          {/* 'form' sections get a comfortable multi-column width — the panels
-              themselves arrange their cards in a 2-col grid at xl. */}
-          <div className={clsx(activeSection.width === 'form' && 'max-w-7xl')}>
+          {/* 'form' sections get a comfortable single-column width like profile settings. */}
+          <div className={clsx(activeSection.width === 'form' && 'max-w-4xl')}>
             {renderSection(active)}
           </div>
         </main>

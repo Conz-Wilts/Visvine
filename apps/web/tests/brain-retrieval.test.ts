@@ -6,7 +6,13 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { bm25Search } from '../lib/notes/shared/bm25'
-import { fusedSearch, matchesFilters, type RetrievalNote, type VectorStage } from '../lib/notes/shared/retrieval'
+import {
+  fusedSearch,
+  matchesFilters,
+  type RetrievalNote,
+  type SourceStage,
+  type VectorStage,
+} from '../lib/notes/shared/retrieval'
 import { buildNoteIndex } from '../lib/notes/shared/graph'
 import { splitFrontmatter } from '../lib/notes/shared/markdown'
 import type { RawNote } from '../lib/notes/shared/types'
@@ -171,4 +177,60 @@ test('fusedSearch applies filters before ranking and honors k', async () => {
   assert.deepEqual(res.map((r) => r.path), ['projects/beta.md']) // alpha filtered out by mtime
   const capped = await fusedSearch(retrievalVault(), 'kubernetes', {}, { k: 1 })
   assert.equal(capped.length, 1)
+})
+
+// --- context-source stage -----------------------------------------------------------
+
+const fakeSources = (hits: { path: string; seq: number; snippet: string; score: number }[]): SourceStage => ({
+  async rank() {
+    return hits
+  },
+})
+
+test('fusedSearch fuses source-chunk hits alongside notes, typed as sources', async () => {
+  const sources = fakeSources([
+    { path: 'projects/pricing.csv', seq: 3, snippet: 'company: Acme; plan: kubernetes', score: 0.95 },
+  ])
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, graphExpand: false })
+  const hit = res.find((r) => r.kind === 'source')
+  assert.ok(hit, 'source hit fused in')
+  assert.equal(hit.path, 'projects/pricing.csv')
+  assert.equal(hit.seq, 3)
+  assert.equal(hit.title, 'pricing.csv')
+  assert.ok(hit.snippet?.includes('Acme'))
+  // note hits keep their kind
+  assert.ok(res.filter((r) => r.kind === 'note').length >= 1)
+})
+
+test('fusedSearch without a source stage (or with an empty one) is unchanged', async () => {
+  const withEmpty = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, {
+    sources: fakeSources([]),
+    graphExpand: false,
+  })
+  const without = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, { graphExpand: false })
+  assert.deepEqual(withEmpty.map((r) => r.path), without.map((r) => r.path))
+  assert.ok(without.every((r) => r.kind === 'note'))
+})
+
+test('fusedSearch skips the source stage under note-frontmatter filters', async () => {
+  let ranked = false
+  const sources: SourceStage = {
+    async rank() {
+      ranked = true
+      return [{ path: 'projects/pricing.csv', seq: 0, snippet: 'x', score: 0.9 }]
+    },
+  }
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', { type: 'Playbook' }, { sources })
+  assert.equal(ranked, false) // type/tags are note concepts — sources sit out
+  assert.ok(res.every((r) => r.kind === 'note'))
+})
+
+test('two chunks of the same source fuse as distinct results', async () => {
+  const sources = fakeSources([
+    { path: 'projects/pricing.csv', seq: 0, snippet: 'rows 0-19', score: 0.95 },
+    { path: 'projects/pricing.csv', seq: 1, snippet: 'rows 20-39', score: 0.9 },
+  ])
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, graphExpand: false })
+  const seqs = res.filter((r) => r.kind === 'source').map((r) => r.seq)
+  assert.deepEqual(seqs.sort(), [0, 1])
 })

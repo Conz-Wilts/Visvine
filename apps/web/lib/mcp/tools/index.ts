@@ -10,7 +10,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerEventTools } from "@/lib/mcp/tools/events";
 import { registerBrainTools } from "@/lib/mcp/tools/brain";
-import { registerIntroTools } from "@/lib/mcp/tools/intros";
 import { registerMessageTools } from "@/lib/mcp/tools/messages";
 import { registerFeedTools } from "@/lib/mcp/tools/feed";
 
@@ -26,7 +25,6 @@ import { registerFeedTools } from "@/lib/mcp/tools/feed";
 export function registerAllTools(server: McpServer): void {
   registerEventTools(server);
   registerBrainTools(server);
-  registerIntroTools(server);
   registerMessageTools(server);
   registerFeedTools(server);
 

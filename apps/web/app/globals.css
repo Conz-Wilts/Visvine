@@ -127,12 +127,17 @@ html, body {
   /* Dark surfaces need heavier shadows + a top bevel highlight to read as raised */
   --shadow-float: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 6px rgba(0,0,0,0.45), 0 14px 32px -6px rgba(0,0,0,0.6);
 }
-a { 
-  color: rgb(55 65 81); /* text-gray-700 */
-  transition: color 0.15s ease-in-out;
-}
-a:hover { 
-  color: rgb(17 24 39); /* text-gray-900 */
+/* In @layer base so text-* utilities on links (e.g. the navbar's active
+   text-brand-green) can override these defaults — unlayered rules would
+   always beat @layer utilities regardless of specificity. */
+@layer base {
+  a {
+    color: rgb(55 65 81); /* text-gray-700 */
+    transition: color 0.15s ease-in-out;
+  }
+  a:hover {
+    color: rgb(17 24 39); /* text-gray-900 */
+  }
 }
 
 /* Profile shimmer animation */

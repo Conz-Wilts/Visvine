@@ -84,12 +84,6 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   const savedPositionsRef = savedPositionsRefProp || localSavedPositionsRef;
   const graphDataHashRef = graphDataHashRefProp || localGraphDataHashRef;
 
-  // Tracks the structure hash the user explicitly re-ran the layout for — makes
-  // us ignore the saved server seed and recompute from scratch (then persist the
-  // fresh result). Cleared naturally once the structure changes, which re-enables
-  // a fresh server seed.
-  const [recomputedHash, setRecomputedHash] = useState<string | null>(null);
-
   // Layouts persisted during this session, keyed by their version-prefixed
   // structure hash. The initialLayout prop stays frozen at its mount-time
   // fetch, so after a structure round-trip (filter on → off) the hash would
@@ -154,20 +148,13 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // structure AND was produced by the current layout algorithm. Layouts
   // persisted this session take precedence over the mount-time server copy.
   const serverSeed = useMemo(
-    () => {
-      if (recomputedHash === graphDataHash) return null;
-      return (
-        sessionLayoutsRef.current.get(layoutHash) ??
-        (initialLayout && initialLayout.hash === layoutHash ? initialLayout : null)
-      );
-    },
-    [initialLayout, layoutHash, graphDataHash, recomputedHash],
+    () =>
+      sessionLayoutsRef.current.get(layoutHash) ??
+      (initialLayout && initialLayout.hash === layoutHash ? initialLayout : null),
+    [initialLayout, layoutHash],
   );
   // Cold start = no reusable saved layout → compute a fresh layout.
   const coldStart = serverSeed === null;
-  // Salt for "Re-run layout": bumping it re-rolls the deterministic engine
-  // seed so a manual re-run actually produces a different arrangement.
-  const [rerollNonce, setRerollNonce] = useState(0);
 
   // d3-force's forceLink mutates simLinks in place, swapping string endpoints
   // for node-object references once a simulation has run — unwrap either form.
@@ -194,10 +181,8 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
   // few members joined/left, or a filter narrowed the node set). Reuse the
   // saved positions for every node we still know and place only the new ones —
   // skipping the full engine run (~1.5s of blocked main thread) entirely.
-  // The user-facing "Re-run layout" button bypasses this on purpose.
   const incrementalLayout = useMemo<Map<string, { x: number; y: number }> | null>(() => {
     if (serverSeed !== null || graphData.nodes.length === 0) return null;
-    if (recomputedHash === graphDataHash) return null;
 
     // Pick the algo-compatible saved layout (session or server) covering the
     // most of the current node set.
@@ -219,7 +204,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       simLinks.map(l => ({ source: endpointId(l.source), target: endpointId(l.target) })),
       best.positions,
     );
-  }, [serverSeed, graphData.nodes, simLinks, graphDataHash, recomputedHash, initialLayout]);
+  }, [serverSeed, graphData.nodes, simLinks, initialLayout]);
 
   // Fresh layout for cold starts, computed by the self-contained engine
   // (PivotMDS init → Barnes-Hut forces → guaranteed overlap removal) instead
@@ -252,14 +237,14 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
         // plenty of separation.
         componentMargin: 150,
         timeBudgetMs: 1500,
-        seed: `${graphDataHash}:${rerollNonce}`,
+        seed: `${graphDataHash}:0`,
       },
     );
     const inv = 1 / result.stats.scale;
     return new Map(
       result.nodes.map(p => [String(p.id), { x: (p.x - 1000) * inv, y: (p.y - 700) * inv }]),
     );
-  }, [serverSeed, incrementalLayout, graphData.nodes, simLinks, nodeTypes, graphDataHash, rerollNonce]);
+  }, [serverSeed, incrementalLayout, graphData.nodes, simLinks, nodeTypes, graphDataHash]);
 
   // In-session drags (savedPositionsRef) take precedence, then the
   // server-saved layout, then the freshly computed engine layout.
@@ -293,7 +278,7 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
       };
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphData.nodes, graphDataHash, serverSeed, incrementalLayout, engineLayout, recomputedHash]);
+  }, [graphData.nodes, graphDataHash, serverSeed, incrementalLayout, engineLayout]);
 
   // Wrap the canvas's geometry callback to stamp it with the current
   // version-prefixed structure hash before handing it to the persistence layer,
@@ -364,12 +349,6 @@ const GraphWithTable: React.FC<GraphWithTableProps> = ({
             // should not re-persist.
             persistOnRestore={serverSeed === null && (incrementalLayout !== null || engineLayout !== null)}
             onPersistLayout={handlePersistLayout}
-            onRerunLayout={() => {
-              setRecomputedHash(graphDataHash);
-              setRerollNonce(n => n + 1);
-              savedPositionsRef.current.clear();
-              graphDataHashRef.current = '';
-            }}
           />
         </div>
       </div>

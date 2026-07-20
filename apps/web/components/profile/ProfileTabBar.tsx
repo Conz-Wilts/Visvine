@@ -3,7 +3,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext';
 
-export type ProfileTab = 'about' | 'connections' | 'communities' | 'activity' | 'context';
+export type ProfileTab = 'about' | 'connections' | 'communities' | 'context' | 'raw' | 'preview';
 
 // One motion for everything the bar does on a tab change: the indicator slides
 // and the attached region opens on the same render, so they must share a curve
@@ -20,11 +20,9 @@ function getTabsForType(
   nodeType: string,
   connectionCount: number,
   communityCount: number,
-  activityCount: number,
   showContextTab: boolean
 ): TabConfig[] {
   const aboutTab: TabConfig = { id: 'about', label: 'About' };
-  const activityTab: TabConfig = { id: 'activity', label: 'Activity' };
 
   const typeTabLabels: Record<string, string> = {
     People: 'Connections',
@@ -61,10 +59,6 @@ function getTabsForType(
     tabs.push(communitiesTab);
   }
 
-  if (activityCount >= 3) {
-    tabs.push(activityTab);
-  }
-
   return tabs;
 }
 
@@ -74,7 +68,6 @@ interface ProfileTabBarProps {
   onTabChange: (tab: ProfileTab) => void;
   connectionCount?: number;
   communityCount?: number;
-  activityCount?: number;
   /** Append a Context tab to the type-derived tab set (entity nodes only). */
   showContextTab?: boolean;
   /** Explicit tab set, overriding getTabsForType — used by the person profile
@@ -98,7 +91,6 @@ export default function ProfileTabBar({
   onTabChange,
   connectionCount = 0,
   communityCount = 0,
-  activityCount = 0,
   showContextTab = false,
   tabs: tabsOverride,
   stickyTop = 'top-20',
@@ -108,8 +100,8 @@ export default function ProfileTabBar({
   const tabs = useMemo(
     () =>
       tabsOverride ??
-      getTabsForType(nodeType, connectionCount, communityCount, activityCount, showContextTab),
-    [tabsOverride, nodeType, connectionCount, communityCount, activityCount, showContextTab]
+      getTabsForType(nodeType, connectionCount, communityCount, showContextTab),
+    [tabsOverride, nodeType, connectionCount, communityCount, showContextTab]
   );
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
@@ -138,15 +130,21 @@ export default function ProfileTabBar({
   }
 
   return (
-    <div className={`sticky ${stickyTop} z-20 -ml-6 border-b border-border-subtle bg-surface-1 pl-6`}>
-      {/* -ml-6/pl-6 bleeds the bar left into <main>'s 24px gutter so its bottom
-          border starts at the sidebar's right edge (continuing the navbar seam)
-          while the inner box — and so the tab row — stays put. The gutter is
-          padding on the scrollport, not overflow, so nothing is clipped.
+    <div className={`sticky ${stickyTop} z-20 -ml-6 border-b border-border-subtle bg-surface-1`}>
+      {/* -ml-6 bleeds the bar left into <main>'s 24px gutter so its bottom
+          border starts at the sidebar's right edge (continuing the navbar seam).
+          No pl-6 to push the content back: the tab row and the attached toolbar
+          hug the sidebar too (their own small paddings are the only offset).
+          The gutter is padding on the scrollport, not overflow, so nothing is
+          clipped.
           That border is the ONLY line under the bar, attached region included —
           it travels down because this box grows, not because a second bar with
           its own line appears. */}
-      <div className="mx-auto flex w-full max-w-5xl items-center px-4 sm:px-6 xl:max-w-6xl">
+      {/* Tabs pinned to the pane's far left, next to the sidebar and out of the
+          way of the centred content column below (the attached toolbar row
+          left-aligns to match). The tablist keeps flex-1 so it spans the row —
+          a shrink-to-fit box with overflow-x-auto grows a stray scrollbar. */}
+      <div className="flex w-full items-center px-1">
         <div
           role="tablist"
           aria-label="Profile sections"

@@ -12,6 +12,7 @@ import CommunityToolsPanel from '@/components/admin/CommunityToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
+import { Settings2, Puzzle, Users, Shapes, History, BarChart3 } from 'lucide-react';
 
 function AdminConsole({ community, onSaved }: {
   community: Community;
@@ -36,18 +37,16 @@ function AdminConsole({ community, onSaved }: {
   const handlePendingCount = useCallback((count: number) => setPendingMembers(count), []);
 
   const sections: ConsoleSection[] = [
-    { id: 'general', label: 'General', group: 'Settings', width: 'form' },
-    { id: 'tools', label: 'Features', group: 'Settings', width: 'form' },
-    { id: 'members', label: 'Members', group: 'People', width: 'wide', badge: pendingMembers },
-    { id: 'types', label: 'Types', group: 'Content', width: 'form' },
-    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide' },
-    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide' },
+    { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} />, description: 'Name, details, and access' },
+    { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} />, description: 'Enable community tools' },
+    { id: 'members', label: 'Members', group: 'People', width: 'wide', badge: pendingMembers, icon: <Users size={18} />, description: 'Roles and requests' },
+    { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} />, description: 'Directory node types' },
+    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} />, description: 'Recent admin actions' },
+    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} />, description: 'Engagement and growth' },
   ];
 
   return (
     <ConsoleShell
-      title="Community Console"
-      subtitle={<>Manage <span className="font-medium text-text-secondary">{community.name}</span> — changes save automatically.</>}
       sections={sections}
       renderSection={(id) => {
         switch (id) {

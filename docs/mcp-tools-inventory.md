@@ -14,7 +14,7 @@
 ## Current state
 
 - **Live now:** `events` (9 tools) + `brain` (8 tools).
-- **Parked (code intact, registration disabled):** the other 10 modules (60 tools).
+- **Parked (code intact, registration disabled):** the other 9 modules (55 tools). (The `intros` module was removed along with the intros feature.)
 
 To bring a module back: open `apps/web/lib/mcp/tools/index.ts`, uncomment its import + its
 `register*Tools(server)` line, and (if relevant) confirm its scope is still advertised in
@@ -137,19 +137,7 @@ write tools, then the request/review workflow).
 | `get_private_values` | `crm:read` | Get your private CRM column values for a set of nodes. |
 | `set_private_value` | `crm:write` | Set one of your private CRM column values on a node. |
 
-### 5. `intros` (5 tools) · `tools/intros.ts`
-
-Warm introductions (double opt-in).
-
-| Tool | Scope | Summary |
-|---|---|---|
-| `list_intros` | `intros:read` | The viewer's warm-intro inbox: incoming / received / sent. |
-| `count_pending_intros` | `intros:read` | Count intro requests awaiting your action (bell badge). |
-| `find_mutual_introducers` | `intros:read` | People you and a target both know — candidate introducers. |
-| `create_intro_request` | `intros:write` | Request a warm intro via a mutual (double opt-in). |
-| `respond_to_intro` | `intros:write` | Approve/decline/accept an intro you're party to (accept seeds a DM). |
-
-### 6. `messages` (4 tools) · `tools/messages.ts`
+### 5. `messages` (4 tools) · `tools/messages.ts`
 
 Read + benign state only (sending/editing/deleting is intentionally deferred).
 
@@ -160,7 +148,7 @@ Read + benign state only (sending/editing/deleting is intentionally deferred).
 | `search_messages` | `messages:read` | Search across the user's conversations and messages. |
 | `mark_conversation_read` | `messages:read` | Mark a conversation read up to now (clears unread). Messages no one. |
 
-### 7. `feed` (1 tool) · `tools/feed.ts`
+### 6. `feed` (1 tool) · `tools/feed.ts`
 
 Read-only (posting/commenting deferred).
 
@@ -168,7 +156,7 @@ Read-only (posting/commenting deferred).
 |---|---|---|
 | `list_feed` | `feed:read` | List recent posts in a community's social feed (cursor-paginated); member. |
 
-### 8. `resources` (7 tools) · `tools/resources.ts`
+### 7. `resources` (7 tools) · `tools/resources.ts`
 
 Resource library — list, comment, propose/review changes, create record.
 
@@ -182,7 +170,7 @@ Resource library — list, comment, propose/review changes, create record.
 | `propose_resource_change` | `resources:write` | Propose a change to a resource cell (queued for review); member. |
 | `review_resource_change` | `resources:write` | Approve/reject a proposed resource change; admin. |
 
-### 9. `blog` (2 tools) · `tools/blog.ts`
+### 8. `blog` (2 tools) · `tools/blog.ts`
 
 Marketing/blog authoring. Super-admin only.
 
@@ -191,7 +179,7 @@ Marketing/blog authoring. Super-admin only.
 | `create_blog_post` | `content:write` | Create a new draft blog post (returns id + slug); super-admin. |
 | `update_blog_post` | `content:write` | Update a post's title/excerpt/cover/content or publish state; super-admin. |
 
-### 10. `analytics` (2 tools) · `tools/analytics.ts`
+### 9. `analytics` (2 tools) · `tools/analytics.ts`
 
 | Tool | Scope | Summary |
 |---|---|---|
@@ -210,13 +198,12 @@ Marketing/blog authoring. Super-admin only.
 | profile | 2 | ⏸ parked |
 | directory | 12 | ⏸ parked |
 | crm | 25 | ⏸ parked |
-| intros | 5 | ⏸ parked |
 | messages | 4 | ⏸ parked |
 | feed | 1 | ⏸ parked |
 | resources | 7 | ⏸ parked |
 | blog | 2 | ⏸ parked |
 | analytics | 2 | ⏸ parked |
-| **Total** | **77** | **17 live / 60 parked** |
+| **Total** | **72** | **17 live / 55 parked** |
 
 ---
 

@@ -31,6 +31,28 @@ export interface FusedResult {
   title: string
   score: number
   snippet?: string
+  /** What the hit is: a brain note (default) or a context-source chunk. */
+  kind: 'note' | 'source'
+  /** Chunk index within the source — set only when kind is 'source'. */
+  seq?: number
+}
+
+/** One ranked context-source chunk from the injected source stage. */
+export interface SourceStageHit {
+  path: string
+  seq: number
+  snippet: string
+  score: number
+}
+
+/**
+ * The context-source stage: ranks source CHUNKS by semantic similarity. Like
+ * VectorStage it is injected (pgvector-backed on the server, absent in tests)
+ * and a stage returning [] contributes nothing to the fusion. The caller passes
+ * only VISIBLE source paths to the stage factory, so nothing inaccessible ranks.
+ */
+export interface SourceStage {
+  rank(query: string): Promise<SourceStageHit[]>
 }
 
 /**
@@ -48,6 +70,8 @@ export interface VectorStage {
 export interface FuseOptions {
   k?: number
   vector?: VectorStage
+  /** Rank context-source chunks alongside notes (BM25 does not cover sources). */
+  sources?: SourceStage
   /** Expand the top BM25 hits with their link neighborhood (default true). */
   graphExpand?: boolean
 }
@@ -109,6 +133,18 @@ export async function fusedSearch(
     stages.push(rankMap(v.map((r) => r.path)))
   }
 
+  // Source chunks join the fusion under composite keys ("source:<path>#<seq>")
+  // so they can never collide with a note path. Type/tag filters are note
+  // frontmatter concepts, so a filtered search skips sources entirely; the
+  // folderId filter is applied by the caller when selecting visible paths.
+  const sourceHitByKey = new Map<string, SourceStageHit>()
+  if (opts.sources && !filters.type && !(filters.tags && filters.tags.length)) {
+    const hits = await opts.sources.rank(query)
+    hits.sort((a, b) => b.score - a.score)
+    for (const h of hits) sourceHitByKey.set(`source:${h.path}#${h.seq}`, h)
+    if (hits.length) stages.push(rankMap(hits.map((h) => `source:${h.path}#${h.seq}`)))
+  }
+
   if (opts.graphExpand !== false) {
     const seed = bm25.slice(0, GRAPH_SEED).map((r) => r.path)
     const seen = new Set(seed)
@@ -137,10 +173,24 @@ export async function fusedSearch(
   return [...fused.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, k)
-    .map(([path, score]) => ({
-      path,
-      title: byPath.get(path)!.meta.title,
-      score,
-      snippet: snippetByPath.get(path),
-    }))
+    .map(([key, score]): FusedResult => {
+      const sourceHit = sourceHitByKey.get(key)
+      if (sourceHit) {
+        return {
+          path: sourceHit.path,
+          title: sourceHit.path.split('/').pop() ?? sourceHit.path,
+          score,
+          snippet: sourceHit.snippet,
+          kind: 'source',
+          seq: sourceHit.seq,
+        }
+      }
+      return {
+        path: key,
+        title: byPath.get(key)!.meta.title,
+        score,
+        snippet: snippetByPath.get(key),
+        kind: 'note',
+      }
+    })
 }

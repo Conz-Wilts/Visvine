@@ -1,8 +1,9 @@
 'use client';
 
 import { createPortal } from 'react-dom';
-import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
-import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import type { Dispatch, ElementType, FormEvent, RefObject, SetStateAction } from 'react';
+import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import { formatChatTimestamp } from '@/lib/date';
@@ -20,9 +21,14 @@ export interface ChannelSection {
 
 interface ConversationListPanelProps {
   // Layout / docking
-  dockChannels: boolean;
+  docked: boolean;
   host: HTMLElement | null;
   channelsVariant: boolean;
+  // Docked messages-variant header (title / new chat / tab switcher)
+  onShowNewChat?: () => void;
+  onTabChange?: (tab: MessageTab) => void;
+  tabCounts?: Record<MessageTab, number>;
+  tabs?: { id: MessageTab; label: string; icon: ElementType }[];
   // Sidebar search (docked panel header)
   sidebarSearchRef: RefObject<HTMLInputElement | null>;
   conversationSearch: string;
@@ -31,7 +37,6 @@ interface ConversationListPanelProps {
   activeTab: MessageTab;
   conversationsLoading: boolean;
   filteredConversations: ConversationSummary[];
-  browsableChannels: ChannelDirectoryEntry[];
   channelSections: ChannelSection[];
   channelSpaces: ChannelSpaceEntry[];
   collapsedSpaces: Record<string, boolean>;
@@ -63,6 +68,9 @@ interface ConversationListPanelProps {
   setSpaceName: (value: string) => void;
   creatingSpace: boolean;
   onCreateSpace: (e: FormEvent) => Promise<void>;
+  // Space rename/delete (community admins only)
+  onRenameSpace: (spaceId: string, name: string) => Promise<void>;
+  onDeleteSpace: (spaceId: string) => Promise<void>;
 }
 
 /**
@@ -71,16 +79,19 @@ interface ConversationListPanelProps {
  * instead of floating as its own box (see dockChannels).
  */
 export default function ConversationListPanel({
-  dockChannels,
+  docked,
   host,
   channelsVariant,
+  onShowNewChat,
+  onTabChange,
+  tabCounts,
+  tabs,
   sidebarSearchRef,
   conversationSearch,
   setConversationSearch,
   activeTab,
   conversationsLoading,
   filteredConversations,
-  browsableChannels,
   channelSections,
   channelSpaces,
   collapsedSpaces,
@@ -110,16 +121,43 @@ export default function ConversationListPanel({
   setSpaceName,
   creatingSpace,
   onCreateSpace,
+  onRenameSpace,
+  onDeleteSpace,
 }: ConversationListPanelProps) {
-  // The docked panel's own header: title and channel search. Channel creation
+  // Inline space rename (community admins): which space header is being edited.
+  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
+  const [editingSpaceName, setEditingSpaceName] = useState('');
+  const [spaceActionBusy, setSpaceActionBusy] = useState(false);
+
+  const submitRenameSpace = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingSpaceId || !editingSpaceName.trim() || spaceActionBusy) return;
+    setSpaceActionBusy(true);
+    try {
+      await onRenameSpace(editingSpaceId, editingSpaceName.trim());
+      setEditingSpaceId(null);
+      setEditingSpaceName('');
+    } catch { /* error surfaced by the parent; keep the form open */ } finally {
+      setSpaceActionBusy(false);
+    }
+  };
+
+  const deleteSpace = async (spaceId: string) => {
+    if (spaceActionBusy) return;
+    setSpaceActionBusy(true);
+    try {
+      await onDeleteSpace(spaceId);
+    } finally {
+      setSpaceActionBusy(false);
+    }
+  };
+
+  // The docked panel's own header: channel search up top. Channel creation
   // lives in the global sidebar "+" (Create new → Channel), not here. Only
   // rendered inside the Sidebar dock (the page's centered controls cover the
   // un-docked cases).
   const channelControls = channelsVariant ? (
-    <div className="space-y-2 px-3 pb-2 pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-text-primary">Channels</span>
-      </div>
+    <div className="px-3 pb-2 pt-3">
       <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
         <Search className="h-4 w-4 shrink-0 text-text-muted" />
         <input
@@ -138,10 +176,76 @@ export default function ConversationListPanel({
     </div>
   ) : null;
 
+  // The docked messages panel's header: title + "new chat" button and search —
+  // everything that floats centered on the page in the un-docked layout moves
+  // in here so the inbox reads as one attached sidebar (mirrors what other
+  // pages do with the Sidebar dock).
+  const messagesControls = !channelsVariant ? (
+    <div className="space-y-2.5 px-3 pb-2 pt-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-text-primary">Messages</span>
+        {onShowNewChat && (
+          <button
+            type="button"
+            onClick={onShowNewChat}
+            title="New chat"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-green text-white shadow-sm transition-opacity hover:opacity-90 active:scale-95"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
+        <Search className="h-4 w-4 shrink-0 text-text-muted" />
+        <input
+          ref={sidebarSearchRef}
+          value={conversationSearch}
+          onChange={(e) => setConversationSearch(e.target.value)}
+          placeholder="Search conversations…"
+          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+        />
+        {conversationSearch && (
+          <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+      {onTabChange && tabs && tabs.length > 1 && (
+        <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
+          {tabs.map(({ id, label, icon: Icon }) => {
+            const active = activeTab === id;
+            const count = tabCounts?.[id] ?? 0;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => onTabChange(id)}
+                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                }`}
+                aria-label={`${label} tab`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+                {count > 0 && (
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+                    active ? 'bg-white/25 text-white' : 'bg-brand-green/15 text-brand-dark-green'
+                  }`}>
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   const inbox = (
     <>
     {/* Docked panel gets its own title + New button + search up top */}
-    {dockChannels && channelControls}
+    {docked && (channelsVariant ? channelControls : messagesControls)}
 
     {/* Channel creation (community admins only) */}
     {activeTab === 'channels' && showChannelForm && (
@@ -219,8 +323,7 @@ export default function ConversationListPanel({
     <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
 
       {/* ── Conversations (Chats / Channels tabs) ── */}
-      {(
-        <>
+      <>
           {conversationsLoading && (
             <div className="space-y-1 px-3 py-2">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -235,8 +338,9 @@ export default function ConversationListPanel({
             </div>
           )}
 
-          {!conversationsLoading && filteredConversations.length === 0
-            && (activeTab !== 'channels' || browsableChannels.length === 0) && (
+          {!conversationsLoading && (activeTab === 'channels'
+            ? channelSections.length === 0
+            : filteredConversations.length === 0) && (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
                 {activeTab === 'channels'
@@ -307,31 +411,79 @@ export default function ConversationListPanel({
             <div className="px-2.5 py-1">
               {channelSections.map((section) => {
                 const hasSpaces = channelSpaces.length > 0;
-                const collapsed = hasSpaces && Boolean(collapsedSpaces[section.key]);
+                const isSpace = section.key !== '__none__';
+                const collapsed = Boolean(collapsedSpaces[section.key]);
                 const sectionUnread = section.joined.reduce(
                   (sum, c) => sum + (selectedConversationId === c.id ? 0 : c.unreadCount),
                   0,
                 );
                 return (
                   <div key={section.key} className="pb-1.5">
-                    {hasSpaces && (
-                      <button
-                        type="button"
-                        onClick={() => toggleSpaceCollapsed(section.key)}
-                        className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-surface-2"
-                      >
-                        {collapsed
-                          ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />
-                          : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />}
-                        <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-text-muted group-hover:text-text-secondary">
-                          {section.emoji ? `${section.emoji} ` : ''}{section.name}
-                        </span>
+                    {editingSpaceId === section.key ? (
+                      <form onSubmit={submitRenameSpace} className="flex items-center gap-1.5 px-2 py-1">
+                        <input
+                          value={editingSpaceName}
+                          onChange={(e) => setEditingSpaceName(e.target.value)}
+                          autoFocus
+                          maxLength={80}
+                          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!editingSpaceName.trim() || spaceActionBusy}
+                          className="shrink-0 rounded-full bg-brand-green px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
+                        >
+                          {spaceActionBusy ? '…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingSpaceId(null); setEditingSpaceName(''); }}
+                          className="shrink-0 text-text-muted hover:text-text-secondary"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleSpaceCollapsed(section.key)}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                        >
+                          {collapsed
+                            ? <ChevronRight className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />
+                            : <ChevronDown className="h-3.5 w-3.5 shrink-0 text-text-muted" strokeWidth={2.5} />}
+                          <span className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-text-muted group-hover:text-text-secondary">
+                            {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                          </span>
+                        </button>
                         {collapsed && sectionUnread > 0 && (
                           <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                             {sectionUnread > 99 ? '99+' : sectionUnread}
                           </span>
                         )}
-                      </button>
+                        {communityIsAdmin && isSpace && (
+                          <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              title="Rename space"
+                              onClick={() => { setEditingSpaceId(section.key); setEditingSpaceName(section.name); }}
+                              className="rounded p-0.5 text-text-muted hover:text-text-secondary"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete space"
+                              disabled={spaceActionBusy}
+                              onClick={() => void deleteSpace(section.key)}
+                              className="rounded p-0.5 text-text-muted hover:text-red-500 disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </span>
+                        )}
+                      </div>
                     )}
                     {!collapsed && (
                       <>
@@ -441,14 +593,13 @@ export default function ConversationListPanel({
               )}
             </div>
           )}
-        </>
-      )}
+      </>
 
     </div>
     </>
   );
 
-  return dockChannels
+  return docked
     ? createPortal(
         <div
           className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-1"

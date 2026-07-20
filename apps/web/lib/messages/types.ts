@@ -1,5 +1,4 @@
 import type { ConversationMemberRole, ConversationType } from '@prisma/client';
-import type { ConversationIntroContext } from '@/lib/intros/types';
 
 interface ConversationParticipant {
   id: string;
@@ -131,8 +130,6 @@ export interface ConversationMessagesPage {
   messages: SerializedMessage[];
   nextCursor: string | null;
   hasMore: boolean;
-  /** Present when this DM exists because of an accepted introduction. */
-  intro?: ConversationIntroContext | null;
 }
 
 interface RealtimeMessageEvent {

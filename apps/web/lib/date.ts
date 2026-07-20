@@ -25,7 +25,7 @@ function plural(n: number, unit: string): string {
   return `${n} ${unit}${n === 1 ? '' : 's'} ago`;
 }
 
-export type TimeAgoStyle = 'long' | 'short' | 'compact' | 'minimal';
+export type TimeAgoStyle = 'long' | 'short' | 'compact';
 
 /**
  * Relative "time ago" formatting. Future timestamps (clock skew) read as the
@@ -34,7 +34,6 @@ export type TimeAgoStyle = 'long' | 'short' | 'compact' | 'minimal';
  * - `long`    — "just now", "5 minutes ago" … "2 years ago" (notes editor).
  * - `short`   — "just now", "5m ago", "3h ago", "12d ago"; days uncapped (analytics).
  * - `compact` — "just now", "5m", "3h", "2d", "3w", then "5 Mar" (blog/feed).
- * - `minimal` — "now", "5m", "3h", "2d", then "Mar 5" (intros).
  *
  * Pass `now` (epoch ms) for deterministic output in tests.
  */
@@ -76,14 +75,6 @@ export function timeAgo(
       if (days < 7) return `${days}d`;
       if (weeks < 4) return `${weeks}w`;
       return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
-    }
-    case 'minimal': {
-      const s = Math.floor(diff / SECOND);
-      if (s < 60) return 'now';
-      if (s < 3600) return `${Math.floor(s / 60)}m`;
-      if (s < 86400) return `${Math.floor(s / 3600)}h`;
-      if (s < 604800) return `${Math.floor(s / 86400)}d`;
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
   }
 }

@@ -17,6 +17,8 @@ test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('organization'), 'company');
   assert.equal(entityKindOf('org'), 'company');
   assert.equal(entityKindOf('company'), 'company');
+  assert.equal(entityKindOf('resource'), 'resource');
+  assert.equal(entityKindOf('Resources'), 'resource');
   assert.equal(entityKindOf('event'), null);
   assert.equal(entityKindOf(''), null);
   assert.equal(entityKindOf(null), null);
@@ -25,6 +27,7 @@ test('entityKindOf classifies node types liberally', () => {
 test('entityNotePath derives people/ and companies/ paths from the node id', () => {
   assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott.md');
   assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'companies/halter.md');
+  assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook.md');
   // slug comes from the id, not the name (collision-proof)
   assert.equal(entityNotePath({ id: 'person:jane-doe-acme', type: 'person', name: 'Jane Doe' }), 'people/jane-doe-acme.md');
   // non-entity nodes return null
@@ -34,10 +37,25 @@ test('entityNotePath derives people/ and companies/ paths from the node id', () 
 test('parseEntityHref normalizes only valid entity hrefs', () => {
   assert.equal(parseEntityHref('/people/craig-piggott.md'), 'people/craig-piggott.md');
   assert.equal(parseEntityHref('companies/halter.md'), 'companies/halter.md');
+  assert.equal(parseEntityHref('resources/founder-playbook.md'), 'resources/founder-playbook.md');
   assert.equal(parseEntityHref('/notes/welcome.md'), null);
   assert.equal(parseEntityHref('/people/craig'), null); // missing .md
   assert.equal(parseEntityHref('https://example.com'), null);
   assert.equal(parseEntityHref(''), null);
+});
+
+test('parseEntityHref excludes folder index notes', () => {
+  assert.equal(parseEntityHref('/people/index.md'), null);
+  assert.equal(parseEntityHref('companies/index.md'), null);
+  assert.equal(parseEntityHref('resources/index.md'), null);
+  assert.equal(parseEntityHref('people/sub/index.md'), null);
+  // Only the exact index.md basename is excluded — slugs merely containing it stay entities.
+  assert.equal(parseEntityHref('people/index-fund.md'), 'people/index-fund.md');
+});
+
+test('entityMentionPaths ignores links to folder indexes', () => {
+  const md = 'Back to [Founders](/people/index.md) and [Craig](/people/craig-piggott.md).';
+  assert.deepEqual(entityMentionPaths('companies/halter.md', md), ['people/craig-piggott.md']);
 });
 
 test('path <-> node id round trips', () => {
@@ -46,6 +64,7 @@ test('path <-> node id round trips', () => {
   assert.equal(parseEntityHref(`/${path}`), path);
   assert.equal(entityKindOfPath(path), 'person');
   assert.equal(entityKindOfPath('companies/halter.md'), 'company');
+  assert.equal(entityKindOfPath('resources/founder-playbook.md'), 'resource');
   assert.equal(entityKindOfPath('notes/welcome.md'), null);
 });
 
@@ -86,6 +105,14 @@ test('entityStub produces parseable frontmatter carrying the node id', () => {
   // The title renders from frontmatter, so the body has no duplicate `# Title` heading.
   assert.doesNotMatch(md, /# Craig Piggott/);
   assert.match(md, /Founder, Halter/);
+});
+
+test('entityStub covers resource nodes', () => {
+  const md = entityStub({ id: 'resource:founder-playbook', type: 'resource', name: 'Founder Playbook' });
+  const fm = parseFrontmatter(md);
+  assert.equal(fm.type, 'Resource');
+  assert.equal(fm.title, 'Founder Playbook');
+  assert.deepEqual(fm.tags, ['resource']);
 });
 
 test('entityStub escapes tricky names so frontmatter still parses', () => {

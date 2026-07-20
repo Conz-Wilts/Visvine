@@ -6,7 +6,7 @@ import { getNodeTypeConfig, getNodeGlyph, findAlias } from '@/lib/types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
 import Badge from '@/components/ui/Badge'
 import PersonSilhouette from '@/components/ui/PersonSilhouette'
-import GroupSilhouette from '@/components/ui/GroupSilhouette'
+import TypeSilhouette from '@/components/ui/TypeSilhouette'
 import { useProfileCache } from '@/lib/contexts/ProfileContext'
 
 interface DirectoryCardProps {
@@ -26,6 +26,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
   const displaySubtitle = cached?.subtitle ?? item.subtitle
   const displayImageUrl = cached?.imageUrl ?? item.image_url
 
+  const glyph = getNodeGlyph(item.type)
   const baseTypeColor = getNodeTypeConfig(item.type, nodeTypes).color
   const aliasConfig = findAlias(communityAliases, item.alias, item.type)
   const typeColor = aliasConfig?.color ?? baseTypeColor
@@ -59,9 +60,9 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
         <div className="h-[180px] shrink-0">
           <PersonSilhouette color={typeColor} />
         </div>
-      ) : getNodeGlyph(item.type) === 'group' ? (
+      ) : glyph ? (
         <div className="h-[180px] shrink-0">
-          <GroupSilhouette color={typeColor} />
+          <TypeSilhouette glyph={glyph} color={typeColor} />
         </div>
       ) : (
         <div className="h-[180px] shrink-0 flex items-center justify-center group-hover:brightness-105 transition-all" style={getHeaderBgStyle(typeColor)}>

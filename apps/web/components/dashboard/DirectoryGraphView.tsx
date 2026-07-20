@@ -6,19 +6,22 @@ import { useCommunityGraphData } from '@/hooks/useCommunityGraphData';
 import { findBestMatchingNodeId } from '@/lib/graphUtils';
 import type { CommunityAlias } from '@/lib/types';
 
-// The graph view unmounts whenever the user switches to grid/table, so keep the
-// last known layout per community for the session. A remount then restores the
-// frozen layout immediately instead of waiting on (or re-running) anything.
+// The graph unmounts whenever the user navigates away from /context, so keep
+// the last known layout per community for the session. A remount then restores
+// the frozen layout immediately instead of waiting on (or re-running) anything.
 // Updated on every persist so it never lags behind the server copy.
 const layoutCache = new Map<string, GraphLayoutData | null>();
 
 interface DirectoryGraphViewProps {
   /** Current value of the graph search box (drives focus + dimming). */
   searchTerm: string;
+  /** Fires with the search's best-matching node (null when search is empty),
+   *  so the page can mirror the focus elsewhere (e.g. the notes sidebar). */
+  onFocusNodeChange?: (node: { id: string; type: string } | null) => void;
 }
 
 /**
- * The directory's graph view, fully decoupled from grid/table.
+ * The community graph — the body of the /context tool.
  *
  * It owns the heavy graph data fetch (nodes + links) and the d3-force bundle, so
  * neither loads until the user actually opens the graph. It also restores the
@@ -26,6 +29,7 @@ interface DirectoryGraphViewProps {
  */
 export default function DirectoryGraphView({
   searchTerm,
+  onFocusNodeChange,
 }: DirectoryGraphViewProps) {
   const { graphData, loading, error, community } = useCommunityGraphData();
 
@@ -90,6 +94,12 @@ export default function DirectoryGraphView({
     if (!trimmed) return null;
     return findBestMatchingNodeId(graphData.nodes, trimmed);
   }, [searchTerm, graphData.nodes]);
+
+  useEffect(() => {
+    if (!onFocusNodeChange) return;
+    const node = focusedNodeId ? graphData.nodes.find(n => n.id === focusedNodeId) : null;
+    onFocusNodeChange(node ? { id: node.id, type: node.type } : null);
+  }, [focusedNodeId, graphData.nodes, onFocusNodeChange]);
 
   return (
     <>

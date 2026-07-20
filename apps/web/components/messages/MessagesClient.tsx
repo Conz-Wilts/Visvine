@@ -21,15 +21,7 @@ import { mergeMessages } from './MessageRow';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
 import PageTitle from '@/components/ui/PageTitle';
-import { MessagesTabSelector, MESSAGE_TABS, type MessageTab } from './messagesTabs';
-import {
-  IntroRequestCard,
-  flattenIntroInbox,
-  isIntroActionable,
-  type IntroAction,
-  type IntroItem,
-} from './IntroPanel';
-import type { ConversationIntroContext, IntroInbox } from '@/lib/intros/types';
+import { MESSAGE_TABS, type MessageTab } from './messagesTabs';
 import ConversationListPanel, { type ChannelSection } from './ConversationListPanel';
 import ThreadPanel from './ThreadPanel';
 import { useConversations } from './useConversations';
@@ -43,9 +35,8 @@ interface MessagesClientProps {
     image: string | null;
   };
   initialConversationId?: string;
-  initialTab?: MessageTab;
   /**
-   * 'messages' (default) → Chats + Intros tabs at /messages (bubble threads).
+   * 'messages' (default) → chats at /messages (bubble threads).
    * 'channels' → the Channels page at /channels: a channel rail beside the
    * selected channel, each rendered as a flat feed (feed-style rows + slim
    * composer) on the same realtime message backend.
@@ -55,13 +46,13 @@ interface MessagesClientProps {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MessagesClient({ currentUser, initialConversationId, initialTab, variant = 'messages' }: MessagesClientProps) {
+export default function MessagesClient({ currentUser, initialConversationId, variant = 'messages' }: MessagesClientProps) {
   const { setHeaderContent } = useHeader();
   const communityCtx = useCommunity();
   // On wide viewports the Channels page docks its channel list INTO the global
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
-  const { host } = useContextPanel();
+  const { host, setDockRequested, contextOpen } = useContextPanel();
 
   // The Channels page locks the experience to channels and embeds the posts feed.
   const channelsVariant = variant === 'channels';
@@ -69,7 +60,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   // Which conversation tabs this variant exposes (channels has no tab strip —
   // it's channels-only with the posts feed as the default view).
   const availableTabs = useMemo<MessageTab[]>(
-    () => (channelsVariant ? ['channels'] : ['direct', 'intros']),
+    () => (channelsVariant ? ['channels'] : ['direct']),
     [channelsVariant],
   );
 
@@ -85,17 +76,13 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [error, setError] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
   const [isMobile, setIsMobile] = useState(false);
-  // ≥1024px: dock the channel list into the Sidebar (must match DOCK_MIN_WIDTH in
-  // Sidebar.tsx). Below it, keep the page's own inline list so a 300px panel doesn't
-  // crowd the thread.
+  // ≥1024px: dock the conversation/channel list into the Sidebar (must match
+  // DOCK_MIN_WIDTH in Sidebar.tsx). Below it, keep the page's own inline list
+  // so a 300px panel doesn't crowd the thread.
   const [isWide, setIsWide] = useState(true);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<MessageTab>(
-    variant === 'channels' ? 'channels' : (initialTab && initialTab !== 'channels' ? initialTab : 'direct'),
-  );
-  const [introItems, setIntroItems] = useState<IntroItem[]>([]);
-  const [introsLoading, setIntrosLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<MessageTab>(variant === 'channels' ? 'channels' : 'direct');
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
   const [channelSpaces, setChannelSpaces] = useState<ChannelSpaceEntry[]>([]);
   // Collapsed rail sections, persisted per browser (keyed by space id, '__none__' = unfiled).
@@ -128,7 +115,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   const [headerPanel, setHeaderPanel] = useState<'pins' | 'saved' | null>(null);
   const [panelItems, setPanelItems] = useState<SavedMessageEntry[]>([]);
   const [panelLoading, setPanelLoading] = useState(false);
-  const [threadIntro, setThreadIntro] = useState<ConversationIntroContext | null>(null);
   const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
   const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
   const [atBottom, setAtBottom] = useState(true);
@@ -149,7 +135,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     messages: SerializedMessage[];
     cursor: string | null;
     hasMore: boolean;
-    intro: ConversationIntroContext | null;
   }>());
   // Which conversation the current `messages` state belongs to — guards the
   // cache against being written with another conversation's rows mid-switch.
@@ -260,17 +245,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     });
   }, []);
 
-  const fetchIntros = useCallback(async () => {
-    try {
-      const res = await fetch('/api/intros', { cache: 'no-store' });
-      if (!res.ok) return;
-      const inbox: IntroInbox = await res.json();
-      setIntroItems(flattenIntroInbox(inbox));
-    } catch { /* best-effort */ } finally {
-      setIntrosLoading(false);
-    }
-  }, []);
-
   const loadMessages = useCallback(async (
     conversationId: string,
     options?: { cursor?: string | null; prepend?: boolean; query?: string; silent?: boolean },
@@ -321,7 +295,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           setFirstItemIndex(INITIAL_FIRST_INDEX);
         }
         messagesFilteredRef.current = isFilteredFetch;
-        setThreadIntro(payload.intro ?? null);
         messagesConvoRef.current = conversationId;
       }
       setActiveConversation(payload.conversation ?? null);
@@ -352,23 +325,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
 
   useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
   useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
-  useEffect(() => {
-    if (channelsVariant) return; // locked to 'channels'
-    if (initialTab && initialTab !== 'channels') setActiveTab(initialTab);
-  }, [initialTab, channelsVariant]);
-
-  // Intro inbox: load on mount, refresh on a slow poll (no SSE channel for
-  // intros). Skipped while the tab is hidden; catches up on return.
-  useEffect(() => {
-    void fetchIntros();
-    const t = setInterval(() => {
-      if (document.visibilityState === 'hidden') return;
-      void fetchIntros();
-    }, 60_000);
-    const onVis = () => { if (document.visibilityState === 'visible') void fetchIntros(); };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(t); document.removeEventListener('visibilitychange', onVis); };
-  }, [fetchIntros]);
 
   // Channel directory: refresh whenever the Channels tab is shown.
   useEffect(() => {
@@ -422,7 +378,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       setMessageSearch('');
       setTypingUsers({});
       setReplyTo(null);
-      setThreadIntro(null);
       messagesConvoRef.current = null;
       return;
     }
@@ -442,7 +397,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       setMessages(cached.messages);
       setMessageCursor(cached.cursor);
       setHasMoreMessages(cached.hasMore);
-      setThreadIntro(cached.intro);
       setFirstItemIndex(INITIAL_FIRST_INDEX);
     }
     void loadMessages(selectedConversationId, { silent: Boolean(cached) });
@@ -461,9 +415,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       messages,
       cursor: messageCursor,
       hasMore: hasMoreMessages,
-      intro: threadIntro,
     });
-  }, [messages, messageCursor, hasMoreMessages, threadIntro, messageSearch]);
+  }, [messages, messageCursor, hasMoreMessages, messageSearch]);
 
   // Set unread divider anchor on first message load for a conversation
   useEffect(() => {
@@ -547,18 +500,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     window.history.pushState(null, '', basePath);
   };
 
-  /** Open (or lazily create) the DM with a person node — the connected-intro CTA. */
-  const openConversationWithNode = async (nodeId: string) => {
-    try {
-      const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/dm', 'POST', { nodeId });
-      await fetchConversations(conversationSearch);
-      setActiveTab('direct');
-      handleSelectConversation(payload.conversation.id);
-    } catch (e) {
-      setError((e as Error).message || 'Unable to open the conversation.');
-    }
-  };
-
   const handleJoinChannel = async (channelId: string) => {
     try {
       setJoiningChannelId(channelId);
@@ -616,6 +557,28 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     }
   };
 
+  const handleRenameSpace = useCallback(async (spaceId: string, name: string) => {
+    try {
+      await fetchJsonBody(`/api/messages/spaces/${spaceId}`, 'PATCH', { name });
+      await fetchChannels();
+    } catch (e) {
+      setError((e as Error).message || 'Unable to rename the space.');
+      throw e;
+    }
+  }, [fetchChannels]);
+
+  const handleDeleteSpace = useCallback(async (spaceId: string) => {
+    if (!window.confirm('Delete this space? Its channels will move to the Channels list.')) return;
+    try {
+      await fetchJson(`/api/messages/spaces/${spaceId}`, { method: 'DELETE' });
+      // Deleting a space unfiles its channels (spaceId → null), so refresh both lists.
+      await fetchChannels();
+      await fetchConversations(conversationSearch);
+    } catch (e) {
+      setError((e as Error).message || 'Unable to delete the space.');
+    }
+  }, [fetchChannels, fetchConversations, conversationSearch]);
+
   /** PATCH the open channel (icon / space) and refresh everything that shows it. */
   const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; spaceId?: string | null }) => {
     const conversationId = selectedConversationRef.current;
@@ -660,18 +623,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     } else {
       handleSelectConversation(item.conversationId);
     }
-  };
-
-  const handleIntroAction = async (id: string, action: IntroAction, endorsement?: string) => {
-    const payload = await fetchJsonBody<{ conversationId?: string } | null>(`/api/intros/${id}`, 'PATCH', { action, endorsement });
-    await fetchIntros();
-    // Accepting seeds a DM — drop the user straight into the new conversation.
-    if (action === 'accept' && payload?.conversationId) {
-      await fetchConversations(conversationSearch);
-      setActiveTab('direct');
-      handleSelectConversation(payload.conversationId);
-    }
-    return payload;
   };
 
   const handleLoadOlder = useCallback(async () => {
@@ -787,7 +738,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   }, [channelDirectory, conversations, conversationSearch]);
 
   // Circle-style rail sections: one per space (joined + browsable channels filed
-  // there), then an unfiled bucket. Sections with nothing to show are skipped.
+  // there, empty spaces still shown so they can be filled/renamed/deleted), then
+  // an unfiled bucket.
   const channelSections = useMemo(() => {
     const joined = filteredConversations.filter((c) => c.type === 'CHANNEL');
     const spaceIds = new Set(channelSpaces.map((s) => s.id));
@@ -795,7 +747,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
     for (const space of channelSpaces) {
       const joinedHere = joined.filter((c) => c.spaceId === space.id);
       const browsableHere = browsableChannels.filter((ch) => ch.spaceId === space.id);
-      if (joinedHere.length || browsableHere.length) {
+      // While searching, hide spaces with no matches so results stay scannable.
+      if (joinedHere.length || browsableHere.length || !conversationSearch.trim()) {
         sections.push({ key: space.id, name: space.name, emoji: space.emoji, joined: joinedHere, browsable: browsableHere });
       }
     }
@@ -805,40 +758,89 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       sections.push({ key: '__none__', name: 'Channels', emoji: null, joined: joinedUnfiled, browsable: browsableUnfiled });
     }
     return sections;
-  }, [filteredConversations, browsableChannels, channelSpaces]);
-
-  const filteredIntroItems = useMemo(() => {
-    const q = conversationSearch.trim().toLowerCase();
-    if (!q) return introItems;
-    return introItems.filter(({ intro }) => [
-      intro.requesterNode?.name,
-      intro.introducerNode?.name,
-      intro.targetNode?.name,
-    ].some((name) => name?.toLowerCase().includes(q)));
-  }, [introItems, conversationSearch]);
+  }, [filteredConversations, browsableChannels, channelSpaces, conversationSearch]);
 
   const tabCounts = useMemo<Record<MessageTab, number>>(() => ({
     channels: conversations.filter((c) => c.type === 'CHANNEL' && c.unreadCount > 0).length,
     direct: conversations.filter((c) => c.type !== 'CHANNEL' && c.unreadCount > 0).length,
-    intros: introItems.filter(isIntroActionable).length,
-  }), [conversations, introItems]);
+  }), [conversations]);
 
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
   // Whether the centre column has an open thread. Desktop always shows the centre
   // beside the rail; mobile shows it only once the user opens a channel/chat.
-  const mobileContentOpen = Boolean(selectedConversationId);
-  // Intros render as a centered list with inline actions — no thread opens there.
-  const hasOpenThread = activeTab !== 'intros' && mobileContentOpen;
+  const hasOpenThread = Boolean(selectedConversationId);
   const showInbox = !isMobile || !hasOpenThread;
   const showThread = !isMobile || hasOpenThread;
-  const showProfile = !isMobile && activeTab !== 'intros' && Boolean(selectedConversation);
+  const showProfile = !isMobile && Boolean(selectedConversation);
   // On mobile, give the open thread the full viewport — hide the centered controls.
   const showCenterControls = !isMobile || !hasOpenThread;
 
-  // Whether to dock the channel list into the Sidebar (channels page, wide viewport,
-  // host mounted). When docked we hide the page's title/search chrome (it moves into
-  // the docked panel) and pad the thread to clear the docked card.
-  const dockChannels = channelsVariant && isWide && Boolean(host);
+  // Whether to dock the list into the Sidebar (wide viewport, host mounted) —
+  // both variants: /channels docks its channel rail, /messages docks its inbox.
+  // When docked we hide the page's title/search/tab chrome (it moves into the
+  // docked panel) and pad the thread to clear the docked card.
+  const docked = isWide && Boolean(host);
+
+  // Channels surfaces the navbar's panel toggle (dockRequested) so the docked
+  // list can be closed; closed = the list is hidden entirely (thread gets the
+  // full width), NOT the un-docked inline layout.
+  useEffect(() => {
+    if (!channelsVariant) return;
+    setDockRequested(isWide);
+    return () => setDockRequested(false);
+  }, [channelsVariant, isWide, setDockRequested]);
+  const channelsCollapsed = channelsVariant && isWide && !contextOpen;
+
+  // The inbox / channel list. When docked it portals into the Sidebar host;
+  // un-docked it renders inline beside the thread.
+  const listPanel = (
+    <ConversationListPanel
+      docked={docked}
+      host={host}
+      onShowNewChat={() => setShowNewChatModal(true)}
+      onTabChange={setActiveTab}
+      tabCounts={tabCounts}
+      tabs={MESSAGE_TABS.filter((t) => availableTabs.includes(t.id))}
+      channelsVariant={channelsVariant}
+      sidebarSearchRef={sidebarSearchRef}
+      conversationSearch={conversationSearch}
+      setConversationSearch={setConversationSearch}
+      activeTab={activeTab}
+      conversationsLoading={conversationsLoading}
+      filteredConversations={filteredConversations}
+      channelSections={channelSections}
+      channelSpaces={channelSpaces}
+      collapsedSpaces={collapsedSpaces}
+      toggleSpaceCollapsed={toggleSpaceCollapsed}
+      selectedConversationId={selectedConversationId}
+      onSelectConversation={handleSelectConversation}
+      onJoinChannel={handleJoinChannel}
+      joiningChannelId={joiningChannelId}
+      communityIsAdmin={communityCtx?.isAdmin}
+      showChannelForm={showChannelForm}
+      setShowChannelForm={setShowChannelForm}
+      onCreateChannel={handleCreateChannel}
+      channelName={channelName}
+      setChannelName={setChannelName}
+      channelDescription={channelDescription}
+      setChannelDescription={setChannelDescription}
+      channelIcon={channelIcon}
+      setChannelIcon={setChannelIcon}
+      channelSpaceId={channelSpaceId}
+      setChannelSpaceId={setChannelSpaceId}
+      showIconPicker={showIconPicker}
+      setShowIconPicker={setShowIconPicker}
+      creatingChannel={creatingChannel}
+      showSpaceForm={showSpaceForm}
+      setShowSpaceForm={setShowSpaceForm}
+      spaceName={spaceName}
+      setSpaceName={setSpaceName}
+      creatingSpace={creatingSpace}
+      onCreateSpace={handleCreateSpace}
+      onRenameSpace={handleRenameSpace}
+      onDeleteSpace={handleDeleteSpace}
+    />
+  );
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -847,12 +849,12 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
   // clears the docked card (300px panel + 12px gutter). Kept in sync with
   // CHANNELS_PANEL_W in Sidebar.tsx.
   return (
-    <div className={`flex h-[calc(100dvh-120px)] min-h-0 w-full flex-col px-6 ${dockChannels ? 'lg:pl-[312px]' : ''}`}
+    <div className={`flex h-[calc(100dvh-120px)] min-h-0 w-full flex-col px-6 ${docked ? 'lg:pl-[312px]' : ''}`}
       style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
     >
 
-      {/* ── Page header — centered title, consistent with other pages ───── */}
-      {!dockChannels && (
+      {/* ── Page header — centered title (un-docked layouts only) ───────── */}
+      {!docked && !channelsCollapsed && (
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-0 pb-0">
         <div />
         <PageTitle title={channelsVariant ? 'Channels' : 'Messages'} />
@@ -873,8 +875,8 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       </div>
       )}
 
-      {/* ── Centered controls: search + tab switcher, same as other pages ── */}
-      {showCenterControls && !dockChannels && (
+      {/* ── Centered controls: search + tab switcher (un-docked layouts) ── */}
+      {showCenterControls && !docked && !channelsCollapsed && (
         <div className="flex flex-col items-center gap-3 pt-6 pb-5">
           <div className="w-full max-w-2xl">
             <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm transition-colors focus-within:border-brand-green/40">
@@ -883,7 +885,7 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
                 ref={sidebarSearchRef}
                 value={conversationSearch}
                 onChange={(e) => setConversationSearch(e.target.value)}
-                placeholder={channelsVariant ? 'Search channels…' : activeTab === 'intros' ? 'Search introductions…' : 'Search conversations…'}
+                placeholder={channelsVariant ? 'Search channels…' : 'Search conversations…'}
                 className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
               />
               {conversationSearch && (
@@ -893,67 +895,18 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
               )}
             </div>
           </div>
-          {!channelsVariant && (
-            <MessagesTabSelector
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
-              counts={tabCounts}
-              tabs={MESSAGE_TABS.filter((t) => availableTabs.includes(t.id))}
-            />
-          )}
         </div>
       )}
 
-      {/* ── List box · open thread · profile box (Chats / Channels) ───────── */}
-      {activeTab !== 'intros' && (
+      {/* ╭── List box — docked: portals into the Sidebar ──╮ */}
+      {docked && listPanel}
+
+      {/* ── List · open thread · profile box (Chats / Channels) ─────────── */}
       <div className="flex min-h-0 w-full flex-1 items-stretch gap-6 pb-2 md:gap-12 md:px-6">
 
-      {/* ╭── List box — users or channels depending on the selected chip ──╮
-          On the Channels page (wide) this same content is portaled into the
-          Sidebar dock instead of floating as its own box (see dockChannels). */}
-      {showInbox && (
-        <ConversationListPanel
-          dockChannels={dockChannels}
-          host={host}
-          channelsVariant={channelsVariant}
-          sidebarSearchRef={sidebarSearchRef}
-          conversationSearch={conversationSearch}
-          setConversationSearch={setConversationSearch}
-          activeTab={activeTab}
-          conversationsLoading={conversationsLoading}
-          filteredConversations={filteredConversations}
-          browsableChannels={browsableChannels}
-          channelSections={channelSections}
-          channelSpaces={channelSpaces}
-          collapsedSpaces={collapsedSpaces}
-          toggleSpaceCollapsed={toggleSpaceCollapsed}
-          selectedConversationId={selectedConversationId}
-          onSelectConversation={handleSelectConversation}
-          onJoinChannel={handleJoinChannel}
-          joiningChannelId={joiningChannelId}
-          communityIsAdmin={communityCtx?.isAdmin}
-          showChannelForm={showChannelForm}
-          setShowChannelForm={setShowChannelForm}
-          onCreateChannel={handleCreateChannel}
-          channelName={channelName}
-          setChannelName={setChannelName}
-          channelDescription={channelDescription}
-          setChannelDescription={setChannelDescription}
-          channelIcon={channelIcon}
-          setChannelIcon={setChannelIcon}
-          channelSpaceId={channelSpaceId}
-          setChannelSpaceId={setChannelSpaceId}
-          showIconPicker={showIconPicker}
-          setShowIconPicker={setShowIconPicker}
-          creatingChannel={creatingChannel}
-          showSpaceForm={showSpaceForm}
-          setShowSpaceForm={setShowSpaceForm}
-          spaceName={spaceName}
-          setSpaceName={setSpaceName}
-          creatingSpace={creatingSpace}
-          onCreateSpace={handleCreateSpace}
-        />
-      )}
+      {/* Un-docked: the list renders inline beside the thread (unless the user
+          closed the channels panel from the navbar toggle) */}
+      {!docked && !channelsCollapsed && showInbox && listPanel}
 
       {/* ╭── Thread — open on the page, just floating message bubbles ─────╮ */}
       {showThread && (
@@ -985,7 +938,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
           setShowMessageSearch={setShowMessageSearch}
           messageSearch={messageSearch}
           setMessageSearch={setMessageSearch}
-          threadIntro={threadIntro}
           messagesContainerRef={messagesContainerRef}
           messagesLoading={messagesLoading}
           messages={messages}
@@ -1034,49 +986,6 @@ export default function MessagesClient({ currentUser, initialConversationId, ini
       )}
 
       </div>
-      )}
-
-      {/* ── Intros — centered list of requests with inline actions ────────── */}
-      {activeTab === 'intros' && (
-        <div className="custom-scrollbar min-h-0 w-full flex-1 overflow-y-auto pb-6">
-          <div className="mx-auto w-full max-w-3xl space-y-3 px-1">
-            {introsLoading && (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3.5 rounded-3xl border border-border-subtle/70 bg-surface-1 p-5">
-                  <div className="h-11 w-11 shrink-0 animate-pulse rounded-xl bg-surface-3" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
-                    <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
-                  </div>
-                </div>
-              ))
-            )}
-
-            {!introsLoading && filteredIntroItems.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-green/10">
-                  <svg className="h-7 w-7 text-brand-dark-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                  </svg>
-                </div>
-                <p className="text-sm font-medium text-text-secondary">No introductions yet</p>
-                <p className="mt-1 text-xs text-text-muted">
-                  Open a member&apos;s profile and use Connect → Request an introduction.
-                </p>
-              </div>
-            )}
-
-            {!introsLoading && filteredIntroItems.map((item) => (
-              <IntroRequestCard
-                key={item.intro.id}
-                item={item}
-                onAction={handleIntroAction}
-                onOpenConversation={(nodeId) => void openConversationWithNode(nodeId)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Modals ──────────────────────────────────────────────────────── */}
       <NewChatModal

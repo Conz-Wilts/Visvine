@@ -24,10 +24,10 @@ import type { CommunityFeatureConfig } from "@/lib/types";
  *  Expanded (200px): icon same spot, label revealed
  *  Transition: ONLY container width animates. Zero instant flips.
  *
- * The card always spans navbar → viewport bottom. While the directory's Context
- * view is active it ALSO hosts the notes tree (the embedded workspace requests
- * the dock and portals its tree into the host div below via ContextPanelContext),
- * so the icon rail + tree read as one connected container.
+ * The card always spans navbar → viewport bottom. While the /context page or a
+ * profile's Context tab is active it ALSO hosts the notes tree (the embedded
+ * workspace requests the dock and portals its tree into the host div below via
+ * ContextPanelContext), so the icon rail + tree read as one connected container.
  */
 
 // Exported so the Navbar seam/fillet and the AuthLayout content padding track the
@@ -41,10 +41,10 @@ const ICON_LEFT = 17; // (COLLAPSED_W - 2px border - ICON_SIZE) / 2 — centers 
 const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
-const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
+const CHANNELS_PANEL_W = 300; // /channels + /messages list panel width — keep in sync with MessagesClient
 const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
-export const CONTEXT_PANEL_W = 300; // directory graph Context tree panel — keep in sync with the graph page inset
-const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
+export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the graph page inset
+export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
 const RAIL_GAP = 8; // gap between the Create block and the nav list
@@ -56,7 +56,7 @@ export default function Sidebar() {
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
   const { currentCommunity, isAdmin } = useCommunity();
-  const { setHost, dockRequested } = useContextPanel();
+  const { setHost, dockRequested, contextOpen } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
   const dur = reduced ? "0s" : "0.32s";
@@ -66,16 +66,15 @@ export default function Sidebar() {
   // enabled surfaces (empty config → everything on) and to what this user may
   // see (an admins-only directory is hidden from members). See lib/features.tsx.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  // Messages lives in the top navbar; Context lives on entity profiles
-  // (Context tabs) — both are toggleable but nav-less.
+  // Messages lives in the top navbar — toggleable but nav-less.
   const allNav = visibleFeatures(featureConfig, isAdmin).filter(
     ({ key }) => !NAV_HIDDEN_FEATURE_KEYS.includes(key)
   );
   const activeIndex = allNav.findIndex(({ href }) => pathname === href);
 
-  // On /channels and /admin (wide viewports only) the rail docks into a
-  // full-height card hosting a side panel — the channel list or the console
-  // sections. The page then portals its panel content into the host below via
+  // On /channels, /messages and /admin (wide viewports only) the rail docks
+  // into a full-height card hosting a side panel — the channel/conversation
+  // list or the console sections. The page then portals its content via
   // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
   // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
   // own inline list there instead).
@@ -87,15 +86,23 @@ export default function Sidebar() {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
-  const dockedChannels = pathname.startsWith("/channels") && wide;
+  // Channels honours the navbar's panel toggle (open by default) — the page
+  // raises dockRequested so the toggle shows, and closing hides the list.
+  const dockedChannels = pathname.startsWith("/channels") && wide && contextOpen;
+  // Messages docks its conversation list the same way — the inbox reads as an
+  // attached sidebar rather than a floating card in the content area.
+  const dockedMessages = pathname.startsWith("/messages") && wide;
   // The Community Console docks its section list here too (exact match so
   // /admin/resources keeps the plain floating rail).
   const dockedAdmin = pathname === "/admin" && wide;
-  // The directory graph view raises dockRequested (already wide-gated by the
-  // requesting page) to dock its Context tree beside the rail.
-  const dockedContext = dockRequested && wide;
-  const docked = dockedChannels || dockedAdmin || dockedContext;
-  const panelW = dockedAdmin ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
+  // Settings docks its section list the same way as the Console.
+  const dockedSettings = pathname.startsWith("/settings") && wide;
+  // The /context page and profile Context tabs raise dockRequested (already
+  // wide-gated by the requesting page) when the tree is available; the panel
+  // only opens once the user asks for it (contextOpen).
+  const dockedContext = dockRequested && contextOpen && wide;
+  const docked = dockedChannels || dockedMessages || dockedAdmin || dockedSettings || dockedContext;
+  const panelW = dockedAdmin || dockedSettings ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).

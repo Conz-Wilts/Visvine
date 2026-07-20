@@ -67,6 +67,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Every community starts with a default space; admins can rename or delete it.
+    await prisma.channelSpace.create({
+      data: { communityId: created.id, name: 'General', position: 0 },
+    });
+
     const createdCommunity: Community = {
       id: created.id,
       name: created.name,

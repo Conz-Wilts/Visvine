@@ -4,7 +4,7 @@
 
 import { NBNode, getNodeGlyph } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
-import { drawWrappedText, roundRect, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
+import { drawWrappedText, roundRect, drawGlyphSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 
@@ -147,9 +147,9 @@ export function drawRectangleNode(
     ctx.drawImage(image, drawX, drawY, drawWidth, drawHeight);
   } else {
     // White header + coloured type glyph when there's no image — matches the
-    // directory card style so the graph view stays visually consistent. People get
-    // the person silhouette, groups the cluster silhouette, everything else the
-    // name initials.
+    // directory card style so the graph view stays visually consistent. Types
+    // with a glyph (person, group, event, resource) get their silhouette,
+    // everything else the name initials.
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(headerX, headerY, headerWidth, headerHeight);
 
@@ -157,10 +157,8 @@ export function drawRectangleNode(
     const cy = headerY + headerHeight / 2;
     const glyphSize = Math.min(headerWidth, headerHeight) * 0.55;
     const glyph = getNodeGlyph(node.type);
-    if (glyph === 'group') {
-      drawGroupSilhouette(ctx, cx, cy, glyphSize, borderColor);
-    } else if (glyph === 'person') {
-      drawPersonSilhouette(ctx, cx, cy, glyphSize, borderColor);
+    if (glyph) {
+      drawGlyphSilhouette(ctx, glyph, cx, cy, glyphSize, borderColor);
     } else {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -193,10 +191,12 @@ export function drawRectangleNode(
       drawWrappedText(ctx, node.subtitle, x, subtitleY, width - CARD_DIMENSIONS.PADDING * 2, 14, 'center');
     }
 
-    // Role Tag — the node type, capitalised for display (stored types are often
-    // lowercase, e.g. 'person', which would otherwise render lowercase).
+    // Role Tag — prefer the (user-entered) alias, e.g. "Founder"; fall back to
+    // the node type, capitalised for display (stored types are often lowercase,
+    // e.g. 'person', which would otherwise render lowercase).
     const tagsY = y + halfHeight - CARD_DIMENSIONS.PADDING - CARD_DIMENSIONS.TAG_HEIGHT;
-    const roleTag = node.type ? node.type.charAt(0).toUpperCase() + node.type.slice(1) : node.type;
+    const roleTag =
+      node.alias ?? (node.type ? node.type.charAt(0).toUpperCase() + node.type.slice(1) : node.type);
     ctx.font = '400 10px Inter, system-ui, -apple-system';
 
     const tagWidth = ctx.measureText(roleTag).width + 16;

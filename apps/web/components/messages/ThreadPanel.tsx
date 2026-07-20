@@ -7,7 +7,6 @@ import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow from './MessageRow';
-import { IntroBanner } from './IntroPanel';
 import { formatChatTimestamp, formatDateLabel } from '@/lib/date';
 import type {
   ChannelSpaceEntry,
@@ -16,7 +15,6 @@ import type {
   SerializedMessage,
   SerializedReplyTo,
 } from '@/lib/messages/types';
-import type { ConversationIntroContext } from '@/lib/intros/types';
 
 /** Messages within this window of the previous message from the same sender share a header. */
 const GROUP_WINDOW_MS = 7 * 60 * 1000;
@@ -53,7 +51,6 @@ interface ThreadPanelProps {
   messageSearch: string;
   setMessageSearch: (value: string) => void;
   // Thread content
-  threadIntro: ConversationIntroContext | null;
   messagesContainerRef: RefObject<HTMLDivElement | null>;
   messagesLoading: boolean;
   messages: SerializedMessage[];
@@ -122,7 +119,6 @@ export default function ThreadPanel({
   setShowMessageSearch,
   messageSearch,
   setMessageSearch,
-  threadIntro,
   messagesContainerRef,
   messagesLoading,
   messages,
@@ -403,11 +399,6 @@ export default function ThreadPanel({
                 )}
               </div>
             </div>
-          )}
-
-          {/* Provenance: this DM exists because of an accepted introduction */}
-          {threadIntro && selectedConversation.type === 'DM' && (
-            <IntroBanner context={threadIntro} />
           )}
 
           {/* Linear message feed */}

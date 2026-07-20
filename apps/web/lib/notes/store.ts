@@ -17,7 +17,18 @@ import type {
   NoteRevisionOrigin,
   TrashEntry,
 } from './shared/types'
+import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
+// Import cycle with vaultCache (it reads via listRaw) is benign: both sides
+// only call each other inside function bodies, never at module init.
+import { invalidateVault } from './vaultCache'
+import { ancestorFolders, buildIndexStub, indexPathOf } from './shared/indexNote'
+
+// The `starred` column is a queryable index of the frontmatter `starred:` flag
+// (the source of truth), re-derived on every write.
+function isStarred(content: string): boolean {
+  return Boolean(parseFrontmatter(content).starred)
+}
 
 export interface Brain {
   communityId: string
@@ -42,7 +53,8 @@ const COALESCE_WINDOW_MS = 5 * 60 * 1000
 
 // Normalize an untrusted, client-supplied path to a safe brain-relative POSIX
 // path. Rejects traversal and NUL (Postgres text can't store NUL anyway).
-function sanitizePath(p: string): string {
+// Exported for the context-source store, which shares the note path namespace.
+export function sanitizePath(p: string): string {
   const norm = p
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')
@@ -138,12 +150,67 @@ export async function createNote(
       ownerKey: brain.ownerKey,
       path: p,
       content,
+      starred: isStarred(content),
       createdBy: actor.id,
     },
     select: { path: true, content: true, updatedAt: true },
   })
   await syncContextLinks(brain, p, content)
+  await ensureAncestorIndexes(brain, p, actor)
+  invalidateVault(brain)
   return toRaw(row)
+}
+
+// Every folder carries an index.md (the blackbird-brain convention — see
+// lib/notes/shared/indexNote.ts). Ensure each ancestor folder of `path` has one,
+// creating missing indexes as a stub listing the folder's current direct-child
+// notes. NEVER rewrites an existing index (they're often curated documents).
+// Rows are inserted directly (not via createNote) — no recursion, no revision.
+// Returns the index paths created.
+export async function ensureAncestorIndexes(
+  brain: Brain,
+  path: string,
+  actor: Actor,
+): Promise<string[]> {
+  const created: string[] = []
+  for (const folder of ancestorFolders(sanitizePath(path))) {
+    const idx = indexPathOf(folder)
+    if (await findLive(brain, idx)) continue
+    const rows = await prisma.communityNote.findMany({
+      where: {
+        communityId: brain.communityId,
+        ownerKey: brain.ownerKey,
+        deletedAt: null,
+        path: { startsWith: `${folder}/` },
+      },
+      select: { path: true, content: true },
+    })
+    const children = rows
+      .filter((r) => r.path !== idx && !r.path.slice(folder.length + 1).includes('/'))
+      .map((r) => {
+        const title = String(parseFrontmatter(r.content).title ?? '').trim()
+        return { path: r.path, title: title || baseName(r.path).replace(/\.md$/i, '') }
+      })
+    try {
+      await prisma.communityNote.create({
+        data: {
+          communityId: brain.communityId,
+          ownerKey: brain.ownerKey,
+          path: idx,
+          content: buildIndexStub(folder, children),
+          starred: false,
+          createdBy: actor.id,
+        },
+      })
+      created.push(idx)
+    } catch (e) {
+      // Concurrent creates in a fresh folder can race the index insert; the
+      // note_identity unique key makes the loser throw — the index exists, done.
+      if ((e as { code?: string }).code !== 'P2002') throw e
+    }
+  }
+  if (created.length) invalidateVault(brain)
+  return created
 }
 
 // Upsert a note's content and record a revision. Mirrors rpc.ts 'note:write':
@@ -163,13 +230,17 @@ export async function writeNote(
   const prev = existing?.content ?? null
 
   const note = existing
-    ? await prisma.communityNote.update({ where: { id: existing.id }, data: { content } })
+    ? await prisma.communityNote.update({
+        where: { id: existing.id },
+        data: { content, starred: isStarred(content) },
+      })
     : await prisma.communityNote.create({
         data: {
           communityId: brain.communityId,
           ownerKey: brain.ownerKey,
           path: p,
           content,
+          starred: isStarred(content),
           createdBy: actor.id,
         },
       })
@@ -178,6 +249,12 @@ export async function writeNote(
   // from its [[mentions]]. Best-effort (no-op for personal brains / non-entity
   // paths); runs even on no-op saves so a missed sync self-heals on next save.
   await syncContextLinks(brain, p, content)
+
+  // Upsert-created notes (e.g. an entity note's first save) get folder indexes too.
+  if (existing === null) await ensureAncestorIndexes(brain, p, actor)
+
+  // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
+  invalidateVault(brain)
 
   if (prev === content) return // nothing changed — don't spawn a revision
 
@@ -272,6 +349,7 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
   // A rename changes which entity (if any) the note is canonical for: drop the
   // old path's context links, derive the new path's.
   if (t !== f) await syncContextLinksBulk(brain, [f], [[t, row.content]])
+  invalidateVault(brain)
   return t // revisions stay attached by noteId
 }
 
@@ -285,6 +363,7 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
     data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
   })
   await syncContextLinks(brain, row.path, null) // trashed note owns no context links
+  invalidateVault(brain)
 }
 
 export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
@@ -317,6 +396,7 @@ export async function restoreTrash(brain: Brain, id: string): Promise<string> {
     data: { deletedAt: null, deletedPath: null, path: dest },
   })
   await syncContextLinks(brain, dest, row.content) // restored entity note re-owns its links
+  invalidateVault(brain)
   return dest
 }
 
@@ -324,17 +404,20 @@ export async function emptyTrash(brain: Brain): Promise<void> {
   await prisma.communityNote.deleteMany({
     where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
   })
+  invalidateVault(brain)
 }
 
 // --- folders -----------------------------------------------------------------
 
-export async function createFolder(brain: Brain, path: string): Promise<void> {
+export async function createFolder(brain: Brain, path: string, actor?: Actor): Promise<void> {
   const p = sanitizePath(path)
   await prisma.communityNoteFolder.upsert({
     where: { folder_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: p } },
     create: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: p },
     update: {},
   })
+  // The synthetic index path makes ancestorFolders cover this folder AND its parents.
+  if (actor) await ensureAncestorIndexes(brain, indexPathOf(p), actor)
 }
 
 // Rename/move a folder and everything under it (notes + nested folder rows).
@@ -377,6 +460,7 @@ export async function renameFolder(brain: Brain, from: string, to: string): Prom
       data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
     })
   }
+  invalidateVault(brain)
   return t
 }
 
@@ -406,6 +490,7 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
       OR: [{ path: p }, { path: { startsWith: `${p}/` } }],
     },
   })
+  invalidateVault(brain)
 }
 
 // --- revision history --------------------------------------------------------
@@ -444,16 +529,30 @@ export async function applyRevision(
   await writeNote(brain, row.path, rev.content, actor, 'restore')
 }
 
-// Pin / unpin a note (sidebar pins section).
-export async function setPinned(brain: Brain, path: string, pinned: boolean): Promise<void> {
+// Star / unstar a note (sidebar Starred section + editor toolbar star). The
+// frontmatter `starred:` flag is the source of truth; rewrite it through
+// writeNote so the synced column, revisions and link sync all stay consistent
+// with a toggle made from the editor.
+export async function setStarred(
+  brain: Brain,
+  path: string,
+  starred: boolean,
+  actor: Actor,
+): Promise<void> {
   const row = await findLive(brain, sanitizePath(path))
   if (!row) throw new Error(`Note not found: ${path}`)
-  await prisma.communityNote.update({ where: { id: row.id }, data: { pinned } })
+  const { frontmatter, body } = splitFrontmatter(row.content)
+  const lines = (frontmatter ?? '')
+    .split('\n')
+    .filter((l) => l.trim() && !/^starred\s*:/i.test(l.trim()))
+  if (starred) lines.push('starred: true')
+  const content = lines.length ? `---\n${lines.join('\n')}\n---\n\n${body}` : body
+  await writeNote(brain, row.path, content, actor)
 }
 
-export async function listPinned(brain: Brain): Promise<string[]> {
+export async function listStarred(brain: Brain): Promise<string[]> {
   const rows = await prisma.communityNote.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null, pinned: true },
+    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null, starred: true },
     select: { path: true },
   })
   return rows.map((r) => r.path)

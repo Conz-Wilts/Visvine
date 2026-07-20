@@ -11,7 +11,7 @@
 
 import { NBNode, getNodeGlyph } from '@/lib/types';
 import type { CanvasTheme } from './RectangleNodeRenderer';
-import { drawWrappedText, roundRect, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
+import { drawWrappedText, roundRect, drawGlyphSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 import { getInitials } from '@/lib/avatarUtils';
@@ -165,10 +165,8 @@ export function drawSquareNode(
     const cx = headerX + headerWidth / 2;
     const cy = headerY + headerHeight / 2;
     const glyph = getNodeGlyph(node.type);
-    if (glyph === 'group') {
-      drawGroupSilhouette(ctx, cx, cy, headerHeight * 0.6, '#ffffff');
-    } else if (glyph === 'person') {
-      drawPersonSilhouette(ctx, cx, cy, headerHeight * 0.6, '#ffffff');
+    if (glyph) {
+      drawGlyphSilhouette(ctx, glyph, cx, cy, headerHeight * 0.6, '#ffffff');
     } else {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';

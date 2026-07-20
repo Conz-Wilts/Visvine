@@ -20,7 +20,8 @@ const TOP_K = 20
 // noise and would otherwise leak into the RRF fusion on sparse queries.
 const RELATIVE_FLOOR = 0.85
 
-function vectorLiteral(v: number[]): string {
+// Exported for the context-source chunk stage, which shares the pgvector SQL shape.
+export function vectorLiteral(v: number[]): string {
   // Compact to 6 decimals — cosine is insensitive and the literal stays small.
   return `[${v.map((x) => Math.round(x * 1e6) / 1e6).join(',')}]`
 }

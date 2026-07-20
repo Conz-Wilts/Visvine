@@ -21,7 +21,9 @@
     "db:blackbird:notes": "node scripts/add-blackbird-notes.mjs",
     "db:identities:backfill": "tsx scripts/backfill-identities.ts",
     "db:rename-org-to-group": "tsx scripts/rename-organization-to-group.ts",
-    "db:context-links:backfill": "tsx scripts/backfill-context-links.ts"
+    "db:context-links:backfill": "tsx scripts/backfill-context-links.ts",
+    "db:index-notes:backfill": "tsx scripts/backfill-index-notes.ts",
+    "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",

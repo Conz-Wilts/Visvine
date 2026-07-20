@@ -46,7 +46,7 @@ Every tool runs `withCtx(extra, scope, …)`:
 ## Scopes
 
 `communities:read`, `profile:read|write`, `directory:read|write`, `crm:read|write`,
-`events:read|write|manage`, `intros:read|write`, `messages:read`, `feed:read`,
+`events:read|write|manage`, `messages:read`, `feed:read`,
 `resources:read|write`, `content:read|write`, `analytics:read`. An empty request grants the
 read-only subset. Destructive ops (delete, member removal) and act-as-you social side effects
 (send DM, post to feed, RSVP) are intentionally **not** exposed in v1 — they belong behind

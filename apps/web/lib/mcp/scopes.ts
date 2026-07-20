@@ -20,8 +20,6 @@ export const MCP_SCOPES = [
   "events:read",
   "events:write",
   "events:manage",
-  "intros:read",
-  "intros:write",
   "messages:read",
   "feed:read",
   "resources:read",

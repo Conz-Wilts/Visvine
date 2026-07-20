@@ -104,7 +104,7 @@ export function TagCombobox({
                         <span className="ml-1 truncate font-medium text-text-primary">“{row.value}”</span>
                       </>
                     ) : (
-                      <span className="rounded-full px-2 py-0.5 text-[12px] font-medium text-white"
+                      <span className="max-w-full truncate rounded-full px-2 py-0.5 text-[12px] font-medium text-white"
                             style={{ background: pal!.base }}>
                         {row.value}
                       </span>

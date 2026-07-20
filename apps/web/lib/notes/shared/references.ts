@@ -37,9 +37,9 @@ const LINK_RE = /(?<!!)\[([^\]]*)\]\(([^)\s"]+)(?:\s+"[^"]*")?\)/g
 // Unlinked mentions shorter than this are too noisy to be useful.
 const MIN_TITLE_LEN = 3
 
-function titleOf(path: string, metas: NoteMeta[]): string {
-  const meta = metas.find((m) => m.path === path)
-  if (meta) return meta.title
+function titleOf(path: string, titleByPath: Map<string, string>): string {
+  const title = titleByPath.get(path)
+  if (title !== undefined) return title
   return path.replace(/\.md$/i, '').split('/').pop() ?? path
 }
 
@@ -119,7 +119,8 @@ export function computeReferences(
   targetPath: string,
   metas: NoteMeta[]
 ): References {
-  const targetTitle = titleOf(targetPath, metas).trim()
+  const titleByPath = new Map(metas.map((m) => [m.path, m.title]))
+  const targetTitle = titleOf(targetPath, titleByPath).trim()
   const linked: LinkedReference[] = []
   const unlinked: UnlinkedReference[] = []
   // Whole-word, case-insensitive title matcher (internal spaces are fine; the
@@ -132,7 +133,7 @@ export function computeReferences(
   for (const note of notes) {
     if (note.path === targetPath) continue
     const { body } = splitFrontmatter(note.content)
-    const fromTitle = titleOf(note.path, metas)
+    const fromTitle = titleOf(note.path, titleByPath)
 
     // Linked: every markdown link in this note that resolves to the target.
     const seenLinked = new Set<string>()

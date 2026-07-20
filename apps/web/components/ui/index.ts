@@ -7,7 +7,7 @@ export { default as EmptyState } from './EmptyState';
 export { default as Field } from './Field';
 export { default as Input, inputBaseClass } from './Input';
 export { default as SearchInput } from './SearchInput';
-export { default as SettingsCard } from './SettingsCard';
+export { default as SettingsSection } from './SettingsSection';
 export { default as Textarea } from './Textarea';
 export { default as LoadingText } from './LoadingText';
 export { default as Modal } from './Modal';

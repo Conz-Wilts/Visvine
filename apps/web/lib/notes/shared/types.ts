@@ -63,9 +63,18 @@ export interface TrashEntry {
 // --- Revision history --------------------------------------------------------
 
 // How a note revision came to be. 'baseline' is the pre-edit snapshot seeded on
-// the first edit; 'ai-refactor' is an LLM rewrite; 'restore' is reverting to an
-// earlier version; 'edit' is an ordinary manual save.
-export type NoteRevisionOrigin = 'edit' | 'ai-refactor' | 'restore' | 'baseline'
+// the first edit; 'ai-refactor' is an LLM rewrite; 'ai-enrich' is an insight
+// distilled from a personal brain by the enrichment pass; 'agent' is an external
+// agent writing through MCP; 'maintenance' is a rule-based review auto-fix;
+// 'restore' is reverting to an earlier version; 'edit' is an ordinary manual save.
+export type NoteRevisionOrigin =
+  | 'edit'
+  | 'ai-refactor'
+  | 'ai-enrich'
+  | 'agent'
+  | 'maintenance'
+  | 'restore'
+  | 'baseline'
 
 // One point-in-time snapshot of a note. The full content is stored so any past
 // version can be reviewed and restored.
@@ -75,7 +84,7 @@ export interface NoteRevision {
   editor: string // display name of who saved it, or 'Unknown'
   editorEmail?: string
   origin: NoteRevisionOrigin
-  model?: string // the LLM model, when origin is 'ai-refactor'
+  model?: string // the LLM model (or agent client), when AI/agent-originated
   content: string // full note snapshot (frontmatter + body) at this save
 }
 

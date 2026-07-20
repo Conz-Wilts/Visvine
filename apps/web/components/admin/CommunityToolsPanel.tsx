@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
 import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, sortFeatureKeys, visibleFeatures } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
-import { SettingsCard } from '@/components/ui';
+import { SettingsSection } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
@@ -21,17 +21,6 @@ const iconProps = {
   viewBox: '0 0 24 24',
 } as const;
 
-const ToolsIcon = () => (
-  <svg {...iconProps}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-  </svg>
-);
-const PreviewIcon = () => (
-  <svg {...iconProps}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-  </svg>
-);
 const LockIcon = () => (
   <svg {...iconProps} className="h-3.5 w-3.5">
     <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5a1.5 1.5 0 011.5 1.5v6a1.5 1.5 0 01-1.5 1.5H6.75a1.5 1.5 0 01-1.5-1.5v-6a1.5 1.5 0 011.5-1.5z" />
@@ -81,7 +70,135 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
     sortFeatureKeys(savedConfig, FEATURES.filter(f => f.key !== 'messages').map(f => f.key))
   );
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
-  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+
+  // FLIP reorder animation: snapshot every [data-flip-key] element's position
+  // right before a reorder commits, then after React re-renders slide each
+  // element from its old slot to its new one. In 'pop' mode (keyboard moves)
+  // the moved row also gets a pop + glow; in 'drag' mode the dragged row is
+  // excluded — it's already floating under the cursor via an inline transform.
+  const flipRoot = useRef<HTMLDivElement>(null);
+  const flipSnapshot = useRef<Map<string, DOMRect> | null>(null);
+  const flipMovedKey = useRef<string | null>(null);
+  const flipMode = useRef<'pop' | 'drag'>('pop');
+
+  const captureFlip = (movedKey: string, mode: 'pop' | 'drag' = 'pop') => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const rects = new Map<string, DOMRect>();
+    flipRoot.current?.querySelectorAll<HTMLElement>('[data-flip-key]').forEach(el => {
+      rects.set(el.dataset.flipKey!, el.getBoundingClientRect());
+    });
+    flipSnapshot.current = rects;
+    flipMovedKey.current = movedKey;
+    flipMode.current = mode;
+  };
+
+  useLayoutEffect(() => {
+    const prev = flipSnapshot.current;
+    if (!prev) return;
+    const movedKey = flipMovedKey.current;
+    const mode = flipMode.current;
+    flipSnapshot.current = null;
+    flipMovedKey.current = null;
+    flipRoot.current?.querySelectorAll<HTMLElement>('[data-flip-key]').forEach(el => {
+      const flipKey = el.dataset.flipKey!;
+      if (mode === 'drag' && flipKey === `row:${movedKey}`) return;
+      const before = prev.get(flipKey);
+      if (!before) return;
+      const dy = before.top - el.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1) return;
+      const moved = mode === 'pop' && flipKey.endsWith(`:${movedKey}`);
+      el.animate(
+        moved
+          ? [
+              { transform: `translateY(${dy}px) scale(1)`, offset: 0 },
+              { transform: `translateY(${dy * 0.4}px) scale(1.03)`, offset: 0.4 },
+              { transform: 'translateY(0) scale(1)', offset: 1 },
+            ]
+          : [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
+        { duration: moved ? 420 : 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+      if (moved && flipKey.startsWith('row:')) {
+        el.animate(
+          [
+            { boxShadow: '0 0 0 0 rgba(34, 197, 94, 0)', borderRadius: '12px' },
+            { boxShadow: '0 8px 24px -6px rgba(34, 197, 94, 0.35)', borderRadius: '12px', offset: 0.4 },
+            { boxShadow: '0 0 0 0 rgba(34, 197, 94, 0)', borderRadius: '12px' },
+          ],
+          { duration: 600, easing: 'ease-out' },
+        );
+      }
+    });
+  }, [order]);
+
+  // Pointer-driven drag: the grabbed card floats with the cursor (inline
+  // translateY on the row) while the other rows FLIP out of its way live.
+  // Refs, not state, so pointermove never waits on a re-render.
+  const dragState = useRef<{ key: string; grabOffset: number; el: HTMLElement; initialOrder: string[] } | null>(null);
+  const dragTranslate = useRef(0);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+
+  const startDrag = (e: React.PointerEvent<HTMLButtonElement>, key: string) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const row = (e.currentTarget as HTMLElement).closest<HTMLElement>('[data-flip-key^="row:"]');
+    if (!row) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragState.current = {
+      key,
+      grabOffset: e.clientY - row.getBoundingClientRect().top,
+      el: row,
+      initialOrder: orderRef.current,
+    };
+    dragTranslate.current = 0;
+    setDraggingKey(key);
+  };
+
+  const moveDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragState.current;
+    if (!drag) return;
+    // The row's layout slot shifts when the list reorders under it, so derive
+    // it fresh each move: on-screen top minus the transform we applied.
+    const baseTop = drag.el.getBoundingClientRect().top - dragTranslate.current;
+    const translate = e.clientY - drag.grabOffset - baseTop;
+    dragTranslate.current = translate;
+    drag.el.style.transform = `translateY(${translate}px) scale(1.02)`;
+
+    const rows = flipRoot.current?.querySelectorAll<HTMLElement>('[data-flip-key^="row:"]') ?? [];
+    const from = orderRef.current.indexOf(drag.key);
+    for (const other of rows) {
+      const otherKey = other.dataset.flipKey!.slice('row:'.length);
+      if (otherKey === drag.key) continue;
+      const r = other.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      const to = orderRef.current.indexOf(otherKey);
+      if ((to < from && e.clientY < mid) || (to > from && e.clientY > mid)) {
+        captureFlip(drag.key, 'drag');
+        setOrder(reorderTo(orderRef.current, drag.key, otherKey));
+        break;
+      }
+    }
+  };
+
+  const endDrag = () => {
+    const drag = dragState.current;
+    if (!drag) return;
+    dragState.current = null;
+    const translate = dragTranslate.current;
+    dragTranslate.current = 0;
+    drag.el.style.transform = '';
+    if (Math.abs(translate) > 1) {
+      // Settle the card from wherever the cursor left it into its new slot.
+      drag.el.animate(
+        [{ transform: `translateY(${translate}px) scale(1.02)` }, { transform: 'translateY(0) scale(1)' }],
+        { duration: 280, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    }
+    setDraggingKey(null);
+    if (orderRef.current.join() !== drag.initialOrder.join()) {
+      commit(enabled, directoryPrivate, orderRef.current);
+    }
+  };
 
   const { queue } = useConsoleAutosave(async (patch) => {
     const data = await fetchJsonBody<{ community: Partial<Community> }>(`/api/communities/${community.id}/settings`, 'PUT', patch);
@@ -105,7 +222,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
 
   const currentConfig: CommunityFeatureConfig = { enabled, directoryPrivate, order };
   // What a regular member's sidebar rail shows with the current config
-  // (messages + notes are toggleable but nav-less — see NAV_HIDDEN_FEATURE_KEYS).
+  // (messages is toggleable but nav-less — see NAV_HIDDEN_FEATURE_KEYS).
   const memberRail = visibleFeatures(currentConfig, false).filter(
     f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)
   );
@@ -114,34 +231,25 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   // owns it, since it's the non-obvious consequence of reordering.
   const landingKey = memberRail[0]?.key ?? null;
 
-  const handleDrop = (targetKey: string) => {
-    if (draggingKey && draggingKey !== targetKey) {
-      commit(enabled, directoryPrivate, reorderTo(order, draggingKey, targetKey));
-    }
-    setDraggingKey(null);
-    setDragOverKey(null);
-  };
-
   return (
-    <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-2">
-      <SettingsCard
-        icon={<ToolsIcon />}
+    <div ref={flipRoot} className="w-full space-y-8">
+      <SettingsSection
         title="Tools"
         description="Choose which tools members of this community can use, and drag to reorder them. The first tool members can see is where they land. Click a tool to see what it does."
-        bodyClassName="divide-y divide-border-subtle"
       >
+        <div className="divide-y divide-border-subtle">
         {toolFeatures.map((feature, index) => {
           const isCore = feature.core === true;
           const expanded = expandedKey === feature.key;
           const isDragging = draggingKey === feature.key;
-          const isDragOver = dragOverKey === feature.key && draggingKey !== feature.key;
           return (
             <div
               key={feature.key}
-              onDragOver={e => { e.preventDefault(); setDragOverKey(feature.key); }}
-              onDrop={e => { e.preventDefault(); handleDrop(feature.key); }}
-              className={`py-3 first:pt-0 last:pb-0 transition-opacity ${isDragging ? 'opacity-40' : ''} ${
-                isDragOver ? 'border-t-2 border-brand-green' : ''
+              data-flip-key={`row:${feature.key}`}
+              className={`py-3 first:pt-0 last:pb-0 ${
+                isDragging
+                  ? 'relative z-10 -mx-3 rounded-xl !border-transparent bg-surface-1 px-3 shadow-xl ring-1 ring-border-subtle'
+                  : ''
               }`}
             >
               <div className="flex items-center gap-3">
@@ -149,16 +257,18 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                     keyboard — native HTML5 drag has no keyboard equivalent. */}
                 <button
                   type="button"
-                  draggable
-                  onDragStart={() => setDraggingKey(feature.key)}
-                  onDragEnd={() => { setDraggingKey(null); setDragOverKey(null); }}
+                  onPointerDown={e => startDrag(e, feature.key)}
+                  onPointerMove={moveDrag}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
                   onKeyDown={e => {
                     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
                     e.preventDefault();
+                    captureFlip(feature.key);
                     commit(enabled, directoryPrivate, moveKey(order, feature.key, e.key === 'ArrowUp' ? -1 : 1));
                   }}
                   aria-label={`Reorder ${feature.label} (position ${index + 1} of ${toolFeatures.length}) — use arrow keys`}
-                  className="shrink-0 cursor-grab rounded text-text-muted transition-colors hover:text-text-secondary focus-visible:text-text-secondary active:cursor-grabbing"
+                  className="shrink-0 cursor-grab touch-none rounded text-text-muted transition-colors hover:text-text-secondary focus-visible:text-text-secondary active:cursor-grabbing"
                 >
                   <GripIcon />
                 </button>
@@ -224,10 +334,10 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
             </div>
           );
         })}
-      </SettingsCard>
+        </div>
+      </SettingsSection>
 
-      <SettingsCard
-        icon={<PreviewIcon />}
+      <SettingsSection
         title="Sidebar preview"
         description="What a member of this community sees right now."
       >
@@ -237,6 +347,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
             {memberRail.map(f => (
               <span
                 key={f.key}
+                data-flip-key={`rail:${f.key}`}
                 title={f.label}
                 className="grid h-10 w-10 place-items-center rounded-lg text-text-secondary"
               >
@@ -250,7 +361,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
           <div className="space-y-2 pt-1 text-xs text-text-muted">
             <ul className="space-y-1">
               {memberRail.map(f => (
-                <li key={f.key} className="flex h-10 items-center text-sm text-text-secondary">{f.label}</li>
+                <li key={f.key} data-flip-key={`label:${f.key}`} className="flex h-10 items-center text-sm text-text-secondary">{f.label}</li>
               ))}
             </ul>
             {directoryPrivate && (
@@ -262,7 +373,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
             <p>Messages appears in the top bar.</p>
           </div>
         </div>
-      </SettingsCard>
+      </SettingsSection>
     </div>
   );
 }

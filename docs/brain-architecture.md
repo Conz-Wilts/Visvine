@@ -169,6 +169,38 @@ silently.
   revision-recorded; everything else is a finding for a human. Locked folders
   are frozen.
 
+## 7b. Context Sources (non-note knowledge)
+
+Uploaded files/tables (v1: csv, md, txt; ≤5 MB) attached to a brain **without
+becoming graph Nodes** — they live only in the Context. A source is keyed
+`(communityId, ownerKey, path)` exactly like a note (`deals/pricing.csv`), so
+the folder gate, visibility lens, and read audit govern it unchanged; `.md`
+uploads are stored as `.markdown` to keep the note namespace disjoint.
+
+- **Data**: `ContextSource` (metadata + GCS pointer + status) and
+  `ContextSourceChunk` (extracted text chunks + pgvector embeddings). Original
+  file in `GCS_RESOURCES_BUCKET` under `context-sources/…`; storage degrades to
+  off when unconfigured (chunks still serve read/search, no download URL).
+- **Ingestion** (`lib/notes/sources/ingest.ts`, in-request): extract
+  (`sources/extract.ts` — the pdf/xlsx extension seam) → chunk
+  (`shared/chunking.ts`: prose ~1.5k chars with overlap; CSV rows with repeated
+  header context; caps 500k chars / 300 chunks, `truncated` flagged) → embed
+  (batched) → `ready`/`failed` (+ gated `reingest` retry).
+- **Retrieval**: `searchBrain` passes a chunk-vector stage
+  (`lib/notes/sourceStage.ts`) over the caller's visible source paths into the
+  RRF fusion; hits come back as `FusedResult{kind:'source', seq}`. No BM25 over
+  chunks in v1 (extension point: Postgres FTS). Note/type/tag filters skip
+  sources.
+- **Surfaces**: REST `app/api/notes/sources` (+ `/item`); MCP
+  `brain_sources_list` / `brain_source_read` (paged, audited), source hits in
+  `brain_search`; UI Sources section in the context tree + `SourcePreviewPanel`
+  at `/directory/source/<path>`.
+
+**AI-write labeling**: every AI/agent write path now stamps revisions —
+`ai-refactor` (editor AI), `ai-enrich` (enrichment), `agent` (MCP writes, model
+`mcp`), `maintenance` (review auto-fixes) — and AI `## Log` appends carry an
+`ai: <model>` role, so human vs AI edits stay distinguishable end to end.
+
 ## 8. Surfaces
 
 - **REST** — `app/api/notes/*`: existing CRUD routes now lens reads and gate

@@ -8,7 +8,7 @@
 import { createHash } from 'crypto'
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Brain } from './store'
-import { chat, extractJsonObject, aiConfigured } from './ai'
+import { chat, extractJsonObject, aiConfigured, aiModelName } from './ai'
 import { readJson, writeJson } from './sidecar'
 import { visibleVault, writeGated, appendLogGated } from './brainService'
 import { buildNoteIndex } from './shared/graph'
@@ -82,11 +82,18 @@ async function applyOutput(
     const existing = await store.readNoteOrNull(shared, path)
     if (existing !== null) {
       // The concept already exists — append rather than clobber.
-      return appendLogGated(p, shared, path, `${out.insight} (source: ${src})`)
+      return appendLogGated(p, shared, path, `${out.insight} (source: ${src})`, 'ai-enrich', aiModelName())
     }
-    return writeGated(p, shared, path, joinFrontmatter(fm, `# ${out.newNote!.title}\n\n${out.insight}\n`))
+    return writeGated(
+      p,
+      shared,
+      path,
+      joinFrontmatter(fm, `# ${out.newNote!.title}\n\n${out.insight}\n`),
+      'ai-enrich',
+      aiModelName(),
+    )
   }
-  return appendLogGated(p, shared, `${out.targetId!}.md`, `${out.insight} (source: ${src})`)
+  return appendLogGated(p, shared, `${out.targetId!}.md`, `${out.insight} (source: ${src})`, 'ai-enrich', aiModelName())
 }
 
 export interface EnrichmentRunResult {

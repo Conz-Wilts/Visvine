@@ -18,9 +18,9 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import type {
   SerializedMessage,
   SerializedReplyTo,
-  SerializedLinkPreview,
 } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
+import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
 import { isOptimizableImageUrl } from '@/lib/mediaUrl';
 import { formatChatTimestamp, formatTime } from '@/lib/date';
 
@@ -195,34 +195,6 @@ function MessageImageGrid({ images }: { images: SerializedMessage['images'] }) {
         </div>
       ))}
     </div>
-  );
-}
-
-function LinkPreviewCard({ preview }: { preview: SerializedLinkPreview }) {
-  if (!preview.title && !preview.description) return null;
-
-  return (
-    <a
-      href={preview.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-2 block max-w-md rounded-xl border border-border-subtle bg-surface-2/60 overflow-hidden hover:bg-surface-2 transition-colors"
-    >
-      {preview.imageUrl && (
-        <img src={preview.imageUrl} alt="" className="h-32 w-full object-cover" loading="lazy" />
-      )}
-      <div className="px-3 py-2">
-        {preview.siteName && (
-          <p className="text-[10px] font-medium text-text-muted uppercase tracking-wider">{preview.siteName}</p>
-        )}
-        {preview.title && (
-          <p className="text-sm font-medium text-text-primary line-clamp-2">{preview.title}</p>
-        )}
-        {preview.description && (
-          <p className="mt-0.5 text-xs text-text-muted line-clamp-2">{preview.description}</p>
-        )}
-      </div>
-    </a>
   );
 }
 

@@ -65,7 +65,6 @@ const CustomForceGraph: React.FC<{
   savedPositionsRef?: React.MutableRefObject<Map<string, { x: number; y: number }>>;
   nodeTypes?: NodeTypeConfig[];
   communityAliases?: CommunityAlias[];
-  onRerunLayout?: () => void;
   /** When false, the incoming node positions are a final layout (server
    *  restore or precomputed engine result) — freeze the simulation and apply
    *  `initialTransform` (or auto-fit) instead of running a cold burst. */
@@ -86,7 +85,7 @@ const CustomForceGraph: React.FC<{
   /** Click (not a pan) on empty canvas background — lets the parent clear any
    *  current selection. */
   onBackgroundClick?: () => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, onRerunLayout, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick, onBackgroundClick }) => {
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick, onBackgroundClick }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -1063,16 +1062,6 @@ const CustomForceGraph: React.FC<{
           display: 'block',
         }}
       />
-      {onRerunLayout && isLayoutReady && (
-        <button
-          type="button"
-          onClick={onRerunLayout}
-          title="Recompute the graph layout from scratch"
-          className="absolute bottom-4 right-4 z-10 rounded-lg border border-surface-3 bg-surface-1 px-3 py-1.5 text-xs font-medium text-text-secondary shadow-sm transition-colors hover:text-text-primary hover:border-surface-2"
-        >
-          Re-run layout
-        </button>
-      )}
     </div>
   );
 };

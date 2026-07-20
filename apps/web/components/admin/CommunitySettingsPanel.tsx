@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { Community } from '@/lib/types';
 import { COUNTRIES, countryCodeToFlag, getCountry } from '@/lib/countries';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { Alert, Button, ConfirmDialog, Field, Input, Textarea, SettingsCard, inputBaseClass } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, Field, Input, Textarea, SettingsSection, inputBaseClass } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import CommunityImageUpload from '@/components/community/CommunityImageUpload';
+import { TagCombobox } from '@/features/notes/components/TagCombobox';
+import { tagPalette, tagKey } from '@/lib/tagColors';
 
 interface Props {
   community: Community;
@@ -25,17 +27,6 @@ const iconProps = {
   viewBox: '0 0 24 24',
 } as const;
 
-const IdentityIcon = () => (
-  <svg {...iconProps}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.5-4.66" />
-  </svg>
-);
-const MapPinIcon = () => (
-  <svg {...iconProps}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-  </svg>
-);
 const GlobeIcon = () => (
   <svg {...iconProps} className="h-4 w-4">
     <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18zm0 0c2.5-2.4 3.75-5.4 3.75-9S14.5 5.4 12 3m0 18c-2.5-2.4-3.75-5.4-3.75-9S9.5 5.4 12 3M3.6 9h16.8M3.6 15h16.8" />
@@ -175,7 +166,10 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   const [description, setDescription] = useState(community.description);
   const [country, setCountry] = useState(community.country ?? '');
   const [location, setLocation] = useState(community.location ?? '');
-  const [tagsInput, setTagsInput] = useState((community.tags ?? []).join(', '));
+  const [tags, setTags] = useState<string[]>(community.tags ?? []);
+  const [addingTag, setAddingTag] = useState(false);
+  // Colours registered this session, layered over the community's saved registry.
+  const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({});
   const [imageUrl, setImageUrl] = useState(community.imageUrl ?? '');
   const [visibility, setVisibility] = useState<'public' | 'private'>(
     community.visibility === 'private' ? 'private' : 'public'
@@ -214,7 +208,37 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
     router.replace('/directory');
   };
 
-  const tagList = tagsInput.split(',').map(t => t.trim()).filter(Boolean);
+  // Same tag system as context notes: coloured pills, a search-or-create picker,
+  // and colours saved to the community's shared tag registry.
+  const tagColors = { ...(community.designConfig?.tagColors ?? {}), ...tagColorOverride };
+  const tagsLower = new Set(tags.map(t => t.toLowerCase()));
+  const tagSuggestions = Object.keys(tagColors).filter(t => !tagsLower.has(t)).sort();
+
+  const saveTags = (next: string[]) => {
+    setTags(next);
+    queue({ tags: next });
+  };
+
+  const addTag = (raw: string) => {
+    const tag = raw.trim();
+    if (!tag || tags.some(t => t.toLowerCase() === tag.toLowerCase())) return;
+    saveTags([...tags, tag]);
+  };
+
+  // Register the chosen colour on the community (best-effort — the tag still
+  // adds if the colour save fails), then add the tag itself.
+  const createTag = (tag: string, color: string) => {
+    if (!tag.trim()) return;
+    setTagColorOverride(m => ({ ...m, [tagKey(tag)]: color }));
+    void fetch(`/api/communities/${encodeURIComponent(community.id)}/tag-colors`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag: tag.trim(), color }),
+    }).catch(() => {});
+    addTag(tag);
+  };
+
+  const removeTag = (tag: string) => saveTags(tags.filter(t => t !== tag));
 
   const visibilityOptions = [
     { value: 'public', title: 'Public', desc: 'Discoverable & self-joinable', icon: <GlobeIcon /> },
@@ -222,27 +246,22 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   ] as const;
 
   return (
-    <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-2">
-      {/* Identity — image beside the core text fields */}
-      <SettingsCard
-        icon={<IdentityIcon />}
+    <div className="w-full space-y-8">
+      {/* Identity — image above the core text fields */}
+      <SettingsSection
         title="Identity"
         description="The name, avatar, and blurb people see first."
-        className="xl:col-span-2"
       >
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="flex shrink-0 flex-col items-center gap-2">
-            <CommunityImageUpload
-              community={{ ...community, imageUrl }}
-              onUploadComplete={url => {
-                setImageUrl(url);
-                onSaved({ imageUrl: url });
-              }}
-              size="lg"
-            />
-            <span className="text-xs text-text-muted">Logo</span>
-          </div>
-          <div className="flex-1 space-y-5">
+        <div className="space-y-6">
+          <CommunityImageUpload
+            community={{ ...community, imageUrl }}
+            onUploadComplete={url => {
+              setImageUrl(url);
+              onSaved({ imageUrl: url });
+            }}
+            size="xl"
+          />
+          <div className="space-y-5">
             <Field label="Community name" error={nameError}>
               <Input
                 type="text"
@@ -267,15 +286,14 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
             </Field>
           </div>
         </div>
-      </SettingsCard>
+      </SettingsSection>
 
       {/* Location & tags */}
-      <SettingsCard
-        icon={<MapPinIcon />}
+      <SettingsSection
         title="Location & tags"
         description="Help the right people find and recognise your community."
       >
-        <div className="grid gap-5 sm:grid-cols-2">
+        <div className="mb-5 grid gap-5 sm:grid-cols-2">
           <Field label="Country">
             <CountrySelector
               value={country}
@@ -299,42 +317,60 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
           </Field>
         </div>
 
-        <Field label="Tags" hint="Separate tags with commas.">
-          <Input
-            type="text"
-            value={tagsInput}
-            onChange={e => {
-              setTagsInput(e.target.value);
-              queue(
-                { tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) },
-                { debounceMs: 800 },
-              );
-            }}
-            onBlur={flush}
-            placeholder="tech, startup, community"
-          />
-          {tagList.length > 0 && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
-              {tagList.map((tag, i) => (
+        <Field label="Tags" hint="Help people recognise what this community is about.">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {tags.map(tag => {
+              const pal = tagPalette(tag, tagColors);
+              return (
                 <span
-                  key={`${tag}-${i}`}
-                  className="inline-flex items-center rounded-full bg-brand-green/12 px-2.5 py-0.5 text-xs font-medium text-brand-dark-green"
+                  key={tag}
+                  className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
+                  style={{ background: pal.base }}
                 >
-                  {tag}
+                  <span className="truncate">{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    aria-label={`Remove ${tag}`}
+                    className="rounded-full p-0.5 opacity-60 transition hover:opacity-100"
+                  >
+                    <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </span>
-              ))}
-            </div>
-          )}
+              );
+            })}
+
+            {addingTag ? (
+              <TagCombobox
+                suggestions={tagSuggestions}
+                existing={tagsLower}
+                registry={tagColors}
+                accentBase="#78d870"
+                onAdd={addTag}
+                onCreate={createTag}
+                onClose={() => setAddingTag(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingTag(true)}
+                className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-brand-green hover:text-brand-dark-green"
+              >
+                + Add tag
+              </button>
+            )}
+          </div>
         </Field>
-      </SettingsCard>
+      </SettingsSection>
 
       {/* Visibility */}
-      <SettingsCard
-        icon={<GlobeIcon />}
+      <SettingsSection
         title="Visibility"
         description="Control who can find and join this community."
       >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+        <div className="grid gap-3 sm:grid-cols-2">
           {visibilityOptions.map(opt => {
             const active = visibility === opt.value;
             return (
@@ -373,15 +409,14 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
             );
           })}
         </div>
-      </SettingsCard>
+      </SettingsSection>
 
       {/* Danger zone */}
-      <SettingsCard
+      <SettingsSection
         title="Danger zone"
         description="Irreversible actions for this community."
-        className="border-red-500/30 xl:col-span-2"
       >
-        {deleteError && <Alert variant="error">{deleteError}</Alert>}
+        {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-medium text-text-primary">Delete this community</div>
@@ -394,7 +429,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
             Delete…
           </Button>
         </div>
-      </SettingsCard>
+      </SettingsSection>
 
       <ConfirmDialog
         open={confirmDelete}

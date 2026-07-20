@@ -6,18 +6,17 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { useHeader } from '@/lib/contexts/HeaderContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf } from '@/lib/notes/entities';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
 import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
-import { NoteModeToggle, type NoteMode } from '@/features/notes/components/NoteModeToggle';
+import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
-import ActivityFeed from '@/components/profile/ActivityFeed';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
 import NodeProfileContent from '@/components/profile/NodeProfileContent';
+import ResourcePreviewContent from '@/components/profile/ResourcePreviewContent';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a tab
 // actually renders it (same rationale as the directory's deferred graph view).
@@ -29,7 +28,7 @@ const EntityContextPanel = dynamic(
 // ── Context-tab availability ──────────────────────────────────────────────────
 
 // A profile carries a Context tab when the notes tool is enabled, the node is an
-// entity kind (person/org — the types with canonical context-note namespaces),
+// entity kind (person/org/resource — the types with canonical context-note namespaces),
 // and the node belongs to the current community (its brain owns the note).
 function useContextTabAvailable(node: NBNode | null): boolean {
   const { currentCommunity } = useCommunity();
@@ -43,18 +42,21 @@ function useContextTabAvailable(node: NBNode | null): boolean {
   );
 }
 
-// Tab state lives in the URL (?tab=context) so tree/graph/backlink deep links
-// land directly on an entity's context. Default tab = bare URL.
-function useProfileTabParam(): [boolean, (tab: ProfileTab) => void] {
+// Tab state lives in the URL (?tab=context / ?tab=raw) so tree/graph/backlink
+// deep links land directly on an entity's context. Default tab = bare URL.
+// Context and Raw are the same note behind the same availability gate — Raw is
+// just the editor in raw mode, promoted to a tab of its own.
+function useProfileTabParam(): [ProfileTab | null, (tab: ProfileTab) => void] {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const wantsContext = searchParams.get('tab') === 'context';
+  const param = searchParams.get('tab');
+  const wantedTab: ProfileTab | null = param === 'context' || param === 'raw' ? param : null;
 
   const setTabParam = useCallback(
     (tab: ProfileTab) => {
       const params = new URLSearchParams(searchParams.toString());
-      if (tab === 'context') params.set('tab', 'context');
+      if (tab === 'context' || tab === 'raw') params.set('tab', tab);
       else params.delete('tab');
       const q = params.toString();
       router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
@@ -62,26 +64,19 @@ function useProfileTabParam(): [boolean, (tab: ProfileTab) => void] {
     [searchParams, router, pathname],
   );
 
-  return [wantsContext, setTabParam];
+  return [wantedTab, setTabParam];
 }
 
-// The note editor's Editor/Raw toggle rides the navbar's right slot, where the
-// directory's own view toggle lives — selectors sit in one place app-wide. Only
-// mounted while the Context tab's editor is actually up.
-function useNoteModeHeaderControl(active: boolean, mode: NoteMode, onChange: (m: NoteMode) => void) {
-  const { setHeaderRight } = useHeader();
-  useEffect(() => {
-    if (!active) return;
-    setHeaderRight(<NoteModeToggle value={mode} onChange={onChange} />);
-    return () => setHeaderRight(null);
-  }, [active, mode, onChange, setHeaderRight]);
-}
+// Both note-backed tabs; the tab IS the editor mode, so no lifted mode state.
+const isNoteTab = (tab: ProfileTab) => tab === 'context' || tab === 'raw';
+const modeForTab = (tab: ProfileTab): NoteMode => (tab === 'raw' ? 'raw' : 'wysiwyg');
 
 // ── Person nodes → LinkedIn profile (+ Context tab) ──────────────────────────
 
 const PERSON_TABS: TabConfig[] = [
   { id: 'about', label: 'Profile' },
   { id: 'context', label: 'Context' },
+  { id: 'raw', label: 'Raw' },
 ];
 
 function PersonProfilePage({ nodeId }: { nodeId: string }) {
@@ -91,27 +86,23 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const node = data?.node ?? null;
   const { currentCommunity, loading: communityLoading } = useCommunity();
   const contextAvailable = useContextTabAvailable(node);
-  const [wantsContext, setTabParam] = useProfileTabParam();
-  // Note editor view-mode lifted here so its Editor/Raw toggle rides the navbar.
-  const [mode, setMode] = useState<NoteMode>('wysiwyg');
-  const [editorActive, setEditorActive] = useState(false);
+  const [wantedTab, setTabParam] = useProfileTabParam();
 
-  const activeTab: ProfileTab = wantsContext && contextAvailable ? 'context' : 'about';
+  const activeTab: ProfileTab = wantedTab && contextAvailable ? wantedTab : 'about';
   // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
   // as the profile knows the tab exists, so clicking over paints immediately.
   usePrefetchEntityContext(nodeId, node, contextAvailable);
-  useNoteModeHeaderControl(activeTab === 'context' && editorActive, mode, setMode);
-  // Deep link to ?tab=context while community/node data still resolves: hold a
-  // skeleton instead of flashing the profile and then swapping.
-  const stillResolving = wantsContext && !contextAvailable && (communityLoading || nodeLoading || !currentCommunity);
+  // Deep link to ?tab=context/raw while community/node data still resolves: hold
+  // a skeleton instead of flashing the profile and then swapping.
+  const stillResolving = wantedTab !== null && !contextAvailable && (communityLoading || nodeLoading || !currentCommunity);
 
-  // Strip a stale ?tab=context (tool off / non-entity / foreign node) once
+  // Strip a stale ?tab=context/raw (tool off / non-entity / foreign node) once
   // everything needed to decide has resolved.
   useEffect(() => {
-    if (wantsContext && !contextAvailable && !communityLoading && !nodeLoading && currentCommunity && node) {
+    if (wantedTab && !contextAvailable && !communityLoading && !nodeLoading && currentCommunity && node) {
       setTabParam('about');
     }
-  }, [wantsContext, contextAvailable, communityLoading, nodeLoading, currentCommunity, node, setTabParam]);
+  }, [wantedTab, contextAvailable, communityLoading, nodeLoading, currentCommunity, node, setTabParam]);
 
   return (
     // Full-width shell: the sticky bars' divider lines run edge to edge across
@@ -134,11 +125,11 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
             attachedOpen={activeTab === 'context'}
           />
         )}
-        <div className={contextAvailable && activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        <div className={contextAvailable && isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
         {stillResolving ? (
           <ProfileSkeletonLoader mode="fullpage" />
-        ) : activeTab === 'context' ? (
-          <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
+        ) : isNoteTab(activeTab) ? (
+          <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
         ) : (
           /* No outer card wrapper — ProfilePageContent renders separate floating
              cards directly on the page background, matching the event detail page. */
@@ -156,15 +147,12 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const contextAvailable = useContextTabAvailable(node);
-  const [wantsContext, setTabParam] = useProfileTabParam();
-  const [activeTab, setActiveTab] = useState<ProfileTab>(wantsContext ? 'context' : 'about');
-  const [mode, setMode] = useState<NoteMode>('wysiwyg');
-  const [editorActive, setEditorActive] = useState(false);
+  const [wantedTab, setTabParam] = useProfileTabParam();
+  const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'about');
   const router = useRouter();
   // Same warm-start as the person page: prefetch the Context tab's chunk + data
   // while the user is still on Profile.
   usePrefetchEntityContext(nodeId, node, contextAvailable);
-  useNoteModeHeaderControl(activeTab === 'context' && contextAvailable && editorActive, mode, setMode);
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
   const changeTab = useCallback(
@@ -180,7 +168,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   // non-entity node), so it can only be judged once the node has loaded.
   useEffect(() => {
     const retired = activeTab === 'connections' || activeTab === 'communities';
-    const staleContext = activeTab === 'context' && !loading && data && !contextAvailable;
+    const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
     if (retired || staleContext) {
       changeTab('about');
     }
@@ -203,19 +191,12 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     );
   }
 
-  const { node: nodeData, connections } = data;
-  const activityItems = connections.slice(0, 10).map((conn, i) => ({
-    id: `conn-${i}`,
-    type: 'connected' as const,
-    description: `Connected with ${conn.name}`,
-    timestamp: conn.since || nodeData.createdAt || new Date().toISOString(),
-  }));
+  const { node: nodeData } = data;
 
   // Tabs mirror the person profile's top bar — the entity view lives under a
   // "Profile" tab, Context is its peer.
   const tabs: TabConfig[] = [{ id: 'about', label: 'Profile' }];
-  if (contextAvailable) tabs.push({ id: 'context', label: 'Context' });
-  if (activityItems.length >= 3) tabs.push({ id: 'activity', label: 'Activity' });
+  if (contextAvailable) tabs.push({ id: 'context', label: 'Context' }, { id: 'raw', label: 'Raw' });
 
   return (
     // Full-width shell (see PersonProfilePage) — divider lines run edge to edge.
@@ -232,12 +213,86 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
           attachedOpen={activeTab === 'context' && contextAvailable}
         />
 
-        <div role="tabpanel" className={activeTab === 'context' ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        <div role="tabpanel" className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
           {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
-          {activeTab === 'context' && contextAvailable && (
-            <EntityContextPanel nodeId={nodeId} mode={mode} onModeChange={setMode} onEditorActiveChange={setEditorActive} />
+          {isNoteTab(activeTab) && contextAvailable && (
+            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
           )}
-          {activeTab === 'activity' && <ActivityFeed items={activityItems} />}
+        </div>
+      </div>
+    </TabBarSlotProvider>
+  );
+}
+
+// ── Resource nodes → Preview + Context (no generic profile) ──────────────────
+
+// Resources are documents/links, not people — a Connect-button profile makes no
+// sense for them. Default tab is a Preview of the resource URL; Context is the
+// same notes panel entities get (entityKindOf covers resources).
+function ResourceNodePage({ nodeId }: { nodeId: string }) {
+  const { data, loading, error } = useNodeProfile(nodeId);
+  const node = data?.node ?? null;
+  const contextAvailable = useContextTabAvailable(node);
+  const [wantedTab, setTabParam] = useProfileTabParam();
+  const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'preview');
+  const router = useRouter();
+  usePrefetchEntityContext(nodeId, node, contextAvailable);
+
+  const changeTab = useCallback(
+    (tab: ProfileTab) => {
+      setActiveTab(tab);
+      setTabParam(tab);
+    },
+    [setTabParam],
+  );
+
+  // Anything but preview/available-context falls back to Preview (retired deep
+  // links, or ?tab=context when the notes tool is off for this community).
+  useEffect(() => {
+    const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
+    if ((activeTab !== 'preview' && !isNoteTab(activeTab)) || staleContext) {
+      changeTab('preview');
+    }
+  }, [activeTab, loading, data, contextAvailable, changeTab]);
+
+  if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
+
+  if (error || !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="text-5xl">😕</div>
+        <h2 className="text-xl font-semibold text-text-primary">Resource not found</h2>
+        <button
+          onClick={() => router.back()}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border-default rounded-xl hover:bg-surface-2 transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Go back
+        </button>
+      </div>
+    );
+  }
+
+  const { node: nodeData } = data;
+
+  const tabs: TabConfig[] = [{ id: 'preview', label: 'Preview' }];
+  if (contextAvailable) tabs.push({ id: 'context', label: 'Context' }, { id: 'raw', label: 'Raw' });
+
+  return (
+    // Full-width shell (see PersonProfilePage) — divider lines run edge to edge.
+    <TabBarSlotProvider>
+      <div className="profile-enter w-full pb-10">
+        {/* Direct child of the tall page container so `sticky` actually pins;
+            "-top-4 -mt-4" cancels <main>'s pt-4 (see NodeTabPage). */}
+        <ProfileTabBar
+          nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
+          attachedOpen={activeTab === 'context' && contextAvailable}
+        />
+
+        <div role="tabpanel" className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+          {activeTab === 'preview' && <ResourcePreviewContent node={nodeData} />}
+          {isNoteTab(activeTab) && contextAvailable && (
+            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+          )}
         </div>
       </div>
     </TabBarSlotProvider>
@@ -264,6 +319,12 @@ function NodeProfileRoute() {
   }
   if (nodeId.startsWith('person:')) {
     return <PersonProfilePage nodeId={nodeId} />;
+  }
+  // Resources get a Preview + Context view instead of the generic profile —
+  // ids are consistently `resource:`-prefixed (create modal + seeds), matching
+  // the person:/event: prefix convention above.
+  if (nodeId.startsWith('resource:')) {
+    return <ResourceNodePage nodeId={nodeId} />;
   }
   return <NodeTabPage nodeId={nodeId} />;
 }

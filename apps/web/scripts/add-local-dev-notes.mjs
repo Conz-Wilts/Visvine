@@ -281,14 +281,19 @@ try {
     { ownerKey: ADMIN, notes: personal },
   ];
 
+  // The starred column is derived from the frontmatter `starred:` flag on every
+  // app write, so seed starred notes with the flag in the frontmatter too.
+  const withStar = (content, starred) =>
+    starred ? content.replace(/^---\n/, '---\nstarred: true\n') : content;
+
   for (const { ownerKey, notes } of brains) {
     for (const n of notes) {
       await client.query(
-        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, pinned, updated_at)
+        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
          ON CONFLICT (community_id, owner_key, path)
-         DO UPDATE SET content = EXCLUDED.content, pinned = EXCLUDED.pinned, updated_at = now()`,
-        [COMM, ownerKey, n.path, n.content, ADMIN, n.pinned ?? false],
+         DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
+        [COMM, ownerKey, n.path, withStar(n.content, n.pinned ?? false), ADMIN, n.pinned ?? false],
       );
     }
   }

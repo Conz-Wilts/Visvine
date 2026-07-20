@@ -5,7 +5,7 @@
 import { NBNode, getNodeGlyph } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import type { CanvasTheme } from './RectangleNodeRenderer';
-import { drawWrappedText, drawPersonSilhouette, drawGroupSilhouette } from '../utils/canvasUtils';
+import { drawWrappedText, drawGlyphSilhouette } from '../utils/canvasUtils';
 import { CARD_DIMENSIONS, type NodeLOD } from '../utils/constants';
 import { loadImage } from '../utils/imageCache';
 
@@ -135,10 +135,8 @@ export function drawCircleNode(
     ctx.stroke();
 
     const glyph = getNodeGlyph(node.type);
-    if (glyph === 'group') {
-      drawGroupSilhouette(ctx, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
-    } else if (glyph === 'person') {
-      drawPersonSilhouette(ctx, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
+    if (glyph) {
+      drawGlyphSilhouette(ctx, glyph, innerCenterX, innerCenterY, innerRadius * 1.2, borderColor);
     } else {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -170,7 +168,10 @@ export function drawCircleNode(
   // Identity tag at bottom
   if (lod === 'full') {
     const tagY = y + radius * 0.6;
-    const roleTag = node.type;
+    // Prefer the (user-entered) alias, e.g. "Founder"; fall back to the type,
+    // capitalised (stored types are often lowercase, e.g. 'person').
+    const roleTag =
+      node.alias ?? (node.type ? node.type.charAt(0).toUpperCase() + node.type.slice(1) : node.type);
     ctx.font = '400 10px Inter, system-ui, -apple-system';
 
     const tagWidth = ctx.measureText(roleTag).width + 16;

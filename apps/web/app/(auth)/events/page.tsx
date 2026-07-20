@@ -5,8 +5,8 @@
  * Layout matches Directory page pattern: header row + filters row + content
  */
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useSession } from '@/lib/auth-client';
 import { useHeader } from '@/lib/contexts/HeaderContext';
@@ -31,17 +31,30 @@ interface EventWithStats extends NBEvent {
   };
 }
 
-export default function EventsPage() {
+function EventsPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { currentCommunity } = useCommunity();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<EventView>('feed');
-  const [scope, setScope] = useState<EventScope>('community');
+  // ?scope=discover deep-links from the navbar's discover-events icon.
+  const initialScope = searchParams.get('scope');
+  const [scope, setScope] = useState<EventScope>(
+    initialScope === 'discover' || initialScope === 'mine' ? initialScope : 'community'
+  );
   const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const { setHeaderRight } = useHeader();
+
+  // Clicking the navbar icon while already on /events updates the param, not a
+  // remount — keep the scope tab in sync with the URL.
+  useEffect(() => {
+    if (initialScope === 'discover' || initialScope === 'mine' || initialScope === 'community') {
+      setScope(initialScope);
+    }
+  }, [initialScope]);
   const { data: session } = useSession();
   const myNodeId = session?.user?.nodeId;
 
@@ -198,5 +211,14 @@ export default function EventsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function EventsPage() {
+  // Suspense boundary: the inner page reads useSearchParams (?scope=).
+  return (
+    <Suspense fallback={null}>
+      <EventsPageInner />
+    </Suspense>
   );
 }

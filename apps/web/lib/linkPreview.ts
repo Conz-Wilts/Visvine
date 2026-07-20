@@ -36,6 +36,15 @@ function pickTitle(html: string): string | undefined {
   return m?.[1]?.trim();
 }
 
+// Whether the response headers allow this origin-agnostic page to be iframed.
+// Any X-Frame-Options or a CSP frame-ancestors directive is treated as blocking —
+// we can't evaluate ancestor lists server-side, so err toward the fallback UI.
+function isEmbeddable(headers: Headers): boolean {
+  if (headers.get('x-frame-options')) return false;
+  const csp = headers.get('content-security-policy') ?? '';
+  return !/frame-ancestors/i.test(csp);
+}
+
 async function fetchLinkPreview(url: string) {
   let parsed: URL;
   try { parsed = new URL(url); } catch { return null; }
@@ -69,7 +78,14 @@ async function fetchLinkPreview(url: string) {
     const imageUrl = pickMeta(html, 'og:image');
     const siteName = pickMeta(html, 'og:site_name');
     if (!title && !description && !imageUrl) return null;
-    return { url, title: title ?? null, description: description ?? null, imageUrl: imageUrl ?? null, siteName: siteName ?? null };
+    return {
+      url,
+      title: title ?? null,
+      description: description ?? null,
+      imageUrl: imageUrl ?? null,
+      siteName: siteName ?? null,
+      embeddable: isEmbeddable(res.headers),
+    };
   } catch {
     return null;
   } finally {
@@ -77,23 +93,30 @@ async function fetchLinkPreview(url: string) {
   }
 }
 
+// Cache-or-fetch: serve the linkPreview row when fresh (<7 days), otherwise
+// unfurl and upsert. `embeddable` is only known on a live fetch (it comes from
+// response headers, not the DB) — undefined on cache hits.
+export async function getOrFetchLinkPreview(url: string) {
+  const cached = await prisma.linkPreview.findUnique({ where: { url } });
+  const stale = cached && Date.now() - cached.fetchedAt.getTime() > 1000 * 60 * 60 * 24 * 7;
+  if (cached && !stale) return { preview: cached, embeddable: undefined as boolean | undefined };
+  const fetched = await fetchLinkPreview(url);
+  if (!fetched) return { preview: cached ?? null, embeddable: undefined as boolean | undefined };
+  const { embeddable, ...row } = fetched;
+  const preview = await prisma.linkPreview.upsert({
+    where: { url },
+    create: row,
+    update: { ...row, fetchedAt: new Date() },
+  });
+  return { preview, embeddable };
+}
+
 export async function attachPreviewsToMessage(messageId: string, text: string) {
   const urls = extractUrls(text).slice(0, 3);
   if (!urls.length) return;
   for (const url of urls) {
     try {
-      const cached = await prisma.linkPreview.findUnique({ where: { url } });
-      let preview = cached;
-      const stale = cached && Date.now() - cached.fetchedAt.getTime() > 1000 * 60 * 60 * 24 * 7;
-      if (!cached || stale) {
-        const fetched = await fetchLinkPreview(url);
-        if (!fetched) continue;
-        preview = await prisma.linkPreview.upsert({
-          where: { url },
-          create: fetched,
-          update: { ...fetched, fetchedAt: new Date() },
-        });
-      }
+      const { preview } = await getOrFetchLinkPreview(url);
       if (!preview) continue;
       await prisma.messageLinkPreview.create({
         data: { messageId, linkPreviewId: preview.id },

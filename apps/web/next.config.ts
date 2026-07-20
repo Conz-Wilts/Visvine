@@ -2,6 +2,18 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async redirects() {
+    return [
+      // The directory's old graph view mode is the standalone Context tool now.
+      // (The old ?view=table mode was removed; the param is simply ignored.)
+      {
+        source: "/directory",
+        has: [{ type: "query", key: "view", value: "graph" }],
+        destination: "/context",
+        permanent: false,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

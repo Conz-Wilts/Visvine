@@ -149,16 +149,20 @@ export function getNodeTypeConfig(
 
 /**
  * The avatar-fallback glyph a node type should draw when it has no image. People
- * get the person silhouette; groups/organisations get the cluster silhouette.
- * Any other type returns null and the caller falls back to name initials. This is
- * a clean SVG-glyph system — deliberately not emoji.
+ * get the person silhouette; groups/organisations the cluster; events a calendar;
+ * resources a document. Any other type returns null and the caller falls back to
+ * name initials. This is a clean SVG-glyph system — deliberately not emoji.
  */
-export function getNodeGlyph(type: string | null | undefined): 'person' | 'group' | null {
+export function getNodeGlyph(
+  type: string | null | undefined
+): 'person' | 'group' | 'event' | 'resource' | null {
   if (!type) return null;
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
   if (canonical === 'person' || canonical === 'people') return 'person';
   if (canonical === 'group') return 'group';
+  if (canonical === 'event' || canonical === 'events') return 'event';
+  if (canonical === 'resource' || canonical === 'resources') return 'resource';
   return null;
 }
 

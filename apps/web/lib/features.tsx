@@ -35,8 +35,19 @@ export const FEATURES: FeatureDef[] = [
     key: 'directory',
     label: 'Directory',
     href: '/directory',
-    description: 'A searchable graph & table of everyone and everything in the community.',
+    description: 'A searchable grid of everyone and everything in the community.',
     core: true,
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'notes',
+    label: 'Context',
+    href: '/context',
+    description: 'An interactive graph of the community, plus shared notes and a Context tab on every person and organization profile.',
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <circle cx="18" cy="5" r="3" />
@@ -44,21 +55,6 @@ export const FEATURES: FeatureDef[] = [
         <circle cx="18" cy="19" r="3" />
         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-      </svg>
-    ),
-  },
-  {
-    key: 'notes',
-    label: 'Context',
-    // Context has no page of its own — the key stays toggleable but has no nav
-    // item (NAV_HIDDEN_FEATURE_KEYS); it surfaces only as the Context tab on
-    // entity profiles. href points at the Directory (where those profiles live)
-    // so nothing ever links to a dead route.
-    href: '/directory',
-    description: 'Community notes and context — a Context tab on every person and organization profile.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
   },
@@ -92,7 +88,7 @@ export const FEATURES: FeatureDef[] = [
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="M8 7v9M12 7v5M16 7v7" />
+        <path d="m8.5 12 2.5 2.5L16 9" />
       </svg>
     ),
   },
@@ -111,7 +107,7 @@ export const FEATURES: FeatureDef[] = [
     key: 'messages',
     label: 'Messages',
     href: '/messages',
-    description: 'Direct messages and warm intro requests.',
+    description: 'Direct messages and group chats.',
     core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">

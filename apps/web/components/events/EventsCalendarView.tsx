@@ -62,7 +62,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(() => new Date());
 
-  // ── Gliding cell highlight ("magic move", lifted from CrmDirectoryTable) ──────
+  // ── Gliding cell highlight ("magic move") ─────────────────────────────────────
   // A single overlay that glides + resizes between day tiles as the pointer
   // moves, driven imperatively (refs + rAF) so mousemove never re-renders React.
   // It lives in the relative month-region wrapper, OUTSIDE the 7-col grid (an

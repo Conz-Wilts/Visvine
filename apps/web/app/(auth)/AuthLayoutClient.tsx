@@ -51,8 +51,8 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
 
   // Every page scrolls inside <main> — not on the document — so the green
   // scrollbar starts BELOW the fixed navbar instead of running up its right
-  // edge to the top of the viewport. (/context, which used to own its scroll
-  // via an overflow-visible special case, is a redirect now.)
+  // edge to the top of the viewport. (/context is immersive: it pins body
+  // overflow itself and never scrolls this container.)
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-brand-bg" style={backgroundStyle}>

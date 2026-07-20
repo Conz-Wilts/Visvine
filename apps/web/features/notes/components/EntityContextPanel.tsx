@@ -20,7 +20,7 @@ import { findAlias } from '@/lib/types'
 import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
-import { entityNotePath, entityStub, resolveEntityNode } from '@/lib/notes/entities'
+import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
 import { notesApi, type RegistryResponse } from '../lib/notesApi'
 import {
@@ -28,6 +28,7 @@ import {
   contextKeys,
   invalidateContextCache,
   readNote,
+  swrFetch,
   type NoteRead,
 } from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
@@ -46,19 +47,16 @@ const PERSONAL_ID_PREFIX = 'me:'
 
 interface EntityContextPanelProps {
   nodeId: string
-  // Editor view mode is lifted to the profile page so its Editor/Raw toggle can
-  // live in the tab bar; the panel reports whether an editor is on screen so the
-  // page knows when to show that toggle.
+  // Editor view mode is lifted to the profile page (reset there across tab
+  // switches); the editor's own toolbar hosts the Editor/Raw toggle.
   mode?: NoteMode
   onModeChange?: (mode: NoteMode) => void
-  onEditorActiveChange?: (active: boolean) => void
 }
 
 export function EntityContextPanel({
   nodeId,
   mode = 'wysiwyg',
   onModeChange,
-  onEditorActiveChange,
 }: EntityContextPanelProps) {
   const router = useRouter()
   const { currentCommunity } = useCommunity()
@@ -100,11 +98,13 @@ export function EntityContextPanel({
 
   const gatedOut = !isPersonalSpace && registry !== null && !registry.gate.canRead
 
+  // swrFetch delivers a cached value synchronously, so on a re-open these
+  // "done" gates flip in the same render pass and the skeleton never flashes.
   useEffect(() => {
-    cachedFetch(contextKeys.config(), () => notesApi.config())
-      .then((c) => setAiConfigured(c.aiConfigured))
-      .catch(() => {})
-      .finally(() => setConfigDone(true))
+    swrFetch(contextKeys.config(), () => notesApi.config(), (c) => {
+      setAiConfigured(c.aiConfigured)
+      setConfigDone(true)
+    }).catch(() => setConfigDone(true))
   }, [])
 
   useEffect(() => {
@@ -112,10 +112,20 @@ export function EntityContextPanel({
     setRegistryDone(false)
     if (!communityId) return
     let stale = false
-    cachedFetch(contextKeys.registry(communityId), () => notesApi.getRegistry(communityId))
-      .then((r) => { if (!stale) setRegistry(r) })
-      .catch(() => { if (!stale) setRegistry(null) })
-      .finally(() => { if (!stale) setRegistryDone(true) })
+    swrFetch(
+      contextKeys.registry(communityId),
+      () => notesApi.getRegistry(communityId),
+      (r) => {
+        if (stale) return
+        setRegistry(r)
+        setRegistryDone(true)
+      },
+    ).catch(() => {
+      if (!stale) {
+        setRegistry(null)
+        setRegistryDone(true)
+      }
+    })
     return () => { stale = true }
   }, [communityId])
 
@@ -162,24 +172,31 @@ export function EntityContextPanel({
     setReferences(null)
     setRelated(null)
     onModeChange?.('wysiwyg')
+    // References/related fire in parallel with the read (no waterfall — they're
+    // below-the-fold UI); their results only apply once the read lands 'ok', so
+    // a missing note never shows phantom backlinks.
+    const refsPromise = cachedFetch(contextKeys.references(communityId, path), () =>
+      notesApi.references(communityId, path),
+    )
+    const relatedPromise = cachedFetch(contextKeys.related(communityId, path), () =>
+      notesApi.related(communityId, path),
+    )
     readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
       setRead(r)
       setNoteExists(r.status === 'ok')
       if (r.status === 'ok') {
-        cachedFetch(contextKeys.references(communityId, path), () =>
-          notesApi.references(communityId, path),
-        ).then(({ references: refs }) => {
+        refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
-        cachedFetch(contextKeys.related(communityId, path), () =>
-          notesApi.related(communityId, path),
-        ).then(({ related: rel }) => {
+        relatedPromise.then(({ related: rel }) => {
           if (loadSeq.current === seq) setRelated(rel)
         }).catch(() => {})
       }
     })
-    cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).then((l) => {
+    refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
+    relatedPromise.catch(() => {})
+    swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
   }, [communityId, path, onModeChange])
@@ -220,6 +237,7 @@ export function EntityContextPanel({
           contextKeys.references(communityId, p),
           contextKeys.related(communityId, p),
           contextKeys.list(communityId),
+          contextKeys.tree(communityId), // a first save creates the note — the tree gains it
         )
         setNoteExists(true)
         setError(null)
@@ -234,14 +252,14 @@ export function EntityContextPanel({
     [communityId],
   )
 
-  // Links inside the note: another entity → that entity's Context tab. Context
-  // has no standalone surface anymore, so a link to a non-entity note has
-  // nowhere to open — ignore it rather than dead-end on a 404.
+  // Links inside the note: another entity → that entity's Context tab; a
+  // non-entity note (folder index, sector, deal…) → the standalone note view.
   const handleOpenNote = useCallback(
     (p: string) => {
       const targetId = resolveEntityNode(p, entityByPath)
-      if (!targetId || targetId === nodeId) return
-      router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
+      if (targetId === nodeId) return
+      if (targetId) router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
+      else router.push(noteHref(p))
     },
     [entityByPath, nodeId, router],
   )
@@ -257,7 +275,11 @@ export function EntityContextPanel({
       try {
         await notesApi.create(communityId, p, entityStub(entity))
         // The target entity's note may be cached as "missing" from a prefetch.
-        invalidateContextCache(contextKeys.read(communityId, p), contextKeys.list(communityId))
+        invalidateContextCache(
+          contextKeys.read(communityId, p),
+          contextKeys.list(communityId),
+          contextKeys.tree(communityId),
+        )
       } catch (err) {
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
@@ -330,22 +352,6 @@ export function EntityContextPanel({
   // requests, so gating the whole surface on all three is what keeps the text,
   // the toolbar and the tags from landing on three different commits.
   const dataReady = read !== null && (isPersonalSpace || registryDone) && configDone
-
-  // Whether a note editor is on screen (mirrors `showEditor` below) — the page
-  // shows the Editor/Raw toggle in the tab bar only while it is, so it has to
-  // read the same gate or the toggle arrives ahead of the bar it belongs to.
-  const editorShown =
-    !!node && !!path &&
-    !(node?.community_id && node.community_id !== communityId) &&
-    !gatedOut &&
-    dataReady && read !== null && read.status !== 'error' &&
-    (noteExists || canWrite)
-  useEffect(() => {
-    onEditorActiveChange?.(editorShown)
-  }, [editorShown, onEditorActiveChange])
-  // Report inactive on unmount (e.g. leaving the Context tab) so a stale toggle
-  // doesn't linger in the tab bar.
-  useEffect(() => () => onEditorActiveChange?.(false), [onEditorActiveChange])
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -505,6 +511,7 @@ export function EntityContextPanel({
             canEdit={canWrite}
             aiConfigured={aiConfigured}
             mode={mode}
+            onModeChange={onModeChange}
             references={references}
             related={related}
             entities={entities}
