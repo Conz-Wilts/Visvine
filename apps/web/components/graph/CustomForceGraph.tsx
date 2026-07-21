@@ -835,12 +835,16 @@ const CustomForceGraph: React.FC<{
     requestAnimationFrame(animateFrame);
   }, [scheduleRender]);
 
-  const fitToScreen = useCallback((animate: boolean = false) => {
+  // Zoom level (and centre) at which the whole current graph fits the canvas.
+  // Shared by fitToScreen and the wheel zoom-out clamp so the "how far out can I
+  // go" floor always reflects the graph's *current* bounding box, even when the
+  // camera was restored from a saved layout and fitToScreen never ran.
+  const computeFitView = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || nodes.length === 0) return;
+    if (!canvas || nodes.length === 0) return null;
 
     const nodePositions = nodes.filter(n => typeof n.x === 'number' && typeof n.y === 'number');
-    if (nodePositions.length === 0) return;
+    if (nodePositions.length === 0) return null;
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     nodePositions.forEach(node => {
@@ -859,14 +863,26 @@ const CustomForceGraph: React.FC<{
     const graphCenterY = (minY + maxY) / 2;
 
     const { width, height } = canvas.getBoundingClientRect();
-    if (width === 0 || height === 0) return;
+    if (width === 0 || height === 0) return null;
 
     const scaleX = width / graphWidth;
     const scaleY = height / graphHeight;
-    const targetZoom = Math.min(scaleX, scaleY, 1.2);
-    // Allow zooming out slightly past the overview so the fit level is never the
-    // hard floor; keep the static 0.05 floor when the fit is already closer in.
-    minZoomRef.current = Math.min(0.05, targetZoom * 0.8);
+    const fitZoom = Math.min(scaleX, scaleY);
+    return { fitZoom, graphCenterX, graphCenterY, width, height };
+  }, [nodes]);
+
+  // Wheel zoom-out floor: allow zooming out to a touch past the whole-graph
+  // overview (never trap the camera closer in than the graph fits), but never
+  // hard-stop before the static 0.05 far-out floor either.
+  const minZoomFor = useCallback((fitZoom: number) => Math.min(0.05, fitZoom * 0.8), []);
+
+  const fitToScreen = useCallback((animate: boolean = false) => {
+    const fit = computeFitView();
+    if (!fit) return;
+    const { fitZoom, graphCenterX, graphCenterY, width, height } = fit;
+
+    const targetZoom = Math.min(fitZoom, 1.2);
+    minZoomRef.current = minZoomFor(fitZoom);
     const targetX = width / 2 - graphCenterX * targetZoom;
     const targetY = height / 2 - graphCenterY * targetZoom;
 
@@ -879,7 +895,7 @@ const CustomForceGraph: React.FC<{
     }
 
     animateTransform({ x: targetX, y: targetY, k: targetZoom });
-  }, [nodes, scheduleRender, animateTransform]);
+  }, [computeFitView, minZoomFor, scheduleRender, animateTransform]);
 
   // Keep fitToScreenRef pointing at the latest fitToScreen so startSimLoop
   // (defined earlier) can call it without a circular useCallback dependency.
@@ -944,6 +960,13 @@ const CustomForceGraph: React.FC<{
       const delta = -e.deltaY * 0.005;
       const factor = Math.exp(delta);
 
+      // Derive the floor from the graph's current bounds every wheel tick — when
+      // the camera was restored from a saved layout, fitToScreen never ran, so
+      // minZoomRef would otherwise still hold the default and trap large graphs
+      // zoomed in with no way out to the overview.
+      const fit = computeFitView();
+      if (fit) minZoomRef.current = Math.min(minZoomRef.current, minZoomFor(fit.fitZoom));
+
       updateTransform(prev => {
         const newK = Math.max(minZoomRef.current, Math.min(prev.k * factor, 8));
 
@@ -971,7 +994,7 @@ const CustomForceGraph: React.FC<{
     return () => {
       canvas.removeEventListener('wheel', handleNativeWheel);
     };
-  }, [updateTransform, schedulePersist, collectPositions]);
+  }, [updateTransform, schedulePersist, collectPositions, computeFitView, minZoomFor]);
 
   // Block the browser's pinch-to-zoom (ctrl+wheel) across the whole window while
   // the graph is mounted. The canvas listener above only prevents default over

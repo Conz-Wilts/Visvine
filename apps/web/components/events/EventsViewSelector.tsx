@@ -1,21 +1,16 @@
 'use client';
 
 /**
- * View selector for the Events tab. Thin wrapper over the shared ViewToggle so
- * it renders identically to Directory's and Context's navbar selectors — same
- * flat brand-green pill, same sizing, same icons.
+ * View selector for the Events tab (Calendar / Feed / Map). Uses the shared
+ * UnderlineTabs so it reads identically to the Directory's Grid / Graph / Tables
+ * switcher — sliding green underline, brand text colors.
  */
 
-import { ViewToggle, type ViewToggleOption } from '@/components/ui';
+import { UnderlineTabs, type UnderlineTab } from '@/components/ui';
 
 export type EventView = 'calendar' | 'feed' | 'map';
 
-interface EventsViewSelectorProps {
-  currentView: EventView;
-  onViewChange: (view: EventView) => void;
-}
-
-const VIEWS: ViewToggleOption<EventView>[] = [
+const VIEWS: UnderlineTab<EventView>[] = [
   {
     id: 'calendar',
     label: 'Calendar',
@@ -45,6 +40,18 @@ const VIEWS: ViewToggleOption<EventView>[] = [
   },
 ];
 
+interface EventsViewSelectorProps {
+  currentView: EventView;
+  onViewChange: (view: EventView) => void;
+}
+
 export default function EventsViewSelector({ currentView, onViewChange }: EventsViewSelectorProps) {
-  return <ViewToggle options={VIEWS} value={currentView} onChange={onViewChange} />;
+  return (
+    <UnderlineTabs
+      tabs={VIEWS}
+      value={currentView}
+      onChange={onViewChange}
+      ariaLabel="Event views"
+    />
+  );
 }

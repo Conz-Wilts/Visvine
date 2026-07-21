@@ -24,6 +24,12 @@ interface ContextPanelValue {
   // within a session; a fresh load starts open again.
   contextOpen: boolean;
   setContextOpen: (v: boolean) => void;
+  // Pixels the docked panel's content should start BELOW the card top. A page
+  // that keeps its own bar pinned at the card top (the Directory's Grid/Graph/
+  // Tables tabs) sets this to that bar's height so the notes tree begins under
+  // it instead of being covered. Defaults to 0 — most docks fill from the top.
+  dockTopInset: number;
+  setDockTopInset: (v: number) => void;
 }
 
 const ContextPanelContext = createContext<ContextPanelValue>({
@@ -33,15 +39,18 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setDockRequested: () => {},
   contextOpen: true,
   setContextOpen: () => {},
+  dockTopInset: 0,
+  setDockTopInset: () => {},
 });
 
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [dockRequested, setDockRequested] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
+  const [dockTopInset, setDockTopInset] = useState(0);
   return (
     <ContextPanelContext.Provider
-      value={{ host, setHost, dockRequested, setDockRequested, contextOpen, setContextOpen }}
+      value={{ host, setHost, dockRequested, setDockRequested, contextOpen, setContextOpen, dockTopInset, setDockTopInset }}
     >
       {children}
     </ContextPanelContext.Provider>

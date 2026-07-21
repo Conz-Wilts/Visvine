@@ -57,7 +57,7 @@ export default function Sidebar() {
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
   const { currentCommunity, isAdmin } = useCommunity();
-  const { setHost, dockRequested, contextOpen } = useContextPanel();
+  const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
   const dur = reduced ? "0s" : "0.32s";
@@ -309,8 +309,15 @@ export default function Sidebar() {
           />
           {/* Portal host: the page (MessagesClient / ConsoleShell) mounts its panel
               here. Inner width tracks the active route's panel so the content is
-              revealed by the clipping column rather than reflowing as it opens. */}
-          <div ref={setHost} className="h-full min-h-0" style={{ width: panelW }} />
+              revealed by the clipping column rather than reflowing as it opens.
+              paddingTop lets a page with a bar pinned at the card top (the
+              Directory tabs) start its tree BELOW that bar instead of behind it —
+              the raised-z bar then draws over this empty strip. */}
+          <div
+            ref={setHost}
+            className="min-h-0"
+            style={{ width: panelW, height: '100%', paddingTop: dockedContext ? dockTopInset : 0 }}
+          />
         </div>
       </div>
 

@@ -9,7 +9,6 @@ import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useSession } from '@/lib/auth-client';
-import { useHeader } from '@/lib/contexts/HeaderContext';
 import { isEventUpcoming } from '@/lib/eventUtils';
 import type { NBEvent } from '@/lib/types';
 import EventsToolbar from '@/components/events/EventsToolbar';
@@ -46,7 +45,6 @@ function EventsPageInner() {
   const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { setHeaderRight } = useHeader();
 
   // Clicking the navbar icon while already on /events updates the param, not a
   // remount — keep the scope tab in sync with the URL.
@@ -57,14 +55,6 @@ function EventsPageInner() {
   }, [initialScope]);
   const { data: session } = useSession();
   const myNodeId = session?.user?.nodeId;
-
-  // View toggle lives in the navbar, to the left of the profile icon (same as Directory).
-  useEffect(() => {
-    setHeaderRight(
-      <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
-    );
-    return () => setHeaderRight(null);
-  }, [currentView, setHeaderRight]);
 
   const handleEventClick = (event: NBEvent) => {
     router.push(`/events/${event.id}`);
@@ -146,7 +136,13 @@ function EventsPageInner() {
 
   return (
     <div className="relative w-full">
-      {/* Header row: centered title (view switcher lives in the navbar) */}
+      {/* View switcher pinned at the top of the page — same position as the
+          Directory's Grid / Graph / Tables tab row. */}
+      {/* UnderlineTabs draws its own bottom border, so the wrapper stays borderless. */}
+      <div className="sticky top-0 z-20 bg-surface-1 px-4 sm:px-6">
+        <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+      </div>
+
       <PageTitle title="Events" />
 
       {/* Search bar — sized to match Directory */}

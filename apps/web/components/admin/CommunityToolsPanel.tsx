@@ -2,7 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { FEATURES, isFeatureEnabled, isDirectoryPrivate, moreFeatureKeys, moreFeatures, railFeatures, sortFeatureKeys } from '@/lib/features';
+import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, isFeatureEnabled, isDirectoryPrivate, moreFeatureKeys, moreFeatures, railFeatures, sortFeatureKeys } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
 import { SettingsSection } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
@@ -73,9 +73,10 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   );
   const [directoryPrivate, setDirectoryPrivate] = useState(isDirectoryPrivate(savedConfig));
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  // Messages is always on and lives in the top bar — never a toggle, never ordered.
+  // Nav-hidden features (Messages in the top bar, Context under the Directory)
+  // are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
   const [order, setOrder] = useState<string[]>(() =>
-    sortFeatureKeys(savedConfig, FEATURES.filter(f => f.key !== 'messages').map(f => f.key))
+    sortFeatureKeys(savedConfig, FEATURES.filter(f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)).map(f => f.key))
   );
   // Keys tucked into the sidebar's "More" popup. Membership only — order still
   // comes from `order` above.

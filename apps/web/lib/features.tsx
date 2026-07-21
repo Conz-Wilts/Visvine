@@ -49,6 +49,9 @@ export const FEATURES: FeatureDef[] = [
     label: 'Context',
     href: '/context',
     description: 'An interactive graph of the community, plus shared notes and a Context tab on every person and organization profile.',
+    // Always on and nav-less: surfaced as the Graph tab under the Directory, not
+    // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.
+    core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <circle cx="18" cy="5" r="3" />
@@ -128,7 +131,7 @@ function inConfiguredOrder(
 }
 
 /** The features a given user should see in the nav, in the configured order. */
-export function visibleFeatures(
+function visibleFeatures(
   config: CommunityFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {

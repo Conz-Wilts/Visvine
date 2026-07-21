@@ -10,7 +10,7 @@ import type { CommunityFeatureConfig } from '@/lib/types';
  * Feature keys that are always on and can never be persisted off. Must stay in
  * sync with the `core: true` entries in lib/features.tsx#FEATURES.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages', 'notes'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
@@ -20,11 +20,13 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages'];
 export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'tasks', 'resources', 'messages'];
 
 /**
- * Feature keys that carry NO sidebar nav item:
+ * Feature keys that carry NO sidebar nav item (and no console toggle):
  * - `messages` is always on (core) and lives in the top navbar beside the
- *   profile icon, so it never appears in the sidebar or the console toggles.
+ *   profile icon.
+ * - `notes` ("Context") is always on (core) and surfaced as the Graph tab under
+ *   the Directory page, so it has no rail item and is not a toggleable tool.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages', 'notes'];
 
 /**
  * Is `key` enabled for a community? Core features are always enabled; any other

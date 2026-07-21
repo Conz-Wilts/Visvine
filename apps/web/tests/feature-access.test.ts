@@ -33,17 +33,17 @@ describe('isFeatureEnabled', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory and messages as the core features', () => {
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'messages']);
+  it('lists directory, messages and notes as the core features', () => {
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'messages', 'notes']);
   });
 
-  it('hides only messages from the nav rail while keeping it toggle-exempt', () => {
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages']);
-    // notes ("Context") has its own /context page and rail item now, but stays
-    // a normal toggle (it also gates the profile Context tabs).
+  it('hides messages and notes from the nav rail and console toggles', () => {
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages', 'notes']);
+    // notes ("Context") is now core: surfaced as the Graph tab under the
+    // Directory, always on, and can never be persisted off.
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
-    assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), false);
-    assert.equal(canAccessFeature({ enabled: { notes: true } }, 'notes', false), true);
+    assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), true);
+    assert.equal(canAccessFeature({ enabled: { notes: false } }, 'notes', false), true);
   });
 });
 
@@ -134,7 +134,7 @@ describe('sortFeatureKeys', () => {
 describe('sanitizeFeatureConfig', () => {
   it('strips core features from enabled so directory can never be persisted off', () => {
     const out = sanitizeFeatureConfig({ enabled: { directory: false, events: false, notes: true } });
-    assert.deepEqual(out.enabled, { events: false, notes: true });
+    assert.deepEqual(out.enabled, { events: false });
   });
 
   it('keeps directoryPrivate only when it is a boolean', () => {
@@ -209,9 +209,10 @@ describe('moreFeatureKeys', () => {
   });
 
   it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
+    // messages and notes are nav-hidden, so neither can live in "More".
     assert.deepEqual(
       moreFeatureKeys({ more: ['events', 'bogus', 'events', 'messages', 'notes'] }),
-      ['events', 'notes'],
+      ['events'],
     );
   });
 
