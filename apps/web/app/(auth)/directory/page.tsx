@@ -67,9 +67,16 @@ export default function DashboardPage() {
 
   return (
     <div
-      className="relative w-full"
+      className={`relative w-full ${view === 'graph' ? 'flex flex-col' : ''}`}
       data-tour="directory-canvas"
-      style={{ minHeight: 'calc(100dvh - 56px)' }}
+      // Graph is a fixed canvas — pin the root to exactly <main>'s content box
+      // (viewport − navbar 64px − main's pt-4/pb-6 = 40px), so the page never
+      // scrolls vertically. The graph panel below fills the leftover space via
+      // flex-1, so no per-element height math can drift out of sync. No
+      // overflow-hidden here: the tab row bleeds up/left (negative margins, for
+      // the flush look + navbar seam curve) and clipping it would shave "Grid".
+      // The graph panel clips its own canvas; Grid/Tables keep the tall min-height.
+      style={view === 'graph' ? { height: 'calc(100dvh - 64px - 40px)' } : { minHeight: 'calc(100dvh - 56px)' }}
     >
       <DirectoryViewTabs active={view} onChange={setView} />
 
@@ -122,11 +129,16 @@ export default function DashboardPage() {
         <div
           id="directory-panel-graph"
           role="tabpanel"
-          className="relative w-full overflow-hidden"
+          className="relative flex-1 min-h-0 overflow-hidden"
           style={{
-            height: 'calc(100dvh - 56px - 3rem)',
+            // Inset for the docked notes tree by SHRINKING the panel, not just
+            // shifting it: a plain marginLeft on a 100%-wide box pushes its right
+            // edge past <main> by dockInset, which spawns a horizontal scrollbar
+            // that pans the whole view. Subtract the inset from the width too.
+            width: dockInset ? `calc(100% - ${dockInset}px)` : '100%',
             marginLeft: dockInset || undefined,
-            transition: 'margin-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+            transition:
+              'margin-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
           }}
         >
           {/* left-1/2 centers within the graph panel, but the panel is pushed
