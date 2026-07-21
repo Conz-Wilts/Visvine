@@ -25,21 +25,21 @@ export const PERSON_SILHOUETTE_PATH =
  * graph and in the DOM. Filled (non-zero winding), so it fills white the same
  * way the person glyph does.
  */
-export const GROUP_SILHOUETTE_PATH =
+const GROUP_SILHOUETTE_PATH =
   'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
 
 /**
  * SVG path for the event avatar fallback (24×24 viewBox): a calendar with a
  * marked date. Drawn identically by <TypeSilhouette> and the canvas renderers.
  */
-export const EVENT_SILHOUETTE_PATH =
+const EVENT_SILHOUETTE_PATH =
   'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z';
 
 /**
  * SVG path for the resource avatar fallback (24×24 viewBox): a document with
  * text lines. Drawn identically by <TypeSilhouette> and the canvas renderers.
  */
-export const RESOURCE_SILHOUETTE_PATH =
+const RESOURCE_SILHOUETTE_PATH =
   'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z';
 
 /** Node-type glyph → its 24×24 silhouette path (the getNodeGlyph value space). */

@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 
-export const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
 export const columnCreateSchema = z.object({
   name: z.string().trim().min(1).max(60),

@@ -239,16 +239,6 @@ export async function listVisibleSources(
     .filter((s) => folderId === undefined || folderIdOfPath(s.path) === folderId)
 }
 
-/** Source metadata through the lens — null for absent AND inaccessible alike. */
-export async function getSourceVisible(
-  p: BrainPrincipal,
-  brain: Brain,
-  path: string,
-): Promise<ContextSourceMeta | null> {
-  if (!canReadPath(p, brain, path)) return null
-  return sourceStore.getSource(brain, path)
-}
-
 /** Gated upload + ingestion of a new source file. */
 export async function createSourceGated(
   p: BrainPrincipal,

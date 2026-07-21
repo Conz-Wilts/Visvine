@@ -13,7 +13,7 @@ import type { NBNode } from '@/lib/types';
 export type SortOrder = 'az' | 'za';
 
 // Maps a directory node into the full DirectoryItem shape the grid/table consume.
-export function toDirectoryItem(node: NBNode): DirectoryItem {
+function toDirectoryItem(node: NBNode): DirectoryItem {
   return {
     id: node.id, name: node.name, type: node.type,
     alias: node.alias,

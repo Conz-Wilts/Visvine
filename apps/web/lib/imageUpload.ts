@@ -27,7 +27,7 @@ export async function uploadImage(
 /**
  * Upload a cropped image blob.
  */
-export async function uploadCroppedImage(
+async function uploadCroppedImage(
   entityType: ImageEntityType,
   entityId: string,
   blob: Blob,

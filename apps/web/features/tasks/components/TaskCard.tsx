@@ -5,14 +5,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { Avatar } from '@/components/ui';
 import type { BoardMember, TaskDTO } from '../lib/types';
 
-export function dueDateTone(dueDate: string): string {
+function dueDateTone(dueDate: string): string {
   const due = new Date(dueDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return due < today ? 'bg-red-50 text-red-600' : 'bg-surface-2 text-text-secondary';
 }
 
-export function formatDueDate(dueDate: string): string {
+function formatDueDate(dueDate: string): string {
   return new Date(dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 

@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
 import { getAdminSession, getMemberSession, type SessionPayload } from '@/lib/auth';
 
-export function fail(error: string, status = 400): NextResponse {
+function fail(error: string, status = 400): NextResponse {
   return NextResponse.json({ error }, { status });
 }
 

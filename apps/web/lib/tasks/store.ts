@@ -34,7 +34,7 @@ export interface TaskDTO {
   updatedAt: string;
 }
 
-export interface BoardMember {
+interface BoardMember {
   userId: string;
   name: string;
   image: string | null;

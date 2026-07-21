@@ -28,7 +28,7 @@ export interface ContextSourceMeta {
 }
 
 /** Extensions accepted per kind — the upload/extract dispatch table. */
-export const SOURCE_EXTENSIONS: Record<string, SourceKind> = {
+const SOURCE_EXTENSIONS: Record<string, SourceKind> = {
   csv: 'csv',
   md: 'markdown',
   markdown: 'markdown',
