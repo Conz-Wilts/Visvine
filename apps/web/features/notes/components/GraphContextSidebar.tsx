@@ -18,7 +18,6 @@ import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import type { CommunityFeatureConfig } from '@/lib/types'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
-import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
 import { notesApi, type AccessOverviewResponse } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, swrFetch } from '../lib/contextPrefetch'
@@ -52,8 +51,6 @@ export function GraphContextSidebar({
   const [tree, setTree] = useState<TreeNode>(EMPTY_TREE)
   const [notes, setNotes] = useState<NoteMeta[]>([])
   const [starred, setStarred] = useState<string[]>([])
-  const [sources, setSources] = useState<ContextSourceMeta[]>([])
-  const [sourceError, setSourceError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
   const [shareFolder, setShareFolder] = useState<string | null>(null)
@@ -111,21 +108,6 @@ export function GraphContextSidebar({
     }
   }, [communityId, notesEnabled])
 
-  // Context sources list (small, uncached — uploads/deletes should show fresh).
-  useEffect(() => {
-    if (!communityId || !notesEnabled) return
-    let cancelled = false
-    notesApi
-      .listSources(communityId)
-      .then(({ sources }) => {
-        if (!cancelled) setSources(sources)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [communityId, notesEnabled])
-
   // Access overview: restricted/locked folder boundaries for the 🔒 badges.
   // Personal spaces have no boundaries — skip the fetch.
   useEffect(() => {
@@ -152,30 +134,6 @@ export function GraphContextSidebar({
     }
     return map.size ? map : undefined
   }, [overview])
-
-  const handleSelectSource = useCallback(
-    (path: string) => {
-      setSelectedPath(path)
-      router.push(`/directory/source/${path.split('/').map(encodeURIComponent).join('/')}`)
-    },
-    [router],
-  )
-
-  const handleUploadSource = useCallback(
-    (file: File) => {
-      if (!communityId) return
-      setSourceError(null)
-      notesApi
-        .uploadSource(communityId, file)
-        .then(({ source }) => {
-          setSources((prev) => [...prev.filter((s) => s.path !== source.path), source].sort((a, b) => a.path.localeCompare(b.path)))
-        })
-        .catch((e: unknown) => {
-          setSourceError(e instanceof Error ? e.message : 'Upload failed')
-        })
-    },
-    [communityId],
-  )
 
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the sidebar itself survives via the layout portal).
@@ -232,13 +190,10 @@ export function GraphContextSidebar({
         <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
       ) : error ? (
         <div className="px-3 py-4 text-sm text-red-500">{error}</div>
-      ) : notes.length === 0 && sources.length === 0 ? (
+      ) : notes.length === 0 ? (
         <div className="px-3 py-4 text-sm text-text-muted">No context notes yet.</div>
       ) : (
         <>
-          {sourceError && (
-            <div className="px-3 pt-2 text-xs text-red-500">{sourceError}</div>
-          )}
           <NoteSidebar
             tree={tree}
             notes={notes}
@@ -249,9 +204,6 @@ export function GraphContextSidebar({
             onToggleStar={handleToggleStar}
             onDeleteNote={() => {}}
             bare
-            sources={sources}
-            onSelectSource={handleSelectSource}
-            onUploadSource={handleUploadSource}
             folderBadges={folderBadges}
             onFolderAccess={communityId.startsWith('me:') ? undefined : setShareFolder}
           />

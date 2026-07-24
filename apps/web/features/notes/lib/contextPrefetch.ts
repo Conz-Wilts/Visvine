@@ -108,7 +108,6 @@ export const contextKeys = {
   list: (c: string) => `notes:list:${c}`,
   tree: (c: string) => `notes:tree:${c}`,
   references: (c: string, path: string) => `notes:refs:${c}:${path}`,
-  related: (c: string, path: string) => `notes:related:${c}:${path}`,
 }
 
 export type NoteRead =
@@ -161,9 +160,6 @@ function prefetchEntityContext(communityId: string, path: string) {
   // the read lands as anything but 'ok'.
   void cachedFetch(contextKeys.references(communityId, path), () =>
     notesApi.references(communityId, path),
-  ).catch(() => {})
-  void cachedFetch(contextKeys.related(communityId, path), () =>
-    notesApi.related(communityId, path),
   ).catch(() => {})
 }
 

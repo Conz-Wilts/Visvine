@@ -11,7 +11,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
-import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
@@ -47,11 +46,6 @@ interface NoteSidebarProps {
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
-  /** Context sources (uploaded files/tables) — rendered as their own section. */
-  sources?: ContextSourceMeta[]
-  onSelectSource?: (path: string) => void
-  /** Upload affordance in the Sources section header (server gates the write). */
-  onUploadSource?: (file: File) => void
 }
 
 export function NoteSidebar({
@@ -66,9 +60,6 @@ export function NoteSidebar({
   folderBadges,
   onFolderAccess,
   bare = false,
-  sources,
-  onSelectSource,
-  onUploadSource,
 }: NoteSidebarProps) {
   const starredSet = useMemo(() => new Set(starred), [starred])
   const titleFor = useMemo(() => {
@@ -159,103 +150,8 @@ export function NoteSidebar({
             folderBadges={folderBadges}
             onFolderAccess={onFolderAccess}
           />
-
-          {(sources?.length || onUploadSource) && (
-            <SourcesSection
-              sources={sources ?? []}
-              selectedPath={selectedPath}
-              onSelect={onSelectSource}
-              onUpload={onUploadSource}
-            />
-          )}
         </div>
       </div>
-    </div>
-  )
-}
-
-// --- context sources -------------------------------------------------------------
-
-function SourcesSection({
-  sources,
-  selectedPath,
-  onSelect,
-  onUpload,
-}: {
-  sources: ContextSourceMeta[]
-  selectedPath: string | null
-  onSelect?: (path: string) => void
-  onUpload?: (file: File) => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between pr-1.5">
-        <SectionLabel>Sources</SectionLabel>
-        {onUpload && (
-          <>
-            <button
-              type="button"
-              title="Add a source file (csv, md, txt)"
-              onClick={() => inputRef.current?.click()}
-              className="rounded p-1 text-text-muted transition hover:text-text-secondary"
-            >
-              <PlusIcon />
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".csv,.md,.markdown,.txt"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) onUpload(file)
-                e.target.value = '' // allow re-uploading the same filename
-              }}
-            />
-          </>
-        )}
-      </div>
-      {sources.length === 0 ? (
-        <div className="px-2 py-1 text-[13px] text-text-muted">No sources yet.</div>
-      ) : (
-        sources.map((s) => (
-          <div
-            key={s.path}
-            data-note-path={s.path}
-            className={`group flex items-center rounded-lg pr-1.5 transition ${
-              selectedPath === s.path ? 'bg-brand-green' : 'hover:bg-surface-2'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => onSelect?.(s.path)}
-              className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left text-[15px]"
-              title={s.path}
-            >
-              <span className={`shrink-0 ${selectedPath === s.path ? 'text-white' : 'text-text-muted'}`}>
-                <SourceFileIcon />
-              </span>
-              <span
-                className={`truncate ${
-                  selectedPath === s.path ? 'font-semibold text-white' : 'text-text-primary'
-                }`}
-              >
-                {s.name}
-              </span>
-              {s.status !== 'ready' && (
-                <span
-                  className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${
-                    s.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-surface-2 text-text-muted'
-                  }`}
-                >
-                  {s.status}
-                </span>
-              )}
-            </button>
-          </div>
-        ))
-      )}
     </div>
   )
 }
@@ -528,27 +424,6 @@ function FileIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
       <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-    </svg>
-  )
-}
-
-function PlusIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M5 12h14" />
-      <path d="M12 5v14" />
-    </svg>
-  )
-}
-
-// FileIcon with data lines — distinguishes an uploaded source from a note.
-function SourceFileIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-      <path d="M8 13h8" />
-      <path d="M8 17h8" />
     </svg>
   )
 }

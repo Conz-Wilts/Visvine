@@ -38,7 +38,7 @@ import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/
 import { timeAgo } from '@/lib/date'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
-import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
+import type { NoteMeta, References } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
 
@@ -59,7 +59,6 @@ interface NoteEditorProps {
   mode: 'wysiwyg' | 'raw'
   onModeChange?: (mode: NoteMode) => void
   references: References | null
-  related: RelatedNote[] | null
   // Directory entities for `[[ ]]` mentions: the picker list + a path→entity map
   // the chip decoration reads, and a hook that ensures the entity's note exists.
   entities?: PickerEntity[]
@@ -124,7 +123,6 @@ export function NoteEditor({
   mode,
   onModeChange,
   references,
-  related,
   entities,
   entityByPath,
   onEnsureEntityNote,
@@ -551,7 +549,7 @@ export function NoteEditor({
 
       {mode === 'wysiwyg' && (
         <>
-          <LinkedReferences references={references} related={related} title={noteTitle} onOpenNote={onOpenNote} />
+          <LinkedReferences references={references} title={noteTitle} onOpenNote={onOpenNote} />
           {meta && (
             <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
               {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}

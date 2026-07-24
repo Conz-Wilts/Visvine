@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 import { Share2, Radio } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
+import type { NoteMeta, References } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -56,7 +56,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   const [read, setRead] = useState<NoteRead | null>(null)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
-  const [related, setRelated] = useState<RelatedNote[] | null>(null)
   const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [requestPending, setRequestPending] = useState(false)
@@ -129,22 +128,18 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     }
   }
 
-  // Load the note + the brain's note index + references/related.
+  // Load the note + the brain's note index + references.
   useEffect(() => {
     if (!communityId || !path) return
     const seq = ++loadSeq.current
     setRead(null)
     setReferences(null)
-    setRelated(null)
     setPubs(null)
     onModeChange?.('wysiwyg')
-    // References/related fire in parallel with the read (no waterfall); their
+    // References fire in parallel with the read (no waterfall); their
     // results only apply once the read lands 'ok' — same as EntityContextPanel.
     const refsPromise = cachedFetch(contextKeys.references(communityId, path), () =>
       notesApi.references(communityId, path),
-    )
-    const relatedPromise = cachedFetch(contextKeys.related(communityId, path), () =>
-      notesApi.related(communityId, path),
     )
     readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
@@ -153,9 +148,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
-        relatedPromise.then(({ related: rel }) => {
-          if (loadSeq.current === seq) setRelated(rel)
-        }).catch(() => {})
         // Replica banner: is this note a live published copy?
         notesApi.getPublications(communityId, path).then((state) => {
           if (loadSeq.current === seq) setPubs(state)
@@ -163,7 +155,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
-    relatedPromise.catch(() => {})
     swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
@@ -185,15 +176,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         invalidateContextCache(
           contextKeys.read(communityId, p),
           contextKeys.references(communityId, p),
-          contextKeys.related(communityId, p),
           contextKeys.list(communityId),
           contextKeys.tree(communityId), // a save can create the note — the tree gains it
         )
         setError(null)
         cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
           .then(({ references: refs }) => setReferences(refs)).catch(() => {})
-        cachedFetch(contextKeys.related(communityId, p), () => notesApi.related(communityId, p))
-          .then(({ related: rel }) => setRelated(rel)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
@@ -331,7 +319,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         mode={mode}
         onModeChange={onModeChange}
         references={references}
-        related={related}
         entities={entities}
         entityByPath={entityByPath}
         onEnsureEntityNote={ensureEntityNote}

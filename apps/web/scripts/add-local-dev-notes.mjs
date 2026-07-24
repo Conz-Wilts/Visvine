@@ -41,7 +41,6 @@ const fm = (title, tags = []) =>
 const shared = [
   {
     path: 'welcome.md',
-    pinned: true,
     content:
       fm('Welcome to the Local Dev brain', ['start-here']) +
       `This is the shared brain of the **Local Dev Community** — seeded content for local development.

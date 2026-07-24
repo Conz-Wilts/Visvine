@@ -367,7 +367,7 @@ Welcome to the shared brain. Start here.
 - [Fundraising landscape](/topics/fundraising-landscape.md)
 - [Mentor programme](/programme/mentor-programme.md)
 - [Community sync — 14 Jul](/meetings/2026-07-14-community-sync.md)
-`, true);
+`);
 
   note(notes, 'topics/fundraising-landscape.md', { type: 'topic', title: 'Fundraising landscape — winter 2026', tags: ['fundraising'] }, `
 Who's raising and who's writing cheques, as of July 2026.

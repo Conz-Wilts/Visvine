@@ -11,7 +11,6 @@ import type {
   References,
   NoteRevision,
   TrashEntry,
-  RelatedNote,
   ReorganizePlan,
 } from '@/lib/notes/shared/types'
 import type {
@@ -178,8 +177,6 @@ export const notesApi = {
 
   references: (c: string, path: string) =>
     getJson<{ references: References }>(`/api/notes/references?${qs(c, { path })}`),
-  related: (c: string, path: string) =>
-    getJson<{ related: RelatedNote[] }>(`/api/notes/related?${qs(c, { path })}`),
 
   history: (c: string, path: string) =>
     getJson<{ revisions: NoteRevision[] }>(`/api/notes/history?${qs(c, { path })}`),

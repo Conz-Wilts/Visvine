@@ -21,7 +21,7 @@ import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
+import type { NoteMeta, References } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
@@ -86,7 +86,6 @@ export function EntityContextPanel({
   const [noteExists, setNoteExists] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
-  const [related, setRelated] = useState<RelatedNote[] | null>(null)
   const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [requestPending, setRequestPending] = useState(false)
@@ -167,24 +166,20 @@ export function EntityContextPanel({
   }
 
   // Load the note + the brain's note index (for [[ ]] linking, link titles, and
-  // the open note's meta) + references/related, best-effort where non-critical.
+  // the open note's meta) + references, best-effort where non-critical.
   useEffect(() => {
     if (!communityId || !path) return
     const seq = ++loadSeq.current
     setRead(null)
     setNoteExists(false)
     setReferences(null)
-    setRelated(null)
     setPubs(null)
     onModeChange?.('wysiwyg')
-    // References/related fire in parallel with the read (no waterfall — they're
+    // References fire in parallel with the read (no waterfall — they're
     // below-the-fold UI); their results only apply once the read lands 'ok', so
     // a missing note never shows phantom backlinks.
     const refsPromise = cachedFetch(contextKeys.references(communityId, path), () =>
       notesApi.references(communityId, path),
-    )
-    const relatedPromise = cachedFetch(contextKeys.related(communityId, path), () =>
-      notesApi.related(communityId, path),
     )
     readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
@@ -194,9 +189,6 @@ export function EntityContextPanel({
         refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
-        relatedPromise.then(({ related: rel }) => {
-          if (loadSeq.current === seq) setRelated(rel)
-        }).catch(() => {})
         // Replica banner: is this context note a live published copy?
         notesApi.getPublications(communityId, path).then((state) => {
           if (loadSeq.current === seq) setPubs(state)
@@ -204,7 +196,6 @@ export function EntityContextPanel({
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
-    relatedPromise.catch(() => {})
     swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
@@ -238,7 +229,6 @@ export function EntityContextPanel({
         invalidateContextCache(
           contextKeys.read(communityId, p),
           contextKeys.references(communityId, p),
-          contextKeys.related(communityId, p),
           contextKeys.list(communityId),
           contextKeys.tree(communityId), // a first save creates the note — the tree gains it
         )
@@ -246,8 +236,6 @@ export function EntityContextPanel({
         setError(null)
         cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
           .then(({ references: refs }) => setReferences(refs)).catch(() => {})
-        cachedFetch(contextKeys.related(communityId, p), () => notesApi.related(communityId, p))
-          .then(({ related: rel }) => setRelated(rel)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
@@ -543,7 +531,6 @@ export function EntityContextPanel({
             mode={mode}
             onModeChange={onModeChange}
             references={references}
-            related={related}
             entities={entities}
             entityByPath={entityByPath}
             onEnsureEntityNote={ensureEntityNote}

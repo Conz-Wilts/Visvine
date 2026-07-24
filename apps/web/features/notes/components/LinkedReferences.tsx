@@ -2,23 +2,22 @@
 
 // Roam-style backlinks rendered below the note body, inside the editor's scroll
 // column — linked + unlinked references (each with the source title, date, and
-// excerpt) plus TF-IDF related notes. Typographic, not boxed: the references read
-// as a continuation of the note. Ported in spirit from blackbird-brain.
+// excerpt). Typographic, not boxed: the references read as a continuation of
+// the note. Ported in spirit from blackbird-brain.
 
 import { type ReactNode } from 'react'
-import type { References, LinkedReference, UnlinkedReference, RelatedNote } from '@/lib/notes/shared/types'
+import type { References, LinkedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { formatDate } from '@/lib/date'
 
 interface Props {
   references: References | null
-  related: RelatedNote[] | null
-  // The open note's title — highlighted within each excerpt as [[title]].
+  // The open note's title — highlighted within each excerpt.
   title: string
   onOpenNote: (path: string) => void
 }
 
 // Wrap whole-word, case-insensitive matches of `needle` in `text` so they render
-// as a highlighted [[needle]], mirroring the editor's bracketed note-link style.
+// highlighted, mirroring the editor's note-link style.
 function highlight(text: string, needle: string): ReactNode[] {
   if (!needle) return [text]
   const re = new RegExp(`(?<![\\w])(${needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})(?![\\w])`, 'gi')
@@ -48,40 +47,43 @@ function Reference({
   title: string
   onOpenNote: (path: string) => void
 }) {
-  // The whole block navigates (blackbird-brain behavior): hover draws a box
-  // around it, click anywhere opens the source note.
+  // The block navigates (blackbird-brain behavior): hover draws a box around it,
+  // click anywhere opens the source note. The date divider sits above, outside
+  // the hover box, so highlighting doesn't swallow the date rule.
   const open = () => onOpenNote(refItem.fromPath)
   return (
-    <div
-      className="notes-ref-block"
-      role="link"
-      tabIndex={0}
-      onClick={open}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          open()
-        }
-      }}
-    >
+    <div className="notes-ref-item">
       <div className="notes-ref-date-divider">
         <span>{formatDate(refItem.date)}</span>
       </div>
-      <div className="notes-ref-head-row">
-        <button type="button" className="notes-ref-from" onClick={() => onOpenNote(refItem.fromPath)}>
-          {refItem.fromTitle}
-        </button>
+      <div
+        className="notes-ref-block"
+        role="link"
+        tabIndex={0}
+        onClick={open}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            open()
+          }
+        }}
+      >
+        <div className="notes-ref-head-row">
+          <button type="button" className="notes-ref-from" onClick={() => onOpenNote(refItem.fromPath)}>
+            {refItem.fromTitle}
+          </button>
+        </div>
+        <p className="notes-ref-excerpt">{highlight(refItem.excerpt, title)}</p>
       </div>
-      <p className="notes-ref-excerpt">{highlight(refItem.excerpt, title)}</p>
     </div>
   )
 }
 
-export function LinkedReferences({ references, related, title, onOpenNote }: Props) {
-  const linked = references?.linked ?? []
-  const unlinked = references?.unlinked ?? []
-  const rel = related ?? []
-  if (linked.length === 0 && unlinked.length === 0 && rel.length === 0) return null
+export function LinkedReferences({ references, title, onOpenNote }: Props) {
+  // Most recent source note first within each group.
+  const linked = [...(references?.linked ?? [])].sort((a, b) => b.date - a.date)
+  const unlinked = [...(references?.unlinked ?? [])].sort((a, b) => b.date - a.date)
+  if (linked.length === 0 && unlinked.length === 0) return null
 
   return (
     <div className="notes-references">
@@ -104,21 +106,6 @@ export function LinkedReferences({ references, related, title, onOpenNote }: Pro
           {unlinked.map((ref, i) => (
             <Reference key={`u-${i}`} refItem={ref} title={title} onOpenNote={onOpenNote} />
           ))}
-        </section>
-      )}
-
-      {rel.length > 0 && (
-        <section className="notes-ref-group">
-          <h3 className="notes-ref-head">
-            Related <span className="notes-ref-count">{rel.length}</span>
-          </h3>
-          <div className="notes-related">
-            {rel.map((r) => (
-              <button key={r.path} type="button" className="notes-related-item" onClick={() => onOpenNote(r.path)}>
-                {r.title}
-              </button>
-            ))}
-          </div>
         </section>
       )}
     </div>
