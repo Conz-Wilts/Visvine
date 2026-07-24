@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import MembersPanel from '@/components/admin/MembersPanel';
+import PeopleAccessPanel from '@/components/admin/people/PeopleAccessPanel';
 import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
 import ActivityLogPanel from '@/components/admin/ActivityLogPanel';
 import TypesTab from '@/components/data/TypesTab';
@@ -39,7 +39,7 @@ function AdminConsole({ community, onSaved }: {
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} />, description: 'Name, details, and access' },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} />, description: 'Enable community tools' },
-    { id: 'members', label: 'Members', group: 'People', width: 'wide', badge: pendingMembers, icon: <Users size={18} />, description: 'Roles and requests' },
+    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingMembers, icon: <Users size={18} />, description: 'Members, teams, and context permissions' },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} />, description: 'Directory node types' },
     { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} />, description: 'Recent admin actions' },
     { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} />, description: 'Engagement and growth' },
@@ -55,7 +55,7 @@ function AdminConsole({ community, onSaved }: {
           case 'tools':
             return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
           case 'members':
-            return <MembersPanel communityId={community.id} onPendingCountChange={handlePendingCount} />;
+            return <PeopleAccessPanel key={community.id} communityId={community.id} onPendingCountChange={handlePendingCount} />;
           case 'types':
             return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
           case 'activity':

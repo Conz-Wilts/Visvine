@@ -81,6 +81,9 @@ interface NoteEditorProps {
   // Embedded only: content rendered directly below the sticky toolbar and above
   // the note body (the entity header card), so it scrolls up behind the toolbar.
   headerSlot?: React.ReactNode
+  // Embedded only: rendered at the far right of the toolbar row, after the
+  // Editor/Raw toggle (the entity panel's Share button). Renders in raw mode too.
+  toolbarTrailSlot?: React.ReactNode
 }
 
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
@@ -130,6 +133,7 @@ export function NoteEditor({
   onOpenTag,
   variant = 'floating',
   headerSlot,
+  toolbarTrailSlot,
 }: NoteEditorProps) {
   const embedded = variant === 'embedded'
   const floating = variant === 'floating'
@@ -587,6 +591,7 @@ export function NoteEditor({
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {refactorButton}
             {onModeChange && <NoteModeToggle value={mode} onChange={onModeChange} size="sm" />}
+            {toolbarTrailSlot}
           </div>
         </div>,
         toolbarHost,

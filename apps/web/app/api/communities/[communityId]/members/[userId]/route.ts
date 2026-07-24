@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logActivity } from '@/lib/activityLog';
+import { removeMemberAccess } from '@/lib/notes/access';
 
 /**
  * PUT: Update a member's role, or approve a pending join request (admin only).
@@ -125,6 +126,9 @@ export async function DELETE(
     where: { userId_communityId: { userId, communityId } },
     include: { user: { select: { email: true, name: true } } },
   });
+
+  // Brain access leaves with them: direct grants + team memberships here.
+  await removeMemberAccess(communityId, userId);
 
   // Only active members counted toward memberCount; pending (denied) ones didn't.
   if (membership.status === 'active') {

@@ -136,11 +136,20 @@ function EventsPageInner() {
 
   return (
     <div className="relative w-full">
-      {/* View switcher pinned at the top of the page — same position as the
-          Directory's Grid / Graph / Tables tab row. */}
-      {/* UnderlineTabs draws its own bottom border, so the wrapper stays borderless. */}
-      <div className="sticky top-0 z-20 bg-surface-1 px-4 sm:px-6">
-        <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} />
+      {/* View switcher pinned flush in the top-left corner — identical treatment
+          to the Directory's Grid / Graph / Tables bar (DirectoryViewTabs): the
+          bar full-bleeds left into the sidebar seam and its bottom border runs
+          edge to edge. "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush
+          under the navbar (at rest and pinned); "-ml-[23px]" bleeds left to 1px
+          shy of the rail edge so the sidebar's right border stays visible.
+          UnderlineTabs draws its own bottom border, so the wrapper stays
+          borderless. */}
+      <div className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
+        <EventsViewSelector
+          currentView={currentView}
+          onViewChange={setCurrentView}
+          className="w-full overflow-x-auto px-1"
+        />
       </div>
 
       <PageTitle title="Events" />

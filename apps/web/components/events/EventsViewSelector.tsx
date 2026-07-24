@@ -43,15 +43,19 @@ const VIEWS: UnderlineTab<EventView>[] = [
 interface EventsViewSelectorProps {
   currentView: EventView;
   onViewChange: (view: EventView) => void;
+  /** Extra classes for the tablist (width/padding/scroll) — see the events page. */
+  className?: string;
 }
 
-export default function EventsViewSelector({ currentView, onViewChange }: EventsViewSelectorProps) {
+export default function EventsViewSelector({ currentView, onViewChange, className }: EventsViewSelectorProps) {
   return (
     <UnderlineTabs
       tabs={VIEWS}
       value={currentView}
       onChange={onViewChange}
       ariaLabel="Event views"
+      idPrefix="events"
+      className={className}
     />
   );
 }

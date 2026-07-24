@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { Dispatch, ElementType, FormEvent, RefObject, SetStateAction } from 'react';
 import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2, Newspaper } from 'lucide-react';
+import { useCreateModal } from '@/lib/contexts/CreateModalContext';
 import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import { formatChatTimestamp } from '@/lib/date';
@@ -128,6 +129,8 @@ export default function ConversationListPanel({
   onRenameSpace,
   onDeleteSpace,
 }: ConversationListPanelProps) {
+  // Creating channels + spaces lives in the global "Create new" (+) modal.
+  const { open: openCreateModal } = useCreateModal();
   // Inline space rename (community admins): which space header is being edited.
   const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
   const [editingSpaceName, setEditingSpaceName] = useState('');
@@ -593,7 +596,7 @@ export default function ConversationListPanel({
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowSpaceForm(true)}
+                  onClick={() => openCreateModal('space')}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
                 >
                   <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />

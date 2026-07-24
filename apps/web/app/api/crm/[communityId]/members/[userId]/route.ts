@@ -3,6 +3,7 @@ import { requireApiSession } from "@/lib/api/route";
 import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
 import { getMember } from "@/lib/crm/memberService";
 import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
+import { removeMemberAccess } from "@/lib/notes/access";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
 
@@ -61,6 +62,9 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     }
     throw e;
   }
+
+  // Brain access leaves with them: direct grants + team memberships here.
+  await removeMemberAccess(communityId, userId);
 
   revalidateTag(`crm-list-${communityId}`);
 

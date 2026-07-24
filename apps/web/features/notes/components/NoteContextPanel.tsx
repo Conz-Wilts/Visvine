@@ -3,17 +3,18 @@
 // The standalone note view (/directory/note/<path>): any non-entity brain note —
 // folder indexes, sectors, deals, journal pages — in the embedded NoteEditor with
 // the linked-references rail below. The slim sibling of EntityContextPanel: same
-// gated /api/notes pipeline (brain gate, folder visibility and write denials come
-// free), minus everything entity-specific (node profile, tags header, stub
+// gated /api/notes pipeline (brain gate, grant-based visibility and write denials
+// come free), minus everything entity-specific (node profile, tags header, stub
 // creation). A missing note here is just "not found" — this surface never creates.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Share2, Radio } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { notesApi, type RegistryResponse } from '../lib/notesApi'
+import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
   contextKeys,
@@ -26,6 +27,7 @@ import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
 import { BrainGateCard } from './BrainGateCard'
+import { SharePanel } from './SharePanel'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
 
@@ -45,22 +47,24 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   const { entities, entityByPath } = useDirectoryEntities()
 
   const [aiConfigured, setAiConfigured] = useState(false)
-  const [registry, setRegistry] = useState<RegistryResponse | null>(null)
+  const [access, setAccess] = useState<PathAccessResponse | null>(null)
   // "Answered" flags (not "answered with a value") so the panel holds one
-  // skeleton until note + registry + config are all in — same contract as
+  // skeleton until note + access + config are all in — same contract as
   // EntityContextPanel, see the comment there.
-  const [registryDone, setRegistryDone] = useState(false)
+  const [accessDone, setAccessDone] = useState(false)
   const [configDone, setConfigDone] = useState(false)
   const [read, setRead] = useState<NoteRead | null>(null)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
+  const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const loadSeq = useRef(0)
 
-  const gatedOut = !isPersonalSpace && registry !== null && !registry.gate.canRead
+  const gatedOut = !isPersonalSpace && access !== null && access.gated
 
   // swrFetch delivers a cached value synchronously, so on a re-open these
   // "done" gates flip in the same render pass and the skeleton never flashes.
@@ -72,30 +76,30 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   }, [])
 
   useEffect(() => {
-    setRegistry(null)
-    setRegistryDone(false)
-    if (!communityId) return
+    setAccess(null)
+    setAccessDone(false)
+    if (!communityId || !path) return
     let stale = false
     swrFetch(
-      contextKeys.registry(communityId),
-      () => notesApi.getRegistry(communityId),
-      (r) => {
+      contextKeys.access(communityId, path),
+      () => notesApi.getAccess(communityId, path),
+      (a) => {
         if (stale) return
-        setRegistry(r)
-        setRegistryDone(true)
+        setAccess(a)
+        setAccessDone(true)
       },
     ).catch(() => {
       if (!stale) {
-        setRegistry(null)
-        setRegistryDone(true)
+        setAccess(null)
+        setAccessDone(true)
       }
     })
     return () => { stale = true }
-  }, [communityId])
+  }, [communityId, path])
 
   // When gated out, surface the viewer's own pending root-gate request.
   useEffect(() => {
-    if (!gatedOut || !communityId || !registry) {
+    if (!gatedOut || !communityId || !access) {
       setRequestPending(false)
       return
     }
@@ -104,12 +108,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
       .then(({ requests }) =>
         setRequestPending(
           requests.some(
-            (r) => r.folderId === '' && r.status === 'pending' && r.userId === registry.me.userId,
+            (r) => r.folderId === '' && r.status === 'pending' && r.userId === access.me.userId,
           ),
         ),
       )
       .catch(() => setRequestPending(false))
-  }, [gatedOut, communityId, registry])
+  }, [gatedOut, communityId, access])
 
   const requestAccess = async () => {
     if (!communityId) return
@@ -132,6 +136,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     setRead(null)
     setReferences(null)
     setRelated(null)
+    setPubs(null)
     onModeChange?.('wysiwyg')
     // References/related fire in parallel with the read (no waterfall); their
     // results only apply once the read lands 'ok' — same as EntityContextPanel.
@@ -151,6 +156,10 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         relatedPromise.then(({ related: rel }) => {
           if (loadSeq.current === seq) setRelated(rel)
         }).catch(() => {})
+        // Replica banner: is this note a live published copy?
+        notesApi.getPublications(communityId, path).then((state) => {
+          if (loadSeq.current === seq) setPubs(state)
+        }).catch(() => {})
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
@@ -163,16 +172,10 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
   const openMeta = useMemo(() => notesIndex.find((n) => n.path === path) ?? null, [notesIndex, path])
 
-  // Same heuristic as EntityContextPanel: the note's top-level folder answers if
-  // registered, else the root gate. Server-side writeDenial stays the enforcement.
-  const canWrite = useMemo(() => {
-    if (isPersonalSpace) return true
-    if (!registry) return false
-    if (!registry.gate.canRead) return false
-    const dir = path.includes('/') ? path.split('/')[0] : null
-    const folder = dir ? registry.folders.find((f) => f.id === dir) : null
-    return folder ? folder.canWrite : registry.gate.canWrite
-  }, [isPersonalSpace, registry, path])
+  // Server-computed, per-path (any-depth grants + restricted cuts included).
+  // A live published replica is read-only here regardless of folder access.
+  const isReplica = pubs?.asTarget != null
+  const canWrite = (isPersonalSpace || (access?.canWrite ?? false)) && !isReplica
 
   const handleSave = useCallback(
     async (p: string, body: string, origin?: string) => {
@@ -232,7 +235,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     [communityId],
   )
 
-  const dataReady = read !== null && (isPersonalSpace || registryDone) && configDone
+  const dataReady = read !== null && (isPersonalSpace || accessDone) && configDone
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -277,12 +280,33 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     (path.split('/').pop() ?? path).replace(/\.md$/i, '')
 
   // The note title leads the scrolling content (embedded NoteEditor hides its
-  // own .notes-title); width/padding mirror .notes-column so it lines up.
+  // own .notes-title); width/padding mirror .notes-column so it lines up. The
+  // Share button rides the title row — every note can answer "who sees this".
   const headerCard = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
-        {title}
-      </h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
+          {title}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          title="Who can see this?"
+          className="mt-3 flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-[13px] font-medium text-text-secondary transition hover:bg-surface-2"
+        >
+          <Share2 className="h-3.5 w-3.5" />
+          Share
+        </button>
+      </div>
+      {isReplica && pubs?.asTarget && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+          <Radio className="h-4 w-4 shrink-0 text-brand-green" />
+          <span>
+            Published from <span className="font-medium">{pubs.asTarget.sourceCommunityName}</span> — kept in
+            sync with its source, read-only here. Unlink it from Share to make it an editable copy.
+          </span>
+        </div>
+      )}
     </div>
   )
 
@@ -314,6 +338,14 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         onSave={handleSave}
         onOpenNote={handleOpenNote}
       />
+      {shareOpen && (
+        <SharePanel
+          communityId={communityId}
+          path={path}
+          kind="note"
+          onClose={() => setShareOpen(false)}
+        />
+      )}
     </div>
   )
 }

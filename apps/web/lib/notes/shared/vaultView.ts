@@ -6,8 +6,8 @@ import type { BrainPrincipal } from './brainTypes'
 import type { NoteMeta, RawNote } from './types'
 import { buildNoteIndex } from './graph'
 import { filterVisible } from './visibility'
-import { canReadFolder, folderById, principalIsSuperAdmin } from './permissions'
-import { ROOT_FOLDER } from './placement'
+import { accessSignature } from './authz'
+import { principalIsSuperAdmin } from './permissions'
 
 export interface VaultView {
   raws: RawNote[]
@@ -16,19 +16,12 @@ export interface VaultView {
 
 /**
  * The visibility signature: everything filterVisible's outcome depends on for a
- * fixed corpus. Per registered folder, whether this principal can read it (a
- * registration change flips the folder's presence in the string even when the
- * readable set is otherwise identical), plus whether unregistered folders are
- * readable (their governing entry is the root gate; no root entry = open).
- * Equal signatures ⇒ identical filterVisible output, so views can be shared.
+ * fixed corpus — the caller's readable grant roots plus the brain's restricted
+ * cuts (shared/authz.ts#accessSignature). Equal signatures ⇒ identical
+ * filterVisible output, so views can be shared across equally-granted viewers.
  */
 export function visibilitySignature(p: BrainPrincipal): string {
-  const root = folderById(p.folders, ROOT_FOLDER)
-  const unregistered = root ? canReadFolder(root, p.userId) : true
-  const perFolder = p.folders.folders
-    .map((f) => `${f.id}:${canReadFolder(f, p.userId) ? 1 : 0}`)
-    .sort()
-  return `u:${unregistered ? 1 : 0}|${perFolder.join(',')}`
+  return accessSignature(p.access)
 }
 
 /** Whether the principal sees the corpus unfiltered (no signature needed). */

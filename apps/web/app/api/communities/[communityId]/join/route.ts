@@ -4,6 +4,7 @@ import { requireApiSession } from '@/lib/api/route';
 import { isForeignPersonalSpace } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { removeMemberAccess } from '@/lib/notes/access';
 import { aliasesForType, type CommunityAlias } from '@/lib/types';
 
 /**
@@ -113,6 +114,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     await prisma.userCommunity.deleteMany({
       where: { userId: session.userId, communityId },
     });
+
+    // Brain access leaves with them: direct grants + team memberships here.
+    await removeMemberAccess(communityId, session.userId);
 
     // Note: intentionally leaving the user's node in the community graph when they leave.
 

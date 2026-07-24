@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { createSafeContext } from './createSafeContext';
 
-export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'channel';
+export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'channel' | 'space';
 
 interface CreateModalContextValue {
   isOpen: boolean;

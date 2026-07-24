@@ -7,6 +7,7 @@ import { Plus, Search, X } from 'lucide-react';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useCreateModal } from '@/lib/contexts/CreateModalContext';
 import { useMessageHeights } from '@/hooks/useMessageHeights';
 import type {
   ChannelDirectoryEntry,
@@ -53,7 +54,10 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // On wide viewports the Channels page docks its channel list INTO the global
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
-  const { host, setDockRequested, contextOpen } = useContextPanel();
+  const { host, setDockRequested, contextOpen, setContextOpen } = useContextPanel();
+  // Channel + space creation lives in the global "Create new" (+) modal, opened
+  // from anywhere via this context.
+  const { open: openCreateModal } = useCreateModal();
 
   // The Channels page locks the experience to channels and embeds the posts feed.
   const channelsVariant = variant === 'channels';
@@ -105,17 +109,17 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
   const [showChannelForm, setShowChannelForm] = useState(false);
-  // Arriving with ?new=channel (from the global "Create new → Channel" tile)
-  // opens the channel-creation form straight away; the param is cleared so a
-  // refresh doesn't re-open it.
+  // Legacy ?new=channel deep link (older "Create new → Channel" tile routed here):
+  // channel creation now lives in the global Create modal, so open that instead of
+  // the retired on-page form, and clear the param.
   const router = useRouter();
   const searchParams = useSearchParams();
   useEffect(() => {
     if (channelsVariant && searchParams.get('new') === 'channel') {
-      setShowChannelForm(true);
+      openCreateModal('channel');
       router.replace(basePath);
     }
-  }, [channelsVariant, searchParams, router, basePath]);
+  }, [channelsVariant, searchParams, router, basePath, openCreateModal]);
   const [channelName, setChannelName] = useState('');
   const [channelDescription, setChannelDescription] = useState('');
   const [channelIcon, setChannelIcon] = useState<string | null>(null);
@@ -833,6 +837,12 @@ export default function MessagesClient({ currentUser, initialConversationId, var
     setDockRequested(isWide);
     return () => setDockRequested(false);
   }, [channelsVariant, isWide, setDockRequested]);
+  // Channels always opens with the channel-list sidebar showing. contextOpen is
+  // shared session state (the notes/admin docks close it too), so landing on
+  // /channels re-opens it by default; the navbar toggle can still close it after.
+  useEffect(() => {
+    if (channelsVariant) setContextOpen(true);
+  }, [channelsVariant, setContextOpen]);
   const channelsCollapsed = channelsVariant && isWide && !contextOpen;
 
   // The inbox / channel list. When docked it portals into the Sidebar host;
@@ -972,7 +982,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
           communityIsAdmin={communityCtx?.isAdmin}
           communityId={communityCtx?.currentCommunity?.id}
           hasChannelsInList={filteredConversations.length > 0}
-          onShowChannelForm={() => setShowChannelForm(true)}
+          onShowChannelForm={() => openCreateModal('channel')}
           onShowNewChat={() => setShowNewChatModal(true)}
           onShowAddMembers={() => setShowAddMembersModal(true)}
           onBackToList={handleBackToList}

@@ -7,7 +7,7 @@
 import { splitFrontmatter, extractMarkdownLinks, resolveOkfLink } from './shared/markdown'
 import { isIndexPath } from './shared/indexNote'
 
-export type EntityKind = 'person' | 'company' | 'resource'
+export type EntityKind = 'person' | 'company' | 'resource' | 'event'
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -20,20 +20,23 @@ export interface EntityNodeLike {
 const PEOPLE_DIR = 'people'
 const COMPANIES_DIR = 'companies'
 const RESOURCES_DIR = 'resources'
+const EVENTS_DIR = 'events'
 
 const ENTITY_DIRS: Record<EntityKind, string> = {
   person: PEOPLE_DIR,
   company: COMPANIES_DIR,
   resource: RESOURCES_DIR,
+  event: EVENTS_DIR,
 }
 
-// Map a node `type` to an entity kind (null for events/etc.). Liberal so it
+// Map a node `type` to an entity kind (null for non-entity types). Liberal so it
 // copes with 'person'/'people' and 'organization'/'org'/'company'.
 export function entityKindOf(type: string | null | undefined): EntityKind | null {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
   if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'company'
   if (t === 'resource' || t === 'resources') return 'resource'
+  if (t === 'event' || t === 'events') return 'event'
   return null
 }
 
@@ -60,7 +63,7 @@ export function entityNotePath(node: EntityNodeLike): string | null {
 export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
-  if (!/^(people|companies|resources)\/.+\.md$/.test(raw)) return null
+  if (!/^(people|companies|resources|events)\/.+\.md$/.test(raw)) return null
   return isIndexPath(raw) ? null : raw
 }
 
@@ -75,6 +78,7 @@ export function entityKindOfPath(path: string): EntityKind | null {
   if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
   if (path.startsWith(`${COMPANIES_DIR}/`)) return 'company'
   if (path.startsWith(`${RESOURCES_DIR}/`)) return 'resource'
+  if (path.startsWith(`${EVENTS_DIR}/`)) return 'event'
   return null
 }
 
@@ -113,8 +117,8 @@ export function entityMentionPaths(notePath: string, content: string): string[] 
 export function entityStub(node: EntityNodeLike): string {
   const kind = entityKindOf(node.type) ?? 'person'
   const title = (node.name ?? idSlug(node.id)).trim()
-  const typeLabel: Record<EntityKind, string> = { person: 'Person', company: 'Company', resource: 'Resource' }
-  const tag: Record<EntityKind, string> = { person: 'person', company: 'company', resource: 'resource' }
+  const typeLabel: Record<EntityKind, string> = { person: 'Person', company: 'Company', resource: 'Resource', event: 'Event' }
+  const tag: Record<EntityKind, string> = { person: 'person', company: 'company', resource: 'resource', event: 'event' }
   // The title renders as the note heading from frontmatter (see NoteEditor), so the
   // body carries no `# Title` line — just the optional subtitle and a starter prompt.
   const subtitle = node.subtitle ? `> ${node.subtitle}\n\n` : ''

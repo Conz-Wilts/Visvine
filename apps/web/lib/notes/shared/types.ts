@@ -66,7 +66,9 @@ export interface TrashEntry {
 // the first edit; 'ai-refactor' is an LLM rewrite; 'ai-enrich' is an insight
 // distilled from a personal brain by the enrichment pass; 'agent' is an external
 // agent writing through MCP; 'maintenance' is a rule-based review auto-fix;
-// 'restore' is reverting to an earlier version; 'edit' is an ordinary manual save.
+// 'restore' is reverting to an earlier version; 'publish' is a replica refresh
+// written by a cross-brain publication (lib/notes/publications.ts — the origin
+// also guards against replication cascades); 'edit' is an ordinary manual save.
 export type NoteRevisionOrigin =
   | 'edit'
   | 'ai-refactor'
@@ -75,6 +77,7 @@ export type NoteRevisionOrigin =
   | 'maintenance'
   | 'restore'
   | 'baseline'
+  | 'publish'
 
 // One point-in-time snapshot of a note. The full content is stored so any past
 // version can be reviewed and restored.

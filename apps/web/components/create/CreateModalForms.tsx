@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { MessageCircle, Newspaper } from 'lucide-react';
 import type { CreateableType } from '@/lib/contexts/CreateModalContext';
 import type { CommunityAlias } from '@/lib/types';
+import type { ChannelSpaceEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
 import { searchLocations } from '@/lib/locationData';
+import { ChannelIcon, EmojiIconPicker } from '@/components/messages/ChannelIcon';
 
 // ─── Type Config ────────────────────────────────────────────────────────────
 
@@ -65,6 +68,18 @@ export const TYPE_OPTIONS: TypeOption[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h17M3 16h17" />
+      </svg>
+    ),
+  },
+  {
+    id: 'space',
+    label: 'Space',
+    description: 'A group of channels in your community',
+    color: '#0ea5e9',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
       </svg>
     ),
   },
@@ -466,6 +481,148 @@ export function CommunityForm({
           })}
         </div>
       </Field>
+    </div>
+  );
+}
+
+// ─── Channel Form ───────────────────────────────────────────────────────────
+
+export interface ChannelFormData {
+  name: string;
+  description: string;
+  icon: string | null;
+  viewMode: ChannelViewMode;
+  spaceId: string;
+}
+
+export function ChannelForm({
+  data,
+  onChange,
+  nameRef,
+  spaces,
+}: {
+  data: ChannelFormData;
+  onChange: (d: ChannelFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+  spaces: ChannelSpaceEntry[];
+}) {
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Channel Name" required>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowIconPicker((v) => !v)}
+              title="Channel icon (default #)"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border-default bg-surface-2 text-text-secondary transition-colors hover:border-brand-green/40"
+            >
+              <ChannelIcon icon={data.icon} className="h-4 w-4" />
+            </button>
+            {showIconPicker && (
+              <div className="absolute left-0 top-11 z-30">
+                <EmojiIconPicker
+                  onSelect={(emoji) => { onChange({ ...data, icon: emoji }); setShowIconPicker(false); }}
+                  onClear={data.icon ? () => { onChange({ ...data, icon: null }); setShowIconPicker(false); } : undefined}
+                  onClose={() => setShowIconPicker(false)}
+                />
+              </div>
+            )}
+          </div>
+          <input
+            ref={nameRef as React.RefObject<HTMLInputElement>}
+            className={inputClass}
+            placeholder="e.g. general"
+            maxLength={80}
+            value={data.name}
+            onChange={(e) => onChange({ ...data, name: e.target.value })}
+          />
+        </div>
+      </Field>
+      <Field label="Description">
+        <input
+          className={inputClass}
+          placeholder="What's this channel about?"
+          maxLength={500}
+          value={data.description}
+          onChange={(e) => onChange({ ...data, description: e.target.value })}
+        />
+      </Field>
+      <Field label="View style">
+        <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
+          {([
+            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle, title: 'Classic channel thread' },
+            { mode: 'FEED' as const, label: 'Feed', icon: Newspaper, title: 'Post cards with comments' },
+          ]).map(({ mode, label, icon: Icon, title }) => {
+            const active = data.viewMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                title={title}
+                onClick={() => onChange({ ...data, viewMode: mode })}
+                className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+      {spaces.length > 0 && (
+        <Field label="Space">
+          <select
+            className={inputClass}
+            value={data.spaceId}
+            onChange={(e) => onChange({ ...data, spaceId: e.target.value })}
+          >
+            <option value="">No space</option>
+            {spaces.map((space) => (
+              <option key={space.id} value={space.id}>
+                {space.emoji ? `${space.emoji} ` : ''}{space.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+    </div>
+  );
+}
+
+// ─── Space Form ─────────────────────────────────────────────────────────────
+
+export interface SpaceFormData {
+  name: string;
+}
+
+export function SpaceForm({
+  data,
+  onChange,
+  nameRef,
+}: {
+  data: SpaceFormData;
+  onChange: (d: SpaceFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Space Name" required>
+        <input
+          ref={nameRef as React.RefObject<HTMLInputElement>}
+          className={inputClass}
+          placeholder="e.g. Engineering"
+          maxLength={80}
+          value={data.name}
+          onChange={(e) => onChange({ ...data, name: e.target.value })}
+        />
+      </Field>
+      <p className="text-xs text-text-muted">
+        Spaces group related channels together in the sidebar. You can file channels into this space when you create them.
+      </p>
     </div>
   );
 }

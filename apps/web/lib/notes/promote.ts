@@ -10,10 +10,12 @@ import { randomUUID } from 'crypto'
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Brain } from './store'
 import { writeDenial } from './brainService'
+import { publishNote } from './publications'
+import { personalCommunityId } from '@/lib/onboarding/personalCommunity'
 import { logAudit } from './audit'
 import { appendJsonl, readJsonl, writeJsonl } from './sidecar'
 import { folderIdOfPath } from './shared/placement'
-import { principalIsFolderAdmin } from './shared/permissions'
+import { principalCanManage } from './shared/permissions'
 import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from './shared/markdown'
 import { provenanceRef } from './shared/noteLog'
 import type { BrainPrincipal, MoveProposalEntry } from './shared/brainTypes'
@@ -110,18 +112,48 @@ export async function promoteNote(
   return { status: 'proposed', proposalId: proposal.id }
 }
 
-/** Proposals the principal may see: their own, plus any folder they admin. */
+/**
+ * Queue a PUBLISH proposal: the caller wants a live-syncing replica at
+ * `toPath` but lacks edit access there. Approval creates the publication
+ * (lib/notes/publications.ts) instead of a one-time copy.
+ */
+export async function queuePublishProposal(
+  p: BrainPrincipal,
+  fromPath: string,
+  toPath: string,
+  contentSnapshot: string,
+): Promise<MoveProposalEntry> {
+  const proposal: MoveProposalEntry = {
+    id: randomUUID(),
+    fromPath,
+    toPath,
+    folderId: folderIdOfPath(toPath),
+    content: contentSnapshot,
+    kind: 'publish',
+    proposedBy: p.userId,
+    proposerName: p.name,
+    proposedAt: Date.now(),
+    status: 'pending',
+  }
+  await appendJsonl(sharedBrain(p.communityId), FILE, proposal)
+  return proposal
+}
+
+/** Proposals the principal may see: their own, plus any folder they manage. */
 export async function listProposals(p: BrainPrincipal): Promise<MoveProposalEntry[]> {
   const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.communityId), FILE)
   return all
-    .filter((r) => r.proposedBy === p.userId || principalIsFolderAdmin(p, r.folderId))
+    .filter((r) => r.proposedBy === p.userId || principalCanManage(p, r.folderId))
     .reverse()
 }
 
 /**
- * Approve or deny a pending promotion. Folder-admin only. Approval writes the
- * proposal's snapshot into the shared folder (the personal original is left to
- * its owner — an admin cannot reach into a personal brain).
+ * Approve or deny a pending promotion/publication. Requires manage (full) at
+ * the destination folder. Approving a copy writes the proposal's snapshot into
+ * the shared folder; approving a PUBLISH proposal creates the live publication
+ * from the proposer's personal brain (reading its CURRENT content — the
+ * snapshot is only the preview). The personal original is left to its owner —
+ * an admin cannot reach into a personal brain.
  */
 export async function resolveProposal(
   p: BrainPrincipal,
@@ -131,15 +163,27 @@ export async function resolveProposal(
   const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.communityId), FILE)
   const proposal = all.find((r) => r.id === proposalId)
   if (!proposal) throw new Error('Proposal not found')
-  if (!principalIsFolderAdmin(p, proposal.folderId)) {
+  if (!principalCanManage(p, proposal.folderId)) {
     throw new Error('Only a folder admin can resolve promotion proposals')
   }
   if (proposal.status !== 'pending') return proposal
-  proposal.status = approve ? 'approved' : 'denied'
-  proposal.resolvedBy = p.userId
-  proposal.resolvedAt = Date.now()
-  await writeJsonl(sharedBrain(p.communityId), FILE, all)
-  if (approve) {
+  if (approve && proposal.kind === 'publish') {
+    const result = await publishNote(
+      personalCommunityId(proposal.proposedBy),
+      proposal.fromPath,
+      p.communityId,
+      proposal.toPath,
+      { id: proposal.proposedBy, name: proposal.proposerName },
+    )
+    if (result.status === 'denied') throw new Error(result.reason)
+    void logAudit(p.communityId, {
+      userId: p.userId,
+      name: p.name,
+      action: 'publish',
+      path: result.publication.targetPath,
+      detail: `approved publish proposal from ${proposal.proposerName}`,
+    })
+  } else if (approve) {
     const shared = sharedBrain(p.communityId)
     let dest = proposal.toPath
     let n = 1
@@ -158,5 +202,9 @@ export async function resolveProposal(
       detail: `approved proposal from ${proposal.proposerName}`,
     })
   }
+  proposal.status = approve ? 'approved' : 'denied'
+  proposal.resolvedBy = p.userId
+  proposal.resolvedAt = Date.now()
+  await writeJsonl(sharedBrain(p.communityId), FILE, all)
   return proposal
 }

@@ -28,17 +28,14 @@ import {
   listVisibleSources,
   readSourceVisible,
 } from "@/lib/notes/brainService";
-import { ensureBrainGate, resolveRegistry } from "@/lib/notes/registry";
+import { brainAccessFor, ensureAccessSeeded } from "@/lib/notes/access";
 import { resolvePersonalBrain } from "@/lib/notes/brain";
 import { personalPrincipal } from "@/lib/notes/principal";
 import { appendCapture } from "@/lib/notes/capture";
 import { SHARED_OWNER_KEY, type Brain } from "@/lib/notes/store";
 import { folderIdOfPath } from "@/lib/notes/shared/placement";
-import {
-  memberLevel,
-  principalCanWrite,
-  readableFolders,
-} from "@/lib/notes/shared/permissions";
+import { principalCanWrite, principalLevelName } from "@/lib/notes/shared/permissions";
+import { OPEN_ACCESS, readableRoots } from "@/lib/notes/shared/authz";
 import type { BrainPrincipal, WriteResult } from "@/lib/notes/shared/brainTypes";
 import type { NoteMeta } from "@/lib/notes/shared/types";
 
@@ -54,8 +51,8 @@ const scopeArg = z
 /**
  * Build the BrainPrincipal for the token identity, enforcing community
  * membership (the hard tenant boundary — mirrors resolveBrain in lib/notes).
- * Normal communities also materialize the brain gate (root registry entry) on
- * first touch; personal-space communities are never gated.
+ * Normal communities also seed their grant rows on first touch (legacy
+ * registry migration / member grandfathering); personal spaces are never gated.
  */
 async function requireBrainPrincipal(
   ctx: McpContext,
@@ -77,16 +74,18 @@ async function requireBrainPrincipal(
       throw new ApiError(403, `You are not a member of community '${communityId}'`);
     }
   }
+  let access = OPEN_ACCESS;
+  if (community.personalOwnerId === null) {
+    await ensureAccessSeeded(communityId);
+    access = await brainAccessFor(communityId, ctx.userId);
+  }
   return {
     userId: ctx.userId,
     email: ctx.email,
     name: ctx.name || "Unknown",
     communityId,
     communityAdmin: admin,
-    folders:
-      community.personalOwnerId !== null
-        ? await resolveRegistry(communityId)
-        : await ensureBrainGate(communityId),
+    access,
   };
 }
 
@@ -386,25 +385,24 @@ export function registerBrainTools(server: McpServer): void {
     "brain_folders",
     {
       description:
-        "List the registered folders of a community's SHARED brain that you can see, with each folder's visibility (public/private), your access level, and whether you can write there. The root entry (id '') gates the whole brain: new community members have no brain access until a root/folder admin grants it. Unregistered folders fall back to the root gate.",
+        "Show your access map for a community's SHARED brain: the subtree roots you can read (with your level — view/comment/edit/full — and whether you can write there), plus the restricted folders you can see into. Access is grant-based and flows down the folder tree ('' = the brain root); a restricted folder cuts inheritance, so it's only visible if a grant reaches you on or inside it. Joining a community does not by itself grant brain access.",
       inputSchema: { community_id: z.string() },
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
       withCtx(extra, "content:read", async (ctx) => {
         const p = await requireBrainPrincipal(ctx, args.community_id);
-        const folders = readableFolders(p.folders, p).map((f) => ({
-          id: f.id,
-          name: f.name,
-          visibility: f.visibility,
-          your_level: p.communityAdmin ? "admin" : (memberLevel(f, p.userId) ?? null),
-          can_write: principalCanWrite(p, f.id),
-          locked: f.locked === true,
-        }));
+        const roots = p.communityAdmin ? [""] : readableRoots(p.access);
         return {
-          folders,
+          readable_roots: roots.map((path) => ({
+            path,
+            your_level: principalLevelName(p, path),
+            can_write: principalCanWrite(p, path),
+          })),
+          restricted_folders: p.access.restricted,
+          locked_folders: p.access.locked,
           note:
-            "The root entry (id '') is the brain gate: joining the community does not grant brain access until a root/folder admin does. Registered folders refine the root's access.",
+            "'' is the brain root. Your effective level on any note is the strongest grant that reaches it; restricted folders start a fresh boundary.",
         };
       }),
   );

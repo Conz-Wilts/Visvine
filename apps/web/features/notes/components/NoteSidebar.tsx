@@ -11,7 +11,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
-import type { FolderLevel } from '@/lib/notes/shared/brainTypes'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
@@ -23,12 +22,13 @@ function noteGlyph(type: string | undefined): NodeGlyph | null {
   return getNodeGlyph(type) ?? (entityKindOf(type) === 'company' ? 'group' : null)
 }
 
-/** Registry-derived adornments for a TOP-LEVEL folder row (shared brain only). */
+/** Access adornments for a folder row at ANY depth (shared brain only):
+ *  restricted = a grant boundary (🔒), plus the viewer's own level chip. */
 interface FolderBadge {
-  private: boolean
+  restricted: boolean
   locked?: boolean
-  /** The viewer's own level in the folder, shown as a small chip. */
-  level?: FolderLevel
+  /** The viewer's own effective level at the folder ('view'…'full'). */
+  level?: string
 }
 
 interface NoteSidebarProps {
@@ -40,10 +40,10 @@ interface NoteSidebarProps {
   onSelect: (path: string) => void
   onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
-  /** Registry badges keyed by top-level folder id (shared scope only). */
+  /** Access badges keyed by FULL folder path (shared scope only). */
   folderBadges?: Map<string, FolderBadge>
-  /** Hover action on top-level folder rows: open the folder access panel. */
-  onFolderAccess?: (folderId: string) => void
+  /** Hover action on folder rows: open the folder's Share panel. */
+  onFolderAccess?: (folderPath: string) => void
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -348,11 +348,10 @@ function FolderRow(props: {
   useEffect(() => {
     if (containsSelection) setOpen(true)
   }, [containsSelection, props.selectedPath])
-  // Registry adornments apply to TOP-LEVEL folders only (the registry's unit of
-  // access control) — a top-level folder's tree path has no slash.
-  const isTopLevel = !props.node.path.includes('/')
-  const badge = isTopLevel ? props.folderBadges?.get(props.node.path) : undefined
-  const showAccess = isTopLevel && !!props.onFolderAccess
+  // Grants live at any depth now, so every folder row can carry a badge and a
+  // Share affordance (keyed by the folder's full path).
+  const badge = props.folderBadges?.get(props.node.path)
+  const showAccess = !!props.onFolderAccess
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note — clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
@@ -385,8 +384,8 @@ function FolderRow(props: {
             <FolderIcon open={open} />
           </span>
           <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>{props.node.name}</span>
-          {badge?.private && (
-            <span className="shrink-0 text-text-muted" title="Private folder">
+          {badge?.restricted && (
+            <span className="shrink-0 text-text-muted" title="Restricted folder — access is granted here, not inherited">
               <LockIcon />
             </span>
           )}
@@ -399,7 +398,7 @@ function FolderRow(props: {
         {showAccess && (
           <button
             type="button"
-            title="Folder access"
+            title="Share / who can see this folder"
             onClick={() => props.onFolderAccess!(props.node.path)}
             className="shrink-0 rounded p-1 text-text-muted opacity-0 transition hover:text-text-secondary group-hover/folder:opacity-100"
           >

@@ -19,7 +19,9 @@ test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('company'), 'company');
   assert.equal(entityKindOf('resource'), 'resource');
   assert.equal(entityKindOf('Resources'), 'resource');
-  assert.equal(entityKindOf('event'), null);
+  assert.equal(entityKindOf('event'), 'event');
+  assert.equal(entityKindOf('Events'), 'event');
+  assert.equal(entityKindOf('note'), null);
   assert.equal(entityKindOf(''), null);
   assert.equal(entityKindOf(null), null);
 });
@@ -28,10 +30,11 @@ test('entityNotePath derives people/ and companies/ paths from the node id', () 
   assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott.md');
   assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'companies/halter.md');
   assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook.md');
+  assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), 'events/summit.md');
   // slug comes from the id, not the name (collision-proof)
   assert.equal(entityNotePath({ id: 'person:jane-doe-acme', type: 'person', name: 'Jane Doe' }), 'people/jane-doe-acme.md');
   // non-entity nodes return null
-  assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), null);
+  assert.equal(entityNotePath({ id: 'note:welcome', type: 'note' }), null);
 });
 
 test('parseEntityHref normalizes only valid entity hrefs', () => {

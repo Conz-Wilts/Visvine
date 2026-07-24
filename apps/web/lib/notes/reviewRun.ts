@@ -13,8 +13,7 @@ import {
   DEFAULT_THRESHOLDS,
   type ReviewReport,
 } from './shared/review'
-import { folderById } from './shared/permissions'
-import { folderIdOfPath } from './shared/placement'
+import { isLockedPath } from './shared/authz'
 import type { BrainPrincipal } from './shared/brainTypes'
 
 const MAINTENANCE_ACTOR = { id: 'system', name: 'Review agent' }
@@ -39,7 +38,7 @@ export async function runReview(
   const metas = buildNoteIndex(raws)
   const frozen =
     brain.ownerKey === SHARED_OWNER_KEY
-      ? (path: string) => folderById(p.folders, folderIdOfPath(path))?.locked === true
+      ? (path: string) => isLockedPath(p.access.locked, path)
       : () => false
 
   const report = buildReviewReport({

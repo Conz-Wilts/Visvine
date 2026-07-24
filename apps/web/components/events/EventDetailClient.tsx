@@ -14,12 +14,16 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useSession } from '@/lib/auth-client';
+import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/components/events/GuestManager';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 import { copyToClipboard } from '@/lib/utils';
 import { useTheme } from '@/lib/contexts/ThemeContext';
 import { type ThemePalette } from '@/lib/profileTheme';
@@ -29,14 +33,31 @@ import {
   missingRequiredAnswers, startsInLabel, RESPONSE_LABELS,
 } from '@/lib/eventUtils';
 import { RegistrationField } from '@/components/events/RegistrationField';
-import type { NBEvent, RSVPResponse } from '@/lib/types';
+import type { CommunityFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
 import {
   Link2, Trash2, Pencil, MapPin, Video, Users, FileDown,
   CalendarPlus, Check, Loader2, Lock, ClipboardList, Globe2,
 } from 'lucide-react';
 import Select from '@/components/ui/Select';
 
+// The Context tab pulls in Tiptap + the notes stack; load it only when a note
+// tab renders (same rationale as the directory profile's deferred panel).
+const EntityContextPanel = dynamic(
+  () => import('@/features/notes/components/EntityContextPanel').then((m) => m.EntityContextPanel),
+  { ssr: false, loading: () => null },
+);
+
 type Tab = 'overview' | 'guests' | 'form';
+
+// The guest-facing view carries the same Event | Context | Raw bar entity
+// profiles get. Context/Raw are the event's context note (events/<slug>.md in
+// the community brain) — the tab IS the editor mode.
+const EVENT_TABS: TabConfig[] = [
+  { id: 'about', label: 'Event' },
+  { id: 'context', label: 'Context' },
+  { id: 'raw', label: 'Raw' },
+];
+const isNoteTab = (tab: ProfileTab) => tab === 'context' || tab === 'raw';
 
 interface EventStats {
   total: number;
@@ -70,6 +91,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const { theme: userTheme, isDark } = useTheme();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  // The guest view's Event | Context | Raw bar (separate from the manage view's
+  // overview/guests/form tabs above).
+  const [viewTab, setViewTab] = useState<ProfileTab>('about');
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [occupied, setOccupied] = useState(0);
@@ -147,7 +171,13 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const virtualLink = event.metadata?.virtualLink as string | undefined;
   const viewerGoing = viewer && ['going', 'checked_in'].includes(viewer.status) && viewer.response !== 'declined';
 
-  return (
+  // The Context/Raw bar only rides the guest-facing view (the manage view has its
+  // own overview/guests/form tabs) and only when the notes tool is on for this
+  // community — the same gate entity profiles use.
+  const featureConfig = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const showContextTabs = !manage && isFeatureEnabled(featureConfig, 'notes');
+
+  const eventBody = (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 lg:pb-10">
       {/* breadcrumb */}
       {manage ? (
@@ -423,6 +453,30 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
         onClose={() => { setShowDeleteModal(false); setDeleteError(null); }}
       />
     </div>
+  );
+
+  // Notes off (or manage view): render the event page unchanged.
+  if (!showContextTabs) return eventBody;
+
+  // Guest view with notes on: wrap the event in the shared Event | Context | Raw
+  // bar. The provider spans the bar and the panel so the Context editor can
+  // portal its toolbar into the bar's attached region (see TabBarSlotContext).
+  return (
+    <TabBarSlotProvider>
+      <div className="profile-enter w-full pb-10">
+        {/* Direct child of the tall page container so `sticky` pins; "-top-4 -mt-4"
+            cancels <main>'s pt-4 so the bar sits flush under the navbar. */}
+        <ProfileTabBar
+          nodeType="Event" tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
+          stickyTop="-top-4 -mt-4" attachedOpen={viewTab === 'context'}
+        />
+        {isNoteTab(viewTab) ? (
+          <EntityContextPanel nodeId={event.id} mode={viewTab === 'raw' ? 'raw' : 'wysiwyg'} />
+        ) : (
+          eventBody
+        )}
+      </div>
+    </TabBarSlotProvider>
   );
 }
 

@@ -2,9 +2,9 @@
 // exactly ONE brain — its shared brain (ownerKey 'shared'). A user's personal
 // context lives in the shared brain of their personal-space community
 // (`me:<userId>`, created at onboarding) — there are no per-community personal
-// brains anymore. Access to a normal community's brain is gated by the registry
-// root entry (see registry.ensureBrainGate): joining the community does not by
-// itself grant brain access. Routes call resolveBrain() right after
+// brains anymore. Access to a normal community's brain is grant-gated
+// (lib/notes/access.ts): joining the community does not by itself grant brain
+// access until a grant reaches you. Routes call resolveBrain() right after
 // requireSession(); it returns either a ResolvedBrain or a ready-to-return
 // error Response (mirroring requireSession).
 
@@ -15,7 +15,9 @@ import type { SessionPayload } from '@/lib/session'
 import { provisionPersonalCommunity, personalCommunityId } from '@/lib/onboarding/personalCommunity'
 import { SHARED_OWNER_KEY, type Brain, type Actor } from './store'
 import type { BrainPrincipal } from './shared/brainTypes'
-import { ensureBrainGate, resolveRegistry } from './registry'
+import { OPEN_ACCESS } from './shared/authz'
+import { principalCanManage } from './shared/permissions'
+import { brainAccessFor, ensureAccessSeeded } from './access'
 
 // Kept for route/client compat; every scope now resolves to the shared brain.
 type Scope = 'shared' | 'personal'
@@ -93,31 +95,41 @@ export async function resolvePersonalBrain(identity: {
 
 /**
  * The BrainPrincipal for an already-resolved brain — the explicit identity every
- * brainService call takes. Loads the shared brain's folder registry per call so
- * membership changes apply immediately; for normal communities this also
- * materializes the brain gate (root entry) on first touch. Personal spaces are
- * never gated.
+ * brainService call takes. Loads the caller's grant rows per call so membership,
+ * team, and grant changes apply immediately; for normal communities this also
+ * seeds the grant rows on first touch (migrating a legacy registry, or
+ * grandfathering current members — lib/notes/access.ts). Personal spaces are
+ * never gated (OPEN_ACCESS).
  */
 export async function principalOf(resolved: ResolvedBrain): Promise<BrainPrincipal> {
-  const folders = resolved.isPersonalSpace
-    ? await resolveRegistry(resolved.communityId)
-    : await ensureBrainGate(resolved.communityId)
+  let access = OPEN_ACCESS
+  if (!resolved.isPersonalSpace) {
+    await ensureAccessSeeded(resolved.communityId)
+    access = await brainAccessFor(resolved.communityId, resolved.actor.id)
+  }
   return {
     userId: resolved.actor.id,
     email: resolved.actor.email ?? '',
     name: resolved.actor.name,
     communityId: resolved.communityId,
     communityAdmin: resolved.isAdmin,
-    folders,
+    access,
   }
 }
 
 /**
  * Whether the caller may delete/rename a note. In a personal space the caller
- * is the owner. Elsewhere, only community admins or the note's original author
- * may remove/rename it; folder write-gating applies on top in the routes.
+ * is the owner. Elsewhere: community admins, the note's original author, or a
+ * FULL-level grant holder at the note's path (full = manage the subtree,
+ * deletes included — pass the principal to enable that check). Folder
+ * write-gating applies on top in the routes.
  */
-export function canRemove(brain: ResolvedBrain, noteCreatedBy: string | null): boolean {
+export function canRemove(
+  brain: ResolvedBrain,
+  noteCreatedBy: string | null,
+  manage?: { principal: BrainPrincipal; path: string },
+): boolean {
   if (brain.isPersonalSpace) return true
-  return brain.isAdmin || noteCreatedBy === brain.actor.id
+  if (brain.isAdmin || noteCreatedBy === brain.actor.id) return true
+  return manage ? principalCanManage(manage.principal, manage.path) : false
 }

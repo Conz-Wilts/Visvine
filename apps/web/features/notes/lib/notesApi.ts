@@ -15,56 +15,73 @@ import type {
   ReorganizePlan,
 } from '@/lib/notes/shared/types'
 import type {
-  Folder,
-  FolderLevel,
-  FolderVisibility,
   JoinRequest,
   MoveProposalEntry,
   AuditEntry,
 } from '@/lib/notes/shared/brainTypes'
+import type { AccessLevelName, GrantSubjectType } from '@/lib/notes/shared/authz'
+import type { AccessListEntry } from '@/lib/notes/access'
+import type { TeamInfo, TeamRole } from '@/lib/notes/teams'
+import type { PublicationInfo } from '@/lib/notes/publications'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 
-// --- brain capability types (registry / review / promote payload shapes) -------
+// --- brain access types (grant model — lib/notes/shared/authz.ts) ---------------
 
-/** A registered folder as the registry endpoint returns it: annotated with the
- *  caller's own level + capability booleans (computed server-side). */
-type RegistryFolder = Folder & {
-  myLevel?: FolderLevel
-  canWrite: boolean
-  canAdmin: boolean
-}
-
-/** The brain gate (root registry entry, id ''): whether the community's brain is
- *  admin-gated at all and whether the CALLER may read it. `canRead: false` means
- *  the caller sees an empty brain and should request access (folderId ''). */
-interface BrainGate {
+/** GET /api/notes/access?path= — the caller's standing at one path, plus the
+ *  merged who-has-access list (readable) and grantable subjects (managers). */
+export interface PathAccessResponse {
+  path: string
+  me: { userId: string; communityAdmin: boolean }
+  /** No grant reaches the caller ANYWHERE — the brain gate is closed to them. */
   gated: boolean
   canRead: boolean
-  /** Whether the caller may write at the brain root (create root-level notes). */
   canWrite: boolean
-  myLevel?: FolderLevel
+  canManage: boolean
+  myLevel: AccessLevelName | null
+  restricted: string[]
+  entries: AccessListEntry[] | null
+  subjects: {
+    members: Array<{ userId: string; name: string; email: string | null; image: string | null }>
+    teams: Array<{ id: string; name: string; memberCount: number }>
+  } | null
 }
 
-export interface RegistryResponse {
-  folders: RegistryFolder[]
-  gate: BrainGate
+/** GET /api/notes/access (no path) — the brain-wide overview for tree badges
+ *  and (for community admins) the full grant dump behind the Access page. */
+export interface AccessOverviewResponse {
   me: { userId: string; communityAdmin: boolean }
+  gated: boolean
+  restricted: string[]
+  locked: string[]
+  readableRoots: string[]
+  grants: Array<{
+    id: string
+    subjectType: GrantSubjectType
+    subjectId: string
+    subjectName: string
+    resourcePath: string
+    level: number
+    grantedBy: string
+    createdAt: number
+  }> | null
 }
 
-/** Discriminated payloads for POST /api/notes/registry. */
-export type RegistryActionInput =
-  | { action: 'register'; name: string; id?: string; visibility: FolderVisibility }
-  | { action: 'unregister'; folderId: string }
-  | { action: 'setVisibility'; folderId: string; visibility: FolderVisibility }
-  | { action: 'setLock'; folderId: string; locked: boolean }
-  | {
-      action: 'setMember'
-      folderId: string
-      member: { userId: string; name?: string; email?: string }
-      level: FolderLevel
-    }
-  | { action: 'removeMember'; folderId: string; userId: string }
+export type AccessActionInput =
+  | { action: 'grant'; subjectType: GrantSubjectType; subjectId?: string; path: string; level: AccessLevelName }
+  | { action: 'revoke'; grantId: string }
+  | { action: 'restrict'; folderPath: string; restricted: boolean }
+  | { action: 'setLock'; folderPath: string; locked: boolean }
+
+export type PublicationWithNames = PublicationInfo & {
+  sourceCommunityName: string
+  targetCommunityName: string
+}
+
+export interface PublicationStateResponse {
+  asSource: PublicationWithNames[]
+  asTarget: PublicationWithNames | null
+}
 
 export type PromoteResult =
   | { status: 'applied'; path: string }
@@ -120,6 +137,15 @@ async function sendJson<T>(url: string, method: string, body: unknown): Promise<
 
 export const notesApi = {
   config: () => getJson<{ aiConfigured: boolean }>('/api/notes/config'),
+
+  /** Brain display settings — currently the context's display name. */
+  getBrainSettings: (c: string) =>
+    getJson<{ settings: { contextName: string } }>(`/api/notes/settings?${qs(c)}`),
+  setContextName: (c: string, contextName: string) =>
+    sendJson<{ settings: { contextName: string } }>('/api/notes/settings', 'POST', {
+      communityId: c,
+      contextName,
+    }),
 
   list: (c: string) => getJson<{ notes: NoteMeta[]; starred: string[] }>(`/api/notes?${qs(c)}`),
   tree: (c: string) => getJson<{ tree: TreeNode }>(`/api/notes/tree?${qs(c)}`),
@@ -207,10 +233,42 @@ export const notesApi = {
       filters: opts?.filters,
     }),
 
-  getRegistry: (c: string) =>
-    getJson<RegistryResponse>(`/api/notes/registry?communityId=${encodeURIComponent(c)}`),
-  registryAction: (c: string, input: RegistryActionInput) =>
-    sendJson<{ ok?: boolean }>('/api/notes/registry', 'POST', { communityId: c, ...input }),
+  /** The caller's standing at one path ('' = brain root) + who-has-access list. */
+  getAccess: (c: string, path: string) =>
+    getJson<PathAccessResponse>(`/api/notes/access?${qs(c, { path })}`),
+  /** Brain-wide access overview (restricted/locked folders, gate) for badges. */
+  getAccessOverview: (c: string) =>
+    getJson<AccessOverviewResponse>(`/api/notes/access?${qs(c)}`),
+  accessAction: (c: string, input: AccessActionInput) =>
+    sendJson<{ ok?: boolean }>('/api/notes/access', 'POST', { communityId: c, ...input }),
+
+  listTeams: (c: string) => getJson<{ teams: TeamInfo[] }>(`/api/teams?${qs(c)}`),
+  teamAction: (
+    c: string,
+    input:
+      | { action: 'create'; name: string; description?: string }
+      | { action: 'update'; teamId: string; name?: string; description?: string }
+      | { action: 'delete'; teamId: string }
+      | { action: 'setMember'; teamId: string; userId: string; role?: TeamRole }
+      | { action: 'removeMember'; teamId: string; userId: string },
+  ) => sendJson<{ ok?: boolean; team?: TeamInfo }>('/api/teams', 'POST', { communityId: c, ...input }),
+
+  /** How `path` participates in publishing, from community `c`'s point of view. */
+  getPublications: (c: string, path: string) =>
+    getJson<PublicationStateResponse>(`/api/notes/publications?${qs(c, { path })}`),
+  /** Publish a note the caller can read (default source: their personal brain)
+   *  into community `c`. Queues a proposal when they can't write the target. */
+  publish: (c: string, input: { fromCommunityId?: string; fromPath: string; toPath: string }) =>
+    sendJson<
+      | { status: 'applied'; publication: PublicationInfo }
+      | { status: 'proposed'; proposalId: string }
+    >('/api/notes/publications', 'POST', { communityId: c, action: 'publish', ...input }),
+  unpublish: (c: string, id: string) =>
+    sendJson<{ publication: PublicationInfo }>('/api/notes/publications', 'POST', {
+      communityId: c,
+      action: 'unpublish',
+      id,
+    }),
 
   listJoinRequests: (c: string) =>
     getJson<{ requests: JoinRequest[] }>(

@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
 import { canRemove, principalOf } from '@/lib/notes/brain'
-import { readVisible, writeDenial, moveGated } from '@/lib/notes/brainService'
+import { readVisible, writeDenial, writeDenialFull, moveGated } from '@/lib/notes/brainService'
 import {
   writeNote,
   createNote,
@@ -72,7 +72,9 @@ export async function PUT(req: NextRequest) {
   const content = typeof body.content === 'string' ? body.content : null
   if (!path || content === null) return fail('path and content are required')
   const p = await principalOf(brain)
-  const denial = writeDenial(p, brain, path)
+  // Full check: folder gate + the replica block (published copies are
+  // read-only in their destination — unlink to edit).
+  const denial = await writeDenialFull(p, brain, path)
   if (denial) return fail(denial, 403)
   const origin: NoteRevisionOrigin =
     body.origin === 'restore' ? 'restore' : body.origin === 'ai-refactor' ? 'ai-refactor' : 'edit'
@@ -92,10 +94,10 @@ export async function PATCH(req: NextRequest) {
   const from = typeof body.from === 'string' ? body.from : null
   const to = typeof body.to === 'string' ? body.to : null
   if (!from || !to) return fail('from and to are required')
-  if (!canRemove(brain, await getNoteCreatedBy(brain, from))) {
-    return fail('Only an admin or the author can move this note', 403)
-  }
   const p = await principalOf(brain)
+  if (!canRemove(brain, await getNoteCreatedBy(brain, from), { principal: p, path: from })) {
+    return fail('Only an admin, the author, or a full-access member can move this note', 403)
+  }
   try {
     // moveGated checks the folder gate on BOTH ends and rewrites inbound links
     // to the new path (a no-op gate for personal brains).
@@ -112,10 +114,12 @@ export async function DELETE(req: NextRequest) {
   if (brain instanceof Response) return brain
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  if (!canRemove(brain, await getNoteCreatedBy(brain, path))) {
-    return fail('Only an admin or the author can delete this note', 403)
-  }
   const p = await principalOf(brain)
+  if (!canRemove(brain, await getNoteCreatedBy(brain, path), { principal: p, path })) {
+    return fail('Only an admin, the author, or a full-access member can delete this note', 403)
+  }
+  // Deleting a published REPLICA is allowed — it deactivates the link — so the
+  // sync folder gate applies here, not the replica block.
   const denial = writeDenial(p, brain, path)
   if (denial) return fail(denial, 403)
   try {

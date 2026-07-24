@@ -83,6 +83,12 @@ interface ProfileTabBarProps {
    *  straight off tab state: it opens in step with the indicator, and whatever
    *  fills it can arrive later without moving the line. */
   attachedOpen?: boolean;
+  /** Horizontal bleed + stacking classes, default `-ml-6 z-20`. The standalone
+   *  note view passes a rail-wide bleed + raised z (`-ml-[23px] z-[45]`) so its
+   *  Context/Raw bar spans OVER the docked notes tree (z-40) — the same trick the
+   *  Directory's Grid/Graph/Tables bar uses — instead of starting at the tree's
+   *  right edge and leaving the tree's top-left corner bare. */
+  edgeClass?: string;
 }
 
 export default function ProfileTabBar({
@@ -95,6 +101,7 @@ export default function ProfileTabBar({
   tabs: tabsOverride,
   stickyTop = 'top-20',
   attachedOpen = false,
+  edgeClass = '-ml-6 z-20',
 }: ProfileTabBarProps) {
   const { setHost } = useTabBarSlot();
   const tabs = useMemo(
@@ -130,7 +137,7 @@ export default function ProfileTabBar({
   }
 
   return (
-    <div className={`sticky ${stickyTop} z-20 -ml-6 border-b border-border-subtle bg-surface-1`}>
+    <div className={`sticky ${stickyTop} ${edgeClass} border-b border-border-subtle bg-surface-1`}>
       {/* -ml-6 bleeds the bar left into <main>'s 24px gutter so its bottom
           border starts at the sidebar's right edge (continuing the navbar seam).
           No pl-6 to push the content back: the tab row and the attached toolbar

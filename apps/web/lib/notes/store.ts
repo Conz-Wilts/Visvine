@@ -19,9 +19,15 @@ import type {
 } from './shared/types'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
-// Import cycle with vaultCache (it reads via listRaw) is benign: both sides
+// Import cycles with vaultCache (it reads via listRaw) and publications (it
+// writes replicas via writeNote; we call its hooks) are benign: both sides
 // only call each other inside function bodies, never at module init.
 import { invalidateVault } from './vaultCache'
+import {
+  syncPublicationsOnDelete,
+  syncPublicationsOnRename,
+  syncPublicationsOnWrite,
+} from './publications'
 import { ancestorFolders, buildIndexStub, indexPathOf } from './shared/indexNote'
 
 // The `starred` column is a queryable index of the frontmatter `starred:` flag
@@ -250,6 +256,12 @@ export async function writeNote(
   // paths); runs even on no-op saves so a missed sync self-heals on next save.
   await syncContextLinks(brain, p, content)
 
+  // Refresh this note's published replicas in other brains. Origin 'publish'
+  // IS a replica write — skipping it is what stops replication cascades and
+  // publish cycles dead. Best-effort like the link sync; self-heals on no-op
+  // saves the same way.
+  if (origin !== 'publish') await syncPublicationsOnWrite(brain, p, content, actor)
+
   // Upsert-created notes (e.g. an entity note's first save) get folder indexes too.
   if (existing === null) await ensureAncestorIndexes(brain, p, actor)
 
@@ -347,8 +359,18 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
   if (t !== f && (await findLive(brain, t))) throw new Error(`A note already exists at: ${to}`)
   await prisma.communityNote.update({ where: { id: row.id }, data: { path: t } })
   // A rename changes which entity (if any) the note is canonical for: drop the
-  // old path's context links, derive the new path's.
-  if (t !== f) await syncContextLinksBulk(brain, [f], [[t, row.content]])
+  // old path's context links, derive the new path's. Publications and any
+  // note-level grants follow the note to its new path.
+  if (t !== f) {
+    await syncContextLinksBulk(brain, [f], [[t, row.content]])
+    await syncPublicationsOnRename(brain, f, t)
+    if (brain.ownerKey === SHARED_OWNER_KEY) {
+      await prisma.brainGrant.updateMany({
+        where: { communityId: brain.communityId, resourcePath: f },
+        data: { resourcePath: t },
+      })
+    }
+  }
   invalidateVault(brain)
   return t // revisions stay attached by noteId
 }
@@ -363,6 +385,8 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
     data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
   })
   await syncContextLinks(brain, row.path, null) // trashed note owns no context links
+  // Trashing either end of a publication deactivates it (replica stays a copy).
+  await syncPublicationsOnDelete(brain, [row.path])
   invalidateVault(brain)
 }
 
@@ -446,6 +470,29 @@ export async function renameFolder(brain: Brain, from: string, to: string): Prom
     notes.map((n) => n.path),
     notes.map((n) => [t + n.path.slice(f.length), n.content]),
   )
+  // Publications follow every moved note (independent rows — overlap the round-trips).
+  await Promise.all(
+    notes.map((note) => syncPublicationsOnRename(brain, note.path, t + note.path.slice(f.length))),
+  )
+  // Grants ride the rename too — a moved team subtree keeps its access rows.
+  if (brain.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.brainGrant.updateMany({
+      where: { communityId: brain.communityId, resourcePath: f },
+      data: { resourcePath: t },
+    })
+    const nested = await prisma.brainGrant.findMany({
+      where: { communityId: brain.communityId, resourcePath: { startsWith: `${f}/` } },
+      select: { id: true, resourcePath: true },
+    })
+    await Promise.all(
+      nested.map((grant) =>
+        prisma.brainGrant.update({
+          where: { id: grant.id },
+          data: { resourcePath: t + grant.resourcePath.slice(f.length) },
+        }),
+      ),
+    )
+  }
   const folders = await prisma.communityNoteFolder.findMany({
     where: {
       communityId: brain.communityId,
@@ -483,6 +530,7 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
     })
   }
   await syncContextLinksBulk(brain, notes.map((n) => n.path)) // trashed entity notes drop their links
+  await syncPublicationsOnDelete(brain, notes.map((n) => n.path))
   await prisma.communityNoteFolder.deleteMany({
     where: {
       communityId: brain.communityId,
@@ -490,6 +538,16 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
       OR: [{ path: p }, { path: { startsWith: `${p}/` } }],
     },
   })
+  // Grants into a deleted subtree go with it — a future folder reusing the
+  // name must not inherit a dead folder's access.
+  if (brain.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.brainGrant.deleteMany({
+      where: {
+        communityId: brain.communityId,
+        OR: [{ resourcePath: p }, { resourcePath: { startsWith: `${p}/` } }],
+      },
+    })
+  }
   invalidateVault(brain)
 }
 

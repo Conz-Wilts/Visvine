@@ -19,7 +19,13 @@ import { rewriteLinks } from './shared/linkRewrite'
 import { fusedSearch, type FusedResult, type SearchFilters } from './shared/retrieval'
 import { pathVisibleTo } from './shared/visibility'
 import { folderIdOfPath } from './shared/placement'
-import { folderById, memberLevel, principalCanWrite, principalIsSuperAdmin } from './shared/permissions'
+import {
+  principalCanWrite,
+  principalIsSuperAdmin,
+  principalLevelName,
+} from './shared/permissions'
+import { isRestrictedPath } from './shared/authz'
+import { replicaDenial } from './publications'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote } from './shared/types'
@@ -33,11 +39,11 @@ function actorOf(p: BrainPrincipal): Actor {
   return { id: p.userId, name: p.name, email: p.email || null }
 }
 
-/** Whether a shared-brain read of this path must be recorded for compliance. */
+/** Whether a shared-brain read of this path must be recorded for compliance:
+ *  reads inside a restricted boundary are the sensitive ones. */
 function isAuditedRead(p: BrainPrincipal, brain: Brain, path: string): boolean {
   if (p.system || !isShared(brain)) return false
-  const folder = folderById(p.folders, folderIdOfPath(path))
-  return folder?.visibility === 'private'
+  return isRestrictedPath(p.access.restricted, path)
 }
 
 // --- read surface ---------------------------------------------------------------
@@ -122,20 +128,34 @@ export async function searchBrain(
 
 /**
  * The write gate. Personal brains are always writable by their owner (scoping
- * guarantees the caller IS the owner). Shared-brain writes are gated on the
- * target folder: registered folders enforce membership levels, unregistered
- * ones keep Visvine's member-writable default. Returns null when allowed, else
- * the denial reason.
+ * guarantees the caller IS the owner). Shared-brain writes require EDIT level
+ * at the target path — a grant that reaches it (through any restricted cuts)
+ * at edit or full. Returns null when allowed, else the denial reason.
  */
 export function writeDenial(p: BrainPrincipal, brain: Brain, path: string): string | null {
   if (!isShared(brain)) return null
-  const folderId = folderIdOfPath(path)
-  if (principalCanWrite(p, folderId)) return null
-  const folder = folderById(p.folders, folderId)
-  const level = folder ? memberLevel(folder, p.userId) : undefined
+  if (principalCanWrite(p, path)) return null
+  const level = principalLevelName(p, path)
+  const where = folderIdOfPath(path) || 'the brain root'
   return level
-    ? `You have ${level} access to "${folder!.name}" — write access is required.`
-    : `You don't have write access to "${folder?.name ?? folderId}".`
+    ? `You have ${level} access in "${where}" — edit access is required.`
+    : `You don't have access to write in "${where}".`
+}
+
+/**
+ * The full async write check: the folder gate plus the replica block — an
+ * ACTIVE publication target is read-only in its destination (the next source
+ * save would clobber any local edit). Every content write goes through this.
+ */
+export async function writeDenialFull(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+): Promise<string | null> {
+  const denial = writeDenial(p, brain, path)
+  if (denial) return denial
+  if (isShared(brain)) return replicaDenial(brain.communityId, path)
+  return null
 }
 
 /** Gated whole-note write, recording revision history. */
@@ -147,7 +167,7 @@ export async function writeGated(
   origin: Parameters<typeof store.writeNote>[4] = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = writeDenial(p, brain, path)
+  const denial = await writeDenialFull(p, brain, path)
   if (denial) return { status: 'denied', reason: denial }
   await store.writeNote(brain, path, content, actorOf(p), origin, model)
   return { status: 'applied', path }
@@ -166,7 +186,7 @@ export async function appendLogGated(
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = writeDenial(p, brain, path)
+  const denial = await writeDenialFull(p, brain, path)
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(brain, path)
   const role =
@@ -190,8 +210,7 @@ function roleLabel(p: BrainPrincipal, brain: Brain, path: string): string {
   if (p.system) return 'maintenance'
   if (!isShared(brain)) return 'owner'
   if (principalIsSuperAdmin(p)) return 'admin'
-  const folder = folderById(p.folders, folderIdOfPath(path))
-  return (folder && memberLevel(folder, p.userId)) ?? 'member'
+  return principalLevelName(p, path) ?? 'member'
 }
 
 // --- move (gated on BOTH ends, inbound links rewritten) ---------------------------

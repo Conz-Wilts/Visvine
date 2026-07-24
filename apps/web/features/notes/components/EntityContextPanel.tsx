@@ -12,7 +12,7 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Share2, Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useNodeProfile } from '@/hooks/useNodeProfile'
@@ -22,7 +22,7 @@ import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RelatedNote } from '@/lib/notes/shared/types'
-import { notesApi, type RegistryResponse } from '../lib/notesApi'
+import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
   contextKeys,
@@ -35,6 +35,7 @@ import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
 import { BrainGateCard } from './BrainGateCard'
+import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
@@ -70,24 +71,27 @@ export function EntityContextPanel({
   const path = node ? entityNotePath({ id: nodeId, type: node.type }) : null
 
   const [aiConfigured, setAiConfigured] = useState(false)
-  const [registry, setRegistry] = useState<RegistryResponse | null>(null)
+  const [access, setAccess] = useState<PathAccessResponse | null>(null)
   // The toolbar and the note text are one visual unit, but they read different
   // fetches: the text needs only the note, while the format controls need
-  // `canWrite` (registry) and the Refactor button needs `aiConfigured` (config).
-  // Whichever lands second used to pop in after the other. These track "answered"
-  // — NOT "answered with a value" — so the panel can hold one skeleton until all
-  // of it is in and paint once. A failed fetch resolves them too, or the skeleton
-  // would hang forever on the error path (both effects swallow into a null/false).
-  const [registryDone, setRegistryDone] = useState(false)
+  // `canWrite` (per-path access) and the Refactor button needs `aiConfigured`
+  // (config). Whichever lands second used to pop in after the other. These track
+  // "answered" — NOT "answered with a value" — so the panel can hold one skeleton
+  // until all of it is in and paint once. A failed fetch resolves them too, or
+  // the skeleton would hang forever on the error path (both effects swallow into
+  // a null/false).
+  const [accessDone, setAccessDone] = useState(false)
   const [configDone, setConfigDone] = useState(false)
   const [read, setRead] = useState<NoteRead | null>(null)
   const [noteExists, setNoteExists] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
   const [related, setRelated] = useState<RelatedNote[] | null>(null)
+  const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   // Entity tags shown in the header — seeded from the node, edited in place.
   const [tags, setTags] = useState<string[]>([])
   const [addingTag, setAddingTag] = useState(false)
@@ -96,7 +100,7 @@ export function EntityContextPanel({
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
 
-  const gatedOut = !isPersonalSpace && registry !== null && !registry.gate.canRead
+  const gatedOut = !isPersonalSpace && access !== null && access.gated
 
   // swrFetch delivers a cached value synchronously, so on a re-open these
   // "done" gates flip in the same render pass and the skeleton never flashes.
@@ -108,31 +112,31 @@ export function EntityContextPanel({
   }, [])
 
   useEffect(() => {
-    setRegistry(null)
-    setRegistryDone(false)
-    if (!communityId) return
+    setAccess(null)
+    setAccessDone(false)
+    if (!communityId || !path) return
     let stale = false
     swrFetch(
-      contextKeys.registry(communityId),
-      () => notesApi.getRegistry(communityId),
-      (r) => {
+      contextKeys.access(communityId, path),
+      () => notesApi.getAccess(communityId, path),
+      (a) => {
         if (stale) return
-        setRegistry(r)
-        setRegistryDone(true)
+        setAccess(a)
+        setAccessDone(true)
       },
     ).catch(() => {
       if (!stale) {
-        setRegistry(null)
-        setRegistryDone(true)
+        setAccess(null)
+        setAccessDone(true)
       }
     })
     return () => { stale = true }
-  }, [communityId])
+  }, [communityId, path])
 
   // When gated out, surface the viewer's own pending root-gate request (same
   // flow as the workspace's gated state).
   useEffect(() => {
-    if (!gatedOut || !communityId || !registry) {
+    if (!gatedOut || !communityId || !access) {
       setRequestPending(false)
       return
     }
@@ -141,12 +145,12 @@ export function EntityContextPanel({
       .then(({ requests }) =>
         setRequestPending(
           requests.some(
-            (r) => r.folderId === '' && r.status === 'pending' && r.userId === registry.me.userId,
+            (r) => r.folderId === '' && r.status === 'pending' && r.userId === access.me.userId,
           ),
         ),
       )
       .catch(() => setRequestPending(false))
-  }, [gatedOut, communityId, registry])
+  }, [gatedOut, communityId, access])
 
   const requestAccess = async () => {
     if (!communityId) return
@@ -171,6 +175,7 @@ export function EntityContextPanel({
     setNoteExists(false)
     setReferences(null)
     setRelated(null)
+    setPubs(null)
     onModeChange?.('wysiwyg')
     // References/related fire in parallel with the read (no waterfall — they're
     // below-the-fold UI); their results only apply once the read lands 'ok', so
@@ -192,6 +197,10 @@ export function EntityContextPanel({
         relatedPromise.then(({ related: rel }) => {
           if (loadSeq.current === seq) setRelated(rel)
         }).catch(() => {})
+        // Replica banner: is this context note a live published copy?
+        notesApi.getPublications(communityId, path).then((state) => {
+          if (loadSeq.current === seq) setPubs(state)
+        }).catch(() => {})
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
@@ -212,18 +221,12 @@ export function EntityContextPanel({
     [node, nodeId],
   )
 
-  // Write-permission heuristic for the empty-state copy and editor editability.
-  // Server-side writeDenial remains the enforcement; a 403 surfaces in the error
-  // row. Personal spaces are always writable; a registered people/companies
-  // folder answers directly; unregistered falls back to the root gate.
-  const canWrite = useMemo(() => {
-    if (isPersonalSpace) return true
-    if (!registry) return false
-    if (!registry.gate.canRead) return false
-    const kindDir = path?.split('/')[0] ?? null
-    const folder = kindDir ? registry.folders.find((f) => f.id === kindDir) : null
-    return folder ? folder.canWrite : registry.gate.canWrite
-  }, [isPersonalSpace, registry, path])
+  // Editor editability: server-computed per-path access (any-depth grants and
+  // restricted cuts included) — writeDenial stays the enforcement; a 403
+  // surfaces in the error row. Personal spaces are always writable. A live
+  // published replica is read-only here regardless of folder access.
+  const isReplica = pubs?.asTarget != null
+  const canWrite = (isPersonalSpace || (access?.canWrite ?? false)) && !isReplica
 
   const handleSave = useCallback(
     async (p: string, body: string, origin?: string) => {
@@ -347,11 +350,11 @@ export function EntityContextPanel({
   )
 
   // Every answer the editor's first paint depends on: the note itself, the
-  // registry behind canWrite (skipped in personal spaces, which are always
-  // writable), and the config behind the Refactor button. They're separate
-  // requests, so gating the whole surface on all three is what keeps the text,
-  // the toolbar and the tags from landing on three different commits.
-  const dataReady = read !== null && (isPersonalSpace || registryDone) && configDone
+  // per-path access behind canWrite (skipped in personal spaces, which are
+  // always writable), and the config behind the Refactor button. They're
+  // separate requests, so gating the whole surface on all three is what keeps
+  // the text, the toolbar and the tags from landing on three different commits.
+  const dataReady = read !== null && (isPersonalSpace || accessDone) && configDone
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -394,6 +397,21 @@ export function EntityContextPanel({
   // Tag colour registry: community-saved colours + those registered this session.
   const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
 
+  // Share lives on the editor toolbar's far-right slot; when there's no editor
+  // (read-only viewer, no note yet / read failure) it falls back to the header
+  // row so the panel is still reachable.
+  const shareButton = (
+    <button
+      type="button"
+      onClick={() => setShareOpen(true)}
+      title="Who can see this context?"
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      Share
+    </button>
+  )
+
   // The entity header (avatar, name, type + tag rows). No card chrome — it
   // renders directly on the page so it reads as one surface with the note, and
   // its width/padding mirror .notes-column (760px / 28px) so it lines up with
@@ -415,8 +433,19 @@ export function EntityContextPanel({
         )}
         {/* The name IS the note title here (embedded NoteEditor hides its own
             .notes-title), so it matches that scale: 2.5rem / 600 / tight. */}
-        <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+        <h2 className="min-w-0 flex-1 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+        {!showEditor && shareButton}
       </div>
+
+      {isReplica && pubs?.asTarget && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+          <Radio className="h-4 w-4 shrink-0 text-brand-green" />
+          <span>
+            Published from <span className="font-medium">{pubs.asTarget.sourceCommunityName}</span> — kept in
+            sync with its source, read-only here. Unlink it from Share to make it an editable copy.
+          </span>
+        </div>
+      )}
 
       {/* Type row — micro-label above a single solid square chip in the entity's
           alias/type colour (read-only here; the type is owned by the graph). */}
@@ -504,6 +533,7 @@ export function EntityContextPanel({
             key={path}
             variant="embedded"
             headerSlot={headerCard}
+            toolbarTrailSlot={shareButton}
             path={path}
             meta={openMeta}
             notes={noteRefs}
@@ -526,6 +556,14 @@ export function EntityContextPanel({
           <p className="text-base font-semibold text-text-secondary">No shared context for {node.name} yet.</p>
           <p className="text-sm text-text-muted">Members with write access can start this entity&apos;s context note.</p>
         </div>
+      )}
+      {shareOpen && path && communityId && (
+        <SharePanel
+          communityId={communityId}
+          path={path}
+          kind="note"
+          onClose={() => setShareOpen(false)}
+        />
       )}
     </div>
   )

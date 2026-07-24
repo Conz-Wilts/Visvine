@@ -1,8 +1,9 @@
 // GET /api/notes/tree?communityId=&scope=
 // The folder/note tree for the sidebar (note-derived folders + explicit empty
 // folders, sorted folders-first then alphabetically). Shared-brain trees are
-// built over the visibility-filtered vault, and explicitly-created empty folders
-// are grafted only when the caller can read their governing top-level folder.
+// built over the visibility-filtered vault, and explicitly-created empty
+// folders are grafted only when the caller may see them (a grant reaches the
+// folder or starts inside it — restricted subtrees stay fully hidden).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain } from '@/lib/notes/api'
@@ -10,8 +11,7 @@ import { principalOf } from '@/lib/notes/brain'
 import { visibleVault } from '@/lib/notes/brainService'
 import { listFolders } from '@/lib/notes/store'
 import { buildTree } from '@/lib/notes/shared/graph'
-import { folderIdOfPath } from '@/lib/notes/shared/placement'
-import { principalCanRead } from '@/lib/notes/shared/permissions'
+import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
 
 // Graft an explicitly-created empty folder onto the note-derived tree (mirrors
@@ -49,10 +49,9 @@ export async function GET(req: NextRequest) {
   const [{ metas }, folders] = await Promise.all([visibleVault(p, brain), listFolders(brain)])
   const root = buildTree(metas)
   for (const folder of folders) {
-    // A folder path's governing folder is its FIRST segment (folderIdOfPath is
-    // for note paths, where "deals" alone would read as a root-level note).
-    const topLevel = folderIdOfPath(`${folder}/`)
-    if (brain.scope === 'shared' && !principalCanRead(p, topLevel)) continue
+    // Graft only folders the caller may see: readable themselves, or holding a
+    // readable grant somewhere inside (restricted subtrees stay invisible).
+    if (brain.scope === 'shared' && !brain.isPersonalSpace && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
   sortChildren(root)

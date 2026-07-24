@@ -1,13 +1,41 @@
-// Types for the brain permission/visibility layer, ported from blackbird-brain's
-// src/shared/{brainTypes,types}.ts and adapted to Visvine's multi-tenant model:
-// members are keyed by stable userId (not email), and the registry lives in the
-// CommunityBrainFile sidecar table instead of `.brain/folders.yaml`. Pure — no
+// Types for the brain permission/visibility layer. Access is grant-based (see
+// ./authz.ts): a principal carries the pre-scoped BrainAccess the pure checks
+// run over. The legacy folder-registry shapes (Folder/FoldersConfig, the old
+// `folders.json` sidecar) are kept ONLY so lib/notes/access.ts can parse and
+// migrate pre-grant registries — no live check reads them. Pure — no
 // Node/DOM/Prisma imports; usable from server, client, and tests.
 
-/** Cumulative folder access levels: admin ⊃ write ⊃ read. */
+import type { BrainAccess } from './authz'
+
+/**
+ * The resolved caller identity every brain-service function takes explicitly —
+ * identity is never implicit. Built by lib/notes/brain.ts#principalOf from the
+ * session, the community membership, and the caller's grant rows.
+ */
+export interface BrainPrincipal {
+  userId: string
+  email: string
+  name: string
+  communityId: string
+  /** Admin of this community (incl. super admins) — bypasses every brain gate. */
+  communityAdmin: boolean
+  /** The caller's grants + the brain's restricted/locked folder boundaries. */
+  access: BrainAccess
+  /** True for internal maintenance passes (review/enrichment) — sees/writes all. */
+  system?: boolean
+}
+
+/** Apply-or-deny result of a gated write. */
+export type WriteResult =
+  | { status: 'applied'; path: string }
+  | { status: 'denied'; reason: string }
+
+// --- legacy folder registry (migration input only) ------------------------------
+
+/** Legacy cumulative folder levels: admin ⊃ write ⊃ read (now view/edit/full). */
 export type FolderLevel = 'read' | 'write' | 'admin'
 
-/** public = every community member can read; private = members-only. */
+/** Legacy: public = every community member can read; private = members-only. */
 export type FolderVisibility = 'public' | 'private'
 
 interface FolderMember {
@@ -21,10 +49,9 @@ interface FolderMember {
 }
 
 /**
- * A registered team folder inside a community's SHARED brain. `id` is the
- * folder's top-level path segment (e.g. "deals" for notes under `deals/…`).
- * Unregistered physical folders behave like the brain root: readable and
- * writable by every member (Visvine's pre-registry behavior).
+ * A legacy registered top-level folder of a community's SHARED brain (`id` was
+ * the top-level path segment; '' the brain-gating root entry). Only read at
+ * migration time — see authz.migrateLegacyRegistry.
  */
 export interface Folder {
   id: string
@@ -37,7 +64,7 @@ export interface Folder {
   locked?: boolean
 }
 
-/** The shared brain's folder registry (sidecar file "folders.json"). */
+/** The legacy folder registry (sidecar file "folders.json"). */
 export interface FoldersConfig {
   version: number
   folders: Folder[]
@@ -45,32 +72,12 @@ export interface FoldersConfig {
 
 export const EMPTY_REGISTRY: FoldersConfig = { version: 1, folders: [] }
 
-/**
- * The resolved caller identity every brain-service function takes explicitly —
- * identity is never implicit. Built by lib/notes/principal.ts from the session,
- * the community membership, and the folder registry.
- */
-export interface BrainPrincipal {
-  userId: string
-  email: string
-  name: string
-  communityId: string
-  /** Admin of this community (incl. super admins) — bypasses folder gates. */
-  communityAdmin: boolean
-  /** The shared brain's folder registry as it applies to this caller. */
-  folders: FoldersConfig
-  /** True for internal maintenance passes (review/enrichment) — sees/writes all. */
-  system?: boolean
-}
-
-/** Apply-or-deny result of a gated write. */
-export type WriteResult =
-  | { status: 'applied'; path: string }
-  | { status: 'denied'; reason: string }
-
 // --- sidecar record shapes ----------------------------------------------------
 
-/** A pending request to join a private folder (sidecar "join-requests.jsonl"). */
+/**
+ * A pending request to join a restricted folder (sidecar "join-requests.jsonl").
+ * `folderId` is a folder path at any depth; '' = the brain root (brain access).
+ */
 export interface JoinRequest {
   id: string
   folderId: string
@@ -84,7 +91,7 @@ export interface JoinRequest {
   resolvedAt?: number
 }
 
-/** A queued promotion the requester couldn't apply directly (sidecar "move-proposals.jsonl"). */
+/** A queued promotion/publication the requester couldn't apply directly (sidecar "move-proposals.jsonl"). */
 export interface MoveProposalEntry {
   id: string
   /** Source note path in the proposer's PERSONAL brain. */
@@ -93,6 +100,8 @@ export interface MoveProposalEntry {
   toPath: string
   folderId: string
   content: string // full markdown snapshot at proposal time
+  /** 'publish' = approving creates a LIVE publication link; absent/'copy' = one-time copy. */
+  kind?: 'copy' | 'publish'
   proposedBy: string // userId
   proposerName: string
   proposedAt: number
@@ -101,12 +110,12 @@ export interface MoveProposalEntry {
   resolvedAt?: number
 }
 
-/** One read-audit line (sidecar "audit.jsonl") — private-folder reads only. */
+/** One read-audit line (sidecar "audit.jsonl") — restricted-folder reads only. */
 export interface AuditEntry {
   at: number
   userId: string
   name: string
-  action: 'read' | 'write' | 'move' | 'delete' | 'folder' | 'promote'
+  action: 'read' | 'write' | 'move' | 'delete' | 'folder' | 'promote' | 'grant' | 'publish'
   path: string
   detail?: string
 }

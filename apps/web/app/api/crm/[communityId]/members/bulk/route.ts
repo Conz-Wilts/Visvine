@@ -7,6 +7,7 @@ import prisma from "@/lib/prisma";
 import { z } from "zod";
 import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
+import { removeMemberAccess } from "@/lib/notes/access";
 
 type RouteContext = { params: Promise<{ communityId: string }> };
 
@@ -176,6 +177,11 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         );
       }
       throw e;
+    }
+
+    // Brain access leaves with them: direct grants + team memberships here.
+    for (const userId of data.user_ids) {
+      await removeMemberAccess(communityId, userId);
     }
 
     await prisma.auditLog.create({

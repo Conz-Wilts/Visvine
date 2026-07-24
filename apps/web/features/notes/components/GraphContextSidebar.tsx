@@ -10,7 +10,7 @@
 // index/organisational notes just highlight. `currentPath` (the profile view)
 // pre-highlights the open entity's note.
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
@@ -20,10 +20,11 @@ import type { CommunityFeatureConfig } from '@/lib/types'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
-import { notesApi } from '../lib/notesApi'
+import { notesApi, type AccessOverviewResponse } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, swrFetch } from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteSidebar } from './NoteSidebar'
+import { SharePanel } from './SharePanel'
 
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
 // Below this the docked panel would crowd the graph — keep in sync with the
@@ -54,6 +55,8 @@ export function GraphContextSidebar({
   const [sources, setSources] = useState<ContextSourceMeta[]>([])
   const [sourceError, setSourceError] = useState<string | null>(null)
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
+  const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
+  const [shareFolder, setShareFolder] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wide, setWide] = useState(false)
@@ -122,6 +125,33 @@ export function GraphContextSidebar({
       cancelled = true
     }
   }, [communityId, notesEnabled])
+
+  // Access overview: restricted/locked folder boundaries for the 🔒 badges.
+  // Personal spaces have no boundaries — skip the fetch.
+  useEffect(() => {
+    setOverview(null)
+    if (!communityId || !notesEnabled || communityId.startsWith('me:')) return
+    let cancelled = false
+    notesApi
+      .getAccessOverview(communityId)
+      .then((o) => {
+        if (!cancelled) setOverview(o)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [communityId, notesEnabled])
+
+  const folderBadges = useMemo(() => {
+    if (!overview) return undefined
+    const map = new Map<string, { restricted: boolean; locked?: boolean }>()
+    for (const path of overview.restricted) map.set(path, { restricted: true })
+    for (const path of overview.locked) {
+      map.set(path, { ...(map.get(path) ?? { restricted: false }), locked: true })
+    }
+    return map.size ? map : undefined
+  }, [overview])
 
   const handleSelectSource = useCallback(
     (path: string) => {
@@ -222,7 +252,17 @@ export function GraphContextSidebar({
             sources={sources}
             onSelectSource={handleSelectSource}
             onUploadSource={handleUploadSource}
+            folderBadges={folderBadges}
+            onFolderAccess={communityId.startsWith('me:') ? undefined : setShareFolder}
           />
+          {shareFolder !== null && (
+            <SharePanel
+              communityId={communityId}
+              path={shareFolder}
+              kind="folder"
+              onClose={() => setShareFolder(null)}
+            />
+          )}
         </>
       )}
     </div>,

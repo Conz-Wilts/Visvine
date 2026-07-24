@@ -19,9 +19,12 @@ import {
   PersonForm, type PersonFormData,
   EventForm, type EventFormData,
   CommunityForm, type CommunityFormData,
+  ChannelForm, type ChannelFormData,
+  SpaceForm, type SpaceFormData,
   AliasSelector,
   SuccessScreen,
 } from './CreateModalForms';
+import type { ChannelSpaceEntry } from '@/lib/messages/types';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -60,8 +63,10 @@ export default function CreateModal() {
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const channelsEnabled = isFeatureEnabled(featureConfig, 'channels');
 
+  // Channels and Spaces are community-admin surfaces, only shown when the
+  // channels feature is on for this community.
   const gridOptions = TYPE_OPTIONS.filter(
-    (o) => o.inGrid && (o.id !== 'channel' || (channelsEnabled && isAdmin)),
+    (o) => o.inGrid && ((o.id !== 'channel' && o.id !== 'space') || (channelsEnabled && isAdmin)),
   );
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
@@ -79,6 +84,11 @@ export default function CreateModal() {
   const [resourceData, setResourceData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [eventData, setEventData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
+  const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
+  const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '' });
+  // Spaces for the channel form's "file into space" dropdown, loaded lazily when
+  // the Channel form opens.
+  const [spaces, setSpaces] = useState<ChannelSpaceEntry[]>([]);
 
   const nameRef = useRef<HTMLInputElement | null>(null);
 
@@ -152,7 +162,21 @@ export default function CreateModal() {
     setResourceData({ name: '', subtitle: '', location: '', tags: '' });
     setEventData({ name: '', subtitle: '', location: '', tags: '' });
     setCommunityData({ name: '', description: '', location: '', visibility: 'public' });
+    setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
+    setSpaceData({ name: '' });
   }, []);
+
+  // Load the community's spaces once the Channel form is showing, so the user can
+  // file the new channel into one on creation.
+  useEffect(() => {
+    if (!isOpen || selectedType !== 'channel' || !currentCommunity) return;
+    let cancelled = false;
+    fetch(`/api/messages/spaces?communityId=${encodeURIComponent(currentCommunity.id)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { spaces: [] }))
+      .then((payload) => { if (!cancelled) setSpaces(payload.spaces ?? []); })
+      .catch(() => { if (!cancelled) setSpaces([]); });
+    return () => { cancelled = true; };
+  }, [isOpen, selectedType, currentCommunity]);
 
   // On open, if a default type is given skip to step 1
   useEffect(() => {
@@ -182,13 +206,6 @@ export default function CreateModal() {
   };
 
   const handleTypeSelect = (t: CreateableType) => {
-    // Channels aren't created here — hand off to the Channels page, which
-    // auto-opens its channel-creation form (see ?new=channel in MessagesClient).
-    if (t === 'channel') {
-      handleClose();
-      router.push('/channels?new=channel');
-      return;
-    }
     setSelectedType(t);
     setStep(1);
   };
@@ -206,6 +223,8 @@ export default function CreateModal() {
       if (selectedType === 'resource') return resourceData.name.trim().length > 0;
       if (selectedType === 'event') return eventData.name.trim().length > 0;
       if (selectedType === 'community') return communityData.name.trim().length > 0;
+      if (selectedType === 'channel') return channelData.name.trim().length > 0;
+      if (selectedType === 'space') return spaceData.name.trim().length > 0;
     }
     return true;
   };
@@ -226,14 +245,60 @@ export default function CreateModal() {
     try {
       if (selectedType === 'community') {
         await createCommunity();
+        setStep(3);
+      } else if (selectedType === 'channel') {
+        // Land the user straight in the new channel — the channels page mounts
+        // fresh and picks it up (no success screen needed).
+        const id = await createChannel();
+        handleClose();
+        router.push(`/channels/${encodeURIComponent(id)}`);
+      } else if (selectedType === 'space') {
+        await createSpace();
+        handleClose();
+        router.push('/channels');
       } else {
         await createNode();
+        setStep(3);
       }
-      setStep(3);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const createChannel = async (): Promise<string> => {
+    if (!currentCommunity) throw new Error('Select a community first');
+    const res = await fetch('/api/messages/conversations/channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        communityId: currentCommunity.id,
+        name: channelData.name.trim(),
+        description: channelData.description.trim() || undefined,
+        icon: channelData.icon ?? undefined,
+        spaceId: channelData.spaceId || undefined,
+        viewMode: channelData.viewMode,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to create channel');
+    }
+    const { conversation } = await res.json();
+    return conversation.id as string;
+  };
+
+  const createSpace = async () => {
+    if (!currentCommunity) throw new Error('Select a community first');
+    const res = await fetch('/api/messages/spaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ communityId: currentCommunity.id, name: spaceData.name.trim() }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? 'Failed to create space');
     }
   };
 
@@ -510,6 +575,12 @@ export default function CreateModal() {
             )}
             {step === 1 && selectedType === 'community' && (
               <CommunityForm data={communityData} onChange={setCommunityData} nameRef={nameRef} />
+            )}
+            {step === 1 && selectedType === 'channel' && (
+              <ChannelForm data={channelData} onChange={setChannelData} nameRef={nameRef} spaces={spaces} />
+            )}
+            {step === 1 && selectedType === 'space' && (
+              <SpaceForm data={spaceData} onChange={setSpaceData} nameRef={nameRef} />
             )}
 
             {step === 2 && (

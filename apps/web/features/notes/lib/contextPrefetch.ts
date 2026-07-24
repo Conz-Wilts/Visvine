@@ -103,7 +103,7 @@ export function invalidateContextCache(...keys: string[]) {
 // fetch twice and the cache is pure overhead.
 export const contextKeys = {
   config: () => 'notes:config',
-  registry: (c: string) => `notes:registry:${c}`,
+  access: (c: string, path: string) => `notes:access:${c}:${path}`,
   read: (c: string, path: string) => `notes:read:${c}:${path}`,
   list: (c: string) => `notes:list:${c}`,
   tree: (c: string) => `notes:tree:${c}`,
@@ -152,7 +152,7 @@ export function readNote(communityId: string, path: string): Promise<NoteRead> {
  *  results land in the cache; nothing here throws. */
 function prefetchEntityContext(communityId: string, path: string) {
   void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
-  void cachedFetch(contextKeys.registry(communityId), () => notesApi.getRegistry(communityId)).catch(() => {})
+  void cachedFetch(contextKeys.access(communityId, path), () => notesApi.getAccess(communityId, path)).catch(() => {})
   void cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).catch(() => {})
   void cachedFetch(contextKeys.tree(communityId), () => notesApi.tree(communityId)).catch(() => {})
   void readNote(communityId, path).catch(() => {})
