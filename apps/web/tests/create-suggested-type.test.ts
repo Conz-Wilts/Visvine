@@ -1,29 +1,34 @@
 // Unit tests for the route → "Create new" suggestion mapping that pins the most
-// likely type at the top of the create panel.
+// likely types at the top of the create panel.
 // Run: node --import tsx --test tests/create-suggested-type.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { suggestedCreateType } from '../lib/create/suggestedType'
 
-test('maps each feature route to its create type', () => {
-  assert.equal(suggestedCreateType('/events')?.type, 'event')
-  assert.equal(suggestedCreateType('/resources')?.type, 'resource')
-  assert.equal(suggestedCreateType('/channels')?.type, 'channel')
-  assert.equal(suggestedCreateType('/context')?.type, 'context')
-  assert.equal(suggestedCreateType('/directory')?.type, 'person')
+test('maps each feature route to its create types', () => {
+  assert.deepEqual(suggestedCreateType('/events')?.types, ['event'])
+  assert.deepEqual(suggestedCreateType('/resources')?.types, ['resource'])
+  assert.deepEqual(suggestedCreateType('/directory')?.types, ['person'])
+})
+
+test('a surface whose tools create several things suggests them all', () => {
+  // Channels is where both channels and spaces are made.
+  assert.deepEqual(suggestedCreateType('/channels')?.types, ['channel', 'space'])
+  // Context takes notes and uploaded files.
+  assert.deepEqual(suggestedCreateType('/context')?.types, ['context', 'file'])
 })
 
 test('matches nested routes under a mapped section', () => {
-  assert.equal(suggestedCreateType('/events/new')?.type, 'event')
-  assert.equal(suggestedCreateType('/events/abc/manage')?.type, 'event')
-  assert.equal(suggestedCreateType('/channels/conv_123')?.type, 'channel')
-  assert.equal(suggestedCreateType('/directory/person:jane')?.type, 'person')
+  assert.deepEqual(suggestedCreateType('/events/new')?.types, ['event'])
+  assert.deepEqual(suggestedCreateType('/events/abc/manage')?.types, ['event'])
+  assert.deepEqual(suggestedCreateType('/channels/conv_123')?.types, ['channel', 'space'])
+  assert.deepEqual(suggestedCreateType('/directory/person:jane')?.types, ['person'])
 })
 
 test('note and source viewers suggest Context, not Person', () => {
-  assert.equal(suggestedCreateType('/directory/note/research/thesis')?.type, 'context')
-  assert.equal(suggestedCreateType('/directory/source/decks/pitch')?.type, 'context')
+  assert.equal(suggestedCreateType('/directory/note/research/thesis')?.types[0], 'context')
+  assert.equal(suggestedCreateType('/directory/source/decks/pitch')?.types[0], 'context')
 })
 
 test('a prefix only matches on a path boundary', () => {

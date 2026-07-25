@@ -9,8 +9,9 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { railFeatures, moreFeatures } from "@/lib/features";
-import { shellEntranceStyle } from "@/lib/contexts/SidebarContext";
+import { shellEntranceStyle, DOCK_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
+import CreateModal from "@/components/create/CreateModal";
 import type { CommunityFeatureConfig } from "@/lib/types";
 
 /*
@@ -52,7 +53,7 @@ const RAIL_GAP = 8; // gap between the Create block and the nav list
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { open: openCreateModal } = useCreateModal();
+  const { open: openCreateModal, isOpen: createOpen } = useCreateModal();
   // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
@@ -60,8 +61,8 @@ export default function Sidebar() {
   const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
   // Honour reduced-motion: collapse the width/height transitions below to 0s.
-  const dur = reduced ? "0s" : "0.32s";
-  const ease = "cubic-bezier(0.25, 0.1, 0.25, 1)";
+  const dur = reduced ? "0s" : `${DOCK_MS}ms`;
+  const ease = DOCK_EASE;
 
   // Nav items come from the feature registry, filtered to the community's
   // enabled surfaces (empty config → everything on) and to what this user may
@@ -113,6 +114,13 @@ export default function Sidebar() {
   const dockedContext = dockRequested && contextOpen && wide;
   const docked = dockedChannels || dockedMessages || dockedAdmin || dockedSettings || dockedContext;
   const panelW = dockedAdmin || dockedSettings ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
+
+  // "Create new" takes over this same column: it replaces whatever panel is
+  // docked (so the width never changes on open), and off-dock it pushes the
+  // column open at the standard panel width — clamped so it can't outgrow a
+  // narrow viewport, where nothing is docked anyway.
+  const createW = docked ? `${panelW}px` : `min(${CHANNELS_PANEL_W}px, calc(100vw - ${COLLAPSED_W}px))`;
+  const columnW = createOpen ? createW : docked ? `${panelW}px` : "0px";
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).
@@ -297,15 +305,16 @@ export default function Sidebar() {
 
         {/* The side panel, hosted inside this same card. Always mounted so the portal
             host stays stable and the column can transition its width open ↔ closed;
-            off the docked routes it's a clipped 0-width sliver with an empty host. */}
+            off the docked routes it's a clipped 0-width sliver with an empty host.
+            "Create new" opens the same column and slides in over the host below. */}
         <div
           className="relative shrink-0 overflow-hidden"
-          style={{ width: docked ? panelW : 0, transition: `width ${dur} ${ease}` }}
+          style={{ width: columnW, transition: `width ${dur} ${ease}` }}
         >
           {/* Seam divider — faded out when closed so no stray hairline lingers off-dock */}
           <div
-            className="absolute left-0 top-0 h-full w-px bg-border-default"
-            style={{ opacity: docked ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
+            className="absolute left-0 top-0 z-20 h-full w-px bg-border-default"
+            style={{ opacity: docked || createOpen ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
           />
           {/* Portal host: the page (MessagesClient / ConsoleShell) mounts its panel
               here. Inner width tracks the active route's panel so the content is
@@ -318,6 +327,22 @@ export default function Sidebar() {
             className="min-h-0"
             style={{ width: panelW, height: '100%', paddingTop: dockedContext ? dockTopInset : 0 }}
           />
+
+          {/* "Create new" — a layer over the host, clipped by this column so it
+              slides out from under the icon rail and covers whatever panel is
+              docked. Starts below any bar the page pins at the card top
+              (dockTopInset — those bars outrank this card at z-[45]), so its
+              header is never cut in half by one. */}
+          <div
+            className="absolute left-0 bottom-0 z-10 overflow-hidden"
+            // Fixed at the panel's FINAL width, not the column's animating one:
+            // the slide is a translateX(-100%) of this box, so a width that grows
+            // during the transition would keep moving the parked position and the
+            // panel would trail the column's leading edge.
+            style={{ top: dockTopInset, width: createW }}
+          >
+            <CreateModal />
+          </div>
         </div>
       </div>
 

@@ -10,7 +10,6 @@ import MessageRow from './MessageRow';
 import FeedView from './FeedView';
 import { formatChatTimestamp, formatDateLabel } from '@/lib/date';
 import type {
-  ChannelSpaceEntry,
   ConversationSummary,
   SavedMessageEntry,
   SerializedMessage,
@@ -38,8 +37,7 @@ interface ThreadPanelProps {
   // Channel header extras
   showHeaderIconPicker: boolean;
   setShowHeaderIconPicker: Dispatch<SetStateAction<boolean>>;
-  updateSelectedChannel: (patch: { icon?: string | null; spaceId?: string | null; viewMode?: 'CHAT' | 'FEED' }) => Promise<void>;
-  channelSpaces: ChannelSpaceEntry[];
+  updateSelectedChannel: (patch: { icon?: string | null; viewMode?: 'CHAT' | 'FEED' }) => Promise<void>;
   headerPanel: 'saved' | null;
   setHeaderPanel: Dispatch<SetStateAction<'saved' | null>>;
   openHeaderPanel: (panel: 'saved') => Promise<void>;
@@ -111,7 +109,6 @@ export default function ThreadPanel({
   showHeaderIconPicker,
   setShowHeaderIconPicker,
   updateSelectedChannel,
-  channelSpaces,
   headerPanel,
   setHeaderPanel,
   openHeaderPanel,
@@ -298,22 +295,6 @@ export default function ThreadPanel({
                   </span>
                   <span className="text-xs font-medium text-text-secondary">{selectedConversation.participants.length}</span>
                 </button>
-              )}
-              {/* Move channel between spaces (community/channel admins) */}
-              {selectedConversation.type === 'CHANNEL' && isAdmin && channelSpaces.length > 0 && (
-                <select
-                  value={selectedConversation.spaceId ?? ''}
-                  onChange={(e) => void updateSelectedChannel({ spaceId: e.target.value || null })}
-                  title="Move to space"
-                  className="hidden max-w-36 rounded-lg border border-border-subtle bg-surface-1 px-2 py-1.5 text-xs text-text-secondary focus:border-brand-green/40 focus:outline-none md:block"
-                >
-                  <option value="">No space</option>
-                  {channelSpaces.map((space) => (
-                    <option key={space.id} value={space.id}>
-                      {space.emoji ? `${space.emoji} ` : ''}{space.name}
-                    </option>
-                  ))}
-                </select>
               )}
               <button
                 type="button"

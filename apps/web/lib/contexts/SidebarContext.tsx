@@ -14,6 +14,16 @@ interface SidebarContextValue {
 }
 
 /**
+ * Dock motion, shared by the Sidebar's panel column and the Create panel that
+ * takes that column over: Create slides in (translateX) while the column widens,
+ * and the two only stay glued together — no bare sliver at the leading edge — if
+ * the duration and easing match exactly. Lives here rather than in Sidebar.tsx so
+ * both sides can import it without a cycle (Sidebar renders CreateModal).
+ */
+export const DOCK_MS = 320;
+export const DOCK_EASE = "cubic-bezier(0.25, 0.1, 0.25, 1)";
+
+/**
  * One shared entrance recipe for the whole navbar + sidebar shell, so both
  * pieces settle in with identical timing and easing and read as one object
  * flowing into place. `transform` uses a gentle overshoot spring; `opacity`

@@ -5,9 +5,10 @@
  * Layout matches Directory page pattern: header row + filters row + content
  */
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { useSession } from '@/lib/auth-client';
 import { isEventUpcoming } from '@/lib/eventUtils';
 import type { NBEvent } from '@/lib/types';
@@ -55,6 +56,16 @@ function EventsPageInner() {
   }, [initialScope]);
   const { data: session } = useSession();
   const myNodeId = session?.user?.nodeId;
+
+  // The view switcher below bleeds over the sidebar card's top strip (z-[45]).
+  // Publish its height so anything hosted in that card's panel column — the
+  // Create panel — starts below it rather than behind it.
+  const viewBarRef = useRef<HTMLDivElement | null>(null);
+  const { setDockTopInset } = useContextPanel();
+  useEffect(() => {
+    setDockTopInset(viewBarRef.current?.offsetHeight ?? 0);
+    return () => setDockTopInset(0);
+  }, [setDockTopInset]);
 
   const handleEventClick = (event: NBEvent) => {
     router.push(`/events/${event.id}`);
@@ -144,7 +155,7 @@ function EventsPageInner() {
           shy of the rail edge so the sidebar's right border stays visible.
           UnderlineTabs draws its own bottom border, so the wrapper stays
           borderless. */}
-      <div className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
+      <div ref={viewBarRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
         <EventsViewSelector
           currentView={currentView}
           onViewChange={setCurrentView}

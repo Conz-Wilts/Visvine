@@ -13,7 +13,6 @@ import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/Comm
 import { ProfileProvider } from "@/lib/contexts/ProfileContext";
 import { ThemeProvider } from "@/lib/contexts/ThemeContext";
 import { CreateModalProvider } from "@/lib/contexts/CreateModalContext";
-import CreateModal from "@/components/create/CreateModal";
 import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext";
 import { ContextPanelProvider } from "@/lib/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
@@ -90,8 +89,8 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
         )}
       </main>
 
-      {/* Global create modal */}
-      <CreateModal />
+      {/* The Create panel is NOT here — it lives inside the Sidebar's docked
+          column (it takes that column over while open), see Sidebar.tsx. */}
 
       {/* One-time post-onboarding feature tour (no-op unless the flag is set) */}
       <TourLauncher />

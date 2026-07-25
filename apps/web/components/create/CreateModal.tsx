@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCreateModal, type CreateableType } from '@/lib/contexts/CreateModalContext';
 import { suggestedCreateType } from '@/lib/create/suggestedType';
@@ -11,7 +12,8 @@ import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
-import SidePanel from '@/components/ui/SidePanel';
+import { useSidebar, DOCK_MS, DOCK_EASE } from '@/lib/contexts/SidebarContext';
+import { useEscapeKey } from '@/hooks/useEscapeKey';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
 import MatchPanel from './MatchPanel';
 import {
@@ -64,6 +66,7 @@ export default function CreateModal() {
   const pathname = usePathname();
   const { isOpen, defaultType, close } = useCreateModal();
   const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
+  const { reduced } = useSidebar();
 
   // The "Create new" grid: the registry's grid types, minus any whose feature is
   // off for this community (Channel only for community admins where the
@@ -84,12 +87,15 @@ export default function CreateModal() {
     return true;
   });
 
-  // What the current page implies you came here to create — dropped when that
-  // type isn't offered in this community (e.g. Channel with channels off).
+  // What the current page implies you came here to create, narrowed to the types
+  // actually offered in this community (e.g. Channel/Space drop out with channels
+  // off, or for non-admins) — and dropped entirely when none survive.
   const routeSuggestion = suggestedCreateType(pathname);
+  const suggestedTypes =
+    routeSuggestion?.types.filter((t) => gridOptions.some((o) => o.id === t)) ?? [];
   const suggestion =
-    routeSuggestion && gridOptions.some((o) => o.id === routeSuggestion.type)
-      ? routeSuggestion
+    routeSuggestion && suggestedTypes.length
+      ? { ...routeSuggestion, types: suggestedTypes }
       : null;
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
@@ -249,10 +255,21 @@ export default function CreateModal() {
     }
   }, [step]);
 
-  const handleClose = () => {
+  // `reset` waits out the slide-out so the form doesn't visibly rewind to step 0
+  // on its way behind the rail.
+  const handleClose = useCallback(() => {
     close();
-    setTimeout(reset, 300);
-  };
+    setTimeout(reset, DOCK_MS);
+  }, [close, reset]);
+
+  useEscapeKey(handleClose, isOpen);
+
+  // Navigating away puts the real sidebar panel back — the create panel is
+  // occupying that column, so leaving it open would hide the new page's own list.
+  useEffect(() => {
+    handleClose();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const handleTypeSelect = (t: CreateableType) => {
     setSelectedType(t);
@@ -582,9 +599,12 @@ export default function CreateModal() {
 
   return (
     <>
-      {/* Image cropper — renders above the modal when a file is selected */}
-      {cropperFile && (
-        <div className="relative z-[60]">
+      {/* Image cropper — a fixed, full-viewport overlay, so it MUST leave the
+          sidebar: the rail <aside> keeps a settled `transform`, which would make
+          `fixed` resolve against the rail instead of the viewport. */}
+      {cropperFile &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <ImageCropper
             imageFile={cropperFile}
             onCrop={handleCropDone}
@@ -592,30 +612,41 @@ export default function CreateModal() {
             shape="square"
             outputWidth={400}
             outputHeight={400}
-          />
-        </div>
-      )}
+          />,
+          document.body,
+        )}
 
-      {/* Backdrop + panel shell */}
-      <SidePanel
-        open={isOpen}
-        onClose={handleClose}
-        ariaLabel="Create new"
-        // Pops out from the left beside the icon rail — same edge the channels
-        // panel docks to — as an inset card rather than a full-height sheet.
-        side="left"
-        floating
-        // Wide enough for the form + finder two-column layout on the entity
-        // types; a narrow sheet everywhere else.
-        widthClass={
-          step === 1 && (selectedType === 'person' || selectedType === 'resource' || selectedType === 'event')
-            ? 'sm:w-[800px]'
-            : 'sm:w-[440px]'
-        }
+      {/* Click-anywhere-to-dismiss catcher: invisible, and under the rail (z-40)
+          and navbar (z-50) so the shell's own controls stay live. */}
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div className="fixed inset-0 z-30" onClick={handleClose} />,
+          document.body,
+        )}
+
+      {/* The panel itself: a layer inside the Sidebar's docked column (see
+          Sidebar.tsx), sliding out from under the icon rail over whatever panel
+          is docked there. Always mounted — `isOpen` drives the transform, and the
+          column's overflow-hidden hides it while it's parked off to the left. */}
+      <aside
+        role="dialog"
+        aria-label="Create new"
+        aria-hidden={!isOpen}
+        className={`absolute inset-0 z-10 flex flex-col overflow-hidden bg-surface-1 ${
+          isOpen ? '' : 'pointer-events-none'
+        }`}
+        // The offset is set inline, NOT with `-translate-x-full`: Tailwind v4
+        // compiles translate utilities to the `translate` property, which a
+        // `transition: transform` never animates — the panel would jump.
+        style={{
+          transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: reduced ? 'none' : `transform ${DOCK_MS}ms ${DOCK_EASE}`,
+        }}
       >
           {/* Header */}
           {step < 3 && (
-            <div className="flex items-center gap-2 px-6 py-4 border-b border-border-subtle flex-shrink-0">
+            <div className="flex items-center gap-2 px-4 py-4 border-b border-border-subtle flex-shrink-0">
               {step > 0 && (
                 <button
                   onClick={handleBack}
@@ -648,7 +679,7 @@ export default function CreateModal() {
           {/* Body — the success screen is small and headerless, so it centers in
               the full-height panel rather than clinging to the top. */}
           <div
-            className={`px-6 py-5 flex-1 overflow-y-auto ${
+            className={`px-4 py-5 flex-1 overflow-y-auto ${
               step === 3 ? 'flex flex-col justify-center' : ''
             }`}
           >
@@ -656,19 +687,18 @@ export default function CreateModal() {
               <TypeList options={gridOptions} suggestion={suggestion} onSelect={handleTypeSelect} />
             )}
 
+            {/* Entity steps: form first, then the cross-community finder stacked
+                below it — the panel is one sidebar-width column, so the finder
+                can't sit beside the form. */}
             {step === 1 && selectedType === 'person' && (
-              <div className="flex gap-6">
-                {/* Form — left */}
-                <div className="flex-1 min-w-0">
-                  <PersonForm
-                    data={personData}
-                    onChange={handlePersonChange}
-                    nameRef={nameRef}
-                    onCropRequest={setCropperFile}
-                  />
-                </div>
-                {/* Match panel — right */}
-                <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
+              <div>
+                <PersonForm
+                  data={personData}
+                  onChange={handlePersonChange}
+                  nameRef={nameRef}
+                  onCropRequest={setCropperFile}
+                />
+                <div className="mt-5 pt-5 border-t border-border-subtle">
                   <MatchPanel
                     results={personSearch.results}
                     loading={personSearch.loading}
@@ -681,13 +711,9 @@ export default function CreateModal() {
               </div>
             )}
             {step === 1 && selectedType === 'resource' && (
-              <div className="flex gap-6">
-                {/* Form — left */}
-                <div className="flex-1 min-w-0">
-                  <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} />
-                </div>
-                {/* Match panel — right */}
-                <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
+              <div>
+                <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} />
+                <div className="mt-5 pt-5 border-t border-border-subtle">
                   <MatchPanel
                     results={resourceSearch.results}
                     loading={resourceSearch.loading}
@@ -700,13 +726,9 @@ export default function CreateModal() {
               </div>
             )}
             {step === 1 && selectedType === 'event' && (
-              <div className="flex gap-6">
-                {/* Form — left */}
-                <div className="flex-1 min-w-0">
-                  <EventForm data={eventData} onChange={setEventData} nameRef={nameRef} />
-                </div>
-                {/* Match panel — right */}
-                <div className="w-72 flex-shrink-0 border-l border-border-subtle pl-5">
+              <div>
+                <EventForm data={eventData} onChange={setEventData} nameRef={nameRef} />
+                <div className="mt-5 pt-5 border-t border-border-subtle">
                   <MatchPanel
                     results={eventSearch.results}
                     loading={eventSearch.loading}
@@ -787,7 +809,7 @@ export default function CreateModal() {
 
           {/* Footer */}
           {step > 0 && step < 3 && (
-            <div className="px-6 py-4 flex justify-end border-t border-border-subtle flex-shrink-0">
+            <div className="px-4 py-4 flex justify-end border-t border-border-subtle flex-shrink-0">
               <button
                 onClick={handleSubmit}
                 disabled={!canAdvance() || saving}
@@ -809,7 +831,7 @@ export default function CreateModal() {
               </button>
             </div>
           )}
-      </SidePanel>
+      </aside>
     </>
   );
 }

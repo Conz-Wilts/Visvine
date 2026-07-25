@@ -171,13 +171,17 @@ function TypeRow({
   opt,
   onSelect,
   reason,
+  suggested: isSuggested,
 }: {
   opt: TypeOption;
   onSelect: (t: CreateableType) => void;
-  /** When set, the row is the route-suggested one: emphasised, with the reason pilled on the right. */
+  /** Pilled on the right of a suggested row — only the first one carries it, so
+      a multi-type suggestion doesn't repeat "You're on Channels" per row. */
   reason?: string;
+  /** Emphasise the row as route-suggested (implied by `reason`). */
+  suggested?: boolean;
 }) {
-  const suggested = reason != null;
+  const suggested = isSuggested || reason != null;
   return (
     <button
       onClick={() => onSelect(opt.id)}
@@ -224,23 +228,39 @@ export function TypeList({
   onSelect,
 }: {
   options: TypeOption[];
-  /** Route-derived hint; ignored when its type isn't among `options`. */
+  /** Route-derived hint; types absent from `options` are dropped. */
   suggestion: CreateSuggestion | null;
   onSelect: (t: CreateableType) => void;
 }) {
-  const suggested = suggestion ? options.find((o) => o.id === suggestion.type) ?? null : null;
-  const rest = suggested ? options.filter((o) => o.id !== suggested.id) : options;
+  // Kept in the suggestion's own order (most likely first), not the registry's.
+  const suggested = suggestion
+    ? suggestion.types
+        .map((t) => options.find((o) => o.id === t))
+        .filter((o): o is TypeOption => Boolean(o))
+    : [];
+  const suggestedIds = new Set(suggested.map((o) => o.id));
+  const rest = suggested.length ? options.filter((o) => !suggestedIds.has(o.id)) : options;
 
   return (
     <div className="flex flex-col gap-5">
-      {suggested && suggestion && (
+      {suggested.length > 0 && suggestion && (
         <div>
           <SectionLabel>Suggested</SectionLabel>
-          <TypeRow opt={suggested} onSelect={onSelect} reason={suggestion.reason} />
+          <div className="flex flex-col gap-2">
+            {suggested.map((opt, i) => (
+              <TypeRow
+                key={opt.id}
+                opt={opt}
+                onSelect={onSelect}
+                suggested
+                reason={i === 0 ? suggestion.reason : undefined}
+              />
+            ))}
+          </div>
         </div>
       )}
       <div>
-        {suggested && <SectionLabel>Everything else</SectionLabel>}
+        {suggested.length > 0 && <SectionLabel>Everything else</SectionLabel>}
         <div className="flex flex-col gap-2">
           {rest.map((opt) => (
             <TypeRow key={opt.id} opt={opt} onSelect={onSelect} />

@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 
 export type DirectoryView = 'grid' | 'graph' | 'tables';
 
@@ -31,8 +33,19 @@ interface DirectoryViewTabsProps {
  * gap between the fillet curve above and the rail border below.
  */
 export default function DirectoryViewTabs({ active, onChange }: DirectoryViewTabsProps) {
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const { setDockTopInset } = useContextPanel();
+
+  // Publish this bar's height so anything hosted in the sidebar card's panel
+  // column (the Create panel, a docked tree) starts BELOW it instead of behind
+  // it — the bar bleeds over the card top and outranks it at z-[45].
+  useEffect(() => {
+    setDockTopInset(barRef.current?.offsetHeight ?? 0);
+    return () => setDockTopInset(0);
+  }, [setDockTopInset]);
+
   return (
-    <div className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
+    <div ref={barRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
       <UnderlineTabs
         tabs={TABS}
         value={active}

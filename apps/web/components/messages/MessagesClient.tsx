@@ -989,7 +989,6 @@ export default function MessagesClient({ currentUser, initialConversationId, var
           showHeaderIconPicker={showHeaderIconPicker}
           setShowHeaderIconPicker={setShowHeaderIconPicker}
           updateSelectedChannel={updateSelectedChannel}
-          channelSpaces={channelSpaces}
           headerPanel={headerPanel}
           setHeaderPanel={setHeaderPanel}
           openHeaderPanel={openHeaderPanel}

@@ -12,7 +12,6 @@ export { default as Textarea } from './Textarea';
 export { default as LoadingText } from './LoadingText';
 export { default as Modal } from './Modal';
 export { default as PageTitle } from './PageTitle';
-export { default as SidePanel } from './SidePanel';
 export { default as Skeleton } from './Skeleton';
 export { default as ViewToggle } from './ViewToggle';
 export type { ViewToggleOption } from './ViewToggle';
