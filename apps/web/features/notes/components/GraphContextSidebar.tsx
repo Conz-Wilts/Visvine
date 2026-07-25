@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
+import CommunityAvatar from '@/components/community/CommunityAvatar'
+import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
 import type { CommunityFeatureConfig } from '@/lib/types'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
@@ -53,6 +55,7 @@ export function GraphContextSidebar({
   const [starred, setStarred] = useState<string[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
+  const [contextName, setContextName] = useState<string | null>(null)
   const [shareFolder, setShareFolder] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -108,6 +111,24 @@ export function GraphContextSidebar({
     }
   }, [communityId, notesEnabled])
 
+  // The context's display name for the panel header (renameable from the
+  // console). Failure just leaves the default label — never blocks the tree.
+  useEffect(() => {
+    setContextName(null)
+    if (!communityId || !notesEnabled) return
+    let cancelled = false
+    swrFetch(
+      contextKeys.settings(communityId),
+      () => notesApi.getBrainSettings(communityId),
+      ({ settings }) => {
+        if (!cancelled) setContextName(settings?.contextName ?? null)
+      },
+    ).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [communityId, notesEnabled])
+
   // Access overview: restricted/locked folder boundaries for the 🔒 badges.
   // Personal spaces have no boundaries — skip the fetch.
   useEffect(() => {
@@ -134,6 +155,28 @@ export function GraphContextSidebar({
     }
     return map.size ? map : undefined
   }, [overview])
+
+  // The community as the tree's root folder — everything below it is literally
+  // its children, so it renders as a folder row (with the community avatar for
+  // its glyph) rather than a separate header bar above the list. A renamed
+  // context wins the label; the generic default defers to the community name.
+  const rootFolder = useMemo(
+    () => ({
+      label:
+        contextName && contextName !== DEFAULT_CONTEXT_NAME
+          ? contextName
+          : (currentCommunity?.name ?? 'Community'),
+      icon: (
+        <CommunityAvatar
+          name={currentCommunity?.name ?? 'Community'}
+          imageUrl={currentCommunity?.imageUrl}
+          size="sm"
+          rounded="rounded-md"
+        />
+      ),
+    }),
+    [contextName, currentCommunity?.name, currentCommunity?.imageUrl],
+  )
 
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the sidebar itself survives via the layout portal).
@@ -186,37 +229,40 @@ export function GraphContextSidebar({
 
   return createPortal(
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-1" style={{ animation: 'fadeIn 0.3s ease-out' }}>
-      {loading && notes.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
-      ) : error ? (
-        <div className="px-3 py-4 text-sm text-red-500">{error}</div>
-      ) : notes.length === 0 ? (
-        <div className="px-3 py-4 text-sm text-text-muted">No context notes yet.</div>
-      ) : (
-        <>
-          <NoteSidebar
-            tree={tree}
-            notes={notes}
-            starred={starred}
-            selectedPath={selectedPath}
-            canEdit={false}
-            onSelect={handleSelect}
-            onToggleStar={handleToggleStar}
-            onDeleteNote={() => {}}
-            bare
-            folderBadges={folderBadges}
-            onFolderAccess={communityId.startsWith('me:') ? undefined : setShareFolder}
-          />
-          {shareFolder !== null && (
-            <SharePanel
-              communityId={communityId}
-              path={shareFolder}
-              kind="folder"
-              onClose={() => setShareFolder(null)}
+      <div className="flex min-h-0 flex-1 flex-col">
+        {loading && notes.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
+        ) : error ? (
+          <div className="px-3 py-4 text-sm text-red-500">{error}</div>
+        ) : notes.length === 0 ? (
+          <div className="px-3 py-4 text-sm text-text-muted">No context notes yet.</div>
+        ) : (
+          <>
+            <NoteSidebar
+              tree={tree}
+              notes={notes}
+              starred={starred}
+              selectedPath={selectedPath}
+              canEdit={false}
+              onSelect={handleSelect}
+              onToggleStar={handleToggleStar}
+              onDeleteNote={() => {}}
+              bare
+              root={rootFolder}
+              folderBadges={folderBadges}
+              onFolderAccess={communityId.startsWith('me:') ? undefined : setShareFolder}
             />
-          )}
-        </>
-      )}
+            {shareFolder !== null && (
+              <SharePanel
+                communityId={communityId}
+                path={shareFolder}
+                kind="folder"
+                onClose={() => setShareFolder(null)}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>,
     host,
   )

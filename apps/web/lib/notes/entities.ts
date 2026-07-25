@@ -73,6 +73,13 @@ export function noteHref(path: string): string {
   return `/directory/note/${path.split('/').map(encodeURIComponent).join('/')}`
 }
 
+// The app route previewing an uploaded Context Source (csv/xlsx/docx/md/txt…).
+// Sources live in the same brain-path namespace as notes but are never .md, so
+// they get their own viewer — same encoding rule as noteHref.
+export function sourceHref(path: string): string {
+  return `/directory/source/${path.split('/').map(encodeURIComponent).join('/')}`
+}
+
 // The entity kind implied by a note path (people/…, companies/…, resources/…), or null.
 export function entityKindOfPath(path: string): EntityKind | null {
   if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'

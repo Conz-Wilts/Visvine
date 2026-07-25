@@ -2,7 +2,7 @@ import React from 'react'
 import { DirectoryItem } from './types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
-import { getNodeTypeConfig, getNodeGlyph, findAlias } from '@/lib/types'
+import { getNodeTypeConfig, getNodeGlyph, findAlias, nodeTypeLabel } from '@/lib/types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
 import Badge from '@/components/ui/Badge'
 import PersonSilhouette from '@/components/ui/PersonSilhouette'
@@ -86,7 +86,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
 
         {/* Type badge — pinned to bottom center */}
         <Badge variant="type-pill" color={typeColor} className="mt-auto mb-2">
-          {item.alias ?? (item.type.charAt(0).toUpperCase() + item.type.slice(1))}
+          {nodeTypeLabel(item.type, item.alias, communityAliases, nodeTypes)}
         </Badge>
       </div>
     </div>

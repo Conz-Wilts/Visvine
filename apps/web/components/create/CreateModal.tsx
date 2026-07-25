@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import { useCreateModal, type CreateableType } from '@/lib/contexts/CreateModalContext';
+import { suggestedCreateType } from '@/lib/create/suggestedType';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { isFeatureEnabled } from '@/lib/features';
 import { slugify } from '@/lib/eventUtils';
@@ -10,21 +11,28 @@ import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/components/data/ImageCropper';
-import Modal from '@/components/ui/Modal';
+import SidePanel from '@/components/ui/SidePanel';
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch';
 import MatchPanel from './MatchPanel';
 import {
   TYPE_OPTIONS,
-  TypeSelector,
+  TypeList,
   PersonForm, type PersonFormData,
   EventForm, type EventFormData,
   CommunityForm, type CommunityFormData,
   ChannelForm, type ChannelFormData,
   SpaceForm, type SpaceFormData,
+  ContextForm, type ContextFormData,
+  FileForm, type FileFormData, type FileEntry,
   AliasSelector,
   SuccessScreen,
 } from './CreateModalForms';
+import { useBrainTree } from './ContextDestination';
 import type { ChannelSpaceEntry } from '@/lib/messages/types';
+import { notesApi } from '@/features/notes/lib/notesApi';
+import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
+import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
+import { noteHref, sourceHref } from '@/lib/notes/entities';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,6 +61,7 @@ const EVENT_FINDER_ICON = (
 
 export default function CreateModal() {
   const router = useRouter();
+  const pathname = usePathname();
   const { isOpen, defaultType, close } = useCreateModal();
   const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
 
@@ -62,12 +71,26 @@ export default function CreateModal() {
   // note lives on its profile's Context tab and is created on first save.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const channelsEnabled = isFeatureEnabled(featureConfig, 'channels');
+  // Context notes and uploaded files both land in the community brain, so both
+  // tiles follow the notes ("Context") feature.
+  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
 
   // Channels and Spaces are community-admin surfaces, only shown when the
   // channels feature is on for this community.
-  const gridOptions = TYPE_OPTIONS.filter(
-    (o) => o.inGrid && ((o.id !== 'channel' && o.id !== 'space') || (channelsEnabled && isAdmin)),
-  );
+  const gridOptions = TYPE_OPTIONS.filter((o) => {
+    if (!o.inGrid) return false;
+    if (o.id === 'channel' || o.id === 'space') return channelsEnabled && isAdmin;
+    if (o.id === 'context' || o.id === 'file') return notesEnabled;
+    return true;
+  });
+
+  // What the current page implies you came here to create — dropped when that
+  // type isn't offered in this community (e.g. Channel with channels off).
+  const routeSuggestion = suggestedCreateType(pathname);
+  const suggestion =
+    routeSuggestion && gridOptions.some((o) => o.id === routeSuggestion.type)
+      ? routeSuggestion
+      : null;
 
   // Step 0 = type select, 1 = form, 2 = alias (person only), 3 = success
   const [step, setStep] = useState(0);
@@ -86,9 +109,31 @@ export default function CreateModal() {
   const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '' });
+  const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
+  const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
+  // Where the just-created note/file lives, so the success screen can offer to
+  // open it (null for types that have no viewer to jump to).
+  const [createdHref, setCreatedHref] = useState<string | null>(null);
+  const [createdDetail, setCreatedDetail] = useState<string | null>(null);
   // Spaces for the channel form's "file into space" dropdown, loaded lazily when
   // the Channel form opens.
   const [spaces, setSpaces] = useState<ChannelSpaceEntry[]>([]);
+
+  // Folder list + existing note paths for the brain forms, loaded (from the
+  // shared context cache) only while one of them is open.
+  const brainForm = selectedType === 'context' || selectedType === 'file';
+  const brainTree = useBrainTree(currentCommunity?.id ?? null, isOpen && brainForm);
+  const contextName = currentCommunity?.name ?? 'Context';
+
+  // The note's real destination: the title's slug in the chosen folder, suffixed
+  // when that path is already taken, so the preview matches what gets written.
+  const contextTitle = contextData.title.trim();
+  const contextDestination = useMemo(
+    () => availableNotePath(contextData.folder, contextTitle || 'untitled', brainTree.notePaths),
+    [contextData.folder, contextTitle, brainTree.notePaths],
+  );
+  const contextRenamed =
+    contextDestination !== composeNotePath(contextData.folder, contextTitle || 'untitled');
 
   const nameRef = useRef<HTMLInputElement | null>(null);
 
@@ -164,6 +209,10 @@ export default function CreateModal() {
     setCommunityData({ name: '', description: '', location: '', visibility: 'public' });
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
     setSpaceData({ name: '' });
+    setContextData({ title: '', folder: '', tags: '', body: '' });
+    setFileData({ files: [], folder: '' });
+    setCreatedHref(null);
+    setCreatedDetail(null);
   }, []);
 
   // Load the community's spaces once the Channel form is showing, so the user can
@@ -225,6 +274,9 @@ export default function CreateModal() {
       if (selectedType === 'community') return communityData.name.trim().length > 0;
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
       if (selectedType === 'space') return spaceData.name.trim().length > 0;
+      if (selectedType === 'context') return contextTitle.length > 0;
+      // Only files that passed the pick-time check can be uploaded.
+      if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
     }
     return true;
   };
@@ -256,6 +308,12 @@ export default function CreateModal() {
         await createSpace();
         handleClose();
         router.push('/channels');
+      } else if (selectedType === 'context') {
+        await createContextNote();
+        setStep(3);
+      } else if (selectedType === 'file') {
+        await uploadFiles();
+        setStep(3);
       } else {
         await createNode();
         setStep(3);
@@ -300,6 +358,76 @@ export default function CreateModal() {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error ?? 'Failed to create space');
     }
+  };
+
+  // ── Context note ──────────────────────────────────────────────────────────
+  // Writes one note at the previewed path. The folder gate lives server-side
+  // (403 with its reason), and intermediate folders come into being with the
+  // note, so a brand-new folder name needs no separate create call.
+  const createContextNote = async () => {
+    if (!currentCommunity) throw new Error('Select a community first');
+    const path = contextDestination;
+    const tags = contextData.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    await notesApi.create(
+      currentCommunity.id,
+      path,
+      newNoteContent({ title: contextTitle, tags, body: contextData.body }),
+    );
+    // The tree, the note index and this path's (cached "missing") read all went
+    // stale — the sidebar and the note view must see it immediately.
+    invalidateContextCache(
+      contextKeys.tree(currentCommunity.id),
+      contextKeys.list(currentCommunity.id),
+      contextKeys.read(currentCommunity.id, path),
+    );
+    setCreatedHref(noteHref(path));
+    setCreatedDetail(`Saved to ${path}`);
+  };
+
+  // ── Files (context sources) ───────────────────────────────────────────────
+  // Uploaded one at a time: each request runs the whole extract → chunk → embed
+  // pipeline synchronously, so a parallel burst would just contend. Per-file
+  // status lands on the row; a file that fails leaves the others alone.
+  const uploadFiles = async () => {
+    if (!currentCommunity) throw new Error('Select a community first');
+    const communityId = currentCommunity.id;
+    const queue = fileData.files
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.status === 'queued');
+
+    const patch = (index: number, next: Partial<FileEntry>) => {
+      setFileData((d) => ({
+        ...d,
+        files: d.files.map((f, i) => (i === index ? { ...f, ...next } : f)),
+      }));
+    };
+
+    let uploaded = 0;
+    let lastPath: string | null = null;
+    for (const { entry, index } of queue) {
+      patch(index, { status: 'uploading', error: undefined });
+      try {
+        const { source } = await notesApi.uploadSource(communityId, entry.file, fileData.folder);
+        patch(index, { status: 'done', path: source.path });
+        uploaded++;
+        lastPath = source.path;
+      } catch (err) {
+        patch(index, {
+          status: 'failed',
+          error: err instanceof Error ? err.message : 'Upload failed',
+        });
+      }
+    }
+
+    if (!uploaded) throw new Error('No files could be uploaded — see the list above');
+
+    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId));
+    const failed = queue.length - uploaded;
+    setCreatedHref(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/context');
+    setCreatedDetail(
+      `${uploaded} file${uploaded === 1 ? '' : 's'} added to ${fileData.folder || contextName}` +
+        (failed ? ` · ${failed} failed` : ''),
+    );
   };
 
   const createNode = async () => {
@@ -426,9 +554,11 @@ export default function CreateModal() {
     setCropperFile(null);
   };
 
-  if (!isOpen) return null;
-
+  // No early return on `!isOpen`: the panel stays mounted through its slide-out
+  // animation, so the shell decides when to unmount. Everything below is cheap
+  // and null-safe while closed.
   const typeOpt = selectedType ? TYPE_OPTIONS.find(o => o.id === selectedType) : null;
+  const uploadedCount = fileData.files.filter((f) => f.status === 'done').length;
   const successLabel = typeOpt
     ? selectedType === 'person'
       ? personData.name || 'People'
@@ -436,6 +566,10 @@ export default function CreateModal() {
       ? resourceData.name || 'Resource'
       : selectedType === 'event'
       ? eventData.name || 'Event'
+      : selectedType === 'context'
+      ? contextTitle || 'Note'
+      : selectedType === 'file'
+      ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : communityData.name || 'Community'
     : '';
 
@@ -463,52 +597,63 @@ export default function CreateModal() {
       )}
 
       {/* Backdrop + panel shell */}
-      <Modal
+      <SidePanel
+        open={isOpen}
         onClose={handleClose}
-        overlayClassName="items-center justify-center p-4"
-        overlayStyle={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
-        maxWidth={
+        ariaLabel="Create new"
+        // Pops out from the left beside the icon rail — same edge the channels
+        // panel docks to — as an inset card rather than a full-height sheet.
+        side="left"
+        floating
+        // Wide enough for the form + finder two-column layout on the entity
+        // types; a narrow sheet everywhere else.
+        widthClass={
           step === 1 && (selectedType === 'person' || selectedType === 'resource' || selectedType === 'event')
-            ? 'max-w-3xl'
-            : 'max-w-sm'
+            ? 'sm:w-[800px]'
+            : 'sm:w-[440px]'
         }
-        panelClassName="relative rounded-2xl border border-border-subtle bg-surface-1 shadow-2xl"
-        panelStyle={{ animation: 'modalIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both' }}
       >
           {/* Header */}
           {step < 3 && (
-            <div className="relative flex items-center justify-center px-6 pt-6 pb-4 border-b border-border-subtle">
+            <div className="flex items-center gap-2 px-6 py-4 border-b border-border-subtle flex-shrink-0">
               {step > 0 && (
                 <button
                   onClick={handleBack}
-                  className="absolute left-6 w-7 h-7 rounded-full flex items-center justify-center text-text-muted hover:bg-surface-2 transition-colors"
+                  aria-label="Back"
+                  className="w-7 h-7 -ml-1.5 flex-shrink-0 rounded-full flex items-center justify-center text-text-muted hover:bg-surface-2 transition-colors"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
               )}
-              <div className="text-center">
+              <div className="min-w-0 flex-1">
                 {typeOpt && step > 0 && (
                   <p className="text-xs text-text-muted mb-0.5">{typeOpt.label}</p>
                 )}
-                <h2 className="font-semibold text-text-primary text-base">{stepTitles[step]}</h2>
+                <h2 className="font-semibold text-text-primary text-base truncate">{stepTitles[step]}</h2>
               </div>
               <button
                 onClick={handleClose}
-                className="absolute right-6 w-8 h-8 rounded-full flex items-center justify-center bg-red-400 hover:scale-110 transition-transform"
+                aria-label="Close"
+                className="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center text-text-muted hover:bg-surface-2 hover:text-text-primary transition-colors"
               >
-                <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
           )}
 
-          {/* Body */}
-          <div className="px-6 py-5">
+          {/* Body — the success screen is small and headerless, so it centers in
+              the full-height panel rather than clinging to the top. */}
+          <div
+            className={`px-6 py-5 flex-1 overflow-y-auto ${
+              step === 3 ? 'flex flex-col justify-center' : ''
+            }`}
+          >
             {step === 0 && (
-              <TypeSelector options={gridOptions} selected={selectedType} onSelect={handleTypeSelect} />
+              <TypeList options={gridOptions} suggestion={suggestion} onSelect={handleTypeSelect} />
             )}
 
             {step === 1 && selectedType === 'person' && (
@@ -582,6 +727,27 @@ export default function CreateModal() {
             {step === 1 && selectedType === 'space' && (
               <SpaceForm data={spaceData} onChange={setSpaceData} nameRef={nameRef} />
             )}
+            {step === 1 && selectedType === 'context' && (
+              <ContextForm
+                data={contextData}
+                onChange={setContextData}
+                nameRef={nameRef}
+                folders={brainTree.folders}
+                contextName={contextName}
+                destination={contextDestination}
+                renamed={contextRenamed}
+                loading={brainTree.loading}
+              />
+            )}
+            {step === 1 && selectedType === 'file' && (
+              <FileForm
+                data={fileData}
+                onChange={setFileData}
+                folders={brainTree.folders}
+                contextName={contextName}
+                loading={brainTree.loading}
+              />
+            )}
 
             {step === 2 && (
               <AliasSelector
@@ -592,7 +758,24 @@ export default function CreateModal() {
             )}
 
             {step === 3 && (
-              <SuccessScreen label={successLabel} onClose={handleClose} />
+              <SuccessScreen
+                label={successLabel}
+                onClose={handleClose}
+                detail={createdDetail ?? undefined}
+                verb={selectedType === 'file' ? 'added' : 'created'}
+                actionLabel={
+                  createdHref ? (selectedType === 'file' ? 'Open' : 'Open note') : undefined
+                }
+                onAction={
+                  createdHref
+                    ? () => {
+                        const href = createdHref;
+                        handleClose();
+                        router.push(href);
+                      }
+                    : undefined
+                }
+              />
             )}
 
             {error && (
@@ -604,7 +787,7 @@ export default function CreateModal() {
 
           {/* Footer */}
           {step > 0 && step < 3 && (
-            <div className="px-6 pb-6 flex justify-end">
+            <div className="px-6 py-4 flex justify-end border-t border-border-subtle flex-shrink-0">
               <button
                 onClick={handleSubmit}
                 disabled={!canAdvance() || saving}
@@ -614,24 +797,19 @@ export default function CreateModal() {
                 {saving ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Saving…
+                    {selectedType === 'file' ? 'Uploading…' : 'Saving…'}
                   </>
                 ) : step === 1 && hasAliases ? (
                   'Next →'
+                ) : selectedType === 'file' ? (
+                  'Upload'
                 ) : (
                   'Create'
                 )}
               </button>
             </div>
           )}
-      </Modal>
-
-      <style>{`
-        @keyframes modalIn {
-          from { opacity: 0; transform: scale(0.94) translateY(8px); }
-          to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
+      </SidePanel>
     </>
   );
 }

@@ -46,6 +46,10 @@ interface NoteSidebarProps {
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
+  /** Show the brain root as a real (collapsible) folder row at the top of the
+   *  tree instead of a separate header bar, so the community reads as the parent
+   *  folder of everything below it. `icon` replaces the folder glyph. */
+  root?: { label: string; icon?: React.ReactNode }
 }
 
 export function NoteSidebar({
@@ -60,6 +64,7 @@ export function NoteSidebar({
   folderBadges,
   onFolderAccess,
   bare = false,
+  root,
 }: NoteSidebarProps) {
   const starredSet = useMemo(() => new Set(starred), [starred])
   const titleFor = useMemo(() => {
@@ -138,18 +143,38 @@ export function NoteSidebar({
             </div>
           )}
 
-          <Tree
-            node={tree}
-            selectedPath={selectedPath}
-            starredSet={starredSet}
-            glyphFor={glyphFor}
-            canEdit={canEdit}
-            onSelect={onSelect}
-            onToggleStar={onToggleStar}
-            onDeleteNote={onDeleteNote}
-            folderBadges={folderBadges}
-            onFolderAccess={onFolderAccess}
-          />
+          {root ? (
+            // The brain root as the tree's own top-level folder — same row
+            // chrome as any other folder, so nesting reads uniformly from the
+            // community down.
+            <FolderRow
+              node={tree}
+              label={root.label}
+              icon={root.icon}
+              selectedPath={selectedPath}
+              starredSet={starredSet}
+              glyphFor={glyphFor}
+              canEdit={canEdit}
+              onSelect={onSelect}
+              onToggleStar={onToggleStar}
+              onDeleteNote={onDeleteNote}
+              folderBadges={folderBadges}
+              onFolderAccess={onFolderAccess}
+            />
+          ) : (
+            <Tree
+              node={tree}
+              selectedPath={selectedPath}
+              starredSet={starredSet}
+              glyphFor={glyphFor}
+              canEdit={canEdit}
+              onSelect={onSelect}
+              onToggleStar={onToggleStar}
+              onDeleteNote={onDeleteNote}
+              folderBadges={folderBadges}
+              onFolderAccess={onFolderAccess}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -224,6 +249,10 @@ function Tree({
 
 function FolderRow(props: {
   node: TreeNode
+  /** Overrides the folder's own name (used for the brain-root row). */
+  label?: string
+  /** Overrides the folder glyph (the community avatar on the root row). */
+  icon?: React.ReactNode
   selectedPath: string | null
   starredSet: Set<string>
   glyphFor: Map<string, NodeGlyph>
@@ -238,9 +267,11 @@ function FolderRow(props: {
   // A selection inside this folder (search focus, profile navigation) re-opens
   // it so the highlighted row is actually visible/scrollable. The folder's own
   // index.md doesn't count — it highlights on the folder row itself.
-  const containsSelection =
-    !!props.selectedPath?.startsWith(`${props.node.path}/`) &&
-    props.selectedPath !== `${props.node.path}/index.md`
+  const containsSelection = props.node.path
+    ? !!props.selectedPath?.startsWith(`${props.node.path}/`) &&
+      props.selectedPath !== `${props.node.path}/index.md`
+    : // The root row (path '') contains everything.
+      !!props.selectedPath
   useEffect(() => {
     if (containsSelection) setOpen(true)
   }, [containsSelection, props.selectedPath])
@@ -251,8 +282,11 @@ function FolderRow(props: {
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note — clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
-  const indexPath = `${props.node.path}/index.md`
-  const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
+  // (The root row has no index note of its own — root's index.md stays a child
+  // row, matching Tree's filter — so it only ever expands/collapses.)
+  const indexPath = props.node.path ? `${props.node.path}/index.md` : ''
+  const hasIndex =
+    !!indexPath && (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
   return (
     <div>
@@ -277,9 +311,11 @@ function FolderRow(props: {
           }`}
         >
           <span className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}>
-            <FolderIcon open={open} />
+            {props.icon ?? <FolderIcon open={open} />}
           </span>
-          <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>{props.node.name}</span>
+          <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>
+            {props.label ?? props.node.name}
+          </span>
           {badge?.restricted && (
             <span className="shrink-0 text-text-muted" title="Restricted folder — access is granted here, not inherited">
               <LockIcon />

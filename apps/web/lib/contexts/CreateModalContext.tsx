@@ -3,7 +3,18 @@
 import { useState } from 'react';
 import { createSafeContext } from './createSafeContext';
 
-export type CreateableType = 'person' | 'organization' | 'resource' | 'event' | 'community' | 'channel' | 'space';
+export type CreateableType =
+  | 'person'
+  | 'organization'
+  | 'resource'
+  | 'event'
+  | 'community'
+  | 'channel'
+  | 'space'
+  // Brain surfaces: a written note, and an uploaded file ingested as a Context
+  // Source. Both land at a path in the current community's context.
+  | 'context'
+  | 'file';
 
 interface CreateModalContextValue {
   isOpen: boolean;

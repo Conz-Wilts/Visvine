@@ -41,7 +41,7 @@ async function processSource(
   buffer: Buffer,
 ): Promise<ContextSourceMeta> {
   try {
-    const text = extractText(buffer, source.kind)
+    const text = await extractText(buffer, source.kind)
     const { chunks, truncated, textChars } = chunkSourceText(text, source.kind)
 
     const config = embeddingsConfig()
@@ -92,9 +92,17 @@ export async function ingestSource(brain: Brain, input: IngestInput): Promise<Co
     createdBy: input.createdBy,
   })
   if (gcsConfigured()) {
+    // Best-effort, exactly like the unconfigured case: the extracted text is what
+    // retrieval needs, so a storage failure (expired credentials, bucket
+    // permissions) must not throw away an otherwise good ingest. gcsPath stays
+    // '' — no download link, and reingest reports the original as unavailable.
     const gcsPath = gcsObjectPath(brain, created.id, input.name)
-    await uploadResourceFile(gcsPath, input.buffer, input.mimeType)
-    await sourceStore.updateSourceGcsPath(created.id, gcsPath)
+    try {
+      await uploadResourceFile(gcsPath, input.buffer, input.mimeType)
+      await sourceStore.updateSourceGcsPath(created.id, gcsPath)
+    } catch (err) {
+      console.error('[context-sources] original upload failed, indexing text only', err)
+    }
   }
   return processSource(brain, { id: created.id, path: created.path, kind: input.kind }, input.buffer)
 }

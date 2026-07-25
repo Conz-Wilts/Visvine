@@ -12,7 +12,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Globe2, Link2Off } from 'lucide-react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { hexToPalette } from '@/lib/profileTheme';
-import { findAlias, type NBNode } from '@/lib/types';
+import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import { fetchJson } from '@/lib/fetchJson';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
@@ -78,7 +78,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
           <div className="min-w-0 flex-1">
             <span className="inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border"
                   style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
-              {node.alias ?? node.type}
+              {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
             </span>
 
             <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>

@@ -107,6 +107,7 @@ export const contextKeys = {
   read: (c: string, path: string) => `notes:read:${c}:${path}`,
   list: (c: string) => `notes:list:${c}`,
   tree: (c: string) => `notes:tree:${c}`,
+  settings: (c: string) => `notes:settings:${c}`,
   references: (c: string, path: string) => `notes:refs:${c}:${path}`,
 }
 

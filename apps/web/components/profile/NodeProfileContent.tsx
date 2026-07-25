@@ -14,7 +14,7 @@ import { MapPin, Globe2, Calendar, Share2, Check, ChevronRight } from 'lucide-re
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { hexToPalette } from '@/lib/profileTheme';
-import { findAlias, getNodeGlyph, type NBNode } from '@/lib/types';
+import { findAlias, getNodeGlyph, nodeTypeLabel, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/components/dashboard/typeStyles';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import TypeSilhouette from '@/components/ui/TypeSilhouette';
@@ -104,7 +104,7 @@ export default function NodeProfileContent({ nodeId, onConnectionsClick, onCommu
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border"
                       style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
-                  {node.alias ?? node.type}
+                  {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
                 </span>
               </div>
 

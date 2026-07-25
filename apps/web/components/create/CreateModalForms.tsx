@@ -3,11 +3,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, Newspaper } from 'lucide-react';
 import type { CreateableType } from '@/lib/contexts/CreateModalContext';
+import type { CreateSuggestion } from '@/lib/create/suggestedType';
 import type { CommunityAlias } from '@/lib/types';
 import type { ChannelSpaceEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, EmojiIconPicker } from '@/components/messages/ChannelIcon';
+import {
+  MAX_SOURCE_BYTES,
+  SOURCE_ACCEPT,
+  SOURCE_EXTENSIONS_LABEL,
+  sourceKindOf,
+} from '@/lib/notes/shared/sourceTypes';
+import { FolderPicker, PathPreview } from './ContextDestination';
 
 // ─── Type Config ────────────────────────────────────────────────────────────
 
@@ -84,6 +92,31 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
+    id: 'context',
+    label: 'Context',
+    description: 'A note in your community context',
+    color: '#ec4899',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6M9 16h4M8 4h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 012-2z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'file',
+    label: 'File',
+    description: 'Upload a document into context',
+    color: '#14b8a6',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16V6a2 2 0 012-2h4l4 4v8a2 2 0 01-2 2H9a2 2 0 01-2-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 4v4h4M5 10v8a4 4 0 004 4h6" />
+      </svg>
+    ),
+  },
+  {
     id: 'community',
     label: 'Community',
     description: 'A new community workspace',
@@ -124,37 +157,96 @@ function Field({
   );
 }
 
-// ─── Type Selector ──────────────────────────────────────────────────────────
+// ─── Type List ──────────────────────────────────────────────────────────────
 
-export function TypeSelector({
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mb-2">
+      {children}
+    </p>
+  );
+}
+
+function TypeRow({
+  opt,
+  onSelect,
+  reason,
+}: {
+  opt: TypeOption;
+  onSelect: (t: CreateableType) => void;
+  /** When set, the row is the route-suggested one: emphasised, with the reason pilled on the right. */
+  reason?: string;
+}) {
+  const suggested = reason != null;
+  return (
+    <button
+      onClick={() => onSelect(opt.id)}
+      className={`w-full flex items-center gap-3 rounded-xl text-left transition-all duration-150 active:scale-[0.99] ${
+        suggested
+          ? 'p-3.5 border-2'
+          : 'p-2.5 border border-border-subtle hover:bg-surface-2 hover:border-border-default'
+      }`}
+      style={
+        suggested
+          ? {
+              borderColor: opt.color,
+              background: `${opt.color}12`,
+              boxShadow: `0 0 0 3px ${opt.color}25`,
+            }
+          : undefined
+      }
+    >
+      <span
+        className="w-9 h-9 flex-shrink-0 rounded-lg flex items-center justify-center"
+        style={{ background: `${opt.color}18`, color: opt.color }}
+      >
+        {opt.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold text-sm text-text-primary">{opt.label}</span>
+        <span className="block text-xs text-text-muted truncate">{opt.description}</span>
+      </span>
+      {suggested && (
+        <span
+          className="flex-shrink-0 text-[11px] font-medium rounded-full px-2 py-0.5"
+          style={{ background: `${opt.color}20`, color: opt.color }}
+        >
+          {reason}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export function TypeList({
   options,
-  selected,
+  suggestion,
   onSelect,
 }: {
   options: TypeOption[];
-  selected: CreateableType | null;
+  /** Route-derived hint; ignored when its type isn't among `options`. */
+  suggestion: CreateSuggestion | null;
   onSelect: (t: CreateableType) => void;
 }) {
+  const suggested = suggestion ? options.find((o) => o.id === suggestion.type) ?? null : null;
+  const rest = suggested ? options.filter((o) => o.id !== suggested.id) : options;
+
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {options.map((opt) => {
-        const active = selected === opt.id;
-        return (
-          <button
-            key={opt.id}
-            onClick={() => onSelect(opt.id)}
-            className="aspect-square flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border-2 text-center overflow-hidden transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
-            style={{
-              borderColor: opt.color,
-              background: active ? `${opt.color}18` : `${opt.color}08`,
-              boxShadow: active ? `0 0 0 3px ${opt.color}35` : 'none',
-            }}
-          >
-            <span style={{ color: opt.color }}>{opt.icon}</span>
-            <span className="font-semibold text-sm text-text-primary">{opt.label}</span>
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-5">
+      {suggested && suggestion && (
+        <div>
+          <SectionLabel>Suggested</SectionLabel>
+          <TypeRow opt={suggested} onSelect={onSelect} reason={suggestion.reason} />
+        </div>
+      )}
+      <div>
+        {suggested && <SectionLabel>Everything else</SectionLabel>}
+        <div className="flex flex-col gap-2">
+          {rest.map((opt) => (
+            <TypeRow key={opt.id} opt={opt} onSelect={onSelect} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -627,6 +719,244 @@ export function SpaceForm({
   );
 }
 
+// ─── Context (note) Form ────────────────────────────────────────────────────
+
+export interface ContextFormData {
+  title: string;
+  folder: string;
+  tags: string;
+  body: string;
+}
+
+export function ContextForm({
+  data,
+  onChange,
+  nameRef,
+  folders,
+  contextName,
+  destination,
+  renamed,
+  loading,
+}: {
+  data: ContextFormData;
+  onChange: (d: ContextFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+  folders: string[];
+  contextName: string;
+  /** The exact path this note will be written to (de-duplicated). */
+  destination: string;
+  /** True when the title's natural filename was taken and a suffix was added. */
+  renamed: boolean;
+  loading: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Title" required>
+        <input
+          ref={nameRef as React.RefObject<HTMLInputElement>}
+          className={inputClass}
+          placeholder="e.g. Fundraising playbook"
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
+      </Field>
+      <Field label="Folder">
+        <FolderPicker
+          folders={folders}
+          value={data.folder}
+          onChange={(folder) => onChange({ ...data, folder })}
+          contextName={contextName}
+        />
+      </Field>
+      <Field label="Tags">
+        <input
+          className={inputClass}
+          placeholder="playbook, gtm"
+          value={data.tags}
+          onChange={(e) => onChange({ ...data, tags: e.target.value })}
+        />
+      </Field>
+      <Field label="Starting text">
+        <textarea
+          className={`${inputClass} resize-none`}
+          rows={4}
+          placeholder="Optional — anything you already know. You can keep writing after it's created."
+          value={data.body}
+          onChange={(e) => onChange({ ...data, body: e.target.value })}
+        />
+      </Field>
+      {data.title.trim() && (
+        <PathPreview path={destination} taken={renamed} />
+      )}
+      {loading && <p className="text-[11px] text-text-muted">Loading folders…</p>}
+    </div>
+  );
+}
+
+// ─── File (context source) Form ─────────────────────────────────────────────
+
+export type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
+
+export interface FileEntry {
+  file: File;
+  status: FileUploadStatus;
+  /** Brain path the source landed at (set once uploaded). */
+  path?: string;
+  error?: string;
+}
+
+export interface FileFormData {
+  files: FileEntry[];
+  folder: string;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Reject unsupported/oversized files at pick time, before any round-trip. */
+export function rejectionReason(file: File): string | null {
+  if (!sourceKindOf(file.name)) return 'Unsupported type';
+  if (file.size > MAX_SOURCE_BYTES) return `Over ${Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB`;
+  return null;
+}
+
+const STATUS_STYLE: Record<FileUploadStatus, { label: string; className: string }> = {
+  queued: { label: 'Ready', className: 'text-text-muted' },
+  uploading: { label: 'Uploading…', className: 'text-text-secondary' },
+  done: { label: 'Added', className: 'text-brand-green' },
+  failed: { label: 'Failed', className: 'text-red-500' },
+};
+
+export function FileForm({
+  data,
+  onChange,
+  folders,
+  contextName,
+  loading,
+}: {
+  data: FileFormData;
+  onChange: (d: FileFormData) => void;
+  folders: string[];
+  contextName: string;
+  loading: boolean;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (incoming: FileList | null) => {
+    if (!incoming?.length) return;
+    const existing = new Set(data.files.map((f) => `${f.file.name}:${f.file.size}`));
+    const next: FileEntry[] = [];
+    for (const file of Array.from(incoming)) {
+      if (existing.has(`${file.name}:${file.size}`)) continue;
+      const reason = rejectionReason(file);
+      next.push(reason ? { file, status: 'failed', error: reason } : { file, status: 'queued' });
+    }
+    if (next.length) onChange({ ...data, files: [...data.files, ...next] });
+  };
+
+  const removeAt = (index: number) => {
+    onChange({ ...data, files: data.files.filter((_, i) => i !== index) });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          addFiles(e.dataTransfer.files);
+        }}
+        onClick={() => inputRef.current?.click()}
+        className={`flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-7 text-center transition-colors ${
+          dragging
+            ? 'border-brand-green bg-brand-green/10'
+            : 'border-border-default bg-surface-2 hover:border-brand-green/60'
+        }`}
+      >
+        <svg className="h-7 w-7 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+        </svg>
+        <span className="text-sm font-medium text-text-primary">
+          Drop files here or <span className="text-brand-green">browse</span>
+        </span>
+        <span className="text-[11px] text-text-muted">
+          {SOURCE_EXTENSIONS_LABEL} · up to {Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB each
+        </span>
+        <input
+          ref={inputRef}
+          type="file"
+          multiple
+          accept={SOURCE_ACCEPT}
+          className="sr-only"
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
+      </div>
+
+      {data.files.length > 0 && (
+        <ul className="flex max-h-48 flex-col gap-1.5 overflow-y-auto">
+          {data.files.map((entry, i) => {
+            const status = STATUS_STYLE[entry.status];
+            return (
+              <li
+                key={`${entry.file.name}-${i}`}
+                className="flex items-center gap-3 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-text-primary">{entry.file.name}</p>
+                  {/* A server error can be long (a provider's raw payload) —
+                      keep the row one line and put the full text in the title. */}
+                  <p className="truncate text-[11px] text-text-muted" title={entry.error ?? undefined}>
+                    {formatBytes(entry.file.size)}
+                    <span className={`ml-2 ${status.className}`}>{entry.error ?? status.label}</span>
+                  </p>
+                </div>
+                {entry.status !== 'uploading' && (
+                  <button
+                    type="button"
+                    onClick={() => removeAt(i)}
+                    aria-label={`Remove ${entry.file.name}`}
+                    className="shrink-0 text-text-muted transition-colors hover:text-red-500"
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <Field label="Folder">
+        <FolderPicker
+          folders={folders}
+          value={data.folder}
+          onChange={(folder) => onChange({ ...data, folder })}
+          contextName={contextName}
+        />
+      </Field>
+      <p className="text-xs text-text-muted">
+        Uploaded files are read, split and indexed, so their contents answer questions across{' '}
+        {contextName} — the original stays downloadable.
+      </p>
+      {loading && <p className="text-[11px] text-text-muted">Loading folders…</p>}
+    </div>
+  );
+}
+
 // ─── Alias Selector ─────────────────────────────────────────────────────────
 
 export function AliasSelector({
@@ -675,7 +1005,24 @@ export function AliasSelector({
 
 // ─── Success Screen ─────────────────────────────────────────────────────────
 
-export function SuccessScreen({ label, onClose }: { label: string; onClose: () => void }) {
+export function SuccessScreen({
+  label,
+  onClose,
+  detail,
+  verb = 'created',
+  actionLabel,
+  onAction,
+}: {
+  label: string;
+  onClose: () => void;
+  /** Past-tense verb after the label — uploads read "3 files added". */
+  verb?: string;
+  /** Replaces the generic "All done!" line (e.g. "3 files added to deals"). */
+  detail?: string;
+  /** Optional primary follow-through — "Open note" / "Open file". */
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
       <div
@@ -685,15 +1032,29 @@ export function SuccessScreen({ label, onClose }: { label: string; onClose: () =
         ✓
       </div>
       <div>
-        <p className="font-semibold text-text-primary text-lg">{label} created</p>
-        <p className="text-sm text-text-muted mt-1">All done!</p>
+        <p className="font-semibold text-text-primary text-lg">{`${label} ${verb}`}</p>
+        <p className="text-sm text-text-muted mt-1">{detail ?? 'All done!'}</p>
       </div>
-      <button
-        onClick={onClose}
-        className="mt-2 px-6 py-2 rounded-full bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-opacity"
-      >
-        Done
-      </button>
+      <div className="mt-2 flex items-center gap-2">
+        {actionLabel && onAction && (
+          <button
+            onClick={onAction}
+            className="px-6 py-2 rounded-full bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            {actionLabel}
+          </button>
+        )}
+        <button
+          onClick={onClose}
+          className={`px-6 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-90 ${
+            actionLabel && onAction
+              ? 'border border-border-default text-text-secondary'
+              : 'bg-brand-green text-white'
+          }`}
+        >
+          Done
+        </button>
+      </div>
     </div>
   );
 }

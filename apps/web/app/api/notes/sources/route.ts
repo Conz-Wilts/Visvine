@@ -16,9 +16,12 @@ import {
   listVisibleSources,
 } from '@/lib/notes/brainService'
 import { sanitizePath } from '@/lib/notes/store'
-import { normalizeSourcePath, sourceKindOf } from '@/lib/notes/shared/sourceTypes'
-
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+import {
+  MAX_SOURCE_BYTES,
+  SOURCE_EXTENSIONS_LABEL,
+  normalizeSourcePath,
+  sourceKindOf,
+} from '@/lib/notes/shared/sourceTypes'
 
 export async function GET(req: NextRequest) {
   const brain = await requireBrain(req)
@@ -41,10 +44,11 @@ export async function POST(req: NextRequest) {
   }
   const file = form.get('file')
   if (!(file instanceof File)) return fail('file is required')
-  if (file.size > MAX_UPLOAD_BYTES) return fail('File too large (max 5 MB)')
+  if (file.size > MAX_SOURCE_BYTES)
+    return fail(`File too large (max ${Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB)`)
 
   const kind = sourceKindOf(file.name)
-  if (!kind) return fail('Unsupported file type — csv, md, and txt are supported')
+  if (!kind) return fail(`Unsupported file type — ${SOURCE_EXTENSIONS_LABEL} are supported`)
 
   // Destination: an explicit brain path, or folder + the file's own name.
   const rawPath = form.get('path')
