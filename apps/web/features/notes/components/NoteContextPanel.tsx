@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 import { Share2, Radio } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -26,7 +26,7 @@ import {
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
-import { BrainGateCard } from './BrainGateCard'
+import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
@@ -96,30 +96,37 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     return () => { stale = true }
   }, [communityId, path])
 
-  // When gated out, surface the viewer's own pending root-gate request.
+  // Surface the viewer's own open request for whichever resource denied them —
+  // the root gate ('') when gated out of the brain, else this exact note path.
+  const requestPath = gatedOut ? '' : path
   useEffect(() => {
-    if (!gatedOut || !communityId || !access) {
+    if (!communityId || isPersonalSpace) {
       setRequestPending(false)
       return
     }
+    let stale = false
     notesApi
-      .listJoinRequests(communityId)
-      .then(({ requests }) =>
+      .listAccessRequests(communityId)
+      .then(({ requests }) => {
+        if (stale) return
         setRequestPending(
           requests.some(
-            (r) => r.folderId === '' && r.status === 'pending' && r.userId === access.me.userId,
+            (r) => r.resourcePath === requestPath && r.status === 'pending' && r.userId === access?.me.userId,
           ),
-        ),
-      )
-      .catch(() => setRequestPending(false))
-  }, [gatedOut, communityId, access])
+        )
+      })
+      .catch(() => {
+        if (!stale) setRequestPending(false)
+      })
+    return () => { stale = true }
+  }, [communityId, isPersonalSpace, requestPath, access?.me.userId])
 
-  const requestAccess = async () => {
+  const requestAccess = async (message?: string) => {
     if (!communityId) return
     setRequesting(true)
     setError(null)
     try {
-      await notesApi.requestJoin(communityId, '')
+      await notesApi.requestAccess(communityId, requestPath, message)
       setRequestPending(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request access')
@@ -189,6 +196,29 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     [communityId],
   )
 
+  // Turn one unlinked reference into a real link. The write lands on the SOURCE
+  // note, so its caches are the ones to drop; the route hands back this note's
+  // refreshed references. Errors bubble to the reference's own inline slot.
+  const handleLinkMention = useCallback(
+    async (ref: UnlinkedReference) => {
+      if (!communityId || !path) return
+      const { references: refs } = await notesApi.linkMention(
+        communityId,
+        path,
+        ref.fromPath,
+        ref.offset,
+      )
+      setReferences(refs)
+      invalidateContextCache(
+        contextKeys.read(communityId, ref.fromPath),
+        contextKeys.references(communityId, ref.fromPath),
+        contextKeys.references(communityId, path),
+        contextKeys.list(communityId),
+      )
+    },
+    [communityId, path],
+  )
+
   // Links inside the note: entity → its profile Context tab; anything else →
   // its own note view.
   const handleOpenNote = useCallback(
@@ -232,10 +262,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   if (gatedOut) {
     return (
       <div className="flex justify-center py-10">
-        <BrainGateCard
+        <AccessRequestCard
+          scope="brain"
           communityName={currentCommunity?.name ?? 'this community'}
           pending={requestPending}
           requesting={requesting}
+          error={error}
           onRequest={requestAccess}
         />
       </div>
@@ -251,13 +283,21 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
       </div>
     )
   }
-  // This surface only views existing notes — a bad/hidden path is a dead end,
-  // not an invitation to create (readVisible 404s hidden notes the same way).
+  // This surface only views existing notes — a bad/hidden path is never an
+  // invitation to create. It IS an invitation to ask: readVisible 404s hidden
+  // notes exactly like absent ones, so the card offers a request either way and
+  // its copy commits to neither reading.
   if (read.status === 'missing') {
     return (
-      <div className="flex flex-col items-center gap-2 py-14 text-center">
-        <p className="text-base font-semibold text-text-secondary">Note not found.</p>
-        <p className="text-sm text-text-muted">It may have been moved, deleted, or you may not have access to it.</p>
+      <div className="flex justify-center py-10">
+        <AccessRequestCard
+          scope="path"
+          communityName={currentCommunity?.name ?? 'this community'}
+          pending={requestPending}
+          requesting={requesting}
+          error={error}
+          onRequest={requestAccess}
+        />
       </div>
     )
   }
@@ -324,6 +364,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
         onEnsureEntityNote={ensureEntityNote}
         onSave={handleSave}
         onOpenNote={handleOpenNote}
+        onLinkMention={handleLinkMention}
       />
       {shareOpen && (
         <SharePanel

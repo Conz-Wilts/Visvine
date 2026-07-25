@@ -21,6 +21,7 @@ import {
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz';
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings';
+import type { AccessRequest } from '@/lib/notes/shared/brainTypes';
 import type { TreeNode } from '@/lib/notes/shared/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { Button } from '@/components/ui';
@@ -48,12 +49,14 @@ export interface PathOption {
   title?: string;
 }
 
-/** Everything the three tabs share, loaded once by PeopleAccessPanel. */
+/** Everything the tabs share, loaded once by PeopleAccessPanel. */
 export interface PeopleData {
   members: CommunityMember[];
   teams: TeamInfo[];
   overview: AccessOverviewResponse | null;
   paths: PathOption[];
+  /** Context access requests — own + everything an admin may resolve. */
+  requests: AccessRequest[];
   /** The brain tree as the server returns it (root node), for hierarchy UIs. */
   tree: TreeNode | null;
   /** Admin-set display name for the brain root (default "Community context"). */

@@ -18,6 +18,7 @@ import {
   levelDisplayLabel,
   type AccessLevelName,
 } from '@/lib/notes/shared/authz'
+import type { AccessRequest } from '@/lib/notes/shared/brainTypes'
 import {
   notesApi,
   type PathAccessResponse,
@@ -58,6 +59,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     title ?? (path === '' ? 'brain root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
 
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
+  const [requests, setRequests] = useState<AccessRequest[]>([])
   const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -86,7 +88,12 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     if (kind === 'note') {
       notesApi.getPublications(communityId, path).then(setPubs).catch(() => setPubs(null))
     }
-  }, [communityId, path, kind])
+    if (!isPersonalSpace) {
+      // Best-effort: the endpoint returns everything the caller may see, and the
+      // block below narrows it to open requests for THIS path.
+      notesApi.listAccessRequests(communityId).then(({ requests: r }) => setRequests(r)).catch(() => setRequests([]))
+    }
+  }, [communityId, path, kind, isPersonalSpace])
 
   useEffect(() => {
     reload()
@@ -129,6 +136,17 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       setPending([])
       setQuery('')
     })
+
+  const openRequests = useMemo(
+    () => requests.filter((r) => r.status === 'pending' && r.resourcePath === path),
+    [requests, path],
+  )
+
+  const resolveRequest = (id: string, approve: boolean) =>
+    run(
+      () => notesApi.resolveAccessRequest(communityId, id, approve),
+      approve ? undefined : 'Request denied.',
+    )
 
   const revokeGrants = (grantIds: string[]) =>
     run(async () => {
@@ -373,6 +391,48 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Waiting for access — requests filed against THIS path. The
+                  console queue covers community admins; this block is the only
+                  place a non-admin folder manager can resolve their own. */}
+              {access.canManage && openRequests.length > 0 && (
+                <section>
+                  <h4 className="mb-1 text-sm font-semibold text-text-primary">
+                    Waiting for access ({openRequests.length})
+                  </h4>
+                  <div className="-mx-2">
+                    {openRequests.map((r) => (
+                      <div key={r.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-surface-2">
+                        {avatar('user', r.requesterName ?? 'Member', r.requesterImage ?? null)}
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-text-primary">
+                            {r.requesterName ?? 'Member'}
+                          </div>
+                          <div className="truncate text-[11px] text-text-muted">
+                            {r.message ? `“${r.message}”` : (r.requesterEmail ?? 'Asked for access')}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void resolveRequest(r.id, true)}
+                          className="h-7 shrink-0 rounded-lg bg-brand-green px-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void resolveRequest(r.id, false)}
+                          className="h-7 shrink-0 rounded-lg border border-border-default px-2.5 text-xs font-semibold text-text-secondary transition hover:bg-surface-2 disabled:opacity-40"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
               )}
 
               {/* People with access */}

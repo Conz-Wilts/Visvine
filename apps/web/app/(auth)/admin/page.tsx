@@ -18,28 +18,36 @@ function AdminConsole({ community, onSaved }: {
   community: Community;
   onSaved: (updated: Partial<Community>) => void;
 }) {
-  const [pendingMembers, setPendingMembers] = useState(0);
+  const [pendingPeople, setPendingPeople] = useState(0);
 
-  // Seed the Members badge without opening the section.
+  // Seed the People & access badge without opening the section: members waiting
+  // to join + members waiting on context access, the same sum the panel reports
+  // back once it's open.
   useEffect(() => {
     let active = true;
-    fetch(`/api/communities/${community.id}/members`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (active && data?.members) {
-          setPendingMembers(data.members.filter((m: { status: string }) => m.status === 'pending').length);
-        }
-      })
-      .catch(() => {});
+    Promise.all([
+      fetch(`/api/communities/${community.id}/members`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => (data?.members
+          ? data.members.filter((m: { status: string }) => m.status === 'pending').length
+          : 0))
+        .catch(() => 0),
+      fetch(`/api/notes/access-requests?communityId=${encodeURIComponent(community.id)}`)
+        .then(r => (r.ok ? r.json() : null))
+        .then(data => (typeof data?.pending === 'number' ? data.pending : 0))
+        .catch(() => 0),
+    ]).then(([members, requests]) => {
+      if (active) setPendingPeople(members + requests);
+    });
     return () => { active = false; };
   }, [community.id]);
 
-  const handlePendingCount = useCallback((count: number) => setPendingMembers(count), []);
+  const handlePendingCount = useCallback((count: number) => setPendingPeople(count), []);
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} />, description: 'Name, details, and access' },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} />, description: 'Enable community tools' },
-    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingMembers, icon: <Users size={18} />, description: 'Members, teams, and context permissions' },
+    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} />, description: 'Members, teams, and context permissions' },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} />, description: 'Directory node types' },
     { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} />, description: 'Recent admin actions' },
     { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} />, description: 'Engagement and growth' },

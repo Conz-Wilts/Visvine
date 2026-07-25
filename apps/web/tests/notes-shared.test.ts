@@ -14,7 +14,7 @@ import {
   resolveOkfLink,
 } from '../lib/notes/shared/markdown'
 import { buildNoteIndex, buildTree } from '../lib/notes/shared/graph'
-import { computeReferences, linkFirstMention } from '../lib/notes/shared/references'
+import { computeReferences, linkFirstMention, linkMentionAt } from '../lib/notes/shared/references'
 import { relatedNotes } from '../lib/notes/shared/related'
 import { searchNotes } from '../lib/notes/shared/search'
 import { decideMerge } from '../lib/notes/shared/merge'
@@ -122,6 +122,37 @@ test('linkFirstMention turns a plain mention into a link', () => {
   const out = linkFirstMention('I love Canva a lot.', 'Canva', 'canva.md')
   assert.equal(out, 'I love [Canva](/canva.md) a lot.')
   assert.equal(linkFirstMention('No mention here', 'Canva', 'canva.md'), null)
+})
+
+test('unlinked references carry the body offset of the mention', () => {
+  const body = 'First Canva line.\n\nSecond Canva line.'
+  const notes = [
+    note('canva.md', '---\ntitle: Canva\n---\n\nThe design tool.'),
+    note('b.md', `---\ntitle: B\n---\n\n${body}`),
+  ]
+  const refs = computeReferences(notes, 'canva.md', buildNoteIndex(notes))
+  assert.equal(refs.unlinked.length, 2)
+  for (const u of refs.unlinked) {
+    assert.equal(body.slice(u.offset, u.offset + 'Canva'.length), 'Canva')
+  }
+  assert.ok(refs.unlinked[0].offset < refs.unlinked[1].offset)
+})
+
+test('linkMentionAt links the mention at the given offset, not the first one', () => {
+  const body = 'First Canva line.\n\nSecond Canva line.'
+  const second = body.lastIndexOf('Canva')
+  assert.equal(
+    linkMentionAt(body, 'Canva', 'canva.md', second),
+    'First Canva line.\n\nSecond [Canva](/canva.md) line.',
+  )
+  // A stale offset (the note changed under us) is refused rather than guessed.
+  assert.equal(linkMentionAt(body, 'Canva', 'canva.md', second + 1), null)
+  assert.equal(linkMentionAt(body, 'Canva', 'canva.md', 999), null)
+  // Not a whole word at that offset.
+  assert.equal(linkMentionAt('Canvassing votes', 'Canva', 'canva.md', 0), null)
+  // Already inside a link span — masked out, so it never double-wraps.
+  const linked = 'See [Canva](/canva.md) here.'
+  assert.equal(linkMentionAt(linked, 'Canva', 'canva.md', linked.indexOf('Canva')), null)
 })
 
 // --- related -----------------------------------------------------------------

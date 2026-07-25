@@ -16,12 +16,12 @@ import { X, Share2, Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useNodeProfile } from '@/hooks/useNodeProfile'
-import { findAlias } from '@/lib/types'
+import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
@@ -34,7 +34,7 @@ import {
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
-import { BrainGateCard } from './BrainGateCard'
+import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
 import type { PickerEntity } from './NotePicker'
@@ -100,6 +100,11 @@ export function EntityContextPanel({
   const loadSeq = useRef(0)
 
   const gatedOut = !isPersonalSpace && access !== null && access.gated
+  // Inside the brain but cut off from THIS entity's note (a restricted folder
+  // between them and it). canRead is path-based, not existence-based, so this
+  // never fires for an entity that simply has no note yet — that case keeps its
+  // "no context yet" empty state.
+  const deniedPath = !isPersonalSpace && access !== null && !access.gated && !access.canRead
 
   // swrFetch delivers a cached value synchronously, so on a re-open these
   // "done" gates flip in the same render pass and the skeleton never flashes.
@@ -132,31 +137,38 @@ export function EntityContextPanel({
     return () => { stale = true }
   }, [communityId, path])
 
-  // When gated out, surface the viewer's own pending root-gate request (same
-  // flow as the workspace's gated state).
+  // Surface the viewer's own open request for whatever denied them: the root
+  // gate ('') when the brain is closed to them, else this entity's note path
+  // (same flow as the workspace's gated state).
+  const requestPath = gatedOut ? '' : (path ?? '')
   useEffect(() => {
-    if (!gatedOut || !communityId || !access) {
+    if (!communityId || isPersonalSpace || !access) {
       setRequestPending(false)
       return
     }
+    let stale = false
     notesApi
-      .listJoinRequests(communityId)
-      .then(({ requests }) =>
+      .listAccessRequests(communityId)
+      .then(({ requests }) => {
+        if (stale) return
         setRequestPending(
           requests.some(
-            (r) => r.folderId === '' && r.status === 'pending' && r.userId === access.me.userId,
+            (r) => r.resourcePath === requestPath && r.status === 'pending' && r.userId === access.me.userId,
           ),
-        ),
-      )
-      .catch(() => setRequestPending(false))
-  }, [gatedOut, communityId, access])
+        )
+      })
+      .catch(() => {
+        if (!stale) setRequestPending(false)
+      })
+    return () => { stale = true }
+  }, [communityId, isPersonalSpace, requestPath, access])
 
-  const requestAccess = async () => {
+  const requestAccess = async (message?: string) => {
     if (!communityId) return
     setRequesting(true)
     setError(null)
     try {
-      await notesApi.requestJoin(communityId, '')
+      await notesApi.requestAccess(communityId, requestPath, message)
       setRequestPending(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request access')
@@ -241,6 +253,29 @@ export function EntityContextPanel({
       }
     },
     [communityId],
+  )
+
+  // Turn one unlinked reference into a real link. The write lands on the SOURCE
+  // note, so its caches are the ones to drop; the route hands back this note's
+  // refreshed references. Errors bubble to the reference's own inline slot.
+  const handleLinkMention = useCallback(
+    async (ref: UnlinkedReference) => {
+      if (!communityId || !path) return
+      const { references: refs } = await notesApi.linkMention(
+        communityId,
+        path,
+        ref.fromPath,
+        ref.offset,
+      )
+      setReferences(refs)
+      invalidateContextCache(
+        contextKeys.read(communityId, ref.fromPath),
+        contextKeys.references(communityId, ref.fromPath),
+        contextKeys.references(communityId, path),
+        contextKeys.list(communityId),
+      )
+    },
+    [communityId, path],
   )
 
   // Links inside the note: another entity → that entity's Context tab; a
@@ -356,13 +391,15 @@ export function EntityContextPanel({
   // pages gate the tab on the same condition; this is the backstop.)
   if (node.community_id && node.community_id !== communityId) return null
 
-  if (gatedOut) {
+  if (gatedOut || deniedPath) {
     return (
       <div className="flex justify-center py-10">
-        <BrainGateCard
+        <AccessRequestCard
+          scope={gatedOut ? 'brain' : 'path'}
           communityName={currentCommunity?.name ?? 'this community'}
           pending={requestPending}
           requesting={requesting}
+          error={error}
           onRequest={requestAccess}
         />
       </div>
@@ -442,7 +479,7 @@ export function EntityContextPanel({
         <div className="mt-1.5">
           <span className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-semibold text-white"
                 style={{ background: theme.base }}>
-            {node.alias ?? node.type}
+            {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
           </span>
         </div>
       </div>
@@ -536,6 +573,7 @@ export function EntityContextPanel({
             onEnsureEntityNote={ensureEntityNote}
             onSave={handleSave}
             onOpenNote={handleOpenNote}
+            onLinkMention={handleLinkMention}
           />
         </>
       ) : (

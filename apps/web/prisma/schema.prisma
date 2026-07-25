@@ -49,6 +49,7 @@ model Community {
   tasks            Task[]
   teams            Team[]
   brainGrants      BrainGrant[]
+  accessRequests   BrainAccessRequest[]
   publicationsOut  NotePublication[]        @relation("PublicationSource")
   publicationsIn   NotePublication[]        @relation("PublicationTarget")
 
@@ -204,6 +205,32 @@ model BrainGrant {
   @@unique([communityId, subjectType, subjectId, resourcePath], name: "grant_identity")
   @@index([communityId, subjectType, subjectId])
   @@map("brain_grants")
+}
+
+/// A member's request for access to part of a community's SHARED brain, filed
+/// from whatever surface denied them (`resourcePath` '' = the brain root gate, a
+/// folder, or a single note path — the path is recorded even when it doesn't
+/// exist, so the denial copy never has to admit whether it does). Whoever
+/// MANAGES that path resolves it: approval writes a BrainGrant at exactly the
+/// requested path (lib/notes/accessRequests.ts). Resolved rows are kept as the
+/// audit trail behind Console → People & access → Requests.
+model BrainAccessRequest {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId  String    @map("community_id")
+  userId       String    @map("user_id")
+  resourcePath String    @default("") @map("resource_path") // '' = brain root
+  level        Int       @default(10) // the level asked for (10 view · 20 comment · 30 edit · 40 full)
+  message      String?
+  status       String    @default("pending") // 'pending' | 'approved' | 'denied'
+  createdAt    DateTime  @default(now()) @map("created_at")
+  resolvedBy   String?   @map("resolved_by")
+  resolvedAt   DateTime? @map("resolved_at")
+  grantedLevel Int?      @map("granted_level") // what the resolver actually gave
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@index([communityId, status])
+  @@index([userId])
+  @@map("brain_access_requests")
 }
 
 /// A live publish link between two brains: the source note stays owned by its

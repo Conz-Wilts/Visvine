@@ -197,6 +197,24 @@ export function findAlias(
   return aliasesForType(aliases, type).find((a) => a.name === name);
 }
 
+/**
+ * The label for a node's type chip. `Node.alias` only counts as a community
+ * alias when the community actually configures one by that name for the node's
+ * type — events reuse the same column for their public /e/<slug> slug, which
+ * must never surface as a type label. Anything unrecognised falls back to the
+ * canonical type name ("Event", "Group", …).
+ */
+export function nodeTypeLabel(
+  type: string | null | undefined,
+  alias: string | null | undefined,
+  aliases: CommunityAlias[] | undefined,
+  nodeTypes?: NodeTypeConfig[],
+): string {
+  const t = type ?? '';
+  if (!t) return alias ?? '';
+  return findAlias(aliases, alias, t)?.name ?? getNodeTypeConfig(t, nodeTypes).name;
+}
+
 // Canonical relationship (edge) types and their default colours. A community
 // overrides these via `linkTypes`; this is the seeded fallback. The `system`
 // types back the auto-link flows (RSVP/event/intro/context-note mentions) and

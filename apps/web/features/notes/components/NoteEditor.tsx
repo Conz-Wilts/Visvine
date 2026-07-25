@@ -11,6 +11,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
+import { getMarkRange } from '@tiptap/core'
+import { TextSelection, type EditorState } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -38,7 +40,7 @@ import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/
 import { timeAgo } from '@/lib/date'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
-import type { NoteMeta, References } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
 
@@ -67,6 +69,10 @@ interface NoteEditorProps {
   onSave: (path: string, content: string, origin?: string) => void
   onOpenNote: (path: string) => void
   onOpenTag?: (tag: string) => void
+  // Turn one unlinked reference into a real link (writes the SOURCE note). Only
+  // offered when the viewer can edit; the source note's own gate still applies
+  // server-side, so a denial surfaces inline on the reference.
+  onLinkMention?: (ref: UnlinkedReference) => Promise<void>
   // Layout variant:
   //  - 'floating' (default): the /context-era full-bleed layout — the note is
   //    its own scroll surface bleeding up behind the navbar, toolbar pinned at
@@ -88,6 +94,15 @@ interface NoteEditorProps {
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
 function getMarkdown(ed: Editor): string {
   return (ed.storage as unknown as MarkdownStorage).markdown.getMarkdown()
+}
+
+// The document range of the link covering `pos`, or null when `pos` isn't inside
+// one. Links are plain marks in the doc; this is what lets the editor treat them
+// as a single unit for clicking and deleting.
+function linkRangeAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const type = state.schema.marks.link
+  if (!type) return null
+  return getMarkRange(state.doc.resolve(pos), type) ?? null
 }
 
 function buildPrefix(frontmatter: string | null): string {
@@ -129,6 +144,7 @@ export function NoteEditor({
   onSave,
   onOpenNote,
   onOpenTag,
+  onLinkMention,
   variant = 'floating',
   headerSlot,
   toolbarTrailSlot,
@@ -218,6 +234,34 @@ export function NoteEditor({
         const c = innerView.coordsAtPos(from)
         setLinkAnchor({ left: c.left, top: c.top, bottom: c.bottom })
         setLinkPickerOpen(true)
+        return true
+      },
+      // A link reads as one unit, so the caret never lands inside its text:
+      // pressing down on a link parks the caret just after it instead. Handled on
+      // mousedown (not click) so the browser never paints a mid-word caret first.
+      handleDOMEvents: {
+        mousedown: (view, event) => {
+          if (event.button !== 0) return false
+          if (!(event.target as HTMLElement).closest('a')) return false
+          const found = view.posAtCoords({ left: event.clientX, top: event.clientY })
+          const range = found ? linkRangeAt(view.state, found.pos) : null
+          if (!range) return false
+          event.preventDefault()
+          view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, range.to)))
+          if (view.editable) view.focus()
+          return true
+        },
+      },
+      // Backspace at a link's trailing edge removes the whole link, matching the
+      // caret rule above — a link is deleted as a unit, not a character at a time.
+      handleKeyDown: (view, event) => {
+        if (event.key !== 'Backspace' || !view.editable) return false
+        const { selection } = view.state
+        if (!selection.empty) return false
+        const pos = selection.from
+        const range = pos > 0 ? linkRangeAt(view.state, pos - 1) : null
+        if (!range || range.to !== pos) return false
+        view.dispatch(view.state.tr.delete(range.from, range.to))
         return true
       },
       handleClickOn: (_v, _pos, _node, _np, event) => {
@@ -549,7 +593,12 @@ export function NoteEditor({
 
       {mode === 'wysiwyg' && (
         <>
-          <LinkedReferences references={references} title={noteTitle} onOpenNote={onOpenNote} />
+          <LinkedReferences
+            references={references}
+            title={noteTitle}
+            onOpenNote={onOpenNote}
+            onLinkMention={canEdit ? onLinkMention : undefined}
+          />
           {meta && (
             <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
               {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}

@@ -22,6 +22,7 @@ export interface UnlinkedReference {
   fromTitle: string
   date: number // the source note's last-modified time (epoch ms)
   excerpt: string // the full containing block, link syntax stripped to display text
+  offset: number // character offset of the mention within the source note's BODY
 }
 
 export interface References {
@@ -110,8 +111,38 @@ export function linkFirstMention(body: string, title: string, targetPath: string
   const re = new RegExp(`(?<![\\w])${escapeRegExp(title)}(?![\\w])`, 'i')
   const match = re.exec(maskLinks(body))
   if (!match) return null
-  const start = match.index
-  return body.slice(0, start) + `[${title}](/${targetPath})` + body.slice(start + match[0].length)
+  return spliceLink(body, match.index, match[0].length, targetPath)
+}
+
+// Turn the mention at exactly `offset` (a body offset, as carried by
+// UnlinkedReference) into a link — so linking the reference the user clicked
+// doesn't silently link a different, earlier mention. Returns null when the
+// offset no longer holds an eligible plain-text mention (the note changed under
+// us, or that mention has since been linked), letting the caller fall back to
+// linkFirstMention.
+export function linkMentionAt(
+  body: string,
+  title: string,
+  targetPath: string,
+  offset: number
+): string | null {
+  if (title.trim().length < MIN_TITLE_LEN) return null
+  const end = offset + title.length
+  if (!Number.isInteger(offset) || offset < 0 || end > body.length) return null
+  // Test against the MASKED body: an offset that now sits inside a link span is
+  // masked to spaces, so it fails here rather than corrupting the link.
+  const masked = maskLinks(body)
+  if (masked.slice(offset, end).toLowerCase() !== title.toLowerCase()) return null
+  // Whole-word on both edges, mirroring the lookarounds used to find mentions.
+  if (/\w/.test(masked[offset - 1] ?? '') || /\w/.test(masked[end] ?? '')) return null
+  return spliceLink(body, offset, title.length, targetPath)
+}
+
+// Replace [start, start+length) with an OKF link, keeping the mention's own
+// wording/casing as the link text.
+function spliceLink(body: string, start: number, length: number, targetPath: string): string {
+  const text = body.slice(start, start + length)
+  return body.slice(0, start) + `[${text}](/${targetPath})` + body.slice(start + length)
 }
 
 export function computeReferences(
@@ -153,11 +184,15 @@ export function computeReferences(
       const masked = maskLinks(body)
       const seenUnlinked = new Set<string>()
       for (const match of masked.matchAll(titleRe)) {
-        const block = blockAround(body, match.index ?? 0)
+        const offset = match.index ?? 0
+        const block = blockAround(body, offset)
         const excerpt = makeExcerpt(block)
         if (excerpt && !seenUnlinked.has(excerpt)) {
           seenUnlinked.add(excerpt)
-          unlinked.push({ fromPath: note.path, fromTitle, date: note.mtime, excerpt })
+          // `offset` is a BODY offset — maskLinks preserves length, so masked
+          // indices map 1:1 onto the real body. It lets the UI link exactly the
+          // mention shown rather than the note's first one.
+          unlinked.push({ fromPath: note.path, fromTitle, date: note.mtime, excerpt, offset })
         }
       }
     }

@@ -14,7 +14,7 @@ import type {
   ReorganizePlan,
 } from '@/lib/notes/shared/types'
 import type {
-  JoinRequest,
+  AccessRequest,
   MoveProposalEntry,
   AuditEntry,
 } from '@/lib/notes/shared/brainTypes'
@@ -177,6 +177,15 @@ export const notesApi = {
 
   references: (c: string, path: string) =>
     getJson<{ references: References }>(`/api/notes/references?${qs(c, { path })}`),
+  /** Turn one unlinked mention of `path` (found in `fromPath` at `offset`) into a
+   *  real link. Returns `path`'s refreshed references. */
+  linkMention: (c: string, path: string, fromPath: string, offset: number) =>
+    sendJson<{ ok: true; references: References }>('/api/notes/references', 'POST', {
+      communityId: c,
+      path,
+      fromPath,
+      offset,
+    }),
 
   history: (c: string, path: string) =>
     getJson<{ revisions: NoteRevision[] }>(`/api/notes/history?${qs(c, { path })}`),
@@ -267,21 +276,25 @@ export const notesApi = {
       id,
     }),
 
-  listJoinRequests: (c: string) =>
-    getJson<{ requests: JoinRequest[] }>(
-      `/api/notes/join-requests?communityId=${encodeURIComponent(c)}`,
+  /** Own requests + every request for a path the caller manages, newest first. */
+  listAccessRequests: (c: string) =>
+    getJson<{ requests: AccessRequest[]; pending: number }>(
+      `/api/notes/access-requests?communityId=${encodeURIComponent(c)}`,
     ),
-  requestJoin: (c: string, folderId: string, message?: string) =>
-    sendJson<{ request: JoinRequest }>('/api/notes/join-requests', 'POST', {
+  /** Ask for access to `resourcePath` ('' = the brain root gate). Idempotent. */
+  requestAccess: (c: string, resourcePath: string, message?: string) =>
+    sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'POST', {
       communityId: c,
-      folderId,
+      resourcePath,
       message,
     }),
-  resolveJoinRequest: (c: string, requestId: string, approve: boolean) =>
-    sendJson<{ request: JoinRequest }>('/api/notes/join-requests', 'PUT', {
+  /** Approve (granting `level`, default = what was asked for) or deny. */
+  resolveAccessRequest: (c: string, requestId: string, approve: boolean, level?: AccessLevelName) =>
+    sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'PUT', {
       communityId: c,
       requestId,
       approve,
+      level,
     }),
 
   /** One-time share: copies `fromPath` from the CALLER's personal brain into the

@@ -72,24 +72,36 @@ export interface FoldersConfig {
 
 export const EMPTY_REGISTRY: FoldersConfig = { version: 1, folders: [] }
 
-// --- sidecar record shapes ----------------------------------------------------
+// --- access requests ----------------------------------------------------------
 
 /**
- * A pending request to join a restricted folder (sidecar "join-requests.jsonl").
- * `folderId` is a folder path at any depth; '' = the brain root (brain access).
+ * A member's request for access to part of the SHARED brain (table
+ * `brain_access_requests`). `resourcePath` is '' for the brain root gate, or a
+ * folder/note path at any depth — recorded even when nothing exists there, so
+ * the denial copy never has to admit whether it does. Whoever MANAGES the path
+ * resolves it; see lib/notes/accessRequests.ts.
  */
-export interface JoinRequest {
+export interface AccessRequest {
   id: string
-  folderId: string
+  resourcePath: string
   userId: string
-  name: string
-  email?: string
+  /** Level asked for (always view today — the resolver picks what to grant). */
+  level: number
   message?: string
   requestedAt: number // epoch ms
   status: 'pending' | 'approved' | 'denied'
   resolvedBy?: string // userId
   resolvedAt?: number
+  /** What the resolver actually granted (approved rows only). */
+  grantedLevel?: number
+  // Display snapshots hydrated for the admin queue (identity is userId).
+  requesterName?: string
+  requesterEmail?: string
+  requesterImage?: string
+  resolvedByName?: string
 }
+
+// --- sidecar record shapes ----------------------------------------------------
 
 /** A queued promotion/publication the requester couldn't apply directly (sidecar "move-proposals.jsonl"). */
 export interface MoveProposalEntry {
