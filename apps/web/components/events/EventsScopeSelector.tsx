@@ -2,7 +2,7 @@
 
 /**
  * Scope tabs for the Events page (Discover / Community / My events). Uses the
- * shared UnderlineTabs so it matches the Directory's Grid / Graph / Tables
+ * shared UnderlineTabs so it matches the Directory's Grid / Context
  * switcher — sliding green underline, brand text colors.
  */
 

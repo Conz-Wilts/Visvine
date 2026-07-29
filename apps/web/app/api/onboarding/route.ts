@@ -118,7 +118,7 @@ export async function PATCH(req: NextRequest) {
       },
     });
     logger.info('api.onboarding.node.upserted', { id: person.id, imageUrl: nodeUpdate.imageUrl });
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
   }
 
   return NextResponse.json(updated);
@@ -143,9 +143,9 @@ export async function POST() {
     email: session.email,
   });
 
-  // The user's person node was just placed in their space — bust the graph cache
+  // The user's person node was just placed in their space — bust the context cache
   // so their directory isn't empty on first load.
-  revalidateTag('graph-data-v2');
+  revalidateTag('context-data-v2');
 
   return NextResponse.json({ ok: true, communityId });
 }

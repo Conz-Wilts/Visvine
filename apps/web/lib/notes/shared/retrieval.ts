@@ -1,9 +1,9 @@
 // The fused search stack, ported from blackbird-brain's src/shared/retrieval.ts:
-// frontmatter/tag filter → BM25 → optional vector stage → link-graph neighborhood
+// frontmatter/tag filter → BM25 → optional vector stage → link-context neighborhood
 // expansion, combined with Reciprocal-Rank Fusion. Pure — the visibility lens
 // (shared/visibility.ts) is applied by the caller BEFORE candidates are assembled,
 // so nothing inaccessible can rank. The vector stage is injected (pgvector-backed
-// on the server, absent in tests) and degrading it to [] leaves BM25 + graph.
+// on the server, absent in tests) and degrading it to [] leaves BM25 + context.
 
 import type { NoteMeta } from './types'
 import { bm25Search } from './bm25'
@@ -58,7 +58,7 @@ export interface SourceStage {
 /**
  * The embeddings stage: ranks docs by semantic similarity to the query. `mtime`
  * lets the stage key its cache; a stage returning [] contributes nothing to the
- * fusion (BM25 + graph carry the search).
+ * fusion (BM25 + context carry the search).
  */
 export interface VectorStage {
   rank(
@@ -73,7 +73,7 @@ export interface FuseOptions {
   /** Rank context-source chunks alongside notes (BM25 does not cover sources). */
   sources?: SourceStage
   /** Expand the top BM25 hits with their link neighborhood (default true). */
-  graphExpand?: boolean
+  contextExpand?: boolean
 }
 
 const RRF_K = 60
@@ -101,7 +101,7 @@ function rankMap(paths: string[]): Map<string, number> {
 /**
  * Run the fused stack over the given (already visibility-filtered) notes.
  * Returns the top-k notes, RRF-fused across BM25, an optional vector stage, and
- * a graph-neighborhood expansion of the strongest text hits.
+ * a context-neighborhood expansion of the strongest text hits.
  */
 export async function fusedSearch(
   notes: RetrievalNote[],
@@ -145,7 +145,7 @@ export async function fusedSearch(
     if (hits.length) stages.push(rankMap(hits.map((h) => `source:${h.path}#${h.seq}`)))
   }
 
-  if (opts.graphExpand !== false) {
+  if (opts.contextExpand !== false) {
     const seed = bm25.slice(0, GRAPH_SEED).map((r) => r.path)
     const seen = new Set(seed)
     const neighbors: string[] = []

@@ -83,7 +83,9 @@ export default function CreateModal() {
   const gridOptions = TYPE_OPTIONS.filter((o) => {
     if (!o.inGrid) return false;
     if (o.id === 'channel' || o.id === 'space') return channelsEnabled && isAdmin;
-    if (o.id === 'context' || o.id === 'file') return notesEnabled;
+    // `context` never reaches here (inGrid: false) — File is the only brain tile
+    // in the grid, so this gate is just the notes feature flag.
+    if (o.id === 'file') return notesEnabled;
     return true;
   });
 
@@ -113,8 +115,8 @@ export default function CreateModal() {
   const [resourceData, setResourceData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [eventData, setEventData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
-  const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
-  const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '' });
+  const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
+  const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
   // Where the just-created note/file lives, so the success screen can offer to
@@ -213,8 +215,8 @@ export default function CreateModal() {
     setResourceData({ name: '', subtitle: '', location: '', tags: '' });
     setEventData({ name: '', subtitle: '', location: '', tags: '' });
     setCommunityData({ name: '', description: '', location: '', visibility: 'public' });
-    setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '' });
-    setSpaceData({ name: '' });
+    setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
+    setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
     setFileData({ files: [], folder: '' });
     setCreatedHref(null);
@@ -354,6 +356,7 @@ export default function CreateModal() {
         icon: channelData.icon ?? undefined,
         spaceId: channelData.spaceId || undefined,
         viewMode: channelData.viewMode,
+        context: channelData.context.trim() || undefined,
       }),
     });
     if (!res.ok) {
@@ -369,7 +372,11 @@ export default function CreateModal() {
     const res = await fetch('/api/messages/spaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ communityId: currentCommunity.id, name: spaceData.name.trim() }),
+      body: JSON.stringify({
+        communityId: currentCommunity.id,
+        name: spaceData.name.trim(),
+        context: spaceData.context.trim() || undefined,
+      }),
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -712,7 +719,7 @@ export default function CreateModal() {
             )}
             {step === 1 && selectedType === 'resource' && (
               <div>
-                <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} />
+                <EventForm data={resourceData} onChange={setResourceData} nameRef={nameRef} entityDir="resources" />
                 <div className="mt-5 pt-5 border-t border-border-subtle">
                   <MatchPanel
                     results={resourceSearch.results}

@@ -38,7 +38,7 @@ Every tool runs `withCtx(extra, scope, …)`:
 - **Community/role gate** — tools call the app's existing API routes **as the user** (a
   short-lived session JWT minted from the token identity in `lib/mcp/apiClient.ts`), so
   `isAdmin` / `assertCrmPermission` / `requireCommunityMember` / `requireEventManager` run
-  unchanged. For routes that are only session-gated (graph/CRM-value/feed/analytics reads), the
+  unchanged. For routes that are only session-gated (context/CRM-value/feed/analytics reads), the
   tool additionally calls `assertMember(ctx, communityId)` so cross-community data can't leak.
   The client-supplied `community_id` is always paired with a live membership lookup keyed on the
   token's `userId`.

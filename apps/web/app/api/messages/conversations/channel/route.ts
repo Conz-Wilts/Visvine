@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       parsed.data.icon,
       parsed.data.spaceId,
       parsed.data.viewMode,
+      parsed.data.context,
     );
 
     return NextResponse.json({ conversation }, { status: 201 });

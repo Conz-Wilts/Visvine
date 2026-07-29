@@ -31,7 +31,7 @@ export { isForeignPersonalSpace };
  * / 404). Unknown communities return false — the caller's own not-found/empty
  * handling takes over. Use this on every endpoint that returns or mutates
  * community-scoped data by `communityId`, since a personal space's directory and
- * graph would otherwise be readable by any authenticated user.
+ * context would otherwise be readable by any authenticated user.
  */
 export async function communityReadForbidden(
   userId: string,
@@ -45,7 +45,7 @@ export async function communityReadForbidden(
 }
 
 /**
- * DB-backed guard for directory/graph reads: returns true when the community's
+ * DB-backed guard for directory/context reads: returns true when the community's
  * directory is marked admins-only (`featureConfig.directoryPrivate`) and the
  * caller is not an admin of it. Unknown communities return false — the caller's
  * own not-found/empty handling takes over.

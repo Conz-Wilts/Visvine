@@ -32,7 +32,7 @@ I mapped the codebase before designing anything, and the good news is that Visvi
 |---|---|---|
 | Folder-level access levels (`read` / `write` / `admin`) with public/private visibility, per top-level folder | `lib/notes/registry.ts`, stored in the `folders.json` sidecar (`CommunityBrainFile`) | **Keep the semantics, promote to a real table** so grants are queryable and can target teams |
 | The "brain gate": community brains are private by default; a root registry entry gates the whole brain and grandfathers members on first touch | `ensureBrainGate` in `registry.ts` | Keep — this becomes the root-folder grant row |
-| Visibility lens: unreadable notes are filtered out *before* the index, graph, search, and backlinks are built, so titles never leak | `lib/notes/shared/visibility.ts`, `vaultView.ts` | Keep unchanged — this is exactly the right architecture and the reason nothing leaks into search or the graph |
+| Visibility lens: unreadable notes are filtered out *before* the index, context, search, and backlinks are built, so titles never leak | `lib/notes/shared/visibility.ts`, `vaultView.ts` | Keep unchanged — this is exactly the right architecture and the reason nothing leaks into search or the context |
 | Personal spaces: every user has a `me:userId` community whose shared brain is their personal brain; `personalOwnerId` hard-isolates it | `lib/onboarding/personalCommunity.ts`, `lib/communities/personalSpace.ts` | Keep — personal brains stay owner-only and never folder-gated |
 | Promote: one-time copy of a note from personal brain → community brain, with provenance and a proposal queue when you can't write the destination | `lib/notes/promote.ts` | Keep as "publish a copy"; extend into live publish (§7) |
 | Audited reads of private folders, join requests for private folders | `brainService.ts`, `joinRequests.ts` | Keep; audit gets richer once grants are rows |
@@ -70,7 +70,7 @@ Replacing today's three registry levels with four, matching what people expect f
 
 | Level | Means |
 |---|---|
-| **view** | read the note, see it in graph & search |
+| **view** | read the note, see it in context & search |
 | **comment** | view + discuss (future-proofing) |
 | **edit** | comment + write, create, move within |
 | **full** | edit + share, restrict, delete the subtree |
@@ -110,7 +110,7 @@ Reading that example: every member can *view* `strategy/2026-plan.md` (root gran
 
 ### Performance: no per-note checks in lists
 
-The trap in every ACL system is checking notes one at a time when rendering a list, search result, or graph. The design avoids it the same way the current visibility lens does: fetch the user's grant set once (a few rows), reduce it to a list of "readable subtree roots minus restricted cuts," then filter the whole vault in one pass with path-prefix matching. The existing `filterVisible` → index → graph → search pipeline keeps working unchanged — only the function that decides "can this principal read this path" gets smarter.
+The trap in every ACL system is checking notes one at a time when rendering a list, search result, or context. The design avoids it the same way the current visibility lens does: fetch the user's grant set once (a few rows), reduce it to a list of "readable subtree roots minus restricted cuts," then filter the whole vault in one pass with path-prefix matching. The existing `filterVisible` → index → context → search pipeline keeps working unchanged — only the function that decides "can this principal read this path" gets smarter.
 
 ## 6. Teams and team subtrees
 
@@ -141,8 +141,8 @@ The question "I keep context in my personal brain — how do I sync it to my com
 | Option | How it works | Verdict |
 |---|---|---|
 | **Copy** | Duplicate the note across (today's promote) | Fine, but diverges the moment you edit — keeps being a papercut |
-| **Reference** | Company brain stores a pointer; reads resolve into your personal community | **Rejected.** Every read path — search, graph, backlinks, embeddings, mobile — would need cross-tenant logic. This is precisely the leak class the `personalOwnerId` guard exists to prevent |
-| **Publish** | Source of truth stays in your brain; a live replica exists as a *real note row* in the company brain, refreshed on every save | **Recommended.** The replica is community-owned data, so every existing system — visibility lens, search, [[mention]] link sync, graph, mobile API — works on it with zero changes |
+| **Reference** | Company brain stores a pointer; reads resolve into your personal community | **Rejected.** Every read path — search, context, backlinks, embeddings, mobile — would need cross-tenant logic. This is precisely the leak class the `personalOwnerId` guard exists to prevent |
+| **Publish** | Source of truth stays in your brain; a live replica exists as a *real note row* in the company brain, refreshed on every save | **Recommended.** The replica is community-owned data, so every existing system — visibility lens, search, [[mention]] link sync, context, mobile API — works on it with zero changes |
 
 ```mermaid
 sequenceDiagram
@@ -166,7 +166,7 @@ The rules that keep it sane:
 - **One-way, by design.** The replica is read-only in the destination (its editor shows "Published from Connor's brain — suggest a change or unlink"). Two-way sync is a merge-conflict project with little payoff; if the team needs to own the note, they unlink it and it becomes a normal copy.
 - **Publishing requires edit rights at the destination folder** — otherwise it queues through the existing move-proposal approval, same as promote today.
 - **Access is governed entirely by the destination.** Once published into `research/`, whoever can read `research/` can read the replica. Your personal grants never leak across; unpublishing or deleting the source deactivates the replica (kept as a copy, clearly marked stale).
-- **[[Mentions]] re-resolve per brain.** The replica's entity mentions sync links into the *company's* directory graph via the existing `syncContextLinks` hook — which is exactly what you want: publishing context enriches the company graph.
+- **[[Mentions]] re-resolve per brain.** The replica's entity mentions sync links into the *company's* directory context via the existing `syncContextLinks` hook — which is exactly what you want: publishing context enriches the company context.
 - Works community-to-community too (e.g. your VC community brain → a portfolio company's brain) with the same mechanism — personal → company is just the common case.
 
 > **Why this is safe:** No read path ever crosses a community boundary. The only cross-tenant motion is a *write*, at save time, through one choke point that stamps provenance and respects destination permissions. One function to secure, one function to audit.
@@ -259,7 +259,7 @@ Their community/team grants stop matching instantly. Direct grants to them in th
 It immediately adopts the destination's access — path is the single source of truth, so a move *is* a permission change. The move UI warns when a move would widen or narrow the audience ("this note will become visible to everyone in Acme"). The existing `moveGated` already checks both ends; it keeps doing so.
 
 **Links pointing into a folder I can't read?**
-Exactly as today: the visibility lens runs before link resolution, so the link renders as unresolved — no title leak, in graph, backlinks, or search.
+Exactly as today: the visibility lens runs before link resolution, so the link renders as unresolved — no title leak, in context, backlinks, or search.
 
 **What about the entity context notes (people/, companies/)?**
 They follow the same rules — they're just notes in folders. If a community wants member profiles readable by all but editable by admins, that's one grant pair on `people/`. Restricting them also hides the corresponding context tabs, consistently, because profile tabs read through the same lens.

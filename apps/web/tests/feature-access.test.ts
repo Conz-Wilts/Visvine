@@ -39,7 +39,7 @@ describe('isFeatureEnabled', () => {
 
   it('hides messages and notes from the nav rail and console toggles', () => {
     assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages', 'notes']);
-    // notes ("Context") is now core: surfaced as the Graph tab under the
+    // notes ("Context") is now core: surfaced as the Context tab under the
     // Directory, always on, and can never be persisted off.
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
     assert.equal(isFeatureEnabled({ enabled: { notes: false } }, 'notes'), true);

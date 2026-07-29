@@ -65,7 +65,7 @@ export async function getMyCommunities(ctx: McpContext): Promise<MyCommunities> 
 /**
  * Hard tenant boundary: throws 403 unless the caller is a member of
  * `communityId` (super-admins bypass, matching the routes). Use at the top of
- * tools whose backing route is only session-gated (graph reads, node/profile
+ * tools whose backing route is only session-gated (context reads, node/profile
  * lookups, search, feed, analytics) so cross-community data can never leak.
  * Route-gated tools (events/CRM) may also call this for a clearer error, but
  * rely on the route as the source of truth.

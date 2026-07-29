@@ -5,16 +5,8 @@ import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden }
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
-import { tryResolveIdentity, confirmIdentity, type ResolveResult } from '@/lib/identity/resolve';
-import type { IdentityKind } from '@/lib/identity/match';
-
-/** Which canonical-identity kind (if any) a node type participates in. */
-function identityKindFor(type: string): IdentityKind | null {
-  const t = type.toLowerCase();
-  if (t === 'person' || t === 'people') return 'person';
-  if (t === 'organization' || t === 'organisation' || t === 'org' || t === 'group') return 'organization';
-  return null;
-}
+import { attachIdentity } from '@/lib/identity/attachIdentity';
+import { ensureEntityNote } from '@/lib/context/entityNodes';
 
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
@@ -105,35 +97,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Resolve the canonical cross-community identity (people/orgs only) ──
-    const kind = identityKindFor(node.type);
-    const meta = (node.metadata as Record<string, unknown>) ?? {};
-    let identityId: string | null = null;
-    let resolution: ResolveResult | null = null;
-
-    if (kind) {
-      if (identity_id) {
-        // Honour the explicit pick from the finder if it exists.
-        const chosen = await prisma.identity.findFirst({ where: { id: identity_id, kind }, select: { id: true } });
-        if (chosen) {
-          identityId = chosen.id;
-          await confirmIdentity(node.id, chosen.id, { actorUserId: session?.userId ?? null, reason: 'picked from finder' });
-        }
-      }
-      if (!identityId) {
-        resolution = await tryResolveIdentity(node.id, {
-          kind,
-          name: node.name,
-          // Only EXPLICIT signals feed matching — never coerce subtitle into a
-          // company, which would risk auto-merging two same-named people.
-          email: kind === 'person' ? ((meta.email as string) ?? null) : null,
-          linkedinUrl: (meta.linkedinUrl as string) ?? null,
-          website: kind === 'organization' ? (((meta.website as string) ?? (meta.url as string) ?? node.url) ?? null) : null,
-          company: kind === 'person' ? ((meta.companyName as string) ?? null) : null,
-          location: node.location ?? null,
-        }, { actorUserId: session?.userId ?? null });
-        identityId = resolution?.identityId ?? null;
-      }
-    }
+    const { identityId, resolution } = await attachIdentity(node, {
+      identityId: identity_id,
+      actorUserId: session?.userId ?? null,
+    });
 
     const row = await prisma.node.create({
       data: {
@@ -154,7 +121,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    revalidateTag('graph-data-v2');
+    // Every node gets its canonical context note, including ones added from the
+    // admin Data tab — otherwise the same person exists in the graph but not in
+    // the brain depending on which surface created them.
+    await ensureEntityNote(
+      community_id,
+      { id: row.id, type: row.type, name: row.name, subtitle: row.subtitle },
+      {
+        tags: row.tags,
+        actor: session ? { id: session.userId, name: session.name, email: session.email } : null,
+      },
+    );
+
+    revalidateTag('context-data-v2');
     // `resolution` lets the client surface possible-match suggestions (Tier C) for
     // inline confirmation; null when the type has no identity or an explicit pick won.
     return NextResponse.json({ node: nodeRowToNBNode(row), resolution }, { status: 201 });
@@ -214,7 +193,7 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
     return NextResponse.json({ node: nodeRowToNBNode(row) });
   } catch (err) {
     return handleApiError(err, 'api.data.nodes.put.failed');
@@ -241,7 +220,7 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.node.deleteMany({ where: { id, communityId } });
 
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, 'api.data.nodes.delete.failed');

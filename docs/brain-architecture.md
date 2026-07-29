@@ -10,7 +10,7 @@
 
 Every community in Visvine has exactly **one brain**: a store of markdown notes
 with YAML frontmatter, connected by standard OKF markdown links
-(`[text](/path.md)`), explorable as a force-directed graph, with backlinks,
+(`[text](/path.md)`), explorable as a force-directed context, with backlinks,
 related-notes, revision history, trash, pins, and AI assist. A brain is the
 `ownerKey='shared'` row-space of `(communityId, ownerKey)`.
 
@@ -50,7 +50,7 @@ your personal space (me:<userId> community) ← your whole private brain;
 | Directory-entity ↔ note bridge (`people/<slug>.md`) | Visvine (`lib/notes/entities.ts`) | unchanged |
 | Folder permission tree (levels, visibility, registry) | blackbird (`permissions.ts`, `visibility.ts`, `folders.ts`) | members keyed by **userId** (not email); registry in DB sidecar; **unregistered folders stay open** (see §4) |
 | Principal-gated service core ("one door") | blackbird (`brainService.ts`) | re-based on Prisma store; REST + MCP + maintenance all share it |
-| Fused retrieval (BM25 → vector → graph, RRF) | blackbird (`retrieval.ts`, `search.ts`) | vector stage re-backed by **pgvector** (was a JSON sidecar) |
+| Fused retrieval (BM25 → vector → context, RRF) | blackbird (`retrieval.ts`, `search.ts`) | vector stage re-backed by **pgvector** (was a JSON sidecar) |
 | Embeddings (`gemini-embedding-001`, 768-dim) | blackbird (`embeddings.ts`) | same OpenAI-compatible endpoint config as Visvine's existing `lib/notes/ai.ts` |
 | Join requests, promotion proposals, read audit | blackbird (`joinRequests.ts`, `brainAudit.ts`) | JSONL records in the DB sidecar |
 | Quick capture + `## Log` stamping | blackbird (`capture.ts`, `contextLog.ts`) | personal log at `log/YYYY-MM.md` |
@@ -113,7 +113,7 @@ registry shape in `shared/brainTypes.ts`.
   user triggers it **over their own personal space**, writing into the chosen
   community through the gate *as them* (one enrichment ledger per target
   community).
-- The **visibility lens** (`filterVisible`) is applied *before* index/graph/
+- The **visibility lens** (`filterVisible`) is applied *before* index/context/
   search construction, so a link into a folder you can't read degrades into an
   unresolved link — titles never leak. Reads of private-folder notes are
   recorded to `audit.jsonl`.
@@ -141,9 +141,9 @@ never implicit):
    whole-note embeddings; stale notes embed lazily (≤100/query, one round-trip
    with the query embedding); relative floor 0.85 keeps noise out of fusion;
    any failure/unconfigured key returns `[]`.
-4. **Graph expansion** — link neighborhood of the top BM25 hits.
+4. **Context expansion** — link neighborhood of the top BM25 hits.
 
-Stages fuse by Reciprocal-Rank Fusion (k=60). No key configured → BM25 + graph,
+Stages fuse by Reciprocal-Rank Fusion (k=60). No key configured → BM25 + context,
 silently.
 
 ## 7. Knowledge flows
@@ -172,7 +172,7 @@ silently.
 ## 7b. Context Sources (non-note knowledge)
 
 Uploaded files/tables (v1: csv, md, txt; ≤5 MB) attached to a brain **without
-becoming graph Nodes** — they live only in the Context. A source is keyed
+becoming context Nodes** — they live only in the Context. A source is keyed
 `(communityId, ownerKey, path)` exactly like a note (`deals/pricing.csv`), so
 the folder gate, visibility lens, and read audit govern it unchanged; `.md`
 uploads are stored as `.markdown` to keep the note namespace disjoint.
@@ -253,6 +253,6 @@ reads, folder governance, and promotions.
 - **Orphan check flags root/index notes too** — any note with zero backlinks is
   reported, including a vault's own entry note.
 - **Vector stage requires an embeddings key** — without `GEMINI_API_KEY`/
-  `GEMMA_*`, search silently runs BM25 + graph only (by design).
+  `GEMMA_*`, search silently runs BM25 + context only (by design).
 - **Review/enrichment are on-demand** — schedule them by hitting the routes
   from an external cron if desired.

@@ -148,7 +148,7 @@ function EventsPageInner() {
   return (
     <div className="relative w-full">
       {/* View switcher pinned flush in the top-left corner — identical treatment
-          to the Directory's Grid / Graph / Tables bar (DirectoryViewTabs): the
+          to the Directory's Grid / Context bar (DirectoryViewTabs): the
           bar full-bleeds left into the sidebar seam and its bottom border runs
           edge to edge. "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush
           under the navbar (at rest and pinned); "-ml-[23px]" bleeds left to 1px

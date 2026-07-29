@@ -253,8 +253,8 @@ export async function DELETE(
 
     // Delete the event node. Attendee.event and Link.source/target are
     // ON DELETE CASCADE (prisma/schema.prisma), so the DB removes the event's
-    // attendees and every connected graph link automatically. (The old
-    // read-filter-reupsert-the-whole-graph dance here threw 500s and clobbered
+    // attendees and every connected context link automatically. (The old
+    // read-filter-reupsert-the-whole-context dance here threw 500s and clobbered
     // node metadata with person-profile enrichment — see eventRepo notes.)
     await deleteEvent(communityId, eventId);
 

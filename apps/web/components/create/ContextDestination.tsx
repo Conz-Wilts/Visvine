@@ -7,6 +7,7 @@
 // are identical for both.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { slugify } from '@/lib/eventUtils';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, swrFetch } from '@/features/notes/lib/contextPrefetch';
 import type { TreeNode } from '@/lib/notes/shared/types';
@@ -172,5 +173,28 @@ export function PathPreview({ path, taken }: { path: string; taken?: boolean }) 
       {taken ? 'Saving as ' : ''}
       <span className="text-text-secondary">{path}</span>
     </p>
+  );
+}
+
+/**
+ * Where an entity's context note will land, for the forms whose namespace is
+ * fixed (people/, events/, spaces/, channels/, communities/…). These get a
+ * preview rather than a FolderPicker on purpose: the path→node resolution the
+ * brain relies on is only sound while each kind owns its own namespace, so the
+ * destination is shown, not chosen.
+ *
+ * Mirrors entityNotePath — the id it derives the filename from is
+ * `<type>:<slugify(name)>`, so slug and path agree with what the server writes.
+ * A name whose slug is taken gets a `-2` suffix server-side; that's rare enough
+ * to leave out of the preview rather than round-trip for.
+ */
+export function EntityNotePreview({ dir, name }: { dir: string; name: string }) {
+  const slug = useMemo(() => slugify(name), [name]);
+  if (!slug) return null;
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-text-secondary">Context note</span>
+      <PathPreview path={`${dir}/${slug}.md`} />
+    </div>
   );
 }

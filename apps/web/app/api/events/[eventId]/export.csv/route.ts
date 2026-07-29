@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getEvent, getAttendees, getCommunityGraphData } from '@/lib/eventRepo';
+import { getEvent, getAttendees, getCommunityContextData } from '@/lib/eventRepo';
 import { requireEventManager } from '@/lib/eventAuth';
 import { normalizeStatus } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
@@ -57,7 +57,7 @@ export async function GET(
     if (auth instanceof Response) return auth;
 
     const attendees = await getAttendees(communityId, eventId);
-    const graphData = await getCommunityGraphData(communityId);
+    const contextData = await getCommunityContextData(communityId);
 
     // CSV header
     const headers = [
@@ -75,7 +75,7 @@ export async function GET(
     ];
 
     const rows = attendees.map((attendee) => {
-      const person = attendee.personId ? graphData.nodes.find((n) => n.id === attendee.personId) : undefined;
+      const person = attendee.personId ? contextData.nodes.find((n) => n.id === attendee.personId) : undefined;
       const name = person?.name || attendee.name || 'Unknown';
 
       return [

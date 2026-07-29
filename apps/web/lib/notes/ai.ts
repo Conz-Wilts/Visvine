@@ -8,7 +8,7 @@
 // a self-hosted Gemma or a Claude-compatible gateway). When nothing is set,
 // aiConfigured() is false and the UI hides the refactor/reorganize affordances.
 
-import { buildNoteIndex } from './shared/graph'
+import { buildNoteIndex } from './shared/context'
 import { splitFrontmatter } from './shared/markdown'
 import { coerceMoves } from './shared/reorganize'
 import type { ReorganizePlan } from './shared/types'

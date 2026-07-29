@@ -3,7 +3,7 @@
 // instead of a JSON sidecar. Whole-note vectors are cached per brain path and
 // invalidated by the note's updatedAt (mtime); stale notes are embedded lazily
 // at query time, bounded per call. Cosine ranking runs in Postgres. Any failure
-// (or no configured key) returns [] and fusion degrades to BM25 + graph.
+// (or no configured key) returns [] and fusion degrades to BM25 + context.
 
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'

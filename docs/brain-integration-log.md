@@ -55,7 +55,7 @@
 | 9 | **Managed Agents not ported** | Heavy beta-API dependency + streaming UI; Visvine's existing OAuth MCP server already provides governed external-agent access to the brain — same capability, existing infrastructure. |
 | 10 | MCP brain tools mounted on the **existing** `/api/mcp` OAuth server under `content:*` scopes | Two-layer enforcement (scope + live membership) already exists there; blackbird's separate MCP server would duplicate it. |
 | 11 | Review schema checks target Visvine's OKF frontmatter (`type`/`title`/`timestamp`/`description`) | The port's frontmatter contract differs from blackbird's (`created`/`updated`/`status`/`review_by`); checks were adapted rather than transplanted. |
-| 12 | Search: BM25 module added **alongside** the existing simple search | The lightweight client-side quick search stays for the palette; the fused stack (BM25 + vector + graph, RRF) powers the server search route. |
+| 12 | Search: BM25 module added **alongside** the existing simple search | The lightweight client-side quick search stays for the palette; the fused stack (BM25 + vector + context, RRF) powers the server search route. |
 
 ## Incidents / drift encountered
 

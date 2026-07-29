@@ -7,7 +7,9 @@ import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
-import { entityKindOf } from '@/lib/notes/entities';
+import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
 import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
@@ -19,11 +21,60 @@ import NodeProfileContent from '@/components/profile/NodeProfileContent';
 import ResourcePreviewContent from '@/components/profile/ResourcePreviewContent';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a tab
-// actually renders it (same rationale as the directory's deferred graph view).
+// actually renders it (same rationale as the directory's deferred context view).
 const EntityContextPanel = dynamic(
   () => import('@/features/notes/components/EntityContextPanel').then((m) => m.EntityContextPanel),
   { ssr: false, loading: () => null },
 );
+
+const ContextSidebar = dynamic(
+  () => import('@/features/notes/components/ContextSidebar').then((m) => m.ContextSidebar),
+  { ssr: false, loading: () => null },
+);
+
+// ── Docked context tree ───────────────────────────────────────────────────────
+
+// An entity's Context tab is a note view like any other, so it keeps the same
+// tree docked in the Sidebar that /context and the standalone note view use.
+// Without it, opening a person from the context tree collapsed the whole panel
+// column mid-navigation — the tree you just clicked in vanished under you.
+// Mounted only while a note tab is open; switching back to Profile lowers the
+// dock and the column closes.
+function DockedContextTree({ notePath }: { notePath: string | null }) {
+  const { setDockTopInset } = useContextPanel();
+
+  // Start the tree below the tab bar: ProfileTabBar stacks the tab row and its
+  // attached toolbar, both h-12 — same 96px the standalone note view sets.
+  useEffect(() => {
+    setDockTopInset(96);
+    return () => setDockTopInset(0);
+  }, [setDockTopInset]);
+
+  return <ContextSidebar currentPath={notePath} />;
+}
+
+/** Inset for the note content while the tree is docked AND open, so the panel
+ *  column never covers it. Mirrors the standalone note view. */
+function useDockInsetStyle(): React.CSSProperties {
+  const { dockRequested, contextOpen } = useContextPanel();
+  return {
+    paddingLeft: dockRequested && contextOpen ? CONTEXT_PANEL_W : undefined,
+    transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+  };
+}
+
+/** The tab bar bleeds over the docked tree (raised z) so it reads as one
+ *  continuous bar across the top rather than starting at the tree's right edge —
+ *  see ProfileTabBar's edgeClass. Only while the tree is actually docked. */
+function useTabBarEdgeClass(): string | undefined {
+  const { dockRequested, contextOpen } = useContextPanel();
+  return dockRequested && contextOpen ? '-ml-[23px] z-[45]' : undefined;
+}
+
+/** The entity's canonical note path — what the tree highlights. */
+function useEntityNotePath(nodeId: string, node: NBNode | null): string | null {
+  return node ? entityNotePath({ id: nodeId, type: node.type }) : null;
+}
 
 // ── Context-tab availability ──────────────────────────────────────────────────
 
@@ -42,7 +93,7 @@ function useContextTabAvailable(node: NBNode | null): boolean {
   );
 }
 
-// Tab state lives in the URL (?tab=context / ?tab=raw) so tree/graph/backlink
+// Tab state lives in the URL (?tab=context / ?tab=raw) so tree/context/backlink
 // deep links land directly on an entity's context. Default tab = bare URL.
 // Context and Raw are the same note behind the same availability gate — Raw is
 // just the editor in raw mode, promoted to a tab of its own.
@@ -89,12 +140,18 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const [wantedTab, setTabParam] = useProfileTabParam();
 
   const activeTab: ProfileTab = wantedTab && contextAvailable ? wantedTab : 'about';
+  const notePath = useEntityNotePath(nodeId, node);
+  const dockInsetStyle = useDockInsetStyle();
+  const edgeClass = useTabBarEdgeClass();
   // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
   // as the profile knows the tab exists, so clicking over paints immediately.
   usePrefetchEntityContext(nodeId, node, contextAvailable);
   // Deep link to ?tab=context/raw while community/node data still resolves: hold
   // a skeleton instead of flashing the profile and then swapping.
   const stillResolving = wantedTab !== null && !contextAvailable && (communityLoading || nodeLoading || !currentCommunity);
+  // Note surface = the docked tree is (or is about to be) beside the content, so
+  // the content insets to clear it and drops the centered profile container.
+  const noteSurface = stillResolving || (contextAvailable && isNoteTab(activeTab));
 
   // Strip a stale ?tab=context/raw (tool off / non-entity / foreign node) once
   // everything needed to decide has resolved.
@@ -123,13 +180,25 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
           <ProfileTabBar
             nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
             attachedOpen={activeTab === 'context'}
+            edgeClass={isNoteTab(activeTab) ? edgeClass : undefined}
           />
         )}
-        <div className={contextAvailable && isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        <div
+          className={noteSurface ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
+          style={noteSurface ? dockInsetStyle : undefined}
+        >
         {stillResolving ? (
-          <ProfileSkeletonLoader mode="fullpage" />
+          // The tree docks while the node still resolves too: arriving from it,
+          // the panel must not blink shut for the length of a profile fetch.
+          <>
+            <DockedContextTree notePath={null} />
+            <ProfileSkeletonLoader mode="fullpage" />
+          </>
         ) : isNoteTab(activeTab) ? (
-          <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+          <>
+            <DockedContextTree notePath={notePath} />
+            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+          </>
         ) : (
           /* No outer card wrapper — ProfilePageContent renders separate floating
              cards directly on the page background, matching the event detail page. */
@@ -153,6 +222,9 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   // Same warm-start as the person page: prefetch the Context tab's chunk + data
   // while the user is still on Profile.
   usePrefetchEntityContext(nodeId, node, contextAvailable);
+  const notePath = useEntityNotePath(nodeId, node);
+  const dockInsetStyle = useDockInsetStyle();
+  const edgeClass = useTabBarEdgeClass();
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
   const changeTab = useCallback(
@@ -174,7 +246,15 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     }
   }, [activeTab, loading, data, contextAvailable, changeTab]);
 
-  if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
+  // Keep the tree docked through the node fetch when the URL already asks for a
+  // note tab — otherwise arriving from the tree blinks the panel shut and open.
+  if (loading && !data)
+    return (
+      <>
+        {isNoteTab(activeTab) && <DockedContextTree notePath={null} />}
+        <ProfileSkeletonLoader mode="fullpage" />
+      </>
+    );
 
   if (error || !data) {
     return (
@@ -211,12 +291,20 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
         <ProfileTabBar
           nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
           attachedOpen={activeTab === 'context' && contextAvailable}
+          edgeClass={isNoteTab(activeTab) && contextAvailable ? edgeClass : undefined}
         />
 
-        <div role="tabpanel" className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        <div
+          role="tabpanel"
+          className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
+          style={isNoteTab(activeTab) && contextAvailable ? dockInsetStyle : undefined}
+        >
           {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
           {isNoteTab(activeTab) && contextAvailable && (
-            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+            <>
+              <DockedContextTree notePath={notePath} />
+              <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+            </>
           )}
         </div>
       </div>
@@ -237,6 +325,9 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'preview');
   const router = useRouter();
   usePrefetchEntityContext(nodeId, node, contextAvailable);
+  const notePath = useEntityNotePath(nodeId, node);
+  const dockInsetStyle = useDockInsetStyle();
+  const edgeClass = useTabBarEdgeClass();
 
   const changeTab = useCallback(
     (tab: ProfileTab) => {
@@ -255,7 +346,15 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
     }
   }, [activeTab, loading, data, contextAvailable, changeTab]);
 
-  if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
+  // Keep the tree docked through the node fetch when the URL already asks for a
+  // note tab — otherwise arriving from the tree blinks the panel shut and open.
+  if (loading && !data)
+    return (
+      <>
+        {isNoteTab(activeTab) && <DockedContextTree notePath={null} />}
+        <ProfileSkeletonLoader mode="fullpage" />
+      </>
+    );
 
   if (error || !data) {
     return (
@@ -286,12 +385,20 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
         <ProfileTabBar
           nodeType={nodeData.type} tabs={tabs} activeTab={activeTab} onTabChange={changeTab} stickyTop="-top-4 -mt-4"
           attachedOpen={activeTab === 'context' && contextAvailable}
+          edgeClass={isNoteTab(activeTab) && contextAvailable ? edgeClass : undefined}
         />
 
-        <div role="tabpanel" className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}>
+        <div
+          role="tabpanel"
+          className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
+          style={isNoteTab(activeTab) && contextAvailable ? dockInsetStyle : undefined}
+        >
           {activeTab === 'preview' && <ResourcePreviewContent node={nodeData} />}
           {isNoteTab(activeTab) && contextAvailable && (
-            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+            <>
+              <DockedContextTree notePath={notePath} />
+              <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
+            </>
           )}
         </div>
       </div>
@@ -308,7 +415,7 @@ function NodeProfileRoute() {
   const isEvent = nodeId.startsWith('event:');
 
   // Events have their own dedicated detail page (EventDetailClient). Anything that
-  // links straight to /directory/event:… (graph deep-links, shared URLs) is
+  // links straight to /directory/event:… (context deep-links, shared URLs) is
   // redirected there rather than rendered with the generic node tab view.
   useEffect(() => {
     if (isEvent) router.replace(`/events/${encodeURIComponent(nodeId)}`);

@@ -1,5 +1,5 @@
 /**
- * Directory / graph / companies / search tools.
+ * Directory / context / companies / search tools.
  *
  * Companies & organizations are `Node`s of type "organization" — there is no
  * separate model, so they're covered by the node tools plus a typed convenience
@@ -70,10 +70,10 @@ export function registerDirectoryTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "get_graph",
+    "get_context",
     {
       description:
-        "Get the full relationship graph (nodes + links) for a community you belong to.",
+        "Get the full relationship context (nodes + links) for a community you belong to.",
       inputSchema: { community_id: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -82,7 +82,7 @@ export function registerDirectoryTools(server: McpServer): void {
         await assertMember(ctx, args.community_id);
         return callApi(
           ctx,
-          `/api/communities/${encodeURIComponent(args.community_id)}/graph`,
+          `/api/communities/${encodeURIComponent(args.community_id)}/context`,
         );
       }),
   );

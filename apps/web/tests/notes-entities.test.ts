@@ -5,6 +5,7 @@ import {
   entityNotePath,
   parseEntityHref,
   entityKindOfPath,
+  entityDraftContent,
   entityStub,
   resolveEntityNode,
   entityMentionPaths,
@@ -24,6 +25,41 @@ test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('note'), null);
   assert.equal(entityKindOf(''), null);
   assert.equal(entityKindOf(null), null);
+});
+
+test('entityKindOf classifies the container kinds', () => {
+  assert.equal(entityKindOf('community'), 'community');
+  assert.equal(entityKindOf('Communities'), 'community');
+  assert.equal(entityKindOf('space'), 'space');
+  assert.equal(entityKindOf('Channels'), 'channel');
+  // 'community' must not be swallowed by the liberal company branch.
+  assert.notEqual(entityKindOf('community'), 'company');
+  // Uploaded files are documents, not entities — they never get a note of their own.
+  assert.equal(entityKindOf('file'), null);
+});
+
+test('container kinds get their own note namespaces', () => {
+  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'community' }), 'communities/blackbird.md');
+  assert.equal(entityNotePath({ id: 'space:engineering', type: 'space' }), 'spaces/engineering.md');
+  assert.equal(entityNotePath({ id: 'channel:general', type: 'channel' }), 'channels/general.md');
+  assert.equal(entityKindOfPath('communities/blackbird.md'), 'community');
+  assert.equal(entityKindOfPath('spaces/engineering.md'), 'space');
+  assert.equal(entityKindOfPath('channels/general.md'), 'channel');
+  assert.equal(parseEntityHref('/channels/general.md'), 'channels/general.md');
+  assert.equal(parseEntityHref('/spaces/index.md'), null); // folder index, not an entity
+});
+
+test('entityDraftContent labels and tags the container kinds', () => {
+  const md = entityDraftContent(
+    { id: 'channel:general', type: 'channel', name: 'general', subtitle: 'Everything else' },
+    { tags: ['ops'], body: 'Where announcements land.' },
+  );
+  const fm = parseFrontmatter(md);
+  assert.equal(fm.type, 'Channel');
+  assert.equal(fm.title, 'general');
+  assert.equal(fm.node, 'channel:general');
+  assert.deepEqual(fm.tags, ['channel', 'ops']);
+  assert.ok(md.includes('Where announcements land.'));
 });
 
 test('entityNotePath derives people/ and companies/ paths from the node id', () => {
@@ -124,6 +160,32 @@ test('entityStub escapes tricky names so frontmatter still parses', () => {
   assert.equal(fm.type, 'Company');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
   assert.deepEqual(fm.tags, ['company']);
+});
+
+test('entityDraftContent keeps the body typed before a type was picked', () => {
+  const md = entityDraftContent(
+    { id: 'person:craig-piggott', type: 'person', name: 'Craig Piggott' },
+    { body: 'Met at the dairy conference. Follow up re: collars.' },
+  );
+  const fm = parseFrontmatter(md);
+  assert.equal(fm.type, 'Person');
+  assert.match(md, /Met at the dairy conference/);
+  // The stub's placeholder line is replaced, not appended to.
+  assert.doesNotMatch(md, /Context and notes about this person/);
+});
+
+test('entityDraftContent merges user tags after the kind tag, de-duped', () => {
+  const md = entityDraftContent(
+    { id: 'person:craig-piggott', type: 'person', name: 'Craig Piggott' },
+    { tags: ['Founder', ' agritech ', 'Person', ''] },
+  );
+  assert.deepEqual(parseFrontmatter(md).tags, ['person', 'Founder', 'agritech']);
+});
+
+test('entityDraftContent with no body or tags is exactly the stub', () => {
+  const node = { id: 'resource:founder-playbook', type: 'resource', name: 'Founder Playbook' };
+  assert.equal(entityDraftContent(node, {}), entityStub(node));
+  assert.equal(entityDraftContent(node, { body: '   ', tags: [] }), entityStub(node));
 });
 
 test('resolveEntityNode resolves through the node map, never by string surgery', () => {

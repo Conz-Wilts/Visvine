@@ -13,7 +13,7 @@ import {
   extractHashtags,
   resolveOkfLink,
 } from '../lib/notes/shared/markdown'
-import { buildNoteIndex, buildTree } from '../lib/notes/shared/graph'
+import { buildNoteIndex, buildTree } from '../lib/notes/shared/context'
 import { computeReferences, linkFirstMention, linkMentionAt } from '../lib/notes/shared/references'
 import { relatedNotes } from '../lib/notes/shared/related'
 import { searchNotes } from '../lib/notes/shared/search'
@@ -55,7 +55,7 @@ test('extractHashtags dedupes and skips headings / #123', () => {
   assert.deepEqual(extractHashtags('#alpha and #beta and #alpha\n# Heading\n#123'), ['alpha', 'beta'])
 })
 
-// --- graph -------------------------------------------------------------------
+// --- context -------------------------------------------------------------------
 
 const vault = (): RawNote[] => [
   note('index.md', '---\ntitle: Index\ntags: [home]\n---\n\nSee [Canva](portfolio/canva.md) and [Gone](portfolio/missing.md)'),

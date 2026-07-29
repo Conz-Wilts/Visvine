@@ -2,11 +2,11 @@
 
 // Directory entities (person/org nodes) usable in `[[ ]]` mentions and for
 // entity-note resolution: the picker list + a canonical-note-path → entity map,
-// built from the cached community graph (all nodes). Consumed by the profile
+// built from the cached community context (all nodes). Consumed by the profile
 // Context tab (EntityContextPanel).
 
 import { useMemo } from 'react'
-import { useCommunityGraphData } from '@/hooks/useCommunityGraphData'
+import { useCommunityContextData } from '@/hooks/useCommunityContextData'
 import { entityNotePath } from '@/lib/notes/entities'
 import type { PickerEntity } from '../components/NotePicker'
 
@@ -18,14 +18,14 @@ export interface DirectoryEntities {
 }
 
 export function useDirectoryEntities(): DirectoryEntities {
-  const { graphData } = useCommunityGraphData()
+  const { contextData } = useCommunityContextData()
 
   return useMemo(() => {
     const list: PickerEntity[] = []
     const map = new Map<string, PickerEntity>()
     // Dedupe tags case-insensitively, keeping the first spelling encountered.
     const tagByKey = new Map<string, string>()
-    for (const n of graphData.nodes) {
+    for (const n of contextData.nodes) {
       for (const tag of n.tags ?? []) {
         const key = tag.trim().toLowerCase()
         if (key && !tagByKey.has(key)) tagByKey.set(key, tag.trim())
@@ -44,5 +44,5 @@ export function useDirectoryEntities(): DirectoryEntities {
     }
     const allTags = [...tagByKey.values()].sort((a, b) => a.localeCompare(b))
     return { entities: list, entityByPath: map, allTags }
-  }, [graphData])
+  }, [contextData])
 }

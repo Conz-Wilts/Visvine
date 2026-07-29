@@ -2,7 +2,7 @@
 // everything so existing '@/lib/types' imports keep working — prefer importing
 // from the specific domain module in new code.
 
-export * from './types/graph';
+export * from './types/context';
 export * from './types/community';
 export * from './types/events';
 export * from './types/resources';

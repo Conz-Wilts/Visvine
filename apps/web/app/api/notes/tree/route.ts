@@ -10,7 +10,7 @@ import { requireBrain } from '@/lib/notes/api'
 import { principalOf } from '@/lib/notes/brain'
 import { visibleVault } from '@/lib/notes/brainService'
 import { listFolders } from '@/lib/notes/store'
-import { buildTree } from '@/lib/notes/shared/graph'
+import { buildTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
 

@@ -48,8 +48,8 @@ export const FEATURES: FeatureDef[] = [
     key: 'notes',
     label: 'Context',
     href: '/context',
-    description: 'An interactive graph of the community, plus shared notes and a Context tab on every person and organization profile.',
-    // Always on and nav-less: surfaced as the Graph tab under the Directory, not
+    description: 'An interactive context map of the community, plus shared notes and a Context tab on every person and organization profile.',
+    // Always on and nav-less: surfaced as the Context tab under the Directory, not
     // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
     icon: (

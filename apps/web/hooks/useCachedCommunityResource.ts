@@ -31,7 +31,7 @@ export function clearCachedCommunityResource(resourceKey: string, communityId?: 
 }
 
 interface UseCachedCommunityResourceArgs<T> {
-  /** Namespaces this resource's cache entries (e.g. 'graph', 'directory'). */
+  /** Namespaces this resource's cache entries (e.g. 'context', 'directory'). */
   resourceKey: string;
   /** Builds the fetch path for the current community. */
   path: (communityId: string) => string;
@@ -52,7 +52,7 @@ interface UseCachedCommunityResourceArgs<T> {
  *
  * Handles the shared lifecycle: community gating, nodeTypes-driven cache
  * busting, AbortController cancellation, and a `refresh` that drops the cache
- * entry and refetches. Concrete hooks (graph, directory) wrap this and expose
+ * entry and refetches. Concrete hooks (context, directory) wrap this and expose
  * their own field names on top of `data`.
  */
 export function useCachedCommunityResource<T>({

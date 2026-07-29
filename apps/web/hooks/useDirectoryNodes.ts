@@ -1,18 +1,18 @@
 'use client';
 
 import type { NBNode } from '@/lib/types';
-import { normalizeNode } from '@/lib/graphUtils';
+import { normalizeNode } from '@/lib/contextUtils';
 import { useCachedCommunityResource } from '@/hooks/useCachedCommunityResource';
 
 const RESOURCE_KEY = 'directory';
 const EMPTY_NODES: NBNode[] = [];
 
 /**
- * Loads a community's directory nodes WITHOUT the link graph.
+ * Loads a community's directory nodes WITHOUT the link context.
  *
  * This is the data source for the grid and table views, which never render
- * links. It deliberately avoids `/api/communities/[id]/graph` (and its edge
- * payload + force-graph bundle) so the directory loads only what it shows.
+ * links. It deliberately avoids `/api/communities/[id]/context` (and its edge
+ * payload + force-context bundle) so the directory loads only what it shows.
  */
 export function useDirectoryNodes() {
   const { data, loading, error, community, refresh } = useCachedCommunityResource<NBNode[]>({

@@ -5,7 +5,7 @@
 //
 // Why a whole Community per user: the notes engine scopes a private "personal
 // brain" by (communityId, ownerKey=userId). Giving each user their own community
-// gives them a clean, private home for that brain plus a directory/graph of their
+// gives them a clean, private home for that brain plus a directory/context of their
 // own — without polluting any shared community. The community is flagged
 // `personalOwnerId` so it's hidden from Discover and other users' lists.
 
@@ -85,7 +85,7 @@ export async function provisionPersonalCommunity(user: {
     update: {},
   })
 
-  // 2. Membership as admin (so the user can edit notes/graph in their own space).
+  // 2. Membership as admin (so the user can edit notes/context in their own space).
   await prisma.userCommunity.upsert({
     where: { userId_communityId: { userId: user.userId, communityId } },
     create: { userId: user.userId, communityId, role: 'admin' },

@@ -4,12 +4,11 @@ import { useEffect, useRef } from 'react';
 import { UnderlineTabs, type UnderlineTab } from '@/components/ui';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 
-export type DirectoryView = 'grid' | 'graph' | 'tables';
+export type DirectoryView = 'grid' | 'context';
 
 const TABS: UnderlineTab<DirectoryView>[] = [
   { id: 'grid', label: 'Grid' },
-  { id: 'graph', label: 'Graph' },
-  { id: 'tables', label: 'Tables' },
+  { id: 'context', label: 'Context' },
 ];
 
 interface DirectoryViewTabsProps {
@@ -18,11 +17,11 @@ interface DirectoryViewTabsProps {
 }
 
 /**
- * Grid / Graph / Tables switcher for the Directory page: the shared
+ * Grid / Context switcher for the Directory page: the shared
  * UnderlineTabs in a sticky full-bleed bar pinned above the page content. The
  * tabs only swap the page's in-place view — no routing.
  *
- * z-[45] sits ABOVE the sidebar's docked notes tree (z-40, graph view) but
+ * z-[45] sits ABOVE the sidebar's docked notes tree (z-40, context view) but
  * BELOW the navbar (z-50) — the bar bleeds flush into the top-left corner, so a
  * higher z would paint over the navbar↔rail concave seam curve the navbar draws
  * there. Letting the navbar win keeps that curve visible.

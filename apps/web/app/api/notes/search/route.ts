@@ -1,6 +1,6 @@
 // POST /api/notes/search
 //   { communityId, scope, query, k?, filters? } → { results: FusedResult[] }
-// Fused retrieval (frontmatter filter → BM25 → pgvector → link graph, RRF) over
+// Fused retrieval (frontmatter filter → BM25 → pgvector → link context, RRF) over
 // everything the caller can read in the brain; the visibility lens and the
 // private-folder read audit are applied inside brainService.searchBrain.
 

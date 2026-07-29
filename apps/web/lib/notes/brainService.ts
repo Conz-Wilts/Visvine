@@ -92,7 +92,7 @@ export async function readVisible(
 }
 
 /**
- * Fused search (frontmatter filter → BM25 → pgvector → link graph, RRF) over
+ * Fused search (frontmatter filter → BM25 → pgvector → link context, RRF) over
  * everything the principal can read in this brain. Private-folder hits are audited.
  */
 export async function searchBrain(

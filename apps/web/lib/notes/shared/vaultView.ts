@@ -4,7 +4,7 @@
 
 import type { BrainPrincipal } from './brainTypes'
 import type { NoteMeta, RawNote } from './types'
-import { buildNoteIndex } from './graph'
+import { buildNoteIndex } from './context'
 import { filterVisible } from './visibility'
 import { accessSignature } from './authz'
 import { principalIsSuperAdmin } from './permissions'

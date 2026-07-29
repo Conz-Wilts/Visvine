@@ -99,6 +99,20 @@ export function invalidateContextCache(...keys: string[]) {
   for (const key of keys) cache.delete(key)
 }
 
+/**
+ * Seed the cache with a value we already hold, so the next reader paints from it
+ * synchronously instead of fetching. Used by the note-first create commit: it
+ * just wrote the note, so priming `contextKeys.read` means the entity's Context
+ * tab renders its content on first paint rather than flashing a skeleton across
+ * the route change.
+ *
+ * The entry is stamped as if it had just been fetched, which is accurate — the
+ * value came from the write that created it.
+ */
+export function primeContextCache<T>(key: string, value: T): void {
+  cache.set(key, { promise: Promise.resolve(value), ts: Date.now(), value, hasValue: true })
+}
+
 // Shared key builders — the panel and the prefetch must agree exactly, or they
 // fetch twice and the cache is pure overhead.
 export const contextKeys = {
@@ -149,8 +163,13 @@ export function readNote(communityId: string, path: string): Promise<NoteRead> {
 }
 
 /** Fire every request the Context tab's first paint depends on. Fire-and-forget:
- *  results land in the cache; nothing here throws. */
-function prefetchEntityContext(communityId: string, path: string) {
+ *  results land in the cache; nothing here throws.
+ *
+ *  Exported so the docked tree can fire it the moment a row is clicked: the
+ *  requests then overlap the route change instead of starting after the new
+ *  panel mounts, and swrFetch serves them synchronously on that first paint —
+ *  no skeleton between the tree click and the note. */
+export function prefetchNoteContext(communityId: string, path: string) {
   void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
   void cachedFetch(contextKeys.access(communityId, path), () => notesApi.getAccess(communityId, path)).catch(() => {})
   void cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).catch(() => {})
@@ -177,6 +196,6 @@ export function usePrefetchEntityContext(nodeId: string, node: NBNode | null, en
     // Warm the code-split chunk (Tiptap + toolbar icons) alongside the data.
     void import('../components/EntityContextPanel').catch(() => {})
     const path = entityNotePath({ id: nodeId, type: nodeType })
-    if (path) prefetchEntityContext(communityId, path)
+    if (path) prefetchNoteContext(communityId, path)
   }, [enabled, nodeId, nodeType, communityId])
 }

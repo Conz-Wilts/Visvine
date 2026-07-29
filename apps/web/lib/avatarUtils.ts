@@ -13,7 +13,7 @@ export const THEME_ACCENT = 'var(--color-brand-green, #78d870)';
 /**
  * SVG path for the person-silhouette avatar fallback (24×24 viewBox).
  * Single source of truth so the React fallback (PersonSilhouette) and the
- * canvas graph renderers draw the identical glyph.
+ * canvas context renderers draw the identical glyph.
  */
 export const PERSON_SILHOUETTE_PATH =
   'M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10Zm0 2c-4.42 0-8 2.69-8 6v2h16v-2c0-3.31-3.58-6-8-6Z';
@@ -22,7 +22,7 @@ export const PERSON_SILHOUETTE_PATH =
  * SVG path for the group/organisation avatar fallback (24×24 viewBox): a house —
  * reads as "community/place" rather than a cluster of people. The canvas glyph
  * drawer and <TypeSilhouette> both draw this so the glyph is identical on the
- * graph and in the DOM. Filled (non-zero winding), so it fills white the same
+ * context and in the DOM. Filled (non-zero winding), so it fills white the same
  * way the person glyph does.
  */
 const GROUP_SILHOUETTE_PATH =

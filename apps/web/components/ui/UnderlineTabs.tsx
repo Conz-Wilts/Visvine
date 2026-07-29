@@ -28,7 +28,7 @@ const TAB_MOTION = 'duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]';
 
 /**
  * Text tab bar with a sliding green underline under the active tab — the same
- * control as the Directory's Grid / Graph / Tables switcher, generalized so
+ * control as the Directory's Grid / Context switcher, generalized so
  * other surfaces (Events view + scope selectors) share one look. Optional icons
  * sit inline before the label. Inline (not sticky) so callers place it freely.
  */

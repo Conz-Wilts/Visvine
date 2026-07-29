@@ -1,16 +1,16 @@
 # Visvine Link Management — Architecture Recommendation
 
-> Research + design for managing links (graph edges) between nodes: both **auto-created**
+> Research + design for managing links (context edges) between nodes: both **auto-created**
 > (RSVP → `attended`, event create → `hosting`, intro accept → `introduced`) and
-> **manually created** by users (drag-to-connect on the graph + right-click "Connect to…").
+> **manually created** by users (drag-to-connect on the context + right-click "Connect to…").
 > Produced via multi-agent research; all load-bearing facts verified against source.
 
 ## 1. TL;DR
 
-- **One gesture, one zone:** manual links are created by **dragging from a hover-revealed connect handle** on a node (not whole-node drag, not a Shift chord). Body-drag stays move; handle-drag connects. Keeps the delicate frozen-sim move-drag code (`CustomForceGraph.tsx` ~655–808) unchanged and needs no modifier in the common case. Shift+body-drag is an optional power fallback.
-- **Drop = pick a type, fast:** the drop opens a **lightweight type picker** at the drop point listing the community's configured link types, pre-selected to the last-used type — one click/Enter confirms. The off-screen escape hatch is a **right-click "Connect to…" typeahead**, reachable on the graph *and* on profiles, cards, and directory rows.
+- **One gesture, one zone:** manual links are created by **dragging from a hover-revealed connect handle** on a node (not whole-node drag, not a Shift chord). Body-drag stays move; handle-drag connects. Keeps the delicate frozen-sim move-drag code (`ContextCanvas.tsx` ~655–808) unchanged and needs no modifier in the common case. Shift+body-drag is an optional power fallback.
+- **Drop = pick a type, fast:** the drop opens a **lightweight type picker** at the drop point listing the community's configured link types, pre-selected to the last-used type — one click/Enter confirms. The off-screen escape hatch is a **right-click "Connect to…" typeahead**, reachable on the context *and* on profiles, cards, and directory rows.
 - **Link types are community-configured (admin-owned), mirroring node types:** add a `Community.linkTypes` JSON column managed in the console (a sibling of the existing "Types & Aliases" tab, `TypesTab.tsx`). Each link type carries `{ name, color, directed }`; the admin chooses the type on every manual link. `DEFAULT_LINK_TYPES` is the seeded fallback (incl. the `system` types the auto-flows depend on).
-- **One write path:** every edge — the 3 auto triggers, the manual POST, the MCP tool, and bulk import — flows through a single `lib/graph/links.ts` `upsertLink()` / `removeLink()`. This collapses today's four divergent dedup notions and fixes the latent `ON CONFLICT` bug.
+- **One write path:** every edge — the 3 auto triggers, the manual POST, the MCP tool, and bulk import — flows through a single `lib/context/links.ts` `upsertLink()` / `removeLink()`. This collapses today's four divergent dedup notions and fixes the latent `ON CONFLICT` bug.
 - **Provenance is a real column, not metadata:** add `origin` + `createdBy` + `updatedAt`. Auto edges render dashed/muted; manual edges render solid in their **link-type color**. Admins can force-remove either.
 - **Dedup identity = `(communityId, pairKey, relationship)` WITHOUT `origin`.** `pairKey` is an app-computed normalized `min|max` of the two node ids (a normal Prisma column, *not* a Postgres GENERATED column). When a manual link duplicates an auto one, the auto row is **promoted in place** (origin flips to `manual`) — one row, no merge/suppression subsystem.
 - **Member-friendly, server-safe:** keep the `isAdmin` gate as the default (matches the repo), structured as a one-line predicate so "members may link from their own person node" is a trivial later flip. Web-only; zero mobile contract impact.
@@ -53,7 +53,7 @@ model Link {
 }
 ```
 
-**Directionality.** Keep columns directed (`sourceId`/`targetId` preserve caller direction so `attended`/`hosting` read source→target), but **dedup undirected** via `pairKey = [sourceId, targetId].sort().join('|')`. The app already reads links undirected (`mutuals.ts`, the `nodes/[nodeId]` self-join, intro bidirectional dedup) and `LinkRenderer.ts:60,116` *already* computes the identical lexicographic `min|max` pairKey for parallel-edge curves — so the DB identity matches what app and renderer already trust. A naive `@@unique([communityId, sourceId, targetId, relationship])` would miss the reversed A→B / B→A duplicate. Direction per relationship lives in a code registry (`lib/graph/relationships.ts`), not a column.
+**Directionality.** Keep columns directed (`sourceId`/`targetId` preserve caller direction so `attended`/`hosting` read source→target), but **dedup undirected** via `pairKey = [sourceId, targetId].sort().join('|')`. The app already reads links undirected (`mutuals.ts`, the `nodes/[nodeId]` self-join, intro bidirectional dedup) and `LinkRenderer.ts:60,116` *already* computes the identical lexicographic `min|max` pairKey for parallel-edge curves — so the DB identity matches what app and renderer already trust. A naive `@@unique([communityId, sourceId, targetId, relationship])` would miss the reversed A→B / B→A duplicate. Direction per relationship lives in a code registry (`lib/context/relationships.ts`), not a column.
 
 **Why `origin` is NOT in the unique key.** Including it lets a manual `related` and an auto `attended` coexist as two rows for the same pair+relationship and forces a render-time merge + suppression tombstone. Excluding it means exactly **one** row per `(community, unordered pair, relationship)`; a manual upsert *promotes* the existing auto row in place. Different relationships between a pair still coexist (`introduced` + `works_at` = two rows) and render as the existing parallel-edge fan.
 
@@ -89,7 +89,7 @@ export function getLinkTypes(communityLinkTypes?: LinkTypeConfig[]): LinkTypeCon
 }
 ```
 
-Wiring (each is a one-line mirror of the existing `nodeTypes` handling): add `linkTypes` to the `Community` interface; add `linkTypes: community.linkTypes as object ?? null` to the POST/PUT `data:` blocks and the GET `select:` in `app/api/data/communities/route.ts`; the existing `saveCommunity()` in `TypesTab.tsx` already spreads `...currentCommunity`, so a sibling "Link types" section there persists with zero new endpoint. `lib/graph/relationships.ts` `normalize()` keys off this list (slugifies `name` → stored `relationship` string), falling back to `DEFAULT_LINK_TYPES`. The stored `Link.relationship` stays a slug string (`works_at`); the human label + color come from the community's `linkTypes`. `system: true` types are recolor-only in the console (delete disabled) so the auto-flows never reference a removed type.
+Wiring (each is a one-line mirror of the existing `nodeTypes` handling): add `linkTypes` to the `Community` interface; add `linkTypes: community.linkTypes as object ?? null` to the POST/PUT `data:` blocks and the GET `select:` in `app/api/data/communities/route.ts`; the existing `saveCommunity()` in `TypesTab.tsx` already spreads `...currentCommunity`, so a sibling "Link types" section there persists with zero new endpoint. `lib/context/relationships.ts` `normalize()` keys off this list (slugifies `name` → stored `relationship` string), falling back to `DEFAULT_LINK_TYPES`. The stored `Link.relationship` stays a slug string (`works_at`); the human label + color come from the community's `linkTypes`. `system: true` types are recolor-only in the console (delete disabled) so the auto-flows never reference a removed type.
 
 ### Migration mechanics (db push, not migrate)
 
@@ -104,7 +104,7 @@ The raw `$executeRaw` in `updateCommunityGraphData` (`eventRepo.ts:650-657`) mus
 
 ## 3. One link-creation path
 
-New file `apps/web/lib/graph/links.ts`:
+New file `apps/web/lib/context/links.ts`:
 
 ```ts
 export type LinkOrigin = 'manual'|'event_attendance'|'event_hosting'|'intro'|'import';
@@ -157,9 +157,9 @@ The Prisma `upsert` is a real `ON CONFLICT (community_id, pair_key, relationship
 
 ## 4. Manual creation UX (web)
 
-### (a) Drag-to-connect on the graph
+### (a) Drag-to-connect on the context
 
-All changes in `apps/web/components/graph/CustomForceGraph.tsx`; the existing body-drag/pan/frozen-sim path is untouched.
+All changes in `apps/web/components/context/ContextCanvas.tsx`; the existing body-drag/pan/frozen-sim path is untouched.
 
 **Disambiguation — chosen: hover-revealed connect handle (a dedicated start zone).** Rejected: Shift+drag (a chord against the "remove hassle" goal, undiscoverable); whole-node-drag (collides with move). The handle needs **no modifier on the common case**, the handle hit-test is a clean sibling of the existing `findNodeAt`, and it leaves the load-bearing move-drag code byte-for-byte unchanged. Industry consensus (FigJam/Miro/Obsidian hover-dots, n8n/React Flow handles, Cytoscape edgehandles) points here — so the handle shows **only on hover/focus, admin-only** (heeds Miro's "users disable always-on dots" lesson).
 
@@ -172,14 +172,14 @@ Exact integration (the four early-return seams):
 
 **Target snapping:** `findNodeAt` within ~40px screen / `transform.k`, highlight ring. Reject self-loops. `Esc` cancels mid-drag.
 
-**Drop behavior — quick type picker, default = last-used.** On a valid drop, `onCreateLink(from, target)` opens a small popover anchored at the target node listing the community's `linkTypes` (color swatch + name), with the **last-used type pre-selected** (persisted in a ref + `localStorage`); one click or `Enter` confirms, `Esc` cancels. On confirm, `DirectoryGraphView` optimistically splices `{source, target, relationship:<slug>, origin:'manual'}` into the links array (tinted with the type color), then POSTs `/api/data/links`. On 2xx → `clearGraphCache + refresh`; on failure → roll back + toast. A **6s "Undo" toast** follows for the rare wrong-link. (This honors "admin chooses the type" without a heavy form — the pre-selected default keeps the common case to a single extra click.)
+**Drop behavior — quick type picker, default = last-used.** On a valid drop, `onCreateLink(from, target)` opens a small popover anchored at the target node listing the community's `linkTypes` (color swatch + name), with the **last-used type pre-selected** (persisted in a ref + `localStorage`); one click or `Enter` confirms, `Esc` cancels. On confirm, `DirectoryContextView` optimistically splices `{source, target, relationship:<slug>, origin:'manual'}` into the links array (tinted with the type color), then POSTs `/api/data/links`. On 2xx → `clearContextCache + refresh`; on failure → roll back + toast. A **6s "Undo" toast** follows for the rare wrong-link. (This honors "admin chooses the type" without a heavy form — the pre-selected default keeps the common case to a single extra click.)
 
-### (b) Right-click context menu (graph + everywhere a node renders)
+### (b) Right-click context menu (context + everywhere a node renders)
 
 No context-menu primitive exists (no Radix/Floating-UI). Build **one** `<NodeContextMenu>` by copying the `ConnectButton.tsx` panel markup (already `role=menu`, brand-styled, click-outside), rendered `position: fixed` at the cursor (the canvas can't host DOM), viewport-clamped, `z-50`, `Escape` to close. Reuse `Dropdown.tsx`'s exported `DROPDOWN_MENU_CLASS`/`DROPDOWN_ITEM_CLASS`.
 
-- **In-graph:** `onContextMenu` on `<canvas>` → `preventDefault`, `findNodeAt`, raise `onNodeContextMenu(node, {clientX,clientY})` to `GraphWithTable` (owns selection + sidebar) to host the menu DOM.
-- **Outside the graph:** the **same** component on right-click of profile cards (extend `ConnectButton` with a "Connect to…" item), directory/CRM rows, search rows, plus a `⋯` kebab for discoverability/touch.
+- **In-context:** `onContextMenu` on `<canvas>` → `preventDefault`, `findNodeAt`, raise `onNodeContextMenu(node, {clientX,clientY})` to `ContextWithTable` (owns selection + sidebar) to host the menu DOM.
+- **Outside the context:** the **same** component on right-click of profile cards (extend `ConnectButton` with a "Connect to…" item), directory/CRM rows, search rows, plus a `⋯` kebab for discoverability/touch.
 
 Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove links".
 
@@ -191,11 +191,11 @@ Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove lin
 
 - **POST** (`route.ts:69`): route through `upsertLink({ origin:'manual', createdBy: session.userId })`. `relationship` is always sent by the UI (the type picker), validated against the community's `linkTypes`; if omitted, fall back to `'related'` so the endpoint can't 400 on a geometry-only call. Echo `origin` + `id`. Request `{ link: { source, target, relationship, since?, metadata? }, community_id }` → `{ link: {…, origin} }` (casing unchanged: top-level `community_id` snake, nested `source`/`target`).
 - **DELETE** (`route.ts:178`): add optional `?relationship=`. Today's `deleteMany` on `(sourceId,targetId,communityId)` nukes **every** relationship between a pair; the param removes exactly one. Route through `removeLink`. **Admins may delete any edge regardless of `origin`** (auto edges included — per the locked decision); no `409` guard.
-- **GET + serializer** (`normalizeLink`, `graphUtils.ts:29`): emit `origin` and the int `id` (finally exposed read-only) so the renderer can style auto vs manual and undo can reconcile. Add `origin`/`id` to `NBLink` (`lib/types.ts`).
+- **GET + serializer** (`normalizeLink`, `contextUtils.ts:29`): emit `origin` and the int `id` (finally exposed read-only) so the renderer can style auto vs manual and undo can reconcile. Add `origin`/`id` to `NBLink` (`lib/types.ts`).
 - **`/api/nodes/search`:** add `community_id` + `exclude_ids` (backward-compatible).
-- Keep `revalidateTag('graph-data-v2')` on every write.
+- Keep `revalidateTag('context-data-v2')` on every write.
 
-**Auth — keep `isAdmin`, structured for a one-line member flip.** Existing POST/PUT/DELETE are all `isAdmin`-gated (verified; super-admin folded in); the "content submission approval" TODO (line 64) was never built. Keep admin-only to match convention; loosening to "members may POST a link whose `source` is their own person node" is a single predicate before the 403. Gate UI affordances (handle render, menu items) on an `isAdmin` flag threaded into the graph so members never see an affordance that would 403.
+**Auth — keep `isAdmin`, structured for a one-line member flip.** Existing POST/PUT/DELETE are all `isAdmin`-gated (verified; super-admin folded in); the "content submission approval" TODO (line 64) was never built. Keep admin-only to match convention; loosening to "members may POST a link whose `source` is their own person node" is a single predicate before the 403. Gate UI affordances (handle render, menu items) on an `isAdmin` flag threaded into the context so members never see an affordance that would 403.
 
 ## 6. Auto vs manual edges — visual + data
 
@@ -205,7 +205,7 @@ Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove lin
 
 ## 7. Undo & accidental-edge prevention
 
-- **Undo:** the 6s toast "Undo" is primary (optimistic remove + DELETE). Add a session undo stack in `DirectoryGraphView` (last N ops in a ref); `Cmd/Ctrl+Z` replays the inverse. Key undo on the `(source,target,relationship)` tuple (not array index) so it survives a `graph-data-v2` revalidation mid-toast.
+- **Undo:** the 6s toast "Undo" is primary (optimistic remove + DELETE). Add a session undo stack in `DirectoryContextView` (last N ops in a ref); `Cmd/Ctrl+Z` replays the inverse. Key undo on the `(source,target,relationship)` tuple (not array index) so it survives a `context-data-v2` revalidation mid-toast.
 - **Accidental-edge prevention:** (a) dedicated handle zone means body-drag never starts an edge; (b) require crossing `DRAG_THRESHOLD` (5px, already defined) before the rubber-band commits; (c) the handle shows only on hover/focus and only for admins; (d) `Esc` cancels; (e) drop on empty canvas = silent cancel in v1; (f) self-loops and exact duplicates are no-ops via `link_identity`.
 
 ## 8. Edge cases & risks
@@ -217,15 +217,15 @@ Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove lin
 - **Optimistic reconciliation** keyed on `(source,target,relationship)` can mis-target a rollback under concurrent same-pair edits — short window + refresh mitigates.
 - **No edge hit-testing exists** — "delete this edge" targets a node's links via the menu in v1; a `findLinkAt` edge inspector is deferred.
 - **Touch is unhandled** (mouse-only today) — long-press-to-reveal-handle is a deferred follow-up.
-- **Visual verification:** Phases 2–4 edit `.tsx` — verify with Playwright MCP (`/dev/login` → `admin@local.dev` → directory graph tab).
+- **Visual verification:** Phases 2–4 edit `.tsx` — verify with Playwright MCP (`/dev/login` → `admin@local.dev` → directory context tab).
 
 ## 9. Phased implementation plan
 
-**Phase 0 — Data model + one write path (no UI).** Edit `schema.prisma`: `Link` gets `origin`, `originRef`, `createdBy`, `updatedAt`, `pairKey`, `@@unique link_identity`, `@@index pairKey`; `Community` gets `linkTypes Json?`. Add `LinkTypeConfig` + `DEFAULT_LINK_TYPES` + `getLinkTypes()` to `lib/types.ts`; add `linkTypes` to the `Community` interface and the GET/POST/PUT handlers in `app/api/data/communities/route.ts`. Add the dedup-collapse + column SQL to `scripts/apply-sql-functions.mjs`; run the §2 runbook then `pnpm db:migrate`. Build `lib/graph/links.ts` + `lib/graph/relationships.ts` (`normalize()` keyed off `linkTypes`/`DEFAULT_LINK_TYPES`). Route **all five** write sites through `upsertLink`; repoint the broken `ON CONFLICT`; fix the raw INSERT column list. `node:test` units for dedup/promotion/reversed-pair/auto-no-op. `tsc --noEmit`.
+**Phase 0 — Data model + one write path (no UI).** Edit `schema.prisma`: `Link` gets `origin`, `originRef`, `createdBy`, `updatedAt`, `pairKey`, `@@unique link_identity`, `@@index pairKey`; `Community` gets `linkTypes Json?`. Add `LinkTypeConfig` + `DEFAULT_LINK_TYPES` + `getLinkTypes()` to `lib/types.ts`; add `linkTypes` to the `Community` interface and the GET/POST/PUT handlers in `app/api/data/communities/route.ts`. Add the dedup-collapse + column SQL to `scripts/apply-sql-functions.mjs`; run the §2 runbook then `pnpm db:migrate`. Build `lib/context/links.ts` + `lib/context/relationships.ts` (`normalize()` keyed off `linkTypes`/`DEFAULT_LINK_TYPES`). Route **all five** write sites through `upsertLink`; repoint the broken `ON CONFLICT`; fix the raw INSERT column list. `node:test` units for dedup/promotion/reversed-pair/auto-no-op. `tsc --noEmit`.
 
 **Phase 1 — API: origin-aware + precise delete + symmetric undo.** POST stamps `origin='manual'`/`createdBy`, defaults `relationship='related'`. DELETE gains `?relationship=` + the `409` auto-edge guard. Wire `removeAutoLink` into decline/cancel RSVP, host removal, intro disconnect. Surface `origin`/`id` via `normalizeLink` + GET.
 
-**Phase 2 — Console link-types + right-click menu + ConnectToPicker (smallest delightful slice that ships a real UX).** Add a "Link types" section to the console (sibling of `TypesTab.tsx`'s Types & Aliases — reuse its `ColorPicker`/`saveCommunity`) so admins manage `linkTypes`. Build `<NodeContextMenu>` + `<ConnectToPicker>` + the shared `<LinkTypePicker>` (reads `currentCommunity.linkTypes`, remembers last-used). Wire `onContextMenu` on the canvas (+ `e.button !== 0` guard) → `GraphWithTable`. Add `community_id`/`exclude_ids` to `/api/nodes/search`. Mount the same menu on profiles + directory rows. Optimistic POST + `clearGraphCache`/`refresh`. Playwright verify.
+**Phase 2 — Console link-types + right-click menu + ConnectToPicker (smallest delightful slice that ships a real UX).** Add a "Link types" section to the console (sibling of `TypesTab.tsx`'s Types & Aliases — reuse its `ColorPicker`/`saveCommunity`) so admins manage `linkTypes`. Build `<NodeContextMenu>` + `<ConnectToPicker>` + the shared `<LinkTypePicker>` (reads `currentCommunity.linkTypes`, remembers last-used). Wire `onContextMenu` on the canvas (+ `e.button !== 0` guard) → `ContextWithTable`. Add `community_id`/`exclude_ids` to `/api/nodes/search`. Mount the same menu on profiles + directory rows. Optimistic POST + `clearContextCache`/`refresh`. Playwright verify.
 
 **Phase 3 — Drag-to-connect on the canvas.** Connect refs + `findHandleAt`; admin-only handle render; the four early-return seams; rubber-band + snap; drop → `<LinkTypePicker>` (last-used pre-selected) → create + 6s Undo toast; `Esc` cancel. Thread `isAdmin` down. Playwright verify (pixel-diff confirming non-dragged nodes don't move during a connect; node-move still works).
 
@@ -233,7 +233,7 @@ Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove lin
 
 ## 10. Mobile follow-up
 
-Zero contract impact, no blocker. The native apps never touch the graph or links — they read `/api/data/nodes` as a flat directory only (verified: zero `apps/mobile` hits for graph/links/relationship/sourceId). Adding `origin`/`id` to link DTOs and extending `/api/data/links` is web-only. The only action is documentation honesty: note in `VisvineApi.kt` that `/api/data/links` exists and is intentionally not mirrored. (Note: there is no `docs/native-migration/api-contract.md` — the de-facto contract is the route handlers + `VisvineApi.kt`.)
+Zero contract impact, no blocker. The native apps never touch the context or links — they read `/api/data/nodes` as a flat directory only (verified: zero `apps/mobile` hits for context/links/relationship/sourceId). Adding `origin`/`id` to link DTOs and extending `/api/data/links` is web-only. The only action is documentation honesty: note in `VisvineApi.kt` that `/api/data/links` exists and is intentionally not mirrored. (Note: there is no `docs/native-migration/api-contract.md` — the de-facto contract is the route handlers + `VisvineApi.kt`.)
 
 ## 11. Decisions (locked with the user)
 
@@ -243,4 +243,4 @@ Zero contract impact, no blocker. The native apps never touch the graph or links
 
 ## 12. Context-note mentions (added 2026-07-13)
 
-A fifth auto origin: `context`. Entity context notes (shared brain, `people/<slug>.md` / `companies/<slug>.md`) drive graph edges — every `[[Mention]]` of another entity in a note's body owns a `mentioned` link (origin `context`, `originRef` = the note path). Sync runs best-effort from `lib/notes/store.ts` on every note write/rename/trash/restore/folder-op via `lib/notes/entityLinks.ts`; all writes flow through the same `upsertLink`, so the manual-promotion and auto-never-demotes rules apply unchanged. Removing a mention removes the link — unless the counterpart's note still mentions back, in which case `originRef` re-points to the counterpart instead of dropping the edge. `Mentioned` joins the system link types (recolor-only). Backfill for pre-existing notes: `pnpm --filter @visvine/web run db:context-links:backfill`.
+A fifth auto origin: `context`. Entity context notes (shared brain, `people/<slug>.md` / `companies/<slug>.md`) drive context edges — every `[[Mention]]` of another entity in a note's body owns a `mentioned` link (origin `context`, `originRef` = the note path). Sync runs best-effort from `lib/notes/store.ts` on every note write/rename/trash/restore/folder-op via `lib/notes/entityLinks.ts`; all writes flow through the same `upsertLink`, so the manual-promotion and auto-never-demotes rules apply unchanged. Removing a mention removes the link — unless the counterpart's note still mentions back, in which case `originRef` re-points to the counterpart instead of dropping the edge. `Mentioned` joins the system link types (recolor-only). Backfill for pre-existing notes: `pnpm --filter @visvine/web run db:context-links:backfill`.

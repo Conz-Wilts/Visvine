@@ -42,7 +42,13 @@ export async function POST(request: NextRequest) {
       return forbiddenResponse('Only community admins can create spaces');
     }
 
-    const space = await createChannelSpace(parsed.data.communityId, parsed.data.name, parsed.data.emoji);
+    const space = await createChannelSpace(
+      parsed.data.communityId,
+      parsed.data.name,
+      parsed.data.emoji,
+      parsed.data.context,
+      user.id,
+    );
     return NextResponse.json({ space }, { status: 201 });
   } catch (error) {
     return handleMessagingError(error);

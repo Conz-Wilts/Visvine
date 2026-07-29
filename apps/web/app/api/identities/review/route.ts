@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     if (action === 'split') {
       const result = await splitNodeToNewIdentity(nodeId, { actorUserId });
       if (!result.ok) return NextResponse.json({ error: result.error ?? 'split failed' }, { status: 400 });
-      revalidateTag('graph-data-v2');
+      revalidateTag('context-data-v2');
       return NextResponse.json(result);
     }
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
       const ok = await confirmIdentity(nodeId, identityId, { actorUserId });
       if (!ok) return NextResponse.json({ error: 'identity not found' }, { status: 404 });
       await prisma.node.update({ where: { id: nodeId }, data: { identityId } });
-      revalidateTag('graph-data-v2');
+      revalidateTag('context-data-v2');
       return NextResponse.json({ ok: true });
     }
 
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
       if (!node?.identityId) return NextResponse.json({ error: 'node has no identity to merge' }, { status: 400 });
       const result = await mergeIdentities(node.identityId, targetIdentityId, { actorUserId });
       if (!result.ok) return NextResponse.json({ error: result.error ?? 'merge failed' }, { status: 400 });
-      revalidateTag('graph-data-v2');
+      revalidateTag('context-data-v2');
       return NextResponse.json(result);
     }
 

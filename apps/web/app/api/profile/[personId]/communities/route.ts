@@ -61,7 +61,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     select: { userId: true },
   });
 
-  // Graph-only people (no linked user) have no memberships to show.
+  // Context-only people (no linked user) have no memberships to show.
   if (!person?.userId) return NextResponse.json({ communities: [], isOwner: false });
 
   const isOwner = person.userId === session.userId;

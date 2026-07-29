@@ -1,5 +1,5 @@
 // The read model for the shared brain. filterVisible is applied BEFORE
-// search/index/graph building, so a link into a path the viewer can't read
+// search/index/context building, so a link into a path the viewer can't read
 // degrades to an unresolved link — no title leak. Grants at any folder depth
 // and restricted cuts are all folded into principalCanRead (shared/authz.ts).
 // Personal brains never pass through here (they are owner-only by brain

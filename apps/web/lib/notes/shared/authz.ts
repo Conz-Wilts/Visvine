@@ -30,7 +30,7 @@ export const ACCESS_LEVELS: ReadonlyArray<{
   label: string
   hint: string
 }> = [
-  { name: 'view', level: LEVEL_VIEW, label: 'Viewer', hint: 'Can read, search, and see the graph' },
+  { name: 'view', level: LEVEL_VIEW, label: 'Viewer', hint: 'Can read, search, and see the context' },
   { name: 'comment', level: LEVEL_COMMENT, label: 'Commenter', hint: 'Can view and discuss' },
   { name: 'edit', level: LEVEL_EDIT, label: 'Editor', hint: 'Can view, comment, write, create, and move' },
   { name: 'full', level: LEVEL_FULL, label: 'Full access', hint: 'Can edit, share, restrict, and delete' },

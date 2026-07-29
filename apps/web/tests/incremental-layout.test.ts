@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeIncrementally } from '../components/graph/utils/incrementalLayout';
-import { CARD_DIMENSIONS } from '../components/graph/utils/constants';
+import { placeIncrementally } from '../components/context/utils/incrementalLayout';
+import { CARD_DIMENSIONS } from '../components/context/utils/constants';
 
 const MIN_DIST = Math.hypot(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) + 24;
 

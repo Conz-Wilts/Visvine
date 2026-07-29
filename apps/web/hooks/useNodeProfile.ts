@@ -44,6 +44,23 @@ export function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
   return promise;
 }
 
+/**
+ * Seed the cache for a node we already hold, so its profile paints on first
+ * render instead of fetching. Used by the note-first create commit: it just
+ * created the node, so priming here is what makes the jump from the draft
+ * surface to /directory/<id>?tab=context land without a skeleton frame.
+ *
+ * A brand-new node has no links and belongs to exactly the community it was
+ * created in, hence the zeroed counts — the real numbers arrive with the next
+ * revalidation, and there is nothing to show until then anyway.
+ */
+export function primeNodeProfile(nodeId: string, node: NBNode): void {
+  nodeProfileCache.set(nodeId, {
+    data: { node, connectionCount: 0, communityCount: node.community_id ? 1 : 0, connections: [] },
+    timestamp: Date.now(),
+  });
+}
+
 export function useNodeProfile(nodeId: string | null) {
   const [data, setData] = useState<NodeProfileData | null>(() => {
     if (!nodeId) return null;

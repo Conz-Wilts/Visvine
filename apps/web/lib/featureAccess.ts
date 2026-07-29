@@ -23,7 +23,7 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
  * Feature keys that carry NO sidebar nav item (and no console toggle):
  * - `messages` is always on (core) and lives in the top navbar beside the
  *   profile icon.
- * - `notes` ("Context") is always on (core) and surfaced as the Graph tab under
+ * - `notes` ("Context") is always on (core) and surfaced as the Context tab under
  *   the Directory page, so it has no rail item and is not a toggleable tool.
  */
 export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages', 'notes'];

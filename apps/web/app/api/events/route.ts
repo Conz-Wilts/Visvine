@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
 import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData, upsertEvent } from '@/lib/eventRepo';
-import { upsertLink } from '@/lib/graph/links';
+import { upsertLink } from '@/lib/context/links';
 import { requireCommunityMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
 import type { NBEvent } from '@/lib/types';
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     // Save event as a node (events ARE nodes)
     await upsertEvent(input.communityId, event);
 
-    // Connect each host to the event in the graph (idempotent: skip if it exists).
+    // Connect each host to the event in the context (idempotent: skip if it exists).
     const prisma = (await import('@/lib/prisma')).default;
     for (const hostId of event.hosts) {
       const hostExists = await prisma.node.findFirst({ where: { id: hostId, communityId: input.communityId } });

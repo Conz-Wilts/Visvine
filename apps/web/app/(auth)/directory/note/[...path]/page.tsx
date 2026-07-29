@@ -21,8 +21,8 @@ const NoteContextPanel = dynamic(
   () => import('@/features/notes/components/NoteContextPanel').then((m) => m.NoteContextPanel),
   { ssr: false, loading: () => null },
 );
-const GraphContextSidebar = dynamic(
-  () => import('@/features/notes/components/GraphContextSidebar').then((m) => m.GraphContextSidebar),
+const ContextSidebar = dynamic(
+  () => import('@/features/notes/components/ContextSidebar').then((m) => m.ContextSidebar),
   { ssr: false, loading: () => null },
 );
 
@@ -38,7 +38,7 @@ function useDockInsetStyle(): React.CSSProperties {
 
 // A non-entity note is still a Context note — give it the same "Context / Raw"
 // top nav an entity profile's Context tab gets, so opening a hub/index note from
-// the graph reads identically to opening a person/company note (both land under
+// the context reads identically to opening a person/company note (both land under
 // a ProfileTabBar, not a bare toolbar with an inline Editor/Raw pill). The tabs
 // ARE the editor mode here, exactly as on the profile page.
 const NOTE_TABS: TabConfig[] = [
@@ -56,7 +56,7 @@ function NoteViewerRoute() {
   const { setDockTopInset } = useContextPanel();
 
   // Push the docked notes tree below the nav — same mechanism the Directory's
-  // Grid/Graph/Tables bar uses (setDockTopInset). Our ProfileTabBar stacks two
+  // Grid/Context bar uses (setDockTopInset). Our ProfileTabBar stacks two
   // h-12 (48px) bars: the Context/Raw tab row and its always-open attached
   // toolbar, so the tree starts 96px down, level with where the note begins.
   useEffect(() => {
@@ -83,7 +83,7 @@ function NoteViewerRoute() {
         {/* The tab bar spans the FULL pane width (no dock inset) and bleeds left
             over the docked notes tree with a raised z — so the Context/Raw bar
             reads as one continuous bar across the top, mirroring the Directory's
-            Grid/Graph/Tables tabs, rather than starting at the tree's right edge.
+            Grid/Context tabs, rather than starting at the tree's right edge.
             Direct child of the tall page container so `sticky` has scroll range;
             "-top-4 -mt-4" cancels <main>'s pt-4 (see directory/[nodeId]/page.tsx). */}
         <ProfileTabBar
@@ -98,7 +98,7 @@ function NoteViewerRoute() {
         {/* Only the note content insets to clear the docked tree; the bar above
             stays full-bleed. */}
         <div style={dockInsetStyle}>
-          <GraphContextSidebar currentPath={notePath} />
+          <ContextSidebar currentPath={notePath} />
           <NoteContextPanel path={notePath} mode={mode} />
         </div>
       </div>

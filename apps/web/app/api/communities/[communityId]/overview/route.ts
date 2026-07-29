@@ -69,7 +69,7 @@ export async function GET(
     const organizers = memberships.filter((m) => m.role === 'admin').map(toMember);
     const members = isMember ? memberships.map(toMember) : [];
 
-    // Events live in the node graph; reuse the event repo rather than re-deriving
+    // Events live in the node context; reuse the event repo rather than re-deriving
     // the metadata unpacking here.
     let events: unknown[] = [];
     let upcomingCount = 0;

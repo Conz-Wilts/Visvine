@@ -649,7 +649,7 @@ function MemberAvatar({ member, theme }: { member: OverviewMember; theme: ThemeP
     : <div>{inner}</div>;
 }
 
-/** Decorative node-cluster illustration in theme colors — the graph teaser. */
+/** Decorative node-cluster illustration in theme colors — the context teaser. */
 function NetworkPreview({ theme }: { theme: ThemePalette }) {
   const nodes = [
     { x: 30, y: 38, r: 9 }, { x: 75, y: 22, r: 6 }, { x: 128, y: 40, r: 8 },

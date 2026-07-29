@@ -1,6 +1,6 @@
 // Community domain: the Community record and its design/feature configuration.
 
-import type { NodeTypeConfig, CommunityAlias, LinkTypeConfig } from './graph';
+import type { NodeTypeConfig, CommunityAlias, LinkTypeConfig } from './context';
 
 interface CommunityDesignFont {
   name: string;

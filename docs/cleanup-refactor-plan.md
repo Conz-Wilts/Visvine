@@ -17,7 +17,7 @@ pnpm --filter @visvine/web test
 
 **Tier 0 executed and verified — 2026-06-28** (tsc ✓ / lint ✓ / 109 tests ✓; lockfile synced). Done in the working tree (not committed):
 - 25 dead files deleted (0a–0d), 4 dead deps removed (0f), config cruft fixed (0g), 7 dead exports trimmed (0e).
-- **Deferred within Tier 0:** `eventRepo.updateCommunityGraphData` + `graphUtils.filterGraphByNodeIds` (deliberate multi-line edits), the `webpush`/`sw.js` push stack and the obsolete-scripts triage (0h) — all gated on a decision or warranting care.
+- **Deferred within Tier 0:** `eventRepo.updateCommunityGraphData` + `contextUtils.filterGraphByNodeIds` (deliberate multi-line edits), the `webpush`/`sw.js` push stack and the obsolete-scripts triage (0h) — all gated on a decision or warranting care.
 
 **Tier 1 — auth unification + first dedup done & verified — 2026-06-28** (tsc ✓ / lint ✓ / 109 tests ✓):
 - **[1a] Latent auth bug FIXED** — `crm/column-requests` + `crm/value-share-requests` now use the canonical `isAdmin` (case-insensitive super-admin compare); deleted their buggy local copies.
@@ -32,12 +32,12 @@ pnpm --filter @visvine/web test
 - **CSV tokenizer** — created `lib/crm/csv.ts` (`splitCsvLine` + `parseCsvRows`); wired both `lib/crm/importService.parseCSV` and `features/crm/utils/parseCSVClient` to it. CSV unit tests confirm identical behavior.
 - **`useClickOutside` + `useEscapeKey`** — created `hooks/useClickOutside.ts` + `hooks/useEscapeKey.ts` (attach-once handler-ref design preserves the originals' semantics; `useEscapeKey` takes an `enabled` guard). Adopted `useClickOutside` in 4 clean dropdowns (`ui/Dropdown`, `auth/UserMenu`, `dashboard/FilterDropdown`, `crm/RowActionsMenu`) and `useEscapeKey` in `profile/edit/EditModal`.
 - **Skipped on purpose:** `slugify` (behavior differs across blog/event/notes — out of "safe" scope); the ~57-file `requireSession` sweep (cosmetic + contract-subtle); 1d error envelopes (CONTRACT). `findOrCreateCommunityColumn` not done.
-- **Remaining click-outside/Escape sites available for incremental adoption** (left because they combine mousedown+Escape in one effect, use a `setTimeout` open-delay, or have `if(!open)return` guards / multiple refs): `CommunitySettingsPanel`, `CreateModalForms`, `BlogCommentItem`, `MarketingShell`, `CustomDateTimePicker`, `LocationAutocomplete`, `CommunitySelector`, `CTARow`, `MembersPanel`, `NoteEditor`, `graph/ConnectMenu`, `resources/page` drawer, `auth/SignInModal`. The hooks now exist; adopt as each file is touched.
+- **Remaining click-outside/Escape sites available for incremental adoption** (left because they combine mousedown+Escape in one effect, use a `setTimeout` open-delay, or have `if(!open)return` guards / multiple refs): `CommunitySettingsPanel`, `CreateModalForms`, `BlogCommentItem`, `MarketingShell`, `CustomDateTimePicker`, `LocationAutocomplete`, `CommunitySelector`, `CTARow`, `MembersPanel`, `NoteEditor`, `context/ConnectMenu`, `resources/page` drawer, `auth/SignInModal`. The hooks now exist; adopt as each file is touched.
 
 ---
 
 **Tier 0 deferred + Tier 2 structural removals done & verified — 2026-06-28** (tsc ✓ / lint ✓ / 109 tests ✓; lockfile synced):
-- **T0 deferred:** removed dead `eventRepo.updateCommunityGraphData` (70 lines) + `graphUtils.filterGraphByNodeIds` (+ orphaned `Prisma`/`GraphData` imports).
+- **T0 deferred:** removed dead `eventRepo.updateCommunityGraphData` (70 lines) + `contextUtils.filterGraphByNodeIds` (+ orphaned `Prisma`/`ContextData` imports).
 - **T1 extra:** fixed the `useResources` stale-response race (request-token guard). **Skipped `CommunityAvatar`→avatarUtils** — its `getInitials`/`getAvatarColor` produce *different* output (different initials + palette), so it is NOT behavior-preserving.
 - **T2 structural:** deleted the orphaned `/[communityId]/directory` route + the whole `features/crm` grid tree (17 files; kept `utils/parseCSV` + `utils/buildColumns` for tests). Deleted 3 disabled-only routes (`profile/by-user`, `push/subscribe`, `users/[userId]/block`), `lib/webpush.ts`, `public/sw.js`. Removed 6 now-unused deps (`@chenglou/pretext`, `emoji-picker-react`, `react-markdown`, `rehype-sanitize`, `remark-gfm`, `web-push`) + `@types/web-push`. `lib/messages/auth.ts` + `lib/linkPreview.ts` kept (now live-orphaned but referenced by the `/disabled` revival tree).
 
@@ -62,7 +62,7 @@ pnpm --filter @visvine/web test
 
 ## DO NOT TOUCH (verified intentional / high-risk)
 
-- `lib/graph-layout/graphLayout.ts` (2283 LOC) — intrinsic force-directed-layout algorithm; complexity is essential, not accidental.
+- `lib/context-layout/contextLayout.ts` (2283 LOC) — intrinsic force-directed-layout algorithm; complexity is essential, not accidental.
 - `hooks/useCachedCommunityResource.ts` — the module-level signature map + eslint-disabled deps are deliberate (commented); a naive "simplification" reintroduces a cache bug.
 - `lib/mcp/tools/{analytics,blog,crm,directory,identity,profile,resources}.ts` — parked on purpose (`lib/mcp/tools/index.ts` documents the drip-feed plan). knip flags them as unused; they are not.
 - Deps `eslint*`, `@tailwindcss/postcss`, `tailwindcss`, `@types/google.maps` — depcheck false positives (config/namespace usage).
@@ -81,15 +81,15 @@ Nothing here is referenced by live code (verified). Delete in one sweep, then ru
 
 ### 0b. Dead component island in `components/data/` (8 files)
 Rooted at the two unimported tables; the whole subtree is dead. **Keep `data/TypesTab.tsx`** (live via admin page — it imports none of these).
-- [ ] `NodesTable.tsx`, `LinksTable.tsx` (the dead roots; `GraphDataTables.tsx` uses its own *local* tables)
+- [ ] `NodesTable.tsx`, `LinksTable.tsx` (the dead roots; `ContextDataTables.tsx` uses its own *local* tables)
 - [ ] `EditableDataTable.tsx`, `ComboboxMultiSelect.tsx`, `FilterPopover.tsx`, `TableToolbar.tsx`, `ExpandedRowCard.tsx`, `TypeSelectDropdown.tsx` (only importers are the dead roots / each other)
 
 ### 0c. Other dead components (~1,700 LOC)
 - [ ] `components/events/EventForm.tsx` (635) — superseded by `EventComposer`
 - [ ] `components/events/EventActions.tsx` (79) — zero refs
 - [ ] `components/events/AttendeesTable.tsx` (177) — superseded by `GuestManager`
-- [ ] `components/graph/NodeDetailsSidebar.tsx` (552) + `components/graph/EventSidebarContent.tsx` (202) — dead pair (sidebar already unimported at HEAD; the `M` in git status is incidental). Also remove the stale comment at `lib/contexts/ProfileContext.tsx:12`.
-- [ ] `components/graph/renderers/HexagonNodeRenderer.ts`, `components/graph/utils/hitTest.ts` — zero refs
+- [ ] `components/context/NodeDetailsSidebar.tsx` (552) + `components/context/EventSidebarContent.tsx` (202) — dead pair (sidebar already unimported at HEAD; the `M` in git status is incidental). Also remove the stale comment at `lib/contexts/ProfileContext.tsx:12`.
+- [ ] `components/context/renderers/HexagonNodeRenderer.ts`, `components/context/utils/hitTest.ts` — zero refs
 - [ ] `components/ui/SearchInput.tsx`, `components/ui/PageHeader.tsx` + their barrel lines in `components/ui/index.ts` (also drop the unused `Avatar`/`Button` re-exports from the barrel if still unconsumed)
 
 ### 0d. Dead feature/lib modules
@@ -102,10 +102,10 @@ Rooted at the two unimported tables; the whole subtree is dead. **Keep `data/Typ
 > **Verification corrected several agent claims** — some "unused exports" are used *internally* (grep showed the callers). Those are kept; removing them would have broken the build.
 - [x] `lib/messages/auth.ts`: `getServerMessagingUser`, `forbiddenResponse` — removed
 - [x] `lib/personDedupe.ts`: `createPersonNode`, `ensureUniquePersonId` — removed (+ trimmed now-unused `slugify` import; kept `findMatchingPerson`)
-- [x] `lib/graph/relationships.ts`: `linkTypeColor` — removed
+- [x] `lib/context/relationships.ts`: `linkTypeColor` — removed
 - [x] `lib/types.ts`: `DirectoryItem.explanation` + `DirectoryItem.similarity` — removed (vestigial pgvector/LLM-search fields)
 - [x] `lib/features.tsx`: `AppsGridIcon` — removed (the "More" launcher that used it is disabled)
-- [ ] **Deferred (genuinely dead, but needs a deliberate multi-line edit):** `lib/eventRepo.ts:620` `updateCommunityGraphData` (70-line block, would orphan `GraphData`/`revalidateTag` imports — check those), and `lib/graphUtils.ts:43` `filterGraphByNodeIds` (trailing-whitespace-sensitive block).
+- [ ] **Deferred (genuinely dead, but needs a deliberate multi-line edit):** `lib/eventRepo.ts:620` `updateCommunityGraphData` (70-line block, would orphan `ContextData`/`revalidateTag` imports — check those), and `lib/contextUtils.ts:43` `filterGraphByNodeIds` (trailing-whitespace-sensitive block).
 - [x] **KEPT — NOT dead (agents were wrong):** `lib/gcs.ts:normalizeImageUrl` (used in 8 files), `lib/eventRepo.ts` `getCommunityLinks`/`updateEventAnalytics`/`upsertAttendee` (called internally at :244/:551,:583/:578), `lib/messages/rateLimit.ts:MESSAGE_SEND_LIMIT` (default param of `takeToken`).
 - [ ] **Deferred to the push/messaging decision:** `lib/webpush.ts` `isPushConfigured`/`sendPushToUser` + `public/sw.js` (the whole push stack is decision-gated).
 - [ ] Remaining knip-flagged unused types are low-value; sweep opportunistically (`lib/schemas/eventSchemas.ts` Zod schemas, `lib/types.ts` `DiagnosticReport`/`CommunitiesRegistry`/`ResourceFileType`). `noteCount`/`listFolders` were already gone.
@@ -152,7 +152,7 @@ The HTTP route `app/api/link-preview/route.ts` has **no live caller** (checked a
 - [ ] Move CSV `splitLine`/`parseCSV` core into `lib/crm/`; have both the client preview (`features/crm/utils/parseCSV.ts`) and server import (`lib/crm/importService.ts`) call it.
 - [ ] `useFetch(url, {enabled})` — unify the 5 divergent one-off fetch idioms; migrating `hooks/useResources.ts` onto it also fixes its real (minor) stale-response race on fast community switches.
 - [ ] Point `components/community/CommunityAvatar.tsx` at `lib/avatarUtils` (it re-implements `getInitials`/`getAvatarColor` inline with a different palette).
-- [ ] Remove the duplicate fuzzy scorer: keep `useDashboardSearch` (intentionally name-only) and one weighted scorer; drop the now-deleted `searchUtils` copy and the degraded char-diff in `lib/graphUtils.ts` (or upgrade it to real Levenshtein).
+- [ ] Remove the duplicate fuzzy scorer: keep `useDashboardSearch` (intentionally name-only) and one weighted scorer; drop the now-deleted `searchUtils` copy and the degraded char-diff in `lib/contextUtils.ts` (or upgrade it to real Levenshtein).
 
 ### 1d. Error-handling consistency (internal only)
 - [ ] Unify the 401 construction so `requireSession` and `messages/auth.unauthorizedResponse` emit one shape (`NextResponse.json`). Keep mobile-facing wire strings stable — only touch internal-only routes here.

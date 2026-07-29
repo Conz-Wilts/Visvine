@@ -140,11 +140,27 @@ export async function GET(request: NextRequest, context: RouteContext) {
   );
 }
 
+/** Node columns the property rows may write. Everything else is metadata, and
+ *  identity/type/name stay off-limits here — retyping an entity is a four-sided
+ *  migration (link FKs, the Person mirror, identity attachment, note frontmatter)
+ *  and belongs to a dedicated endpoint, not an incidental field edit. */
+const PATCHABLE_COLUMNS = {
+  subtitle: 'subtitle',
+  location: 'location',
+  url: 'url',
+  image_url: 'imageUrl',
+} as const;
+
 /**
- * PATCH /api/nodes/[nodeId] — update an entity's tags from its context note.
- * Body: { communityId, tags }. Gated on active membership of the node's own
- * community (the same audience that can read/write the community brain); tags
- * are shared collaborative metadata, so any member with write access may edit.
+ * PATCH /api/nodes/[nodeId] — update an entity's tags and property rows from its
+ * context note. Body: { communityId, tags?, metadata?, subtitle?, location?,
+ * url?, image_url? }. Gated on active membership of the node's own community
+ * (the same audience that can read/write the community brain); these are shared
+ * collaborative metadata, so any member with write access may edit them.
+ *
+ * `metadata` MERGES into the stored blob rather than replacing it — the property
+ * rows only know the keys for the node's own type, and a replace would silently
+ * drop everything else on the node (event form_schema, importer provenance…).
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const session = await requireApiSession();
@@ -156,14 +172,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!communityId) {
     return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
   }
-  if (!('tags' in body)) {
-    return NextResponse.json({ error: 'tags is required' }, { status: 400 });
+
+  const columnKeys = Object.keys(PATCHABLE_COLUMNS).filter((k) => k in body);
+  const hasTags = 'tags' in body;
+  const hasMetadata = 'metadata' in body && body.metadata !== null && typeof body.metadata === 'object';
+  if (!hasTags && !hasMetadata && columnKeys.length === 0) {
+    return NextResponse.json(
+      { error: 'One of tags, metadata, or a property column is required' },
+      { status: 400 },
+    );
   }
-  const tags = cleanTags(body.tags);
+  const tags = hasTags ? cleanTags(body.tags) : null;
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { communityId: true },
+    select: { communityId: true, metadata: true },
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
@@ -183,15 +206,36 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   });
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  // Update the graph node; keep Person.tags in sync so the person profile's
-  // Skills section stays consistent with the same underlying tag list.
+  const data: Record<string, unknown> = {};
+  if (tags !== null) data.tags = tags;
+  for (const key of columnKeys) {
+    const column = PATCHABLE_COLUMNS[key as keyof typeof PATCHABLE_COLUMNS];
+    const value = body[key];
+    // An empty string means "clear this row", which is a null column — storing
+    // '' would make a blank field read as a real (empty) value downstream.
+    data[column] = typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+  }
+  if (hasMetadata) {
+    data.metadata = {
+      ...((node.metadata as Record<string, unknown>) ?? {}),
+      ...(body.metadata as Record<string, unknown>),
+    };
+  }
+
+  // Update the context node; keep the Person mirror in sync so the person
+  // profile's Skills section and avatar stay consistent with the same
+  // underlying values.
+  const personMirror: Record<string, unknown> = {};
+  if (tags !== null) personMirror.tags = tags;
+  if ('image_url' in body) personMirror.imageUrl = data.imageUrl;
+
   await prisma.$transaction([
-    prisma.node.update({ where: { id: nodeId }, data: { tags } }),
-    ...(nodeId.startsWith('person:')
-      ? [prisma.person.updateMany({ where: { id: nodeId }, data: { tags } })]
+    prisma.node.update({ where: { id: nodeId }, data }),
+    ...(nodeId.startsWith('person:') && Object.keys(personMirror).length > 0
+      ? [prisma.person.updateMany({ where: { id: nodeId }, data: personMirror })]
       : []),
   ]);
 
-  revalidateTag('graph-data-v2');
-  return NextResponse.json({ tags });
+  revalidateTag('context-data-v2');
+  return NextResponse.json({ tags: tags ?? undefined, ok: true });
 }

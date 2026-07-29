@@ -15,8 +15,8 @@ const SourcePreviewPanel = dynamic(
   () => import('@/features/notes/components/SourcePreviewPanel').then((m) => m.SourcePreviewPanel),
   { ssr: false, loading: () => null },
 );
-const GraphContextSidebar = dynamic(
-  () => import('@/features/notes/components/GraphContextSidebar').then((m) => m.GraphContextSidebar),
+const ContextSidebar = dynamic(
+  () => import('@/features/notes/components/ContextSidebar').then((m) => m.ContextSidebar),
   { ssr: false, loading: () => null },
 );
 
@@ -36,7 +36,7 @@ function SourceViewerRoute() {
         transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
       }}
     >
-      <GraphContextSidebar currentPath={sourcePath} />
+      <ContextSidebar currentPath={sourcePath} />
       <SourcePreviewPanel path={sourcePath} />
     </div>
   );

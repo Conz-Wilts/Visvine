@@ -26,8 +26,8 @@ function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
 
 /**
  * Segmented view selector with an animated brand-green pill sliding under the
- * active option — the directory's graph/grid/table toggle, generalized so other
- * surfaces (e.g. the notes Search/Graph/Editor/Raw selector) share one control.
+ * active option — the directory's context/grid/table toggle, generalized so other
+ * surfaces (e.g. the notes Search/Context/Editor/Raw selector) share one control.
  * The option set may change at runtime (options appearing/disappearing); the
  * pill re-measures and slides to wherever the active option lands.
  */

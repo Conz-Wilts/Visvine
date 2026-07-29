@@ -18,7 +18,7 @@
 
 import { listRaw, SHARED_OWNER_KEY, type Brain } from './store'
 import prisma from '@/lib/prisma'
-import { buildNoteIndex } from './shared/graph'
+import { buildNoteIndex } from './shared/context'
 import {
   buildVaultView,
   seesUnfiltered,

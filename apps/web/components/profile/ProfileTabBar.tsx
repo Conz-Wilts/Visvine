@@ -86,7 +86,7 @@ interface ProfileTabBarProps {
   /** Horizontal bleed + stacking classes, default `-ml-6 z-20`. The standalone
    *  note view passes a rail-wide bleed + raised z (`-ml-[23px] z-[45]`) so its
    *  Context/Raw bar spans OVER the docked notes tree (z-40) — the same trick the
-   *  Directory's Grid/Graph/Tables bar uses — instead of starting at the tree's
+   *  Directory's Grid/Context bar uses — instead of starting at the tree's
    *  right edge and leaving the tree's top-left corner bare. */
   edgeClass?: string;
 }

@@ -1,4 +1,4 @@
-// Context-driven graph links: an entity context note (people/<slug>.md or
+// Context-driven context links: an entity context note (people/<slug>.md or
 // companies/<slug>.md, shared brain only) that mentions another entity via
 // `[[Name]]` owns a real directory Link between the two nodes — relationship
 // 'mentioned', origin 'context', originRef = the note's path. Saving a note
@@ -15,8 +15,11 @@
 import { revalidateTag } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
-import { upsertLink } from '@/lib/graph/links'
-import { pairKeyFor } from '@/lib/graph/relationships'
+import { upsertLink } from '@/lib/context/links'
+import { pairKeyFor } from '@/lib/context/relationships'
+import { communityNodeId, removeEntityNode, syncEntityNode } from '@/lib/context/entityNodes'
+import { parseFrontmatter } from './shared/markdown'
+import { isIndexPath } from './shared/indexNote'
 import { entityKindOfPath, entityMentionPaths, entityNotePath } from './entities'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
@@ -36,9 +39,9 @@ interface EntityMaps {
   pathById: Map<string, string>
 }
 
-function bustGraphCache(): void {
+function bustContextCache(): void {
   try {
-    revalidateTag('graph-data-v2')
+    revalidateTag('context-data-v2')
   } catch {
     /* outside request scope */
   }
@@ -50,17 +53,62 @@ function bustGraphCache(): void {
 async function loadEntityMaps(communityId: string): Promise<EntityMaps> {
   const nodes = await prisma.node.findMany({
     where: { communityId },
-    select: { id: true, type: true },
+    select: { id: true, type: true, metadata: true },
   })
   const idByPath = new Map<string, string>()
   const pathById = new Map<string, string>()
   for (const node of nodes) {
-    const path = entityNotePath(node)
+    // A plain note is its own node, and its path lives in metadata rather than
+    // being derivable from the id — the id is a slug of the path, which is lossy.
+    const path =
+      node.type === 'note'
+        ? notePathOfNode(node.metadata)
+        : entityNotePath(node)
     if (!path) continue
     idByPath.set(path, node.id)
     pathById.set(node.id, path)
   }
   return { idByPath, pathById }
+}
+
+/** The brain path a `note:` node stands for, off its metadata. */
+function notePathOfNode(metadata: unknown): string | null {
+  const value = (metadata as Record<string, unknown> | null)?.notePath
+  return typeof value === 'string' && value ? value : null
+}
+
+/**
+ * A note that isn't the canonical note for some other entity is its own thing,
+ * so it gets its own `note:` node — that's what lets an ordinary note appear in
+ * the context view and own the `mentioned` edges it draws.
+ *
+ * Two exclusions. An entity note (people/craig.md) is already represented by the
+ * entity's node; giving it a second one would draw Craig twice. A folder's
+ * index.md is brain scaffolding rather than content — see shared/indexNote.ts.
+ *
+ * `content: null` means the note is gone, so its node goes with it. Returns true
+ * when anything changed.
+ */
+async function syncNoteNode(
+  communityId: string,
+  path: string,
+  content: string | null,
+): Promise<boolean> {
+  if (entityKindOfPath(path) || isIndexPath(path)) return false
+  if (content === null) return removeEntityNode(communityId, 'note', path)
+
+  const title = String(parseFrontmatter(content).title ?? '').trim()
+  await syncEntityNode({
+    communityId,
+    type: 'note',
+    name: title || path.replace(/\.md$/i, '').split('/').pop() || path,
+    recordId: path,
+    slugSource: path.replace(/\.md$/i, ''),
+    metadata: { notePath: path },
+    parentNodeId: communityNodeId(communityId),
+    revalidate: false,
+  })
+  return true
 }
 
 // The live shared-brain note at `path`, or null.
@@ -130,20 +178,27 @@ async function syncOne(
 }
 
 /**
- * Best-effort sync of the context links derived from one note. No-op for
- * personal brains and non-entity paths. Pass `content: null` when the note no
- * longer lives at `path` (trash, rename, folder delete).
+ * Best-effort sync of one note's place in the graph: its own `note:` node, then
+ * the context links its `[[mentions]]` own. Every shared-brain note goes through
+ * here now, not just entity notes — an ordinary note that mentions three people
+ * draws three edges, which is the whole point of notes being first-class.
+ *
+ * No-op for personal brains. Pass `content: null` when the note no longer lives
+ * at `path` (trash, rename, folder delete).
  */
 export async function syncContextLinks(
   brain: BrainRef,
   path: string,
   content: string | null,
 ): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY || !entityKindOfPath(path)) return
+  if (brain.ownerKey !== SHARED_OWNER_KEY) return
   try {
+    // The node must exist before syncOne runs — that's what makes `selfId`
+    // resolve, and therefore what lets a plain note own edges at all.
+    const nodeChanged = await syncNoteNode(brain.communityId, path, content)
     const maps = await loadEntityMaps(brain.communityId)
     const changed = await syncOne(brain.communityId, path, content, maps)
-    if (changed) bustGraphCache()
+    if (changed || nodeChanged) bustContextCache()
   } catch (err) {
     logger.error('notes.contextLinks.sync.failed', { err, path, communityId: brain.communityId })
   }
@@ -152,8 +207,12 @@ export async function syncContextLinks(
 /**
  * Best-effort bulk sync after a folder rename/delete: `removed` paths lose
  * their links (counterpart re-point rules apply), `added` [path, content]
- * pairs gain theirs. Non-entity paths are skipped, so callers can pass every
- * affected note without pre-filtering.
+ * pairs gain theirs, and each path's own `note:` node follows it.
+ *
+ * A rename is modelled as remove-then-add, so a renamed plain note gets a fresh
+ * node keyed on the new path: its saved canvas position doesn't survive the
+ * move. Entity notes are unaffected — their node is keyed on the entity, not the
+ * path.
  */
 export async function syncContextLinksBulk(
   brain: BrainRef,
@@ -161,40 +220,50 @@ export async function syncContextLinksBulk(
   added: Array<[path: string, content: string]> = [],
 ): Promise<void> {
   if (brain.ownerKey !== SHARED_OWNER_KEY) return
-  const removedEntity = removed.filter((p) => entityKindOfPath(p))
-  const addedEntity = added.filter(([p]) => entityKindOfPath(p))
-  if (removedEntity.length === 0 && addedEntity.length === 0) return
+  if (removed.length === 0 && added.length === 0) return
   try {
-    const maps = await loadEntityMaps(brain.communityId)
     let changed = false
-    for (const path of removedEntity) {
+    for (const path of removed) {
+      changed = (await syncNoteNode(brain.communityId, path, null)) || changed
+    }
+    for (const [path, content] of added) {
+      changed = (await syncNoteNode(brain.communityId, path, content)) || changed
+    }
+    // Loaded after the node writes so newly added notes resolve to their nodes.
+    const maps = await loadEntityMaps(brain.communityId)
+    for (const path of removed) {
       changed = (await syncOne(brain.communityId, path, null, maps)) || changed
     }
-    for (const [path, content] of addedEntity) {
+    for (const [path, content] of added) {
       changed = (await syncOne(brain.communityId, path, content, maps)) || changed
     }
-    if (changed) bustGraphCache()
+    if (changed) bustContextCache()
   } catch (err) {
     logger.error('notes.contextLinks.bulkSync.failed', { err, communityId: brain.communityId })
   }
 }
 
 /**
- * Rebuild every context link in a community's shared brain from its entity
- * notes — the backfill for notes written before context-driven links existed.
- * Returns the number of entity notes processed.
+ * Rebuild every context link in a community's shared brain from its notes — the
+ * backfill for notes written before context-driven links existed, and for the
+ * notes that only became graph-visible when notes gained their own nodes.
+ * Returns the number of notes processed.
  */
 export async function backfillContextLinks(communityId: string): Promise<number> {
-  const maps = await loadEntityMaps(communityId)
   const notes = await prisma.communityNote.findMany({
     where: { communityId, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
     select: { path: true, content: true },
   })
-  const entityNotes = notes.filter((n) => entityKindOfPath(n.path))
   let changed = false
-  for (const note of entityNotes) {
+  // Nodes first, for the whole set: a note can only own an edge once its own
+  // node exists, and the maps are loaded once afterwards rather than per note.
+  for (const note of notes) {
+    changed = (await syncNoteNode(communityId, note.path, note.content)) || changed
+  }
+  const maps = await loadEntityMaps(communityId)
+  for (const note of notes) {
     changed = (await syncOne(communityId, note.path, note.content, maps)) || changed
   }
-  if (changed) bustGraphCache()
-  return entityNotes.length
+  if (changed) bustContextCache()
+  return notes.length
 }

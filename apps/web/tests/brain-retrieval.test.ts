@@ -1,5 +1,5 @@
 // Unit tests for the brain retrieval stack: BM25 text ranking and the fused
-// search (filters → BM25 → optional vector stage → graph expansion → RRF).
+// search (filters → BM25 → optional vector stage → context expansion → RRF).
 // Fixtures go through the real index pipeline (buildNoteIndex) rather than
 // hand-rolled metas. Run: node --import tsx --test tests/brain-retrieval.test.ts
 import test from 'node:test'
@@ -13,7 +13,7 @@ import {
   type SourceStage,
   type VectorStage,
 } from '../lib/notes/shared/retrieval'
-import { buildNoteIndex } from '../lib/notes/shared/graph'
+import { buildNoteIndex } from '../lib/notes/shared/context'
 import { splitFrontmatter } from '../lib/notes/shared/markdown'
 import type { RawNote } from '../lib/notes/shared/types'
 
@@ -125,16 +125,16 @@ const retrievalVault = (): RetrievalNote[] =>
   ])
 
 test('fusedSearch (BM25 only) returns the expected top hit', async () => {
-  const res = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, { graphExpand: false })
+  const res = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, { contextExpand: false })
   assert.ok(res.length >= 1)
   assert.equal(res[0].path, 'projects/alpha.md')
   assert.equal(res[0].title, 'Alpha')
   assert.ok(res[0].snippet && res[0].snippet.includes('kubernetes'))
-  // graph expansion off → the text-unrelated neighbor never appears
+  // context expansion off → the text-unrelated neighbor never appears
   assert.ok(!res.some((r) => r.path === 'projects/notes.md'))
 })
 
-test('fusedSearch graph expansion pulls in a linked neighbor of the top hits', async () => {
+test('fusedSearch context expansion pulls in a linked neighbor of the top hits', async () => {
   const res = await fusedSearch(retrievalVault(), 'kubernetes deployment', {})
   assert.equal(res[0].path, 'projects/alpha.md')
   // notes.md matches no query term but is linked from the seed hit
@@ -149,7 +149,7 @@ test('fusedSearch lets a vector stage introduce and lift a result', async () => 
       return [{ path: 'projects/notes.md', score: 0.93 }]
     },
   }
-  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { vector, graphExpand: false })
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { vector, contextExpand: false })
   const paths = res.map((r) => r.path)
   // the vector-only hit is fused in, and its rank-0 vector vote beats the
   // weaker (rank-1) BM25 hit
@@ -163,10 +163,10 @@ test('fusedSearch degrades gracefully when the vector stage returns []', async (
   const emptyVector: VectorStage = { async rank() { return [] } }
   const withVector = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, {
     vector: emptyVector,
-    graphExpand: false,
+    contextExpand: false,
   })
   const withoutVector = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, {
-    graphExpand: false,
+    contextExpand: false,
   })
   assert.deepEqual(withVector.map((r) => r.path), withoutVector.map((r) => r.path))
   assert.equal(withVector[0].path, 'projects/alpha.md')
@@ -191,7 +191,7 @@ test('fusedSearch fuses source-chunk hits alongside notes, typed as sources', as
   const sources = fakeSources([
     { path: 'projects/pricing.csv', seq: 3, snippet: 'company: Acme; plan: kubernetes', score: 0.95 },
   ])
-  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, graphExpand: false })
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, contextExpand: false })
   const hit = res.find((r) => r.kind === 'source')
   assert.ok(hit, 'source hit fused in')
   assert.equal(hit.path, 'projects/pricing.csv')
@@ -205,9 +205,9 @@ test('fusedSearch fuses source-chunk hits alongside notes, typed as sources', as
 test('fusedSearch without a source stage (or with an empty one) is unchanged', async () => {
   const withEmpty = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, {
     sources: fakeSources([]),
-    graphExpand: false,
+    contextExpand: false,
   })
-  const without = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, { graphExpand: false })
+  const without = await fusedSearch(retrievalVault(), 'kubernetes deployment', {}, { contextExpand: false })
   assert.deepEqual(withEmpty.map((r) => r.path), without.map((r) => r.path))
   assert.ok(without.every((r) => r.kind === 'note'))
 })
@@ -230,7 +230,7 @@ test('two chunks of the same source fuse as distinct results', async () => {
     { path: 'projects/pricing.csv', seq: 0, snippet: 'rows 0-19', score: 0.95 },
     { path: 'projects/pricing.csv', seq: 1, snippet: 'rows 20-39', score: 0.9 },
   ])
-  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, graphExpand: false })
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, contextExpand: false })
   const seqs = res.filter((r) => r.kind === 'source').map((r) => r.seq)
   assert.deepEqual(seqs.sort(), [0, 1])
 })

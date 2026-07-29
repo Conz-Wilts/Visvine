@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
-import { upsertLink, removeLink } from '@/lib/graph/links';
+import { upsertLink, removeLink } from '@/lib/context/links';
 import type { NBLink } from '@/lib/types';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
     }
 
-    // A personal space's relationship graph is private to its owner — block
+    // A personal space's relationship context is private to its owner — block
     // reads of someone else's `me:<userId>` community.
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       metadata: link.metadata,
     });
 
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
     return NextResponse.json({
       link: {
         id: created.id,
@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
     return NextResponse.json({
       link: {
         source: updated.sourceId,
@@ -192,7 +192,7 @@ export async function DELETE(request: NextRequest) {
     // ?relationship= narrows the delete to one edge type between the pair.
     await removeLink(communityId, sourceId, targetId, relationship);
 
-    revalidateTag('graph-data-v2');
+    revalidateTag('context-data-v2');
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, 'api.data.links.delete.failed');

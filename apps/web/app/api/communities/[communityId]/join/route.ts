@@ -91,8 +91,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
       }
     }
 
-    // Bust the graph cache so the node appears immediately
-    revalidateTag('graph-data-v2');
+    // Bust the context cache so the node appears immediately
+    revalidateTag('context-data-v2');
 
     return NextResponse.json({ membership: { id: membership.id, role: membership.role } }, { status: 201 });
   } catch (err) {
@@ -118,7 +118,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     // Brain access leaves with them: direct grants + team memberships here.
     await removeMemberAccess(communityId, session.userId);
 
-    // Note: intentionally leaving the user's node in the community graph when they leave.
+    // Note: intentionally leaving the user's node in the community context when they leave.
 
     return NextResponse.json({ success: true });
   } catch (err) {

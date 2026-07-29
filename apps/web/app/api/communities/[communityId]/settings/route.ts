@@ -114,7 +114,7 @@ export async function PUT(
     },
   });
 
-  revalidateTag('graph-data-v2');
+  revalidateTag('context-data-v2');
 
   await logActivity({
     communityId,

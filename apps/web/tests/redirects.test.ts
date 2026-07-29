@@ -11,7 +11,7 @@ function resolved(input: string): string {
 
 test("safeRelativePath keeps legitimate same-origin paths intact", () => {
   assert.equal(safeRelativePath("/directory"), "/directory");
-  assert.equal(safeRelativePath("/notes/abc-123?tab=graph"), "/notes/abc-123?tab=graph");
+  assert.equal(safeRelativePath("/notes/abc-123?tab=context"), "/notes/abc-123?tab=context");
   assert.equal(safeRelativePath("/profile/x#section"), "/profile/x#section");
   // Encoded slashes are a legitimate single-segment same-origin path.
   assert.equal(safeRelativePath("/%2Fnot-a-host"), "/%2Fnot-a-host");

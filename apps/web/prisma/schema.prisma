@@ -39,7 +39,7 @@ model Community {
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]
-  graphLayout      GraphLayout?
+  contextLayout    ContextLayout?
   notes            CommunityNote[]
   noteFolders      CommunityNoteFolder[]
   brainFiles       CommunityBrainFile[]
@@ -66,7 +66,7 @@ model Community {
 /// community-wide brain every member sees; any other value is a userId = that
 /// user's personal brain scoped to this community. `path` is the brain-relative
 /// POSIX path ("portfolio/canva.md") and doubles as the link-resolution identity,
-/// so the pure index/graph/backlink pipeline (lib/notes/shared) treats a row exactly
+/// so the pure index/context/backlink pipeline (lib/notes/shared) treats a row exactly
 /// like a file on disk. `content` (full markdown incl. YAML frontmatter) is the
 /// source of truth. Soft-deleted notes (deletedAt set) are the trash.
 model CommunityNote {
@@ -278,7 +278,7 @@ model CommunityNoteEmbedding {
 }
 
 /// A non-note source (uploaded file/table) attached to a brain. Lives ONLY in
-/// the Context — never a graph Node, never in the workspace/directory. Keyed
+/// the Context — never a Node, never in the workspace/directory. Keyed
 /// (communityId, ownerKey, path) exactly like CommunityNote so the folder gate
 /// and visibility lens apply to sources unchanged; `path` must NOT end in .md
 /// (the note namespace stays disjoint). The original file lives in GCS; the
@@ -376,11 +376,11 @@ model Task {
   @@map("tasks")
 }
 
-/// Persisted force-directed graph layout for a community's directory graph view.
-/// Stored once per community (a shared canonical layout) so reopening the graph
+/// Persisted force-directed layout for a community's directory Context view.
+/// Stored once per community (a shared canonical layout) so reopening the context
 /// restores saved node positions + camera transform instead of re-running the
 /// expensive simulation from scratch.
-model GraphLayout {
+model ContextLayout {
   communityId String    @id @map("community_id")
   hash        String // signature of node ids + link count; layout is reused only while this matches
   transform   Json      @default("{}") // { x, y, k } camera transform
@@ -435,9 +435,9 @@ model Link {
   createdAt    DateTime   @default(now()) @map("created_at")
   // Provenance + dedup (see docs/link-management-design.md). `pairKey` is the
   // normalized "minId|maxId" of the two endpoints so A->B and B->A dedup as one
-  // edge; always computed by lib/graph/links.ts upsertLink, never raw-written blank.
-  origin       String     @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | context | import
-  originRef    String?    @map("origin_ref") // Attendee.id / IntroRequest.id / event node id / context-note path — for symmetric auto-undo
+  // edge; always computed by lib/context/links.ts upsertLink, never raw-written blank.
+  origin       String     @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | context | structure | import
+  originRef    String?    @map("origin_ref") // Attendee.id / IntroRequest.id / event node id / context-note path / contained node id — for symmetric auto-undo
   createdBy    String?    @map("created_by") // userId for manual links; null for system/auto
   updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
   pairKey      String     @map("pair_key")

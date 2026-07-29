@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 /*
  * Bridges panel-owning pages and the global Sidebar so page content can render
@@ -25,8 +25,8 @@ interface ContextPanelValue {
   contextOpen: boolean;
   setContextOpen: (v: boolean) => void;
   // Pixels the docked panel's content should start BELOW the card top. A page
-  // that keeps its own bar pinned at the card top (the Directory's Grid/Graph/
-  // Tables tabs) sets this to that bar's height so the notes tree begins under
+  // that keeps its own bar pinned at the card top (the Directory's Grid/Context
+  // tabs) sets this to that bar's height so the notes tree begins under
   // it instead of being covered. Defaults to 0 — most docks fill from the top.
   dockTopInset: number;
   setDockTopInset: (v: number) => void;
@@ -43,14 +43,76 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setDockTopInset: () => {},
 });
 
+// Handing the dock BACK is deferred by this long. Navigating between two docked
+// surfaces (the context canvas → a note, a note → another note) unmounts one
+// ContextSidebar before the next one mounts, so a synchronous false→true would
+// slam the panel column shut and slide it open again mid-navigation — the flash
+// the transition reads as. The grace window swallows that gap; a real exit still
+// collapses a beat later, which is invisible against the page swap. The same
+// rule applies to dockTopInset: a page's cleanup resets it to 0 just before the
+// next page sets its own, and without the grace the tree jumps to the card top
+// and back down.
+const DOCK_RELEASE_MS = 260;
+
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
-  const [dockRequested, setDockRequested] = useState(false);
+  const [dockRequestedState, setDockRequestedState] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
-  const [dockTopInset, setDockTopInset] = useState(0);
+  const [dockTopInsetState, setDockTopInsetState] = useState(0);
+
+  // One timer per latched value: claiming cancels a pending release.
+  const dockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const insetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (dockTimer.current) clearTimeout(dockTimer.current);
+      if (insetTimer.current) clearTimeout(insetTimer.current);
+    },
+    [],
+  );
+
+  const setDockRequested = useCallback((v: boolean) => {
+    if (dockTimer.current) {
+      clearTimeout(dockTimer.current);
+      dockTimer.current = null;
+    }
+    if (v) {
+      setDockRequestedState(true);
+      return;
+    }
+    dockTimer.current = setTimeout(() => {
+      dockTimer.current = null;
+      setDockRequestedState(false);
+    }, DOCK_RELEASE_MS);
+  }, []);
+
+  const setDockTopInset = useCallback((v: number) => {
+    if (insetTimer.current) {
+      clearTimeout(insetTimer.current);
+      insetTimer.current = null;
+    }
+    if (v > 0) {
+      setDockTopInsetState(v);
+      return;
+    }
+    insetTimer.current = setTimeout(() => {
+      insetTimer.current = null;
+      setDockTopInsetState(0);
+    }, DOCK_RELEASE_MS);
+  }, []);
+
   return (
     <ContextPanelContext.Provider
-      value={{ host, setHost, dockRequested, setDockRequested, contextOpen, setContextOpen, dockTopInset, setDockTopInset }}
+      value={{
+        host,
+        setHost,
+        dockRequested: dockRequestedState,
+        setDockRequested,
+        contextOpen,
+        setContextOpen,
+        dockTopInset: dockTopInsetState,
+        setDockTopInset,
+      }}
     >
       {children}
     </ContextPanelContext.Provider>

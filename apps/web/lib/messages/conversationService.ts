@@ -9,6 +9,12 @@ import {
   getUnreadCount,
   serializeConversation,
 } from './core';
+import {
+  communityNodeId,
+  removeEntityNode,
+  reparentEntityNode,
+  syncEntityNodeSafe,
+} from '@/lib/context/entityNodes';
 
 export async function listConversationsForUser(userId: string, searchQuery?: string): Promise<ConversationSummary[]> {
   const query = searchQuery?.trim();
@@ -251,6 +257,7 @@ export async function createChannelConversation(
   icon?: string,
   spaceId?: string,
   viewMode?: 'CHAT' | 'FEED',
+  context?: string,
 ): Promise<ConversationSummary> {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
@@ -288,7 +295,39 @@ export async function createChannelConversation(
     include: CONVERSATION_INCLUDE,
   });
 
+  // A channel is a thing you can hold context about, so it gets a graph node and
+  // a channels/<slug>.md note, contained by its space (or by the community when
+  // it's unfiled). Best-effort: a channel without context still works.
+  await syncEntityNodeSafe({
+    communityId,
+    type: 'channel',
+    name: created.name?.trim() || 'Channel',
+    recordId: created.id,
+    subtitle: created.description,
+    body: context,
+    metadata: { viewMode: created.viewMode, icon: created.icon },
+    parentNodeId: await parentNodeForChannel(communityId, created.spaceId),
+    actor: { id: currentUserId, name: '' },
+  });
+
   return serializeConversation(created, currentUserId, 0, ConversationMemberRole.ADMIN);
+}
+
+/**
+ * What contains a channel in the graph: its space when it's filed, otherwise the
+ * community itself. Returns null when the space has no node yet — syncEntityNode
+ * skips a missing parent rather than failing.
+ */
+async function parentNodeForChannel(
+  communityId: string,
+  spaceId: string | null,
+): Promise<string | null> {
+  if (!spaceId) return communityNodeId(communityId);
+  const node = await prisma.node.findFirst({
+    where: { communityId, type: 'space', metadata: { path: ['spaceId'], equals: spaceId } },
+    select: { id: true },
+  });
+  return node?.id ?? communityNodeId(communityId);
 }
 
 /** All channels in a community, flagged with whether the user has joined. */
@@ -363,6 +402,8 @@ export async function createChannelSpace(
   communityId: string,
   name: string,
   emoji?: string,
+  context?: string,
+  actorId?: string,
 ): Promise<ChannelSpaceEntry> {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
@@ -384,6 +425,16 @@ export async function createChannelSpace(
       position: (last?.position ?? -1) + 1,
     },
   });
+  await syncEntityNodeSafe({
+    communityId,
+    type: 'space',
+    name: created.name,
+    recordId: created.id,
+    body: context,
+    metadata: { emoji: created.emoji },
+    parentNodeId: communityNodeId(communityId),
+    ...(actorId ? { actor: { id: actorId, name: '' } } : {}),
+  });
   return serializeSpace(created);
 }
 
@@ -403,16 +454,51 @@ export async function updateChannelSpace(
       ...(payload.position !== undefined ? { position: payload.position } : {}),
     },
   });
+  // Keep the graph label in step with the rename. The node id (and so the note
+  // path) is deliberately NOT re-derived — the note is the space's history, and
+  // moving it on every rename would break links into it.
+  if (payload.name !== undefined || payload.emoji !== undefined) {
+    await syncEntityNodeSafe({
+      communityId: updated.communityId,
+      type: 'space',
+      name: updated.name,
+      recordId: updated.id,
+      metadata: { emoji: updated.emoji },
+    });
+  }
   return serializeSpace(updated);
 }
 
 /** Delete a space — its channels are unfiled (spaceId → null), not deleted. */
 export async function deleteChannelSpace(spaceId: string): Promise<void> {
-  const existing = await prisma.channelSpace.findUnique({ where: { id: spaceId }, select: { id: true } });
+  const existing = await prisma.channelSpace.findUnique({
+    where: { id: spaceId },
+    select: { id: true, communityId: true },
+  });
   if (!existing) {
     throw new MessagingError(404, 'Space not found');
   }
+  // Channels survive the space, so their containment edge has to move up to the
+  // community before the space's node (and its cascading edges) goes away.
+  const orphaned = await prisma.conversation.findMany({
+    where: { spaceId, type: ConversationType.CHANNEL },
+    select: { id: true },
+  });
+  for (const channel of orphaned) {
+    const node = await prisma.node.findFirst({
+      where: {
+        communityId: existing.communityId,
+        type: 'channel',
+        metadata: { path: ['conversationId'], equals: channel.id },
+      },
+      select: { id: true },
+    });
+    if (node) {
+      await reparentEntityNode(existing.communityId, node.id, communityNodeId(existing.communityId));
+    }
+  }
   await prisma.channelSpace.delete({ where: { id: spaceId } });
+  await removeEntityNode(existing.communityId, 'space', spaceId);
 }
 
 /** Join a community channel (any member of the channel's community can join). */
@@ -675,10 +761,28 @@ export async function updateGroupConversation(
     return getConversationSummaryForUser(currentUserId, conversationId);
   }
 
-  await prisma.conversation.update({
+  const updated = await prisma.conversation.update({
     where: { id: conversationId },
     data: { ...updates, updatedAt: new Date() },
+    select: { id: true, name: true, description: true, icon: true, viewMode: true, spaceId: true, communityId: true },
   });
+
+  // Keep the channel's node in step: the label follows a rename, and moving the
+  // channel between spaces moves its containment edge with it.
+  if (isChannel && updated.communityId) {
+    const result = await syncEntityNodeSafe({
+      communityId: updated.communityId,
+      type: 'channel',
+      name: updated.name?.trim() || 'Channel',
+      recordId: updated.id,
+      subtitle: updated.description,
+      metadata: { viewMode: updated.viewMode, icon: updated.icon },
+    });
+    if (result && payload.spaceId !== undefined) {
+      const parent = await parentNodeForChannel(updated.communityId, updated.spaceId);
+      if (parent) await reparentEntityNode(updated.communityId, result.nodeId, parent);
+    }
+  }
 
   return getConversationSummaryForUser(currentUserId, conversationId);
 }

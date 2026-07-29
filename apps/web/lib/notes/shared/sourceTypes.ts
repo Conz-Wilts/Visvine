@@ -1,5 +1,5 @@
 // Types for Context Sources — non-note files/tables attached to a brain that
-// feed the fused retrieval but never become graph Nodes. A source is addressed
+// feed the fused retrieval but never become context Nodes. A source is addressed
 // by the same brain-relative POSIX `path` as a note (so the folder gate and
 // visibility lens govern it unchanged), but never with a `.md` extension — the
 // note namespace stays disjoint. Pure — no Node/DOM/Prisma imports.

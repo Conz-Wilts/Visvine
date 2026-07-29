@@ -1,6 +1,6 @@
 // Directory domain: the flattened list-view shape of a node.
 
-import type { NodeType } from './graph';
+import type { NodeType } from './context';
 
 export interface DirectoryItem {
   id: string

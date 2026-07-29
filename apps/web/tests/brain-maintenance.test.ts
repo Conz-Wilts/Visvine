@@ -29,7 +29,7 @@ import {
   selectEnrichmentCandidates,
   type EnrichmentSource,
 } from '../lib/notes/shared/enrichment'
-import { buildNoteIndex } from '../lib/notes/shared/graph'
+import { buildNoteIndex } from '../lib/notes/shared/context'
 import { parseFrontmatter } from '../lib/notes/shared/markdown'
 import type { RawNote } from '../lib/notes/shared/types'
 

@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDirectoryNodes } from '@/hooks/useDirectoryNodes';
-import { clearGraphCache } from '@/hooks/useCommunityGraphData';
+import { clearContextCache } from '@/hooks/useCommunityContextData';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
@@ -100,10 +100,10 @@ export function useDirectoryBrowse() {
     router.push(`/directory/${encodeURIComponent(item.id)}`);
   }, [router]);
 
-  // Admin edits invalidate both the directory list and the (separate) graph cache.
+  // Admin edits invalidate both the directory list and the (separate) context cache.
   const handleDataChanged = useCallback(() => {
     refresh();
-    clearGraphCache(community?.id);
+    clearContextCache(community?.id);
   }, [refresh, community?.id]);
 
   return {

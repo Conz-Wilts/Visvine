@@ -15,7 +15,7 @@ import {
   SOURCE_EXTENSIONS_LABEL,
   sourceKindOf,
 } from '@/lib/notes/shared/sourceTypes';
-import { FolderPicker, PathPreview } from './ContextDestination';
+import { EntityNotePreview, FolderPicker, PathPreview } from './ContextDestination';
 
 // ─── Type Config ────────────────────────────────────────────────────────────
 
@@ -25,7 +25,11 @@ export interface TypeOption {
   description: string;
   color: string;
   icon: React.ReactNode;
-  inGrid?: boolean; // shown in the "Create new" type grid. Community lives in the
+  inGrid?: boolean; // shown in the "Create new" type grid. Person, Resource and
+                    // Context are false: they're context notes, so they're
+                    // created on the note-first surface (/directory/new), not in
+                    // this panel. Their entries stay for label/title lookups.
+                    // Community lives in the
                     // registry (for title/label lookups) but is created from the
                     // community dropdown, so it's excluded from the grid.
 }
@@ -36,7 +40,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
     label: 'Person',
     description: 'A person in your network',
     color: '#2563eb',
-    inGrid: true,
+    inGrid: false,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
@@ -48,7 +52,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
     label: 'Resource',
     description: 'A link, document, or asset',
     color: '#f59e0b',
-    inGrid: true,
+    inGrid: false,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
@@ -60,7 +64,10 @@ export const TYPE_OPTIONS: TypeOption[] = [
     label: 'Event',
     description: 'A meetup, conference, or gathering',
     color: '#9333ea',
-    inGrid: true,
+    // Events are created on /events, which owns the date/time/RSVP fields this
+    // form doesn't have. The entry stays for label/title lookups and for the
+    // form branch reached with an explicit `event` default type.
+    inGrid: false,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -96,7 +103,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
     label: 'Context',
     description: 'A note in your community context',
     color: '#ec4899',
-    inGrid: true,
+    inGrid: false,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6M9 16h4M8 4h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 012-2z" />
@@ -285,12 +292,16 @@ export interface PersonFormData {
 
 // ─── Location Autocomplete ──────────────────────────────────────────────────
 
-function LocationAutocomplete({
+// Exported so the note-first surface's Location property row gets the same
+// keyboard-navigable picker the modal has, rather than a second implementation.
+export function LocationAutocomplete({
   value,
   onChange,
+  placeholder = 'e.g. San Francisco, United States',
 }: {
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
@@ -332,7 +343,7 @@ function LocationAutocomplete({
     <div ref={wrapperRef} className="relative">
       <input
         className={inputClass}
-        placeholder="e.g. San Francisco, United States"
+        placeholder={placeholder}
         value={value}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
@@ -459,6 +470,7 @@ export function PersonForm({
           />
         </Field>
       </div>
+      <EntityNotePreview dir="people" name={data.name} />
     </div>
   );
 }
@@ -476,10 +488,13 @@ export function EventForm({
   data,
   onChange,
   nameRef,
+  entityDir = 'events',
 }: {
   data: EventFormData;
   onChange: (d: EventFormData) => void;
   nameRef: React.RefObject<HTMLInputElement | null>;
+  /** Note namespace for the kind being created — this form backs Resource too. */
+  entityDir?: string;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -518,6 +533,7 @@ export function EventForm({
           />
         </Field>
       </div>
+      <EntityNotePreview dir={entityDir} name={data.name} />
     </div>
   );
 }
@@ -593,6 +609,9 @@ export function CommunityForm({
           })}
         </div>
       </Field>
+      {/* The note lands in the NEW community's own brain — its description is
+          the starting text, so there's no second textarea here. */}
+      <EntityNotePreview dir="communities" name={data.name} />
     </div>
   );
 }
@@ -605,6 +624,8 @@ export interface ChannelFormData {
   icon: string | null;
   viewMode: ChannelViewMode;
   spaceId: string;
+  /** Starting text for the channel's context note (channels/<slug>.md). */
+  context: string;
 }
 
 export function ChannelForm({
@@ -701,6 +722,16 @@ export function ChannelForm({
           </select>
         </Field>
       )}
+      <Field label="Starting context">
+        <textarea
+          className={`${inputClass} resize-none`}
+          rows={3}
+          placeholder="Optional — what this channel is for. You can keep writing after it's created."
+          value={data.context}
+          onChange={(e) => onChange({ ...data, context: e.target.value })}
+        />
+      </Field>
+      <EntityNotePreview dir="channels" name={data.name} />
     </div>
   );
 }
@@ -709,6 +740,8 @@ export function ChannelForm({
 
 export interface SpaceFormData {
   name: string;
+  /** Starting text for the space's context note (spaces/<slug>.md). */
+  context: string;
 }
 
 export function SpaceForm({
@@ -732,6 +765,16 @@ export function SpaceForm({
           onChange={(e) => onChange({ ...data, name: e.target.value })}
         />
       </Field>
+      <Field label="Starting context">
+        <textarea
+          className={`${inputClass} resize-none`}
+          rows={3}
+          placeholder="Optional — what this space is for. You can keep writing after it's created."
+          value={data.context}
+          onChange={(e) => onChange({ ...data, context: e.target.value })}
+        />
+      </Field>
+      <EntityNotePreview dir="spaces" name={data.name} />
       <p className="text-xs text-text-muted">
         Spaces group related channels together in the sidebar. You can file channels into this space when you create them.
       </p>
@@ -968,6 +1011,22 @@ export function FileForm({
           contextName={contextName}
         />
       </Field>
+      {/* Where each file will land. Uploads keep their own filename, so this is
+          the one place a collision with an existing source is visible before the
+          request — the server would otherwise reject it as a taken path. */}
+      {data.files.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {data.files.slice(0, 4).map((entry, i) => (
+            <PathPreview
+              key={`${entry.file.name}-preview-${i}`}
+              path={data.folder ? `${data.folder}/${entry.file.name}` : entry.file.name}
+            />
+          ))}
+          {data.files.length > 4 && (
+            <p className="text-[11px] text-text-muted">+{data.files.length - 4} more</p>
+          )}
+        </div>
+      )}
       <p className="text-xs text-text-muted">
         Uploaded files are read, split and indexed, so their contents answer questions across{' '}
         {contextName} — the original stays downloadable.

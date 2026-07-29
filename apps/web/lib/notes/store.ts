@@ -2,7 +2,7 @@
 // src/server/notes.ts + src/server/history.ts. Every note is a `CommunityNote`
 // row keyed by a brain `{ communityId, ownerKey }` and a brain-relative POSIX
 // `path` — the same `{ path, content, mtime }` shape the Electron app read off
-// disk, so the pure index/graph/backlink pipeline in ./shared works unchanged.
+// disk, so the pure index/context/backlink pipeline in ./shared works unchanged.
 //
 // Soft-delete (trash) is a `deletedAt` timestamp; the row's `path` is parked at a
 // `:trash:<id>` sentinel so it frees the real path (kept in `deletedPath`) for a

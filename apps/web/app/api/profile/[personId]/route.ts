@@ -35,9 +35,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     });
   }
 
-  // No Person row yet. Many person nodes are created graph-first (seed scripts,
+  // No Person row yet. Many person nodes are created context-first (seed scripts,
   // CRM imports, bulk adds) and only get a Person row when someone edits the
-  // profile. Rather than 404, synthesize a profile from the graph Node so the
+  // profile. Rather than 404, synthesize a profile from the context Node so the
   // page still renders. Only person: nodes are profiles.
   if (personId.startsWith('person:')) {
     const node = await prisma.node.findUnique({ where: { id: personId } });
@@ -96,7 +96,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     phone, pronouns, tags, imageUrl, metadata,
   } = body;
 
-  // Sync shared fields back to the Node record so the graph/sidebar stay fresh.
+  // Sync shared fields back to the Node record so the context/sidebar stay fresh.
   // Only update fields that are present in the patch to avoid clobbering unrelated data.
   const nodeUpdate: Record<string, unknown> = {};
   if (name !== undefined)     nodeUpdate.name     = name;
@@ -105,7 +105,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   if (imageUrl !== undefined) nodeUpdate.imageUrl = imageUrl;
   if (tags !== undefined)     nodeUpdate.tags     = tags;
 
-  // Write the Person row and its graph Node in one transaction so a mid-sequence
+  // Write the Person row and its context Node in one transaction so a mid-sequence
   // failure can't leave them diverged.
   const hasNodeUpdate = Object.keys(nodeUpdate).length > 0;
   const [updated] = await prisma.$transaction([
@@ -132,8 +132,8 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   ]);
 
   if (hasNodeUpdate) {
-    // Bust the graph cache so the sidebar picks up the new data on next load
-    revalidateTag('graph-data-v2');
+    // Bust the context cache so the sidebar picks up the new data on next load
+    revalidateTag('context-data-v2');
   }
 
   updated.imageUrl = normalizeImageUrl(updated.imageUrl) ?? updated.imageUrl;

@@ -57,13 +57,13 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     // Context is its own tool now: the /context page hosts the community
-    // graph plus the notes tree, and every person/organization profile
+    // context plus the notes tree, and every person/organization profile
     // carries a Context tab.
     leg: 'directory',
     selector: '[data-tour="nav-notes"]',
     title: 'Context: your community brain',
     description:
-      'Open Context to see the community as an interactive graph and capture notes about the people and companies here. Link them with [[ ]] to build up your map — every profile carries its context too.',
+      'Open Context to see the community as an interactive map and capture notes about the people and companies here. Link them with [[ ]] to build up your map — every profile carries its context too.',
     side: 'right',
     align: 'start',
   },

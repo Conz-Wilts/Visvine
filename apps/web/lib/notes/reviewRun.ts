@@ -6,7 +6,7 @@
 
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Brain } from './store'
-import { buildNoteIndex } from './shared/graph'
+import { buildNoteIndex } from './shared/context'
 import {
   applyAutoFix,
   buildReviewReport,

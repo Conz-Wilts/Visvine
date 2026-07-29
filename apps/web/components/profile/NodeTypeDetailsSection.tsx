@@ -1,7 +1,20 @@
 'use client';
 
+// The profile's "Details" rows — the same per-type fields the note-first create
+// surface asks for, rendered read-only here.
+//
+// This used to be a `switch (node.type)` over 'People' | 'Startup' |
+// 'Organization' | 'Event', which could never match: both POST and PUT on
+// /api/data/nodes store `type.toLowerCase()`, so every case was unreachable and
+// this section rendered nothing for every node in the database. It also read
+// `meta.startAt` where lib/eventRepo.ts writes `meta.start_at`.
+//
+// Driving it off lib/create/typeFields.ts fixes both, and means a field added to
+// the create surface shows up here without a second edit.
+
 import React from 'react';
 import type { NBNode } from '@/lib/types';
+import { fieldsForType, readFields, type TypeFieldDef } from '@/lib/create/typeFields';
 
 interface Props {
   node: NBNode;
@@ -17,78 +30,27 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-export default function NodeTypeDetailsSection({ node }: Props) {
-  const meta = node.metadata ?? {};
-
-  switch (node.type) {
-    case 'People':
-      return (
-        <div>
-          <DetailRow label="Pronouns" value={meta.pronouns as string} />
-          <DetailRow label="Organization" value={meta.organization as string} />
-        </div>
-      );
-
-    case 'Startup':
-      return (
-        <div>
-          <DetailRow label="Stage" value={meta.stage as string} />
-          <DetailRow label="Industry" value={meta.industry as string} />
-          <DetailRow label="Founded" value={meta.founded as string} />
-          {Boolean(meta.hiring) && (
-            <div className="py-2">
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                We&apos;re Hiring
-              </span>
-            </div>
-          )}
-        </div>
-      );
-
-    case 'Investor':
-      return (
-        <div>
-          <DetailRow label="Investment Stage" value={meta.investmentStage as string} />
-          <DetailRow label="Sector Focus" value={meta.sectorFocus as string} />
-          <DetailRow label="Portfolio Count" value={meta.portfolioCount as string} />
-          <DetailRow label="Check Size" value={meta.checkSize as string} />
-        </div>
-      );
-
-    case 'Organization':
-    case 'Group':
-      return (
-        <div>
-          <DetailRow label="Founded" value={meta.founded as string} />
-          <DetailRow label="HQ" value={node.location} />
-          <DetailRow label="Mission" value={meta.mission as string} />
-          <DetailRow label="Members" value={meta.memberCount as string} />
-        </div>
-      );
-
-    case 'Event':
-      return (
-        <div>
-          <DetailRow
-            label="Date"
-            value={
-              meta.startAt
-                ? new Date(meta.startAt as string).toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'long',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })
-                : undefined
-            }
-          />
-          <DetailRow label="Location" value={node.location} />
-          <DetailRow label="Organizer" value={meta.organizerEmail as string} />
-          <DetailRow label="Capacity" value={meta.capacity ? `${meta.capacity} attendees` : undefined} />
-        </div>
-      );
-
-    default:
-      return null;
+function formatValue(field: TypeFieldDef, value: string): string {
+  if (field.kind === 'date') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? value
+      : date.toLocaleDateString('en-US', { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' });
   }
+  return value;
+}
+
+export default function NodeTypeDetailsSection({ node }: Props) {
+  const values = readFields(node);
+  // The image row is the profile hero's job, not a details line.
+  const rows = fieldsForType(node.type).filter((f) => f.kind !== 'image' && values[f.key]);
+  if (rows.length === 0) return null;
+
+  return (
+    <div>
+      {rows.map((field) => (
+        <DetailRow key={field.key} label={field.label} value={formatValue(field, values[field.key])} />
+      ))}
+    </div>
+  );
 }

@@ -21,6 +21,7 @@ import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
+import { fieldDef, readFields } from '@/lib/create/typeFields'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -37,6 +38,7 @@ import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
+import { PropertyRows } from './PropertyRows'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
 
@@ -95,6 +97,8 @@ export function EntityContextPanel({
   const [tags, setTags] = useState<string[]>([])
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
+  // Property rows (email, location, website…) — seeded from the node, saved on blur.
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   // Colours registered this session (before the community config refetches).
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
@@ -320,7 +324,55 @@ export function EntityContextPanel({
     setAddingTag(false)
   }, [node?.id, node?.tags])
 
-  // Persist a tag change to the entity's graph node (shared metadata). Optimistic:
+  // Seed the property rows from the node. Keyed on the node id so switching
+  // entities re-seeds, but NOT on the field values themselves — that would stomp
+  // what the user is typing every time the profile fetch revalidates.
+  useEffect(() => {
+    setFieldValues(node ? readFields(node) : {})
+  }, [node?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleFieldChange = useCallback((key: string, value: string) => {
+    setFieldValues((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  // Persist one property row on blur. Column-backed fields go up as their own
+  // key and metadata-backed fields as a one-key merge, so a save never has to
+  // know (or clobber) the rest of the node's metadata.
+  const saveField = useCallback(
+    async (key: string, raw: string) => {
+      if (!communityId || !node) return
+      const def = fieldDef(node.type, key)
+      if (!def) return
+      const value = raw.trim()
+      if (value === (readFields(node)[key] ?? '')) return // unchanged — no write
+
+      const patch: Record<string, unknown> = { communityId }
+      if (def.target === 'column' && def.column) {
+        patch[def.column] = value
+        if (def.mirrorMetadataKey) patch.metadata = { [def.mirrorMetadataKey]: value }
+      } else {
+        patch.metadata = { [def.key]: def.kind === 'number' && value ? Number(value) : value }
+      }
+
+      try {
+        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patch),
+        })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save')
+        setError(null)
+      } catch (err) {
+        // Roll the row back to what the server still holds, so the surface never
+        // shows a value that isn't saved.
+        setFieldValues((prev) => ({ ...prev, [key]: readFields(node)[key] ?? '' }))
+        setError(err instanceof Error ? err.message : 'Failed to save')
+      }
+    },
+    [communityId, node, nodeId],
+  )
+
+  // Persist a tag change to the entity's context node (shared metadata). Optimistic:
   // the header updates immediately and rolls back if the write is rejected.
   const saveTags = useCallback(
     async (next: string[], prev: string[]) => {
@@ -415,7 +467,11 @@ export function EntityContextPanel({
   // Alias colour wins over the base type colour (same rule as the profile hero).
   const aliasColor = findAlias(currentCommunity?.communityAliases, node.alias, node.type)?.color
   const theme = hexToPalette(aliasColor ?? getTypeColor(node.type, currentCommunity?.nodeTypes))
+  // Property rows follow the same rule as tags — they're node metadata, edited
+  // by whoever can write the entity's context. They stay editable during a save
+  // (an in-flight PATCH must not yank the row out from under the cursor).
   const canEditTags = showEditor && canWrite
+  const canEditFields = canEditTags
   // Community tags not already on this entity power the picker's suggestions.
   const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
   const tagSuggestions = allTags.filter((t) => !tagsLower.has(t.toLowerCase()))
@@ -472,22 +528,27 @@ export function EntityContextPanel({
         </div>
       )}
 
-      {/* Type row — micro-label above a single solid square chip in the entity's
-          alias/type colour (read-only here; the type is owned by the graph). */}
-      <div className="mt-5">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Type</span>
-        <div className="mt-1.5">
+      {/* Type, the type's own property rows, then Tags — the same block the
+          note-first create surface shows, so filling an entity in and coming
+          back to edit it look like one surface. Type stays a read-only chip
+          here: retyping a committed entity moves its note and rebinds its
+          identity, which is a migration, not a field edit. */}
+      <PropertyRows
+        type={node.type}
+        values={fieldValues}
+        editable={canEditFields}
+        onChange={handleFieldChange}
+        onCommit={saveField}
+        accent={theme.dark}
+        onImageRequest={() => {}}
+        typeRow={
           <span className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-semibold text-white"
                 style={{ background: theme.base }}>
             {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
           </span>
-        </div>
-      </div>
-
-      {(tags.length > 0 || canEditTags) && (
-        <div className="mt-4">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Tags</span>
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        }
+        tagsRow={(tags.length > 0 || canEditTags) ? (
+          <div className="flex flex-wrap items-center gap-1.5">
             {tags.map((tag) => {
               const pal = tagPalette(tag, tagColors)
               return (
@@ -524,8 +585,8 @@ export function EntityContextPanel({
             </button>
           ))}
           </div>
-        </div>
-      )}
+        ) : null}
+      />
     </div>
   )
 

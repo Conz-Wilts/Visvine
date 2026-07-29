@@ -3,7 +3,7 @@
 // access, so it is unit-testable and usable from the main process. This is the
 // local, dependency-free precursor to the knowledge's vector retrieval — it
 // surfaces semantically-adjacent notes you have *not* linked yet, complementing
-// the explicit OKF links that drive the graph and backlinks.
+// the explicit OKF links that drive the context and backlinks.
 
 export interface RelatedDoc {
   path: string

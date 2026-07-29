@@ -21,7 +21,7 @@ import {
   getNoteCreatedBy,
   listRaw,
 } from '@/lib/notes/store'
-import { buildNoteIndex } from '@/lib/notes/shared/graph'
+import { buildNoteIndex } from '@/lib/notes/shared/context'
 import { aiModelName } from '@/lib/notes/ai'
 import type { NoteRevisionOrigin } from '@/lib/notes/shared/types'
 

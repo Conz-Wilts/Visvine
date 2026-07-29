@@ -11,7 +11,7 @@ import { SHARED_OWNER_KEY, type Brain } from './store'
 import { chat, extractJsonObject, aiConfigured, aiModelName } from './ai'
 import { readJson, writeJson } from './sidecar'
 import { visibleVault, writeGated, appendLogGated } from './brainService'
-import { buildNoteIndex } from './shared/graph'
+import { buildNoteIndex } from './shared/context'
 import { joinFrontmatter, splitFrontmatter } from './shared/markdown'
 import { provenanceRef, stampProvenance } from './shared/noteLog'
 import {

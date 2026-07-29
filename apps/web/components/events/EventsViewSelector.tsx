@@ -2,7 +2,7 @@
 
 /**
  * View selector for the Events tab (Calendar / Feed / Map). Uses the shared
- * UnderlineTabs so it reads identically to the Directory's Grid / Graph / Tables
+ * UnderlineTabs so it reads identically to the Directory's Grid / Context
  * switcher — sliding green underline, brand text colors.
  */
 

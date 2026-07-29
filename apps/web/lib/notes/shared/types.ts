@@ -1,4 +1,4 @@
-// Types shared by the notes pure-logic layer (index/tree/graph/backlinks/related)
+// Types shared by the notes pure-logic layer (index/tree/context/backlinks/related)
 // and the server store + API. Ported from blackbird-brain's src/shared/types.ts,
 // trimmed to the core note-taking surface — the knowledge-brain, shared-brain
 // sync, and Electron `BrainApi` types are intentionally dropped (out of scope).
@@ -30,14 +30,14 @@ export interface RawNote {
   mtime: number
 }
 
-// A note enriched with everything the UI and graph need, computed from the raw
+// A note enriched with everything the UI and context need, computed from the raw
 // markdown plus knowledge of every other note (to resolve OKF markdown links).
 export interface NoteMeta {
   path: string // brain-relative POSIX path, e.g. "projects/acme.md"
   title: string // frontmatter.title, else the filename without extension
   folder: string // parent folder POSIX path, "" for the brain root
   frontmatter: NoteFrontmatter
-  tags: string[] // frontmatter tags + inline #hashtags from the body (not graph edges)
+  tags: string[] // frontmatter tags + inline #hashtags from the body (not context edges)
   linkTargets: string[] // resolved paths of notes this note links to
   unresolved: string[] // markdown link hrefs that matched no existing note
   mtime: number

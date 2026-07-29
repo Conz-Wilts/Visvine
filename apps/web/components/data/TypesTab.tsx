@@ -524,7 +524,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
         </div>
 
         <p className="text-xs text-text-muted">
-          Aliases appear in place of the base type label on node cards and graph tooltips.
+          Aliases appear in place of the base type label on node cards and context tooltips.
         </p>
       </SettingsSection>
     </div>

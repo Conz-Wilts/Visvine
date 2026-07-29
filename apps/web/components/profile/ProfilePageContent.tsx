@@ -138,7 +138,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   }
 
   // Prefer the profile-visible community list; fall back to the shared-count
-  // for graph-only people with no linked user.
+  // for context-only people with no linked user.
   const visibleCommunityCount = profileCommunities.filter((c) => c.visible).length;
   const communityCount = profileCommunities.length > 0 ? visibleCommunityCount : (nodeData?.communityCount ?? 1);
   const communitiesClickable = profileCommunities.length > 0;

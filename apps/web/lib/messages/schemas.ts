@@ -28,6 +28,9 @@ export const createChannelSchema = z.object({
   icon: emojiSchema.optional(),
   spaceId: z.string().min(1).optional(),
   viewMode: viewModeSchema.optional(),
+  // Starting text for the channel's context note (channels/<slug>.md). Optional
+  // — the note is created either way, this just saves an empty first edit.
+  context: z.string().trim().max(5000).optional(),
 });
 
 export const updateGroupSchema = z.object({
@@ -43,6 +46,8 @@ export const createSpaceSchema = z.object({
   communityId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
   emoji: emojiSchema.optional(),
+  /** Starting text for the space's context note (spaces/<slug>.md). */
+  context: z.string().trim().max(5000).optional(),
 });
 
 export const updateSpaceSchema = z.object({

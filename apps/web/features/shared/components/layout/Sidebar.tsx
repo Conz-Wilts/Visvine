@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useCreateModal } from "@/lib/contexts/CreateModalContext";
+import { useCreateModal, useCreateSurface, type CreateableType } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
@@ -45,15 +45,27 @@ const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const CHANNELS_PANEL_W = 300; // /channels + /messages list panel width — keep in sync with MessagesClient
 const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
-export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the graph page inset
+export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the context page inset
 export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
 const RAIL_GAP = 8; // gap between the Create block and the nav list
 
+// The things the docked Create panel still makes. Everything else is a context
+// note, so it opens the note-first draft surface instead (see useCreateSurface).
+const CREATE_PANEL_TYPES: Array<{ type: CreateableType; label: string }> = [
+  { type: "file", label: "Upload a file" },
+  { type: "channel", label: "Channel" },
+  { type: "space", label: "Space" },
+  { type: "community", label: "Community" },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
-  const { open: openCreateModal, isOpen: createOpen } = useCreateModal();
+  const { isOpen: createOpen } = useCreateModal();
+  const createSurface = useCreateSurface();
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const createMenuRef = useRef<HTMLDivElement>(null);
   // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
@@ -82,6 +94,25 @@ export default function Sidebar() {
   const [moreOpen, setMoreOpen] = useState(false);
   // Close on navigation (a tool card was clicked, or back/forward).
   useEffect(() => setMoreOpen(false), [pathname]);
+
+  // The create caret menu closes on navigation and on any click outside it —
+  // including the "+" itself, whose own handler closes it before navigating.
+  useEffect(() => setCreateMenuOpen(false), [pathname]);
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    // Deferred to the next frame: the click that opened the menu is still
+    // propagating, and would otherwise close it immediately.
+    const id = requestAnimationFrame(() => document.addEventListener("mousedown", handler));
+    return () => {
+      cancelAnimationFrame(id);
+      document.removeEventListener("mousedown", handler);
+    };
+  }, [createMenuOpen]);
 
   // On /channels, /messages and /admin (wide viewports only) the rail docks
   // into a full-height card hosting a side panel — the channel/conversation
@@ -132,7 +163,10 @@ export default function Sidebar() {
       {/* Create button */}
       <div className="relative group" data-tour="create">
         <button
-          onClick={() => openCreateModal()}
+          onClick={() => {
+            setCreateMenuOpen(false);
+            createSurface();
+          }}
           className="flex items-center h-10 text-white"
           style={{ paddingLeft: ICON_LEFT }}
         >
@@ -154,6 +188,46 @@ export default function Sidebar() {
             Create new
           </span>
         </button>
+
+        {/* The caret is the escape hatch for the four things that are NOT context
+            notes (a channel, space, community or uploaded file has no note to
+            open), so they keep the docked panel. Everything else is one click
+            away on the blank draft — no tile grid standing between "+" and a
+            surface you can type into. */}
+        {expanded && (
+          <button
+            type="button"
+            aria-label="More things to create"
+            aria-expanded={createMenuOpen}
+            onClick={() => setCreateMenuOpen((v) => !v)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-text-muted transition hover:bg-black/5 hover:text-text-secondary"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        )}
+
+        {createMenuOpen && (
+          <div
+            ref={createMenuRef}
+            className="absolute left-2 right-2 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg"
+          >
+            {CREATE_PANEL_TYPES.map((item) => (
+              <button
+                key={item.type}
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  createSurface(item.type);
+                }}
+                className="block w-full px-3 py-1.5 text-left text-[13px] text-text-primary transition hover:bg-surface-2"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!expanded && (
           <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
@@ -325,7 +399,17 @@ export default function Sidebar() {
           <div
             ref={setHost}
             className="min-h-0"
-            style={{ width: panelW, height: '100%', paddingTop: dockedContext ? dockTopInset : 0 }}
+            // paddingTop is animated: moving between docked surfaces with
+            // different top bars (the context canvas has none, a note view has a
+            // 96px tab bar) would otherwise teleport the tree up or down mid
+            // navigation. Same duration/easing as the column, so the two read as
+            // one motion.
+            style={{
+              width: panelW,
+              height: '100%',
+              paddingTop: dockedContext ? dockTopInset : 0,
+              transition: `padding-top ${dur} ${ease}`,
+            }}
           />
 
           {/* "Create new" — a layer over the host, clipped by this column so it
@@ -333,8 +417,14 @@ export default function Sidebar() {
               docked. Starts below any bar the page pins at the card top
               (dockTopInset — those bars outrank this card at z-[45]), so its
               header is never cut in half by one. */}
+          {/* pointer-events-none while parked: the box still covers the docked
+              panel (it's absolutely positioned over it) even with the panel
+              slid out of view, so leaving it hit-testable made it swallow every
+              wheel/click aimed at the docked tree — scrolling over the context
+              tree did nothing while the graph behind it took the wheel. The
+              panel re-enables events on itself once open. */}
           <div
-            className="absolute left-0 bottom-0 z-10 overflow-hidden"
+            className={`absolute left-0 bottom-0 z-10 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
             // Fixed at the panel's FINAL width, not the column's animating one:
             // the slide is a translateX(-100%) of this box, so a width that grows
             // during the transition would keep moving the parked position and the

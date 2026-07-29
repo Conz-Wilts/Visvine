@@ -2,7 +2,7 @@
 // replica exists as a REAL note row in the target community's shared brain,
 // overwritten on every source save. The replica being real community data is
 // the whole design — the visibility lens, search, [[mention]] link sync, the
-// graph, and mobile all work on it with zero changes, and NO read path ever
+// context, and mobile all work on it with zero changes, and NO read path ever
 // crosses a community boundary. The only cross-tenant motion is the
 // replicating write below: one choke point that stamps provenance and runs
 // with origin 'publish' (which is also the cascade guard — a replica write

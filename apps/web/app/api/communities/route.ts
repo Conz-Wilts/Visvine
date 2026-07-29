@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
+import { communityNodeId, syncEntityNodeSafe } from '@/lib/context/entityNodes';
 
 /**
  * POST /api/communities — user-facing community creation.
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
       id = `${base}-${n}`;
     }
 
-    const created = await prisma.$transaction(async (tx) => {
+    const { community: created, space: defaultSpace } = await prisma.$transaction(async (tx) => {
       const community = await tx.community.create({
         data: {
           id,
@@ -55,10 +56,35 @@ export async function POST(request: NextRequest) {
         data: { userId: session.userId, communityId: id, role: 'admin', status: 'active' },
       });
       // Every community starts with a default space; admins can rename or delete it.
-      await tx.channelSpace.create({
+      const space = await tx.channelSpace.create({
         data: { communityId: id, name: 'General', position: 0 },
       });
-      return community;
+      return { community, space };
+    });
+
+    // Give the new community its place in its own context graph: a node for the
+    // community, a node for its default space, and the containment edge between
+    // them. Best-effort — a community that exists without context is recoverable
+    // (the backfill script fixes it); a failed create is not.
+    const actor = { id: session.userId, name: session.name, email: session.email };
+    const communityNode = communityNodeId(id);
+    await syncEntityNodeSafe({
+      communityId: id,
+      type: 'community',
+      nodeId: communityNode,
+      name,
+      subtitle: description || null,
+      location: location || null,
+      body: description,
+      actor,
+    });
+    await syncEntityNodeSafe({
+      communityId: id,
+      type: 'space',
+      name: defaultSpace.name,
+      recordId: defaultSpace.id,
+      parentNodeId: communityNode,
+      actor,
     });
 
     return NextResponse.json(

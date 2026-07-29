@@ -52,7 +52,7 @@ reads default to `shared`, writes default to `personal`.
 
 | Tool | Scope | Summary |
 |---|---|---|
-| `brain_search` | `content:read` | Fused (BM25 + vector + link-graph) search over the notes the caller can read; filters: type/tags/folder_id, `k` results. |
+| `brain_search` | `content:read` | Fused (BM25 + vector + link-context) search over the notes the caller can read; filters: type/tags/folder_id, `k` results. |
 | `brain_read` | `content:read` | Read one note by path; absent and inaccessible are indistinguishable ("No accessible note"). |
 | `brain_index` | `content:read` | List visible notes (title, path, description), filterable by top-level folder or path prefix, clipped at `limit` (default 100). |
 | `brain_backlinks` | `content:read` | List the visible notes whose links point at a given note path. |
@@ -88,13 +88,13 @@ nearly every other tool needs a `community_id` the user can only get from here.
 
 ### 3. `directory` (9 tools) · `tools/directory.ts`
 
-Graph / nodes / companies / search. Companies are `Node`s of type `organization`.
+Context / nodes / companies / search. Companies are `Node`s of type `organization`.
 
 | Tool | Scope | Summary |
 |---|---|---|
 | `list_directory` | `directory:read` | List directory nodes (people/orgs/events/groups) for a community; optional type filter. |
 | `list_organizations` | `directory:read` | List organization/company nodes for a community. |
-| `get_graph` | `directory:read` | Full relationship graph (nodes + links) for a community. |
+| `get_context` | `directory:read` | Full relationship context (nodes + links) for a community. |
 | `get_node` | `directory:read` | One node with its connections + connection count. |
 | `search_nodes` | `directory:read` | Fuzzy keyword search for nodes by name/email across your communities. |
 | `create_node` | `directory:write` | Create a directory node; admin role required. |

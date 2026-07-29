@@ -47,7 +47,7 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
   const [membershipRoles, setMembershipRoles] = useState<Map<string, string>>(
     () => new Map((initialMemberships ?? []).map(m => [m.id, m.role]))
   );
-  // Read localStorage synchronously so graph data can start fetching on first render
+  // Read localStorage synchronously so context data can start fetching on first render
   const [currentCommunityId, setCurrentCommunityId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     try { return localStorage.getItem(CURRENT_COMMUNITY_KEY); } catch { return null; }

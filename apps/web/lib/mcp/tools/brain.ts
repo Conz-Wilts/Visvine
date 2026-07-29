@@ -126,7 +126,7 @@ export function registerBrainTools(server: McpServer): void {
     "brain_search",
     {
       description:
-        "Search a community brain (knowledge store of markdown notes) with fused retrieval: keyword (BM25) + semantic (vector) + link-graph ranking. Searches the shared community brain by default; pass scope:'personal' for your personal space (your personal community's brain). Only notes you're allowed to read are searched. Returns a ranked list of matches with paths you can pass to brain_read.",
+        "Search a community brain (knowledge store of markdown notes) with fused retrieval: keyword (BM25) + semantic (vector) + link-context ranking. Searches the shared community brain by default; pass scope:'personal' for your personal space (your personal community's brain). Only notes you're allowed to read are searched. Returns a ranked list of matches with paths you can pass to brain_read.",
       inputSchema: {
         community_id: z.string().describe("The community whose brain to search"),
         query: z.string().describe("Natural-language or keyword search query"),
@@ -322,7 +322,7 @@ export function registerBrainTools(server: McpServer): void {
     "brain_sources_list",
     {
       description:
-        "List the Context Sources (uploaded files/tables — csv, markdown, txt) attached to a community brain. Sources are non-note knowledge: they feed brain_search as chunk hits and are readable with brain_source_read, but never appear in the community's graph/workspace. Only sources you're allowed to read are listed. Shared brain by default; scope:'personal' for your own.",
+        "List the Context Sources (uploaded files/tables — csv, markdown, txt) attached to a community brain. Sources are non-note knowledge: they feed brain_search as chunk hits and are readable with brain_source_read, but never appear in the community's context/workspace. Only sources you're allowed to read are listed. Shared brain by default; scope:'personal' for your own.",
       inputSchema: {
         community_id: z.string(),
         scope: scopeArg,

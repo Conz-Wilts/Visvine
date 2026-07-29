@@ -5,11 +5,12 @@
 
 import prisma from './prisma';
 import { revalidateTag, unstable_cache } from 'next/cache';
-import type { EventsData, NBEvent, NBAttendee, GraphData, NBNode, NBLink, RSVPStatus, RSVPResponse } from './types';
+import type { EventsData, NBEvent, NBAttendee, ContextData, NBNode, NBLink, RSVPStatus, RSVPResponse } from './types';
 import { normalizeImageUrl } from './mediaUrl';
 import { findMatchingPerson } from './personDedupe';
 import { generateAttendeeId, normalizeStatus, occupiedSpots, decideRsvpStatus } from './eventUtils';
-import { upsertLink, removeAutoLink } from './graph/links';
+import { upsertLink, removeAutoLink } from './context/links';
+import { ensureEntityNote } from './context/entityNodes';
 import { logger } from './logger';
 
 /** Thrown by submitRsvp when an event is full and its waitlist is disabled. */
@@ -109,14 +110,14 @@ function attendeeRowToNBAttendee(a: {
   };
 }
 
-// ─── Graph data ───────────────────────────────────────────────────────────────
+// ─── Context data ───────────────────────────────────────────────────────────────
 
 /**
  * Fetch a community's nodes (with person-profile enrichment) — WITHOUT links.
  *
  * This is the payload the directory grid/table views actually render. Keeping it
  * separate from links means those views never pay to load (or serialize) the edge
- * set. The graph view composes this with links via {@link getCommunityGraphData}.
+ * set. The context view composes this with links via {@link getCommunityContextData}.
  */
 async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
   const allRows = await prisma.node.findMany({
@@ -124,7 +125,7 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
     select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true },
   });
 
-  // Keep draft and unlisted (private) events out of the directory/graph — they're
+  // Keep draft and unlisted (private) events out of the directory/context — they're
   // reached only via their own page / share link, never the community listing.
   const nodeRows = allRows.filter((n) => {
     if (n.type !== 'event') return true;
@@ -205,14 +206,14 @@ async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
 
 /**
  * Nodes-only data source for the directory grid/table. Cached under the shared
- * `graph-data-v2` tag, which every node/profile write already revalidates.
+ * `context-data-v2` tag, which every node/profile write already revalidates.
  */
 export async function getCommunityNodes(communityId: string): Promise<NBNode[]> {
   try {
     return await unstable_cache(
       () => fetchCommunityNodes(communityId),
       ['community-nodes', communityId],
-      { tags: ['graph-data-v2'] },
+      { tags: ['context-data-v2'] },
     )();
   } catch (err) {
     logger.error('eventRepo.getCommunityNodes.failed', { err });
@@ -225,7 +226,7 @@ async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
     return await unstable_cache(
       () => fetchCommunityLinks(communityId),
       ['community-links', communityId],
-      { tags: ['graph-data-v2'] },
+      { tags: ['context-data-v2'] },
     )();
   } catch (err) {
     logger.error('eventRepo.getCommunityLinks.failed', { err });
@@ -233,7 +234,7 @@ async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
   }
 }
 
-export async function getCommunityGraphData(communityId: string): Promise<GraphData> {
+export async function getCommunityContextData(communityId: string): Promise<ContextData> {
   try {
     const [nodes, links] = await Promise.all([
       getCommunityNodes(communityId),
@@ -241,7 +242,7 @@ export async function getCommunityGraphData(communityId: string): Promise<GraphD
     ]);
     return { nodes, links };
   } catch (err) {
-    logger.error('eventRepo.getCommunityGraphData.failed', { err });
+    logger.error('eventRepo.getCommunityContextData.failed', { err });
     return { nodes: [], links: [] };
   }
 }
@@ -319,7 +320,7 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
     allowedResponses: event.allowedResponses,
   };
 
-  // Node.imageUrl powers the graph/directory poster; Node.alias powers /e/<slug>.
+  // Node.imageUrl powers the context/directory poster; Node.alias powers /e/<slug>.
   const imageUrl = event.coverImageUrl ?? null;
   const alias = event.slug ?? null;
 
@@ -346,12 +347,21 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
       metadata: meta as object,
     },
   });
-  revalidateTag('graph-data-v2');
+  // Events have always been nodes; what they lacked was the events/<slug>.md
+  // note every other entity gets. Best-effort and create-only, so re-saving an
+  // event never clobbers what someone wrote about it.
+  await ensureEntityNote(communityId, {
+    id: event.id,
+    type: 'event',
+    name: event.title,
+    subtitle: event.description ?? null,
+  });
+  revalidateTag('context-data-v2');
 }
 
 export async function deleteEvent(communityId: string, eventId: string): Promise<void> {
   await prisma.node.deleteMany({ where: { id: eventId, communityId, type: 'event' } });
-  revalidateTag('graph-data-v2');
+  revalidateTag('context-data-v2');
 }
 
 async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
@@ -403,7 +413,7 @@ async function upsertAttendee(communityId: string, attendee: NBAttendee): Promis
 }
 
 /**
- * Best-effort 'attended' graph link person -> event (so the directory can answer
+ * Best-effort 'attended' context link person -> event (so the directory can answer
  * "what did person Y attend"). Never throws into the RSVP path.
  */
 async function ensureAttendedLink(
@@ -442,7 +452,7 @@ export interface RsvpInput {
  * Create or update an RSVP for an event. Single source of truth shared by the
  * authenticated and public RSVP endpoints.
  *
- *  - Matches an existing community member (so the graph links up) but NEVER
+ *  - Matches an existing community member (so the context links up) but NEVER
  *    auto-creates a Person node for an unknown public guest — name/email live on
  *    the Attendee row. This keeps the directory clean and the RSVP path fast.
  *  - Computes going / waitlisted / pending from capacity + approval settings.
@@ -584,7 +594,7 @@ export async function setAttendeeStatus(
   return next;
 }
 
-/** Permanently remove an attendee (and any 'attended' graph link). */
+/** Permanently remove an attendee (and any 'attended' context link). */
 export async function removeAttendee(communityId: string, eventId: string, attendeeId: string): Promise<boolean> {
   const attendees = await getAttendees(communityId, eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);

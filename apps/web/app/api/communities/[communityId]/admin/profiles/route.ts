@@ -213,7 +213,7 @@ export async function PATCH(
     });
   }
 
-  revalidateTag('graph-data-v2');
+  revalidateTag('context-data-v2');
 
   return NextResponse.json({ node: updated, person: personUpdated });
 }
