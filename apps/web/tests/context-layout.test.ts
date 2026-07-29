@@ -6,7 +6,7 @@ import {
   type ContextEdgeInput,
   type ContextNodeInput,
   type LayoutResult,
-} from '../lib/context-layout/contextLayout';
+} from '../lib/context/layout';
 
 /* ------------------------------ helpers ------------------------------ */
 

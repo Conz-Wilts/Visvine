@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ContextWithTable, { type ContextLayoutData } from '@/components/context/ContextWithTable';
 import { useCommunityContextData } from '@/hooks/useCommunityContextData';
-import { findBestMatchingNodeId } from '@/lib/contextUtils';
+import { findBestMatchingNodeId } from '@/lib/context/normalize';
 import { isStructuralNodeType } from '@/lib/types/context';
 import type { CommunityAlias, ContextData } from '@/lib/types';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ContextData } from '@/lib/types';
-import { normalizeNode, normalizeLink } from '@/lib/contextUtils';
+import { normalizeNode, normalizeLink } from '@/lib/context/normalize';
 import {
   useCachedCommunityResource,
   clearCachedCommunityResource,

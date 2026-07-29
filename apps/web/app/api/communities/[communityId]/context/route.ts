@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityContextData } from '@/lib/eventRepo';
-import { normalizeNode, normalizeLink } from '@/lib/contextUtils';
+import { normalizeNode, normalizeLink } from '@/lib/context/normalize';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
 

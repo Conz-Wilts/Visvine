@@ -2,8 +2,8 @@
  * Context data normalization and filtering utilities
  */
 
-import type { NBNode, NBLink, NodeType } from './types';
-import { normalizeImageUrl } from './mediaUrl';
+import type { NBNode, NBLink, NodeType } from '../types';
+import { normalizeImageUrl } from '../mediaUrl';
 
 /**
  * Normalize a node to ensure all required fields exist

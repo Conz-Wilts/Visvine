@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityNodes } from '@/lib/eventRepo';
-import { normalizeNode } from '@/lib/contextUtils';
+import { normalizeNode } from '@/lib/context/normalize';
 import { isStructuralNodeType } from '@/lib/types/context';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';

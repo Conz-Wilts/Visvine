@@ -1,7 +1,7 @@
 'use client';
 
 import type { NBNode } from '@/lib/types';
-import { normalizeNode } from '@/lib/contextUtils';
+import { normalizeNode } from '@/lib/context/normalize';
 import { useCachedCommunityResource } from '@/hooks/useCachedCommunityResource';
 
 const RESOURCE_KEY = 'directory';

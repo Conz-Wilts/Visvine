@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ContextData, NBNode, NodeTypeConfig, CommunityAlias, getNodeTypeConfig } from '@/lib/types';
 import { CARD_DIMENSIONS, OBSIDIAN_PHYSICS } from './utils/constants';
-import { layoutContext } from '@/lib/context-layout/contextLayout';
+import { layoutContext } from '@/lib/context/layout';
 import { placeIncrementally } from './utils/incrementalLayout';
 import { fetchNodeProfile } from '@/hooks/useNodeProfile';
 import { prefetchProfile } from '@/hooks/useProfile';
