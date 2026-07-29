@@ -10,9 +10,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import prisma from '@/lib/prisma';
 import { isSuperAdmin } from '@/lib/session';
-import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
+import { requireApiSession, handleApiError, forbiddenResponse, parseBody } from '@/lib/api/route';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -40,47 +41,38 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
-type Transform = { x: number; y: number; k: number };
 type Positions = Record<string, { x: number; y: number }>;
 
 // Upper bound on persisted nodes — the row is read back into every member's
 // camera, so we reject pathologically large payloads rather than store an
 // unbounded blob.
 const MAX_LAYOUT_NODES = 20_000;
-const IDENTITY_TRANSFORM: Transform = { x: 0, y: 0, k: 1 };
+const IDENTITY_TRANSFORM = { x: 0, y: 0, k: 1 };
 
-const isFiniteNumber = (v: unknown): v is number =>
-  typeof v === 'number' && Number.isFinite(v);
+const finite = z.number().finite();
+const pointSchema = z.object({ x: finite, y: finite });
 
-/** Coerce an untrusted transform to a valid {x,y,k}; fall back to identity. */
-function sanitizeTransform(raw: unknown): Transform {
-  if (raw && typeof raw === 'object') {
-    const t = raw as Record<string, unknown>;
-    if (isFiniteNumber(t.x) && isFiniteNumber(t.y) && isFiniteNumber(t.k) && t.k > 0) {
-      return { x: t.x, y: t.y, k: t.k };
-    }
-  }
-  return IDENTITY_TRANSFORM;
-}
-
-/**
- * Validate an untrusted positions map. Returns the cleaned map (dropping any
- * entry that isn't {x:number, y:number}), or null if it's not an object or
- * exceeds MAX_LAYOUT_NODES.
- */
-function sanitizePositions(raw: unknown): Positions | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const entries = Object.entries(raw as Record<string, unknown>);
-  if (entries.length > MAX_LAYOUT_NODES) return null;
-  const out: Positions = {};
-  for (const [id, val] of entries) {
-    if (val && typeof val === 'object') {
-      const p = val as Record<string, unknown>;
-      if (isFiniteNumber(p.x) && isFiniteNumber(p.y)) out[id] = { x: p.x, y: p.y };
-    }
-  }
-  return out;
-}
+const layoutSchema = z.object({
+  hash: z.string(),
+  // An unusable camera is not worth a 400 — fall back to the identity view and
+  // keep the positions, which are the expensive part of the payload.
+  transform: z.object({ x: finite, y: finite, k: finite.positive() }).catch(IDENTITY_TRANSFORM),
+  positions: z
+    .record(z.string(), z.unknown())
+    .refine((raw) => Object.keys(raw).length <= MAX_LAYOUT_NODES, {
+      message: `at most ${MAX_LAYOUT_NODES} node positions`,
+    })
+    // Individual malformed entries are dropped rather than failing the write:
+    // a stale node id in one member's browser shouldn't lose everyone's layout.
+    .transform((raw) => {
+      const out: Positions = {};
+      for (const [id, val] of Object.entries(raw)) {
+        const point = pointSchema.safeParse(val);
+        if (point.success) out[id] = point.data;
+      }
+      return out;
+    }),
+});
 
 export async function PUT(request: NextRequest, context: RouteContext) {
   const session = await requireApiSession();
@@ -99,22 +91,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (!membership) return forbiddenResponse();
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
-  }
-
-  const hash = (body as { hash?: unknown } | null)?.hash;
-  if (typeof hash !== 'string') {
-    return NextResponse.json({ error: 'Invalid layout payload' }, { status: 400 });
-  }
-  const positions = sanitizePositions((body as { positions?: unknown }).positions);
-  if (positions === null) {
-    return NextResponse.json({ error: 'Invalid or oversized positions' }, { status: 400 });
-  }
-  const transform = sanitizeTransform((body as { transform?: unknown }).transform);
+  const body = await parseBody(request, layoutSchema);
+  if (body instanceof NextResponse) return body;
+  const { hash, transform, positions } = body;
 
   try {
     await prisma.contextLayout.upsert({
