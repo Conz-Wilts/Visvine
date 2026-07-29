@@ -72,7 +72,7 @@ export type AccessActionInput =
   | { action: 'restrict'; folderPath: string; restricted: boolean }
   | { action: 'setLock'; folderPath: string; locked: boolean }
 
-export type PublicationWithNames = PublicationInfo & {
+type PublicationWithNames = PublicationInfo & {
   sourceCommunityName: string
   targetCommunityName: string
 }

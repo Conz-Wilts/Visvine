@@ -181,7 +181,7 @@ export function LevelSelect({
  * Searchable path picker over the brain tree — 'Entire context' + every folder
  * and note. Type to filter; folders list before notes.
  */
-export function PathPicker({
+function PathPicker({
   paths,
   value,
   onChange,

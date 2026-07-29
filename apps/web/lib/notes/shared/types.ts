@@ -4,9 +4,6 @@
 // sync, and Electron `BrainApi` types are intentionally dropped (out of scope).
 // Keep this file free of Node/DOM imports so it runs on the server and the client.
 
-import type { RelatedNote } from './related'
-
-export type { RelatedNote }
 export type { References, LinkedReference, UnlinkedReference } from './references'
 
 // The subset of YAML frontmatter the app reasons about. Any other keys are kept

@@ -83,8 +83,6 @@ export interface BrainAccess {
   locked: string[]
 }
 
-export const EMPTY_ACCESS: BrainAccess = { grants: [], restricted: [], locked: [] }
-
 /** Full access from the root — personal spaces are never folder-gated. */
 export const OPEN_ACCESS: BrainAccess = {
   grants: [{ subjectType: 'community', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
@@ -219,7 +217,7 @@ export function winningGrant(
 // --- legacy registry migration ----------------------------------------------------
 
 /** A grant row produced by migrating the pre-grant folder registry. */
-export interface MigratedGrant extends AccessGrant {
+interface MigratedGrant extends AccessGrant {
   grantedBy: string
 }
 

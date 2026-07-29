@@ -145,16 +145,6 @@ export async function createAccessRequest(
   return toRequest(row)
 }
 
-/** The caller's own requests — powers the "Request pending" state. */
-export async function listMyAccessRequests(p: BrainPrincipal): Promise<AccessRequest[]> {
-  await ensureRequestsImported(p.communityId)
-  const rows = await prisma.brainAccessRequest.findMany({
-    where: { communityId: p.communityId, userId: p.userId },
-    orderBy: { createdAt: 'desc' },
-  })
-  return rows.map(toRequest)
-}
-
 /**
  * Every request the caller may see — their own plus every request for a path
  * they manage (community admins manage everything). One payload serves both the
@@ -169,11 +159,6 @@ export async function listVisibleAccessRequests(p: BrainPrincipal): Promise<Acce
   })
   const visible = rows.map(toRequest).filter((r) => requestVisibleTo(p, r))
   return hydrate(sortRequests(visible))
-}
-
-/** Pending count for a community — the console nav badge. Admin surfaces only. */
-export function pendingAccessRequestCount(communityId: string): Promise<number> {
-  return prisma.brainAccessRequest.count({ where: { communityId, status: 'pending' } })
 }
 
 /**

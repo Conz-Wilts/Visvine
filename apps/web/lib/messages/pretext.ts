@@ -125,11 +125,3 @@ export function calculateMessageHeight(
 
   return Math.ceil(height);
 }
-
-/**
- * Clear the pretext preparation cache.
- * Call when font changes or on memory pressure.
- */
-export function clearPretextCache(): void {
-  preparedCache.clear();
-}

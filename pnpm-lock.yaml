@@ -116,9 +116,6 @@ importers:
       react-leaflet:
         specifier: ^5.0.0
         version: 5.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      react-leaflet-cluster:
-        specifier: ^4.1.3
-        version: 4.1.3(@react-leaflet/core@3.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react-leaflet@5.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.2.14)(react@19.1.0)
@@ -2925,11 +2922,6 @@ packages:
     resolution: {integrity: sha512-MbjN408fEndfiQXbFQ1vnd+1NoLDsnQW41410oQBXiyXDMYH5z505juWa4KUE1LqxRC7DgOgZDbKLxHIwm27hA==}
     engines: {node: '>=0.10'}
 
-  leaflet.markercluster@1.5.3:
-    resolution: {integrity: sha512-vPTw/Bndq7eQHjLBVlWpnGeLa3t+3zGiuM7fJwCkiMFq+nmRuG3RI3f7f4N4TDX7T4NpbAXpR2+NTRSEGfCSeA==}
-    peerDependencies:
-      leaflet: ^1.3.1
-
   leaflet@1.9.4:
     resolution: {integrity: sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==}
 
@@ -3649,15 +3641,6 @@ packages:
 
   react-is@16.13.1:
     resolution: {integrity: sha512-24e6ynE2H+OKt4kqsOvNd8kBpV65zoxbA4BVsEOB3ARVWQki/DHzaUoC5KuON/BiccDaCCTZBuOcfZs70kR8bQ==}
-
-  react-leaflet-cluster@4.1.3:
-    resolution: {integrity: sha512-b3ICS7r9Fs5hBWrFPMVnmkCuDewyG3m1GaGzamXY0eryyAXDfQ+ikSkiR/mVethueIIA5MSyLok2/KsZVotspQ==}
-    peerDependencies:
-      '@react-leaflet/core': ^3.0.0
-      leaflet: ^1.9.0
-      react: ^19.0.0
-      react-dom: ^19.0.0
-      react-leaflet: ^5.0.0
 
   react-leaflet@5.0.0:
     resolution: {integrity: sha512-CWbTpr5vcHw5bt9i4zSlPEVQdTVcML390TjeDG0cK59z1ylexpqC6M1PJFjV8jD7CF+ACBFsLIDs6DRMoLEofw==}
@@ -7040,10 +7023,6 @@ snapshots:
     dependencies:
       language-subtag-registry: 0.3.23
 
-  leaflet.markercluster@1.5.3(leaflet@1.9.4):
-    dependencies:
-      leaflet: 1.9.4
-
   leaflet@1.9.4: {}
 
   levn@0.4.1:
@@ -8019,15 +7998,6 @@ snapshots:
       scheduler: 0.26.0
 
   react-is@16.13.1: {}
-
-  react-leaflet-cluster@4.1.3(@react-leaflet/core@3.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react-leaflet@5.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0):
-    dependencies:
-      '@react-leaflet/core': 3.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      leaflet: 1.9.4
-      leaflet.markercluster: 1.5.3(leaflet@1.9.4)
-      react: 19.1.0
-      react-dom: 19.1.0(react@19.1.0)
-      react-leaflet: 5.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
   react-leaflet@5.0.0(leaflet@1.9.4)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:

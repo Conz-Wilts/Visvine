@@ -36,7 +36,7 @@ export type WriteResult =
 export type FolderLevel = 'read' | 'write' | 'admin'
 
 /** Legacy: public = every community member can read; private = members-only. */
-export type FolderVisibility = 'public' | 'private'
+type FolderVisibility = 'public' | 'private'
 
 interface FolderMember {
   userId: string

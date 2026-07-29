@@ -10,7 +10,7 @@ import { logAudit } from './audit'
 
 export type TeamRole = 'lead' | 'member'
 
-export interface TeamMemberInfo {
+interface TeamMemberInfo {
   userId: string
   role: TeamRole
   name: string

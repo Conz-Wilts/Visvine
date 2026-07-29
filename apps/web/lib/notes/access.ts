@@ -146,7 +146,7 @@ async function loadFolderFlags(communityId: string): Promise<FolderFlags> {
 }
 
 /** The teamIds the user belongs to inside this community. */
-export async function teamIdsOf(communityId: string, userId: string): Promise<string[]> {
+async function teamIdsOf(communityId: string, userId: string): Promise<string[]> {
   const rows = await prisma.teamMember.findMany({
     where: { userId, team: { communityId } },
     select: { teamId: true },

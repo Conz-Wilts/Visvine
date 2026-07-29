@@ -858,7 +858,7 @@ export function ContextForm({
 
 // ─── File (context source) Form ─────────────────────────────────────────────
 
-export type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
+type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
 
 export interface FileEntry {
   file: File;
@@ -880,7 +880,7 @@ function formatBytes(bytes: number): string {
 }
 
 /** Reject unsupported/oversized files at pick time, before any round-trip. */
-export function rejectionReason(file: File): string | null {
+function rejectionReason(file: File): string | null {
   if (!sourceKindOf(file.name)) return 'Unsupported type';
   if (file.size > MAX_SOURCE_BYTES) return `Over ${Math.round(MAX_SOURCE_BYTES / (1024 * 1024))} MB`;
   return null;

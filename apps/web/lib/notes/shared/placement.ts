@@ -5,15 +5,10 @@
 // every member may write (Visvine's pre-registry behavior is preserved).
 
 /** The reserved id for the shared brain's root (notes with no top-level folder). */
-export const ROOT_FOLDER = ''
+const ROOT_FOLDER = ''
 
 /** Top-level folder id of a brain path ('' for a root-level note). */
 export function folderIdOfPath(path: string): string {
   const slash = path.indexOf('/')
   return slash === -1 ? ROOT_FOLDER : path.slice(0, slash)
-}
-
-/** Whether a path sits under the given registered folder id. */
-export function pathInFolder(path: string, folderId: string): boolean {
-  return folderIdOfPath(path) === folderId
 }
