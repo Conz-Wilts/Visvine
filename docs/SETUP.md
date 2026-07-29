@@ -220,8 +220,8 @@ but the cheapest safety is not to be in that state in the first place.
 pnpm db:check               # SELECT 1 + pgvector check against current .env target
 pnpm env:check              # fails if a real .env is tracked in git
 pnpm env:check:staged       # fails if a real .env is staged (use in pre-commit)
-pnpm lint                   # next lint --max-warnings=0 (web app)
-pnpm --filter @visvine/web exec tsc --noEmit   # full typecheck
+pnpm lint                   # eslint . --max-warnings=0 (web app)
+pnpm typecheck              # tsc --noEmit (web app)
 pnpm test                   # Node built-in test runner (apps/web)
 ```
 

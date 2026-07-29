@@ -53,8 +53,9 @@ pnpm setup              # first-time machine bootstrap
 pnpm dev                # docker up + Next.js dev server
 pnpm build              # production build
 pnpm test               # run tests
-pnpm typecheck          # typecheck all packages
-pnpm lint               # lint all packages
+pnpm typecheck          # tsc --noEmit (web app)
+pnpm lint               # eslint (web app)
+pnpm --filter @visvine/web knip   # dead-code / unused-dependency check
 
 pnpm db:up              # start Postgres container (idempotent)
 pnpm db:down            # stop container (data preserved in named volume)

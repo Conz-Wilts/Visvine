@@ -6,7 +6,7 @@ context you see on screen. The product surface is a force-directed layout of car
 
 There are **two distinct layout systems** that hand off to each other:
 
-1. A **deterministic offline layout engine** (`lib/context-layout/contextLayout.ts`)
+1. A **deterministic offline layout engine** (`lib/context/layout/`)
    that computes a good static arrangement once, off the simulation loop.
 2. A **runtime d3-force simulation + canvas renderer** (`components/context/ContextCanvas.tsx`)
    that draws the context, handles interaction, and *optionally* runs a live
@@ -23,7 +23,8 @@ that node — the simulation is **never reheated** on interaction. This avoids t
 
 | File | Role |
 | --- | --- |
-| `lib/context-layout/contextLayout.ts` | Deterministic offline layout engine (PivotMDS → Barnes-Hut → overlap removal → component packing) |
+| `lib/context/layout/` | Deterministic offline layout engine, one module per pipeline stage (`index.ts` = public API + driver; `prepare`, `seed`, `quadtree`, `forces`, `collide`, `crossings`, `pack`, `compose`) |
+| `lib/context/normalize.ts` | Node/link normalization shared by the context API, the directory and the hooks |
 | `components/context/ContextCanvas.tsx` | Canvas renderer, d3-force runtime, interaction (drag/pan/zoom/focus) |
 | `components/context/ContextWithTable.tsx` | Picks the layout *source* (server seed / incremental / engine / fallback), builds sim nodes |
 | `components/dashboard/DirectoryContextView.tsx` | Fetches context data, applies text-search dimming/focus |
@@ -66,7 +67,7 @@ API PUT: { hash, transform, positions }
 
 ---
 
-## 1. The offline layout engine (`contextLayout.ts`)
+## 1. The offline layout engine (`lib/context/layout/`)
 
 `layoutContext(nodes, links, options)` is a deterministic, time-budgeted pipeline.
 Given the same input it produces the same output (unless the time budget is

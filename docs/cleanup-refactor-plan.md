@@ -1,5 +1,12 @@
 # Cleanup & Refactor Plan — apps/web
 
+> **HISTORICAL — do not read as current state.** This is the record of the
+> June 2026 cleanup pass, kept for the reasoning behind decisions made then.
+> Paths, line numbers and "still to do" boxes have since drifted: the layout
+> engine now lives in `lib/context/layout/`, `contextUtils.ts` is
+> `lib/context/normalize.ts`, and `/api/link-preview` (described below as
+> deleted) exists again. Verify against the code before acting on anything here.
+
 > Generated 2026-06-28 from a 6-area deep review (dead code, API routes, lib, components, features/hooks, pages/config/schema). Every high-impact claim below was independently re-verified by grep before inclusion. Organized by **risk tier** so the safe, behavior-preserving work can ship first and the contract/DB-sensitive work stays gated behind explicit decisions.
 
 **Guiding constraint:** behavior must not change. Anything that could alter the mobile API JSON contract is marked **[CONTRACT]**; anything that touches the production database is marked **[DB-MIGRATION]**; anything requiring a product call is marked **[DECISION]**.

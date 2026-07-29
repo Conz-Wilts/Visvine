@@ -191,7 +191,7 @@ Items (admin-gated): **"Connect to…"**, "View profile", admin-only "Remove lin
 
 - **POST** (`route.ts:69`): route through `upsertLink({ origin:'manual', createdBy: session.userId })`. `relationship` is always sent by the UI (the type picker), validated against the community's `linkTypes`; if omitted, fall back to `'related'` so the endpoint can't 400 on a geometry-only call. Echo `origin` + `id`. Request `{ link: { source, target, relationship, since?, metadata? }, community_id }` → `{ link: {…, origin} }` (casing unchanged: top-level `community_id` snake, nested `source`/`target`).
 - **DELETE** (`route.ts:178`): add optional `?relationship=`. Today's `deleteMany` on `(sourceId,targetId,communityId)` nukes **every** relationship between a pair; the param removes exactly one. Route through `removeLink`. **Admins may delete any edge regardless of `origin`** (auto edges included — per the locked decision); no `409` guard.
-- **GET + serializer** (`normalizeLink`, `contextUtils.ts:29`): emit `origin` and the int `id` (finally exposed read-only) so the renderer can style auto vs manual and undo can reconcile. Add `origin`/`id` to `NBLink` (`lib/types.ts`).
+- **GET + serializer** (`normalizeLink`, `lib/context/normalize.ts`): emit `origin` and the int `id` (finally exposed read-only) so the renderer can style auto vs manual and undo can reconcile. Add `origin`/`id` to `NBLink` (`lib/types.ts`).
 - **`/api/nodes/search`:** add `community_id` + `exclude_ids` (backward-compatible).
 - Keep `revalidateTag('context-data-v2')` on every write.
 
