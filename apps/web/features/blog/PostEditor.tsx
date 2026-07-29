@@ -53,7 +53,6 @@ function textLinesToHtml(lines: string[]): string {
 
 export default function PostEditor({
   postId,
-  number,
   slug,
   title,
   initialContent,
@@ -62,7 +61,6 @@ export default function PostEditor({
   author,
 }: {
   postId: string;
-  number: number;
   slug: string;
   title: string;
   initialContent: JSONContent;

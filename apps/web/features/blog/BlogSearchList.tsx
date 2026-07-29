@@ -14,7 +14,7 @@ type Post = {
   publishedAt: string | null;
 };
 
-export default function BlogSearchList({ posts, isAdmin = false }: { posts: Post[]; isAdmin?: boolean }) {
+export default function BlogSearchList({ posts }: { posts: Post[] }) {
   const [query, setQuery] = useState("");
 
   const filtered = query.trim()

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { calculateMessageHeight, clearPretextCache, type MessageHeightOptions } from '@/lib/messages/pretext';
+import { calculateMessageHeight, type MessageHeightOptions } from '@/lib/messages/pretext';
 import type { SerializedMessage } from '@/lib/messages/types';
 
 /**
@@ -74,10 +74,12 @@ export function useMessageHeights(
     [messages, heights],
   );
 
-  // Clear caches on unmount
+  // Clear caches on unmount. The ref is captured here rather than read in the
+  // cleanup so we clear the map this mount owned, not whatever it points at later.
   useEffect(() => {
+    const cache = heightsRef.current;
     return () => {
-      heightsRef.current.clear();
+      cache.clear();
     };
   }, []);
 

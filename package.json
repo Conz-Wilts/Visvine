@@ -16,8 +16,8 @@
     "proxy": "bash scripts/start-cloud-sql-proxy.sh",
     "build": "pnpm --filter @visvine/web build",
     "start": "pnpm --filter @visvine/web start",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
+    "lint": "pnpm --filter @visvine/web lint",
+    "typecheck": "pnpm --filter @visvine/web typecheck",
     "test": "pnpm --filter @visvine/web test",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
@@ -43,7 +43,7 @@
     "db:publish": "node scripts/db-publish.mjs",
     "db:restore": "node scripts/db-restore.mjs",
     "setup:fixture": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:restore",
-    "clean": "turbo clean"
+    "clean": "pnpm --filter @visvine/web clean"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

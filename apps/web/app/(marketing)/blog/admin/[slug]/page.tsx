@@ -26,7 +26,6 @@ export default async function BlogAdminEdit({ params }: Props) {
     <article className="relative z-10 w-full max-w-[900px] mx-auto px-5 pt-6 pb-24 sm:px-8 sm:pt-10">
       <PostEditor
         postId={post.id}
-        number={post.number}
         slug={post.slug}
         title={post.title}
         initialContent={post.content as JSONContent}

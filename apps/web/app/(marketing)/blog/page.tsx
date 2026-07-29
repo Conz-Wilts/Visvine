@@ -1,6 +1,5 @@
 ﻿import type { Metadata } from "next";
 import prisma from "@/lib/prisma";
-import { getSession, isSuperAdmin } from "@/lib/session";
 import BlogSearchList from "@/features/blog/BlogSearchList";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +10,6 @@ export const metadata: Metadata = {
 };
 
 export default async function BlogIndex() {
-  const session = await getSession();
-  const admin = isSuperAdmin(session?.email);
-
   const posts = await prisma.blogPost.findMany({
     where: { published: true },
     orderBy: { publishedAt: "desc" },
@@ -37,7 +33,7 @@ export default async function BlogIndex() {
       <h1 className="text-5xl font-medium tracking-tight leading-[1.02] text-black sm:text-6xl">
         Blogs
       </h1>
-      <BlogSearchList posts={serialized} isAdmin={admin} />
+      <BlogSearchList posts={serialized} />
     </section>
   );
 }

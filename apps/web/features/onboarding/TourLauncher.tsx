@@ -320,7 +320,7 @@ export default function TourLauncher() {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   return null;
 }

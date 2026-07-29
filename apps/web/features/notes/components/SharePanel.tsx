@@ -231,7 +231,6 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
         <UsersRound className="h-4 w-4" />
       </span>
     ) : image ? (
-      // eslint-disable-next-line @next/next/no-img-element
       <img src={image} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
     ) : (
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-green/15 text-sm font-semibold text-brand-green">

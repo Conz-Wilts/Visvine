@@ -79,7 +79,6 @@ export default function ResizableImageView(props: ReactNodeViewProps) {
       <div className="relative inline-block w-full">
         {/* drag handle: lets ProseMirror move the node within the document.
             A raw <img> is required — next/image can't live in a contenteditable. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
           src={node.attrs.src}
