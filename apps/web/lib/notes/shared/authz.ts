@@ -1,5 +1,5 @@
 // The grant-based access model for community brains — the pure core of the
-// multiplayer-brains permission system (docs/brain-permissions-plan.md). One
+// multiplayer-brains permission system. One
 // mental model: every brain is a folder tree and access flows DOWN it. A grant
 // gives a subject (the whole community, a team, or one member) a level on a
 // resource path ('' = the brain root, a folder at any depth, or a single note);

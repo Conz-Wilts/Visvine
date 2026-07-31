@@ -2,7 +2,7 @@
  * The single create/update/delete path for every context edge — manual links and
  * all auto triggers (RSVP -> attended, event -> hosting, intro -> introduced,
  * bulk import). Routing everything here gives us one dedup rule and one place to
- * reason about provenance. See docs/link-management-design.md.
+ * reason about provenance.
  */
 import { revalidateTag } from 'next/cache';
 import prisma from '../prisma';

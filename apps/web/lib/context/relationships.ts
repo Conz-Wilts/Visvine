@@ -3,8 +3,7 @@
  *
  * The stored `Link.relationship` is a slug (e.g. "works_at"); the human label +
  * colour come from the community's configurable `linkTypes` (managed in the
- * console, mirroring node types), falling back to DEFAULT_LINK_TYPES. See
- * docs/link-management-design.md.
+ * console, mirroring node types), falling back to DEFAULT_LINK_TYPES.
  */
 import { DEFAULT_LINK_TYPES, getLinkTypes, type LinkTypeConfig } from '../types';
 

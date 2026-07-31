@@ -1,7 +1,7 @@
 'use client'
 
 // The Share dialog — one place that answers "who can see this and why" and
-// carries every sharing action (docs/brain-permissions-plan.md §9). Modeled on
+// carries every sharing action. Modeled on
 // the Google Drive share dialog: an "Add people" typeahead on top, the computed
 // people-with-access list (with per-row role menus — this list IS the audit),
 // a General access section (Restricted ↔ Everyone in the community, plus the

@@ -447,8 +447,8 @@ try {
     console.log(`  ✓ ${persons.length} founders`);
 
     // 5. founded links. Schema-aware: the links table gained provenance/dedup
-    // columns (origin, pair_key + the link_identity unique index — see
-    // docs/link-management-design.md). pair_key is NOT NULL with no DB default,
+    // columns (origin, pair_key + the link_identity unique index).
+    // pair_key is NOT NULL with no DB default,
     // so on the new schema we must compute it (LEAST|GREATEST of the endpoints,
     // identical to the migration + lib/graph upsertLink) and dedup via ON
     // CONFLICT. On an older prod schema that hasn't had the provenance push yet,

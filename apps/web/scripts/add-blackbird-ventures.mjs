@@ -388,7 +388,7 @@ try {
   // 5. Directory links are NOT written here anymore. Founder↔company edges are
   // derived from the shared-brain context notes (origin 'context', relationship
   // 'mentioned') seeded by add-blackbird-notes.mjs and materialised by
-  // scripts/backfill-context-links.ts. See docs/link-management-design.md.
+  // scripts/backfill-context-links.ts.
   void links; // computed above for reference only; no longer inserted
 
   // 6. CRM column values (organization nodes)

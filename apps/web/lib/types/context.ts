@@ -59,7 +59,6 @@ type RelationshipType =
 // note path); `structure` = the containment edge from a community to its spaces,
 // channels, notes and files (originRef = the child node id, so moving or deleting
 // the child undoes exactly its own edge); `import` = bulk-loaded curated data.
-// See docs/link-management-design.md.
 export type LinkOrigin =
   | 'manual'
   | 'event_attendance'

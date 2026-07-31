@@ -2,9 +2,7 @@
 
 > How blackbird-brain's knowledge-store architecture was integrated into Visvine's
 > **Context** tab (the notes feature), what was kept from each side, and how the
-> combined system works. Produced during the July 2026 integration session; the
-> full decision log and session record live in
-> [brain-integration-log.md](./brain-integration-log.md).
+> combined system works. Produced during the July 2026 integration session.
 
 ## 1. What the brain is
 
