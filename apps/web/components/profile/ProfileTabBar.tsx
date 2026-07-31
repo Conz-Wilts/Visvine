@@ -1,9 +1,19 @@
 'use client';
 
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState, useMemo } from 'react';
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext';
 
 export type ProfileTab = 'about' | 'connections' | 'communities' | 'context' | 'raw' | 'preview';
+
+/** Height of one row of the bar — the tab row, and the attached toolbar row. */
+const TAB_ROW_H = 48;
+
+/** Top inset for anything docking beside the bar (the notes tree). The bar is
+ *  one row tall by default and two only while the attached toolbar is open, so
+ *  this must be derived from the SAME flag passed to `attachedOpen` — hardcoding
+ *  96 leaves a row-high gap above the tree on Raw, which has no toolbar. */
+export const dockTopInsetFor = (attachedOpen: boolean) =>
+  attachedOpen ? TAB_ROW_H * 2 : TAB_ROW_H;
 
 // One motion for everything the bar does on a tab change: the indicator slides
 // and the attached region opens on the same render, so they must share a curve
@@ -112,15 +122,32 @@ export default function ProfileTabBar({
   );
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  // Transitions are ARMED only after the bar's first frame is on screen. This bar
+  // mounts mid-navigation (the Directory's Grid/Context bar unmounts and this one
+  // takes its place at the identical position), and an unarmed first frame is what
+  // makes that read as one continuous bar: without it the indicator slides out
+  // from width 0 and the attached toolbar row unfolds from 0fr, so the bar plays
+  // an entrance animation the user sees as a flash. Once armed, a real tab change
+  // animates as designed.
+  const [armed, setArmed] = useState(false);
+  const motion = armed ? `transition-all ${TAB_MOTION}` : '';
 
-  // Compute indicator position
-  useEffect(() => {
+  // Measure BEFORE paint, so the underline is already sitting under the active tab
+  // on that first frame rather than being placed a frame later.
+  useLayoutEffect(() => {
     const idx = tabs.findIndex((t) => t.id === activeTab);
     const btn = tabRefs.current[idx];
     if (btn) {
       setIndicatorStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
     }
   }, [activeTab, tabs]);
+
+  // One frame later the measured position is painted, so turning transitions on
+  // now can't retroactively animate it.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   function handleKeyDown(e: React.KeyboardEvent, idx: number) {
     if (e.key === 'ArrowRight') {
@@ -179,7 +206,7 @@ export default function ProfileTabBar({
 
           {/* Animated green underline indicator */}
           <div
-            className={`absolute bottom-0 h-0.5 bg-brand-green transition-all ${TAB_MOTION}`}
+            className={`absolute bottom-0 h-0.5 bg-brand-green ${motion}`}
             style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
           />
         </div>
@@ -190,14 +217,18 @@ export default function ProfileTabBar({
           indicator, off the same tab state, so the pair moves as one gesture.
           The host reserves its full h-12 from the first frame, so a portalled
           bar that only arrives once its data lands drops in without shifting the
-          line that just travelled down to meet it. */}
+          line that just travelled down to meet it.
+          Unarmed on the first frame (see `armed`): a bar that mounts already-open
+          must START open, not unfold into place. */}
       <div
-        className={`grid transition-[grid-template-rows] ${TAB_MOTION} motion-reduce:transition-none ${
+        className={`grid ${
+          armed ? `transition-[grid-template-rows] ${TAB_MOTION}` : ''
+        } motion-reduce:transition-none ${
           attachedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
         }`}
       >
         <div className="overflow-hidden">
-          <div ref={setHost} className="h-12" />
+          <div ref={setHost} style={{ height: TAB_ROW_H }} />
         </div>
       </div>
     </div>

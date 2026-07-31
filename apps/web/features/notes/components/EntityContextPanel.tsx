@@ -21,7 +21,6 @@ import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import { fieldDef, readFields } from '@/lib/create/typeFields'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -54,12 +53,17 @@ interface EntityContextPanelProps {
   // switches); the editor's own toolbar hosts the Editor/Raw toggle.
   mode?: NoteMode
   onModeChange?: (mode: NoteMode) => void
+  /** Fired once this panel has stopped waiting on data and is rendering its real
+   *  surface — the profile page holds its entrance animation until then, so the
+   *  transition into a note plays over the note instead of over a skeleton. */
+  onReady?: () => void
 }
 
 export function EntityContextPanel({
   nodeId,
   mode = 'wysiwyg',
   onModeChange,
+  onReady,
 }: EntityContextPanelProps) {
   const router = useRouter()
   const { currentCommunity } = useCommunity()
@@ -82,9 +86,22 @@ export function EntityContextPanel({
   // until all of it is in and paint once. A failed fetch resolves them too, or
   // the skeleton would hang forever on the error path (both effects swallow into
   // a null/false).
-  const [accessDone, setAccessDone] = useState(false)
+  // Which note each answer is FOR, rather than a bare "answered" flag — on a switch
+  // the panel has to tell "answered for the note being left" apart from "answered
+  // for the note being opened". See `shown`.
+  const [accessPath, setAccessPath] = useState<string | null>(null)
   const [configDone, setConfigDone] = useState(false)
-  const [read, setRead] = useState<NoteRead | null>(null)
+  // The note currently ON SCREEN, which lags `path` while the next one loads rather
+  // than being cleared. NoteEditor portals its format toolbar up into the tab bar
+  // (TabBarSlotContext), so tearing the editor down for the length of a fetch
+  // empties that bar and refills it after — the toolbar flash on every switch.
+  // Holding the previous note keeps the toolbar mounted, and the new read swaps
+  // editor and toolbar together on one commit via `key={shown.path}`. The body is
+  // hidden while it lags (ContentReveal), so the outgoing note is never seen.
+  // Scoped by community as well as path: the same path in two brains is two
+  // different notes, so a community switch must not reuse a held read.
+  const [shown, setShown] = useState<{ communityId: string; path: string; read: NoteRead } | null>(null)
+  const [everPainted, setEverPainted] = useState(false)
   const [noteExists, setNoteExists] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
@@ -97,8 +114,6 @@ export function EntityContextPanel({
   const [tags, setTags] = useState<string[]>([])
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
-  // Property rows (email, location, website…) — seeded from the node, saved on blur.
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   // Colours registered this session (before the community config refetches).
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
@@ -119,9 +134,10 @@ export function EntityContextPanel({
     }).catch(() => setConfigDone(true))
   }, [])
 
+  // Access is held across a switch for the same reason `shown` is: canWrite gates
+  // the toolbar's format controls, so clearing it would blank those buttons even
+  // with the editor still mounted — the same flash by another route.
   useEffect(() => {
-    setAccess(null)
-    setAccessDone(false)
     if (!communityId || !path) return
     let stale = false
     swrFetch(
@@ -130,12 +146,12 @@ export function EntityContextPanel({
       (a) => {
         if (stale) return
         setAccess(a)
-        setAccessDone(true)
+        setAccessPath(path)
       },
     ).catch(() => {
       if (!stale) {
         setAccess(null)
-        setAccessDone(true)
+        setAccessPath(path)
       }
     })
     return () => { stale = true }
@@ -186,8 +202,11 @@ export function EntityContextPanel({
   useEffect(() => {
     if (!communityId || !path) return
     const seq = ++loadSeq.current
-    setRead(null)
-    setNoteExists(false)
+    // No setShown(null) here — that teardown is what blanks the toolbar. The
+    // previous note stays mounted until this read lands. noteExists isn't reset
+    // either: it gates showEditor, so clearing it would unmount the editor (and
+    // its toolbar) for read-only viewers even while `shown` holds. The read handler
+    // below sets it in the same commit that swaps `shown`.
     setReferences(null)
     setPubs(null)
     onModeChange?.('wysiwyg')
@@ -199,7 +218,7 @@ export function EntityContextPanel({
     )
     readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
-      setRead(r)
+      setShown({ communityId, path, read: r })
       setNoteExists(r.status === 'ok')
       if (r.status === 'ok') {
         refsPromise.then(({ references: refs }) => {
@@ -218,7 +237,13 @@ export function EntityContextPanel({
   }, [communityId, path, onModeChange])
 
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
-  const openMeta = useMemo(() => notesIndex.find((n) => n.path === path) ?? null, [notesIndex, path])
+  // Keyed to the note on screen, not the one being fetched — while `shown` lags,
+  // its meta must stay its own.
+  const shownPath = shown?.path ?? null
+  const openMeta = useMemo(
+    () => notesIndex.find((n) => n.path === shownPath) ?? null,
+    [notesIndex, shownPath],
+  )
 
   const stubContent = useMemo(
     () =>
@@ -324,54 +349,6 @@ export function EntityContextPanel({
     setAddingTag(false)
   }, [node?.id, node?.tags])
 
-  // Seed the property rows from the node. Keyed on the node id so switching
-  // entities re-seeds, but NOT on the field values themselves — that would stomp
-  // what the user is typing every time the profile fetch revalidates.
-  useEffect(() => {
-    setFieldValues(node ? readFields(node) : {})
-  }, [node?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleFieldChange = useCallback((key: string, value: string) => {
-    setFieldValues((prev) => ({ ...prev, [key]: value }))
-  }, [])
-
-  // Persist one property row on blur. Column-backed fields go up as their own
-  // key and metadata-backed fields as a one-key merge, so a save never has to
-  // know (or clobber) the rest of the node's metadata.
-  const saveField = useCallback(
-    async (key: string, raw: string) => {
-      if (!communityId || !node) return
-      const def = fieldDef(node.type, key)
-      if (!def) return
-      const value = raw.trim()
-      if (value === (readFields(node)[key] ?? '')) return // unchanged — no write
-
-      const patch: Record<string, unknown> = { communityId }
-      if (def.target === 'column' && def.column) {
-        patch[def.column] = value
-        if (def.mirrorMetadataKey) patch.metadata = { [def.mirrorMetadataKey]: value }
-      } else {
-        patch.metadata = { [def.key]: def.kind === 'number' && value ? Number(value) : value }
-      }
-
-      try {
-        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patch),
-        })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save')
-        setError(null)
-      } catch (err) {
-        // Roll the row back to what the server still holds, so the surface never
-        // shows a value that isn't saved.
-        setFieldValues((prev) => ({ ...prev, [key]: readFields(node)[key] ?? '' }))
-        setError(err instanceof Error ? err.message : 'Failed to save')
-      }
-    },
-    [communityId, node, nodeId],
-  )
-
   // Persist a tag change to the entity's context node (shared metadata). Optimistic:
   // the header updates immediately and rolls back if the write is rejected.
   const saveTags = useCallback(
@@ -429,7 +406,28 @@ export function EntityContextPanel({
   // always writable), and the config behind the Refactor button. They're
   // separate requests, so gating the whole surface on all three is what keeps
   // the text, the toolbar and the tags from landing on three different commits.
-  const dataReady = read !== null && (isPersonalSpace || accessDone) && configDone
+  // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
+  // being left when this is false; that lag is what keeps the toolbar up.
+  const shownFresh = shown?.path === path && shown?.communityId === communityId
+  const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
+
+  // "Nothing left to wait for": the note being opened has landed, or we've reached
+  // a terminal branch that renders its own final surface (gated/denied, or a node
+  // this panel declines to render at all). The page holds its reveal until this
+  // flips, so the animation plays over the note.
+  const revealReady =
+    !!communityId &&
+    !(!node && nodeLoading) &&
+    (!node || !path || gatedOut || deniedPath || dataReady)
+  useEffect(() => {
+    if (revealReady) onReady?.()
+  }, [revealReady, onReady])
+
+  // Latched: once a note has painted, the panel never drops back to a skeleton —
+  // it keeps showing the note it has until the next one is ready to replace it.
+  useEffect(() => {
+    if (dataReady) setEverPainted(true)
+  }, [dataReady])
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -458,20 +456,21 @@ export function EntityContextPanel({
     )
   }
 
-  // Hold one skeleton until `dataReady`, so the note text can't beat its own
-  // toolbar onto the screen.
-  const loadingNote = !dataReady
-  const readFailed = read?.status === 'error'
+  // First load holds one skeleton so the note text can't beat its own toolbar onto
+  // the screen. After that the panel always has a note to show: it keeps the held
+  // one rather than flashing a skeleton between two notes.
+  const loadingNote = !shown || (!dataReady && !everPainted)
+  const shownRead = shown?.read ?? null
+  const readFailed = shownRead?.status === 'error'
   const showEditor = !loadingNote && !readFailed && (noteExists || canWrite)
 
   // Alias colour wins over the base type colour (same rule as the profile hero).
   const aliasColor = findAlias(currentCommunity?.communityAliases, node.alias, node.type)?.color
   const theme = hexToPalette(aliasColor ?? getTypeColor(node.type, currentCommunity?.nodeTypes))
-  // Property rows follow the same rule as tags — they're node metadata, edited
-  // by whoever can write the entity's context. They stay editable during a save
-  // (an in-flight PATCH must not yank the row out from under the cursor).
+  // Tags are node metadata, edited by whoever can write the entity's context.
+  // They stay editable during a save (an in-flight PATCH must not yank the row
+  // out from under the cursor).
   const canEditTags = showEditor && canWrite
-  const canEditFields = canEditTags
   // Community tags not already on this entity power the picker's suggestions.
   const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
   const tagSuggestions = allTags.filter((t) => !tagsLower.has(t.toLowerCase()))
@@ -528,19 +527,17 @@ export function EntityContextPanel({
         </div>
       )}
 
-      {/* Type, the type's own property rows, then Tags — the same block the
-          note-first create surface shows, so filling an entity in and coming
-          back to edit it look like one surface. Type stays a read-only chip
-          here: retyping a committed entity moves its note and rebinds its
-          identity, which is a migration, not a field edit. */}
+      {/* Type then Tags — nothing else. A committed entity's context header is
+          deliberately thinner than the create surface's: the type's own fields
+          (role, website, HQ…) live on the profile's details section, and every
+          entity reads the same here no matter how many fields its type defines.
+          `type={null}` is what withholds those rows from PropertyRows; the Type
+          chip stays read-only because retyping a committed entity moves its note
+          and rebinds its identity — a migration, not a field edit. */}
       <PropertyRows
-        type={node.type}
-        values={fieldValues}
-        editable={canEditFields}
-        onChange={handleFieldChange}
-        onCommit={saveField}
+        type={null}
+        values={{}}
         accent={theme.dark}
-        onImageRequest={() => {}}
         typeRow={
           <span className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-semibold text-white"
                 style={{ background: theme.base }}>
@@ -606,7 +603,7 @@ export function EntityContextPanel({
         <PanelSkeleton />
       ) : readFailed ? (
         <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
-          {read.message}
+          {shownRead.status === 'error' ? shownRead.message : null}
         </div>
       ) : showEditor ? (
         <>
@@ -615,20 +612,24 @@ export function EntityContextPanel({
               No shared context for {node.name} yet — start typing below to create it.
             </p>
           )}
+          {/* Keyed and fed from `shown`, never from the in-flight `path`: the editor
+              is the note it actually holds. When the next read lands, this key
+              changes and React swaps the editor — and the toolbar it portals into
+              the tab bar — on a single commit, with no empty frame between. */}
           <NoteEditor
-            key={path}
+            key={shown?.path ?? path}
             variant="embedded"
             headerSlot={headerCard}
             toolbarTrailSlot={shareButton}
-            path={path}
+            path={shown?.path ?? path}
             meta={openMeta}
             notes={noteRefs}
-            initialContent={read.status === 'ok' ? read.content : stubContent}
+            initialContent={shownRead?.status === 'ok' ? shownRead.content : stubContent}
             canEdit={canWrite}
             aiConfigured={aiConfigured}
             mode={mode}
             onModeChange={onModeChange}
-            references={references}
+            references={shownFresh ? references : null}
             entities={entities}
             entityByPath={entityByPath}
             onEnsureEntityNote={ensureEntityNote}

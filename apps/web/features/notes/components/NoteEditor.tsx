@@ -486,56 +486,66 @@ export function NoteEditor({
   // The formatting pill is shared between two layouts: a floating overlay in
   // the full workspace, a sticky in-flow row when embedded (the profile Context
   // tab scrolls with the page, so overlays can't anchor).
+  // Presence is decided by canEdit + mode ALONE — deliberately not by `editor`.
+  // useEditor({ immediatelyRender: false }) returns null on a new instance's first
+  // render, so gating the controls on it emptied the whole toolbar row every time
+  // the editor remounted (every note switch, since NoteContextPanel keys the editor
+  // by path) and refilled it once Tiptap initialised. That blink is the toolbar
+  // flash: the row is part of every context note, so it must never leave the bar.
+  // The controls simply render inert for the frame or two before the instance
+  // exists — visually identical, and every binding below no-ops on null.
   const formatControls =
-    canEdit && mode === 'wysiwyg' && editor ? (
+    canEdit && mode === 'wysiwyg' ? (
       <>
         <BlockTypeSelect editor={editor} />
         <Divider />
-        <ToolbarButton label="Bold" onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')}>
+        <ToolbarButton label="Bold" onClick={() => editor?.chain().focus().toggleBold().run()} active={!!editor?.isActive('bold')}>
           <BoldIcon className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton label="Italic" onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')}>
+        <ToolbarButton label="Italic" onClick={() => editor?.chain().focus().toggleItalic().run()} active={!!editor?.isActive('italic')}>
           <ItalicIcon className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton label="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')}>
+        <ToolbarButton label="Bullet list" onClick={() => editor?.chain().focus().toggleBulletList().run()} active={!!editor?.isActive('bulletList')}>
           <ListBulletIcon className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton label="Numbered list" onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')}>
+        <ToolbarButton label="Numbered list" onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={!!editor?.isActive('orderedList')}>
           <NumberedListIcon className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton label="Checklist" onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')}>
+        <ToolbarButton label="Checklist" onClick={() => editor?.chain().focus().toggleTaskList().run()} active={!!editor?.isActive('taskList')}>
           <CheckCircleIcon className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
-        <ToolbarButton label="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')}>
+        <ToolbarButton label="Quote" onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={!!editor?.isActive('blockquote')}>
           <QuoteIcon size={16} />
         </ToolbarButton>
-        <ToolbarButton label="Code" onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')}>
+        <ToolbarButton label="Code" onClick={() => editor?.chain().focus().toggleCodeBlock().run()} active={!!editor?.isActive('codeBlock')}>
           <CodeBracketIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label="Table"
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         >
           <TableCellsIcon className="h-4 w-4" />
         </ToolbarButton>
       </>
     ) : null
   // Star sits at the far left of the toolbar; Refactor is a filled button pushed
-  // to the far right (both matching the reference layout).
+  // to the far right (both matching the reference layout). Same rule as
+  // formatControls: no `editor` in the presence test. toggleStar already no-ops
+  // without one.
   const starButton =
-    canEdit && mode === 'wysiwyg' && editor ? (
+    canEdit && mode === 'wysiwyg' ? (
       <ToolbarButton label={starred ? 'Unstar note' : 'Star note'} onClick={toggleStar}>
         <StarIcon className={`h-4 w-4 ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
       </ToolbarButton>
     ) : null
   const refactorButton =
-    canEdit && mode === 'wysiwyg' && editor && aiConfigured ? (
+    canEdit && mode === 'wysiwyg' && aiConfigured ? (
       <button
         type="button"
         onClick={refactor}
-        disabled={refactoring}
+        disabled={refactoring || !editor}
         className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-dark-green px-2.5 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
       >
         <SparklesIcon className="h-3.5 w-3.5" />
@@ -768,7 +778,9 @@ const BLOCK_TYPES = [
 
 type BlockType = (typeof BLOCK_TYPES)[number]['value']
 
-function BlockTypeSelect({ editor }: { editor: Editor }) {
+// Accepts a null editor so the control can render before Tiptap exists — see the
+// note on formatControls. With no editor it shows the default label and no-ops.
+function BlockTypeSelect({ editor }: { editor: Editor | null }) {
   const [open, setOpen] = useState(false)
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -794,17 +806,20 @@ function BlockTypeSelect({ editor }: { editor: Editor }) {
     }
   }, [open])
 
-  const current: BlockType = editor.isActive('heading', { level: 1 })
-    ? 'title'
-    : editor.isActive('heading', { level: 2 })
-      ? 'heading'
-      : editor.isActive('heading', { level: 3 })
-        ? 'subheading'
-        : editor.isActive('codeBlock')
-          ? 'mono'
-          : 'body'
+  const current: BlockType = !editor
+    ? 'body'
+    : editor.isActive('heading', { level: 1 })
+      ? 'title'
+      : editor.isActive('heading', { level: 2 })
+        ? 'heading'
+        : editor.isActive('heading', { level: 3 })
+          ? 'subheading'
+          : editor.isActive('codeBlock')
+            ? 'mono'
+            : 'body'
 
   const apply = (value: BlockType) => {
+    if (!editor) return
     const chain = editor.chain().focus()
     if (value === 'title') chain.setHeading({ level: 1 }).run()
     else if (value === 'heading') chain.setHeading({ level: 2 }).run()

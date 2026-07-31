@@ -12,7 +12,8 @@ import { useParams } from 'next/navigation';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import ProfileTabBar, { dockTopInsetFor, type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import ContentReveal from '@/components/ui/ContentReveal';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 
 // Tiptap + the notes stack load only here, same rationale as the profile page's
@@ -55,14 +56,22 @@ function NoteViewerRoute() {
   const dockInsetStyle = useDockInsetStyle();
   const { setDockTopInset } = useContextPanel();
 
+  // Context ⇄ Raw drive the editor mode; the NoteContextPanel isn't given
+  // onModeChange so its editor drops the inline Editor/Raw pill (the tabs own it).
+  const activeTab: ProfileTab = mode === 'raw' ? 'raw' : 'context';
+
+  // Only the wysiwyg editor portals a toolbar into the bar's attached region —
+  // Raw is a plain textarea with nothing to put there, so the region stays shut
+  // and the bar keeps its single-row height.
+  const attachedOpen = activeTab === 'context';
+
   // Push the docked notes tree below the nav — same mechanism the Directory's
-  // Grid/Context bar uses (setDockTopInset). Our ProfileTabBar stacks two
-  // h-12 (48px) bars: the Context/Raw tab row and its always-open attached
-  // toolbar, so the tree starts 96px down, level with where the note begins.
+  // Grid/Context bar uses (setDockTopInset) — level with where the note begins,
+  // which tracks whether the toolbar row is open.
   useEffect(() => {
-    setDockTopInset(96);
+    setDockTopInset(dockTopInsetFor(attachedOpen));
     return () => setDockTopInset(0);
-  }, [setDockTopInset]);
+  }, [setDockTopInset, attachedOpen]);
 
   // Switching notes resets to the Context (wysiwyg) tab — the profile Context tab
   // does the same across entities (its mode is derived from the URL ?tab param).
@@ -70,16 +79,27 @@ function NoteViewerRoute() {
     setMode('wysiwyg');
   }, [notePath]);
 
-  // Context ⇄ Raw drive the editor mode; the NoteContextPanel isn't given
-  // onModeChange so its editor drops the inline Editor/Raw pill (the tabs own it).
-  const activeTab: ProfileTab = mode === 'raw' ? 'raw' : 'context';
+  // The note body stays hidden until NoteContextPanel says its fetches are in, so
+  // the entrance animates the note rather than the skeleton that preceded it.
+  // Reset per note: clicking another note in the tree replays the same reveal.
+  const [bodyReady, setBodyReady] = useState(false);
+  const markBodyReady = useCallback(() => setBodyReady(true), []);
+  useEffect(() => {
+    setBodyReady(false);
+  }, [notePath]);
+
   const handleTabChange = useCallback((tab: ProfileTab) => {
     setMode(tab === 'raw' ? 'raw' : 'wysiwyg');
   }, []);
 
   return (
     <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
+      {/* No profile-enter on this container: it wraps the sticky tab bar, and the
+          bar must NOT play an entrance. Arriving from the Directory's context, the
+          Grid/Context bar sits at exactly this position and geometry — fading a
+          replacement in from opacity 0 / 18px down is the flash. Only the note
+          body below animates; the bar reads as the same bar, relabelled. */}
+      <div className="w-full pb-10">
         {/* The tab bar spans the FULL pane width (no dock inset) and bleeds left
             over the docked notes tree with a raised z — so the Context/Raw bar
             reads as one continuous bar across the top, mirroring the Directory's
@@ -93,14 +113,14 @@ function NoteViewerRoute() {
           onTabChange={handleTabChange}
           stickyTop="-top-4 -mt-4"
           edgeClass="-ml-[23px] z-[45]"
-          attachedOpen
+          attachedOpen={attachedOpen}
         />
         {/* Only the note content insets to clear the docked tree; the bar above
             stays full-bleed. */}
-        <div style={dockInsetStyle}>
+        <ContentReveal ready={bodyReady} style={dockInsetStyle}>
           <ContextSidebar currentPath={notePath} />
-          <NoteContextPanel path={notePath} mode={mode} />
-        </div>
+          <NoteContextPanel path={notePath} mode={mode} onReady={markBodyReady} />
+        </ContentReveal>
       </div>
     </TabBarSlotProvider>
   );

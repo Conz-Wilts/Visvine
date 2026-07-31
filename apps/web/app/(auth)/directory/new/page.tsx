@@ -20,7 +20,7 @@ import { useSearchParams } from 'next/navigation';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import ProfileTabBar, { dockTopInsetFor, type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 import type { DraftType } from '@/features/notes/components/DraftContextPanel';
 
@@ -57,14 +57,18 @@ function DraftRoute() {
   const dockInsetStyle = useDockInsetStyle();
   const { setDockTopInset } = useContextPanel();
 
-  // Two h-12 bars (the tab row and its always-open attached toolbar), so the
-  // docked tree starts 96px down, level with where the note begins.
-  useEffect(() => {
-    setDockTopInset(96);
-    return () => setDockTopInset(0);
-  }, [setDockTopInset]);
-
   const activeTab: ProfileTab = mode === 'raw' ? 'raw' : 'context';
+
+  // Only wysiwyg portals a toolbar into the bar's attached region; Raw is a
+  // plain textarea, so the bar stays one row tall there (see the note view).
+  const attachedOpen = activeTab === 'context';
+
+  // Start the docked tree level with where the note begins — which tracks
+  // whether the attached toolbar row is open.
+  useEffect(() => {
+    setDockTopInset(dockTopInsetFor(attachedOpen));
+    return () => setDockTopInset(0);
+  }, [setDockTopInset, attachedOpen]);
   const handleTabChange = useCallback((tab: ProfileTab) => {
     setMode(tab === 'raw' ? 'raw' : 'wysiwyg');
   }, []);
@@ -77,7 +81,9 @@ function DraftRoute() {
 
   return (
     <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
+      {/* profile-enter goes on the body, not here — this container holds the sticky
+          tab bar, which must stay put across the navigation (see the note view). */}
+      <div className="w-full pb-10">
         <ProfileTabBar
           nodeType="Note"
           tabs={DRAFT_TABS}
@@ -85,9 +91,9 @@ function DraftRoute() {
           onTabChange={handleTabChange}
           stickyTop="-top-4 -mt-4"
           edgeClass="-ml-[23px] z-[45]"
-          attachedOpen
+          attachedOpen={attachedOpen}
         />
-        <div style={dockInsetStyle}>
+        <div className="profile-enter" style={dockInsetStyle}>
           <ContextSidebar currentPath="" />
           <DraftContextPanel mode={mode} initialFolder={folder} initialType={initialType} />
         </div>

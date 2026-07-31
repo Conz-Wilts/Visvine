@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -12,7 +12,8 @@ import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
-import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import ProfileTabBar, { dockTopInsetFor, type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import ContentReveal from '@/components/ui/ContentReveal';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
@@ -40,15 +41,16 @@ const ContextSidebar = dynamic(
 // column mid-navigation — the tree you just clicked in vanished under you.
 // Mounted only while a note tab is open; switching back to Profile lowers the
 // dock and the column closes.
-function DockedContextTree({ notePath }: { notePath: string | null }) {
+function DockedContextTree({ notePath, attachedOpen }: { notePath: string | null; attachedOpen: boolean }) {
   const { setDockTopInset } = useContextPanel();
 
-  // Start the tree below the tab bar: ProfileTabBar stacks the tab row and its
-  // attached toolbar, both h-12 — same 96px the standalone note view sets.
+  // Start the tree below the tab bar — one row, or two while the attached
+  // toolbar is open. Raw has no toolbar, so it must pass attachedOpen={false}
+  // here too or the tree hangs a row below the bar it's meant to sit under.
   useEffect(() => {
-    setDockTopInset(96);
+    setDockTopInset(dockTopInsetFor(attachedOpen));
     return () => setDockTopInset(0);
-  }, [setDockTopInset]);
+  }, [setDockTopInset, attachedOpen]);
 
   return <ContextSidebar currentPath={notePath} />;
 }
@@ -69,6 +71,54 @@ function useDockInsetStyle(): React.CSSProperties {
 function useTabBarEdgeClass(): string | undefined {
   const { dockRequested, contextOpen } = useContextPanel();
   return dockRequested && contextOpen ? '-ml-[23px] z-[45]' : undefined;
+}
+
+/**
+ * The loading state for arriving on a note tab (from the context, the tree, a
+ * backlink). The bare skeleton can't be used here: it renders no tab bar, so the
+ * bar the previous page had at this exact position blinks out for the length of
+ * the node fetch and back in after — the flash the navigation reads as. The tab
+ * set is already known before the fetch (a note tab implies
+ * [firstTab, Context, Raw]), so the bar is rendered up front and the fetch only
+ * fills in the body beneath it.
+ */
+function NoteTabLoading({
+  activeTab,
+  firstTab,
+  onTabChange,
+}: {
+  activeTab: ProfileTab;
+  firstTab: TabConfig;
+  onTabChange: (tab: ProfileTab) => void;
+}) {
+  const edgeClass = useTabBarEdgeClass();
+  const tabs = useMemo(
+    () => [firstTab, { id: 'context' as const, label: 'Context' }, { id: 'raw' as const, label: 'Raw' }],
+    [firstTab],
+  );
+
+  return (
+    <TabBarSlotProvider>
+      <div className="w-full pb-10">
+        <ProfileTabBar
+          nodeType="Note"
+          tabs={tabs}
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          stickyTop="-top-4 -mt-4"
+          attachedOpen={activeTab === 'context'}
+          edgeClass={edgeClass}
+        />
+        {/* No skeleton in the body on purpose. The note that follows is revealed by
+            ContentReveal once it has loaded, so a skeleton here would paint, unmount,
+            and leave a blank frame before that reveal — three states where the user
+            asked for one. The bar and the tree already say "loading"; the body simply
+            stays empty until the note fades into it. (This renders no body markup at
+            all: DockedContextTree is a portal into the Sidebar.) */}
+        <DockedContextTree notePath={null} attachedOpen={activeTab === 'context'} />
+      </div>
+    </TabBarSlotProvider>
+  );
 }
 
 /** The entity's canonical note path — what the tree highlights. */
@@ -152,6 +202,20 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // Note surface = the docked tree is (or is about to be) beside the content, so
   // the content insets to clear it and drops the centered profile container.
   const noteSurface = stillResolving || (contextAvailable && isNoteTab(activeTab));
+  // The tab the BAR should show. activeTab falls back to 'about' until
+  // contextAvailable resolves, but while stillResolving the URL's tab is the one
+  // we're heading for — underlining it keeps the bar from correcting itself a
+  // beat after arrival. Also drives the docked tree's inset (dockTopInsetFor).
+  const barTab: ProfileTab = stillResolving && wantedTab ? wantedTab : activeTab;
+
+  // Hold the note body hidden until EntityContextPanel reports its fetches in.
+  // Reset per entity and on each entry into the note surface (Profile → Context
+  // mounts a fresh panel, which must get its own reveal, not a stale open state).
+  const [bodyReady, setBodyReady] = useState(false);
+  const markBodyReady = useCallback(() => setBodyReady(true), []);
+  useEffect(() => {
+    setBodyReady(false);
+  }, [nodeId, noteSurface]);
 
   // Strip a stale ?tab=context/raw (tool off / non-entity / foreign node) once
   // everything needed to decide has resolved.
@@ -167,7 +231,12 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
     // The provider spans the tab bar and the panel so the Context tab's editor
     // can portal its toolbar into the tab bar's attached region.
     <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
+      {/* profile-enter lives on the CONTENT below, never on this shell: the shell
+          holds the sticky tab bar, and arriving from the Directory's context (or
+          another note) that bar occupies the exact position the outgoing page's bar
+          did. Fading a replacement in from opacity 0 / 18px down is the flash — the
+          bar should look continuous and only the body under it should animate. */}
+      <div className="w-full pb-10">
         {/* ProfileTabBar must be a DIRECT child of the tall page container so its
             `sticky` has scroll range — a thin wrapper would confine it and it'd
             scroll away. Spacing below the tabs lives on the content instead.
@@ -176,41 +245,57 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
             would pin the bar 16px short of the navbar, letting content show in
             the gap. -mt-4 pulls the bar over that padding at rest too, so it
             sits flush under the navbar and never shifts when it pins. */}
-        {contextAvailable && (
+        {/* Rendered through stillResolving too, not just once contextAvailable
+            lands: the URL already asks for a note tab, so the tab set is known and
+            withholding the bar for the length of the fetch is what makes it blink
+            out and back in on arrival. barTab underlines the tab being navigated
+            TO — activeTab is still 'about' until contextAvailable resolves. */}
+        {(contextAvailable || stillResolving) && (
           <ProfileTabBar
-            nodeType="Person" tabs={PERSON_TABS} activeTab={activeTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
-            attachedOpen={activeTab === 'context'}
-            edgeClass={isNoteTab(activeTab) ? edgeClass : undefined}
+            nodeType="Person" tabs={PERSON_TABS} activeTab={barTab} onTabChange={setTabParam} stickyTop="-top-4 -mt-4"
+            attachedOpen={barTab === 'context'}
+            edgeClass={isNoteTab(barTab) ? edgeClass : undefined}
           />
         )}
-        <div
-          className={noteSurface ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
-          style={noteSurface ? dockInsetStyle : undefined}
-        >
-        {stillResolving ? (
-          // The tree docks while the node still resolves too: arriving from it,
-          // the panel must not blink shut for the length of a profile fetch.
-          <>
-            <DockedContextTree notePath={null} />
-            <ProfileSkeletonLoader mode="fullpage" />
-          </>
-        ) : isNoteTab(activeTab) ? (
-          <>
-            <DockedContextTree notePath={notePath} />
-            <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
-          </>
+        {/* Note surfaces reveal on data, not on mount (ContentReveal): the entrance
+            waits for the note so it animates the note. The profile side keeps
+            profile-enter — that one introduces content it already has. */}
+        {noteSurface ? (
+          <ContentReveal ready={bodyReady} style={dockInsetStyle}>
+            {stillResolving ? (
+              // The tree docks while the node still resolves too: arriving from it,
+              // the panel must not blink shut for the length of a profile fetch.
+              // barTab, not activeTab: the inset must match the bar that's actually
+              // rendered above (see barTab) or the tree hangs a row off it.
+              <DockedContextTree notePath={null} attachedOpen={barTab === 'context'} />
+            ) : (
+              <>
+                <DockedContextTree notePath={notePath} attachedOpen={activeTab === 'context'} />
+                <EntityContextPanel
+                  nodeId={nodeId}
+                  mode={modeForTab(activeTab)}
+                  onReady={markBodyReady}
+                />
+              </>
+            )}
+          </ContentReveal>
         ) : (
           /* No outer card wrapper — ProfilePageContent renders separate floating
              cards directly on the page background, matching the event detail page. */
-          <ProfilePageContent nodeId={nodeId} />
+          <div className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl">
+            <ProfilePageContent nodeId={nodeId} />
+          </div>
         )}
-        </div>
       </div>
     </TabBarSlotProvider>
   );
 }
 
 // ── Non-person nodes → classic tab view (+ Context tab for orgs) ─────────────
+
+// Module-level so NoteTabLoading's tab set is referentially stable across the
+// fetch — the bar must not rebuild its tabs while the body loads.
+const NODE_FIRST_TAB: TabConfig = { id: 'about', label: 'Profile' };
 
 function NodeTabPage({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
@@ -225,6 +310,14 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   const notePath = useEntityNotePath(nodeId, node);
   const dockInsetStyle = useDockInsetStyle();
   const edgeClass = useTabBarEdgeClass();
+  const noteSurface = isNoteTab(activeTab) && contextAvailable;
+
+  // Hold the note body hidden until its fetches land — see PersonProfilePage.
+  const [bodyReady, setBodyReady] = useState(false);
+  const markBodyReady = useCallback(() => setBodyReady(true), []);
+  useEffect(() => {
+    setBodyReady(false);
+  }, [nodeId, noteSurface]);
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
   const changeTab = useCallback(
@@ -249,11 +342,10 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   // Keep the tree docked through the node fetch when the URL already asks for a
   // note tab — otherwise arriving from the tree blinks the panel shut and open.
   if (loading && !data)
-    return (
-      <>
-        {isNoteTab(activeTab) && <DockedContextTree notePath={null} />}
-        <ProfileSkeletonLoader mode="fullpage" />
-      </>
+    return isNoteTab(activeTab) ? (
+      <NoteTabLoading activeTab={activeTab} firstTab={NODE_FIRST_TAB} onTabChange={changeTab} />
+    ) : (
+      <ProfileSkeletonLoader mode="fullpage" />
     );
 
   if (error || !data) {
@@ -275,7 +367,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
 
   // Tabs mirror the person profile's top bar — the entity view lives under a
   // "Profile" tab, Context is its peer.
-  const tabs: TabConfig[] = [{ id: 'about', label: 'Profile' }];
+  const tabs: TabConfig[] = [NODE_FIRST_TAB];
   if (contextAvailable) tabs.push({ id: 'context', label: 'Context' }, { id: 'raw', label: 'Raw' });
 
   return (
@@ -283,7 +375,8 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     // Provider spans tab bar + panel so the Context editor's toolbar can portal
     // into the tab bar's attached region.
     <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
+      {/* profile-enter on the content, not the shell — see PersonProfilePage. */}
+      <div className="w-full pb-10">
         {/* Direct child of the tall page container so `sticky` actually pins —
             a thin wrapper would confine it. Spacing below lives on the panel.
             "-top-4 -mt-4" cancels <main>'s pt-4 both at rest and when pinned, so
@@ -294,19 +387,25 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
           edgeClass={isNoteTab(activeTab) && contextAvailable ? edgeClass : undefined}
         />
 
-        <div
-          role="tabpanel"
-          className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
-          style={isNoteTab(activeTab) && contextAvailable ? dockInsetStyle : undefined}
-        >
-          {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
-          {isNoteTab(activeTab) && contextAvailable && (
-            <>
-              <DockedContextTree notePath={notePath} />
-              <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
-            </>
-          )}
-        </div>
+        {/* Note surface reveals on data (see PersonProfilePage); the entity view
+            keeps profile-enter. */}
+        {noteSurface ? (
+          <ContentReveal role="tabpanel" ready={bodyReady} style={dockInsetStyle}>
+            <DockedContextTree notePath={notePath} attachedOpen={activeTab === 'context'} />
+            <EntityContextPanel
+              nodeId={nodeId}
+              mode={modeForTab(activeTab)}
+              onReady={markBodyReady}
+            />
+          </ContentReveal>
+        ) : (
+          <div
+            role="tabpanel"
+            className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl"
+          >
+            {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
+          </div>
+        )}
       </div>
     </TabBarSlotProvider>
   );
@@ -317,6 +416,9 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
 // Resources are documents/links, not people — a Connect-button profile makes no
 // sense for them. Default tab is a Preview of the resource URL; Context is the
 // same notes panel entities get (entityKindOf covers resources).
+// Module-level for the same reason as NODE_FIRST_TAB.
+const RESOURCE_FIRST_TAB: TabConfig = { id: 'preview', label: 'Preview' };
+
 function ResourceNodePage({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
@@ -328,6 +430,14 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   const notePath = useEntityNotePath(nodeId, node);
   const dockInsetStyle = useDockInsetStyle();
   const edgeClass = useTabBarEdgeClass();
+  const noteSurface = isNoteTab(activeTab) && contextAvailable;
+
+  // Hold the note body hidden until its fetches land — see PersonProfilePage.
+  const [bodyReady, setBodyReady] = useState(false);
+  const markBodyReady = useCallback(() => setBodyReady(true), []);
+  useEffect(() => {
+    setBodyReady(false);
+  }, [nodeId, noteSurface]);
 
   const changeTab = useCallback(
     (tab: ProfileTab) => {
@@ -349,11 +459,10 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   // Keep the tree docked through the node fetch when the URL already asks for a
   // note tab — otherwise arriving from the tree blinks the panel shut and open.
   if (loading && !data)
-    return (
-      <>
-        {isNoteTab(activeTab) && <DockedContextTree notePath={null} />}
-        <ProfileSkeletonLoader mode="fullpage" />
-      </>
+    return isNoteTab(activeTab) ? (
+      <NoteTabLoading activeTab={activeTab} firstTab={RESOURCE_FIRST_TAB} onTabChange={changeTab} />
+    ) : (
+      <ProfileSkeletonLoader mode="fullpage" />
     );
 
   if (error || !data) {
@@ -373,13 +482,14 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
 
   const { node: nodeData } = data;
 
-  const tabs: TabConfig[] = [{ id: 'preview', label: 'Preview' }];
+  const tabs: TabConfig[] = [RESOURCE_FIRST_TAB];
   if (contextAvailable) tabs.push({ id: 'context', label: 'Context' }, { id: 'raw', label: 'Raw' });
 
   return (
     // Full-width shell (see PersonProfilePage) — divider lines run edge to edge.
     <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
+      {/* profile-enter on the content, not the shell — see PersonProfilePage. */}
+      <div className="w-full pb-10">
         {/* Direct child of the tall page container so `sticky` actually pins;
             "-top-4 -mt-4" cancels <main>'s pt-4 (see NodeTabPage). */}
         <ProfileTabBar
@@ -388,19 +498,25 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
           edgeClass={isNoteTab(activeTab) && contextAvailable ? edgeClass : undefined}
         />
 
-        <div
-          role="tabpanel"
-          className={isNoteTab(activeTab) ? '' : 'mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl'}
-          style={isNoteTab(activeTab) && contextAvailable ? dockInsetStyle : undefined}
-        >
-          {activeTab === 'preview' && <ResourcePreviewContent node={nodeData} />}
-          {isNoteTab(activeTab) && contextAvailable && (
-            <>
-              <DockedContextTree notePath={notePath} />
-              <EntityContextPanel nodeId={nodeId} mode={modeForTab(activeTab)} />
-            </>
-          )}
-        </div>
+        {/* Note surface reveals on data (see PersonProfilePage); the preview keeps
+            profile-enter. */}
+        {noteSurface ? (
+          <ContentReveal role="tabpanel" ready={bodyReady} style={dockInsetStyle}>
+            <DockedContextTree notePath={notePath} attachedOpen={activeTab === 'context'} />
+            <EntityContextPanel
+              nodeId={nodeId}
+              mode={modeForTab(activeTab)}
+              onReady={markBodyReady}
+            />
+          </ContentReveal>
+        ) : (
+          <div
+            role="tabpanel"
+            className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl"
+          >
+            {activeTab === 'preview' && <ResourcePreviewContent node={nodeData} />}
+          </div>
+        )}
       </div>
     </TabBarSlotProvider>
   );

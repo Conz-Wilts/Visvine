@@ -37,9 +37,13 @@ interface NoteContextPanelProps {
   path: string
   mode?: NoteMode
   onModeChange?: (mode: NoteMode) => void
+  /** Fired once this panel has stopped waiting on data and is rendering its real
+   *  surface. The page holds its entrance animation until then (ContentReveal), so
+   *  the transition into a note plays over the note and not over a skeleton. */
+  onReady?: () => void
 }
 
-export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteContextPanelProps) {
+export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady }: NoteContextPanelProps) {
   const router = useRouter()
   const { currentCommunity } = useCommunity()
   const communityId = currentCommunity?.id ?? null
@@ -48,12 +52,26 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
 
   const [aiConfigured, setAiConfigured] = useState(false)
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
-  // "Answered" flags (not "answered with a value") so the panel holds one
-  // skeleton until note + access + config are all in — same contract as
-  // EntityContextPanel, see the comment there.
-  const [accessDone, setAccessDone] = useState(false)
+  // Which note each answer is FOR, rather than a bare "answered" flag. The panel
+  // still holds one skeleton until note + access + config are all in on first
+  // load (same paint-once contract as EntityContextPanel), but on a switch it
+  // needs to distinguish "answered for the note being left" from "answered for
+  // the note being opened" — see `shown`.
+  const [accessPath, setAccessPath] = useState<string | null>(null)
   const [configDone, setConfigDone] = useState(false)
-  const [read, setRead] = useState<NoteRead | null>(null)
+  // The note currently ON SCREEN. It deliberately lags `path` while the next note
+  // loads instead of being cleared: NoteEditor portals its format toolbar up into
+  // the tab bar (TabBarSlotContext), so dropping to a skeleton unmounts the editor,
+  // which empties the bar for the length of the fetch and refills it afterwards —
+  // the toolbar flash on every note switch. Holding the previous note keeps that
+  // toolbar mounted throughout, and when the new read lands `key={shown.path}`
+  // replaces editor and toolbar together on a single commit, so there is never an
+  // empty frame. The body itself is hidden while it lags (ContentReveal), so the
+  // outgoing note is never actually seen under the incoming note's title.
+  // Scoped by community as well as path: the same path in two brains is two
+  // different notes, so a community switch must not be able to reuse a held read.
+  const [shown, setShown] = useState<{ communityId: string; path: string; read: NoteRead } | null>(null)
+  const [everPainted, setEverPainted] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
   const [pubs, setPubs] = useState<PublicationStateResponse | null>(null)
@@ -74,9 +92,11 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     }).catch(() => setConfigDone(true))
   }, [])
 
+  // Access is held across a note switch for the same reason `shown` is: canWrite
+  // gates the toolbar's format controls, so clearing it mid-switch would blank
+  // those buttons even with the editor still mounted — the same flash by another
+  // route. accessPath records which note the held answer belongs to.
   useEffect(() => {
-    setAccess(null)
-    setAccessDone(false)
     if (!communityId || !path) return
     let stale = false
     swrFetch(
@@ -85,12 +105,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
       (a) => {
         if (stale) return
         setAccess(a)
-        setAccessDone(true)
+        setAccessPath(path)
       },
     ).catch(() => {
       if (!stale) {
         setAccess(null)
-        setAccessDone(true)
+        setAccessPath(path)
       }
     })
     return () => { stale = true }
@@ -139,7 +159,8 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   useEffect(() => {
     if (!communityId || !path) return
     const seq = ++loadSeq.current
-    setRead(null)
+    // No setShown(null) here — that is exactly the teardown that blanks the
+    // toolbar. The previous note stays mounted until this read lands.
     setReferences(null)
     setPubs(null)
     onModeChange?.('wysiwyg')
@@ -150,7 +171,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     )
     readNote(communityId, path).then((r) => {
       if (loadSeq.current !== seq) return
-      setRead(r)
+      setShown({ communityId, path, read: r })
       if (r.status === 'ok') {
         refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
@@ -168,7 +189,13 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   }, [communityId, path, onModeChange])
 
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
-  const openMeta = useMemo(() => notesIndex.find((n) => n.path === path) ?? null, [notesIndex, path])
+  // Keyed to the note on screen, not the one being fetched — while `shown` lags,
+  // its title/meta must stay its own.
+  const shownPath = shown?.path ?? null
+  const openMeta = useMemo(
+    () => notesIndex.find((n) => n.path === shownPath) ?? null,
+    [notesIndex, shownPath],
+  )
 
   // Server-computed, per-path (any-depth grants + restricted cuts included).
   // A live published replica is read-only here regardless of folder access.
@@ -253,7 +280,24 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     [communityId],
   )
 
-  const dataReady = read !== null && (isPersonalSpace || accessDone) && configDone
+  // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
+  // being left when this is false; that lag is what keeps the toolbar up.
+  const shownFresh = shown?.path === path && shown?.communityId === communityId
+  const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
+
+  // "Nothing left to wait for" — the note being opened has fully landed, or we've
+  // reached a terminal branch (gated out) that renders its own final surface. The
+  // page holds its reveal until this flips, so the animation plays over the note.
+  const revealReady = !!communityId && (gatedOut || dataReady)
+  useEffect(() => {
+    if (revealReady) onReady?.()
+  }, [revealReady, onReady])
+
+  // Latched: once the surface has painted a note it never falls back to a skeleton,
+  // it just keeps showing the note it has. Only the very first load skeletons.
+  useEffect(() => {
+    if (dataReady) setEverPainted(true)
+  }, [dataReady])
 
   // ── Render states ───────────────────────────────────────────────────────────
 
@@ -274,12 +318,19 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
     )
   }
 
-  if (!dataReady) return <PanelSkeleton />
+  // First load only: nothing has ever painted, so there is no held note to show.
+  // After that the panel always has `shown` and renders it, fresh or lagging.
+  if (!shown || (!dataReady && !everPainted)) return <PanelSkeleton />
 
-  if (read.status === 'error') {
+  const shownRead = shown.read
+  // References are fetched for `path`; withhold them while the shown note lags so
+  // the rail can't attribute one note's backlinks to another.
+  const shownReferences = shownFresh ? references : null
+
+  if (shownRead.status === 'error') {
     return (
       <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
-        {read.message}
+        {shownRead.message}
       </div>
     )
   }
@@ -287,7 +338,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
   // invitation to create. It IS an invitation to ask: readVisible 404s hidden
   // notes exactly like absent ones, so the card offers a request either way and
   // its copy commits to neither reading.
-  if (read.status === 'missing') {
+  if (shownRead.status === 'missing') {
     return (
       <div className="flex justify-center py-10">
         <AccessRequestCard
@@ -304,8 +355,8 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
 
   const title =
     openMeta?.title?.trim() ||
-    String(parseFrontmatter(read.content).title ?? '').trim() ||
-    (path.split('/').pop() ?? path).replace(/\.md$/i, '')
+    String(parseFrontmatter(shownRead.content).title ?? '').trim() ||
+    (shown.path.split('/').pop() ?? shown.path).replace(/\.md$/i, '')
 
   // The note title leads the scrolling content (embedded NoteEditor hides its
   // own .notes-title); width/padding mirror .notes-column so it lines up. The
@@ -346,19 +397,24 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
           <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
+      {/* Keyed and fed from `shown`, never from the in-flight `path`: the editor is
+          the note it actually holds. When the next read lands, this key changes and
+          React swaps the whole editor — and the toolbar it portals into the tab bar
+          — on one commit. `initialContent` is read once at mount, so keying it this
+          way is also what stops a stale body outliving its content. */}
       <NoteEditor
-        key={path}
+        key={shown.path}
         variant="embedded"
         headerSlot={headerCard}
-        path={path}
+        path={shown.path}
         meta={openMeta}
         notes={noteRefs}
-        initialContent={read.content}
+        initialContent={shownRead.content}
         canEdit={canWrite}
         aiConfigured={aiConfigured}
         mode={mode}
         onModeChange={onModeChange}
-        references={references}
+        references={shownReferences}
         entities={entities}
         entityByPath={entityByPath}
         onEnsureEntityNote={ensureEntityNote}
@@ -369,7 +425,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange }: NoteC
       {shareOpen && (
         <SharePanel
           communityId={communityId}
-          path={path}
+          path={shown.path}
           kind="note"
           onClose={() => setShareOpen(false)}
         />

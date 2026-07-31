@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 
 export interface UnderlineTab<T extends string> {
   id: T;
@@ -43,9 +43,16 @@ export default function UnderlineTabs<T extends string>({
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
+  // Transitions stay off until the first frame is painted — a bar that mounts
+  // mid-navigation (this one replaces the note view's Context/Raw bar at the
+  // identical position) must appear finished, not slide its underline out from
+  // width 0. Real tab changes still animate. Same arming as ProfileTabBar.
+  const [armed, setArmed] = useState(false);
+
   // Slide the underline to the active tab whenever it (or the tab set) changes.
+  // Measured before paint so the first frame already has it in place.
   const tabsKey = tabs.map((t) => t.id).join('|');
-  useEffect(() => {
+  useLayoutEffect(() => {
     const idx = tabs.findIndex((t) => t.id === value);
     const btn = tabRefs.current[idx];
     if (btn) {
@@ -53,6 +60,11 @@ export default function UnderlineTabs<T extends string>({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, tabsKey]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   function handleKeyDown(e: React.KeyboardEvent, idx: number) {
     if (e.key === 'ArrowRight') {
@@ -97,7 +109,7 @@ export default function UnderlineTabs<T extends string>({
 
       {/* Animated green underline indicator */}
       <div
-        className={`absolute bottom-0 h-0.5 bg-brand-green transition-all ${TAB_MOTION}`}
+        className={`absolute bottom-0 h-0.5 bg-brand-green ${armed ? `transition-all ${TAB_MOTION}` : ''}`}
         style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
       />
     </div>

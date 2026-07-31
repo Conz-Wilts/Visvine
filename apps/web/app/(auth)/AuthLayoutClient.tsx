@@ -57,6 +57,12 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // scrollbar starts BELOW the fixed navbar instead of running up its right
   // edge to the top of the viewport. (/context is immersive: it pins body
   // overflow itself and never scrolls this container.)
+  //
+  // overscroll-y-none is load-bearing, not cosmetic: <main> is a nested
+  // scroller, so on macOS a fast flick past either end rubber-bands it. A
+  // `sticky` tab bar can't hold above its rest position, so it rides that
+  // bounce down while the fixed navbar stays put — the bar visibly unsticks.
+  // Killing the bounce keeps every page's sticky top bar welded to the navbar.
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-brand-bg" style={backgroundStyle}>
@@ -73,7 +79,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
           <main> is the scroll container (mt-16 sits it below the fixed navbar), so
           its scrollbar starts under the navbar rather than at the viewport top. */}
       <main
-        className={fullBleed ? "flex-1 mt-16 overflow-hidden" : "flex-1 mt-16 pt-4 pb-6 scroll-pt-32 overflow-y-auto"}
+        className={fullBleed ? "flex-1 mt-16 overflow-hidden" : "flex-1 mt-16 pt-4 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
         style={{
           paddingLeft: (expanded ? EXPANDED_W : COLLAPSED_W) + (fullBleed ? 0 : 24),
           ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
