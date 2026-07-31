@@ -358,25 +358,28 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     String(parseFrontmatter(shownRead.content).title ?? '').trim() ||
     (shown.path.split('/').pop() ?? shown.path).replace(/\.md$/i, '')
 
+  // Share lives in the editor's toolbar tray (toolbarTrailSlot) with the other
+  // controls — every note can answer "who sees this" from the same spot the
+  // entity Context tab does.
+  const shareButton = (
+    <button
+      type="button"
+      onClick={() => setShareOpen(true)}
+      title="Who can see this?"
+      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      Share
+    </button>
+  )
+
   // The note title leads the scrolling content (embedded NoteEditor hides its
-  // own .notes-title); width/padding mirror .notes-column so it lines up. The
-  // Share button rides the title row — every note can answer "who sees this".
+  // own .notes-title); width/padding mirror .notes-column so it lines up.
   const headerCard = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
-          {title}
-        </h2>
-        <button
-          type="button"
-          onClick={() => setShareOpen(true)}
-          title="Who can see this?"
-          className="mt-3 flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-[13px] font-medium text-text-secondary transition hover:bg-surface-2"
-        >
-          <Share2 className="h-3.5 w-3.5" />
-          Share
-        </button>
-      </div>
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
+        {title}
+      </h2>
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <Radio className="h-4 w-4 shrink-0 text-brand-green" />
@@ -406,6 +409,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         key={shown.path}
         variant="embedded"
         headerSlot={headerCard}
+        toolbarTrailSlot={shareButton}
         path={shown.path}
         meta={openMeta}
         notes={noteRefs}

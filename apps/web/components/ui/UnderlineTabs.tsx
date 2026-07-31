@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
+import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from './tabIndicatorHandoff';
+import { TAB_MOTION } from './tabMotion';
 
 export interface UnderlineTab<T extends string> {
   id: T;
@@ -20,11 +22,11 @@ interface UnderlineTabsProps<T extends string> {
    * `{idPrefix}-panel-{id}` so callers can wire matching role="tabpanel" ids.
    */
   idPrefix?: string;
+  /** Participate in the cross-page underline handoff under this key (see
+   *  tabIndicatorHandoff) — mounting shortly after a keyed sibling unmounted
+   *  slides the underline from its last position instead of snapping. */
+  handoffKey?: string;
 }
-
-// Match the profile/directory tab bars: the green underline slides on the same
-// curve/duration so every tab bar across the app reads as one system.
-const TAB_MOTION = 'duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]';
 
 /**
  * Text tab bar with a sliding green underline under the active tab — the same
@@ -39,6 +41,7 @@ export default function UnderlineTabs<T extends string>({
   ariaLabel,
   className = '',
   idPrefix,
+  handoffKey,
 }: UnderlineTabsProps<T>) {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
@@ -49,17 +52,28 @@ export default function UnderlineTabs<T extends string>({
   // width 0. Real tab changes still animate. Same arming as ProfileTabBar.
   const [armed, setArmed] = useState(false);
 
+  // The underline rect of the keyed bar this one just replaced, claimed once at
+  // mount. Null outside a fresh navigation.
+  const { handoff, firstMeasure } = useTabIndicatorHandoff(handoffKey);
+
   // Slide the underline to the active tab whenever it (or the tab set) changes.
   // Measured before paint so the first frame already has it in place.
   const tabsKey = tabs.map((t) => t.id).join('|');
   useLayoutEffect(() => {
     const idx = tabs.findIndex((t) => t.id === value);
     const btn = tabRefs.current[idx];
-    if (btn) {
-      setIndicatorStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
-    }
+    if (!btn) return;
+    const target = { left: btn.offsetLeft, width: btn.offsetWidth };
+    if (handoffKey) publishTabIndicator(handoffKey, target);
+    return applyTabIndicator({
+      handoff,
+      target,
+      firstMeasure,
+      setIndicator: setIndicatorStyle,
+      setArmed,
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, tabsKey]);
+  }, [value, tabsKey, handoff, handoffKey]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setArmed(true));
@@ -97,6 +111,8 @@ export default function UnderlineTabs<T extends string>({
           onClick={() => onChange(tab.id)}
           onKeyDown={(e) => handleKeyDown(e, idx)}
           className={`flex h-12 items-center gap-1.5 whitespace-nowrap px-4 text-sm font-medium outline-none transition-colors duration-150 ${
+            handoff ? 'tabbar-label-enter' : ''
+          } ${
             value === tab.id
               ? 'text-brand-black'
               : 'text-brand-grey hover:text-brand-black'

@@ -68,7 +68,15 @@ export function useNodeProfile(nodeId: string | null) {
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) return cached.data;
     return null;
   });
-  const [loading, setLoading] = useState(false);
+  // True from the first render when the node isn't cached: the fetch effect
+  // hasn't run yet, but "about to load" must not read as "resolved and empty".
+  // The pane shell registers its tab bar off this flag on the first commit, so
+  // a false start unmounted the bar for a frame on every profile navigation.
+  const [loading, setLoading] = useState(() => {
+    if (!nodeId) return false;
+    const cached = nodeProfileCache.get(nodeId);
+    return !(cached && Date.now() - cached.timestamp < CACHE_TTL);
+  });
   const [error, setError] = useState<string | null>(null);
   const nodeIdRef = useRef(nodeId);
 
@@ -83,6 +91,7 @@ export function useNodeProfile(nodeId: string | null) {
     const cached = nodeProfileCache.get(nodeId);
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       setData(cached.data);
+      setLoading(false);
       return;
     }
 

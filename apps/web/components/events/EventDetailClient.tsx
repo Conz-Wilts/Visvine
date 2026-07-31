@@ -23,6 +23,7 @@ import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/components/events/GuestManager';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import { HANDOFF_KEY, useDockEdgeClass } from '@/components/pane/PaneTabBar';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 import { copyToClipboard } from '@/lib/utils';
 import { useTheme } from '@/lib/contexts/ThemeContext';
@@ -103,6 +104,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const [copyStatus, setCopyStatus] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Rides over the docked notes tree while it's visible — including the
+  // retract window right after arriving from a /directory context note.
+  const barEdgeClass = useDockEdgeClass();
 
   const loadEvent = useCallback(async () => {
     if (!currentCommunity) return;
@@ -145,7 +149,37 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   if (!currentCommunity) {
     return <CenteredNote text="Please select a community to view this event." />;
   }
-  if (loading) return <EventSkeleton />;
+
+  // The Context/Raw bar only rides the guest-facing view (the manage view has
+  // its own overview/guests/form tabs) and only when the notes tool is on for
+  // this community — the same gate entity profiles use. Known before the event
+  // fetch resolves, so the bar can be up from the first frame.
+  const featureConfig = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const showContextTabs = !manage && isFeatureEnabled(featureConfig, 'notes');
+
+  // The shared Event | Context | Raw wrapper. The provider spans the bar and
+  // the panel so the Context editor can portal its toolbar into the bar's
+  // attached region (see TabBarSlotContext). handoffKey: arriving from the
+  // /directory pane shell (an event's context note), this bar claims the
+  // outgoing bar's underline so the navigation reads as one bar relabelling.
+  const withContextBar = (body: React.ReactNode) => (
+    <TabBarSlotProvider>
+      <div className="profile-enter w-full pb-10">
+        {/* Direct child of the tall page container so `sticky` pins; "-top-4 -mt-4"
+            cancels <main>'s pt-4 so the bar sits flush under the navbar. */}
+        <ProfileTabBar
+          nodeType="Event" tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
+          stickyTop="-top-4 -mt-4" attachedOpen={viewTab === 'context'}
+          edgeClass={barEdgeClass} handoffKey={HANDOFF_KEY}
+        />
+        {body}
+      </div>
+    </TabBarSlotProvider>
+  );
+
+  // Keep the bar mounted through the fetch: navigating in from an event's
+  // context note would otherwise blink it out for the length of the load.
+  if (loading) return showContextTabs ? withContextBar(<EventSkeleton />) : <EventSkeleton />;
   if (!event) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
@@ -170,12 +204,6 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const goingCount = (stats?.going ?? 0) + (stats?.checkedIn ?? 0);
   const virtualLink = event.metadata?.virtualLink as string | undefined;
   const viewerGoing = viewer && ['going', 'checked_in'].includes(viewer.status) && viewer.response !== 'declined';
-
-  // The Context/Raw bar only rides the guest-facing view (the manage view has its
-  // own overview/guests/form tabs) and only when the notes tool is on for this
-  // community — the same gate entity profiles use.
-  const featureConfig = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const showContextTabs = !manage && isFeatureEnabled(featureConfig, 'notes');
 
   const eventBody = (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 lg:pb-10">
@@ -458,25 +486,13 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   // Notes off (or manage view): render the event page unchanged.
   if (!showContextTabs) return eventBody;
 
-  // Guest view with notes on: wrap the event in the shared Event | Context | Raw
-  // bar. The provider spans the bar and the panel so the Context editor can
-  // portal its toolbar into the bar's attached region (see TabBarSlotContext).
-  return (
-    <TabBarSlotProvider>
-      <div className="profile-enter w-full pb-10">
-        {/* Direct child of the tall page container so `sticky` pins; "-top-4 -mt-4"
-            cancels <main>'s pt-4 so the bar sits flush under the navbar. */}
-        <ProfileTabBar
-          nodeType="Event" tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
-          stickyTop="-top-4 -mt-4" attachedOpen={viewTab === 'context'}
-        />
-        {isNoteTab(viewTab) ? (
-          <EntityContextPanel nodeId={event.id} mode={viewTab === 'raw' ? 'raw' : 'wysiwyg'} />
-        ) : (
-          eventBody
-        )}
-      </div>
-    </TabBarSlotProvider>
+  // Guest view with notes on: wrap the event in the shared Event | Context | Raw bar.
+  return withContextBar(
+    isNoteTab(viewTab) ? (
+      <EntityContextPanel nodeId={event.id} mode={viewTab === 'raw' ? 'raw' : 'wysiwyg'} />
+    ) : (
+      eventBody
+    ),
   );
 }
 

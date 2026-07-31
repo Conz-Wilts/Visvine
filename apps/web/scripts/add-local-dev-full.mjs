@@ -461,7 +461,50 @@ Seed fund covering NZ & the Pacific. ${person('priya-nair', 'Priya Nair')} is th
   c('city-university-ai-lab', 'City University AI Lab', ['research', 'ai'], `
 Applied AI research lab directed by ${person('felix-wong', 'Felix Wong')}. Runs workshops for the community and takes industry collaborations.`);
 
+  addFolderIndexes(notes);
   return notes;
+}
+
+// Per-folder `index.md` notes — the convention lib/notes/shared/indexNote.ts
+// encodes and store.ts maintains live. Notes seeded here go straight into the
+// table (no writeNote), so the indexes have to be built explicitly or every
+// seeded folder ends up index-less. Derived from the notes themselves, so new
+// seed content lands in its folder index automatically.
+const FOLDER_BLURBS = {
+  companies: 'Every organisation in the community directory, with the people attached to each.',
+  people: 'The regulars — founders, operators, investors and mentors in this community.',
+  meetings: 'Notes from community syncs and working sessions.',
+  programme: 'How the community programmes — mentoring, cohorts and workshops.',
+  topics: 'Standing research and working notes on themes the community keeps returning to.',
+};
+
+function addFolderIndexes(notes) {
+  const humanize = (segment) =>
+    segment.split(/[-_]+/).filter(Boolean).map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
+  const titleOf = (content) => (content.match(/^title:\s*(.+)$/m)?.[1] ?? '').trim().replace(/^"|"$/g, '');
+
+  // Ancestor folders of every seeded note, excluding the brain root.
+  const folders = new Set();
+  for (const n of notes) {
+    const segments = n.path.split('/').slice(0, -1);
+    segments.forEach((_, i) => folders.add(segments.slice(0, i + 1).join('/')));
+  }
+
+  for (const folder of [...folders].sort()) {
+    const indexPath = `${folder}/index.md`;
+    if (notes.some((n) => n.path === indexPath)) continue; // curated index wins
+    const children = notes
+      .filter((n) => n.path !== indexPath && n.path.startsWith(`${folder}/`) && !n.path.slice(folder.length + 1).includes('/'))
+      .map((n) => ({ path: n.path, title: titleOf(n.content) || n.path.split('/').pop().replace(/\.md$/i, '') }))
+      .sort((a, b) => a.title.localeCompare(b.title));
+    const name = folder.split('/').pop();
+    const blurb = FOLDER_BLURBS[folder];
+    const body = [
+      ...(blurb ? [blurb, ''] : []),
+      ...children.map((c) => `- ${link(c.title, `/${c.path}`)}`),
+    ].join('\n');
+    note(notes, indexPath, { type: 'Index', title: humanize(name), tags: ['index'] }, body);
+  }
 }
 
 function buildPersonalNotes() {

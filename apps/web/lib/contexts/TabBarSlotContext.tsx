@@ -38,3 +38,19 @@ export function TabBarSlotProvider({ children }: { children: ReactNode }) {
 export function useTabBarSlot() {
   return useContext(TabBarSlotContext);
 }
+
+const NULL_SLOT: TabBarSlotValue = { host: null, setHost: () => {} };
+
+/** Gates the slot: while `suppressed`, children see a null host; otherwise the
+ *  outer provider's host passes through. The pane shell keeps both note panels
+ *  mounted during a cross-kind swap (PaneSurfaceHost), so the incoming one sits
+ *  behind this gate — two editors never portal two toolbar pills into the one
+ *  host, and the swap is just the gate flipping, so the tray never empties. */
+export function TabBarSlotGate({ suppressed, children }: { suppressed: boolean; children: ReactNode }) {
+  const outer = useTabBarSlot();
+  return (
+    <TabBarSlotContext.Provider value={suppressed ? NULL_SLOT : outer}>
+      {children}
+    </TabBarSlotContext.Provider>
+  );
+}

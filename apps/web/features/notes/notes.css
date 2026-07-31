@@ -57,8 +57,14 @@
 /* The note title — rendered above the body from frontmatter, in heading style so
  * every note opens with a clear, prominent title. The body no longer carries a
  * duplicate `# Title` line, so this is the single source of the visible title. */
+/* line-height 1.1 makes the line box shorter than the font's ascent+descent, so
+ * descenders (p, g, y) spill past the element box and get shaved off by the
+ * clipping ancestor. The padding-bottom gives them room without loosening the
+ * tight display leading; margin-bottom drops by the same amount so the gap to
+ * the body is unchanged. */
 .notes-title {
-  margin: 0 0 0.6rem;
+  margin: 0 0 0.4rem;
+  padding-bottom: 0.2rem;
   font-size: 1.75rem;
   font-weight: 600;
   line-height: 1.1;
@@ -308,6 +314,29 @@
 }
 .notes-editor ul[data-type='taskList'] li > div {
   flex: 1 1 auto;
+}
+
+/* ---------- Editor ⇄ Raw mode switch ----------
+ * The incoming surface (body + header card) drops down in step with the
+ * toolbar tray returning from its slide-up. Applied only after a completed
+ * swap — never on a note's initial mount. */
+.notes-mode-enter {
+  animation: notes-mode-drop 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes notes-mode-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notes-mode-enter {
+    animation: none;
+  }
 }
 
 /* Tables. */

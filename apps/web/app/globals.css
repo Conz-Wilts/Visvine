@@ -235,6 +235,31 @@ html, body {
   transform-origin: top left;
 }
 
+/* Pane-top tab bar handoff — when one tab bar replaces another mid-navigation
+   (Directory Grid/Context ⇄ profile/note Context bars), the new labels fade in
+   while the shared underline slides between positions (tabIndicatorHandoff).
+   Labels only: the underline must be visible from the first frame — it is the
+   continuity anchor of the whole gesture. */
+@keyframes tabbar-label-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.tabbar-label-enter {
+  animation: tabbar-label-enter 0.3s ease-out;
+}
+
+/* A label leaving the persistent pane-top bar on an in-place tab-set change
+   (PaneTabBar's FLIP): the removed word fades out where it stood while the
+   surviving words slide to their new positions. `forwards` holds opacity 0
+   until the ghost is purged. */
+@keyframes tabbar-label-exit {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.tabbar-label-exit {
+  animation: tabbar-label-exit 0.3s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
   .profile-enter,
@@ -244,6 +269,8 @@ html, body {
   .timeline-draw,
   .dot-pulse,
   .dropdown-pop,
+  .tabbar-label-enter,
+  .tabbar-label-exit,
   [style*="animation: shimmer"] {
     animation: none !important;
   }

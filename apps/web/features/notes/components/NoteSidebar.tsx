@@ -2,14 +2,17 @@
 
 // The notes sidebar: starred notes and a folder/note tree. Folders expand/collapse
 // and carry a folder icon; notes carry their frontmatter type's glyph (person,
-// group, event, resource) or a document icon when untyped. Note rows reveal star +
-// delete actions on hover. Starring is the same `starred:` frontmatter flag the
-// editor toolbar's star toggles, so both surfaces always agree. Nesting is shown
+// group, event, resource) or a document icon when untyped. Row actions (star,
+// delete, share) live behind a single ⋯ menu revealed on hover — starred state
+// shows only there and in the Starred section above the tree, never as a glyph
+// on the row. Starring is the same `starred:` frontmatter flag the editor
+// toolbar's star toggles, so both surfaces always agree. Nesting is shown
 // VS Code style: each level is wrapped in an indented container with a left guide
 // line so folder depth reads at a glance. The tree scrolls with its scrollbar on
 // the right (normal) edge.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
@@ -91,16 +94,22 @@ interface NoteSidebarProps {
   onSelect: (path: string) => void
   onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
-  /** Access badges keyed by FULL folder path (shared scope only). */
+  /** Access badges keyed by FULL path — folders AND privately-restricted notes
+   *  (shared scope only). */
   folderBadges?: Map<string, FolderBadge>
   /** Hover action on folder rows: open the folder's Share panel. */
   onFolderAccess?: (folderPath: string) => void
+  /** ⋯ menu action on note rows: open the note's Share panel. */
+  onShareNote?: (path: string) => void
+  /** ⋯ menu action on folder rows: delete the folder (and the notes inside). */
+  onDeleteFolder?: (folderPath: string) => void
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
   /** Show the brain root as a real (collapsible) folder row at the top of the
    *  tree instead of a separate header bar, so the community reads as the parent
-   *  folder of everything below it. `icon` replaces the folder glyph. */
+   *  folder of everything below it. `icon` replaces the folder glyph; the root
+   *  row shows no glyph at all when it's omitted. */
   root?: { label: string; icon?: React.ReactNode }
   /** Scopes the persisted expand/collapse state (pass the community id). Omit to
    *  keep the state in memory only. */
@@ -123,6 +132,8 @@ export function NoteSidebar({
   onDeleteNote,
   folderBadges,
   onFolderAccess,
+  onShareNote,
+  onDeleteFolder,
   bare = false,
   root,
   storageKey = null,
@@ -287,10 +298,12 @@ export function NoteSidebar({
                   glyph={glyphFor.get(n.path) ?? null}
                   selected={selectedPath === n.path}
                   starred
+                  restrictedBadge={folderBadges?.get(n.path)?.restricted ?? false}
                   canEdit={canEdit}
                   onSelect={onSelect}
                   onToggleStar={onToggleStar}
                   onDelete={onDeleteNote}
+                  onShare={onShareNote}
                 />
               ))}
             </div>
@@ -303,7 +316,7 @@ export function NoteSidebar({
             <FolderRow
               node={tree}
               label={root.label}
-              icon={root.icon}
+              icon={root.icon ?? null}
               openPaths={effectiveOpenPaths}
               onToggleFolder={toggleFolder}
               selectedPath={selectedPath}
@@ -315,6 +328,8 @@ export function NoteSidebar({
               onDeleteNote={onDeleteNote}
               folderBadges={folderBadges}
               onFolderAccess={onFolderAccess}
+              onShareNote={onShareNote}
+              onDeleteFolder={onDeleteFolder}
             />
           ) : (
             <Tree
@@ -330,6 +345,8 @@ export function NoteSidebar({
               onDeleteNote={onDeleteNote}
               folderBadges={folderBadges}
               onFolderAccess={onFolderAccess}
+              onShareNote={onShareNote}
+              onDeleteFolder={onDeleteFolder}
             />
           )}
         </div>
@@ -351,6 +368,8 @@ function Tree({
   onDeleteNote,
   folderBadges,
   onFolderAccess,
+  onShareNote,
+  onDeleteFolder,
 }: {
   node: TreeNode
   openPaths: Set<string>
@@ -364,6 +383,8 @@ function Tree({
   onDeleteNote: (path: string) => void
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
+  onShareNote?: (path: string) => void
+  onDeleteFolder?: (folderPath: string) => void
 }) {
   // A folder's own index.md never renders as a child row — the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The brain
@@ -390,6 +411,8 @@ function Tree({
             onDeleteNote={onDeleteNote}
             folderBadges={folderBadges}
             onFolderAccess={onFolderAccess}
+            onShareNote={onShareNote}
+            onDeleteFolder={onDeleteFolder}
           />
         ) : (
           <NoteRow
@@ -399,10 +422,12 @@ function Tree({
             glyph={glyphFor.get(child.path) ?? null}
             selected={selectedPath === child.path}
             starred={starredSet.has(child.path)}
+            restrictedBadge={folderBadges?.get(child.path)?.restricted ?? false}
             canEdit={canEdit}
             onSelect={onSelect}
             onToggleStar={onToggleStar}
             onDelete={onDeleteNote}
+            onShare={onShareNote}
           />
         ),
       )}
@@ -414,8 +439,8 @@ function FolderRow(props: {
   node: TreeNode
   /** Overrides the folder's own name (used for the brain-root row). */
   label?: string
-  /** Overrides the folder glyph (the community avatar on the root row). */
-  icon?: React.ReactNode
+  /** Overrides the folder glyph; explicit null renders no glyph (the root row). */
+  icon?: React.ReactNode | null
   openPaths: Set<string>
   onToggleFolder: (path: string, isOpen: boolean) => void
   selectedPath: string | null
@@ -427,6 +452,8 @@ function FolderRow(props: {
   onDeleteNote: (path: string) => void
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
+  onShareNote?: (path: string) => void
+  onDeleteFolder?: (folderPath: string) => void
 }) {
   // Expansion is owned by NoteSidebar (persisted, and revealed by selection) —
   // this row only reads it and reports toggles.
@@ -445,6 +472,7 @@ function FolderRow(props: {
   const hasIndex =
     !!indexPath && (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
+  const indexStarred = hasIndex && props.starredSet.has(indexPath)
   return (
     <div>
       <div
@@ -469,9 +497,11 @@ function FolderRow(props: {
             selected ? 'text-white' : 'text-text-secondary'
           }`}
         >
-          <span className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}>
-            {props.icon ?? <FolderIcon open={open} />}
-          </span>
+          {props.icon !== null && (
+            <span className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}>
+              {props.icon ?? <FolderIcon open={open} />}
+            </span>
+          )}
           <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>
             {props.label ?? props.node.name}
           </span>
@@ -486,16 +516,37 @@ function FolderRow(props: {
             </span>
           )}
         </button>
-        {showAccess && (
-          <button
-            type="button"
-            title="Share / who can see this folder"
-            onClick={() => props.onFolderAccess!(props.node.path)}
-            className="shrink-0 rounded p-1 text-text-muted opacity-0 transition hover:text-text-secondary group-hover/folder:opacity-100"
-          >
-            <ShieldIcon />
-          </button>
-        )}
+        <RowMenu
+          selected={selected}
+          hoverClass="group-hover/folder:opacity-100"
+          items={[
+            ...(showAccess
+              ? [{ label: 'Share', icon: <ShieldIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
+              : []),
+            // Starring a folder stars its index note — the same note the folder
+            // row opens on click, so the two always agree. No index, no star.
+            ...(hasIndex
+              ? [
+                  {
+                    label: indexStarred ? 'Unstar' : 'Star',
+                    icon: <StarIcon filled={indexStarred} />,
+                    onClick: () => props.onToggleStar(indexPath, !indexStarred),
+                  },
+                ]
+              : []),
+            // The root row is the brain itself — not deletable from the tree.
+            ...(props.onDeleteFolder && props.node.path !== ''
+              ? [
+                  {
+                    label: 'Delete',
+                    icon: <TrashIcon />,
+                    danger: true,
+                    onClick: () => props.onDeleteFolder!(props.node.path),
+                  },
+                ]
+              : []),
+          ]}
+        />
       </div>
       {open && (
         // Indented child container with a left guide line (VS Code style).
@@ -513,10 +564,129 @@ function FolderRow(props: {
             onDeleteNote={props.onDeleteNote}
             folderBadges={props.folderBadges}
             onFolderAccess={props.onFolderAccess}
+            onShareNote={props.onShareNote}
+            onDeleteFolder={props.onDeleteFolder}
           />
         </div>
       )}
     </div>
+  )
+}
+
+// ── Row action menu ───────────────────────────────────────────────────────────
+
+interface RowMenuItem {
+  label: string
+  icon?: React.ReactNode
+  onClick: () => void
+  danger?: boolean
+}
+
+const ROW_MENU_W = 160
+const ROW_MENU_ITEM_H = 34
+
+/** The ⋯ button every row shows on hover, opening its actions (star, delete,
+ *  share…) in a small popup. The popup is a fixed-position portal: the tree's
+ *  scroll container clips overflow on both axes, so an absolutely positioned
+ *  menu inside the row would be cut off at the panel edge. Fixed positioning
+ *  detaches from scrolling, so any scroll just closes the menu. */
+function RowMenu({
+  items,
+  selected,
+  hoverClass = 'group-hover:opacity-100',
+}: {
+  items: RowMenuItem[]
+  selected: boolean
+  /** The row's hover-group variant that reveals the trigger. */
+  hoverClass?: string
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+
+  const close = useCallback(() => setPos(null), [])
+
+  const toggle = () => {
+    if (pos) return close()
+    const r = btnRef.current?.getBoundingClientRect()
+    if (!r) return
+    const height = items.length * ROW_MENU_ITEM_H + 10
+    const openUp = r.bottom + height + 8 > window.innerHeight
+    setPos({
+      top: openUp ? r.top - height - 4 : r.bottom + 4,
+      left: Math.max(8, r.right - ROW_MENU_W),
+    })
+  }
+
+  useEffect(() => {
+    if (!pos) return
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      close()
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('pointerdown', onDown, true)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('pointerdown', onDown, true)
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [pos, close])
+
+  if (items.length === 0) return null
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        title="More actions"
+        aria-haspopup="menu"
+        aria-expanded={!!pos}
+        onClick={toggle}
+        className={`shrink-0 rounded p-1 transition ${
+          selected ? 'text-white' : 'text-text-muted hover:text-text-secondary'
+        } ${pos ? 'opacity-100' : `opacity-0 ${hoverClass}`}`}
+      >
+        <KebabIcon />
+      </button>
+      {pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            className="dropdown-pop fixed z-[100] rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-xl"
+            style={{ top: pos.top, left: pos.left, width: ROW_MENU_W }}
+          >
+            {items.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  close()
+                  item.onClick()
+                }}
+                className={`flex w-full items-center gap-2 px-3 text-left text-[13px] transition-colors hover:bg-surface-2 ${
+                  item.danger ? 'text-red-500' : 'text-text-secondary'
+                }`}
+                style={{ height: ROW_MENU_ITEM_H }}
+              >
+                {item.icon && <span className="shrink-0">{item.icon}</span>}
+                <span className="truncate">{item.label}</span>
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
@@ -526,20 +696,25 @@ function NoteRow({
   glyph,
   selected,
   starred,
+  restrictedBadge = false,
   canEdit,
   onSelect,
   onToggleStar,
   onDelete,
+  onShare,
 }: {
   title: string
   path: string
   glyph: NodeGlyph | null
   selected: boolean
   starred: boolean
+  /** The note is privately restricted — inherited access is cut at the note. */
+  restrictedBadge?: boolean
   canEdit: boolean
   onSelect: (path: string) => void
   onToggleStar: (path: string, starred: boolean) => void
   onDelete: (path: string) => void
+  onShare?: (path: string) => void
 }) {
   return (
     <div
@@ -559,32 +734,31 @@ function NoteRow({
         <span className={`truncate ${selected ? 'font-semibold text-white' : 'text-text-primary'}`}>
           {title}
         </span>
-      </button>
-      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
-        <button
-          type="button"
-          title={starred ? 'Unstar' : 'Star'}
-          onClick={() => onToggleStar(path, !starred)}
-          className={`rounded p-1 ${starred ? 'text-amber-400' : 'text-text-muted hover:text-text-secondary'}`}
-        >
-          <StarIcon filled={starred} />
-        </button>
-        {canEdit && (
-          <button
-            type="button"
-            title="Delete"
-            onClick={() => onDelete(path)}
-            className="rounded p-1 text-red-500 hover:text-red-600"
+        {restrictedBadge && (
+          <span
+            className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}
+            title="Private note — access from its folders is cut off"
           >
-            <TrashIcon />
-          </button>
+            <LockIcon />
+          </span>
         )}
-      </div>
-      {starred && (
-        <span className="pointer-events-none -ml-1 text-amber-400 opacity-100 group-hover:hidden">
-          <StarIcon filled />
-        </span>
-      )}
+      </button>
+      <RowMenu
+        selected={selected}
+        items={[
+          ...(onShare
+            ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
+            : []),
+          {
+            label: starred ? 'Unstar' : 'Star',
+            icon: <StarIcon filled={starred} />,
+            onClick: () => onToggleStar(path, !starred),
+          },
+          ...(canEdit
+            ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
+            : []),
+        ]}
+      />
     </div>
   )
 }
@@ -658,11 +832,35 @@ function StarIcon({ filled = false }: { filled?: boolean }) {
   )
 }
 
+// Horizontal ⋯ — the rows' single actions trigger.
+function KebabIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.9" />
+      <circle cx="12" cy="12" r="1.9" />
+      <circle cx="19" cy="12" r="1.9" />
+    </svg>
+  )
+}
+
 function LockIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
+
+// Share glyph (same shape as the editor toolbar's lucide Share2).
+function ShareIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" x2="15.42" y1="13.51" y2="17.49" />
+      <line x1="15.41" x2="8.59" y1="6.51" y2="10.49" />
     </svg>
   )
 }

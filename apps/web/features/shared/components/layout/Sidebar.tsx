@@ -9,7 +9,7 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { railFeatures, moreFeatures } from "@/lib/features";
-import { shellEntranceStyle, DOCK_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
+import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/components/create/CreateModal";
 import type { CommunityFeatureConfig } from "@/lib/types";
@@ -72,8 +72,6 @@ export default function Sidebar() {
   const { currentCommunity, isAdmin } = useCommunity();
   const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
-  // Honour reduced-motion: collapse the width/height transitions below to 0s.
-  const dur = reduced ? "0s" : `${DOCK_MS}ms`;
   const ease = DOCK_EASE;
 
   // Nav items come from the feature registry, filtered to the community's
@@ -152,6 +150,12 @@ export default function Sidebar() {
   // narrow viewport, where nothing is docked anyway.
   const createW = docked ? `${panelW}px` : `min(${CHANNELS_PANEL_W}px, calc(100vw - ${COLLAPSED_W}px))`;
   const columnW = createOpen ? createW : docked ? `${panelW}px` : "0px";
+
+  // Honour reduced-motion: collapse the width/margin transitions below to 0s.
+  // Closing (nothing docked, no create panel) runs faster than opening — the
+  // leaving panel should be out of the way before the destination's content
+  // (the grid's card cascade) is mid-animation beside it.
+  const dur = reduced ? "0s" : `${docked || createOpen ? DOCK_MS : DOCK_CLOSE_MS}ms`;
 
   // Shared with the Navbar: both drift in from the left by the same amount so the
   // whole L-shell flows into place as one piece (see shellEntranceStyle).
@@ -355,17 +359,25 @@ export default function Sidebar() {
     >
       {/* The card always runs from the navbar to the bottom of the viewport, flush
           against the left/bottom screen edges: those corners and borders are dropped
-          so it reads as attached to the shell rather than floating. */}
-      <div
-        className="flex overflow-hidden border-r border-border-subtle bg-white"
-        style={{ height: RAIL_H }}
-      >
+          so it reads as attached to the shell rather than floating.
+          No paint on this wrapper (no white, no border): the panel column
+          starts below a page's pinned tab bar, so a full-height rectangle or
+          edge here would cut through the bar's band. The rail carries the
+          card's left seam; the column carries its own right edge. */}
+      <div className="flex overflow-hidden" style={{ height: RAIL_H }}>
         {/* Icon rail column — hover-expands; the only width that animates. Hover
-            lives here (not the aside) so hovering the tree never expands the rail. */}
+            lives here (not the aside) so hovering the tree never expands the rail.
+            Its border-r is the card's constant vertical seam: the closed card's
+            right edge, the rail/panel divider when a panel is docked, and the
+            line beside the pane tab bar (which starts one pixel in — PaneTabBar's
+            -ml-[23px] — so this stays visible). Width is +1 so the border sits
+            outside the icon area, at the x the navbar's corner fillet expects
+            (Navbar.tsx SEAM_R), letting the seam emerge from the curve instead
+            of poking a tick up through it. */}
         <div
-          className="relative flex shrink-0 flex-col overflow-hidden"
+          className="relative flex shrink-0 flex-col overflow-hidden bg-white border-r border-border-subtle"
           style={{
-            width: expanded ? EXPANDED_W : COLLAPSED_W,
+            width: (expanded ? EXPANDED_W : COLLAPSED_W) + 1,
             paddingTop: RAIL_PAD_Y,
             paddingBottom: RAIL_PAD_Y,
             gap: RAIL_GAP,
@@ -380,43 +392,43 @@ export default function Sidebar() {
         {/* The side panel, hosted inside this same card. Always mounted so the portal
             host stays stable and the column can transition its width open ↔ closed;
             off the docked routes it's a clipped 0-width sliver with an empty host.
-            "Create new" opens the same column and slides in over the host below. */}
+            "Create new" opens the same column and slides in over the host below.
+            marginTop: the column element starts below any bar the page pins at
+            the card top (dockTopInset); the flex stretch absorbs the margin, so
+            no height math is needed and the bar's band holds no aside pixels at
+            all. Ungated on purpose — the dock flag is already false while the
+            column is closing, so a gate would slide it up into the bar's band
+            mid-close. Animated like the width, since docked surfaces with
+            different top bars must glide rather than teleport. */}
         <div
-          className="relative shrink-0 overflow-hidden"
-          style={{ width: columnW, transition: `width ${dur} ${ease}` }}
+          className="relative shrink-0 overflow-hidden bg-white"
+          style={{
+            width: columnW,
+            marginTop: dockTopInset,
+            transition: `width ${dur} ${ease}, margin-top ${dur} ${ease}`,
+          }}
         >
-          {/* Seam divider — faded out when closed so no stray hairline lingers off-dock */}
+          {/* The panel's right edge (was the card wrapper's border-r, which spanned
+              the bar band too). Lives inside the offset column so it starts below
+              the bar and rides the clipping width; faded when closed so no stray
+              hairline lingers off-dock. */}
           <div
-            className="absolute left-0 top-0 z-20 h-full w-px bg-border-default"
+            className="absolute right-0 top-0 z-20 h-full w-px bg-border-subtle"
             style={{ opacity: docked || createOpen ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
           />
           {/* Portal host: the page (MessagesClient / ConsoleShell) mounts its panel
               here. Inner width tracks the active route's panel so the content is
-              revealed by the clipping column rather than reflowing as it opens.
-              paddingTop lets a page with a bar pinned at the card top (the
-              Directory tabs) start its tree BELOW that bar instead of behind it —
-              the raised-z bar then draws over this empty strip. */}
+              revealed by the clipping column rather than reflowing as it opens. */}
           <div
             ref={setHost}
             className="min-h-0"
-            // paddingTop is animated: moving between docked surfaces with
-            // different top bars (the context canvas has none, a note view has a
-            // 96px tab bar) would otherwise teleport the tree up or down mid
-            // navigation. Same duration/easing as the column, so the two read as
-            // one motion.
-            style={{
-              width: panelW,
-              height: '100%',
-              paddingTop: dockedContext ? dockTopInset : 0,
-              transition: `padding-top ${dur} ${ease}`,
-            }}
+            style={{ width: panelW, height: '100%' }}
           />
 
           {/* "Create new" — a layer over the host, clipped by this column so it
               slides out from under the icon rail and covers whatever panel is
-              docked. Starts below any bar the page pins at the card top
-              (dockTopInset — those bars outrank this card at z-[45]), so its
-              header is never cut in half by one. */}
+              docked. The column itself already starts below any bar the page
+              pins at the card top (marginTop above), so top-0 here. */}
           {/* pointer-events-none while parked: the box still covers the docked
               panel (it's absolutely positioned over it) even with the panel
               slid out of view, so leaving it hit-testable made it swallow every
@@ -424,12 +436,12 @@ export default function Sidebar() {
               tree did nothing while the graph behind it took the wheel. The
               panel re-enables events on itself once open. */}
           <div
-            className={`absolute left-0 bottom-0 z-10 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
+            className={`absolute left-0 top-0 bottom-0 z-10 overflow-hidden ${createOpen ? '' : 'pointer-events-none'}`}
             // Fixed at the panel's FINAL width, not the column's animating one:
             // the slide is a translateX(-100%) of this box, so a width that grows
             // during the transition would keep moving the parked position and the
             // panel would trail the column's leading edge.
-            style={{ top: dockTopInset, width: createW }}
+            style={{ width: createW }}
           >
             <CreateModal />
           </div>

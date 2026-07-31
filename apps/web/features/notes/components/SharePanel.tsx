@@ -11,6 +11,7 @@
 // the caller may do.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Users, UsersRound, Lock, Radio, Link2Off, Link as LinkIcon, Check } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import {
@@ -77,10 +78,9 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   const [publishTarget, setPublishTarget] = useState('')
   const [publishPath, setPublishPath] = useState(path)
 
-  // The folder whose restriction this panel manages: the folder itself, or the
-  // note's containing folder ('' = root, which can't be restricted).
-  const boundaryFolder = kind === 'folder' ? path : path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : ''
-
+  // The restriction boundary is the panel's own subject: a folder limits the
+  // folder, a note makes itself private (authz's grantReaches doesn't care
+  // which it is). Only the root ('') can never be restricted.
   const reload = useCallback(() => {
     notesApi.getAccess(communityId, path).then(setAccess).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : 'Failed to load access')
@@ -153,20 +153,42 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       for (const id of grantIds) await notesApi.accessAction(communityId, { action: 'revoke', grantId: id })
     })
 
-  const isRestricted = access?.restricted.includes(boundaryFolder) ?? false
+  const isRestricted = access?.restricted.includes(path) ?? false
   const toggleRestrict = () => {
-    const confirmText = isRestricted
-      ? `Open up "${boundaryFolder}"? Access from parent folders will flow in again.`
-      : `Limit "${boundaryFolder}"? Only people or teams added on this folder (and community admins) will see inside — everyone else loses access to it.`
-    if (!window.confirm(confirmText)) return
+    const confirms = {
+      note: {
+        open: `Open up “${displayName}”? Access from its folders will flow in again.`,
+        close: `Make “${displayName}” private? Only people added on this note (and community admins) will see it — access inherited from its folders is cut off.`,
+      },
+      folder: {
+        open: `Open up “${path}”? Access from parent folders will flow in again.`,
+        close: `Limit “${path}”? Only people or teams added on this folder (and community admins) will see inside — everyone else loses access to it.`,
+      },
+    }
+    if (!window.confirm(confirms[kind][isRestricted ? 'open' : 'close'])) return
     void run(() =>
       notesApi.accessAction(communityId, {
         action: 'restrict',
-        folderPath: boundaryFolder,
+        folderPath: path,
         restricted: !isRestricted,
       }),
     )
   }
+
+  const restrictRow =
+    kind === 'note'
+      ? {
+          title: isRestricted ? 'This note is private' : 'Make this note private',
+          hint: isRestricted
+            ? 'Access from its folders is cut off — only people added above see it. Click to open it up again'
+            : 'Cut off access inherited from its folders — only people added above will see it',
+        }
+      : {
+          title: isRestricted ? `“${path}/” is limited` : `Limit “${path}/”`,
+          hint: isRestricted
+            ? 'Access from parent folders is cut off — click to open it up again'
+            : 'Cut off access inherited from parent folders',
+        }
 
   const publish = () =>
     run(async () => {
@@ -262,7 +284,11 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     </select>
   )
 
-  return (
+  // Portalled to <body>: the ContextSidebar renders this from inside the
+  // Sidebar's docked column, which animates with a transform — and a
+  // transformed ancestor makes `fixed` resolve against it, trapping the dialog
+  // in the sidebar instead of centring it over the viewport.
+  return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-start justify-center bg-black/30 p-4 pt-[10vh]"
       onMouseDown={(e) => {
@@ -536,7 +562,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                     ))}
                 </div>
 
-                {access.canManage && boundaryFolder !== '' && (
+                {access.canManage && path !== '' && (
                   <button
                     type="button"
                     onClick={toggleRestrict}
@@ -552,13 +578,9 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-text-primary">
-                        {isRestricted ? `“${boundaryFolder}/” is limited` : `Limit “${boundaryFolder}/”`}
+                        {restrictRow.title}
                       </span>
-                      <span className="block text-[11px] text-text-muted">
-                        {isRestricted
-                          ? 'Access from parent folders is cut off — click to open it up again'
-                          : 'Cut off access inherited from parent folders'}
-                      </span>
+                      <span className="block text-[11px] text-text-muted">{restrictRow.hint}</span>
                     </span>
                   </button>
                 )}
@@ -674,6 +696,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

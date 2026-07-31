@@ -512,8 +512,11 @@ export function EntityContextPanel({
           </span>
         )}
         {/* The name IS the note title here (embedded NoteEditor hides its own
-            .notes-title), so it matches that scale: 2.5rem / 600 / tight. */}
-        <h2 className="min-w-0 flex-1 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+            .notes-title), so it matches that scale: 2.5rem / 600 / tight.
+            `truncate` clips overflow, and leading-[1.1] makes the line box
+            shorter than the font's ascent+descent — without the pb the p/g/y
+            descenders get shaved off. */}
+        <h2 className="min-w-0 flex-1 truncate pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
         {!showEditor && shareButton}
       </div>
 

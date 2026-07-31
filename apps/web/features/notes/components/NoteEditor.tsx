@@ -40,9 +40,14 @@ import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/
 import { timeAgo } from '@/lib/date'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
+import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
+// How long the tab bar's attached region takes to collapse (TAB_MOTION). The
+// toolbar tray keeps its full contents for exactly this long after a switch to
+// raw, so it rides the region's slide-up as one piece.
+const TRAY_RETRACT_MS = TAB_MOTION_MS
 
 interface NoteRef {
   path: string
@@ -164,6 +169,33 @@ export function NoteEditor({
   // Embedded only: the tab bar's attached region is our toolbar's home, and it
   // opened when the tab did (see TabBarSlotContext).
   const { host: toolbarHost } = useTabBarSlot()
+
+  // The mode the toolbar tray is dressed for. Hosts collapse the tab bar's
+  // attached region on Raw — that collapse is the tray's slide-up. This lags
+  // `mode` on a switch to raw so the tray stays populated for the length of the
+  // collapse and retracts as one piece, rather than dropping its format
+  // controls on the first frame. Switching back is immediate: the region must
+  // drop down already dressed.
+  const [trayMode, setTrayMode] = useState(mode)
+  useEffect(() => {
+    if (mode === trayMode) return
+    if (mode === 'wysiwyg' || !(embedded && toolbarHost)) {
+      setTrayMode(mode)
+      return
+    }
+    const t = setTimeout(() => setTrayMode('raw'), TRAY_RETRACT_MS)
+    return () => clearTimeout(t)
+  }, [mode, trayMode, embedded, toolbarHost])
+
+  // Latched on the first Edit ⇄ Raw switch (render-phase, so the very first
+  // switch animates too): the body's drop-in plays on every mode swap after,
+  // but never on the note's initial mount — the page owns that entrance.
+  const [prevMode, setPrevMode] = useState(mode)
+  const [modeSwitched, setModeSwitched] = useState(false)
+  if (mode !== prevMode) {
+    setPrevMode(mode)
+    setModeSwitched(true)
+  }
 
   const prefixRef = useRef('')
   const rawRef = useRef<HTMLTextAreaElement>(null)
@@ -495,7 +527,7 @@ export function NoteEditor({
   // The controls simply render inert for the frame or two before the instance
   // exists — visually identical, and every binding below no-ops on null.
   const formatControls =
-    canEdit && mode === 'wysiwyg' ? (
+    canEdit && trayMode === 'wysiwyg' ? (
       <>
         <BlockTypeSelect editor={editor} />
         <Divider />
@@ -535,13 +567,13 @@ export function NoteEditor({
   // formatControls: no `editor` in the presence test. toggleStar already no-ops
   // without one.
   const starButton =
-    canEdit && mode === 'wysiwyg' ? (
+    canEdit && trayMode === 'wysiwyg' ? (
       <ToolbarButton label={starred ? 'Unstar note' : 'Star note'} onClick={toggleStar}>
         <StarIcon className={`h-4 w-4 ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
       </ToolbarButton>
     ) : null
   const refactorButton =
-    canEdit && mode === 'wysiwyg' && aiConfigured ? (
+    canEdit && trayMode === 'wysiwyg' && aiConfigured ? (
       <button
         type="button"
         onClick={refactor}
@@ -623,9 +655,9 @@ export function NoteEditor({
   return (
     <div className={embedded ? 'relative' : 'relative h-full'}>
       {/* Embedded: the format controls ride the profile tab bar's attached
-          region, portalled into the host it exposes (TabBarSlotContext) — the
-          bar is part of that sticky box, not a second bar below it, so the pair
-          shares one border and pins as one unit. In the workspace this is an
+          region, portalled into the host it exposes (TabBarSlotContext) — a
+          centred tray hanging off the tab bar's border inside that sticky box,
+          so it pins with the bar as one unit. In the workspace this is an
           absolute overlay instead (below).
 
           No motion of our own: the region opened off the tab change long before
@@ -635,21 +667,45 @@ export function NoteEditor({
 
           No host means no toolbar: `embedded` is only used by EntityContextPanel
           under the profile pages, which provide one. */}
-      {embedded && toolbarHost && createPortal(
-        /* Controls pinned to the pane's far left, matching the tab row above
-           (ProfileTabBar) — the note column below stays centred on its own. */
-        <div className="flex h-12 w-full items-center gap-1 px-2">
+      {embedded && toolbarHost && (starButton || formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
+        /* One content-width tray, centred by the host and hanging off the nav
+           line: concave shoulders where it meets the bar's border, curved at
+           the bottom ends, so it reads as dripping out of the bar rather than
+           butting into it. Everything lives in it together instead of spread
+           across a full-width row. max-w-full + the inner overflow-x-auto keep
+           narrow panes scrolling inside the tray rather than growing it. */
+        <div className="relative flex h-12 max-w-full items-center gap-1 rounded-b-[32px_24px] border-x border-b border-border-subtle bg-surface-1 px-4 shadow-sm">
+          {/* Shoulder fillets: 32×24 boxes just outside each top corner,
+              painted with an elliptical radial gradient whose transparent
+              quadrant is the page and whose ring continues the tray's border.
+              The ellipse mirrors the 32×24 bottom rounding and each arc covers
+              half the tray's 48px height, so the two meet tangent-vertical at
+              the midpoint and the side reads as one ogee with no straight run.
+              1px wider than the ellipse so the fill hides the sliver of the
+              tray's own side border inside the curve. */}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -left-8 top-0 h-6 w-[33px] [background:radial-gradient(32px_24px_at_0_100%,transparent_calc(100%_-_1.75px),var(--color-border-subtle)_calc(100%_-_1.25px)_calc(100%_-_0.25px),var(--color-surface-1)_100%)]"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-8 top-0 h-6 w-[33px] [background:radial-gradient(32px_24px_at_100%_100%,transparent_calc(100%_-_1.75px),var(--color-border-subtle)_calc(100%_-_1.25px)_calc(100%_-_0.25px),var(--color-surface-1)_100%)]"
+          />
           {starButton}
           {starButton && formatControls && <Divider />}
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
-          {/* Right group: Refactor + the Editor/Raw toggle. The toggle renders
-              regardless of canEdit/mode (unlike formatControls, null in raw) so
-              raw mode can always switch back and read-only viewers can peek raw. */}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {refactorButton}
-            {onModeChange && <NoteModeToggle value={mode} onChange={onModeChange} size="sm" />}
-            {toolbarTrailSlot}
-          </div>
+          {/* Trailing group: Refactor + the Editor/Raw toggle + Share. The
+              toggle renders regardless of canEdit/mode (unlike formatControls,
+              null in raw) so raw mode can always switch back and read-only
+              viewers can peek raw. */}
+          {(refactorButton || onModeChange || toolbarTrailSlot) && formatControls && <Divider />}
+          {(refactorButton || onModeChange || toolbarTrailSlot) && (
+            <div className="flex shrink-0 items-center gap-2">
+              {refactorButton}
+              {onModeChange && <NoteModeToggle value={mode} onChange={onModeChange} size="sm" />}
+              {toolbarTrailSlot}
+            </div>
+          )}
         </div>,
         toolbarHost,
       )}
@@ -658,16 +714,21 @@ export function NoteEditor({
           paint over them, so nothing "pops up" above the toolbar on scroll. */}
       {embedded ? (
         <div className="relative z-0 pt-4">
-          {/* Raw mode shows the note's own frontmatter — title, type and tags are
-              right there in the text, so the header card would just repeat them. */}
-          {mode === 'wysiwyg' && headerSlot}
           {error && (
             <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               <span>{error}</span>
               <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
             </div>
           )}
-          {bodyContent}
+          {/* Keyed by mode so each Edit ⇄ Raw swap drops the incoming surface
+              down in step with the tab bar's attached region opening/closing
+              above it. Never animates on the note's first mount (modeSwitched). */}
+          <div key={mode} className={modeSwitched ? 'notes-mode-enter' : undefined}>
+            {/* Raw mode shows the note's own frontmatter — title, type and tags are
+                right there in the text, so the header card would just repeat them. */}
+            {mode === 'wysiwyg' && headerSlot}
+            {bodyContent}
+          </div>
         </div>
       ) : (
         bodyContent
@@ -768,12 +829,14 @@ function ToolbarButton({
 // (useEditor re-renders on each transaction, so isActive is current). The menu
 // portals to <body> with fixed positioning — the embedded toolbar strip is an
 // overflow-x-auto row, which would otherwise clip the popover into a scrollbar.
+// Each option previews its own typography (Apple Notes-style), so the menu
+// reads as what the text will become rather than a list of names.
 const BLOCK_TYPES = [
-  { value: 'title', label: 'Title' },
-  { value: 'heading', label: 'Heading' },
-  { value: 'subheading', label: 'Subheading' },
-  { value: 'body', label: 'Body' },
-  { value: 'mono', label: 'Monospaced' },
+  { value: 'title', label: 'Title', preview: 'text-[15px] font-bold' },
+  { value: 'heading', label: 'Heading', preview: 'text-sm font-semibold' },
+  { value: 'subheading', label: 'Subheading', preview: 'text-[13px] font-semibold' },
+  { value: 'body', label: 'Body', preview: 'text-sm' },
+  { value: 'mono', label: 'Monospaced', preview: 'font-mono text-[12.5px]' },
 ] as const
 
 type BlockType = (typeof BLOCK_TYPES)[number]['value']
@@ -833,25 +896,31 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
 
   return (
     <div ref={ref} className="relative">
+      {/* Fixed width so the toolbar doesn't shift as the label changes between
+          block types ("Body" ⇄ "Monospaced") — it sits in a centred row now,
+          where any width change would nudge every control sideways. */}
       <button
         type="button"
         aria-label="Text style"
+        aria-expanded={open}
         onMouseDown={(e) => e.preventDefault()}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect()
-          setMenuPos({ top: r.bottom + 4, left: r.left })
+          setMenuPos({ top: r.bottom + 6, left: r.left })
           setOpen((v) => !v)
         }}
-        className="flex h-7 items-center gap-1.5 rounded-lg px-2 text-sm text-text-secondary transition hover:bg-surface-2"
+        className={`flex h-7 w-28 items-center justify-between rounded-lg px-2 text-sm transition ${
+          open ? 'bg-surface-2 text-text-primary' : 'text-text-secondary hover:bg-surface-2'
+        }`}
       >
-        {currentLabel}
-        <ChevronsUpDownIcon className="h-3.5 w-3.5 text-text-secondary" />
+        <span className="truncate">{currentLabel}</span>
+        <ChevronsUpDownIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
       </button>
       {open && menuPos && createPortal(
         <div
           ref={menuRef}
           style={{ top: menuPos.top, left: menuPos.left }}
-          className="fixed z-50 w-40 rounded-xl border border-border-subtle bg-surface-1 p-1 shadow-sm"
+          className="dropdown-pop fixed z-50 w-44 rounded-xl border border-border-subtle bg-surface-1 p-1.5 shadow-lg"
         >
           {BLOCK_TYPES.map((t) => (
             <button
@@ -859,10 +928,14 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => apply(t.value)}
-              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-text-primary transition hover:bg-surface-2"
+              className={`flex h-8 w-full items-center justify-between gap-3 rounded-lg px-2.5 text-left transition ${
+                t.value === current
+                  ? 'bg-surface-2 text-text-primary'
+                  : 'text-text-primary hover:bg-surface-2'
+              }`}
             >
-              {t.label}
-              {t.value === current && <CheckIcon className="h-4 w-4 text-brand-dark-green" />}
+              <span className={`truncate ${t.preview}`}>{t.label}</span>
+              {t.value === current && <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />}
             </button>
           ))}
         </div>,

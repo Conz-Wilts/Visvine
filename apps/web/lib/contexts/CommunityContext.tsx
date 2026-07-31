@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, ReactNode } from 'react';
 import { Community } from '@/lib/types';
 import { createSafeContext } from './createSafeContext';
 
@@ -21,6 +21,13 @@ const [CommunityContext, useCommunity] = createSafeContext<CommunityContextValue
 export { useCommunity };
 
 const CURRENT_COMMUNITY_KEY = 'nb_current_community';
+
+// The stored selection is read in a layout effect, not during render: the
+// server has no localStorage, so a synchronous read would make the first client
+// render disagree with the SSR'd HTML. Layout effects flush before children's
+// passive effects and before paint, so consumers still see the restored
+// community before they fetch, with no flash.
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** Minimal membership shape needed to hydrate the provider server-side. */
 export interface InitialMembership {
@@ -47,13 +54,17 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
   const [membershipRoles, setMembershipRoles] = useState<Map<string, string>>(
     () => new Map((initialMemberships ?? []).map(m => [m.id, m.role]))
   );
-  // Read localStorage synchronously so context data can start fetching on first render
-  const [currentCommunityId, setCurrentCommunityId] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try { return localStorage.getItem(CURRENT_COMMUNITY_KEY); } catch { return null; }
-  });
+  const [currentCommunityId, setCurrentCommunityId] = useState<string | null>(null);
   const [loading, setLoading] = useState(!hasInitialData);
   const [error, setError] = useState<string | null>(null);
+
+  // Restore the stored selection once, right after hydration (see the note above).
+  useIsomorphicLayoutEffect(() => {
+    try {
+      const stored = localStorage.getItem(CURRENT_COMMUNITY_KEY);
+      if (stored) setCurrentCommunityId(stored);
+    } catch {}
+  }, []);
 
   const loadAllCommunities = useCallback(async () => {
     const res = await fetch('/api/data/communities');

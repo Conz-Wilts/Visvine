@@ -108,7 +108,11 @@ export async function listFolders(brain: Brain): Promise<string[]> {
     where: { communityId: brain.communityId, ownerKey: brain.ownerKey },
     select: { path: true },
   })
-  return rows.map((r) => r.path)
+  // The table doubles as the access-boundary store, and a boundary can sit on a
+  // NOTE (the Share panel's "make this note private"). Those rows are flags,
+  // not folders — grafting one into the tree would render a phantom folder
+  // duplicate next to the note itself.
+  return rows.map((r) => r.path).filter((p) => !p.endsWith('.md'))
 }
 
 export async function noteCount(brain: Brain): Promise<number> {

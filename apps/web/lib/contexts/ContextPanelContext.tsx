@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { DOCK_MS } from "@/lib/contexts/SidebarContext";
 
 /*
  * Bridges panel-owning pages and the global Sidebar so page content can render
@@ -19,6 +20,10 @@ interface ContextPanelValue {
   // the user's call via `contextOpen` below.
   dockRequested: boolean;
   setDockRequested: (v: boolean) => void;
+  // Immediate release, skipping the DOCK_RELEASE_MS grace below — for moves
+  // where nothing will re-claim the dock, so the grace would only hold the
+  // panel open over a page with no dock inset.
+  releaseDockNow: () => void;
   // User intent: the docked panel starts OPEN and can be closed from the
   // navbar's panel toggle. Lives here so it survives page-to-page navigation
   // within a session; a fresh load starts open again.
@@ -37,6 +42,7 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setHost: () => {},
   dockRequested: false,
   setDockRequested: () => {},
+  releaseDockNow: () => {},
   contextOpen: true,
   setContextOpen: () => {},
   dockTopInset: 0,
@@ -86,6 +92,18 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
     }, DOCK_RELEASE_MS);
   }, []);
 
+  const releaseDockNow = useCallback(() => {
+    if (dockTimer.current) {
+      clearTimeout(dockTimer.current);
+      dockTimer.current = null;
+    }
+    // dockTopInset is deliberately not reset here: the closing column's white
+    // starts below the bar by exactly this inset, so zeroing it mid-close would
+    // slide that white up into the bar's band. It drains through its own graced
+    // path when the bar goes away.
+    setDockRequestedState(false);
+  }, []);
+
   const setDockTopInset = useCallback((v: number) => {
     if (insetTimer.current) {
       clearTimeout(insetTimer.current);
@@ -108,6 +126,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         setHost,
         dockRequested: dockRequestedState,
         setDockRequested,
+        releaseDockNow,
         contextOpen,
         setContextOpen,
         dockTopInset: dockTopInsetState,
@@ -121,4 +140,40 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
 
 export function useContextPanel() {
   return useContext(ContextPanelContext);
+}
+
+/*
+ * True while the docked panel column is visible, not just requested. The dock
+ * releases in two lagged stages (the DOCK_RELEASE_MS grace above, then the
+ * DOCK_MS width animation in the Sidebar), so anything stacked relative to the
+ * panel must hold its state through both or the closing panel paints over it.
+ */
+export function useDockVisuallyOpen() {
+  const { dockRequested, contextOpen } = useContextPanel();
+  const open = dockRequested && contextOpen;
+  const [visuallyOpen, setVisuallyOpen] = useState(open);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+    if (open) {
+      setVisuallyOpen(true);
+      return;
+    }
+    // dockRequested already lagged by DOCK_RELEASE_MS; hold through the width
+    // animation that starts when it flips (small buffer for paint jitter).
+    closeTimer.current = setTimeout(() => {
+      closeTimer.current = null;
+      setVisuallyOpen(false);
+    }, DOCK_MS + 50);
+    return () => {
+      if (closeTimer.current) {
+        clearTimeout(closeTimer.current);
+        closeTimer.current = null;
+      }
+    };
+  }, [open]);
+  return visuallyOpen;
 }

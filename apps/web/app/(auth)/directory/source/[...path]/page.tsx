@@ -10,6 +10,9 @@ import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
+import { usePaneChrome } from '@/lib/contexts/PaneShellContext';
+
+const noop = () => {};
 
 const SourcePreviewPanel = dynamic(
   () => import('@/features/notes/components/SourcePreviewPanel').then((m) => m.SourcePreviewPanel),
@@ -27,6 +30,11 @@ function SourceViewerRoute() {
   const sourcePath = segments.map((s) => decodeURIComponent(String(s))).join('/');
   // Same contract as the note view: inset the page while the tree is docked+open.
   const { dockRequested, contextOpen } = useContextPanel();
+
+  // No tab bar on sources (they aren't editable) — registering explicitly is
+  // required under the shell's hold-last-config store, or the previous page's
+  // bar and note surface would stay on screen over this one.
+  usePaneChrome({ tabs: null, activeId: null, onSelect: noop, attachedOpen: false, surface: null });
 
   return (
     <div

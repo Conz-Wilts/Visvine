@@ -16,7 +16,6 @@ import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
-import CommunityAvatar from '@/components/community/CommunityAvatar'
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
 import type { CommunityFeatureConfig } from '@/lib/types'
 import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
@@ -56,10 +55,12 @@ export function ContextSidebar({
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
   const [contextName, setContextName] = useState<string | null>(null)
-  const [shareFolder, setShareFolder] = useState<string | null>(null)
+  const [shareTarget, setShareTarget] = useState<{ path: string; kind: 'note' | 'folder' } | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wide, setWide] = useState(false)
+  // Bumped after a tree mutation (delete) to re-run the load effect.
+  const [treeVersion, setTreeVersion] = useState(0)
 
   // Only mark the tree dockable on wide viewports (matches the Sidebar), and only
   // while the notes tool is on. The panel column itself stays closed until the
@@ -109,7 +110,7 @@ export function ContextSidebar({
     return () => {
       cancelled = true
     }
-  }, [communityId, notesEnabled])
+  }, [communityId, notesEnabled, treeVersion])
 
   // The context's display name for the panel header (renameable from the
   // console). Failure just leaves the default label — never blocks the tree.
@@ -129,11 +130,15 @@ export function ContextSidebar({
     }
   }, [communityId, notesEnabled])
 
-  // Access overview: restricted/locked folder boundaries for the 🔒 badges.
-  // Personal spaces have no boundaries — skip the fetch.
+  // Access overview: restricted/locked boundaries (folders AND private notes)
+  // for the 🔒 badges. Personal spaces have no boundaries — skip the fetch.
+  // shareOpen is a dep so closing the Share panel repaints badges it changed.
+  const shareOpen = shareTarget !== null
   useEffect(() => {
-    setOverview(null)
-    if (!communityId || !notesEnabled || communityId.startsWith('me:')) return
+    if (!communityId || !notesEnabled || communityId.startsWith('me:')) {
+      setOverview(null)
+      return
+    }
     let cancelled = false
     notesApi
       .getAccessOverview(communityId)
@@ -144,7 +149,7 @@ export function ContextSidebar({
     return () => {
       cancelled = true
     }
-  }, [communityId, notesEnabled])
+  }, [communityId, notesEnabled, shareOpen])
 
   const folderBadges = useMemo(() => {
     if (!overview) return undefined
@@ -157,25 +162,17 @@ export function ContextSidebar({
   }, [overview])
 
   // The community as the tree's root folder — everything below it is literally
-  // its children, so it renders as a folder row (with the community avatar for
-  // its glyph) rather than a separate header bar above the list. A renamed
-  // context wins the label; the generic default defers to the community name.
+  // its children, so it renders as a folder row (chevron + name, no glyph)
+  // rather than a separate header bar above the list. A renamed context wins
+  // the label; the generic default defers to the community name.
   const rootFolder = useMemo(
     () => ({
       label:
         contextName && contextName !== DEFAULT_CONTEXT_NAME
           ? contextName
           : (currentCommunity?.name ?? 'Community'),
-      icon: (
-        <CommunityAvatar
-          name={currentCommunity?.name ?? 'Community'}
-          imageUrl={currentCommunity?.imageUrl}
-          size="sm"
-          rounded="rounded-md"
-        />
-      ),
     }),
-    [contextName, currentCommunity?.name, currentCommunity?.imageUrl],
+    [contextName, currentCommunity?.name],
   )
 
   // Keep the highlight on the open entity's note as the profile view navigates
@@ -233,6 +230,56 @@ export function ContextSidebar({
     [communityId],
   )
 
+  // Delete = move to the brain's trash (restorable from the console). Authority
+  // is enforced server-side per note — the menu can't know each viewer's level,
+  // so a rejected delete just surfaces its message. Deleting the note that's
+  // open navigates back to the context canvas.
+  const handleDeleteNote = useCallback(
+    (path: string) => {
+      if (!communityId) return
+      const title = notes.find((n) => n.path === path)?.title ?? path
+      if (!window.confirm(`Delete “${title}”? It moves to the context trash and can be restored.`)) return
+      notesApi
+        .remove(communityId, path)
+        .then(() => {
+          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          setTreeVersion((v) => v + 1)
+          if (path === currentPath) router.push('/directory?view=context')
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
+        })
+    },
+    [communityId, notes, currentPath, router],
+  )
+
+  // Deleting a folder trashes every note inside it, so the confirm spells that
+  // out with the actual count. Same server-side authority + trash semantics as
+  // a single note; navigates home if the open note lived inside the folder.
+  const handleDeleteFolder = useCallback(
+    (folderPath: string) => {
+      if (!communityId) return
+      const name = folderPath.split('/').pop() ?? folderPath
+      const count = notes.filter((n) => n.path.startsWith(`${folderPath}/`)).length
+      const contents =
+        count === 0
+          ? 'It is empty.'
+          : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to the context trash, restorable).`
+      if (!window.confirm(`Delete the folder “${name}”? ${contents}`)) return
+      notesApi
+        .deleteFolder(communityId, folderPath)
+        .then(() => {
+          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          setTreeVersion((v) => v + 1)
+          if (currentPath?.startsWith(`${folderPath}/`)) router.push('/directory?view=context')
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to delete the folder')
+        })
+    },
+    [communityId, notes, currentPath, router],
+  )
+
   // Nothing to render until the Sidebar's portal host is mounted and we're docking.
   if (!host || !wide || !notesEnabled || !communityId) return null
 
@@ -257,10 +304,10 @@ export function ContextSidebar({
               notes={notes}
               starred={starred}
               selectedPath={selectedPath}
-              canEdit={false}
+              canEdit
               onSelect={handleSelect}
               onToggleStar={handleToggleStar}
-              onDeleteNote={() => {}}
+              onDeleteNote={handleDeleteNote}
               bare
               root={rootFolder}
               storageKey={communityId}
@@ -270,14 +317,20 @@ export function ContextSidebar({
               // that, which is why the peek can't be derived from it.
               revealPath={focusPath ?? currentPath}
               folderBadges={folderBadges}
-              onFolderAccess={communityId.startsWith('me:') ? undefined : setShareFolder}
+              onFolderAccess={
+                communityId.startsWith('me:')
+                  ? undefined
+                  : (path) => setShareTarget({ path, kind: 'folder' })
+              }
+              onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
+              onDeleteFolder={handleDeleteFolder}
             />
-            {shareFolder !== null && (
+            {shareTarget !== null && (
               <SharePanel
                 communityId={communityId}
-                path={shareFolder}
-                kind="folder"
-                onClose={() => setShareFolder(null)}
+                path={shareTarget.path}
+                kind={shareTarget.kind}
+                onClose={() => setShareTarget(null)}
               />
             )}
           </>

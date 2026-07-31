@@ -2,23 +2,15 @@
 
 import React, { useRef, useEffect, useLayoutEffect, useState, useMemo } from 'react';
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
+import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
+import { TAB_MOTION } from '@/components/ui/tabMotion';
 
 export type ProfileTab = 'about' | 'connections' | 'communities' | 'context' | 'raw' | 'preview';
 
 /** Height of one row of the bar — the tab row, and the attached toolbar row. */
 const TAB_ROW_H = 48;
-
-/** Top inset for anything docking beside the bar (the notes tree). The bar is
- *  one row tall by default and two only while the attached toolbar is open, so
- *  this must be derived from the SAME flag passed to `attachedOpen` — hardcoding
- *  96 leaves a row-high gap above the tree on Raw, which has no toolbar. */
-export const dockTopInsetFor = (attachedOpen: boolean) =>
-  attachedOpen ? TAB_ROW_H * 2 : TAB_ROW_H;
-
-// One motion for everything the bar does on a tab change: the indicator slides
-// and the attached region opens on the same render, so they must share a curve
-// and duration to read as a single gesture. Keep them on this const.
-const TAB_MOTION = 'duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]';
 
 export interface TabConfig {
   id: ProfileTab;
@@ -99,6 +91,12 @@ interface ProfileTabBarProps {
    *  Directory's Grid/Context bar uses — instead of starting at the tree's
    *  right edge and leaving the tree's top-left corner bare. */
   edgeClass?: string;
+  /** Participate in the cross-page underline handoff under this key (see
+   *  tabIndicatorHandoff). On mount, if the bar this one replaces published its
+   *  underline within the freshness window, the indicator slides from that
+   *  position to the active tab and the labels fade in — the navigation reads
+   *  as one bar relabelling instead of a snap swap. */
+  handoffKey?: string;
 }
 
 export default function ProfileTabBar({
@@ -112,8 +110,16 @@ export default function ProfileTabBar({
   stickyTop = 'top-20',
   attachedOpen = false,
   edgeClass = '-ml-6 z-20',
+  handoffKey,
 }: ProfileTabBarProps) {
   const { setHost } = useTabBarSlot();
+  // The toolbar tray centres over the note COLUMN, not the pane: while the
+  // notes tree is docked into the Sidebar the content insets by its width
+  // (useDockInsetStyle on the pages), so the attached region insets the same
+  // amount — otherwise the tray hangs left of the column it belongs to. Same
+  // transition as the content inset so they move together.
+  const { dockRequested, contextOpen } = useContextPanel();
+  const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
   const tabs = useMemo(
     () =>
       tabsOverride ??
@@ -132,15 +138,26 @@ export default function ProfileTabBar({
   const [armed, setArmed] = useState(false);
   const motion = armed ? `transition-all ${TAB_MOTION}` : '';
 
+  // The underline rect of the pane-top bar this one just replaced, claimed once
+  // at mount. Null outside a fresh navigation, and for un-keyed bars.
+  const { handoff, firstMeasure } = useTabIndicatorHandoff(handoffKey);
+
   // Measure BEFORE paint, so the underline is already sitting under the active tab
   // on that first frame rather than being placed a frame later.
   useLayoutEffect(() => {
     const idx = tabs.findIndex((t) => t.id === activeTab);
     const btn = tabRefs.current[idx];
-    if (btn) {
-      setIndicatorStyle({ left: btn.offsetLeft, width: btn.offsetWidth });
-    }
-  }, [activeTab, tabs]);
+    if (!btn) return;
+    const target = { left: btn.offsetLeft, width: btn.offsetWidth };
+    if (handoffKey) publishTabIndicator(handoffKey, target);
+    return applyTabIndicator({
+      handoff,
+      target,
+      firstMeasure,
+      setIndicator: setIndicatorStyle,
+      setArmed,
+    });
+  }, [activeTab, tabs, handoff, handoffKey, firstMeasure]);
 
   // One frame later the measured position is painted, so turning transitions on
   // now can't retroactively animate it.
@@ -164,21 +181,22 @@ export default function ProfileTabBar({
   }
 
   return (
-    <div className={`sticky ${stickyTop} ${edgeClass} border-b border-border-subtle bg-surface-1`}>
+    <div className={`sticky ${stickyTop} ${edgeClass}`}>
       {/* -ml-6 bleeds the bar left into <main>'s 24px gutter so its bottom
           border starts at the sidebar's right edge (continuing the navbar seam).
-          No pl-6 to push the content back: the tab row and the attached toolbar
-          hug the sidebar too (their own small paddings are the only offset).
-          The gutter is padding on the scrollport, not overflow, so nothing is
-          clipped.
-          That border is the ONLY line under the bar, attached region included —
-          it travels down because this box grows, not because a second bar with
-          its own line appears. */}
+          No pl-6 to push the content back: the tab row hugs the sidebar too
+          (its own small paddings are the only offset). The gutter is padding on
+          the scrollport, not overflow, so nothing is clipped.
+          Border + background live on the TAB ROW alone — the attached region
+          below is transparent, so the toolbar tray it hosts reads as a pill
+          hanging off the nav line with the page visible beside it, not as a
+          second full-width bar. */}
       {/* Tabs pinned to the pane's far left, next to the sidebar and out of the
-          way of the centred content column below (the attached toolbar row
-          left-aligns to match). The tablist keeps flex-1 so it spans the row —
+          way of the centred content column below (the attached region centres
+          its toolbar tray over that column, NoteEditor). The tablist keeps
+          flex-1 so it spans the row —
           a shrink-to-fit box with overflow-x-auto grows a stray scrollbar. */}
-      <div className="flex w-full items-center px-1">
+      <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
         <div
           role="tablist"
           aria-label="Profile sections"
@@ -195,6 +213,8 @@ export default function ProfileTabBar({
               onClick={() => onTabChange(tab.id)}
               onKeyDown={(e) => handleKeyDown(e, idx)}
               className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
+                handoff ? 'tabbar-label-enter' : ''
+              } ${
                 activeTab === tab.id
                   ? 'text-brand-black'
                   : 'text-brand-grey hover:text-brand-black'
@@ -215,9 +235,12 @@ export default function ProfileTabBar({
       {/* The attached region. Always mounted — a conditional mount would snap
           open with no transition — and animated 0fr↔1fr on the same const as the
           indicator, off the same tab state, so the pair moves as one gesture.
-          The host reserves its full h-12 from the first frame, so a portalled
-          bar that only arrives once its data lands drops in without shifting the
-          line that just travelled down to meet it.
+          The host reserves its full h-12 from the first frame, so a toolbar
+          tray that only arrives once its data lands drops in without shifting
+          the content below.
+          Transparent and centred: whatever portals in (NoteEditor's tray)
+          brings its own pill chrome and shrinks to its content, with the page
+          showing through on either side.
           Unarmed on the first frame (see `armed`): a bar that mounts already-open
           must START open, not unfold into place. */}
       <div
@@ -228,7 +251,28 @@ export default function ProfileTabBar({
         }`}
       >
         <div className="overflow-hidden">
-          <div ref={setHost} style={{ height: TAB_ROW_H }} />
+          {/* The host translates -100% in step with the row collapsing above it,
+              on the same duration/curve, so its bottom edge tracks the closing
+              edge exactly: the tray visibly SLIDES up behind the tab row and
+              drops back down from under it, rather than standing still while
+              the shrinking row wipes it from the bottom. Unarmed first frame:
+              no transform transition, so a bar that mounts open/closed starts
+              there without playing the slide. */}
+          <div
+            ref={setHost}
+            className={`flex justify-center motion-reduce:[transition:none!important] ${
+              attachedOpen ? 'translate-y-0' : '-translate-y-full'
+            }`}
+            style={{
+              height: TAB_ROW_H,
+              paddingLeft: trayInset || undefined,
+              // `translate`, not `transform`: Tailwind v4's translate-y-*
+              // utilities set the standalone CSS translate property.
+              transition: armed
+                ? 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                : 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+            }}
+          />
         </div>
       </div>
     </div>

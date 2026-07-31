@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import ChatInterface from '@/components/chat/ChatInterface';
 import NodeGrid from '@/components/dashboard/NodeGrid';
 import DirectoryFilterBar from '@/components/dashboard/DirectoryFilterBar';
-import DirectoryViewTabs, { type DirectoryView } from '@/components/dashboard/DirectoryViewTabs';
+import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
@@ -28,15 +28,42 @@ const ContextSidebar = dynamic(
   { ssr: false, loading: () => null },
 );
 
+type DirectoryView = 'grid' | 'context';
+
+const DIRECTORY_TABS: PaneTabItem[] = [
+  { id: 'grid', label: 'Grid' },
+  { id: 'context', label: 'Context' },
+];
+
 /**
  * The Directory: a Grid / Context switcher over the community. Grid is the
- * searchable, filterable card grid; Context is the community context
- * (lazy-loaded). Views swap purely client-side — no
- * routing — so switching is instant and never re-runs the shell layout. The
- * dedicated /context route still hosts the context full-bleed with its notes tree.
+ * searchable, filterable card grid; Context is the lazy-loaded community
+ * context. Views swap purely client-side, so switching is instant and never
+ * re-runs the shell layout. The bar itself lives in the persistent pane shell
+ * (directory/layout.tsx) — this page just registers its tabs and view state.
  */
 export default function DashboardPage() {
   const [view, setView] = useState<DirectoryView>('grid');
+  const { dockRequested, contextOpen, releaseDockNow } = useContextPanel();
+  // Switching to Grid closes the docked tree now, skipping the release grace:
+  // the grace exists for navigations where another surface re-claims the dock,
+  // but Grid is a terminal state — waiting just holds the closing panel over
+  // cards that are already animating in.
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (id === 'grid') releaseDockNow();
+      setView(id as DirectoryView);
+    },
+    [releaseDockNow],
+  );
+  usePaneChrome({
+    tabs: DIRECTORY_TABS,
+    activeId: view,
+    onSelect: handleSelect,
+    attachedOpen: false,
+    ariaLabel: 'Directory views',
+    surface: null,
+  });
   const browse = useDirectoryBrowse();
   // The context search's best-matching node, lifted out so the docked tree can
   // scroll to that entity's note alongside the canvas focus (same as /context).
@@ -45,7 +72,6 @@ export default function DashboardPage() {
   // While the tree is docked AND open the sidebar card widens by CONTEXT_PANEL_W,
   // but <main>'s left padding only clears the icon rail — the canvas pane must
   // inset itself or the panel covers the search bar and the context's left edge.
-  const { dockRequested, contextOpen } = useContextPanel();
   const dockInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
   const {
     community, loading, error,
@@ -57,17 +83,13 @@ export default function DashboardPage() {
     <div
       className={`relative w-full ${view === 'context' ? 'flex flex-col' : ''}`}
       data-tour="directory-canvas"
-      // Context is a fixed canvas — pin the root to exactly <main>'s content box
-      // (viewport − navbar 64px − main's pt-4/pb-6 = 40px), so the page never
-      // scrolls vertically. The context panel below fills the leftover space via
-      // flex-1, so no per-element height math can drift out of sync. No
-      // overflow-hidden here: the tab row bleeds up/left (negative margins, for
-      // the flush look + navbar seam curve) and clipping it would shave "Grid".
-      // The context panel clips its own canvas; Grid keeps the tall min-height.
-      style={view === 'context' ? { height: 'calc(100dvh - 64px - 40px)' } : { minHeight: 'calc(100dvh - 56px)' }}
+      // Context is a fixed canvas — pin the root to the space left below the
+      // shell's tab bar (viewport − navbar 64px − main's pt-4/pb-6 = 40px − the
+      // bar's 32px of flow height: a 48px row minus its -mt-4 pull-up), so the
+      // page never scrolls vertically. The panel below fills the rest via
+      // flex-1 and clips its own canvas; Grid keeps the tall min-height.
+      style={view === 'context' ? { height: 'calc(100dvh - 64px - 40px - 32px)' } : { minHeight: 'calc(100dvh - 56px)' }}
     >
-      <DirectoryViewTabs active={view} onChange={setView} />
-
       {/* Grid: search sits in normal flow above the filter bar and card grid. */}
       {view === 'grid' && (
         <div className="flex justify-center px-6 pt-6">
@@ -87,7 +109,7 @@ export default function DashboardPage() {
       )}
 
       {view === 'grid' && (
-        <div id="directory-panel-grid" role="tabpanel">
+        <div id="panel-grid" role="tabpanel">
           <DirectoryFilterBar browse={browse} />
 
           <div className="w-full px-6 pt-4 pb-8">
@@ -115,7 +137,7 @@ export default function DashboardPage() {
           immersive layout as the /context page, not a boxed panel. */}
       {view === 'context' && (
         <div
-          id="directory-panel-context"
+          id="panel-context"
           role="tabpanel"
           className="relative flex-1 min-h-0 overflow-hidden"
           // marginLeft (not padding): the search + canvas are absolutely

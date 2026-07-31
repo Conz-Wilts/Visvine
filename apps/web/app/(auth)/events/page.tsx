@@ -147,10 +147,10 @@ function EventsPageInner() {
 
   return (
     <div className="relative w-full">
-      {/* View switcher pinned flush in the top-left corner — identical treatment
-          to the Directory's Grid / Context bar (DirectoryViewTabs): the
-          bar full-bleeds left into the sidebar seam and its bottom border runs
-          edge to edge. "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush
+      {/* View switcher pinned flush in the top-left corner — same treatment as
+          the Directory's Grid / Context bar (PaneTabBar): the bar full-bleeds
+          left into the sidebar seam and its bottom border runs edge to edge.
+          "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush
           under the navbar (at rest and pinned); "-ml-[23px]" bleeds left to 1px
           shy of the rail edge so the sidebar's right border stays visible.
           UnderlineTabs draws its own bottom border, so the wrapper stays
