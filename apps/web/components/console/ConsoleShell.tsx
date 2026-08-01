@@ -1,44 +1,42 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clsx } from 'clsx';
 import SaveStatus from '@/components/ui/SaveStatus';
-import { useTheme } from '@/lib/contexts/ThemeContext';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
+import { TAB_MOTION } from '@/components/ui/tabMotion';
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
 /**
- * Settings shell for the Community Console: header with the shared save
- * indicator and the active section's content pane. Section state lives in the
- * URL (`?section=members`) so it deep-links and survives refresh.
+ * Settings shell for the Community Console: a pane-top tab bar with the active
+ * section's content below it. Section state lives in the URL
+ * (`?section=members`) so it deep-links and survives refresh.
  *
- * On wide viewports the grouped section list docks INTO the global Sidebar —
- * the same portal host the /context notes tree and /channels list use — so the
- * icon rail + section list read as one connected card. Below the dock width it
- * falls back to a horizontal pill row above the content.
+ * The sections used to dock into the global Sidebar as a second column; they
+ * now ride the same pane-top tab bar the Directory, notes and profiles use
+ * (same bleed, row height, underline and handoff key), so moving between those
+ * surfaces and the console reads as one bar relabelling itself.
  *
  * Must be rendered inside a `<Suspense>` boundary (uses `useSearchParams`).
  */
 
-// ≥1024px: dock the section list into the Sidebar (must match DOCK_MIN_WIDTH
-// in Sidebar.tsx). The Sidebar's panel column is ADMIN_PANEL_W = 260 there.
-const DOCK_MIN_WIDTH = 1024;
+/** Handoff key shared with the pane-top bars — see tabIndicatorHandoff. */
+const HANDOFF_KEY = 'pane-top';
 
 export interface ConsoleSection {
   id: string;
   label: string;
-  /** Nav group heading, e.g. "Settings", "People". Groups render in first-seen order. */
-  group: string;
-  /** Icon shown in the row's leading badge (size 18 works best). */
-  icon: React.ReactNode;
-  /** One-line summary shown under the label in the docked nav. */
+  /** One-line summary shown above the section's content. */
   description: string;
-  /** Count badge shown next to the label (hidden when 0/undefined). */
+  /** Count badge appended to the tab label (hidden when 0/undefined). */
   badge?: number;
   /** 'form' constrains the pane to a comfortable form width; 'wide' uses the full pane. */
   width: 'form' | 'wide';
+  /** Legacy nav-list fields, no longer rendered by the tab bar. Kept optional so
+   *  callers that still pass them keep type-checking. */
+  group?: string;
+  icon?: React.ReactNode;
 }
 
 interface ConsoleShellProps {
@@ -46,182 +44,142 @@ interface ConsoleShellProps {
   renderSection: (id: string) => React.ReactNode;
 }
 
-function CountBadge({ count }: { count?: number }) {
-  if (!count) return null;
-  return (
-    <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-amber-700">
-      {count > 99 ? '99+' : count}
-    </span>
-  );
-}
-
 function HeaderSaveStatus() {
   const { status, retry } = useConsoleSave();
   return <SaveStatus status={status} onRetry={retry} />;
 }
 
+/** Tabs carry their count inline, the way the profile bar labels
+ *  "Connections (12)" — a separate pill would break the underline measuring. */
+const tabLabel = (s: ConsoleSection) =>
+  s.badge ? `${s.label} (${s.badge > 99 ? '99+' : s.badge})` : s.label;
+
 export default function ConsoleShell({ sections, renderSection }: ConsoleShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { host } = useContextPanel();
-  const { theme, isDark } = useTheme();
-
-  // Track the Sidebar's dock breakpoint so both sides flip together.
-  const [wide, setWide] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`);
-    const sync = () => setWide(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-
-  const dockNav = wide && Boolean(host);
 
   const requested = searchParams.get('section');
   const active = sections.some((s) => s.id === requested) ? (requested as string) : sections[0].id;
   const activeSection = sections.find((s) => s.id === active)!;
 
-  const groups = useMemo(() => {
-    const order: string[] = [];
-    const byGroup = new Map<string, ConsoleSection[]>();
-    for (const s of sections) {
-      if (!byGroup.has(s.group)) {
-        byGroup.set(s.group, []);
-        order.push(s.group);
-      }
-      byGroup.get(s.group)!.push(s);
-    }
-    return order.map((g) => ({ name: g, items: byGroup.get(g)! }));
-  }, [sections]);
-
   const select = (id: string) => {
     router.replace(`${pathname}?section=${id}`, { scroll: false });
   };
 
-  // The grouped section list, rendered into the Sidebar's docked panel — styled
-  // like the /context notes tree and /channels list that share this host.
-  const dockedNav = dockNav && host
-    ? createPortal(
-        <div
-          data-tour="console-tabs"
-          className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface-1 px-3 py-4"
-          style={{ animation: 'fadeIn 0.3s ease-out' }}
-        >
-          <div className="mb-4 px-4 text-sm font-bold text-text-primary">Community Console</div>
-          <nav aria-label="Console sections">
-            {groups.map((group) => (
-              <div key={group.name} className="mb-5 last:mb-0">
-                <div className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                  {group.name}
-                </div>
-                <ul className="space-y-1">
-                  {group.items.map((s) => {
-                    const isActive = s.id === active;
-                    return (
-                      <li key={s.id}>
-                        <button
-                          type="button"
-                          onClick={() => select(s.id)}
-                          aria-current={isActive ? 'page' : undefined}
-                          className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150"
-                          style={{
-                            background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : 'transparent',
-                            color: isActive ? theme.accentDark : undefined,
-                          }}
-                        >
-                          <span
-                            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors"
-                            style={{
-                              background: isActive ? theme.accent : undefined,
-                              color: isActive ? 'white' : undefined,
-                            }}
-                          >
-                            <span className={isActive ? '' : 'text-text-muted'}>{s.icon}</span>
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className={clsx('truncate text-sm font-medium', !isActive && 'text-text-secondary')}>
-                              {s.label}
-                            </p>
-                            <p className={clsx('truncate text-[10px] opacity-70', !isActive && 'text-text-muted')}>
-                              {s.description}
-                            </p>
-                          </div>
-                          <CountBadge count={s.badge} />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </nav>
-        </div>,
-        host,
-      )
-    : null;
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  // Transitions arm only once the first frame is painted, so a bar mounting
+  // mid-navigation appears finished instead of sliding its underline out from
+  // width 0. Same arming as ProfileTabBar/PaneTabBar.
+  const [armed, setArmed] = useState(false);
+  const motion = armed ? `transition-all ${TAB_MOTION}` : '';
+
+  // The underline rect of the pane-top bar this one replaced, claimed at mount.
+  const { handoff, firstMeasure } = useTabIndicatorHandoff(HANDOFF_KEY);
+
+  const tabsKey = sections.map((s) => `${s.id} ${tabLabel(s)}`).join('|');
+
+  // Measure BEFORE paint so the underline is already under the active tab on
+  // the first frame rather than being placed one frame later.
+  useLayoutEffect(() => {
+    const idx = sections.findIndex((s) => s.id === active);
+    const btn = tabRefs.current[idx];
+    if (!btn) return;
+    const target = { left: btn.offsetLeft, width: btn.offsetWidth };
+    publishTabIndicator(HANDOFF_KEY, target);
+    return applyTabIndicator({
+      handoff,
+      target,
+      firstMeasure,
+      setIndicator: setIndicatorStyle,
+      setArmed,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, tabsKey, handoff]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setArmed(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent, idx: number) {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      const next = (idx + 1) % sections.length;
+      select(sections[next].id);
+      tabRefs.current[next]?.focus();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const prev = (idx - 1 + sections.length) % sections.length;
+      select(sections[prev].id);
+      tabRefs.current[prev]?.focus();
+    }
+  }
 
   return (
     <ConsoleSaveProvider>
-      {dockedNav}
-      {/* When the section list is docked into the Sidebar, pad left so the content
-          clears the docked card (260px panel + 12px gutter — keep in sync with
-          ADMIN_PANEL_W in Sidebar.tsx). */}
-      <div
-        className={clsx('w-full', dockNav && 'pl-[272px]')}
-        style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
-      >
-      <div className="w-full max-w-[1600px] mx-auto pt-4 pb-10 px-6 sm:px-8">
-
-        {/* Narrow fallback: horizontally scrollable pill row above the content */}
-        {!dockNav && (
-          <nav
-            data-tour="console-tabs"
-            className="-mx-6 mb-6 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            aria-label="Console sections"
-          >
-            {sections.map((s) => {
-              const isActive = s.id === active;
-              return (
+      <div className="w-full">
+        {/* Same chrome as the pane-top bars: -ml-6 bleeds into <main>'s gutter so
+            the bottom border continues the navbar seam, and "-top-4 -mt-4"
+            cancels <main>'s pt-4 so the bar pins flush under the navbar. */}
+        <div className="sticky -top-4 -mt-4 -ml-6 z-20">
+          <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
+            <div
+              role="tablist"
+              aria-label="Console sections"
+              data-tour="console-tabs"
+              className="relative flex flex-1 overflow-x-auto"
+            >
+              {sections.map((s, idx) => (
                 <button
                   key={s.id}
-                  type="button"
+                  ref={(el) => { tabRefs.current[idx] = el; }}
+                  role="tab"
+                  id={`tab-${s.id}`}
+                  aria-selected={active === s.id}
+                  aria-controls={`panel-${s.id}`}
                   onClick={() => select(s.id)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all"
-                  style={{
-                    background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : undefined,
-                    color: isActive ? theme.accentDark : undefined,
-                  }}
+                  onKeyDown={(e) => handleKeyDown(e, idx)}
+                  className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
+                    handoff ? 'tabbar-label-enter' : ''
+                  } ${
+                    active === s.id ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
+                  }`}
                 >
-                  <span className={isActive ? '' : 'text-text-muted'}>{s.icon}</span>
-                  <span className={isActive ? '' : 'text-text-secondary'}>{s.label}</span>
-                  <CountBadge count={s.badge} />
+                  {tabLabel(s)}
                 </button>
-              );
-            })}
-          </nav>
-        )}
+              ))}
 
-        {/* Compact profile-style heading: active section + autosave status */}
-        <header className="mb-6 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Community Console</p>
+              {/* Animated green underline indicator */}
+              <div
+                className={`absolute bottom-0 h-0.5 bg-brand-green ${motion}`}
+                style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+              />
+            </div>
+
+            {/* Autosave state rides the bar so it stays visible while pinned. */}
+            <div className="shrink-0 px-4">
+              <HeaderSaveStatus />
+            </div>
+          </div>
+        </div>
+
+        {/* <main> supplies no horizontal gutter (see AuthLayoutClient) — the bar
+            bleeds into the sidebar seam, the content keeps the page's own px. */}
+        <div className="w-full max-w-[1600px] mx-auto pt-6 pb-10 px-6 sm:px-8">
+          <header className="mb-6">
             <h1 className="text-lg font-bold text-text-primary">{activeSection.label}</h1>
             <p className="text-xs text-text-muted mt-0.5">{activeSection.description}</p>
-          </div>
-          <div className="pt-1 shrink-0">
-            <HeaderSaveStatus />
-          </div>
-        </header>
+          </header>
 
-        <main className="min-w-0">
-          {/* 'form' sections get a comfortable single-column width like profile settings. */}
-          <div className={clsx(activeSection.width === 'form' && 'max-w-4xl')}>
-            {renderSection(active)}
-          </div>
-        </main>
-      </div>
+          <main id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`} className="min-w-0">
+            {/* 'form' sections get a comfortable single-column width like profile settings. */}
+            <div className={clsx(activeSection.width === 'form' && 'max-w-4xl')}>
+              {renderSection(active)}
+            </div>
+          </main>
+        </div>
       </div>
     </ConsoleSaveProvider>
   );

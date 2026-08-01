@@ -44,7 +44,7 @@ const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const CHANNELS_PANEL_W = 300; // /channels + /messages list panel width — keep in sync with MessagesClient
-const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
+const SETTINGS_PANEL_W = 260; // /settings sections panel width
 export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the context page inset
 export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
@@ -112,9 +112,9 @@ export default function Sidebar() {
     };
   }, [createMenuOpen]);
 
-  // On /channels, /messages and /admin (wide viewports only) the rail docks
+  // On /channels, /messages and /settings (wide viewports only) the rail docks
   // into a full-height card hosting a side panel — the channel/conversation
-  // list or the console sections. The page then portals its content via
+  // list or the settings sections. The page then portals its content via
   // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
   // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
   // own inline list there instead).
@@ -132,17 +132,16 @@ export default function Sidebar() {
   // Messages docks its conversation list the same way — the inbox reads as an
   // attached sidebar rather than a floating card in the content area.
   const dockedMessages = pathname.startsWith("/messages") && wide;
-  // The Community Console docks its section list here too (exact match so
-  // /admin/resources keeps the plain floating rail).
-  const dockedAdmin = pathname === "/admin" && wide;
-  // Settings docks its section list the same way as the Console.
+  // The Community Console used to dock its section list here; it now carries a
+  // pane-top tab bar instead (see ConsoleShell), so /admin gets the plain rail.
+  // Settings still docks its section list.
   const dockedSettings = pathname.startsWith("/settings") && wide;
   // The /context page and profile Context tabs raise dockRequested (already
   // wide-gated by the requesting page) when the tree is available; the panel
   // only opens once the user asks for it (contextOpen).
   const dockedContext = dockRequested && contextOpen && wide;
-  const docked = dockedChannels || dockedMessages || dockedAdmin || dockedSettings || dockedContext;
-  const panelW = dockedAdmin || dockedSettings ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
+  const docked = dockedChannels || dockedMessages || dockedSettings || dockedContext;
+  const panelW = dockedSettings ? SETTINGS_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // "Create new" takes over this same column: it replaces whatever panel is
   // docked (so the width never changes on open), and off-dock it pushes the
