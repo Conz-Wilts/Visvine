@@ -85,7 +85,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
         </p>
 
         {/* Type badge — pinned to bottom center */}
-        <Badge variant="type-pill" color={typeColor} className="mt-auto mb-2">
+        <Badge variant="type-chip" color={typeColor} className="mt-auto mb-2">
           {nodeTypeLabel(item.type, item.alias, communityAliases, nodeTypes)}
         </Badge>
       </div>
