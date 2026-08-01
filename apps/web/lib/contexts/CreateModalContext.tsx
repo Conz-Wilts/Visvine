@@ -16,7 +16,10 @@ export type CreateableType =
   // Brain surfaces: a written note, and an uploaded file ingested as a Context
   // Source. Both land at a path in the current community's context.
   | 'context'
-  | 'file';
+  | 'file'
+  // A gateway to an external API or database, written as connectors/<name>.md.
+  // Admin-only, and the note IS the config — see lib/connectors/config.ts.
+  | 'connector';
 
 /**
  * Types that are created on the note-first surface (/directory/new) rather than

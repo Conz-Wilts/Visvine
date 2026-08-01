@@ -49,7 +49,7 @@ export default function UnderlineTabs<T extends string>({
   // Transitions stay off until the first frame is painted — a bar that mounts
   // mid-navigation (this one replaces the note view's Context/Raw bar at the
   // identical position) must appear finished, not slide its underline out from
-  // width 0. Real tab changes still animate. Same arming as ProfileTabBar.
+  // width 0. Real tab changes still animate. Same arming as PageTabBar.
   const [armed, setArmed] = useState(false);
 
   // The underline rect of the keyed bar this one just replaced, claimed once at

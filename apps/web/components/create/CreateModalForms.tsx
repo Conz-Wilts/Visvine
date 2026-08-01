@@ -7,6 +7,7 @@ import type { CreateSuggestion } from '@/lib/create/suggestedType';
 import type { CommunityAlias } from '@/lib/types';
 import type { ChannelSpaceEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
+import { slugify } from '@/lib/eventUtils';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, EmojiIconPicker } from '@/components/messages/ChannelIcon';
 import {
@@ -120,6 +121,18 @@ export const TYPE_OPTIONS: TypeOption[] = [
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 16V6a2 2 0 012-2h4l4 4v8a2 2 0 01-2 2H9a2 2 0 01-2-2z" />
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M13 4v4h4M5 10v8a4 4 0 004 4h6" />
+      </svg>
+    ),
+  },
+  {
+    id: 'connector',
+    label: 'Connector',
+    description: 'A gateway to an external API or database',
+    color: '#6366f1',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-5 5 5 5 0 01-5-5V8zM12 17v4" />
       </svg>
     ),
   },
@@ -852,6 +865,175 @@ export function ContextForm({
         <PathPreview path={destination} taken={renamed} />
       )}
       {loading && <p className="text-[11px] text-text-muted">Loading folders…</p>}
+    </div>
+  );
+}
+
+// ─── Connector Form ─────────────────────────────────────────────────────────
+
+export interface ConnectorFormData {
+  name: string;
+  alias: 'http' | 'postgres';
+  description: string;
+  /** http only — the absolute base URL every call hangs off. */
+  baseUrl: string;
+  /** http only — one "METHOD /path" rule per line; empty means docs-only. */
+  allow: string;
+  /** postgres only — the NAME of a stored secret holding the DSN. */
+  secretName: string;
+}
+
+const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
+
+/**
+ * A connector's name IS its filename and the handle agents call it by, so it's
+ * slugified rather than validated-and-rejected — "My API" becomes `my-api`,
+ * which is both a legal note path and a legal connector name.
+ */
+export function connectorSlug(name: string): string {
+  return slugify(name).slice(0, 64);
+}
+
+/**
+ * What's wrong with this draft, or null when it's ready. Mirrors the checks
+ * parseConnectorConfig runs server-side so the panel can't write a note the
+ * connectors layer would immediately call invalid.
+ */
+function connectorFormError(data: ConnectorFormData): string | null {
+  const name = data.name.trim();
+  if (!name) return null; // not an error yet — just nothing typed
+  if (!connectorSlug(name)) return 'Use letters and numbers — that name has none.';
+  if (data.alias === 'postgres') {
+    const secret = data.secretName.trim().toUpperCase();
+    if (!secret) return null;
+    if (!SECRET_NAME_RE.test(secret)) return 'Secret names are UPPER_SNAKE_CASE: A-Z, 0-9 and _, starting with a letter.';
+    return null;
+  }
+  const url = data.baseUrl.trim();
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return 'Base URL must be a full absolute URL, e.g. https://api.example.com';
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'Base URL must be http(s).';
+  if (parsed.search || parsed.hash) return 'Base URL may not include a query string or fragment.';
+  for (const line of data.allow.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    if (!/^[A-Za-z]+\s+\/\S*$/.test(line)) return `Bad allow rule "${line}" — use "GET /widgets".`;
+  }
+  return null;
+}
+
+/** True when there's enough here to write a connector note. */
+export function connectorFormReady(data: ConnectorFormData): boolean {
+  if (!connectorSlug(data.name) || connectorFormError(data)) return false;
+  return data.alias === 'postgres' ? !!data.secretName.trim() : !!data.baseUrl.trim();
+}
+
+export function ConnectorForm({
+  data,
+  onChange,
+  nameRef,
+}: {
+  data: ConnectorFormData;
+  onChange: (d: ConnectorFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const error = connectorFormError(data);
+  const slug = connectorSlug(data.name);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Name" required>
+        <input
+          ref={nameRef as React.RefObject<HTMLInputElement>}
+          className={`${inputClass} font-mono`}
+          placeholder="e.g. stripe"
+          maxLength={64}
+          value={data.name}
+          onChange={(e) => onChange({ ...data, name: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Alias" required>
+        <div className="flex gap-2">
+          {(['http', 'postgres'] as const).map((alias) => (
+            <button
+              key={alias}
+              type="button"
+              onClick={() => onChange({ ...data, alias })}
+              className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+                data.alias === alias
+                  ? 'border-brand-green bg-brand-green/10 text-text-primary'
+                  : 'border-border-default bg-surface-2 text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {alias}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Description">
+        <input
+          className={inputClass}
+          placeholder="What this system is — agents read this to decide when to use it."
+          value={data.description}
+          onChange={(e) => onChange({ ...data, description: e.target.value })}
+        />
+      </Field>
+
+      {data.alias === 'http' ? (
+        <>
+          <Field label="Base URL" required>
+            <input
+              className={`${inputClass} font-mono`}
+              placeholder="https://api.example.com"
+              value={data.baseUrl}
+              onChange={(e) => onChange({ ...data, baseUrl: e.target.value })}
+            />
+          </Field>
+          <Field label="Allowed calls">
+            <textarea
+              className={`${inputClass} font-mono resize-none`}
+              rows={3}
+              placeholder={'GET /customers\nGET /customers/*\nPOST /customers'}
+              value={data.allow}
+              onChange={(e) => onChange({ ...data, allow: e.target.value })}
+            />
+          </Field>
+          <p className="text-xs text-text-muted">
+            One <span className="font-mono">METHOD /path</span> per line. Anything not listed is refused
+            before a request is sent — leave it empty for a documentation-only connector. API keys go in
+            the note&apos;s <span className="font-mono">headers</span> as{' '}
+            <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
+          </p>
+        </>
+      ) : (
+        <>
+          <Field label="DSN secret name" required>
+            <input
+              className={`${inputClass} font-mono`}
+              placeholder="ANALYTICS_DSN"
+              value={data.secretName}
+              onChange={(e) => onChange({ ...data, secretName: e.target.value })}
+            />
+          </Field>
+          <p className="text-xs text-text-muted">
+            The connection string itself never lives in the note — add it under{' '}
+            <span className="font-mono">{data.secretName.trim().toUpperCase() || 'THIS NAME'}</span> on
+            the connector&apos;s page once it exists. Queries run read-only.
+          </p>
+        </>
+      )}
+
+      {slug && <EntityNotePreview dir="connectors" name={slug} />}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <p className="text-xs text-text-muted">
+        Only community admins can create or edit connectors. You can refine the note afterwards — its
+        body is the documentation agents read.
+      </p>
     </div>
   );
 }

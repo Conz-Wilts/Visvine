@@ -45,7 +45,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
   const [unfurl, setUnfurl] = useState<PreviewResponse | null>(null);
   const [unfurlLoading, setUnfurlLoading] = useState(!!externalUrl);
 
-  // Same theme derivation as NodeProfileContent: alias colour wins over type colour.
+  // Same theme derivation as OrgPageContent: alias colour wins over type colour.
   const theme = useMemo(() => {
     const aliasConfig = findAlias(currentCommunity?.communityAliases, node.alias, node.type);
     const color = aliasConfig?.color ?? getTypeColor(node.type, currentCommunity?.nodeTypes);

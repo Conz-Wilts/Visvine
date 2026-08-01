@@ -15,11 +15,21 @@ export type EntityKind =
   | 'community'
   | 'space'
   | 'channel'
+  | 'connector'
 
 // community/space/channel are container kinds: they get the same "a note is the
 // context doc" treatment as directory entities, but they describe structure
 // rather than directory records, so the context view and the directory grid hide
 // them by default (see STRUCTURAL_NODE_TYPES in lib/types/context.ts).
+//
+// connector is the one kind whose note comes FIRST: an admin authors
+// connectors/<name>.md (frontmatter = machine config, body = agent docs) and the
+// node follows it, rather than the other way round. It's listed here so a
+// connector gets the entity treatment — its own node id, backlinks, and
+// [[mentions]] resolving to it — see lib/notes/entityLinks.ts. Creating one from
+// the directory is deliberately NOT possible: CREATABLE_TYPES in
+// lib/directory/createEntity.ts stays person/group/resource, so the admin-only
+// write gate on connectors/ in brainService.writeDenial remains the only door.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -36,6 +46,7 @@ const EVENTS_DIR = 'events'
 const COMMUNITIES_DIR = 'communities'
 const SPACES_DIR = 'spaces'
 const CHANNELS_DIR = 'channels'
+const CONNECTORS_DIR = 'connectors'
 
 const ENTITY_DIRS: Record<EntityKind, string> = {
   person: PEOPLE_DIR,
@@ -45,6 +56,7 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
   community: COMMUNITIES_DIR,
   space: SPACES_DIR,
   channel: CHANNELS_DIR,
+  connector: CONNECTORS_DIR,
 }
 
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
@@ -60,6 +72,7 @@ export function entityKindOf(type: string | null | undefined): EntityKind | null
   if (t === 'community' || t === 'communities') return 'community'
   if (t === 'space' || t === 'spaces') return 'space'
   if (t === 'channel' || t === 'channels') return 'channel'
+  if (t === 'connector' || t === 'connectors') return 'connector'
   if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'company'
   if (t === 'resource' || t === 'resources') return 'resource'
   if (t === 'event' || t === 'events') return 'event'
@@ -89,7 +102,7 @@ export function entityNotePath(node: EntityNodeLike): string | null {
 export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
-  if (!/^(people|companies|resources|events|communities|spaces|channels)\/.+\.md$/.test(raw)) return null
+  if (!/^(people|companies|resources|events|communities|spaces|channels|connectors)\/.+\.md$/.test(raw)) return null
   return isIndexPath(raw) ? null : raw
 }
 
@@ -115,6 +128,7 @@ export function entityKindOfPath(path: string): EntityKind | null {
   if (path.startsWith(`${COMMUNITIES_DIR}/`)) return 'community'
   if (path.startsWith(`${SPACES_DIR}/`)) return 'space'
   if (path.startsWith(`${CHANNELS_DIR}/`)) return 'channel'
+  if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
   return null
 }
 
@@ -156,6 +170,9 @@ const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
   community: 'Community',
   space: 'Space',
   channel: 'Channel',
+  // Lower-case, unlike its siblings: `type: connector` is machine config that
+  // lib/connectors/service.ts matches on, not just a display label.
+  connector: 'connector',
 }
 const ENTITY_TAG: Record<EntityKind, string> = {
   person: 'person',
@@ -165,6 +182,7 @@ const ENTITY_TAG: Record<EntityKind, string> = {
   community: 'community',
   space: 'space',
   channel: 'channel',
+  connector: 'connector',
 }
 
 // Default markdown for an auto-created entity context note. Carries the directory

@@ -7,10 +7,11 @@
 // blur / Escape / empty-selection calls onClose.
 
 import { useMemo, useRef, useState } from 'react'
-import { TAG_SWATCHES, resolveTagBase, tagPalette } from '@/lib/tagColors'
+import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 
 interface TagComboboxProps {
-  /** Community tags not already on this entity, sorted. */
+  /** Community tags in use and not already on this entity, sorted. Merged with
+   *  the registry below, so a caller need not chase down every source. */
   suggestions: string[]
   /** Lower-cased tags already on this entity, to suppress a redundant "Create". */
   existing: Set<string>
@@ -32,16 +33,34 @@ export function TagCombobox({
   const selecting = useRef(false)
 
   const query = draft.trim().toLowerCase()
-  const matches = useMemo(() => {
-    if (!query) return suggestions.slice(0, 8)
-    return suggestions.filter((t) => t.toLowerCase().includes(query)).slice(0, 8)
-  }, [suggestions, query])
+
+  // Every tag the community knows, not just the ones currently ON something:
+  // the colour registry holds tags whose last node was retyped or deleted, and
+  // a plain note's tags are as real as an entity's. The list scrolls, so it is
+  // shown whole rather than truncated — a hidden tag gets re-created by hand,
+  // which is exactly how near-duplicate tags appear.
+  const pool = useMemo(() => {
+    const byKey = new Map<string, string>()
+    for (const t of suggestions) {
+      const key = tagKey(t)
+      if (key) byKey.set(key, t.trim())
+    }
+    for (const key of Object.keys(registry)) {
+      if (key && !byKey.has(key) && !existing.has(key)) byKey.set(key, key)
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b))
+  }, [suggestions, registry, existing])
+
+  const matches = useMemo(
+    () => (query ? pool.filter((t) => t.toLowerCase().includes(query)) : pool),
+    [pool, query],
+  )
 
   const trimmed = draft.trim()
   const showCreate =
     !!trimmed &&
     !existing.has(query) &&
-    !suggestions.some((t) => t.toLowerCase() === query)
+    !pool.some((t) => t.toLowerCase() === query)
 
   // Keyboard-selectable rows: matching suggestions, then the optional Create.
   const rows: Array<{ kind: 'tag' | 'create'; value: string }> = [

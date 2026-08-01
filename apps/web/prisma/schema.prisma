@@ -43,6 +43,7 @@ model Community {
   notes            CommunityNote[]
   noteFolders      CommunityNoteFolder[]
   brainFiles       CommunityBrainFile[]
+  secrets          CommunitySecret[]
   noteEmbeddings   CommunityNoteEmbedding[]
   contextSources   ContextSource[]
   taskColumns      TaskColumn[]
@@ -146,6 +147,24 @@ model CommunityBrainFile {
 
   @@unique([communityId, ownerKey, name], name: "brain_file_identity")
   @@map("community_brain_files")
+}
+
+/// A named secret a connector note can reference as {{secret:NAME}}. The value
+/// is AES-256-GCM encrypted with the server-wide SECRETS_KEY (lib/crypto/secrets.ts)
+/// and only ever decrypted server-side while executing a connector call — the
+/// admin API lists names but never returns plaintext.
+model CommunitySecret {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String    @map("community_id")
+  name        String // ^[A-Z][A-Z0-9_]{0,63}$
+  ciphertext  String // aes256gcm$iv$tag$cipher
+  createdBy   String?   @map("created_by") // admin email, for the audit trail
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([communityId, name], name: "secret_identity")
+  @@map("community_secrets")
 }
 
 /// A named group of members inside a community (Engineering, GTM, Board…).
@@ -885,7 +904,7 @@ model BlogCommentReaction {
   @@map("blog_comment_reactions")
 }
 
-// ─── MCP OAuth 2.1 authorization server (self-hosted; see docs/MCP.md) ───
+// ─── MCP OAuth 2.1 authorization server (self-hosted) ───
 
 /// A Dynamically-Registered (RFC 7591) MCP/OAuth client. Public clients (PKCE),
 /// no client secret. `redirectUris` is the allowlist enforced at /authorize.

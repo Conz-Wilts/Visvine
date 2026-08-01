@@ -28,7 +28,7 @@ function NodeCardSkeleton() {
       <Skeleton className="h-[180px] shrink-0 rounded-none" />
       <div className="px-4 pt-3 pb-3 flex flex-col flex-1 gap-2 items-center">
         <Skeleton className="h-3.5 w-3/4" />
-        <Skeleton className="h-5 rounded-full w-20" />
+        <Skeleton className="h-5 rounded-md w-20" />
         <Skeleton className="h-3 w-2/3" />
         <Skeleton className="h-3 w-1/2" />
         <div className="mt-auto pt-3 border-t border-surface-3 flex gap-2 w-full">

@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useCreateModal, type CreateableType } from '@/lib/contexts/CreateModalContext';
 import { suggestedCreateType } from '@/lib/create/suggestedType';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { isFeatureEnabled } from '@/lib/features';
+import { canCreateType } from '@/lib/create/creatable';
 import { slugify } from '@/lib/eventUtils';
 import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
@@ -26,9 +26,11 @@ import {
   SpaceForm, type SpaceFormData,
   ContextForm, type ContextFormData,
   FileForm, type FileFormData, type FileEntry,
+  ConnectorForm, type ConnectorFormData, connectorSlug, connectorFormReady,
   AliasSelector,
   SuccessScreen,
 } from './CreateModalForms';
+import { newConnectorNote } from '@/lib/connectors/config';
 import { useBrainTree } from './ContextDestination';
 import type { ChannelSpaceEntry } from '@/lib/messages/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
@@ -68,26 +70,14 @@ export default function CreateModal() {
   const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
   const { reduced } = useSidebar();
 
-  // The "Create new" grid: the registry's grid types, minus any whose feature is
-  // off for this community (Channel only for community admins where the
-  // channels feature is on). Context isn't created here — an entity's context
-  // note lives on its profile's Context tab and is created on first save.
+  // The "Create new" grid: the registry's grid types, minus any this person
+  // can't create here. `inGrid` says which surface lists a type; canCreateType
+  // says who may — the sidebar's caret menu asks the same question, so the two
+  // entry points can't drift apart (see lib/create/creatable.ts).
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const channelsEnabled = isFeatureEnabled(featureConfig, 'channels');
-  // Context notes and uploaded files both land in the community brain, so both
-  // tiles follow the notes ("Context") feature.
-  const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
-
-  // Channels and Spaces are community-admin surfaces, only shown when the
-  // channels feature is on for this community.
-  const gridOptions = TYPE_OPTIONS.filter((o) => {
-    if (!o.inGrid) return false;
-    if (o.id === 'channel' || o.id === 'space') return channelsEnabled && isAdmin;
-    // `context` never reaches here (inGrid: false) — File is the only brain tile
-    // in the grid, so this gate is just the notes feature flag.
-    if (o.id === 'file') return notesEnabled;
-    return true;
-  });
+  const gridOptions = TYPE_OPTIONS.filter(
+    (o) => o.inGrid && canCreateType(o.id, { featureConfig, isAdmin }),
+  );
 
   // What the current page implies you came here to create, narrowed to the types
   // actually offered in this community (e.g. Channel/Space drop out with channels
@@ -119,6 +109,7 @@ export default function CreateModal() {
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
+  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', alias: 'http', description: '', baseUrl: '', allow: '', secretName: '' });
   // Where the just-created note/file lives, so the success screen can offer to
   // open it (null for types that have no viewer to jump to).
   const [createdHref, setCreatedHref] = useState<string | null>(null);
@@ -219,6 +210,7 @@ export default function CreateModal() {
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
     setFileData({ files: [], folder: '' });
+    setConnectorData({ name: '', alias: 'http', description: '', baseUrl: '', allow: '', secretName: '' });
     setCreatedHref(null);
     setCreatedDetail(null);
   }, []);
@@ -296,6 +288,7 @@ export default function CreateModal() {
       if (selectedType === 'context') return contextTitle.length > 0;
       // Only files that passed the pick-time check can be uploaded.
       if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
+      if (selectedType === 'connector') return connectorFormReady(connectorData);
     }
     return true;
   };
@@ -332,6 +325,9 @@ export default function CreateModal() {
         setStep(3);
       } else if (selectedType === 'file') {
         await uploadFiles();
+        setStep(3);
+      } else if (selectedType === 'connector') {
+        await createConnector();
         setStep(3);
       } else {
         await createNode();
@@ -406,6 +402,45 @@ export default function CreateModal() {
     );
     setCreatedHref(noteHref(path));
     setCreatedDetail(`Saved to ${path}`);
+  };
+
+  // ── Connector ─────────────────────────────────────────────────────────────
+  // Just a note at connectors/<name>.md — the connectors layer reads its
+  // frontmatter as config, so newConnectorNote (which lives beside the parser)
+  // is what guarantees the panel can't write one that won't parse. The
+  // admin-only gate is the server's: writeDenial refuses this path for anyone
+  // else, so a non-admin who reached this form still gets a 403.
+  const createConnector = async () => {
+    if (!currentCommunity) throw new Error('Select a community first');
+    const name = connectorSlug(connectorData.name);
+    const path = `connectors/${name}.md`;
+    await notesApi.create(
+      currentCommunity.id,
+      path,
+      newConnectorNote({
+        name,
+        alias: connectorData.alias,
+        description: connectorData.description,
+        baseUrl: connectorData.baseUrl,
+        allow: connectorData.allow.split('\n').map((l) => l.trim()).filter(Boolean),
+        secretName: connectorData.secretName,
+      }),
+    );
+    invalidateContextCache(
+      contextKeys.tree(currentCommunity.id),
+      contextKeys.list(currentCommunity.id),
+      contextKeys.read(currentCommunity.id, path),
+    );
+    // Land on the connector's own page rather than the bare note: the write
+    // above already synced the `connector:<name>` node (syncConnectorNode, and
+    // store.ts awaits it), and that page is where the secret gets set — with
+    // the note itself one tab away on Context.
+    setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
+    setCreatedDetail(
+      connectorData.alias === 'postgres'
+        ? `Saved to ${path} — add the ${connectorData.secretName.trim().toUpperCase()} secret on its page before using it.`
+        : `Saved to ${path}`,
+    );
   };
 
   // ── Files (context sources) ───────────────────────────────────────────────
@@ -594,6 +629,8 @@ export default function CreateModal() {
       ? contextTitle || 'Note'
       : selectedType === 'file'
       ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
+      : selectedType === 'connector'
+      ? connectorSlug(connectorData.name) || 'Connector'
       : communityData.name || 'Community'
     : '';
 
@@ -776,6 +813,9 @@ export default function CreateModal() {
                 contextName={contextName}
                 loading={brainTree.loading}
               />
+            )}
+            {step === 1 && selectedType === 'connector' && (
+              <ConnectorForm data={connectorData} onChange={setConnectorData} nameRef={nameRef} />
             )}
 
             {step === 2 && (

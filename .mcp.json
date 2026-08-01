@@ -19,6 +19,10 @@
     "memory": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "visvine": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp"
     }
   }
 }

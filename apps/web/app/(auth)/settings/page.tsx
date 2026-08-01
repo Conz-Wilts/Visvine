@@ -180,7 +180,7 @@ export default function SettingsPage() {
   const dockNav = wide && Boolean(host);
 
   // The section list, rendered into the Sidebar's docked panel — same host the
-  // /channels list and /admin console sections share.
+  // /channels list and the notes tree share.
   const dockedNav = dockNav && host
     ? createPortal(
         <div
@@ -237,7 +237,7 @@ export default function SettingsPage() {
       {dockedNav}
       {/* When the section list is docked into the Sidebar, pad left so the content
           clears the docked card (260px panel + 12px gutter — keep in sync with
-          ADMIN_PANEL_W in Sidebar.tsx). */}
+          SETTINGS_PANEL_W in Sidebar.tsx). */}
       <div
         className={`w-full ${dockNav ? 'pl-[272px]' : ''}`}
         style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}

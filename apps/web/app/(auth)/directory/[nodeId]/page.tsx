@@ -1,10 +1,17 @@
 'use client';
 
-// Entity profile routes. The pane chrome (tab bar, docked tree, note panel)
-// lives in the persistent shell (directory/layout.tsx → PaneShell); these pages
-// keep the deciding logic — node-type dispatch, ?tab= semantics, Context-tab
+// Entity routes. The pane chrome (tab bar, docked tree, note panel) lives in the
+// persistent shell (directory/layout.tsx → PaneShell); these pages keep the
+// deciding logic — node-type dispatch, ?tab= semantics, Context-tab
 // availability, deep-link resolution — and register the resulting chrome with
 // the shell. Only non-note bodies render here as page children.
+//
+// A node only earns a first tab when there is something behind it that isn't the
+// context note. People get a profile, organisations an Overview, connectors
+// their configuration, resources a preview, and events/communities a link out to
+// their dedicated routes (/events/<id>, /communities/<id>). Everything else —
+// channels, spaces, notes, files, any type we haven't given a page — is nothing
+// but its context, so those get Context/Raw and no first tab at all.
 
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -19,7 +26,7 @@ import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
-import NodeProfileContent from '@/components/profile/NodeProfileContent';
+import OrgPageContent from '@/components/profile/OrgPageContent';
 import ResourcePreviewContent from '@/components/profile/ResourcePreviewContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
@@ -99,7 +106,8 @@ function NotFoundState({ title }: { title: string }) {
  *  tab means all three) and the tree docks with no panel yet; once resolved,
  *  availability decides. */
 function useEntityChrome(args: {
-  firstTab: PaneTabItem;
+  /** null for the kinds that are nothing but their note — Context/Raw only. */
+  firstTab: PaneTabItem | null;
   activeTab: ProfileTab;
   nodeId: string;
   notePath: string | null;
@@ -113,8 +121,18 @@ function useEntityChrome(args: {
   const noteTab = isNoteTab(activeTab);
   const hasContext = loading ? noteTab : contextAvailable;
 
+  // With no first tab the bar is the note's own two tabs — and if there's no
+  // context either there is nothing left to show, so the bar goes away.
+  const tabs = hasContext
+    ? firstTab
+      ? [firstTab, CONTEXT_TAB, RAW_TAB]
+      : [CONTEXT_TAB, RAW_TAB]
+    : firstTab
+      ? [firstTab]
+      : null;
+
   usePaneChrome({
-    tabs: error ? null : hasContext ? [firstTab, CONTEXT_TAB, RAW_TAB] : [firstTab],
+    tabs: error ? null : tabs,
     activeId: error ? null : activeTab,
     onSelect: args.onSelect,
     attachedOpen: !error && activeTab === 'context' && (loading || contextAvailable),
@@ -201,11 +219,31 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   );
 }
 
-// ── Non-person nodes → classic tab view (+ Context tab for orgs) ─────────────
+// ── Non-person nodes → their own page (+ Context/Raw) ────────────────────────
 
-const NODE_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Profile' };
+// "Overview", not "Profile": an organisation has a page, and the first tab is
+// named after what it shows rather than after the person-shaped thing it used
+// to imitate.
+const ORG_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Overview' };
+// Which ids OrgPageContent is for. Node ids are `<type>:<slug>` (createEntity,
+// syncEntityNode), so the prefix is the type — and the org namespace has
+// accumulated four spellings over time, all of which land on companies/<slug>.md.
+// An id with no prefix at all is a legacy directory row: those predate the
+// structural types entirely, so org is the right guess for them too.
+const ORG_ID_PREFIXES = ['group:', 'org:', 'organization:', 'company:'];
 
-function NodeTabPage({ nodeId }: { nodeId: string }) {
+function isOrgId(nodeId: string): boolean {
+  return !nodeId.includes(':') || ORG_ID_PREFIXES.some((p) => nodeId.startsWith(p));
+}
+
+/** Shared shell for every node kind whose first tab is a body we render here. */
+function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
+  nodeId: string;
+  firstTab: PaneTabItem;
+  ariaLabel: string;
+  notFoundTitle: string;
+  renderBody: (nodeId: string) => React.ReactNode;
+}) {
   const { data, loading, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const contextAvailable = useContextTabAvailable(node);
@@ -227,9 +265,9 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
-  // A tab with no panel behind it falls back to Profile: ?tab=connections and
-  // ?tab=communities are retired links, and context resolves late (tool off /
-  // non-entity node), so it can only be judged once the node has loaded.
+  // A tab with no panel behind it falls back to the first tab: ?tab=connections
+  // and ?tab=communities are retired links, and context resolves late (tool off
+  // / non-entity node), so it can only be judged once the node has loaded.
   useEffect(() => {
     const retired = activeTab === 'connections' || activeTab === 'communities';
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
@@ -242,14 +280,14 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
   const errorState = !loadingState && (!!error || !data);
 
   useEntityChrome({
-    firstTab: NODE_FIRST_TAB,
+    firstTab,
     activeTab,
     nodeId,
     notePath,
     loading: loadingState,
     error: errorState,
     contextAvailable,
-    ariaLabel: 'Profile sections',
+    ariaLabel,
     onSelect: handleSelect,
   });
 
@@ -259,7 +297,7 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
     return isNoteTab(activeTab) ? null : <ProfileSkeletonLoader mode="fullpage" />;
   }
 
-  if (errorState) return <NotFoundState title="Profile not found" />;
+  if (errorState) return <NotFoundState title={notFoundTitle} />;
 
   if (noteSurface) return null;
 
@@ -269,21 +307,89 @@ function NodeTabPage({ nodeId }: { nodeId: string }) {
         role="tabpanel"
         className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl"
       >
-        {activeTab === 'about' && <NodeProfileContent nodeId={nodeId} />}
+        {activeTab === 'about' && renderBody(nodeId)}
       </div>
     </div>
   );
 }
 
-// ── Event nodes → Context/Raw here, the event page for everything else ───────
+// ── Everything else → Context/Raw only ───────────────────────────────────────
 
-// Events have a dedicated detail page instead of a generic profile, but their
-// context note is a first-class note like any entity's — the tree, backlinks
-// and [[mentions]] all deep-link to /directory/event:…?tab=context. So note
-// tabs render here, and the first tab jumps to the real event page.
+// A channel, a space, an uploaded file: the node exists so the thing is in the
+// graph and has somewhere to record what we know about it. There is no second
+// view to give it, so inventing an "Overview" tab just to render a near-empty
+// org card is worse than not having one — the note IS the page.
+function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
+  nodeId: string;
+  ariaLabel: string;
+  notFoundTitle: string;
+}) {
+  const { data, loading, error } = useNodeProfile(nodeId);
+  const node = data?.node ?? null;
+  const contextAvailable = useContextTabAvailable(node);
+  const [wantedTab, setTabParam] = useProfileTabParam();
+  const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'context');
+  usePrefetchEntityContext(nodeId, node, contextAvailable);
+  const notePath = useEntityNotePath(nodeId, node);
+
+  const changeTab = useCallback(
+    (tab: ProfileTab) => {
+      setActiveTab(tab);
+      setTabParam(tab);
+    },
+    [setTabParam],
+  );
+  const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
+
+  // Only the two note tabs exist here, so anything else (a retired deep link)
+  // lands back on Context.
+  useEffect(() => {
+    if (!isNoteTab(activeTab)) changeTab('context');
+  }, [activeTab, changeTab]);
+
+  const loadingState = loading && !data;
+  const errorState = !loadingState && (!!error || !data);
+
+  useEntityChrome({
+    firstTab: null,
+    activeTab,
+    nodeId,
+    notePath,
+    loading: loadingState,
+    error: errorState,
+    contextAvailable,
+    ariaLabel,
+    onSelect: handleSelect,
+  });
+
+  if (errorState) return <NotFoundState title={notFoundTitle} />;
+  // The note surface is shell-rendered; while loading the predicted bar and the
+  // docked tree already stand in for it.
+  if (loadingState || contextAvailable) return null;
+
+  // Notes tool off, or the node belongs to another community's brain: there is
+  // no note to show and nothing else this page could offer.
+  return <NotFoundState title="No context for this yet" />;
+}
+
+// ── Nodes owning a page elsewhere → Context/Raw here, the page for the rest ──
+
+// Events and communities have dedicated pages (/events/<id>, /communities/<id>)
+// rather than anything profile-shaped, but their context note is a first-class
+// note like any entity's — the tree, backlinks and [[mentions]] all deep-link to
+// /directory/<id>?tab=context. So note tabs render here, and the first tab jumps
+// out to the real page.
 const EVENT_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Event' };
+const COMMUNITY_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Community' };
 
-function EventContextPage({ nodeId }: { nodeId: string }) {
+function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
+  nodeId: string;
+  firstTab: PaneTabItem;
+  /** The node's real page — where the first tab, and an unavailable note, go. */
+  href: string;
+  ariaLabel: string;
+  notFoundTitle: string;
+}) {
   const { data, loading, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
   const contextAvailable = useContextTabAvailable(node);
@@ -294,39 +400,37 @@ function EventContextPage({ nodeId }: { nodeId: string }) {
   const notePath = useEntityNotePath(nodeId, node);
   const noteSurface = isNoteTab(activeTab) && contextAvailable;
 
-  const eventHref = `/events/${encodeURIComponent(nodeId)}`;
-
-  // The Event tab is a link out, not a panel: the event's real page owns
+  // The first tab is a link out, not a panel: the node's real page owns
   // everything that isn't the context note.
   const changeTab = useCallback(
     (tab: ProfileTab) => {
       if (!isNoteTab(tab)) {
-        router.push(eventHref);
+        router.push(href);
         return;
       }
       setActiveTab(tab);
       setTabParam(tab);
     },
-    [router, eventHref, setTabParam],
+    [router, href, setTabParam],
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
   // Context resolved as unavailable (notes tool off / foreign node): there is
-  // nothing to render here, so fall through to the event page.
+  // nothing to render here, so fall through to the real page.
   useEffect(() => {
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
-    if (staleContext) router.replace(eventHref);
-  }, [activeTab, loading, data, contextAvailable, router, eventHref]);
+    if (staleContext) router.replace(href);
+  }, [activeTab, loading, data, contextAvailable, router, href]);
 
   const loadingState = loading && !data;
   const errorState = !loadingState && (!!error || !data);
 
   usePaneChrome({
-    tabs: errorState ? null : [EVENT_FIRST_TAB, CONTEXT_TAB, RAW_TAB],
+    tabs: errorState ? null : [firstTab, CONTEXT_TAB, RAW_TAB],
     activeId: errorState ? null : activeTab,
     onSelect: handleSelect,
     attachedOpen: !errorState && activeTab === 'context',
-    ariaLabel: 'Event sections',
+    ariaLabel,
     surface: errorState
       ? null
       : loadingState || !contextAvailable
@@ -336,7 +440,7 @@ function EventContextPage({ nodeId }: { nodeId: string }) {
           : null,
   });
 
-  if (errorState) return <NotFoundState title="Event not found" />;
+  if (errorState) return <NotFoundState title={notFoundTitle} />;
 
   // Everything else is shell-rendered; the tab that isn't a note tab navigates
   // away above.
@@ -421,27 +525,74 @@ const noop = () => {};
 // event page; ?tab=context/raw stays here as the event's context surface.
 function EventRoute({ nodeId }: { nodeId: string }) {
   const [wantedTab] = useProfileTabParam();
-  return wantedTab ? <EventContextPage nodeId={nodeId} /> : <EventRedirect nodeId={nodeId} />;
+  const href = `/events/${encodeURIComponent(nodeId)}`;
+  return wantedTab ? (
+    <NoteOnlyPage
+      nodeId={nodeId}
+      firstTab={EVENT_FIRST_TAB}
+      href={href}
+      ariaLabel="Event sections"
+      notFoundTitle="Event not found"
+    />
+  ) : (
+    <PageRedirect href={href} />
+  );
 }
 
-// The event detail page lives outside the pane shell. Register empty chrome
-// while the redirect is in flight, or the previous page's bar (and its note
-// surface) would sit over the skeleton.
-function EventRedirect({ nodeId }: { nodeId: string }) {
+// Same split for communities: a community's page is /communities/<id>, and the
+// node only exists here to carry its context note.
+//
+// The community id comes off the NODE, not off the id string. `communityNodeId`
+// (lib/context/entityNodes.ts) only prefixes an id that lacks one, so a
+// community already called `community:local-dev` has a node id identical to its
+// community id — stripping `community:` there would redirect to a 404 — while a
+// community called `blackbird` gets the node id `community:blackbird` and does
+// need the prefix gone. A community node's own `community_id` is the right
+// answer in both cases, which is why this waits for the node before redirecting.
+function CommunityRoute({ nodeId }: { nodeId: string }) {
+  const [wantedTab] = useProfileTabParam();
+  const { data, error } = useNodeProfile(nodeId);
+  const communityId = data?.node?.community_id ?? null;
+  const href = communityId ? `/communities/${encodeURIComponent(communityId)}` : null;
+
+  if (wantedTab) {
+    return (
+      <NoteOnlyPage
+        nodeId={nodeId}
+        firstTab={COMMUNITY_FIRST_TAB}
+        href={href ?? '/communities'}
+        ariaLabel="Community sections"
+        notFoundTitle="Community not found"
+      />
+    );
+  }
+  // A node that can't be read has no community to send us to; the index lists
+  // every community the viewer can reach, which beats a dead end.
+  return <PageRedirect href={error ? '/communities' : href} />;
+}
+
+// A dedicated page lives outside the pane shell. Register empty chrome while the
+// redirect is in flight, or the previous page's bar (and its note surface) would
+// sit over the skeleton. A null href means the destination is still resolving —
+// hold the skeleton rather than navigating somewhere wrong.
+function PageRedirect({ href }: { href: string | null }) {
   const router = useRouter();
   useEffect(() => {
-    router.replace(`/events/${encodeURIComponent(nodeId)}`);
-  }, [nodeId, router]);
+    if (href) router.replace(href);
+  }, [href, router]);
   usePaneChrome({ tabs: null, activeId: null, onSelect: noop, attachedOpen: false, surface: null });
   return <ProfileSkeletonLoader mode="fullpage" />;
 }
 
-function NodeProfileRoute() {
+function NodeRoute() {
   const params = useParams();
   const nodeId = typeof params.nodeId === 'string' ? decodeURIComponent(params.nodeId) : '';
 
   if (nodeId.startsWith('event:')) {
     return <EventRoute nodeId={nodeId} />;
+  }
+  if (nodeId.startsWith('community:')) {
+    return <CommunityRoute nodeId={nodeId} />;
   }
   if (nodeId.startsWith('person:')) {
     return <PersonProfilePage nodeId={nodeId} />;
@@ -449,14 +600,44 @@ function NodeProfileRoute() {
   if (nodeId.startsWith('resource:')) {
     return <ResourceNodePage nodeId={nodeId} />;
   }
-  return <NodeTabPage nodeId={nodeId} />;
+  if (nodeId.startsWith('connector:')) {
+    // The note IS the connector — frontmatter is the config, the body is the doc
+    // agents read — so there is nothing left for a first tab to show.
+    return (
+      <ContextOnlyPage
+        nodeId={nodeId}
+        ariaLabel="Connector sections"
+        notFoundTitle="Connector not found"
+      />
+    );
+  }
+  if (isOrgId(nodeId)) {
+    return (
+      <NodePage
+        nodeId={nodeId}
+        firstTab={ORG_FIRST_TAB}
+        ariaLabel="Page sections"
+        notFoundTitle="Page not found"
+        renderBody={(id) => <OrgPageContent nodeId={id} />}
+      />
+    );
+  }
+  // Channels, spaces, files, and any type that hasn't earned a page: the context
+  // note is the whole of it.
+  return (
+    <ContextOnlyPage
+      nodeId={nodeId}
+      ariaLabel="Context sections"
+      notFoundTitle="Page not found"
+    />
+  );
 }
 
-export default function NodeProfilePage() {
+export default function NodePageRoute() {
   // Suspense boundary: the tab components read useSearchParams (?tab=context).
   return (
     <Suspense fallback={<ProfileSkeletonLoader mode="fullpage" />}>
-      <NodeProfileRoute />
+      <NodeRoute />
     </Suspense>
   );
 }

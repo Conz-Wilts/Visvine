@@ -22,7 +22,7 @@ import { useSession } from '@/lib/auth-client';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/components/events/GuestManager';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import ProfileTabBar, { type ProfileTab, type TabConfig } from '@/components/profile/ProfileTabBar';
+import PageTabBar, { type PageTab, type TabConfig } from '@/components/pane/PageTabBar';
 import { HANDOFF_KEY, useDockEdgeClass } from '@/components/pane/PaneTabBar';
 import { TabBarSlotProvider } from '@/lib/contexts/TabBarSlotContext';
 import { copyToClipboard } from '@/lib/utils';
@@ -58,7 +58,7 @@ const EVENT_TABS: TabConfig[] = [
   { id: 'context', label: 'Context' },
   { id: 'raw', label: 'Raw' },
 ];
-const isNoteTab = (tab: ProfileTab) => tab === 'context' || tab === 'raw';
+const isNoteTab = (tab: PageTab) => tab === 'context' || tab === 'raw';
 
 interface EventStats {
   total: number;
@@ -94,7 +94,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   // The guest view's Event | Context | Raw bar (separate from the manage view's
   // overview/guests/form tabs above).
-  const [viewTab, setViewTab] = useState<ProfileTab>('about');
+  const [viewTab, setViewTab] = useState<PageTab>('about');
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [occupied, setOccupied] = useState(0);
@@ -167,8 +167,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
       <div className="profile-enter w-full pb-10">
         {/* Direct child of the tall page container so `sticky` pins; "-top-4 -mt-4"
             cancels <main>'s pt-4 so the bar sits flush under the navbar. */}
-        <ProfileTabBar
-          nodeType="Event" tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
+        <PageTabBar
+          tabs={EVENT_TABS} activeTab={viewTab} onTabChange={setViewTab}
+          ariaLabel="Event sections"
           stickyTop="-top-4 -mt-4" attachedOpen={viewTab === 'context'}
           edgeClass={barEdgeClass} handoffKey={HANDOFF_KEY}
         />

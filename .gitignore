@@ -15,6 +15,7 @@
 
 # next.js
 **/.next/
+**/.next-verify/
 **/out/
 **/.expo/
 **/.expo-shared/
@@ -79,7 +80,6 @@ supabase_data_dump.sql
 /blackbird-brain/
 
 # Local dev fixtures (pg_dump output before/after GCS round-trip).
-# See docs/SETUP.md §6.
 tmp/fixtures/
 *.dump
 

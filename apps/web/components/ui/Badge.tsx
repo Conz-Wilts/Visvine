@@ -1,11 +1,11 @@
 import { clsx } from 'clsx';
 
-type BadgeVariant = 'status' | 'tag' | 'score' | 'label' | 'type-pill' | 'table-type';
+type BadgeVariant = 'status' | 'tag' | 'score' | 'label' | 'type-chip' | 'table-type';
 
 interface BadgeProps {
   children: React.ReactNode;
   variant?: BadgeVariant;
-  /** Custom background color — only used with the `type-pill` variant */
+  /** Custom background color — only used with the `type-chip` variant */
   color?: string;
   className?: string;
 }
@@ -19,8 +19,9 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   score: 'inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium',
   /** Small gray capsule label (e.g. "Not yet on platform") */
   label: 'rounded-full bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500',
-  /** Rounded-full type badge with custom background color via `color` prop */
-  'type-pill': 'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold',
+  /** Type chip with custom background color via `color` prop. Rounding matches
+   *  the context panel's type chip (`rounded-md`) so both surfaces agree. */
+  'type-chip': 'inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold',
   /** Bordered type badge used in tables */
   'table-type': 'inline-flex px-3 py-1 rounded-full text-xs font-medium border',
 };
@@ -28,7 +29,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
 export default function Badge({ children, variant = 'label', color, className }: BadgeProps) {
   const baseClasses = VARIANT_CLASSES[variant];
 
-  if (variant === 'type-pill' && color) {
+  if (variant === 'type-chip' && color) {
     return (
       <span
         className={clsx(baseClasses, className)}

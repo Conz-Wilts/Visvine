@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
 /*
- * Bridges the ProfileTabBar and whatever the active tab renders, so a tab's own
+ * Bridges the PageTabBar and whatever the active tab renders, so a tab's own
  * bar (today: the note editor's format toolbar on the Context tab) can live
  * INSIDE the tab bar's sticky box rather than as a second bar stacked below it.
  * The tab bar exposes a portal host inside a collapsible region under the tab

@@ -1,17 +1,18 @@
 /**
- * OAuth 2.0 Protected Resource Metadata (RFC 9728). Tells MCP clients which
- * Authorization Server issues tokens for this resource. Served via mcp-handler's
- * helper so the shape matches what its `withMcpAuth` challenge points clients to.
+ * Root copy of the Protected Resource Metadata (RFC 9728), for clients that
+ * probe the origin root instead of following the MCP endpoint's 401 challenge
+ * to /api/mcp/.well-known/oauth-protected-resource. Both paths serve the same
+ * document from lib/mcp/metadata.ts.
  */
-import {
-  protectedResourceHandler,
-  metadataCorsOptionsRequestHandler,
-} from "mcp-handler";
-import { oauthIssuer } from "@/lib/mcp/config";
+import { NextResponse } from 'next/server'
+import { protectedResourceMetadata, METADATA_CORS } from '@/lib/mcp/metadata'
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs'
 
-const handler = protectedResourceHandler({ authServerUrls: [oauthIssuer()] });
+export function GET() {
+  return NextResponse.json(protectedResourceMetadata(), { headers: METADATA_CORS })
+}
 
-export { handler as GET };
-export const OPTIONS = metadataCorsOptionsRequestHandler();
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: METADATA_CORS })
+}

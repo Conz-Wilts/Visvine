@@ -41,9 +41,13 @@ export type EntityNodeType =
   | 'channel'
   | 'note'
   | 'file'
+  | 'connector'
 
 /** Document kinds: their own artifact is the context, so no `.md` is written. */
-const DOCUMENT_TYPES = new Set<EntityNodeType>(['note', 'file'])
+// A connector counts as a document even though it lives in an entity namespace:
+// the admin authored connectors/<name>.md first and the node follows it, so
+// there is nothing left to write.
+const DOCUMENT_TYPES = new Set<EntityNodeType>(['note', 'file', 'connector'])
 
 /** The containment relationship every structural edge uses. */
 const CONTAINS_RELATIONSHIP = 'contains'
@@ -60,6 +64,7 @@ const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   channel: 'conversationId',
   note: 'notePath',
   file: 'sourceId',
+  connector: 'notePath',
 }
 
 /** Writes made by a background job rather than a signed-in person. */
@@ -87,6 +92,12 @@ export interface SyncEntityNodeInput {
   subtitle?: string | null
   location?: string | null
   url?: string | null
+  /**
+   * The node's alias — the type-scoped label (see CommunityAlias). Omit to
+   * leave the column alone: events reuse `alias` for their public /e/<slug>
+   * slug, so blindly writing null here would break their share links.
+   */
+  alias?: string | null
   tags?: string[]
   metadata?: Record<string, unknown>
   /** Starting text for the canonical note. Ignored for document types. */
@@ -216,6 +227,8 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
     subtitle: input.subtitle ?? null,
     location: input.location ?? null,
     url: input.url ?? null,
+    // Only written when the caller actually passed one — see SyncEntityNodeInput.alias.
+    ...(input.alias === undefined ? {} : { alias: input.alias }),
     tags: input.tags ?? [],
     metadata: metadata as Prisma.InputJsonObject,
     communityId,

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
 
-// Caps on nested fan-out per post. The only current consumer of GET /api/feed
-// is the MCP `list_feed` tool (lib/mcp/tools/feed.ts) — there is no web UI
-// rendering comments inline yet — so a moderate cap is safe. Totals are still
+// Caps on nested fan-out per post. No web UI renders comments inline yet (the
+// MCP `list_feed` tool that used to consume this was removed with the rest of
+// the non-context tool surface), so a moderate cap is safe. Totals are still
 // available for a future "view all" affordance: `_count.comments` on each post
 // (all comments incl. replies) and `_count.replies` on each top-level comment.
 const COMMENTS_PER_POST = 20;

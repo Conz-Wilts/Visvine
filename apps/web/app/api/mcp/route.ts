@@ -1,39 +1,41 @@
 /**
- * Visvine MCP server endpoint (Streamable HTTP).
+ * The Visvine MCP endpoint (Streamable HTTP, SSE disabled).
  *
- * `withMcpAuth` validates the OAuth Bearer access token (our `mcp_access` JWT)
- * and, on failure, returns 401 with a `WWW-Authenticate` challenge pointing at
- * the protected-resource metadata. Verified identity + scopes flow into each
- * tool via `extra.authInfo`. Tools then call the app's own API routes as the
- * user, so every community-scoping + role check runs in the route layer.
+ * Every request must carry a Bearer access token minted by our own OAuth 2.1
+ * server (app/api/oauth/*). An unauthenticated request gets a 401 whose
+ * WWW-Authenticate header points at the protected-resource metadata and names
+ * the scopes to ask for; a request whose token lacks the scope for the tool it
+ * calls gets a 403 `insufficient_scope` the client can step up from.
  */
-import { createMcpHandler, withMcpAuth } from "mcp-handler";
-import { registerAllTools } from "@/lib/mcp/tools";
-import { verifyMcpBearer } from "@/lib/mcp/auth";
-import { mcpResourceUrl } from "@/lib/mcp/config";
+import { createMcpHandler, withMcpAuth } from 'mcp-handler'
+import { registerTools } from '@/lib/mcp/tools'
+import { verifyMcpBearer } from '@/lib/mcp/auth'
+import { withScopeGate, withScopeHint } from '@/lib/mcp/challenge'
+import { mcpResourceUrl } from '@/lib/mcp/config'
 
-export const runtime = "nodejs";
-export const maxDuration = 60;
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+const RESOURCE_METADATA_URL = `${mcpResourceUrl()}/.well-known/oauth-protected-resource`
 
 const handler = createMcpHandler(
   (server) => {
-    registerAllTools(server);
+    registerTools(server)
   },
+  { serverInfo: { name: 'visvine', version: '1.0.0' } },
   {
-    serverInfo: { name: "visvine-mcp", version: "0.1.0" },
-  },
-  {
-    // Route lives at /api/mcp; derive the streamable endpoint from this base.
-    basePath: "/api",
+    basePath: '/api',
     disableSse: true,
-    verboseLogs: process.env.NODE_ENV !== "production",
+    verboseLogs: process.env.NODE_ENV !== 'production',
     maxDuration: 60,
   },
-);
+)
 
-const authHandler = withMcpAuth(handler, verifyMcpBearer, {
-  required: true,
-  resourceUrl: mcpResourceUrl(),
-});
+const authHandler = withScopeHint(
+  withMcpAuth(withScopeGate(handler, RESOURCE_METADATA_URL), verifyMcpBearer, {
+    required: true,
+    resourceUrl: mcpResourceUrl(),
+  }),
+)
 
-export { authHandler as GET, authHandler as POST, authHandler as DELETE };
+export { authHandler as GET, authHandler as POST, authHandler as DELETE }

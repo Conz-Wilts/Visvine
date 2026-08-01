@@ -14,8 +14,13 @@ import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '
 import { TAB_MOTION, TAB_MOTION_EASE, TAB_MOTION_MS } from '@/components/ui/tabMotion';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 
-/** Height of one row of the bar — the tab row, and the attached toolbar row. */
+/** Height of the tab row. */
 const TAB_ROW_H = 48;
+
+/** Height the attached region reserves: the floating toolbar card (44px), the
+ *  gap detaching it from the nav line, and room below for its shadow — the
+ *  region clips (overflow-hidden), so anything unaccounted for is cut off. */
+const TRAY_ROW_H = 64;
 
 /** Top inset for anything docking beside the bar (the notes tree). Only the tab
  *  row spans the docked column — the attached toolbar is a centred pill over
@@ -275,11 +280,11 @@ function PaneTabBarInner({
               the tab row and drops back down from under it. */}
           <div
             ref={setHost}
-            className={`flex justify-center motion-reduce:[transition:none!important] ${
+            className={`flex items-start justify-center motion-reduce:[transition:none!important] ${
               attachedOpen ? 'translate-y-0' : '-translate-y-full'
             }`}
             style={{
-              height: TAB_ROW_H,
+              height: TRAY_ROW_H,
               paddingLeft: trayInset || undefined,
               // `translate`, not `transform`: Tailwind v4's translate-y-*
               // utilities set the standalone CSS translate property.

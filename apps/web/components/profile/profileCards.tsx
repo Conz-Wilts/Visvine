@@ -1,10 +1,11 @@
 'use client';
 
 /**
- * Shared presentational primitives for the redesigned profile pages — the
+ * Shared presentational primitives for the entity pages — the
  * floating "section" cards, the sticky-rail cards, the stat-strip items and the
  * dashed add-prompt. Used by both the person profile (ProfilePageContent) and the
- * directory-node profile (NodeProfileContent) so the two stay visually identical.
+ * organisation page (OrgPageContent), plus the connector page, so they stay
+ * visually of a piece.
  */
 
 import React from 'react';

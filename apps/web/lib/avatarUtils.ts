@@ -42,12 +42,21 @@ const EVENT_SILHOUETTE_PATH =
 const RESOURCE_SILHOUETTE_PATH =
   'M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z';
 
+/**
+ * SVG path for the connector avatar fallback (24×24 viewBox): an electrical
+ * plug — a connector is a gateway to something outside the community, and the
+ * plug is the same metaphor the console's Connectors section uses.
+ */
+const CONNECTOR_SILHOUETTE_PATH =
+  'M16.01 7 16 3h-2v4h-4V3H8v4h-.01C7 6.99 6 7.99 6 8.99v5.49L9.5 18v3h5v-3l3.5-3.51v-5.5c0-1-1-2-1.99-1.99z';
+
 /** Node-type glyph → its 24×24 silhouette path (the getNodeGlyph value space). */
 export const NODE_GLYPH_PATHS = {
   person: PERSON_SILHOUETTE_PATH,
   group: GROUP_SILHOUETTE_PATH,
   event: EVENT_SILHOUETTE_PATH,
   resource: RESOURCE_SILHOUETTE_PATH,
+  connector: CONNECTOR_SILHOUETTE_PATH,
 } as const;
 
 export type NodeGlyph = keyof typeof NODE_GLYPH_PATHS;

@@ -668,29 +668,14 @@ export function NoteEditor({
           No host means no toolbar: `embedded` is only used by EntityContextPanel
           under the profile pages, which provide one. */}
       {embedded && toolbarHost && (starButton || formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
-        /* One content-width tray, centred by the host and hanging off the nav
-           line: concave shoulders where it meets the bar's border, curved at
-           the bottom ends, so it reads as dripping out of the bar rather than
-           butting into it. Everything lives in it together instead of spread
-           across a full-width row. max-w-full + the inner overflow-x-auto keep
-           narrow panes scrolling inside the tray rather than growing it. */
-        <div className="relative flex h-12 max-w-full items-center gap-1 rounded-b-[32px_24px] border-x border-b border-border-subtle bg-surface-1 px-4 shadow-sm">
-          {/* Shoulder fillets: 32×24 boxes just outside each top corner,
-              painted with an elliptical radial gradient whose transparent
-              quadrant is the page and whose ring continues the tray's border.
-              The ellipse mirrors the 32×24 bottom rounding and each arc covers
-              half the tray's 48px height, so the two meet tangent-vertical at
-              the midpoint and the side reads as one ogee with no straight run.
-              1px wider than the ellipse so the fill hides the sliver of the
-              tray's own side border inside the curve. */}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -left-8 top-0 h-6 w-[33px] [background:radial-gradient(32px_24px_at_0_100%,transparent_calc(100%_-_1.75px),var(--color-border-subtle)_calc(100%_-_1.25px)_calc(100%_-_0.25px),var(--color-surface-1)_100%)]"
-          />
-          <span
-            aria-hidden
-            className="pointer-events-none absolute -right-8 top-0 h-6 w-[33px] [background:radial-gradient(32px_24px_at_100%_100%,transparent_calc(100%_-_1.75px),var(--color-border-subtle)_calc(100%_-_1.25px)_calc(100%_-_0.25px),var(--color-surface-1)_100%)]"
-          />
+        /* One content-width card, centred by the host and floating clear of the
+           nav line: a rounded rectangle on all four sides with its own border
+           and shadow, separated from the tab row by the mt-2 gap the host's
+           reserved height accounts for. Everything lives in it together instead
+           of spread across a full-width row. max-w-full + the inner
+           overflow-x-auto keep narrow panes scrolling inside the card rather
+           than growing it. */
+        <div className="relative mt-2 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-md">
           {starButton}
           {starButton && formatControls && <Divider />}
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>

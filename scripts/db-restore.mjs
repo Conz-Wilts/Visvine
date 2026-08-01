@@ -34,7 +34,7 @@ if (guard.status !== 0) process.exit(guard.status ?? 1);
 const bucket = process.env.GCS_DUMP_BUCKET;
 if (!bucket) {
   console.error("db-restore: GCS_DUMP_BUCKET is not set in apps/web/.env.");
-  console.error("  See docs/SETUP.md §6 for bucket provisioning + onboarding steps.");
+  console.error("  Set it to the shared dev-fixture bucket before restoring.");
   process.exit(1);
 }
 

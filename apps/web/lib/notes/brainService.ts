@@ -134,6 +134,15 @@ export async function searchBrain(
  */
 export function writeDenial(p: BrainPrincipal, brain: Brain, path: string): string | null {
   if (!isShared(brain)) return null
+  // connectors/ holds machine config that executes against external systems
+  // (lib/connectors) — folder grants don't apply; only community admins write it.
+  if (
+    (path === 'connectors' || path.startsWith('connectors/')) &&
+    !p.system &&
+    !principalIsSuperAdmin(p)
+  ) {
+    return 'Only community admins can create or edit connectors.'
+  }
   if (principalCanWrite(p, path)) return null
   const level = principalLevelName(p, path)
   const where = folderIdOfPath(path) || 'the brain root'

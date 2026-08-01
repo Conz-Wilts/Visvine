@@ -10,6 +10,7 @@ import {
   resolveEntityNode,
   entityMentionPaths,
 } from '../lib/notes/entities';
+import { isCreatableType } from '../lib/directory/createEntity';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
 
 test('entityKindOf classifies node types liberally', () => {
@@ -47,6 +48,18 @@ test('container kinds get their own note namespaces', () => {
   assert.equal(entityKindOfPath('channels/general.md'), 'channel');
   assert.equal(parseEntityHref('/channels/general.md'), 'channels/general.md');
   assert.equal(parseEntityHref('/spaces/index.md'), null); // folder index, not an entity
+});
+
+test('connectors are an entity namespace, but not a creatable one', () => {
+  assert.equal(entityKindOf('connector'), 'connector');
+  assert.equal(entityKindOf('Connectors'), 'connector');
+  assert.equal(entityNotePath({ id: 'connector:sandbox', type: 'connector' }), 'connectors/sandbox.md');
+  assert.equal(entityKindOfPath('connectors/sandbox.md'), 'connector');
+  assert.equal(parseEntityHref('/connectors/sandbox.md'), 'connectors/sandbox.md');
+  assert.equal(parseEntityHref('connectors/index.md'), null); // folder index, not an entity
+  // The note is authored by an admin under the connectors/ write gate — the
+  // directory create path must never be a second door to one.
+  assert.equal(isCreatableType('connector'), false);
 });
 
 test('entityDraftContent labels and tags the container kinds', () => {

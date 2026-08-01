@@ -117,7 +117,17 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Channel',   color: '#e0685f', shape: 'rectangle' },
   { name: 'Note',      color: '#ec4899', shape: 'rectangle' },
   { name: 'File',      color: '#14b8a6', shape: 'rectangle' },
+  // A connector is a community's gateway to an external API or database, kept
+  // as a note under connectors/. Rectangle like the other document types — the
+  // indigo tint and the plug glyph are what set it apart.
+  { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
 ];
+
+// Aliases are entirely community-configured — there is no built-in list for any
+// type, Connector included. A connector's `alias: http` frontmatter picks its
+// executor on its own (lib/connectors/config.ts never reads this registry), so
+// the alias rows here are pure display vocabulary and an admin owns all of them:
+// add, recolour, remove.
 
 /**
  * Node types that describe where things live rather than who/what they are.
@@ -133,6 +143,7 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'channel',
   'note',
   'file',
+  'connector',
 ];
 
 /** Whether a node type is structural (see {@link STRUCTURAL_NODE_TYPES}). */
@@ -197,7 +208,7 @@ export function getNodeTypeConfig(
  */
 export function getNodeGlyph(
   type: string | null | undefined
-): 'person' | 'group' | 'event' | 'resource' | null {
+): 'person' | 'group' | 'event' | 'resource' | 'connector' | null {
   if (!type) return null;
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
@@ -209,6 +220,7 @@ export function getNodeGlyph(
   // containers read as a cluster, documents as a page.
   if (canonical === 'community' || canonical === 'space' || canonical === 'channel') return 'group';
   if (canonical === 'note' || canonical === 'file') return 'resource';
+  if (canonical === 'connector') return 'connector';
   return null;
 }
 

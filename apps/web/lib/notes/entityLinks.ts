@@ -60,8 +60,10 @@ async function loadEntityMaps(communityId: string): Promise<EntityMaps> {
   for (const node of nodes) {
     // A plain note is its own node, and its path lives in metadata rather than
     // being derivable from the id — the id is a slug of the path, which is lossy.
+    // A connector is the same: its id slugifies the filename (`my_api` →
+    // `connector:my-api`), so metadata is the only exact path.
     const path =
-      node.type === 'note'
+      node.type === 'note' || node.type === 'connector'
         ? notePathOfNode(node.metadata)
         : entityNotePath(node)
     if (!path) continue
@@ -94,7 +96,11 @@ async function syncNoteNode(
   path: string,
   content: string | null,
 ): Promise<boolean> {
-  if (entityKindOfPath(path) || isIndexPath(path)) return false
+  if (isIndexPath(path)) return false
+  // A connector is the one entity whose note comes first, so it's the one
+  // entity namespace this function owns rather than skips (see entities.ts).
+  if (entityKindOfPath(path) === 'connector') return syncConnectorNode(communityId, path, content)
+  if (entityKindOfPath(path)) return false
   if (content === null) return removeEntityNode(communityId, 'note', path)
 
   const title = String(parseFrontmatter(content).title ?? '').trim()
@@ -104,6 +110,43 @@ async function syncNoteNode(
     name: title || path.replace(/\.md$/i, '').split('/').pop() || path,
     recordId: path,
     slugSource: path.replace(/\.md$/i, ''),
+    metadata: { notePath: path },
+    parentNodeId: communityNodeId(communityId),
+    revalidate: false,
+  })
+  return true
+}
+
+/**
+ * The `connector:` node standing for a `connectors/<name>.md` note.
+ *
+ * The node id is `connector:<name>`, which is exactly what entityNotePath maps
+ * back to the note — so the connector participates in backlinks and
+ * `[[mentions]]` like any other entity. Its `alias` mirrors the note's
+ * frontmatter (`http` / `postgres`), which is what makes the type chip read
+ * "http" wherever the node is drawn; an unparseable or missing alias leaves the
+ * column null and the chip falls back to the base "Connector" label.
+ */
+async function syncConnectorNode(
+  communityId: string,
+  path: string,
+  content: string | null,
+): Promise<boolean> {
+  if (content === null) return removeEntityNode(communityId, 'connector', path)
+
+  const name = path.replace(/\.md$/i, '').split('/').pop() || path
+  const fm = parseFrontmatter(content)
+  const alias = typeof fm.alias === 'string' && fm.alias.trim() ? fm.alias.trim() : null
+  const description = typeof fm.description === 'string' ? fm.description.trim() : ''
+
+  await syncEntityNode({
+    communityId,
+    type: 'connector',
+    name: String(fm.title ?? '').trim() || name,
+    alias,
+    subtitle: description || null,
+    recordId: path,
+    slugSource: name,
     metadata: { notePath: path },
     parentNodeId: communityNodeId(communityId),
     revalidate: false,

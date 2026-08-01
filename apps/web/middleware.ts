@@ -21,7 +21,7 @@ const PUBLIC_PATHS = [
   // MCP server + its self-hosted OAuth 2.1 layer. These must bypass the HTML
   // redirect-to-/signin: the MCP endpoint answers 401 + WWW-Authenticate and
   // the OAuth endpoints validate Bearer/PKCE/cookie themselves. (`/.well-known`
-  // serves public discovery metadata.) See docs/MCP.md.
+  // serves public discovery metadata.)
   "/.well-known/oauth-",
   "/api/oauth",
   "/api/mcp",

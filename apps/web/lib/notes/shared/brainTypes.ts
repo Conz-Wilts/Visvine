@@ -127,7 +127,7 @@ export interface AuditEntry {
   at: number
   userId: string
   name: string
-  action: 'read' | 'write' | 'move' | 'delete' | 'folder' | 'promote' | 'grant' | 'publish'
+  action: 'read' | 'write' | 'move' | 'delete' | 'folder' | 'promote' | 'grant' | 'publish' | 'connector'
   path: string
   detail?: string
 }

@@ -2,8 +2,8 @@
 
 Multi-tenant relationship-context visualization platform. Next.js web app + native iOS (SwiftUI) & Android (Jetpack Compose) mobile apps, backed by Postgres with pgvector.
 
-> For dev-vs-prod database setup (Docker locally, Cloud SQL in production),
-> see [docs/SETUP.md](./docs/SETUP.md).
+> Local dev runs against a Docker Postgres; production runs against Cloud SQL.
+> The two share zero data.
 
 ## Prerequisites
 

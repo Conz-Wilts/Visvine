@@ -9,6 +9,7 @@ import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { railFeatures, moreFeatures } from "@/lib/features";
+import { canCreateType } from "@/lib/create/creatable";
 import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/components/create/CreateModal";
@@ -44,7 +45,7 @@ const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const CHANNELS_PANEL_W = 300; // /channels + /messages list panel width — keep in sync with MessagesClient
-const ADMIN_PANEL_W = 260; // /admin console sections panel width — keep in sync with ConsoleShell
+const SETTINGS_PANEL_W = 260; // /settings sections panel width
 export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the context page inset
 export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
@@ -53,10 +54,14 @@ const RAIL_GAP = 8; // gap between the Create block and the nav list
 
 // The things the docked Create panel still makes. Everything else is a context
 // note, so it opens the note-first draft surface instead (see useCreateSurface).
+// This list is what the menu COULD offer; canCreateType decides what it does —
+// without that filter it offered Channel/Space to members and to communities
+// with channels switched off, and the form only failed on submit.
 const CREATE_PANEL_TYPES: Array<{ type: CreateableType; label: string }> = [
   { type: "file", label: "Upload a file" },
   { type: "channel", label: "Channel" },
   { type: "space", label: "Space" },
+  { type: "connector", label: "Connector" },
   { type: "community", label: "Community" },
 ];
 
@@ -80,6 +85,11 @@ export default function Sidebar() {
   // the rail and the "More" popup per featureConfig.more. See lib/features.tsx.
   // (Messages lives in the top navbar — toggleable but nav-less.)
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  // Same gate the Create panel's grid uses, so the caret menu never offers
+  // something this person can't actually create here.
+  const createTypes = CREATE_PANEL_TYPES.filter((item) =>
+    canCreateType(item.type, { featureConfig, isAdmin }),
+  );
   const allNav = railFeatures(featureConfig, isAdmin);
   const moreNav = moreFeatures(featureConfig, isAdmin);
   const moreActive = moreNav.some(({ href }) => pathname === href);
@@ -112,9 +122,9 @@ export default function Sidebar() {
     };
   }, [createMenuOpen]);
 
-  // On /channels, /messages and /admin (wide viewports only) the rail docks
+  // On /channels, /messages and /settings (wide viewports only) the rail docks
   // into a full-height card hosting a side panel — the channel/conversation
-  // list or the console sections. The page then portals its content via
+  // list or the settings sections. The page then portals its content via
   // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
   // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
   // own inline list there instead).
@@ -132,17 +142,16 @@ export default function Sidebar() {
   // Messages docks its conversation list the same way — the inbox reads as an
   // attached sidebar rather than a floating card in the content area.
   const dockedMessages = pathname.startsWith("/messages") && wide;
-  // The Community Console docks its section list here too (exact match so
-  // /admin/resources keeps the plain floating rail).
-  const dockedAdmin = pathname === "/admin" && wide;
-  // Settings docks its section list the same way as the Console.
+  // The Community Console used to dock its section list here; it now carries a
+  // pane-top tab bar instead (see ConsoleShell), so /admin gets the plain rail.
+  // Settings still docks its section list.
   const dockedSettings = pathname.startsWith("/settings") && wide;
   // The /context page and profile Context tabs raise dockRequested (already
   // wide-gated by the requesting page) when the tree is available; the panel
   // only opens once the user asks for it (contextOpen).
   const dockedContext = dockRequested && contextOpen && wide;
-  const docked = dockedChannels || dockedMessages || dockedAdmin || dockedSettings || dockedContext;
-  const panelW = dockedAdmin || dockedSettings ? ADMIN_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
+  const docked = dockedChannels || dockedMessages || dockedSettings || dockedContext;
+  const panelW = dockedSettings ? SETTINGS_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // "Create new" takes over this same column: it replaces whatever panel is
   // docked (so the width never changes on open), and off-dock it pushes the
@@ -217,7 +226,7 @@ export default function Sidebar() {
             ref={createMenuRef}
             className="absolute left-2 right-2 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg"
           >
-            {CREATE_PANEL_TYPES.map((item) => (
+            {createTypes.map((item) => (
               <button
                 key={item.type}
                 type="button"

@@ -51,6 +51,7 @@ interface Counts {
   files: number;
   eventNotes: number;
   entityNotes: number;
+  staleConnectorNodes: number;
 }
 
 async function backfillCommunity(community: { id: string; name: string; description: string | null; location: string | null }): Promise<Counts> {
@@ -62,6 +63,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
     files: 0,
     eventNotes: 0,
     entityNotes: 0,
+    staleConnectorNodes: 0,
   };
   const communityNode = communityNodeId(community.id);
 
@@ -162,7 +164,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
   });
   for (const node of nodes) {
     if (node.type === 'community' || node.type === 'space' || node.type === 'channel') continue;
-    if (node.type === 'note' || node.type === 'file') continue;
+    if (node.type === 'note' || node.type === 'file' || node.type === 'connector') continue;
     // Counts are notes actually written — an entity that already had its note is
     // the common case, and reporting it as work done would hide what changed.
     if (!dryRun) {
@@ -173,7 +175,25 @@ async function backfillCommunity(community: { id: string; name: string; descript
     else counts.entityNotes++;
   }
 
-  // ── 6. Note nodes + every mention edge, now that the rest of the graph exists ─
+  // ── 6. Retire pre-Connector-type nodes ─────────────────────────────────────
+  // connectors/<name>.md used to sync as a plain `note:` node. Now it has its
+  // own `connector:` type, so the old row would sit beside the new one drawing
+  // a duplicate. Deleting it takes its `contains`/`mentioned` edges with it
+  // (Link cascades), and step 7 immediately re-creates them off the new node.
+  const staleConnectorNotes = await prisma.node.findMany({
+    where: {
+      communityId: community.id,
+      type: 'note',
+      metadata: { path: ['notePath'], string_starts_with: 'connectors/' },
+    },
+    select: { id: true },
+  });
+  if (!dryRun && staleConnectorNotes.length > 0) {
+    await prisma.node.deleteMany({ where: { id: { in: staleConnectorNotes.map((n) => n.id) } } });
+  }
+  counts.staleConnectorNodes = staleConnectorNotes.length;
+
+  // ── 7. Note nodes + every mention edge, now that the rest of the graph exists ─
   if (!dryRun) {
     counts.notes = await backfillContextLinks(community.id);
   } else {
@@ -205,7 +225,8 @@ async function main() {
     console.log(
       `${community.name} (${community.id}): ` +
         `${c.spaces} spaces, ${c.channels} channels, ${c.files} files, ${c.notes} notes, ` +
-        `${c.eventNotes} event notes, ${c.entityNotes} other entity notes`,
+        `${c.eventNotes} event notes, ${c.entityNotes} other entity notes` +
+        (c.staleConnectorNodes > 0 ? `, ${c.staleConnectorNodes} stale connector note-nodes retired` : ''),
     );
   }
   if (dryRun) console.log('\nNothing was written — re-run without --dry-run to apply.');

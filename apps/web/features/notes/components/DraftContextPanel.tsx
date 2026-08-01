@@ -17,9 +17,8 @@
 // the very orphan the flow exists to avoid.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Check, ChevronDown } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, X } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { aliasesForType, findAlias, type CommunityAlias, type NodeTypeConfig } from '@/lib/types'
 import { getTypeColor } from '@/components/dashboard/typeStyles'
@@ -29,8 +28,7 @@ import { noteHref } from '@/lib/notes/entities'
 import { useBrainTree, FolderPicker, PathPreview } from '@/components/create/ContextDestination'
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch'
 import MatchPanel from '@/components/create/MatchPanel'
-import ImageCropper from '@/components/data/ImageCropper'
-import { uploadCroppedNodeImage, validateImageFile } from '@/lib/imageUpload'
+import { tagKey, tagPalette } from '@/lib/tagColors'
 import { primeNodeProfile } from '@/hooks/useNodeProfile'
 import { clearContextCache } from '@/hooks/useCommunityContextData'
 import type { NBNode } from '@/lib/types'
@@ -39,6 +37,7 @@ import { contextKeys, invalidateContextCache, primeContextCache } from '../lib/c
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { PropertyRows } from './PropertyRows'
+import { TagCombobox } from './TagCombobox'
 import { type NoteMode } from './NoteModeToggle'
 import '../notes.css'
 
@@ -86,6 +85,7 @@ interface Stash {
   body: string
   folder: string
   fields: Record<string, string>
+  tags: string[]
 }
 
 function readStash(): Partial<Stash> {
@@ -101,7 +101,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const router = useRouter()
   const { currentCommunity } = useCommunity()
   const communityId = currentCommunity?.id ?? null
-  const { entities, entityByPath } = useDirectoryEntities()
+  const { entities, entityByPath, allTags } = useDirectoryEntities()
 
   const stash = useRef<Partial<Stash>>(readStash()).current
 
@@ -110,14 +110,13 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [alias, setAlias] = useState<string | null>(stash.alias ?? null)
   const [folder, setFolder] = useState(stash.folder ?? initialFolder)
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
-  const [tags] = useState<string[]>([])
+  const [tags, setTags] = useState<string[]>(stash.tags ?? [])
+  const [addingTag, setAddingTag] = useState(false)
+  const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<{ message: string; nodeId: string | null; path: string } | null>(null)
-  const [cropperFile, setCropperFile] = useState<File | null>(null)
-  const [imageBlob, setImageBlob] = useState<Blob | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
   const [dismissedMatches, setDismissedMatches] = useState(false)
 
@@ -130,10 +129,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const titleRef = useRef<HTMLInputElement>(null)
 
   const brainTree = useBrainTree(communityId, type === 'note')
-  const aliases = useMemo(
-    () => (type && type !== 'note' ? aliasesForType(currentCommunity?.communityAliases, DRAFT_TYPES.find((t) => t.id === type)?.configName ?? '') : []),
-    [currentCommunity?.communityAliases, type],
-  )
 
   // Cross-community duplicate check — the highest-value carry-over from the old
   // modal. Dropping it re-opens duplicate people and orgs across communities.
@@ -152,11 +147,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // successful commit (the real note/entity is the record from then on).
   useEffect(() => {
     if (typeof sessionStorage === 'undefined') return
-    const payload: Stash = { title, type, alias, body: bodyRef.current, folder, fields }
+    const payload: Stash = { title, type, alias, body: bodyRef.current, folder, fields, tags }
     sessionStorage.setItem(STASH_KEY, JSON.stringify(payload))
-  }, [title, type, alias, folder, fields])
-
-  useEffect(() => () => { if (imagePreview) URL.revokeObjectURL(imagePreview) }, [imagePreview])
+  }, [title, type, alias, folder, fields, tags])
 
   const slug = noteFileSlug(title)
   // A punctuation-only title is a non-empty string that slugs to nothing — it
@@ -177,12 +170,30 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     [type, titleUsable, folder, title, brainTree.notePaths],
   )
 
-  const handleFieldChange = useCallback((key: string, value: string) => {
-    setFields((prev) => ({ ...prev, [key]: value }))
-    // Any manual edit means this is no longer the entry the user picked from the
-    // finder — the old modal's rule, kept, so an edited copy can't be silently
-    // merged into someone else's identity.
-    setSelectedIdentityId(null)
+  const addTag = useCallback((raw: string) => {
+    const tag = raw.trim()
+    if (!tag) return
+    setTags((prev) => (prev.some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...prev, tag]))
+    setAddingTag(false)
+  }, [])
+
+  // A brand-new tag with a chosen colour. The colour registers on the community
+  // immediately (it is community-level config, not draft state) — best effort,
+  // the tag still lands on the draft if that write fails.
+  const createTag = useCallback((raw: string, color: string) => {
+    const tag = raw.trim()
+    if (!tag || !communityId) return
+    setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
+    void fetch(`/api/communities/${encodeURIComponent(communityId)}/tag-colors`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tag, color }),
+    }).catch(() => {})
+    addTag(tag)
+  }, [communityId, addTag])
+
+  const removeTag = useCallback((tag: string) => {
+    setTags((prev) => prev.filter((t) => t !== tag))
   }, [])
 
   const handlePickMatch = useCallback((result: NodeSearchResult) => {
@@ -199,25 +210,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }))
     setSelectedIdentityId(result.identity_id)
     setDismissedMatches(true)
-  }, [])
-
-  const handleCropDone = useCallback((blob: Blob) => {
-    setImagePreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return URL.createObjectURL(blob)
-    })
-    setImageBlob(blob)
-    setCropperFile(null)
-  }, [])
-
-  const handleImageRequest = useCallback((file: File) => {
-    const invalid = validateImageFile(file)
-    if (invalid) {
-      setError(invalid)
-      return
-    }
-    setError(null)
-    setCropperFile(file)
   }, [])
 
   // ── Commit ────────────────────────────────────────────────────────────────
@@ -262,20 +254,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     const node = data.node as NBNode
     const notePath = data.notePath as string
 
-    // The photo needs the node id, so it uploads after the create. A failure here
-    // is not fatal — the entity exists and the photo row can be filled in again.
-    if (imageBlob) {
-      const url = await uploadCroppedNodeImage(node.id, imageBlob).catch(() => null)
-      if (url) {
-        node.image_url = url
-        await fetch(`/api/nodes/${encodeURIComponent(node.id)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ communityId, image_url: url }),
-        }).catch(() => {})
-      }
-    }
-
     // Prime both caches the destination reads, so the jump lands painted: the
     // profile fetch and the note read both already have their answers.
     primeNodeProfile(node.id, node)
@@ -292,7 +270,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
     sessionStorage.removeItem(STASH_KEY)
     router.replace(`/directory/${encodeURIComponent(node.id)}?tab=context`)
-  }, [communityId, type, title, alias, selectedIdentityId, fields, tags, imageBlob, router])
+  }, [communityId, type, title, alias, selectedIdentityId, fields, tags, router])
 
   const commit = useCallback(async () => {
     if (!ready || committing || committedRef.current || !communityId) return
@@ -325,11 +303,77 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       onOpenChange={setTypeMenuOpen}
       type={type}
       alias={alias}
-      aliases={aliases}
       theme={theme}
       onPick={pickType}
+      communityAliases={currentCommunity?.communityAliases}
       communityNodeTypes={currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined}
     />
+  )
+
+  // The draft's one explicit affordance, sitting in the editor toolbar's trail
+  // slot — the spot a saved note gives Share. Commit also fires on Enter in the
+  // title; this is what makes the surface legible the first time.
+  const createButton = (
+    <button
+      type="button"
+      disabled={!ready || committing}
+      onClick={() => void commit()}
+      title={ready ? 'Create' : !titleUsable ? 'Give it a name first' : 'Pick a type first'}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+      style={{ background: theme.base }}
+    >
+      {committing ? 'Creating…' : <>Create <Check className="h-3.5 w-3.5" /></>}
+    </button>
+  )
+
+  // Tags on the draft are plain local state — they ride the create request (in
+  // the note's frontmatter, or the entity payload) rather than being saved one
+  // at a time the way the committed entity's row does it.
+  const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
+  const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
+  const tagsRow = (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {tags.map((tag) => {
+        const pal = tagPalette(tag, tagColors)
+        return (
+          <span
+            key={tag}
+            className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
+            style={{ background: pal.base }}
+          >
+            <span className="truncate">{tag}</span>
+            <button
+              type="button"
+              onClick={() => removeTag(tag)}
+              aria-label={`Remove ${tag}`}
+              className="rounded-full p-0.5 opacity-60 transition hover:opacity-100"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        )
+      })}
+      {addingTag ? (
+        <TagCombobox
+          suggestions={allTags.filter((t) => !tagsLower.has(t.toLowerCase()))}
+          existing={tagsLower}
+          registry={tagColors}
+          accentBase={theme.base}
+          onAdd={addTag}
+          onCreate={createTag}
+          onClose={() => setAddingTag(false)}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAddingTag(true)}
+          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+          style={{ ['--accent' as string]: theme.dark }}
+        >
+          + Add tag
+        </button>
+      )}
+    </div>
   )
 
   const headerSlot = (
@@ -353,15 +397,17 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
       />
 
+      {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows
+          (email, location, photo…): those describe a thing that exists, and
+          they are right there on the entity's own page the moment it does.
+          Creating is choosing what this is and filing it — not filling a form. */}
       <PropertyRows
-        type={type === 'note' ? null : type}
-        values={fields}
+        type={null}
+        values={{}}
         editable
-        onChange={handleFieldChange}
         accent={theme.dark}
         typeRow={typeRow}
-        onImageRequest={handleImageRequest}
-        imagePreviewUrl={imagePreview}
+        tagsRow={tagsRow}
       />
 
       {type === 'note' && (
@@ -403,26 +449,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         </div>
       )}
 
-      {/* The one explicit affordance. Commit also fires on Enter and on leaving
-          the title, but a visible action is what makes the surface legible the
-          first time someone lands on it. */}
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={!ready || committing}
-          onClick={() => void commit()}
-          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3.5 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-          style={{ background: theme.base }}
-        >
-          {committing ? 'Creating…' : <>Create <Check className="h-3.5 w-3.5" /></>}
-        </button>
-        {!ready && (
-          <span className="text-xs text-text-muted">
-            {!titleUsable ? 'Give it a name' : 'Pick a type'} to create it
-          </span>
-        )}
-      </div>
-
       {searchType && !dismissedMatches && title.trim().length >= 2 && (matches.length > 0 || matchesLoading) && (
         <div className="mt-5 rounded-lg border border-border-subtle bg-surface-1 p-3">
           <MatchPanel
@@ -446,23 +472,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   return (
     <div className="pb-10">
-      {cropperFile &&
-        typeof document !== 'undefined' &&
-        createPortal(
-          <ImageCropper
-            imageFile={cropperFile}
-            onCrop={handleCropDone}
-            onCancel={() => setCropperFile(null)}
-            shape="square"
-            outputWidth={400}
-            outputHeight={400}
-          />,
-          document.body,
-        )}
-
       <NoteEditor
         variant="embedded"
         headerSlot={headerSlot}
+        toolbarTrailSlot={createButton}
         path=""
         meta={null}
         notes={[]}
@@ -489,21 +502,28 @@ function TypeMenu({
   onOpenChange,
   type,
   alias,
-  aliases,
   theme,
   onPick,
+  communityAliases,
   communityNodeTypes,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   type: DraftType | null
   alias: string | null
-  aliases: CommunityAlias[]
   theme: { base: string; dark: string }
   onPick: (type: DraftType, alias?: string | null) => void
+  communityAliases: CommunityAlias[] | undefined
   communityNodeTypes: NodeTypeConfig[] | undefined
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
+  // Which type's aliases are unfolded. Only one at a time — the menu is a
+  // choice, and two open branches read as two competing lists.
+  const [expanded, setExpanded] = useState<DraftType | null>(null)
+
+  useEffect(() => {
+    if (!open) setExpanded(null)
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -533,48 +553,72 @@ function TypeMenu({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 shadow-lg">
+        /* One list of types. A type that has community aliases (Founder,
+           Investor…) carries a disclosure caret: press the row to take the
+           plain type, press the caret to unfold its aliases and take one of
+           those instead. The old flat "More specific" section could only ever
+           show the ALREADY-picked type's aliases — you had to choose twice to
+           find out what was on offer. */
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg">
           {DRAFT_TYPES.map((option) => {
             const color =
               option.id === 'note' ? NOTE_COLOR : getTypeColor(option.configName, communityNodeTypes)
+            const options = option.id === 'note' ? [] : aliasesForType(communityAliases, option.configName)
+            const isOpen = expanded === option.id
             return (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => onPick(option.id, null)}
-                className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-surface-2"
-              >
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-medium text-text-primary">{option.label}</span>
-                  <span className="block truncate text-[11px] text-text-muted">{option.hint}</span>
-                </span>
-                {type === option.id && !alias && <Check className="ml-auto h-3.5 w-3.5 text-text-muted" />}
-              </button>
+              <div key={option.id}>
+                <div className="flex items-stretch transition hover:bg-surface-2">
+                  {/* Disclosure leads the row; the colour dot closes it. The
+                      w-7 spacer keeps the labels of alias-less types (Note) on
+                      the same left edge as the ones with a caret. */}
+                  {options.length > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : option.id)}
+                      aria-expanded={isOpen}
+                      aria-label={`More specific than ${option.label}`}
+                      className="flex w-7 shrink-0 items-center justify-center text-text-muted transition hover:text-text-primary"
+                    >
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </button>
+                  ) : (
+                    <span className="w-7 shrink-0" aria-hidden />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onPick(option.id, null)}
+                    className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-1 pr-3 text-left"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[13px] font-medium text-text-primary">{option.label}</span>
+                      <span className="block truncate text-[11px] text-text-muted">{option.hint}</span>
+                    </span>
+                    {type === option.id && !alias && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+                  </button>
+                </div>
+
+                {isOpen && (
+                  <div className="pb-1">
+                    {options.map((a) => (
+                      <button
+                        key={a.name}
+                        type="button"
+                        onClick={() => onPick(option.id, a.name)}
+                        className="flex w-full items-center gap-2.5 py-1.5 pl-8 pr-3 text-left transition hover:bg-surface-2"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[13px] text-text-primary">{a.name}</span>
+                        {type === option.id && alias === a.name && (
+                          <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                        )}
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: a.color }} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )
           })}
-
-          {/* Community aliases for the picked type (Founder, Investor…) — the
-              old modal's separate alias step, collapsed into this one menu. */}
-          {aliases.length > 0 && (
-            <div className="border-t border-border-subtle py-1">
-              <span className="block px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                More specific
-              </span>
-              {aliases.map((a) => (
-                <button
-                  key={a.name}
-                  type="button"
-                  onClick={() => type && onPick(type, a.name)}
-                  className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition hover:bg-surface-2"
-                >
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
-                  <span className="text-[13px] text-text-primary">{a.name}</span>
-                  {alias === a.name && <Check className="ml-auto h-3.5 w-3.5 text-text-muted" />}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
