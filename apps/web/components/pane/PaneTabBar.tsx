@@ -20,7 +20,7 @@ const TAB_ROW_H = 48;
 /** Height the attached region reserves: the floating toolbar card (44px), the
  *  gap detaching it from the nav line, and room below for its shadow — the
  *  region clips (overflow-hidden), so anything unaccounted for is cut off. */
-const TRAY_ROW_H = 64;
+const TRAY_ROW_H = 72;
 
 /** Top inset for anything docking beside the bar (the notes tree). Only the tab
  *  row spans the docked column — the attached toolbar is a centred pill over

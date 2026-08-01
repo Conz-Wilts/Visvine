@@ -17,7 +17,7 @@ const off = (...keys: string[]): { featureConfig: CommunityFeatureConfig; isAdmi
   // off means listing the others.
   featureConfig: {
     enabled: Object.fromEntries(
-      ['channels', 'notes', 'events', 'resources'].map((k) => [k, !keys.includes(k)]),
+      ['channels', 'notes', 'tasks', 'resources'].map((k) => [k, !keys.includes(k)]),
     ),
   } as CommunityFeatureConfig,
   isAdmin: true,

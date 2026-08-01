@@ -84,12 +84,9 @@
   margin: 2rem 0 0.65rem;
 }
 
-/* Freshness line at the very bottom of the note. */
+/* Freshness line above the title, flush with the note column's left edge. */
 .notes-meta {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 8px 28px 28px;
+  margin: 0 0 0.5rem;
   font-size: 11px;
   color: var(--color-text-muted, #6b7280);
 }

@@ -20,12 +20,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, ChevronDown, X } from 'lucide-react'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
-import { aliasesForType, findAlias, type CommunityAlias, type NodeTypeConfig } from '@/lib/types'
+import { canCreateType } from '@/lib/create/creatable'
+import type { CreateableType } from '@/lib/contexts/CreateModalContext'
+import { aliasesForType, findAlias, type CommunityAlias, type CommunityFeatureConfig, type NodeTypeConfig } from '@/lib/types'
 import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { noteFileSlug, availableNotePath, newNoteContent } from '@/lib/notes/shared/newContext'
-import { noteHref } from '@/lib/notes/entities'
+import { noteHref, sourceHref } from '@/lib/notes/entities'
 import { useBrainTree, FolderPicker, PathPreview } from '@/components/create/ContextDestination'
+import {
+  FileForm,
+  connectorSlug,
+  connectorFormReady,
+  type ConnectorFormData,
+  type FileEntry,
+  type FileFormData,
+} from '@/components/create/CreateModalForms'
+import { newConnectorNote } from '@/lib/connectors/config'
+import type { ChannelSpaceEntry } from '@/lib/messages/types'
 import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch'
 import MatchPanel from '@/components/create/MatchPanel'
 import { tagKey, tagPalette } from '@/lib/tagColors'
@@ -42,28 +54,55 @@ import { type NoteMode } from './NoteModeToggle'
 import '../notes.css'
 
 /** The draft's type choices. `note` is always available — pressing "+" must
- *  always produce something, even where the directory types are gated. */
-export type DraftType = 'note' | 'person' | 'group' | 'resource'
+ *  always produce something, even where the directory types are gated.
+ *
+ *  Everything creatable in the app is here: there is no second menu. The five
+ *  that used to hide behind the sidebar's caret (file, channel, space,
+ *  connector, community) are ordinary types on this surface — the title is
+ *  their name and the editor body is their starting context, with only the
+ *  handful of fields that CANNOT be filled in afterwards shown inline. */
+export type DraftType =
+  | 'note'
+  | 'person'
+  | 'group'
+  | 'resource'
+  | 'connector'
+  | 'channel'
+  | 'space'
+  | 'community'
+  | 'file'
 
 interface DraftTypeOption {
   id: DraftType
   label: string
-  /** The `nodeTypes` name this maps to, for colour resolution. */
-  configName: string
+  /** The `nodeTypes` name this maps to, for colour resolution (null → `color`). */
+  configName: string | null
+  /** Fixed colour for types the community's nodeTypes don't describe. */
+  color: string
   hint: string
+  /** What `canCreateType` is asked about — the permission gate is shared with
+   *  the docked panel, so this menu can't offer a form that 403s on submit. */
+  creatable: CreateableType
 }
 
+const NOTE_COLOR = '#64748b'
+
 const DRAFT_TYPES: DraftTypeOption[] = [
-  { id: 'note', label: 'Note', configName: 'Note', hint: 'A plain context note in a folder' },
-  { id: 'person', label: 'Person', configName: 'Person', hint: 'Someone in the directory' },
-  { id: 'group', label: 'Group', configName: 'Group', hint: 'A company or organisation' },
-  { id: 'resource', label: 'Resource', configName: 'Resource', hint: 'A document, link or tool' },
+  { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
+  { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
+  { id: 'group', label: 'Group', configName: 'Group', color: NOTE_COLOR, hint: 'A company or organisation', creatable: 'organization' },
+  { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
+  { id: 'file', label: 'File', configName: null, color: '#0ea5e9', hint: 'Upload documents into the context', creatable: 'file' },
+  { id: 'connector', label: 'Connector', configName: 'Connector', color: '#a855f7', hint: 'A gateway to an external API or database', creatable: 'connector' },
+  { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a space', creatable: 'channel' },
+  { id: 'space', label: 'Space', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'space' },
+  { id: 'community', label: 'Community', configName: null, color: '#14b8a6', hint: 'A whole new community of your own', creatable: 'community' },
 ]
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
 const ENTITY_TYPES = new Set<DraftType>(['person', 'group', 'resource'])
-
-const NOTE_COLOR = '#64748b'
+/** Types whose only inline field is the destination folder in the context. */
+const FOLDERED_TYPES = new Set<DraftType>(['note', 'file'])
 
 interface DraftContextPanelProps {
   mode?: NoteMode
@@ -86,6 +125,37 @@ interface Stash {
   folder: string
   fields: Record<string, string>
   tags: string[]
+  extras: Extras
+}
+
+/**
+ * The inline settings the non-note types need at creation time — the ones that
+ * can't sensibly be changed afterwards, or that the create endpoint requires.
+ * Everything else about a channel/space/community/connector is edited on the
+ * thing itself once it exists. Files are deliberately absent: `File` objects
+ * don't survive a JSON round-trip, so a picked upload isn't stashed.
+ */
+interface Extras {
+  /** connector */
+  connectorAlias: 'http' | 'postgres'
+  baseUrl: string
+  allow: string
+  secretName: string
+  /** channel */
+  viewMode: 'CHAT' | 'FEED'
+  spaceId: string
+  /** community */
+  visibility: 'public' | 'private'
+}
+
+const EMPTY_EXTRAS: Extras = {
+  connectorAlias: 'http',
+  baseUrl: '',
+  allow: '',
+  secretName: '',
+  viewMode: 'CHAT',
+  spaceId: '',
+  visibility: 'public',
 }
 
 function readStash(): Partial<Stash> {
@@ -99,7 +169,7 @@ function readStash(): Partial<Stash> {
 
 export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initialType = null }: DraftContextPanelProps) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
+  const { currentCommunity, refreshCommunity, isAdmin } = useCommunity()
   const communityId = currentCommunity?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
@@ -111,6 +181,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [folder, setFolder] = useState(stash.folder ?? initialFolder)
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
+  const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}) })
+  const [files, setFiles] = useState<FileEntry[]>([])
+  const [spaces, setSpaces] = useState<ChannelSpaceEntry[]>([])
   const [addingTag, setAddingTag] = useState(false)
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
@@ -128,7 +201,19 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const committedRef = useRef(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  const brainTree = useBrainTree(communityId, type === 'note')
+  const brainTree = useBrainTree(communityId, type !== null && FOLDERED_TYPES.has(type))
+
+  // The spaces a new channel can be filed into. Loaded only while the Channel
+  // type is selected — every other draft has no use for the list.
+  useEffect(() => {
+    if (type !== 'channel' || !communityId) return
+    let cancelled = false
+    fetch(`/api/messages/spaces?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { spaces: [] }))
+      .then((payload) => { if (!cancelled) setSpaces(payload.spaces ?? []) })
+      .catch(() => { if (!cancelled) setSpaces([]) })
+    return () => { cancelled = true }
+  }, [type, communityId])
 
   // Cross-community duplicate check — the highest-value carry-over from the old
   // modal. Dropping it re-opens duplicate people and orgs across communities.
@@ -147,23 +232,55 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // successful commit (the real note/entity is the record from then on).
   useEffect(() => {
     if (typeof sessionStorage === 'undefined') return
-    const payload: Stash = { title, type, alias, body: bodyRef.current, folder, fields, tags }
+    const payload: Stash = { title, type, alias, body: bodyRef.current, folder, fields, tags, extras }
     sessionStorage.setItem(STASH_KEY, JSON.stringify(payload))
-  }, [title, type, alias, folder, fields, tags])
+  }, [title, type, alias, folder, fields, tags, extras])
 
   const slug = noteFileSlug(title)
   // A punctuation-only title is a non-empty string that slugs to nothing — it
   // would produce the id `person:`. The SLUG is the readiness test, not the text.
   const titleUsable = slug !== 'untitled' || title.trim().toLowerCase() === 'untitled'
-  const ready = titleUsable && type !== null
+
+  // A connector's note IS its config, so the two settings the parser demands
+  // (a base URL, or the name of the secret holding the DSN) have to be here —
+  // writing the note without them produces one the connectors layer rejects.
+  const connectorDraft: ConnectorFormData = {
+    name: title,
+    alias: extras.connectorAlias,
+    description: '',
+    baseUrl: extras.baseUrl,
+    allow: extras.allow,
+    secretName: extras.secretName,
+  }
+  const queuedFiles = files.filter((f) => f.status === 'queued')
+
+  // An upload has no title — the files carry their own names — so readiness is
+  // per-type rather than one rule.
+  const ready =
+    type === null
+      ? false
+      : type === 'file'
+        ? queuedFiles.length > 0
+        : type === 'connector'
+          ? connectorFormReady(connectorDraft)
+          : titleUsable
 
   const typeOption = type ? DRAFT_TYPES.find((t) => t.id === type) ?? null : null
   const aliasColor = alias ? findAlias(currentCommunity?.communityAliases, alias, typeOption?.configName ?? '')?.color : null
-  const baseColor =
-    type === 'note' || !typeOption
-      ? NOTE_COLOR
-      : getTypeColor(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)
+  const baseColor = !typeOption
+    ? NOTE_COLOR
+    : typeOption.configName
+      ? getTypeColor(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)
+      : typeOption.color
   const theme = hexToPalette(aliasColor ?? baseColor)
+
+  // Only the types the community actually offers this person — same gate the
+  // docked panel's grid asks (lib/create/creatable.ts).
+  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null
+  const availableTypes = useMemo(
+    () => DRAFT_TYPES.filter((o) => canCreateType(o.creatable, { featureConfig, isAdmin })),
+    [featureConfig, isAdmin],
+  )
 
   const notePath = useMemo(
     () => (type === 'note' && titleUsable ? availableNotePath(folder, title, brainTree.notePaths) : ''),
@@ -272,6 +389,125 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     router.replace(`/directory/${encodeURIComponent(node.id)}?tab=context`)
   }, [communityId, type, title, alias, selectedIdentityId, fields, tags, router])
 
+  // ── The non-note commits ──────────────────────────────────────────────────
+  // Each one is the same shape: the title is the name, the editor body is the
+  // starting context, and the inline extras carry the rest. None of them can
+  // reuse commitEntity — they aren't directory nodes, they're their own
+  // endpoints (and a connector is a note whose frontmatter IS its config).
+
+  const commitConnector = useCallback(async () => {
+    if (!communityId) return
+    const name = connectorSlug(title)
+    const path = `connectors/${name}.md`
+    const body = bodyRef.current.trim()
+    const note = newConnectorNote({
+      name,
+      alias: extras.connectorAlias,
+      baseUrl: extras.baseUrl,
+      allow: extras.allow.split('\n').map((l) => l.trim()).filter(Boolean),
+      secretName: extras.secretName,
+    })
+    // The generated note already carries a documentation body; anything typed
+    // in the editor is appended to it rather than replacing the scaffold.
+    await notesApi.create(communityId, path, body ? `${note}\n\n${body}` : note)
+    invalidateContextCache(
+      contextKeys.tree(communityId),
+      contextKeys.list(communityId),
+      contextKeys.read(communityId, path),
+    )
+    clearContextCache(communityId)
+    sessionStorage.removeItem(STASH_KEY)
+    // Its own page, not the bare note: the write synced a `connector:<name>`
+    // node, and that page is where the secret gets set.
+    router.replace(`/directory/${encodeURIComponent(`connector:${name}`)}`)
+  }, [communityId, title, extras, router])
+
+  const commitChannel = useCallback(async () => {
+    if (!communityId) return
+    const res = await fetch('/api/messages/conversations/channel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        communityId,
+        name: title.trim(),
+        viewMode: extras.viewMode,
+        spaceId: extras.spaceId || undefined,
+        context: bodyRef.current.trim() || undefined,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to create channel')
+    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace(`/channels/${encodeURIComponent(data.conversation.id as string)}`)
+  }, [communityId, title, extras, router])
+
+  const commitSpace = useCallback(async () => {
+    if (!communityId) return
+    const res = await fetch('/api/messages/spaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        communityId,
+        name: title.trim(),
+        context: bodyRef.current.trim() || undefined,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to create space')
+    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace('/channels')
+  }, [communityId, title, router])
+
+  const commitCommunity = useCallback(async () => {
+    const res = await fetch('/api/communities', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: title.trim(),
+        description: bodyRef.current.trim(),
+        visibility: extras.visibility,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.error || 'Failed to create community')
+    // The switcher has to see it before we land anywhere inside it.
+    await refreshCommunity()
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace('/directory')
+  }, [title, extras, refreshCommunity, router])
+
+  // Uploaded one at a time: each request runs the whole extract → chunk → embed
+  // pipeline synchronously, so a parallel burst would just contend. A file that
+  // fails leaves the others alone and keeps its row.
+  const commitFiles = useCallback(async () => {
+    if (!communityId) return
+    const patch = (index: number, next: Partial<FileEntry>) =>
+      setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, ...next } : f)))
+
+    let uploaded = 0
+    let lastPath: string | null = null
+    for (const [index, entry] of files.entries()) {
+      if (entry.status !== 'queued') continue
+      patch(index, { status: 'uploading', error: undefined })
+      try {
+        const { source } = await notesApi.uploadSource(communityId, entry.file, folder)
+        patch(index, { status: 'done', path: source.path })
+        uploaded++
+        lastPath = source.path
+      } catch (err) {
+        patch(index, { status: 'failed', error: err instanceof Error ? err.message : 'Upload failed' })
+      }
+    }
+    if (!uploaded) throw new Error('No files could be uploaded — see the list above')
+
+    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    clearContextCache(communityId)
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory')
+  }, [communityId, files, folder, router])
+
   const commit = useCallback(async () => {
     if (!ready || committing || committedRef.current || !communityId) return
     committedRef.current = true
@@ -279,6 +515,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     setError(null)
     try {
       if (type === 'note') await commitNote()
+      else if (type === 'connector') await commitConnector()
+      else if (type === 'channel') await commitChannel()
+      else if (type === 'space') await commitSpace()
+      else if (type === 'community') await commitCommunity()
+      else if (type === 'file') await commitFiles()
       else await commitEntity()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create')
@@ -288,7 +529,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     } finally {
       setCommitting(false)
     }
-  }, [ready, committing, communityId, type, commitNote, commitEntity])
+  }, [
+    ready, committing, communityId, type,
+    commitNote, commitEntity, commitConnector, commitChannel, commitSpace, commitCommunity, commitFiles,
+  ])
 
   const pickType = useCallback((next: DraftType, nextAlias: string | null = null) => {
     setType(next)
@@ -301,6 +545,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     <TypeMenu
       open={typeMenuOpen}
       onOpenChange={setTypeMenuOpen}
+      options={availableTypes}
       type={type}
       alias={alias}
       theme={theme}
@@ -318,7 +563,21 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       type="button"
       disabled={!ready || committing}
       onClick={() => void commit()}
-      title={ready ? 'Create' : !titleUsable ? 'Give it a name first' : 'Pick a type first'}
+      title={
+        ready
+          ? 'Create'
+          : type === null
+            ? 'Pick a type first'
+            : type === 'file'
+              ? 'Add a file first'
+              : !titleUsable
+                ? 'Give it a name first'
+                : type === 'connector'
+                  ? extras.connectorAlias === 'postgres'
+                    ? 'Name the DSN secret first'
+                    : 'Give it a base URL first'
+                  : 'Pick a type first'
+      }
       className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
       style={{ background: theme.base }}
     >
@@ -378,8 +637,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   const headerSlot = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
+      {/* An upload has no name of its own to type — each file keeps its own —
+          so File is the one type that drops the title line entirely. */}
       <input
         ref={titleRef}
+        hidden={type === 'file'}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
@@ -421,6 +683,39 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           />
           {titleUsable && <PathPreview path={notePath} />}
         </div>
+      )}
+
+      {/* Per-type extras: ONLY what can't be set afterwards on the thing itself,
+          or what its create endpoint refuses to go without. Everything else
+          (a channel's icon, a community's location…) is one click away on the
+          page you land on. */}
+      {type === 'file' && (
+        <div className="mt-4">
+          <FileForm
+            data={{ files, folder }}
+            onChange={(d: FileFormData) => { setFiles(d.files); setFolder(d.folder) }}
+            folders={brainTree.folders}
+            contextName={currentCommunity?.name ?? 'Context'}
+            loading={brainTree.loading}
+          />
+        </div>
+      )}
+
+      {type === 'connector' && (
+        <ConnectorExtras
+          extras={extras}
+          onChange={setExtras}
+          slug={connectorSlug(title)}
+          accent={theme.dark}
+        />
+      )}
+
+      {type === 'channel' && (
+        <ChannelExtras extras={extras} onChange={setExtras} spaces={spaces} accent={theme.base} />
+      )}
+
+      {type === 'community' && (
+        <VisibilityExtras extras={extras} onChange={setExtras} accent={theme.base} />
       )}
 
       {conflict && (
@@ -500,6 +795,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 function TypeMenu({
   open,
   onOpenChange,
+  options: typeOptions,
   type,
   alias,
   theme,
@@ -509,6 +805,7 @@ function TypeMenu({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  options: DraftTypeOption[]
   type: DraftType | null
   alias: string | null
   theme: { base: string; dark: string }
@@ -559,11 +856,12 @@ function TypeMenu({
            those instead. The old flat "More specific" section could only ever
            show the ALREADY-picked type's aliases — you had to choose twice to
            find out what was on offer. */
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg">
-          {DRAFT_TYPES.map((option) => {
-            const color =
-              option.id === 'note' ? NOTE_COLOR : getTypeColor(option.configName, communityNodeTypes)
-            const options = option.id === 'note' ? [] : aliasesForType(communityAliases, option.configName)
+        <div className="absolute left-0 top-full z-50 mt-1.5 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg">
+          {typeOptions.map((option) => {
+            const color = option.configName
+              ? getTypeColor(option.configName, communityNodeTypes)
+              : option.color
+            const options = option.configName ? aliasesForType(communityAliases, option.configName) : []
             const isOpen = expanded === option.id
             return (
               <div key={option.id}>
@@ -621,6 +919,209 @@ function TypeMenu({
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Per-type extras ─────────────────────────────────────────────────────────
+// Deliberately small. The draft surface's whole argument is that creating is
+// choosing what a thing is and naming it — anything editable on the thing's own
+// page afterwards does NOT belong here. What's left is the irreducible part:
+// a connector's transport and endpoint (its note is its config, and one without
+// them is invalid), a channel's view style and space, a community's visibility.
+
+function ExtraField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <span className="block text-[10px] font-semibold uppercase tracking-wide text-text-muted">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+const extraInput =
+  'w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted/60 focus:border-[color:var(--accent)] focus:outline-none'
+
+function SegmentedChoice<T extends string>({
+  value,
+  options,
+  onPick,
+  accent,
+}: {
+  value: T
+  options: readonly { value: T; label: string; hint?: string }[]
+  onPick: (value: T) => void
+  accent: string
+}) {
+  return (
+    <div className="flex gap-2">
+      {options.map((opt) => {
+        const active = value === opt.value
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onPick(opt.value)}
+            className={`flex flex-1 flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left text-sm font-medium transition ${
+              active
+                ? 'border-[color:var(--accent)] text-text-primary'
+                : 'border-border-default text-text-secondary hover:border-[color:var(--accent)]/60'
+            }`}
+            style={{
+              ['--accent' as string]: accent,
+              background: active ? `color-mix(in srgb, ${accent} 12%, transparent)` : undefined,
+            }}
+          >
+            {opt.label}
+            {opt.hint && <span className="text-[11px] font-normal text-text-muted">{opt.hint}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ConnectorExtras({
+  extras,
+  onChange,
+  slug,
+  accent,
+}: {
+  extras: Extras
+  onChange: (next: Extras) => void
+  slug: string
+  accent: string
+}) {
+  return (
+    <div className="mt-4 space-y-3" style={{ ['--accent' as string]: accent }}>
+      <ExtraField label="Transport">
+        <SegmentedChoice
+          value={extras.connectorAlias}
+          onPick={(connectorAlias) => onChange({ ...extras, connectorAlias })}
+          accent={accent}
+          options={[
+            { value: 'http', label: 'http', hint: 'A REST API' },
+            { value: 'postgres', label: 'postgres', hint: 'A read-only database' },
+          ] as const}
+        />
+      </ExtraField>
+
+      {extras.connectorAlias === 'http' ? (
+        <>
+          <ExtraField label="Base URL">
+            <input
+              className={`${extraInput} font-mono`}
+              placeholder="https://api.example.com"
+              value={extras.baseUrl}
+              onChange={(e) => onChange({ ...extras, baseUrl: e.target.value })}
+            />
+          </ExtraField>
+          <ExtraField label="Allowed calls">
+            <textarea
+              className={`${extraInput} resize-none font-mono`}
+              rows={3}
+              placeholder={'GET /customers\nGET /customers/*\nPOST /customers'}
+              value={extras.allow}
+              onChange={(e) => onChange({ ...extras, allow: e.target.value })}
+            />
+          </ExtraField>
+          <p className="text-xs text-text-muted">
+            One <span className="font-mono">METHOD /path</span> per line — anything not listed is refused
+            before a request is sent. API keys go in the note&apos;s{' '}
+            <span className="font-mono">headers</span> as <span className="font-mono">{'{{secret:NAME}}'}</span>,
+            never as raw values.
+          </p>
+        </>
+      ) : (
+        <>
+          <ExtraField label="DSN secret name">
+            <input
+              className={`${extraInput} font-mono`}
+              placeholder="ANALYTICS_DSN"
+              value={extras.secretName}
+              onChange={(e) => onChange({ ...extras, secretName: e.target.value })}
+            />
+          </ExtraField>
+          <p className="text-xs text-text-muted">
+            The connection string itself never lives in the note — add it under{' '}
+            <span className="font-mono">{extras.secretName.trim().toUpperCase() || 'THIS NAME'}</span> on the
+            connector&apos;s page once it exists. Queries run read-only.
+          </p>
+        </>
+      )}
+
+      {slug && <PathPreview path={`connectors/${slug}.md`} />}
+    </div>
+  )
+}
+
+function ChannelExtras({
+  extras,
+  onChange,
+  spaces,
+  accent,
+}: {
+  extras: Extras
+  onChange: (next: Extras) => void
+  spaces: ChannelSpaceEntry[]
+  accent: string
+}) {
+  return (
+    <div className="mt-4 space-y-3">
+      <ExtraField label="View style">
+        <SegmentedChoice
+          value={extras.viewMode}
+          onPick={(viewMode) => onChange({ ...extras, viewMode })}
+          accent={accent}
+          options={[
+            { value: 'CHAT', label: 'Chat', hint: 'A classic thread' },
+            { value: 'FEED', label: 'Feed', hint: 'Post cards with comments' },
+          ] as const}
+        />
+      </ExtraField>
+      {spaces.length > 0 && (
+        <ExtraField label="Space">
+          <select
+            className={extraInput}
+            style={{ ['--accent' as string]: accent }}
+            value={extras.spaceId}
+            onChange={(e) => onChange({ ...extras, spaceId: e.target.value })}
+          >
+            <option value="">No space</option>
+            {spaces.map((space) => (
+              <option key={space.id} value={space.id}>
+                {space.emoji ? `${space.emoji} ` : ''}{space.name}
+              </option>
+            ))}
+          </select>
+        </ExtraField>
+      )}
+    </div>
+  )
+}
+
+function VisibilityExtras({
+  extras,
+  onChange,
+  accent,
+}: {
+  extras: Extras
+  onChange: (next: Extras) => void
+  accent: string
+}) {
+  return (
+    <div className="mt-4">
+      <ExtraField label="Visibility">
+        <SegmentedChoice
+          value={extras.visibility}
+          onPick={(visibility) => onChange({ ...extras, visibility })}
+          accent={accent}
+          options={[
+            { value: 'public', label: 'Public', hint: 'Findable from Discover' },
+            { value: 'private', label: 'Private', hint: 'Invite or admin add only' },
+          ] as const}
+        />
+      </ExtraField>
     </div>
   )
 }

@@ -9,9 +9,9 @@ import { Alert, SettingsSection } from '@/components/ui';
 import { useConsoleSave } from '@/components/console/ConsoleSaveContext';
 
 // Node types backed by a toggleable community feature; Person/Group belong to
-// the always-on directory. (Types key on name, features on slug — no registry.)
+// the always-on directory and Event to the always-on navbar Events surface.
+// (Types key on name, features on slug — no registry.)
 const TYPE_FEATURE_KEYS: Record<string, { key: string; label: string }> = {
-  Event: { key: 'events', label: 'Events' },
   Resource: { key: 'resources', label: 'Resources' },
 };
 

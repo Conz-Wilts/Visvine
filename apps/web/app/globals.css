@@ -334,6 +334,26 @@ html {
   background: var(--color-brand-dark-green, #2f7a3e);
 }
 
+/* Opt-in: the thumb only appears while the pointer is over the scroller. The
+   bar keeps its width either way, so nothing reflows when it fades in.
+
+   This one is driven by the STANDARD `scrollbar-color`, not the
+   `::-webkit-scrollbar*` pseudo-elements the rest of the app uses — deliberately,
+   and it's why the rule sits outside the Firefox-only @supports guard above.
+   Chromium resolves scrollbar pseudo-element styles once and does not repaint
+   them when an ancestor's `:hover` flips, so `::-webkit-scrollbar-thumb`
+   transparent→green never actually paints (verified: the thumb stays stuck in
+   whatever state it first rendered in). `scrollbar-color` does restyle live.
+   The trade-off is Chromium's native bar rendering for these scrollers. */
+.scrollbar-on-hover {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.scrollbar-on-hover:hover {
+  scrollbar-color: var(--color-brand-green, #78d870) transparent;
+}
+
 /* Date & Time Picker Styling */
 input[type="date"],
 input[type="time"] {

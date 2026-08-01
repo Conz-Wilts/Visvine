@@ -78,6 +78,10 @@ export const FEATURES: FeatureDef[] = [
     label: 'Events',
     href: '/events',
     description: 'Create and RSVP to events, manage guests and invitations.',
+    // Always on and nav-less: events are reached from the calendar button in the
+    // global navbar, not a sidebar rail item, so there is nothing to toggle or
+    // reorder per community. See NAV_HIDDEN_FEATURE_KEYS.
+    core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -140,7 +144,8 @@ function visibleFeatures(
 
 /**
  * The nav features split between the sidebar rail and its "More" popup. Both
- * lists exclude nav-hidden features (messages) and keep the configured display
+ * lists exclude nav-hidden features (messages, notes, events — all reached from
+ * the top navbar or the Directory rather than the rail) and keep the configured display
  * order; `more` membership comes from `featureConfig.more`.
  */
 function navFeatures(

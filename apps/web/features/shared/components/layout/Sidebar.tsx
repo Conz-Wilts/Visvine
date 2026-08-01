@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useCreateModal, useCreateSurface, type CreateableType } from "@/lib/contexts/CreateModalContext";
+import { useCreateModal, useCreateSurface } from "@/lib/contexts/CreateModalContext";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { railFeatures, moreFeatures } from "@/lib/features";
-import { canCreateType } from "@/lib/create/creatable";
 import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/components/create/CreateModal";
@@ -52,25 +51,10 @@ const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar b
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
 const RAIL_GAP = 8; // gap between the Create block and the nav list
 
-// The things the docked Create panel still makes. Everything else is a context
-// note, so it opens the note-first draft surface instead (see useCreateSurface).
-// This list is what the menu COULD offer; canCreateType decides what it does —
-// without that filter it offered Channel/Space to members and to communities
-// with channels switched off, and the form only failed on submit.
-const CREATE_PANEL_TYPES: Array<{ type: CreateableType; label: string }> = [
-  { type: "file", label: "Upload a file" },
-  { type: "channel", label: "Channel" },
-  { type: "space", label: "Space" },
-  { type: "connector", label: "Connector" },
-  { type: "community", label: "Community" },
-];
-
 export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen } = useCreateModal();
   const createSurface = useCreateSurface();
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
-  const createMenuRef = useRef<HTMLDivElement>(null);
   // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
@@ -85,11 +69,6 @@ export default function Sidebar() {
   // the rail and the "More" popup per featureConfig.more. See lib/features.tsx.
   // (Messages lives in the top navbar — toggleable but nav-less.)
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  // Same gate the Create panel's grid uses, so the caret menu never offers
-  // something this person can't actually create here.
-  const createTypes = CREATE_PANEL_TYPES.filter((item) =>
-    canCreateType(item.type, { featureConfig, isAdmin }),
-  );
   const allNav = railFeatures(featureConfig, isAdmin);
   const moreNav = moreFeatures(featureConfig, isAdmin);
   const moreActive = moreNav.some(({ href }) => pathname === href);
@@ -102,25 +81,6 @@ export default function Sidebar() {
   const [moreOpen, setMoreOpen] = useState(false);
   // Close on navigation (a tool card was clicked, or back/forward).
   useEffect(() => setMoreOpen(false), [pathname]);
-
-  // The create caret menu closes on navigation and on any click outside it —
-  // including the "+" itself, whose own handler closes it before navigating.
-  useEffect(() => setCreateMenuOpen(false), [pathname]);
-  useEffect(() => {
-    if (!createMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
-        setCreateMenuOpen(false);
-      }
-    };
-    // Deferred to the next frame: the click that opened the menu is still
-    // propagating, and would otherwise close it immediately.
-    const id = requestAnimationFrame(() => document.addEventListener("mousedown", handler));
-    return () => {
-      cancelAnimationFrame(id);
-      document.removeEventListener("mousedown", handler);
-    };
-  }, [createMenuOpen]);
 
   // On /channels, /messages and /settings (wide viewports only) the rail docks
   // into a full-height card hosting a side panel — the channel/conversation
@@ -176,10 +136,7 @@ export default function Sidebar() {
       {/* Create button */}
       <div className="relative group" data-tour="create">
         <button
-          onClick={() => {
-            setCreateMenuOpen(false);
-            createSurface();
-          }}
+          onClick={() => createSurface()}
           className="flex items-center h-10 text-white"
           style={{ paddingLeft: ICON_LEFT }}
         >
@@ -202,46 +159,10 @@ export default function Sidebar() {
           </span>
         </button>
 
-        {/* The caret is the escape hatch for the four things that are NOT context
-            notes (a channel, space, community or uploaded file has no note to
-            open), so they keep the docked panel. Everything else is one click
-            away on the blank draft — no tile grid standing between "+" and a
-            surface you can type into. */}
-        {expanded && (
-          <button
-            type="button"
-            aria-label="More things to create"
-            aria-expanded={createMenuOpen}
-            onClick={() => setCreateMenuOpen((v) => !v)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-text-muted transition hover:bg-black/5 hover:text-text-secondary"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-        )}
-
-        {createMenuOpen && (
-          <div
-            ref={createMenuRef}
-            className="absolute left-2 right-2 top-full z-50 mt-1 overflow-hidden rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg"
-          >
-            {createTypes.map((item) => (
-              <button
-                key={item.type}
-                type="button"
-                onClick={() => {
-                  setCreateMenuOpen(false);
-                  createSurface(item.type);
-                }}
-                className="block w-full px-3 py-1.5 text-left text-[13px] text-text-primary transition hover:bg-surface-2"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
-
+        {/* No menu hangs off this button. Every type — including a channel,
+            space, community, connector or uploaded file — is a choice in the
+            draft surface's own Type row, so "+" is one click to a surface you
+            can type into rather than a list of decisions. */}
         {!expanded && (
           <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50"
             style={{ left: COLLAPSED_W + 4 }}

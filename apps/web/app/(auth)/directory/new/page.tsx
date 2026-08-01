@@ -42,7 +42,12 @@ const DRAFT_TABS: PaneTabItem[] = [
   { id: 'raw', label: 'Raw' },
 ];
 
-const DRAFT_TYPES = new Set<DraftType>(['note', 'person', 'group', 'resource']);
+// Every type the draft surface can commit — `?type=` is only a pre-pick, so an
+// unknown value just leaves the Type row unset rather than erroring.
+const DRAFT_TYPES = new Set<DraftType>([
+  'note', 'person', 'group', 'resource',
+  'file', 'connector', 'channel', 'space', 'community',
+]);
 
 function DraftRoute() {
   const params = useSearchParams();

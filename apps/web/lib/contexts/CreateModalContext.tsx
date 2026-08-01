@@ -23,15 +23,27 @@ export type CreateableType =
 
 /**
  * Types that are created on the note-first surface (/directory/new) rather than
- * in the docked panel: everything that IS a context note. The panel keeps the
- * four that aren't — a channel, a space, a community and an uploaded file have
- * no note to open, so there is nothing for the draft surface to render.
+ * in the docked panel — which is now everything except an Event (whose detail
+ * route redirects to /events/<id>, so the draft has nowhere to land).
+ *
+ * A channel, space, community and uploaded file used to be panel-only on the
+ * grounds that they have no note to open. They do: each writes a context note
+ * (channels/<slug>.md, spaces/…, communities/…) or lands in the context tree,
+ * so the draft surface takes a name and a starting body for them just like the
+ * rest. The docked panel is still reachable from the places that open it
+ * directly (the community switcher, the channel list) — it just isn't the only
+ * way to reach these types any more.
  */
 const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   context: 'note',
   person: 'person',
   organization: 'group',
   resource: 'resource',
+  connector: 'connector',
+  channel: 'channel',
+  space: 'space',
+  community: 'community',
+  file: 'file',
 };
 
 interface CreateModalContextValue {

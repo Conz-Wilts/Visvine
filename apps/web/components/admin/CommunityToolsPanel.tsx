@@ -73,8 +73,8 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
   );
   const [directoryPrivate, setDirectoryPrivate] = useState(isDirectoryPrivate(savedConfig));
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  // Nav-hidden features (Messages in the top bar, Context under the Directory)
-  // are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
+  // Nav-hidden features (Messages and Events in the top bar, Context under the
+  // Directory) are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
   const [order, setOrder] = useState<string[]>(() =>
     sortFeatureKeys(savedConfig, FEATURES.filter(f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)).map(f => f.key))
   );

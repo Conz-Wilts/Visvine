@@ -616,6 +616,13 @@ export function NoteEditor({
         {/* The note title — rendered as the page heading from frontmatter, so
             every note opens with a styled title and the body carries none.
             (Embedded/profile tab: the profile above IS the identity.) */}
+        {/* Freshness line sits at the top-left of the column, above the title. */}
+        {mode === 'wysiwyg' && meta && (
+          <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
+            {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
+            Edited {timeAgo(meta.mtime, { style: 'long' })}
+          </div>
+        )}
         {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
         {mode === 'wysiwyg' ? (
           <EditorContent editor={editor} />
@@ -634,20 +641,12 @@ export function NoteEditor({
       </div>
 
       {mode === 'wysiwyg' && (
-        <>
-          <LinkedReferences
-            references={references}
-            title={noteTitle}
-            onOpenNote={onOpenNote}
-            onLinkMention={canEdit ? onLinkMention : undefined}
-          />
-          {meta && (
-            <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
-              {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
-              Edited {timeAgo(meta.mtime, { style: 'long' })}
-            </div>
-          )}
-        </>
+        <LinkedReferences
+          references={references}
+          title={noteTitle}
+          onOpenNote={onOpenNote}
+          onLinkMention={canEdit ? onLinkMention : undefined}
+        />
       )}
     </div>
   )
@@ -670,12 +669,12 @@ export function NoteEditor({
       {embedded && toolbarHost && (starButton || formatControls || refactorButton || onModeChange || toolbarTrailSlot) && createPortal(
         /* One content-width card, centred by the host and floating clear of the
            nav line: a rounded rectangle on all four sides with its own border
-           and shadow, separated from the tab row by the mt-2 gap the host's
+           and shadow, separated from the tab row by the mt-4 gap the host's
            reserved height accounts for. Everything lives in it together instead
            of spread across a full-width row. max-w-full + the inner
            overflow-x-auto keep narrow panes scrolling inside the card rather
            than growing it. */
-        <div className="relative mt-2 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-md">
+        <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-md">
           {starButton}
           {starButton && formatControls && <Divider />}
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>

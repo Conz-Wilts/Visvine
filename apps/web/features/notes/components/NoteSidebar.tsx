@@ -281,7 +281,7 @@ export function NoteSidebar({
       <div
         ref={scrollRef}
         onScroll={rememberScroll}
-        className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
+        className="scrollbar-on-hover flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
       >
         {/* pl only — it insets the row CONTENT off the panel edge while the
             bands still bleed past it; a matching pr would pull the bands'

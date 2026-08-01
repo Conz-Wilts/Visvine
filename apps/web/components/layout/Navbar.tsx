@@ -120,9 +120,9 @@ export default function Navbar() {
         {/* Right: page-injected controls (e.g. directory view toggle) + profile */}
         <div className="flex items-center gap-3">
           {headerRight}
-          {/* Events discovery is always reachable from the shell, even when the
-              current community has the events feature turned off — public events
-              from other communities remain discoverable. */}
+          {/* Events live here, not in the sidebar rail: they're a shell-level
+              surface (like Messages), always reachable and not a per-community
+              tool, so public events from other communities stay discoverable. */}
           <Link
             href="/events?scope=discover"
             aria-label="Discover events"
