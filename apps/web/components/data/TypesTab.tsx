@@ -4,16 +4,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
-import { isFeatureEnabled } from '@/lib/featureAccess';
+import { isNodeTypeEnabled } from '@/lib/featureAccess';
 import { Alert, SettingsSection } from '@/components/ui';
 import { useConsoleSave } from '@/components/console/ConsoleSaveContext';
-
-// Node types backed by a toggleable community feature; Person/Group belong to
-// the always-on directory and Event to the always-on navbar Events surface.
-// (Types key on name, features on slug — no registry.)
-const TYPE_FEATURE_KEYS: Record<string, { key: string; label: string }> = {
-  Resource: { key: 'resources', label: 'Resources' },
-};
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
 
@@ -272,7 +265,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
 
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving, featureEnabled = true, disabledHint }: {
+function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
   typeName: string;
   typeColor: string;
   aliases: CommunityAlias[];
@@ -282,8 +275,6 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
   onUpdateTypeColor: (color: string) => void;
   saving: boolean;
-  featureEnabled?: boolean;
-  disabledHint?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -295,22 +286,20 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
   };
 
   const toggleExpanded = () => {
-    if (!featureEnabled) return;
     setExpanded(p => !p);
     setAdding(false);
     setShowColorPicker(false);
   };
 
   return (
-    <div className={`border border-border-subtle rounded-xl ${featureEnabled ? '' : 'opacity-50'}`}>
+    <div className="border border-border-subtle rounded-xl">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-surface-1 rounded-xl" style={{ borderBottomLeftRadius: expanded ? 0 : undefined, borderBottomRightRadius: expanded ? 0 : undefined }}>
         {/* Expand chevron */}
         <button
           type="button"
-          disabled={!featureEnabled}
           onClick={toggleExpanded}
-          className="w-5 h-5 flex items-center justify-center shrink-0 text-text-muted hover:text-text-primary transition-colors disabled:hover:text-text-muted"
+          className="w-5 h-5 flex items-center justify-center shrink-0 text-text-muted hover:text-text-primary transition-colors"
         >
           <svg
             className="w-3.5 h-3.5 transition-transform duration-200"
@@ -325,11 +314,10 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
         <div className="relative shrink-0">
           <button
             type="button"
-            disabled={!featureEnabled}
             onClick={e => { e.stopPropagation(); setShowColorPicker(p => !p); }}
-            className="w-4 h-4 rounded-sm shadow-sm transition-transform hover:scale-110 disabled:hover:scale-100"
+            className="w-4 h-4 rounded-sm shadow-sm transition-transform hover:scale-110"
             style={{ background: typeColor }}
-            title={featureEnabled ? 'Change type colour' : disabledHint}
+            title="Change type colour"
           />
           {showColorPicker && (
             <div className="absolute left-0 top-6 z-50" onClick={e => e.stopPropagation()}>
@@ -345,22 +333,15 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
         {/* Name — clicking expands */}
         <button
           type="button"
-          disabled={!featureEnabled}
           onClick={toggleExpanded}
           className="font-semibold text-sm text-text-primary flex-1 text-left"
         >
           {typeName}
         </button>
 
-        {/* Feature-off hint */}
-        {!featureEnabled && disabledHint && (
-          <span className="text-xs text-text-muted shrink-0">{disabledHint}</span>
-        )}
-
         {/* Alias preview */}
         <button
           type="button"
-          disabled={!featureEnabled}
           onClick={toggleExpanded}
           className="flex items-center gap-1.5 shrink-0"
         >
@@ -386,7 +367,7 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
       </div>
 
       {/* Expanded panel */}
-      {featureEnabled && expanded && (
+      {expanded && (
         <div className="px-4 py-3 bg-surface-2 border-t border-border-subtle rounded-b-xl space-y-3">
           {/* Existing aliases */}
           {aliases.length > 0 && (
@@ -494,16 +475,14 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     <div className="space-y-8">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <SettingsSection
-        title="Types & aliases"
-        description="Click a type to expand it and add community-specific aliases with custom colours."
-      >
+      <SettingsSection title="Types & aliases">
         <div className="mb-4 space-y-2">
-          {DEFAULT_NODE_TYPES.map(defaultType => {
+          {/* A type whose feature is switched off isn't offered at all — no point
+              curating aliases for something the community can't create. */}
+          {DEFAULT_NODE_TYPES
+            .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
+            .map(defaultType => {
             const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
-            const feature = TYPE_FEATURE_KEYS[liveType.name];
-            const featureEnabled = !feature
-              || isFeatureEnabled(currentCommunity.featureConfig ?? null, feature.key);
             return (
               <TypeSection
                 key={liveType.name}
@@ -516,16 +495,11 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
                 onUpdateAliasColor={handleUpdateAliasColor}
                 onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
                 saving={saving}
-                featureEnabled={featureEnabled}
-                disabledHint={feature ? `${feature.label} off` : undefined}
               />
             );
           })}
         </div>
 
-        <p className="text-xs text-text-muted">
-          Aliases appear in place of the base type label on node cards and context tooltips.
-        </p>
       </SettingsSection>
     </div>
   );

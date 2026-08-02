@@ -247,10 +247,10 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
 
   return (
     <div ref={flipRoot} className="w-full space-y-8">
-      <SettingsSection
-        title="Tools"
-        description="Choose which tools members of this community can use, and drag to reorder them. The first tool members can see is where they land. Click a tool to see what it does. Use the dot-grid button to tuck a tool into the sidebar's More popup and keep the rail compact."
-      >
+      {/* The row affordances explain themselves — grip to reorder, name to
+          expand, dot-grid to tuck into More, toggle to switch off — so the
+          section carries no instructions. */}
+      <SettingsSection title="Tools">
         <div className="divide-y divide-border-subtle">
         {toolFeatures.map((feature, index) => {
           const isCore = feature.core === true;
@@ -358,7 +358,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
                       Admins only
                     </span>
                     <span className="mt-0.5 block text-xs text-text-muted">
-                      Hidden from members&apos; sidebars; only admins can open the directory.
+                      Only admins can open the directory.
                     </span>
                   </span>
                   <Toggle
@@ -374,10 +374,7 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
         </div>
       </SettingsSection>
 
-      <SettingsSection
-        title="Sidebar preview"
-        description="What a member of this community sees right now."
-      >
+      <SettingsSection title="Sidebar preview">
         <div className="flex items-start gap-5">
           {/* Mini rail — mimics the floating sidebar geometry at reduced scale. */}
           <div className="flex w-16 shrink-0 flex-col items-center gap-1 rounded-2xl border border-border-subtle bg-surface-1 py-3 shadow-soft">
@@ -415,10 +412,9 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
             {directoryPrivate && (
               <p className="flex items-center gap-1.5">
                 <LockIcon />
-                Admins also see: Directory (admins only)
+                Directory: admins only
               </p>
             )}
-            <p>Messages appears in the top bar.</p>
           </div>
         </div>
       </SettingsSection>

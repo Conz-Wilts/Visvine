@@ -92,8 +92,6 @@ async function createCommunity() {
       id: COMMUNITY_ID,
       name: COMMUNITY_NAME,
       description: "Local development scaffolding community. NZ ecosystem content lives in community:nz-ecosystem (pnpm db:nz).",
-      location: "localhost",
-      tags: ["dev", "local"],
       country: "NZ",
     },
   });

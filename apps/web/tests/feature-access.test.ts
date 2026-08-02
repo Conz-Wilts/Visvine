@@ -5,6 +5,8 @@ import {
   CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
+  isNodeTypeEnabled,
+  nodeTypeFeatureKey,
   isDirectoryPrivate,
   canAccessFeature,
   moreFeatureKeys,
@@ -225,5 +227,29 @@ describe('moreFeatureKeys', () => {
       moreFeatureKeys({ enabled: { tasks: false }, more: ['tasks'] }),
       ['tasks'],
     );
+  });
+});
+
+describe('isNodeTypeEnabled', () => {
+  it('leaves ungated types alone', () => {
+    for (const type of ['Person', 'Group', 'Event', 'Community', 'Note', 'File', 'Connector']) {
+      assert.equal(nodeTypeFeatureKey(type), null);
+      assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
+    }
+  });
+
+  it('hides Channel and Space when the channels tool is off', () => {
+    const off = { enabled: { channels: false } };
+    assert.equal(isNodeTypeEnabled(off, 'Channel'), false);
+    assert.equal(isNodeTypeEnabled(off, 'Space'), false);
+    // Stored node.type casing drifts — match case-insensitively.
+    assert.equal(isNodeTypeEnabled(off, 'space'), false);
+    assert.equal(isNodeTypeEnabled({ enabled: { channels: true } }, 'Channel'), true);
+  });
+
+  it('hides Resource when the resources tool is off, and defaults everything on', () => {
+    assert.equal(isNodeTypeEnabled({ enabled: { resources: false } }, 'Resource'), false);
+    assert.equal(isNodeTypeEnabled(null, 'Resource'), true);
+    assert.equal(isNodeTypeEnabled({}, 'Channel'), true);
   });
 });

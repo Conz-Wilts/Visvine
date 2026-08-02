@@ -2,15 +2,14 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Trash2 } from 'lucide-react';
 import { Community } from '@/lib/types';
-import { COUNTRIES, countryCodeToFlag, getCountry } from '@/lib/countries';
+import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { Alert, Button, ConfirmDialog, Field, Input, Textarea, SettingsSection, inputBaseClass } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, SettingsSection, inputBaseClass } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import CommunityImageUpload from '@/components/community/CommunityImageUpload';
-import { TagCombobox } from '@/features/notes/components/TagCombobox';
-import { tagPalette, tagKey } from '@/lib/tagColors';
 
 interface Props {
   community: Community;
@@ -91,7 +90,7 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
       >
         {selected ? (
           <>
-            <span className="text-xl leading-none">{countryCodeToFlag(selected.code)}</span>
+            <CountryFlagIcon code={selected.code} className="w-[24px] h-[18px]" />
             <span className="flex-1">{selected.name}</span>
             <span
               onClick={handleClear}
@@ -137,7 +136,7 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
                       value === country.code ? 'bg-surface-2 font-medium' : ''
                     }`}
                   >
-                    <span className="text-lg leading-none w-6 text-center">{countryCodeToFlag(country.code)}</span>
+                    <CountryFlagIcon code={country.code} className="w-[22px] h-[16px]" />
                     <span className="text-text-primary">{country.name}</span>
                     {value === country.code && (
                       <svg className="w-4 h-4 text-brand-green ml-auto shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -166,10 +165,6 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   const [description, setDescription] = useState(community.description);
   const [country, setCountry] = useState(community.country ?? '');
   const [location, setLocation] = useState(community.location ?? '');
-  const [tags, setTags] = useState<string[]>(community.tags ?? []);
-  const [addingTag, setAddingTag] = useState(false);
-  // Colours registered this session, layered over the community's saved registry.
-  const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({});
   const [imageUrl, setImageUrl] = useState(community.imageUrl ?? '');
   const [visibility, setVisibility] = useState<'public' | 'private'>(
     community.visibility === 'private' ? 'private' : 'public'
@@ -208,168 +203,18 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
     router.replace('/directory');
   };
 
-  // Same tag system as context notes: coloured pills, a search-or-create picker,
-  // and colours saved to the community's shared tag registry.
-  const tagColors = { ...(community.designConfig?.tagColors ?? {}), ...tagColorOverride };
-  const tagsLower = new Set(tags.map(t => t.toLowerCase()));
-  const tagSuggestions = Object.keys(tagColors).filter(t => !tagsLower.has(t)).sort();
-
-  const saveTags = (next: string[]) => {
-    setTags(next);
-    queue({ tags: next });
-  };
-
-  const addTag = (raw: string) => {
-    const tag = raw.trim();
-    if (!tag || tags.some(t => t.toLowerCase() === tag.toLowerCase())) return;
-    saveTags([...tags, tag]);
-  };
-
-  // Register the chosen colour on the community (best-effort — the tag still
-  // adds if the colour save fails), then add the tag itself.
-  const createTag = (tag: string, color: string) => {
-    if (!tag.trim()) return;
-    setTagColorOverride(m => ({ ...m, [tagKey(tag)]: color }));
-    void fetch(`/api/communities/${encodeURIComponent(community.id)}/tag-colors`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tag: tag.trim(), color }),
-    }).catch(() => {});
-    addTag(tag);
-  };
-
-  const removeTag = (tag: string) => saveTags(tags.filter(t => t !== tag));
-
   const visibilityOptions = [
-    { value: 'public', title: 'Public', desc: 'Discoverable & self-joinable', icon: <GlobeIcon /> },
-    { value: 'private', title: 'Private', desc: 'Invite link or admin add only', icon: <LockIcon /> },
+    { value: 'public', title: 'Public', desc: 'Anyone can find and join', icon: <GlobeIcon /> },
+    { value: 'private', title: 'Private', desc: 'Invite or admin only', icon: <LockIcon /> },
   ] as const;
+
 
   return (
     <div className="w-full space-y-8">
-      {/* Identity — image above the core text fields */}
-      <SettingsSection
-        title="Identity"
-        description="The name, avatar, and blurb people see first."
-      >
-        <div className="space-y-6">
-          <CommunityImageUpload
-            community={{ ...community, imageUrl }}
-            onUploadComplete={url => {
-              setImageUrl(url);
-              onSaved({ imageUrl: url });
-            }}
-            size="xl"
-          />
-          <div className="space-y-5">
-            <Field label="Community name" error={nameError}>
-              <Input
-                type="text"
-                required
-                value={name}
-                onChange={e => handleNameChange(e.target.value)}
-                onBlur={flush}
-                placeholder="Your community name"
-              />
-            </Field>
-            <Field label="Description" hint="A sentence or two about what this community is for.">
-              <Textarea
-                rows={3}
-                value={description}
-                onChange={e => {
-                  setDescription(e.target.value);
-                  queue({ description: e.target.value }, { debounceMs: 800 });
-                }}
-                onBlur={flush}
-                placeholder="What brings this community together?"
-              />
-            </Field>
-          </div>
-        </div>
-      </SettingsSection>
-
-      {/* Location & tags */}
-      <SettingsSection
-        title="Location & tags"
-        description="Help the right people find and recognise your community."
-      >
-        <div className="mb-5 grid gap-5 sm:grid-cols-2">
-          <Field label="Country">
-            <CountrySelector
-              value={country}
-              onChange={code => {
-                setCountry(code);
-                queue({ country: code || null });
-              }}
-            />
-          </Field>
-          <Field label="Location">
-            <Input
-              type="text"
-              value={location}
-              onChange={e => {
-                setLocation(e.target.value);
-                queue({ location: e.target.value }, { debounceMs: 800 });
-              }}
-              onBlur={flush}
-              placeholder="e.g. Auckland, New Zealand"
-            />
-          </Field>
-        </div>
-
-        <Field label="Tags" hint="Help people recognise what this community is about.">
-          <div className="flex flex-wrap items-center gap-1.5">
-            {tags.map(tag => {
-              const pal = tagPalette(tag, tagColors);
-              return (
-                <span
-                  key={tag}
-                  className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
-                  style={{ background: pal.base }}
-                >
-                  <span className="truncate">{tag}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    aria-label={`Remove ${tag}`}
-                    className="rounded-full p-0.5 opacity-60 transition hover:opacity-100"
-                  >
-                    <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </span>
-              );
-            })}
-
-            {addingTag ? (
-              <TagCombobox
-                suggestions={tagSuggestions}
-                existing={tagsLower}
-                registry={tagColors}
-                accentBase="var(--color-brand-green, #78d870)"
-                onAdd={addTag}
-                onCreate={createTag}
-                onClose={() => setAddingTag(false)}
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAddingTag(true)}
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-brand-green hover:text-brand-dark-green"
-              >
-                + Add tag
-              </button>
-            )}
-          </div>
-        </Field>
-      </SettingsSection>
-
-      {/* Visibility */}
-      <SettingsSection
-        title="Visibility"
-        description="Control who can find and join this community."
-      >
+      {/* Visibility leads: it's the one setting with consequences for who can
+          see any of the rest, so it shouldn't be buried below the form. The two
+          cards say what they do, so they carry no heading. */}
+      <section>
         <div className="grid gap-3 sm:grid-cols-2">
           {visibilityOptions.map(opt => {
             const active = visibility === opt.value;
@@ -409,27 +254,85 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
             );
           })}
         </div>
-      </SettingsSection>
+      </section>
 
-      {/* Danger zone */}
-      <SettingsSection
-        title="Danger zone"
-        description="Irreversible actions for this community."
-      >
-        {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-medium text-text-primary">Delete this community</div>
-            <div className="mt-0.5 text-xs text-text-muted">
-              Removes the community and its memberships. All people, organisations, and connections
-              must be deleted first.
+      {/* Avatar, name, blurb and where it is — one block, no commentary: the
+          field labels already say what each one is. */}
+      <SettingsSection title="Details">
+        <div className="space-y-6">
+          <CommunityImageUpload
+            community={{ ...community, imageUrl }}
+            onUploadComplete={url => {
+              setImageUrl(url);
+              onSaved({ imageUrl: url });
+            }}
+            size="xl"
+          />
+          <div className="space-y-5">
+            <Field label="Name" error={nameError}>
+              <Input
+                type="text"
+                required
+                value={name}
+                onChange={e => handleNameChange(e.target.value)}
+                onBlur={flush}
+                placeholder="Community name"
+              />
+            </Field>
+            <Field label="Description">
+              <Textarea
+                rows={3}
+                value={description}
+                onChange={e => {
+                  setDescription(e.target.value);
+                  queue({ description: e.target.value }, { debounceMs: 800 });
+                }}
+                onBlur={flush}
+                placeholder="What brings this community together?"
+              />
+            </Field>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Country">
+                <CountrySelector
+                  value={country}
+                  onChange={code => {
+                    setCountry(code);
+                    queue({ country: code || null });
+                  }}
+                />
+              </Field>
+              <Field label="Location">
+                <Input
+                  type="text"
+                  value={location}
+                  onChange={e => {
+                    setLocation(e.target.value);
+                    queue({ location: e.target.value }, { debounceMs: 800 });
+                  }}
+                  onBlur={flush}
+                  placeholder="e.g. Auckland, New Zealand"
+                />
+              </Field>
             </div>
           </div>
-          <Button variant="pill-danger" onClick={() => { setDeleteError(''); setConfirmDelete(true); }}>
-            Delete…
-          </Button>
         </div>
       </SettingsSection>
+
+      {/* Hand-rolled rather than a SettingsSection: the red wash has to enclose
+          the heading too, which that component's hairline-divider shell can't do.
+          The button names the action, so there's no label row beside it. */}
+      <section className="rounded-xl border border-red-300 bg-red-50 p-5 dark:border-red-900/60 dark:bg-red-950/30">
+        <h3 className="mb-4 text-base font-semibold text-red-600 dark:text-red-400">Danger zone</h3>
+        {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
+        <Button
+          variant="danger"
+          className="inline-flex items-center gap-2 px-4 py-2.5 text-base font-semibold"
+          onClick={() => { setDeleteError(''); setConfirmDelete(true); }}
+        >
+          <Trash2 size={18} aria-hidden />
+          Delete this community
+        </Button>
+      </section>
 
       <ConfirmDialog
         open={confirmDelete}

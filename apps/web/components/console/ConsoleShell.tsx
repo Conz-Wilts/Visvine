@@ -27,8 +27,6 @@ const HANDOFF_KEY = 'pane-top';
 export interface ConsoleSection {
   id: string;
   label: string;
-  /** One-line summary shown above the section's content. */
-  description: string;
   /** Count badge appended to the tab label (hidden when 0/undefined). */
   badge?: number;
   /** 'form' constrains the pane to a comfortable form width; 'wide' uses the full pane. */
@@ -168,9 +166,10 @@ export default function ConsoleShell({ sections, renderSection }: ConsoleShellPr
         {/* <main> supplies no horizontal gutter (see AuthLayoutClient) — the bar
             bleeds into the sidebar seam, the content keeps the page's own px. */}
         <div className="w-full max-w-[1600px] mx-auto pt-6 pb-10 px-6 sm:px-8">
+          {/* The tab bar above already names the active section, so the page
+              heading is the label alone — no restatement underneath it. */}
           <header className="mb-6">
             <h1 className="text-lg font-bold text-text-primary">{activeSection.label}</h1>
-            <p className="text-xs text-text-muted mt-0.5">{activeSection.description}</p>
           </header>
 
           <main id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`} className="min-w-0">

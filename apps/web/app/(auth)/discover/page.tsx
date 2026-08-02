@@ -4,7 +4,6 @@ import React, { useState, useMemo } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
 import { Community, aliasesForType } from '@/lib/types';
-import Badge from '@/components/ui/Badge';
 import { PageTitle } from '@/components/ui';
 
 function formatMemberCount(count: number): string {
@@ -92,17 +91,6 @@ function CommunityCard({
           </div>
         )}
 
-        {/* Tags */}
-        {community.tags && community.tags.length > 0 && (
-          <div className="shrink-0 flex flex-wrap justify-center gap-1.5">
-            {community.tags.slice(0, 2).map((tag, index) => (
-              <Badge key={index} variant="tag">
-                {tag}
-              </Badge>
-            ))}
-          </div>
-        )}
-
         {/* Join button pinned to bottom */}
         <div className="mt-auto pt-3 border-t border-border-subtle w-full" onClick={e => e.stopPropagation()}>
           <button
@@ -169,8 +157,7 @@ export default function DiscoverPage() {
       const q = search.toLowerCase();
       result = result.filter(c =>
         c.name.toLowerCase().includes(q) ||
-        (c.description ?? '').toLowerCase().includes(q) ||
-        c.tags.some(t => t.toLowerCase().includes(q))
+        (c.description ?? '').toLowerCase().includes(q)
       );
     }
     return result;

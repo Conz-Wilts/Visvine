@@ -42,6 +42,40 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
   return enabled[key] !== false;
 }
 
+/**
+ * Node types that only exist because a toggleable feature is on. Keyed by the
+ * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
+ * drifts — 'space' vs 'Space'), valued by the feature slug that owns them.
+ *
+ * Person/Group belong to the always-on directory, Event to the always-on
+ * navbar Events surface, and Community/Note/File/Connector to core surfaces —
+ * none of them appear here, so they're never hidden.
+ */
+export const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
+  resource: 'resources',
+  space: 'channels',
+  channel: 'channels',
+};
+
+/** The feature slug a node type belongs to, or null if it isn't feature-gated. */
+export function nodeTypeFeatureKey(typeName: string): string | null {
+  return NODE_TYPE_FEATURE_KEYS[typeName.toLowerCase()] ?? null;
+}
+
+/**
+ * Should a node type be offered at all in this community? False only when the
+ * type belongs to a feature the community has switched off — turning off
+ * Channels should take the Channel and Space types with it, not leave them
+ * listed in the console and the directory filters.
+ */
+export function isNodeTypeEnabled(
+  config: CommunityFeatureConfig | null | undefined,
+  typeName: string,
+): boolean {
+  const key = nodeTypeFeatureKey(typeName);
+  return key === null || isFeatureEnabled(config, key);
+}
+
 /** Is the community's directory restricted to admins only? */
 export function isDirectoryPrivate(config: CommunityFeatureConfig | null | undefined): boolean {
   return config?.directoryPrivate === true;

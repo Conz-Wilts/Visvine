@@ -371,16 +371,6 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
             ) : (
               <p className="text-sm text-text-muted italic">No description yet.</p>
             )}
-            {community.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-4">
-                {community.tags.map((tag) => (
-                  <span key={tag} className="px-3 py-1.5 rounded-full text-[13px] font-semibold border transition hover:-translate-y-0.5"
-                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
           </SectionCard>
 
           {/* Upcoming events */}

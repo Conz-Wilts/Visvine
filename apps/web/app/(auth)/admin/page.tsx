@@ -45,12 +45,12 @@ function AdminConsole({ community, onSaved }: {
   const handlePendingCount = useCallback((count: number) => setPendingPeople(count), []);
 
   const sections: ConsoleSection[] = [
-    { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} />, description: 'Name, details, and access' },
-    { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} />, description: 'Enable community tools' },
-    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} />, description: 'Members, teams, and context permissions' },
-    { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} />, description: 'Directory node types' },
-    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} />, description: 'Recent admin actions' },
-    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} />, description: 'Engagement and growth' },
+    { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
+    { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
+    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} /> },
+    { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
+    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} /> },
+    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} /> },
   ];
 
   return (

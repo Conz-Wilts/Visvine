@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import CommunityAvatar from '@/components/community/CommunityAvatar';
-import { Badge, EmptyState, PageTitle } from '@/components/ui';
+import { EmptyState, PageTitle } from '@/components/ui';
 
 export default function CommunitiesPage() {
   const { joinedCommunities, currentCommunity, setCurrentCommunity, leaveCommunity } = useCommunity();
@@ -105,14 +105,6 @@ export default function CommunitiesPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                         {community.location}
-                      </div>
-                    )}
-
-                    {community.tags && community.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {community.tags.slice(0, 2).map((tag, index) => (
-                          <Badge key={index} variant="tag">{tag}</Badge>
-                        ))}
                       </div>
                     )}
                   </div>

@@ -8,6 +8,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { useDashboardSearch } from '@/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/components/dashboard/types';
 import { DEFAULT_NODE_TYPES } from '@/lib/types';
+import { isNodeTypeEnabled } from '@/lib/featureAccess';
 import type { NBNode } from '@/lib/types';
 
 export type SortOrder = 'az' | 'za';
@@ -47,20 +48,26 @@ export function useDirectoryBrowse() {
   const { nodes, loading, error, community, refresh } = useDirectoryNodes();
   const { isAdmin } = useCommunity();
 
-  // Always show all configured types (even those with zero nodes).
+  // Always show all configured types (even those with zero nodes) — except the
+  // ones belonging to a switched-off feature, which shouldn't advertise a filter
+  // for something the community doesn't have. Existing nodes of such a type still
+  // pull it back in below, so nothing becomes unfilterable.
   // Stored node.type casing ('person') can differ from the configured name
   // ('Person'); canonicalize by lowercase so the two collapse into a single
   // entry (preferring the configured casing) instead of showing duplicates.
   const presentTypes = useMemo(() => {
     const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
     const byLower = new Map<string, string>();
-    for (const t of configuredTypes) byLower.set(t.name.toLowerCase(), t.name);
+    for (const t of configuredTypes) {
+      if (!isNodeTypeEnabled(community?.featureConfig ?? null, t.name)) continue;
+      byLower.set(t.name.toLowerCase(), t.name);
+    }
     nodes.forEach(n => {
       const key = n.type.toLowerCase();
       if (!byLower.has(key)) byLower.set(key, n.type);
     });
     return Array.from(byLower.values()).sort();
-  }, [nodes, community?.nodeTypes]);
+  }, [nodes, community?.nodeTypes, community?.featureConfig]);
 
   const presentTags = useMemo(() => {
     const tags = new Set<string>();

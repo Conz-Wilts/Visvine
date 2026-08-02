@@ -37,11 +37,16 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'connector':
       return isFeatureEnabled(featureConfig, 'notes') && isAdmin
 
+    // A resource node only exists because the Resources tool does — same rule
+    // the console's Types tab and the directory filters follow.
+    case 'resource':
+      return isFeatureEnabled(featureConfig, 'resources')
+
     // Anyone can start a community of their own.
     case 'community':
       return true
 
-    // The note-first types: person, organization, resource, context. Writing a
+    // The remaining note-first types: person, organization, context. Writing a
     // context note is the baseline capability of a member, gated per-folder
     // server-side rather than per-type here.
     default:
