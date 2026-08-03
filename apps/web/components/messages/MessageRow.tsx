@@ -54,7 +54,7 @@ function linkifyMentions(text: string): React.ReactNode[] {
       );
     } else if (m[2]) {
       parts.push(
-        <span key={`e${m.index}`} className="font-semibold text-red-500 dark:text-red-400 cursor-pointer hover:underline">#{m[2]}</span>,
+        <span key={`e${m.index}`} className="font-semibold text-red-500 cursor-pointer hover:underline">#{m[2]}</span>,
       );
     }
     last = m.index + m[0].length;
@@ -87,7 +87,7 @@ const MD_COMPONENTS: ReactMarkdownOptions['components'] = {
   code: ({ children }) => <code className="rounded bg-surface-3 px-1 py-0.5 font-mono text-[13px]">{children}</code>,
   pre: ({ children }) => <pre className="my-1 overflow-x-auto rounded-md bg-surface-3 p-2 font-mono text-[13px]">{children}</pre>,
   a: ({ href, children }) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 underline hover:opacity-80">
+    <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:opacity-80">
       {children}
     </a>
   ),
@@ -319,7 +319,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
               </span>
             )}
             {message.starred && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
                 <Star className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
@@ -328,7 +328,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Saved badge for grouped messages (the header line carries it otherwise) */}
         {!showHeader && message.starred && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
             <Star className="h-2.5 w-2.5 fill-current" /> Saved
           </span>
         )}

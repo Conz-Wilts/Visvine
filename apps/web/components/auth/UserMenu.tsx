@@ -4,9 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useSession, signOut } from "@/lib/auth-client";
-import { useTheme } from "@/lib/contexts/ThemeContext";
 import { useFullProfile } from "@/lib/contexts/FullProfileContext";
-import { Moon, Sun } from "lucide-react";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import PersonSilhouette from "@/components/ui/PersonSilhouette";
 
@@ -15,7 +13,6 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { isDark, toggleDark } = useTheme();
   const { openProfile } = useFullProfile();
 
   useClickOutside(menuRef, () => setOpen(false));
@@ -97,18 +94,6 @@ export default function UserMenu() {
               Admin console
             </button>
           )}
-
-          {/* Dark mode toggle */}
-          <button
-            onClick={toggleDark}
-            className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-surface-2 transition-colors flex items-center gap-2"
-          >
-            {isDark
-              ? <Sun className="w-4 h-4 text-text-muted" />
-              : <Moon className="w-4 h-4 text-text-muted" />
-            }
-            {isDark ? 'Light mode' : 'Dark mode'}
-          </button>
 
           <div className="border-t border-border-subtle my-1" />
 

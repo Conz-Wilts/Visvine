@@ -89,7 +89,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const router = useRouter();
   const { currentCommunity } = useCommunity();
   const { data: session } = useSession();
-  const { theme: userTheme, isDark } = useTheme();
+  const { theme: userTheme } = useTheme();
 
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   // The guest view's Event | Context | Raw bar (separate from the manage view's
@@ -134,8 +134,8 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
     name: userTheme.name,
     base: userTheme.accent,
     dark: userTheme.accentDark,
-    light: isDark ? userTheme.accentLightDark : userTheme.accentLight,
-  }), [userTheme, isDark]);
+    light: userTheme.accentLight,
+  }), [userTheme]);
 
   const publicSlug = event?.slug ?? eventId.replace(/^event:/, '');
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}/e/${publicSlug}` : `/e/${publicSlug}`;

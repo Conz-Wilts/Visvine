@@ -13,7 +13,6 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { MapPin, Video, Calendar, Loader2 } from 'lucide-react';
 import { formatEventDate, formatEventTime, formatEventDateShort, isEventPast } from '@/lib/eventUtils';
-import { useTheme } from '@/lib/contexts/ThemeContext';
 import type { NBEvent } from '@/lib/types';
 
 // Dynamic import — Leaflet requires window.
@@ -36,7 +35,6 @@ interface EventsMapViewProps {
 type RailTab = 'in-person' | 'virtual';
 
 export default function EventsMapView({ events }: EventsMapViewProps) {
-  const { isDark } = useTheme();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const [railTab, setRailTab] = useState<RailTab>('in-person');
@@ -145,7 +143,6 @@ export default function EventsMapView({ events }: EventsMapViewProps) {
             events={physicalEvents}
             selectedEventId={selectedEventId}
             hoveredEventId={hoveredEventId}
-            isDark={isDark}
             onSelectEvent={setSelectedEventId}
           />
         )}

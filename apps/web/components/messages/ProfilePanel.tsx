@@ -272,7 +272,7 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
         <button
           type="button"
           onClick={onLeave}
-          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-red-500 transition-colors hover:bg-red-50"
         >
           <LogOut className="h-4 w-4" />
           Leave {isChannel ? 'channel' : 'group'}

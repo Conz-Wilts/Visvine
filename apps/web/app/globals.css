@@ -1,9 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Open+Sauce+One:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
-/* Enable class-based dark mode via .dark on <html> */
-@custom-variant dark (&:where(.dark, .dark *));
-
 /* ─── ABC Ginto Rounded — local font faces ─── */
 @font-face {
   font-family: 'ABC Ginto Rounded';
@@ -108,25 +105,17 @@ html, body {
   color-scheme: light;
   --shimmer-base: #f0f0f0;
   --shimmer-highlight: #e8e8e8;
-  /* Lifted "floating chrome" shadow (navbar pills, sidebar). Lives on :root/.dark
-     (not @theme) so dark mode can swap it at runtime — Tailwind v4 inlines @theme
-     shadow values into utilities, which would freeze the light-mode value.
+  /* Lifted "floating chrome" shadow (navbar pills, sidebar). Lives on :root
+     (not @theme) — Tailwind v4 inlines @theme shadow values into utilities.
      Note: tailwind.config.js is ignored under Tailwind v4. */
   --shadow-float: 0 1px 2px rgba(16,24,40,0.10), 0 4px 10px rgba(16,24,40,0.10), 0 16px 32px -8px rgba(16,24,40,0.14);
 }
 
-/* Plain class (not @utility): reads the var at paint time so the .dark override applies */
+/* Plain class (not @utility): reads the var at paint time */
 .shadow-float {
   box-shadow: var(--shadow-float);
 }
 
-.dark {
-  color-scheme: dark;
-  --shimmer-base: #374151;
-  --shimmer-highlight: #4b5563;
-  /* Dark surfaces need heavier shadows + a top bevel highlight to read as raised */
-  --shadow-float: inset 0 1px 0 rgba(255,255,255,0.07), 0 2px 6px rgba(0,0,0,0.45), 0 14px 32px -6px rgba(0,0,0,0.6);
-}
 /* In @layer base so text-* utilities on links (e.g. the navbar's active
    text-brand-green) can override these defaults — unlayered rules would
    always beat @layer utilities regardless of specificity. */

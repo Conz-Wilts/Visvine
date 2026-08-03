@@ -25,23 +25,14 @@ interface EventMapInnerProps {
   events: NBEvent[];
   selectedEventId: string | null;
   hoveredEventId: string | null;
-  isDark: boolean;
   onSelectEvent: (id: string | null) => void;
 }
 
 const ACCENT = 'var(--color-brand-green, #78d870)';
 
-// Theme-aware CARTO basemaps (keyless, free for reasonable use, OSM-derived).
-const TILES = {
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-    pill: '#ffffff',
-  },
-  dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
-    pill: '#252524',
-  },
-} as const;
+// CARTO basemap (keyless, free for reasonable use, OSM-derived).
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
+const PILL_BG = '#ffffff';
 
 const TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
@@ -67,14 +58,13 @@ function escapeHtml(s: string): string {
 function createMarkerIcon(
   event: NBEvent,
   state: PinState,
-  isDark: boolean,
   offsetY: number,
 ): L.DivIcon {
   const { month, day } = formatEventDateShort(event.startAt);
   const selected = state === 'selected';
   const hovered = state === 'hovered';
 
-  const pillBg = TILES[isDark ? 'dark' : 'light'].pill;
+  const pillBg = PILL_BG;
   const borderColor = selected ? ACCENT : 'var(--color-border-subtle, #e5e7eb)';
   const borderWidth = selected ? 2 : 1;
   const scale = selected ? 1.04 : hovered ? 1.05 : 1;
@@ -207,7 +197,6 @@ function EventMarkers({
   events,
   selectedEventId,
   hoveredEventId,
-  isDark,
   onSelectEvent,
 }: EventMapInnerProps) {
   const map = useMap();
@@ -240,7 +229,7 @@ function EventMarkers({
           <Marker
             key={event.id}
             position={[event.location!.lat!, event.location!.lon!]}
-            icon={createMarkerIcon(event, state, isDark, offsets[event.id] ?? 0)}
+            icon={createMarkerIcon(event, state, offsets[event.id] ?? 0)}
             zIndexOffset={state === 'selected' ? 1000 : state === 'hovered' ? 500 : 0}
             eventHandlers={{
               click: () => onSelectEvent(selectedEventId === event.id ? null : event.id),
@@ -373,7 +362,6 @@ export default function EventMapInner({
   events,
   selectedEventId,
   hoveredEventId,
-  isDark,
   onSelectEvent,
 }: EventMapInnerProps) {
   const center = useMemo((): [number, number] => {
@@ -383,7 +371,6 @@ export default function EventMapInner({
     return [sumLat / events.length, sumLon / events.length];
   }, [events]);
 
-  const tiles = isDark ? TILES.dark : TILES.light;
   const selectedEvent = events.find(e => e.id === selectedEventId);
 
   return (
@@ -391,11 +378,10 @@ export default function EventMapInner({
       center={center}
       zoom={4}
       className="h-full w-full"
-      style={{ height: '100%', width: '100%', background: isDark ? '#1b1b1a' : '#eaeaea' }}
+      style={{ height: '100%', width: '100%', background: '#eaeaea' }}
       zoomControl
     >
-      {/* key forces a clean tile reload when the theme flips light <-> dark */}
-      <TileLayer key={isDark ? 'dark' : 'light'} attribution={TILE_ATTRIBUTION} url={tiles.url} />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
       <FitBounds events={events} />
       {/* Every event renders as its own card marker (no clustering) so the map
           reads consistently — no mix of full cards and numbered bundles.
@@ -404,7 +390,6 @@ export default function EventMapInner({
         events={events}
         selectedEventId={selectedEventId}
         hoveredEventId={hoveredEventId}
-        isDark={isDark}
         onSelectEvent={onSelectEvent}
       />
       {selectedEvent && (

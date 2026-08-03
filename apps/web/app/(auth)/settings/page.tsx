@@ -5,7 +5,6 @@ import { createPortal } from 'react-dom';
 import { useTheme, COLOR_THEMES, ColorTheme } from '@/lib/contexts/ThemeContext';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { DOCK_MIN_WIDTH } from '@/features/shared/components/layout/Sidebar';
-import Toggle from '@/components/ui/Toggle';
 import {
   User,
   Bell,
@@ -13,8 +12,6 @@ import {
   Shield,
   Globe,
   Eye,
-  Moon,
-  Sun,
   Smartphone,
 } from 'lucide-react';
 
@@ -76,7 +73,7 @@ function ThemeSwatch({ t, active, onSelect }: { t: ColorTheme; active: boolean; 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
 function AppearanceSection() {
-  const { theme, setTheme, isDark, toggleDark } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   return (
     <div className="space-y-8">
@@ -105,18 +102,6 @@ function AppearanceSection() {
       <div>
         <h3 className="text-sm font-semibold text-text-primary mb-3">Display</h3>
         <div className="space-y-2">
-          {/* Dark mode toggle */}
-          <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-surface-2 border border-border-subtle">
-            <div className="w-7 h-7 rounded-md flex items-center justify-center bg-surface-1 border border-border-default text-text-muted">
-              {isDark ? <Sun size={15} /> : <Moon size={15} />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-text-primary">Dark mode</p>
-              <p className="text-xs text-text-muted">{isDark ? 'Currently on' : 'Currently off'}</p>
-            </div>
-            <Toggle checked={isDark} onChange={toggleDark} aria-label="Dark mode" />
-          </div>
-
           {/* Language (static) */}
           <div className="flex items-center gap-3 px-3 py-3 rounded-lg bg-surface-2 border border-border-subtle">
             <div className="w-7 h-7 rounded-md flex items-center justify-center bg-surface-1 border border-border-default text-text-muted">
@@ -145,12 +130,12 @@ function AppearanceSection() {
 }
 
 function PlaceholderSection({ label, icon }: { label: string; icon: React.ReactNode }) {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div
         className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-        style={{ background: isDark ? theme.accentLightDark : theme.accentLight, color: theme.accentDark }}
+        style={{ background: theme.accentLight, color: theme.accentDark }}
       >
         {icon}
       </div>
@@ -164,7 +149,7 @@ function PlaceholderSection({ label, icon }: { label: string; icon: React.ReactN
 
 export default function SettingsPage() {
   const [active, setActive] = useState<SettingsSection>('appearance');
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { host } = useContextPanel();
 
   // Track the Sidebar's dock breakpoint so both sides flip together.
@@ -202,7 +187,7 @@ export default function SettingsPage() {
                       aria-current={isActive ? 'page' : undefined}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 w-full group"
                       style={{
-                        background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : 'transparent',
+                        background: isActive ? theme.accentLight : 'transparent',
                         color: isActive ? theme.accentDark : undefined,
                       }}
                     >
@@ -254,7 +239,7 @@ export default function SettingsPage() {
                   onClick={() => setActive(item.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all"
                   style={{
-                    background: isActive ? (isDark ? theme.accentLightDark : theme.accentLight) : undefined,
+                    background: isActive ? theme.accentLight : undefined,
                     color: isActive ? theme.accentDark : undefined,
                   }}
                 >
