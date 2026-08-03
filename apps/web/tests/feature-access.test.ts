@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ADMIN_ONLY_FEATURE_KEYS,
   ALL_FEATURE_KEYS,
   CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
@@ -20,6 +21,9 @@ import {
 // The registry keys from lib/features.tsx — mirrored in featureAccess.ts so the
 // node test runner never has to evaluate that module's JSX icons.
 const ALL_KEYS = ALL_FEATURE_KEYS;
+// The keys a member can reach with an empty config — everything except the tools
+// that are admins-only whatever the community says (ADMIN_ONLY_FEATURE_KEYS).
+const OPEN_KEYS = ALL_FEATURE_KEYS.filter((k) => !ADMIN_ONLY_FEATURE_KEYS.includes(k));
 
 describe('isFeatureEnabled', () => {
   it('defaults every feature on with an empty/missing config', () => {
@@ -85,14 +89,18 @@ describe('canAccessFeature', () => {
 
   it('does not let directoryPrivate affect other features', () => {
     const config = { directoryPrivate: true };
-    for (const key of ALL_KEYS.filter((k) => k !== 'directory')) {
+    for (const key of OPEN_KEYS.filter((k) => k !== 'directory')) {
       assert.equal(canAccessFeature(config, key, false), true);
     }
   });
 
-  it('gives a member with an empty config access to everything', () => {
-    for (const key of ALL_KEYS) {
+  it('gives a member with an empty config access to everything but the locked tools', () => {
+    for (const key of OPEN_KEYS) {
       assert.equal(canAccessFeature(null, key, false), true);
+    }
+    for (const key of ADMIN_ONLY_FEATURE_KEYS) {
+      assert.equal(canAccessFeature(null, key, false), false);
+      assert.equal(canAccessFeature(null, key, true), true);
     }
   });
 });
@@ -235,10 +243,19 @@ describe('moreFeatureKeys', () => {
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    for (const type of ['Person', 'Community', 'Event', 'Note', 'File', 'Connector']) {
+    for (const type of ['Person', 'Community', 'Event', 'Note', 'File']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
     }
+  });
+
+  it('hides Connector when the connectors tool is off', () => {
+    assert.equal(nodeTypeFeatureKey('Connector'), 'connectors');
+    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'Connector'), false);
+    // Stored `node.type` for a connector is lower-case — see notes/entities.ts.
+    assert.equal(isNodeTypeEnabled({ enabled: { connectors: false } }, 'connector'), false);
+    assert.equal(isNodeTypeEnabled({ enabled: { connectors: true } }, 'Connector'), true);
+    assert.equal(isNodeTypeEnabled(null, 'Connector'), true);
   });
 
   it('hides Channel and Space when the channels tool is off', () => {
@@ -259,15 +276,16 @@ describe('isNodeTypeEnabled', () => {
 
 describe('adminOnlyFeatureKeys', () => {
   it('folds the legacy directoryPrivate flag in', () => {
-    assert.deepEqual(adminOnlyFeatureKeys({ directoryPrivate: true }), ['directory']);
-    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['directory'], directoryPrivate: true }), ['directory']);
-    assert.deepEqual(adminOnlyFeatureKeys({}), []);
+    assert.deepEqual(adminOnlyFeatureKeys({ directoryPrivate: true }), ['directory', 'connectors']);
+    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['directory'], directoryPrivate: true }), ['directory', 'connectors']);
+    // Connectors is admins-only by nature, so it's there even with no config.
+    assert.deepEqual(adminOnlyFeatureKeys({}), ['connectors']);
   });
 
   it('drops unknown, nav-hidden and repeated keys', () => {
     assert.deepEqual(
       adminOnlyFeatureKeys({ adminOnly: ['tasks', 'tasks', 'messages', 'nope', 42 as never] }),
-      ['tasks'],
+      ['tasks', 'connectors'],
     );
   });
 
@@ -291,6 +309,8 @@ describe('sanitizeFeatureConfig adminOnly', () => {
   it('reduces adminOnly to known, nav-bearing keys', () => {
     assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['tasks', 'events', 'bogus'] }).adminOnly, ['tasks']);
     assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
+    // The always-admins-only keys are implicit — never written back to the row.
+    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['connectors'] }).adminOnly, []);
   });
 });
 
@@ -298,6 +318,7 @@ describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
     assert.deepEqual(featureNodeTypeNames('channels'), ['Space', 'Channel']);
     assert.deepEqual(featureNodeTypeNames('resources'), ['Resource']);
+    assert.deepEqual(featureNodeTypeNames('connectors'), ['Connector']);
   });
 
   it('is empty for tools that own no node type', () => {

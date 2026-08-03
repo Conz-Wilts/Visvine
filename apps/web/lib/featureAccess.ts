@@ -17,7 +17,18 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages', 'notes', 'e
  * with lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
  * reject unknown keys from a client-submitted `order`.
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'tasks', 'resources', 'messages'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'tasks', 'resources', 'connectors', 'messages'];
+
+/**
+ * Feature keys that are admins-only by nature rather than by choice — their
+ * pages and APIs refuse a member outright, so the per-community "Restrict to
+ * admins" switch has nothing left to decide. `adminOnlyFeatureKeys` folds these
+ * in unconditionally and the console renders their switch locked on.
+ *
+ * Connectors is the only one today: the list route 403s every non-admin, and
+ * writing to `connectors/` is admin-gated in brainService.writeDenial.
+ */
+export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Feature keys that carry NO sidebar nav item (and no console toggle):
@@ -48,13 +59,14 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
  * drifts — 'space' vs 'Space'), valued by the feature slug that owns them.
  *
  * Person and Community belong to the always-on directory, Event to the
- * always-on navbar Events surface, and Note/File/Connector to core surfaces —
- * none of them appear here, so they're never hidden.
+ * always-on navbar Events surface, and Note/File to core surfaces — none of
+ * them appear here, so they're never hidden.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
   space: 'channels',
   channel: 'channels',
+  connector: 'connectors',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
@@ -89,15 +101,16 @@ export function isNodeTypeEnabled(
 
 /**
  * The features restricted to admins — members get neither the sidebar row nor
- * the page. Reduced to known, nav-bearing keys, and folded together with the
- * legacy directory-only `directoryPrivate` flag so old configs keep working.
+ * the page. Reduced to known, nav-bearing keys, folded together with the legacy
+ * directory-only `directoryPrivate` flag so old configs keep working, and with
+ * the features that are admins-only whatever the config says.
  */
 export function adminOnlyFeatureKeys(config: CommunityFeatureConfig | null | undefined): string[] {
   const keys = (config?.adminOnly ?? []).filter(
     (key) => typeof key === 'string' && ALL_FEATURE_KEYS.includes(key) && !NAV_HIDDEN_FEATURE_KEYS.includes(key),
   );
   if (config?.directoryPrivate === true && !keys.includes('directory')) keys.push('directory');
-  return [...new Set(keys)];
+  return [...new Set([...keys, ...ADMIN_ONLY_FEATURE_KEYS])];
 }
 
 /** Is feature `key` restricted to admins? */
@@ -190,7 +203,11 @@ export function sanitizeFeatureConfig(input: {
     out.directoryPrivate = input.directoryPrivate;
   }
   if (Array.isArray(input.adminOnly)) {
-    out.adminOnly = adminOnlyFeatureKeys({ adminOnly: input.adminOnly as string[] });
+    // The always-admins-only keys are implicit — adminOnlyFeatureKeys folds them
+    // back in on read, so persisting them would just be a derived value on disk.
+    out.adminOnly = adminOnlyFeatureKeys({ adminOnly: input.adminOnly as string[] }).filter(
+      (key) => !ADMIN_ONLY_FEATURE_KEYS.includes(key),
+    );
     // A raw SQL guard in the node-search route still reads directoryPrivate, so
     // the legacy flag tracks whichever way the directory's switch was left.
     out.directoryPrivate = out.adminOnly.includes('directory');

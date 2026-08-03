@@ -28,6 +28,7 @@ import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
 import { encryptSecret } from '../lib/crypto/secrets';
+import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 
 /** Kept in step with the same expression in the sandbox route by hand — the
  *  route is a Next entry point and isn't worth importing into a CLI script. */
@@ -195,6 +196,9 @@ async function main() {
     const secrets = await prisma.communitySecret.deleteMany({
       where: { communityId, name: { in: SECRETS.map((s) => s.name) } },
     });
+    // Writing notes straight to the table bypasses the note store, so the
+    // `connector:<name>` nodes it would have kept in step are ours to drop.
+    await syncContextLinksBulk({ communityId, ownerKey: SHARED }, NOTES.map((n) => n.path));
     console.log(`Removed ${notes.count} connector note(s) and ${secrets.count} secret(s) from ${community.name}`);
     return;
   }
@@ -214,6 +218,16 @@ async function main() {
       update: { content: note.content, deletedAt: null, deletedPath: null },
     });
   }
+
+  // The note store does this on every save; a direct table write has to do it by
+  // hand, or the connectors have no `connector:<name>` nodes and so no page in
+  // the directory, no backlinks and no place on the context map. Bulk, because
+  // the per-note call reloads the community's whole node map each time.
+  await syncContextLinksBulk(
+    { communityId, ownerKey: SHARED },
+    [],
+    NOTES.map((n) => [n.path, n.content] as [string, string]),
+  );
 
   for (const secret of SECRETS) {
     await prisma.communitySecret.upsert({

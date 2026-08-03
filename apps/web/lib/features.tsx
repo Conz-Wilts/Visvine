@@ -6,6 +6,7 @@ import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, moreFeatureKeys, sortFeature
 // tests can import it without this module's icons. Re-exported here so UI code
 // keeps a single import point.
 export {
+  ADMIN_ONLY_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
   adminOnlyFeatureKeys,
@@ -109,6 +110,17 @@ export const FEATURES: FeatureDef[] = [
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+      </svg>
+    ),
+  },
+  {
+    key: 'connectors',
+    label: 'Connectors',
+    href: '/connectors',
+    description: 'Gateways to external APIs and databases that agents can call.',
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-10 0V8zM12 17v4" />
       </svg>
     ),
   },

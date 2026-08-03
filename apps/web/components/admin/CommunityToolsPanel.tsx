@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, moreFeatureKeys, sortFeatureKeys } from '@/lib/features';
+import { ADMIN_ONLY_FEATURE_KEYS, FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, moreFeatureKeys, sortFeatureKeys } from '@/lib/features';
 import Toggle from '@/components/ui/Toggle';
 import { Modal, SearchInput, SettingsSection } from '@/components/ui';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
@@ -415,17 +415,24 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
             </span>
           </div>
           {/* Admins only — members get neither the sidebar row nor the
-              page. Visibility, not enablement, so core tools have it too. */}
+              page. Visibility, not enablement, so core tools have it too. A
+              tool whose pages refuse a member outright is locked on: there's
+              nothing for the switch to decide. */}
           <span
             data-no-drag
             className={`flex shrink-0 items-center gap-1.5 ${
               adminOnly.includes(feature.key) ? 'text-text-secondary' : 'text-text-muted'
             }`}
-            title={`Only admins can open ${feature.label}`}
+            title={
+              ADMIN_ONLY_FEATURE_KEYS.includes(feature.key)
+                ? `${feature.label} is always admins-only`
+                : `Only admins can open ${feature.label}`
+            }
           >
             <LockIcon />
             <Toggle
               checked={adminOnly.includes(feature.key)}
+              disabled={ADMIN_ONLY_FEATURE_KEYS.includes(feature.key)}
               onChange={on => setToolAdminOnly(feature.key, on)}
               aria-label={`Restrict ${feature.label} to admins`}
             />

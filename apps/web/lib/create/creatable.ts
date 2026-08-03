@@ -28,14 +28,17 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'space':
       return isFeatureEnabled(featureConfig, 'channels') && isAdmin
 
-    // Both land in the community brain, so both follow the notes ("Context")
-    // feature. A connector is additionally admin-only to write — the real gate
-    // is server-side in brainService.writeDenial; this just stops us offering
-    // a form that would 403.
+    // An uploaded file lands in the community brain, so it follows the notes
+    // ("Context") feature.
     case 'file':
       return isFeatureEnabled(featureConfig, 'notes')
+
+    // A connector note only exists because the Connectors tool does — same rule
+    // the console's Types tab and the directory filters follow. It's
+    // additionally admin-only to write: the real gate is server-side in
+    // brainService.writeDenial, this just stops us offering a form that 403s.
     case 'connector':
-      return isFeatureEnabled(featureConfig, 'notes') && isAdmin
+      return isFeatureEnabled(featureConfig, 'connectors') && isAdmin
 
     // A resource node only exists because the Resources tool does — same rule
     // the console's Types tab and the directory filters follow.

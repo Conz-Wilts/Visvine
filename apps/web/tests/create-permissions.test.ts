@@ -17,7 +17,7 @@ const off = (...keys: string[]): { featureConfig: CommunityFeatureConfig; isAdmi
   // off means listing the others.
   featureConfig: {
     enabled: Object.fromEntries(
-      ['channels', 'notes', 'tasks', 'resources'].map((k) => [k, !keys.includes(k)]),
+      ['channels', 'notes', 'tasks', 'resources', 'connectors'].map((k) => [k, !keys.includes(k)]),
     ),
   } as CommunityFeatureConfig,
   isAdmin: true,
@@ -34,16 +34,21 @@ test('channels and spaces need the channels feature AND admin', () => {
   assert.equal(canCreateType('space', off('channels')), false)
 })
 
-test('brain types follow the notes feature, and connectors are admin-only', () => {
+test('an uploaded file follows the notes feature', () => {
   assert.equal(canCreateType('file', ADMIN), true)
   assert.equal(canCreateType('file', MEMBER), true) // uploading is a member capability
-  assert.equal(canCreateType('connector', ADMIN), true)
-  // connectors/ is admin-write in brainService.writeDenial — don't offer the form.
-  assert.equal(canCreateType('connector', MEMBER), false)
   // `notes` is a CORE feature (featureAccess.CORE_FEATURE_KEYS), so it can't
   // actually be switched off — the check is there to keep the brain tiles tied
   // to Context if that ever changes, and must not accidentally hide them today.
   assert.equal(canCreateType('file', off('notes')), true)
+})
+
+test('connectors need the connectors tool AND admin', () => {
+  assert.equal(canCreateType('connector', ADMIN), true)
+  // connectors/ is admin-write in brainService.writeDenial — don't offer the form.
+  assert.equal(canCreateType('connector', MEMBER), false)
+  // Removing the tool takes the Connector type with it, for an admin too.
+  assert.equal(canCreateType('connector', off('connectors')), false)
   assert.equal(canCreateType('connector', off('notes')), true)
 })
 
