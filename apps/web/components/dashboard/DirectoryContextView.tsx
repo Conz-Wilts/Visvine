@@ -36,16 +36,11 @@ export default function DirectoryContextView({
 
   // Everything creatable is a node now — spaces, channels, notes, uploaded
   // files. That's what makes the graph complete, and also what would bury the
-  // people in it, so structure is off until asked for. Links to hidden nodes
-  // drop out downstream (ContextWithTable filters links to present endpoints).
-  const [showStructure, setShowStructure] = useState(false);
-  const contextData = useMemo<ContextData>(() => {
-    if (showStructure) return allData;
-    return { ...allData, nodes: allData.nodes.filter((n) => !isStructuralNodeType(n.type)) };
-  }, [allData, showStructure]);
-  const structuralCount = useMemo(
-    () => allData.nodes.filter((n) => isStructuralNodeType(n.type)).length,
-    [allData.nodes],
+  // people in it, so structural nodes stay out. Links to hidden nodes drop out
+  // downstream (ContextWithTable filters links to present endpoints).
+  const contextData = useMemo<ContextData>(
+    () => ({ ...allData, nodes: allData.nodes.filter((n) => !isStructuralNodeType(n.type)) }),
+    [allData],
   );
 
   // ── Saved layout (per community) ───────────────────────────────────────────
@@ -117,32 +112,16 @@ export default function DirectoryContextView({
   }, [focusedNodeId, contextData.nodes, onFocusNodeChange]);
 
   return (
-    <>
-      {structuralCount > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowStructure((v) => !v)}
-          className={`absolute bottom-4 right-8 z-20 rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
-            showStructure
-              ? 'border-transparent bg-text-primary text-white'
-              : 'border-border-subtle bg-surface-raised text-text-muted hover:text-text-primary'
-          }`}
-          aria-pressed={showStructure}
-        >
-          {showStructure ? 'Hide' : 'Show'} structure ({structuralCount})
-        </button>
-      )}
-      <ContextWithTable
-        dataOverride={contextData}
-        loadingOverride={loading || layout === undefined}
-        errorOverride={error}
-        focusNodeId={focusedNodeId}
-        dimmedNodeIds={dimmedNodeIds}
-        nodeTypes={community?.nodeTypes}
-        communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
-        initialLayout={layout ?? null}
-        onPersistLayout={handlePersistLayout}
-      />
-    </>
+    <ContextWithTable
+      dataOverride={contextData}
+      loadingOverride={loading || layout === undefined}
+      errorOverride={error}
+      focusNodeId={focusedNodeId}
+      dimmedNodeIds={dimmedNodeIds}
+      nodeTypes={community?.nodeTypes}
+      communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
+      initialLayout={layout ?? null}
+      onPersistLayout={handlePersistLayout}
+    />
   );
 }

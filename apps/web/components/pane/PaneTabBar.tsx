@@ -13,6 +13,7 @@ import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION, TAB_MOTION_EASE, TAB_MOTION_MS } from '@/components/ui/tabMotion';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
+import PaneTopScrollbarMask from './PaneTopScrollbarMask';
 
 /** Height of the tab row. */
 const TAB_ROW_H = 48;
@@ -207,6 +208,8 @@ function PaneTabBarInner({
 
   return (
     <div className={`sticky -top-4 -mt-4 ${edgeClass}`}>
+      {/* Keeps the page scrollbar from running up beside the pinned bar. */}
+      <PaneTopScrollbarMask />
       {/* The negative left margin bleeds the bar into <main>'s gutter so its
           bottom border continues the navbar seam. Border + background live on
           the tab row alone, so the transparent region below reads as a pill

@@ -66,18 +66,15 @@ export default function RequestsTab({ communityId, data, busy, run }: Props) {
 
   return (
     <div className="space-y-8">
-      <SettingsSection
-        title={`Pending requests (${pending.length})`}
-        description="People who hit something they couldn’t open and asked for access. Approving grants them exactly the folder or note they asked for — nothing wider."
-      >
+      <SettingsSection title={`Pending (${pending.length})`}>
         {pending.length === 0 ? (
-          <p className="text-sm text-text-muted">No one is waiting for access.</p>
+          <p className="text-sm text-text-muted">No one is waiting.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="divide-y divide-border-subtle">
             {pending.map((request) => (
               <div
                 key={request.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border-subtle bg-surface-1 px-3 py-2.5"
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
               >
                 <div className="flex min-w-0 flex-1 items-start gap-3">
                   <Avatar name={request.requesterName ?? 'Member'} imageUrl={request.requesterImage ?? null} size="sm" />
@@ -128,10 +125,7 @@ export default function RequestsTab({ communityId, data, busy, run }: Props) {
       </SettingsSection>
 
       {resolved.length > 0 && (
-        <SettingsSection
-          title="Recently resolved"
-          description="The last few decisions, and who made them."
-        >
+        <SettingsSection title="Resolved">
           <div className="space-y-2">
             {resolved.map((request) => (
               <div key={request.id} className="flex items-center gap-2 text-xs text-text-muted">

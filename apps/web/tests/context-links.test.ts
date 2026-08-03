@@ -94,7 +94,7 @@ test("isSystemRelationship is false for ordinary manual relationships", () => {
 //    directory only show the structure kinds when asked ─────────────────────────
 
 test("isStructuralNodeType covers the container and document kinds", () => {
-  for (const type of ["community", "space", "channel", "note", "file"]) {
+  for (const type of ["space", "channel", "note", "file"]) {
     assert.equal(isStructuralNodeType(type), true, type);
   }
   // Case-insensitive, and 'source' is the stored alias for an uploaded file.
@@ -102,8 +102,10 @@ test("isStructuralNodeType covers the container and document kinds", () => {
   assert.equal(isStructuralNodeType("source"), true);
 });
 
+// `community` belongs here, not above: it carries the organisations that used
+// to be the Group type, which are directory records people expect to see.
 test("isStructuralNodeType leaves the directory kinds alone", () => {
-  for (const type of ["person", "group", "organization", "event", "resource"]) {
+  for (const type of ["person", "community", "group", "organization", "event", "resource"]) {
     assert.equal(isStructuralNodeType(type), false, type);
   }
   assert.equal(isStructuralNodeType(null), false);

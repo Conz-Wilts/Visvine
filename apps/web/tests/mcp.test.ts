@@ -357,10 +357,14 @@ test('a mention WITHOUT the leading slash silently resolves to nothing', () => {
   ])
 })
 
-test('only person, group and resource are creatable from the context layer', () => {
-  assert.deepEqual([...CREATABLE_TYPES], ['person', 'group', 'resource'])
+test('only person, community and resource are creatable from the context layer', () => {
+  assert.deepEqual([...CREATABLE_TYPES], ['person', 'community', 'resource'])
   assert.equal(isCreatableType('person'), true)
-  assert.equal(isCreatableType('group'), true)
+  assert.equal(isCreatableType('community'), true)
+  // The retired organisation spellings are NOT creatable ids — callers must
+  // send the canonical type, which is what the zod enum on create_entity takes.
+  assert.equal(isCreatableType('group'), false)
+  assert.equal(isCreatableType('organization'), false)
   assert.equal(isCreatableType('resource'), true)
   // Events go through the events surface; these are structural/admin types.
   assert.equal(isCreatableType('event'), false)

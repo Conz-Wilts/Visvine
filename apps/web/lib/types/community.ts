@@ -28,7 +28,13 @@ export interface CommunityDesignConfig {
 // empty config means "everything on" — see lib/features.tsx#isFeatureEnabled.
 export interface CommunityFeatureConfig {
   enabled?: Record<string, boolean>;
+  // Legacy directory-only form of `adminOnly`, kept in sync by
+  // sanitizeFeatureConfig because a raw SQL guard in the node-search route reads
+  // this column directly. Prefer `adminOnly`.
   directoryPrivate?: boolean; // true = directory is admins-only (hidden from members)
+  // Feature keys only admins can see or open — members get neither the sidebar
+  // row nor the page. See lib/featureAccess.ts#adminOnlyFeatureKeys.
+  adminOnly?: string[];
   // Feature keys in display order. Unlisted keys fall in after, in registry
   // order, so an absent `order` reproduces the registry's own order — see
   // lib/featureAccess.ts#sortFeatureKeys. The first visible entry is also the

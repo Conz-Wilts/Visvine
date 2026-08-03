@@ -282,7 +282,7 @@ export default function CreateModal() {
       if (selectedType === 'person') return personData.name.trim().length > 0;
       if (selectedType === 'resource') return resourceData.name.trim().length > 0;
       if (selectedType === 'event') return eventData.name.trim().length > 0;
-      if (selectedType === 'community') return communityData.name.trim().length > 0;
+      if (selectedType === 'workspace') return communityData.name.trim().length > 0;
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
       if (selectedType === 'space') return spaceData.name.trim().length > 0;
       if (selectedType === 'context') return contextTitle.length > 0;
@@ -307,7 +307,7 @@ export default function CreateModal() {
     setError(null);
 
     try {
-      if (selectedType === 'community') {
+      if (selectedType === 'workspace') {
         await createCommunity();
         setStep(3);
       } else if (selectedType === 'channel') {
@@ -631,7 +631,7 @@ export default function CreateModal() {
       ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : selectedType === 'connector'
       ? connectorSlug(connectorData.name) || 'Connector'
-      : communityData.name || 'Community'
+      : communityData.name || 'Workspace'
     : '';
 
   const stepTitles: Record<number, string> = {
@@ -784,7 +784,7 @@ export default function CreateModal() {
                 </div>
               </div>
             )}
-            {step === 1 && selectedType === 'community' && (
+            {step === 1 && selectedType === 'workspace' && (
               <CommunityForm data={communityData} onChange={setCommunityData} nameRef={nameRef} />
             )}
             {step === 1 && selectedType === 'channel' && (

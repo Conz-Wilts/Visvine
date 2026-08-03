@@ -42,15 +42,12 @@ export default function TeamsTab({ communityId, data, busy, run }: Props) {
 
   return (
     <div className="space-y-8">
-      <SettingsSection
-        title="Teams"
-        description="Teams are your access roles: grant a team a folder and everyone on it can see inside. Add someone to a team to onboard them into everything it reaches."
-      >
+      <SettingsSection title="Teams">
         <div className="mb-5 flex items-center gap-2">
           <Input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="New team name (Engineering, GTM, Board…)"
+            placeholder="New team name"
             onKeyDown={(e) => {
               if (e.key === 'Enter') void createTeam();
             }}
@@ -65,11 +62,9 @@ export default function TeamsTab({ communityId, data, busy, run }: Props) {
         </div>
 
         {data.teams.length === 0 ? (
-          <p className="text-sm text-text-muted">
-            No teams yet. Create one, add members, then grant it access to folders right on the card.
-          </p>
+          <p className="text-sm text-text-muted">No teams yet.</p>
         ) : (
-          <div className="space-y-4">
+          <div className="divide-y divide-border-subtle">
             {data.teams.map((team) => (
               <TeamCard
                 key={team.id}
@@ -149,7 +144,7 @@ function TeamCard({ team, members, grants, paths, contextName, busy, communityId
   };
 
   return (
-    <div className="rounded-2xl border border-border-default bg-surface-1 p-4">
+    <div className="py-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         {editing ? (
           <div className="min-w-0 flex-1 space-y-2">
@@ -280,10 +275,8 @@ function TeamCard({ team, members, grants, paths, contextName, busy, communityId
       )}
 
       {/* What this team can see — its grants, editable in place */}
-      <div className="mt-4 border-t border-border-subtle pt-3">
-        <h5 className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-          Can access
-        </h5>
+      <div className="mt-4">
+        <h5 className="mb-1.5 px-1 text-xs font-medium text-text-muted">Can access</h5>
         <GrantEditor
           communityId={communityId}
           subjectType="team"
@@ -293,7 +286,7 @@ function TeamCard({ team, members, grants, paths, contextName, busy, communityId
           contextName={contextName}
           busy={busy}
           run={run}
-          emptyText="Nothing yet — grant this team a folder below."
+          emptyText="Nothing yet."
           placeholder="Grant access to…"
           addLabel="Grant"
         />

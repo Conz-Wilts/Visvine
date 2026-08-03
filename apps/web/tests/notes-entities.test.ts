@@ -16,9 +16,10 @@ import { parseFrontmatter } from '../lib/notes/shared/markdown';
 test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('person'), 'person');
   assert.equal(entityKindOf('Person'), 'person');
-  assert.equal(entityKindOf('organization'), 'company');
-  assert.equal(entityKindOf('org'), 'company');
-  assert.equal(entityKindOf('company'), 'company');
+  assert.equal(entityKindOf('organization'), 'community');
+  assert.equal(entityKindOf('org'), 'community');
+  assert.equal(entityKindOf('group'), 'community');
+  assert.equal(entityKindOf('company'), 'community');
   assert.equal(entityKindOf('resource'), 'resource');
   assert.equal(entityKindOf('Resources'), 'resource');
   assert.equal(entityKindOf('event'), 'event');
@@ -33,8 +34,6 @@ test('entityKindOf classifies the container kinds', () => {
   assert.equal(entityKindOf('Communities'), 'community');
   assert.equal(entityKindOf('space'), 'space');
   assert.equal(entityKindOf('Channels'), 'channel');
-  // 'community' must not be swallowed by the liberal company branch.
-  assert.notEqual(entityKindOf('community'), 'company');
   // Uploaded files are documents, not entities — they never get a note of their own.
   assert.equal(entityKindOf('file'), null);
 });
@@ -75,9 +74,12 @@ test('entityDraftContent labels and tags the container kinds', () => {
   assert.ok(md.includes('Where announcements land.'));
 });
 
-test('entityNotePath derives people/ and companies/ paths from the node id', () => {
+test('entityNotePath derives people/ and communities/ paths from the node id', () => {
   assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott.md');
-  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'companies/halter.md');
+  assert.equal(entityNotePath({ id: 'community:halter', type: 'community' }), 'communities/halter.md');
+  // …and every retired organisation spelling lands in the same namespace.
+  assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'communities/halter.md');
+  assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'communities/halter.md');
   assert.equal(entityNotePath({ id: 'resource:founder-playbook', type: 'resource' }), 'resources/founder-playbook.md');
   assert.equal(entityNotePath({ id: 'event:summit', type: 'event' }), 'events/summit.md');
   // slug comes from the id, not the name (collision-proof)
@@ -88,7 +90,7 @@ test('entityNotePath derives people/ and companies/ paths from the node id', () 
 
 test('parseEntityHref normalizes only valid entity hrefs', () => {
   assert.equal(parseEntityHref('/people/craig-piggott.md'), 'people/craig-piggott.md');
-  assert.equal(parseEntityHref('companies/halter.md'), 'companies/halter.md');
+  assert.equal(parseEntityHref('communities/halter.md'), 'communities/halter.md');
   assert.equal(parseEntityHref('resources/founder-playbook.md'), 'resources/founder-playbook.md');
   assert.equal(parseEntityHref('/notes/welcome.md'), null);
   assert.equal(parseEntityHref('/people/craig'), null); // missing .md
@@ -98,7 +100,7 @@ test('parseEntityHref normalizes only valid entity hrefs', () => {
 
 test('parseEntityHref excludes folder index notes', () => {
   assert.equal(parseEntityHref('/people/index.md'), null);
-  assert.equal(parseEntityHref('companies/index.md'), null);
+  assert.equal(parseEntityHref('communities/index.md'), null);
   assert.equal(parseEntityHref('resources/index.md'), null);
   assert.equal(parseEntityHref('people/sub/index.md'), null);
   // Only the exact index.md basename is excluded — slugs merely containing it stay entities.
@@ -107,7 +109,7 @@ test('parseEntityHref excludes folder index notes', () => {
 
 test('entityMentionPaths ignores links to folder indexes', () => {
   const md = 'Back to [Founders](/people/index.md) and [Craig](/people/craig-piggott.md).';
-  assert.deepEqual(entityMentionPaths('companies/halter.md', md), ['people/craig-piggott.md']);
+  assert.deepEqual(entityMentionPaths('communities/halter.md', md), ['people/craig-piggott.md']);
 });
 
 test('path <-> node id round trips', () => {
@@ -115,33 +117,33 @@ test('path <-> node id round trips', () => {
   const path = entityNotePath(node)!;
   assert.equal(parseEntityHref(`/${path}`), path);
   assert.equal(entityKindOfPath(path), 'person');
-  assert.equal(entityKindOfPath('companies/halter.md'), 'company');
+  assert.equal(entityKindOfPath('communities/halter.md'), 'community');
   assert.equal(entityKindOfPath('resources/founder-playbook.md'), 'resource');
   assert.equal(entityKindOfPath('notes/welcome.md'), null);
 });
 
 test('entityMentionPaths extracts entity-note links from the body only', () => {
   const md =
-    '---\ntitle: Halter\nnode: "org:halter"\ntags: [company]\n---\n\n' +
+    '---\ntitle: Halter\nnode: "community:halter"\ntags: [community]\n---\n\n' +
     'Founded by [Craig Piggott](/people/craig-piggott.md). Backed by ' +
     '[Blackbird](https://blackbird.vc) — see [thesis](/notes/thesis.md) and ' +
     '[Craig Piggott](/people/craig-piggott.md) again.\n';
   // External links and non-entity notes are ignored; duplicates collapse.
-  assert.deepEqual(entityMentionPaths('companies/halter.md', md), ['people/craig-piggott.md']);
+  assert.deepEqual(entityMentionPaths('communities/halter.md', md), ['people/craig-piggott.md']);
 });
 
 test('entityMentionPaths resolves relative links and excludes self-links', () => {
   const md =
-    'Peer: [Aquila](aquila.md). Self: [Halter](/companies/halter.md). ' +
+    'Peer: [Aquila](aquila.md). Self: [Halter](/communities/halter.md). ' +
     'Person: [Craig](../people/craig-piggott.md).\n';
-  assert.deepEqual(entityMentionPaths('companies/halter.md', md), [
-    'companies/aquila.md',
+  assert.deepEqual(entityMentionPaths('communities/halter.md', md), [
+    'communities/aquila.md',
     'people/craig-piggott.md',
   ]);
 });
 
 test('entityMentionPaths returns [] for notes with no entity mentions', () => {
-  assert.deepEqual(entityMentionPaths('companies/halter.md', 'Just prose, no links.'), []);
+  assert.deepEqual(entityMentionPaths('communities/halter.md', 'Just prose, no links.'), []);
   assert.deepEqual(entityMentionPaths('notes/welcome.md', '[Craig](/people/craig-piggott.md)'), [
     'people/craig-piggott.md',
   ]); // non-entity notes still extract — the sync layer decides whether to act
@@ -168,11 +170,11 @@ test('entityStub covers resource nodes', () => {
 });
 
 test('entityStub escapes tricky names so frontmatter still parses', () => {
-  const md = entityStub({ id: 'org:eucalyptus', type: 'organization', name: 'Eucalyptus: telehealth & "more"' });
+  const md = entityStub({ id: 'community:eucalyptus', type: 'community', name: 'Eucalyptus: telehealth & "more"' });
   const fm = parseFrontmatter(md);
-  assert.equal(fm.type, 'Company');
+  assert.equal(fm.type, 'Community');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
-  assert.deepEqual(fm.tags, ['company']);
+  assert.deepEqual(fm.tags, ['community']);
 });
 
 test('entityDraftContent keeps the body typed before a type was picked', () => {
@@ -202,18 +204,18 @@ test('entityDraftContent with no body or tags is exactly the stub', () => {
 });
 
 test('resolveEntityNode resolves through the node map, never by string surgery', () => {
-  // Org ids are NOT uniform ('org:halter' in seeds, 'organization:<slug>' from
-  // the create modal), so the same companies/ path can back either id shape —
-  // only the map (built by entityNotePath over real nodes) can invert it.
-  const seedOrg = { id: 'org:halter', type: 'organization' };
-  const modalOrg = { id: 'organization:halter', type: 'Organization' };
-  assert.equal(entityNotePath(seedOrg), 'companies/halter.md');
-  assert.equal(entityNotePath(modalOrg), 'companies/halter.md');
+  // Organisation ids are NOT uniform (legacy 'org:halter' in old seeds, today's
+  // 'community:halter'), so the same communities/ path can back either id shape
+  // — only the map (built by entityNotePath over real nodes) can invert it.
+  const legacyOrg = { id: 'org:halter', type: 'organization' };
+  const currentOrg = { id: 'community:halter', type: 'Community' };
+  assert.equal(entityNotePath(legacyOrg), 'communities/halter.md');
+  assert.equal(entityNotePath(currentOrg), 'communities/halter.md');
 
-  const viaSeed = new Map([[entityNotePath(seedOrg)!, { id: seedOrg.id }]]);
-  const viaModal = new Map([[entityNotePath(modalOrg)!, { id: modalOrg.id }]]);
-  assert.equal(resolveEntityNode('companies/halter.md', viaSeed), 'org:halter');
-  assert.equal(resolveEntityNode('companies/halter.md', viaModal), 'organization:halter');
+  const viaLegacy = new Map([[entityNotePath(legacyOrg)!, { id: legacyOrg.id }]]);
+  const viaCurrent = new Map([[entityNotePath(currentOrg)!, { id: currentOrg.id }]]);
+  assert.equal(resolveEntityNode('communities/halter.md', viaLegacy), 'org:halter');
+  assert.equal(resolveEntityNode('communities/halter.md', viaCurrent), 'community:halter');
 
   const people = new Map([['people/craig-piggott.md', { id: 'person:craig-piggott' }]]);
   assert.equal(resolveEntityNode('people/craig-piggott.md', people), 'person:craig-piggott');

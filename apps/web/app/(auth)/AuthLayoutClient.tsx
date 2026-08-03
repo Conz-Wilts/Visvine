@@ -23,8 +23,8 @@ import type { Session } from "@/lib/auth-client";
 import type { InitialMembership } from "@/lib/contexts/CommunityContext";
 
 // If this user can't open the feature whose page is currently on screen —
-// either the community switched it off, or the directory is admins-only and
-// they're a member — bounce to the first feature they can still see. The
+// either the community removed it, or the tool is admins-only and they're a
+// member — bounce to the first feature they can still see. The
 // matching feature must own the path prefix — so /directory/foo is guarded too.
 function useFeatureRouteGuard() {
   const { currentCommunity, loading, isAdmin } = useCommunity();

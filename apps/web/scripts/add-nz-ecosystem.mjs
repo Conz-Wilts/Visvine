@@ -14,14 +14,17 @@ if (!connectionString) throw new Error('add-nz-ecosystem: no DATABASE_URL or DB_
 
 const pool = new pg.Pool({ connectionString });
 
+// Matches pairKeyFor in lib/context/relationships.ts — links.pair_key is NOT
+// NULL and backs the (community, pairKey, relationship) dedup index.
+const pairKey = (a, b) => [a, b].sort().join('|');
+
 const COMM = 'community:nz-ecosystem';
 const COMM_NAME = 'NZ Startup Ecosystem';
 
 const NODE_TYPES = [
   { icon: '👤', name: 'Person',    color: '#2563eb', shape: 'rectangle' },
-  { icon: '👥', name: 'Group',     color: '#9333ea', shape: 'rectangle' },
   { icon: '📅', name: 'Event',     color: '#ef4444', shape: 'rectangle' },
-  { icon: '🌐', name: 'Community', color: '#10b981', shape: 'square'   },
+  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square'   },
   { icon: '📦', name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
@@ -29,36 +32,36 @@ const NODE_TYPES = [
 // metadata.kind drives downstream filtering / display.
 const ORGS = [
   // accelerators
-  { id: 'org:icehouse',         name: 'The Icehouse',          subtitle: 'NZ\'s longest-running startup incubator (since 2001)', location: 'Auckland', url: 'https://theicehouse.co.nz',  tags: ['Accelerator', 'Incubator', 'Auckland'],                metadata: { kind: 'accelerator', founded: 2001 } },
-  { id: 'org:creative-hq',      name: 'Creative HQ',           subtitle: 'Wellington-based startup accelerator & GovTech specialists', location: 'Wellington', url: 'https://creativehq.co.nz', tags: ['Accelerator', 'GovTech', 'Wellington'],                metadata: { kind: 'accelerator', founded: 2003 } },
-  { id: 'org:sprout-agritech',  name: 'Sprout Agritech',       subtitle: 'NZ\'s agritech-focused accelerator',             location: 'Palmerston North', url: 'https://sprout.ag', tags: ['Accelerator', 'Agritech', 'Manawatū'],                metadata: { kind: 'accelerator' } },
-  { id: 'org:kiwinet',          name: 'KiwiNet',               subtitle: 'Commercialising research from NZ universities & CRIs', location: 'Auckland', url: 'https://kiwinet.org.nz',  tags: ['Accelerator', 'DeepTech', 'Research'],                metadata: { kind: 'accelerator' } },
-  { id: 'org:mahuki',           name: 'Mahuki',                subtitle: 'Te Papa\'s innovation accelerator for cultural-sector startups', location: 'Wellington', url: 'https://mahuki.org', tags: ['Accelerator', 'Cultural', 'Wellington'],                metadata: { kind: 'accelerator' } },
-  { id: 'org:lightning-lab',    name: 'Lightning Lab',         subtitle: 'Outcome-focused accelerator (run by Creative HQ)', location: 'Wellington', url: 'https://lightninglab.co.nz', tags: ['Accelerator', 'Programme'],                metadata: { kind: 'accelerator' } },
+  { id: 'community:icehouse',         name: 'The Icehouse',          subtitle: 'NZ\'s longest-running startup incubator (since 2001)', location: 'Auckland', url: 'https://theicehouse.co.nz',  tags: ['Accelerator', 'Incubator', 'Auckland'],                metadata: { kind: 'accelerator', founded: 2001 } },
+  { id: 'community:creative-hq',      name: 'Creative HQ',           subtitle: 'Wellington-based startup accelerator & GovTech specialists', location: 'Wellington', url: 'https://creativehq.co.nz', tags: ['Accelerator', 'GovTech', 'Wellington'],                metadata: { kind: 'accelerator', founded: 2003 } },
+  { id: 'community:sprout-agritech',  name: 'Sprout Agritech',       subtitle: 'NZ\'s agritech-focused accelerator',             location: 'Palmerston North', url: 'https://sprout.ag', tags: ['Accelerator', 'Agritech', 'Manawatū'],                metadata: { kind: 'accelerator' } },
+  { id: 'community:kiwinet',          name: 'KiwiNet',               subtitle: 'Commercialising research from NZ universities & CRIs', location: 'Auckland', url: 'https://kiwinet.org.nz',  tags: ['Accelerator', 'DeepTech', 'Research'],                metadata: { kind: 'accelerator' } },
+  { id: 'community:mahuki',           name: 'Mahuki',                subtitle: 'Te Papa\'s innovation accelerator for cultural-sector startups', location: 'Wellington', url: 'https://mahuki.org', tags: ['Accelerator', 'Cultural', 'Wellington'],                metadata: { kind: 'accelerator' } },
+  { id: 'community:lightning-lab',    name: 'Lightning Lab',         subtitle: 'Outcome-focused accelerator (run by Creative HQ)', location: 'Wellington', url: 'https://lightninglab.co.nz', tags: ['Accelerator', 'Programme'],                metadata: { kind: 'accelerator' } },
 
   // venture capital
-  { id: 'org:movac',            name: 'Movac',                 subtitle: 'NZ\'s largest VC fund — Series A / B tech investor', location: 'Wellington', url: 'https://movac.co.nz', tags: ['VC', 'Series A', 'Series B'],                metadata: { kind: 'vc', stage: 'Series A/B' } },
-  { id: 'org:icehouse-ventures',name: 'Icehouse Ventures',     subtitle: 'NZ\'s most active early-stage tech investor',     location: 'Auckland', url: 'https://icehouseventures.co.nz', tags: ['VC', 'Seed', 'Early Stage'],                metadata: { kind: 'vc', stage: 'Seed/Series A' } },
-  { id: 'org:outset-ventures',  name: 'Outset Ventures',       subtitle: 'Deep-tech research lab & venture fund',           location: 'Auckland', url: 'https://outset.ventures', tags: ['VC', 'DeepTech', 'Hardware'],                metadata: { kind: 'vc', stage: 'Pre-seed/Seed' } },
-  { id: 'org:gd1',              name: 'GD1 (Global from Day 1)', subtitle: 'NZ\'s software-focused growth fund',           location: 'Auckland', url: 'https://gd1.vc',          tags: ['VC', 'Software', 'Growth'],                metadata: { kind: 'vc', stage: 'Series A/B' } },
-  { id: 'org:pacific-channel',  name: 'Pacific Channel',       subtitle: 'Deep-tech VC across health, climate & food',      location: 'Auckland', url: 'https://pacificchannel.com', tags: ['VC', 'DeepTech', 'Climate', 'Health'],                metadata: { kind: 'vc', stage: 'Seed/Series A' } },
-  { id: 'org:blackbird-nz',     name: 'Blackbird Aotearoa',    subtitle: 'Trans-Tasman VC — NZ chapter',                    location: 'Auckland', url: 'https://blackbird.vc', tags: ['VC', 'Trans-Tasman', 'Generalist'],                metadata: { kind: 'vc', stage: 'Pre-seed to Series B' } },
+  { id: 'community:movac',            name: 'Movac',                 subtitle: 'NZ\'s largest VC fund — Series A / B tech investor', location: 'Wellington', url: 'https://movac.co.nz', tags: ['VC', 'Series A', 'Series B'],                metadata: { kind: 'vc', stage: 'Series A/B' } },
+  { id: 'community:icehouse-ventures',name: 'Icehouse Ventures',     subtitle: 'NZ\'s most active early-stage tech investor',     location: 'Auckland', url: 'https://icehouseventures.co.nz', tags: ['VC', 'Seed', 'Early Stage'],                metadata: { kind: 'vc', stage: 'Seed/Series A' } },
+  { id: 'community:outset-ventures',  name: 'Outset Ventures',       subtitle: 'Deep-tech research lab & venture fund',           location: 'Auckland', url: 'https://outset.ventures', tags: ['VC', 'DeepTech', 'Hardware'],                metadata: { kind: 'vc', stage: 'Pre-seed/Seed' } },
+  { id: 'community:gd1',              name: 'GD1 (Global from Day 1)', subtitle: 'NZ\'s software-focused growth fund',           location: 'Auckland', url: 'https://gd1.vc',          tags: ['VC', 'Software', 'Growth'],                metadata: { kind: 'vc', stage: 'Series A/B' } },
+  { id: 'community:pacific-channel',  name: 'Pacific Channel',       subtitle: 'Deep-tech VC across health, climate & food',      location: 'Auckland', url: 'https://pacificchannel.com', tags: ['VC', 'DeepTech', 'Climate', 'Health'],                metadata: { kind: 'vc', stage: 'Seed/Series A' } },
+  { id: 'community:blackbird-nz',     name: 'Blackbird Aotearoa',    subtitle: 'Trans-Tasman VC — NZ chapter',                    location: 'Auckland', url: 'https://blackbird.vc', tags: ['VC', 'Trans-Tasman', 'Generalist'],                metadata: { kind: 'vc', stage: 'Pre-seed to Series B' } },
 
   // government / public funders
-  { id: 'org:callaghan',        name: 'Callaghan Innovation',  subtitle: 'NZ\'s government innovation agency — R&D grants & tax incentive', location: 'Wellington', url: 'https://callaghaninnovation.govt.nz', tags: ['Government', 'Funding', 'R&D'],                metadata: { kind: 'gov_agency' } },
-  { id: 'org:nzte',             name: 'NZTE',                  subtitle: 'New Zealand Trade & Enterprise — export & global growth support', location: 'Wellington', url: 'https://nzte.govt.nz', tags: ['Government', 'Export', 'International'],                metadata: { kind: 'gov_agency' } },
-  { id: 'org:mbie',             name: 'MBIE',                  subtitle: 'Ministry of Business, Innovation & Employment',   location: 'Wellington', url: 'https://mbie.govt.nz', tags: ['Government', 'Policy'],                metadata: { kind: 'gov_agency' } },
-  { id: 'org:nzgcp',            name: 'NZGCP',                 subtitle: 'NZ Growth Capital Partners — Aspire & Elevate funds', location: 'Wellington', url: 'https://nzgcp.co.nz', tags: ['Government', 'Funding', 'VC'],                metadata: { kind: 'gov_agency' } },
+  { id: 'community:callaghan',        name: 'Callaghan Innovation',  subtitle: 'NZ\'s government innovation agency — R&D grants & tax incentive', location: 'Wellington', url: 'https://callaghaninnovation.govt.nz', tags: ['Government', 'Funding', 'R&D'],                metadata: { kind: 'gov_agency' } },
+  { id: 'community:nzte',             name: 'NZTE',                  subtitle: 'New Zealand Trade & Enterprise — export & global growth support', location: 'Wellington', url: 'https://nzte.govt.nz', tags: ['Government', 'Export', 'International'],                metadata: { kind: 'gov_agency' } },
+  { id: 'community:mbie',             name: 'MBIE',                  subtitle: 'Ministry of Business, Innovation & Employment',   location: 'Wellington', url: 'https://mbie.govt.nz', tags: ['Government', 'Policy'],                metadata: { kind: 'gov_agency' } },
+  { id: 'community:nzgcp',            name: 'NZGCP',                 subtitle: 'NZ Growth Capital Partners — Aspire & Elevate funds', location: 'Wellington', url: 'https://nzgcp.co.nz', tags: ['Government', 'Funding', 'VC'],                metadata: { kind: 'gov_agency' } },
 
   // coworking
-  { id: 'org:bizdojo',          name: 'BizDojo',               subtitle: 'Coworking & community spaces across NZ',          location: 'Auckland / Wellington', url: 'https://bizdojo.com', tags: ['Coworking', 'Community'],                metadata: { kind: 'coworking' } },
-  { id: 'org:gridakl',          name: 'GridAKL',               subtitle: 'Innovation precinct in Auckland\'s Wynyard Quarter', location: 'Auckland', url: 'https://gridakl.co.nz', tags: ['Coworking', 'Innovation', 'Auckland'],                metadata: { kind: 'coworking' } },
-  { id: 'org:epic-chch',        name: 'EPIC Christchurch',     subtitle: 'Post-quake innovation campus for ChCh tech',      location: 'Christchurch', url: 'https://epicinnovation.co.nz', tags: ['Coworking', 'Innovation', 'Christchurch'],                metadata: { kind: 'coworking' } },
+  { id: 'community:bizdojo',          name: 'BizDojo',               subtitle: 'Coworking & community spaces across NZ',          location: 'Auckland / Wellington', url: 'https://bizdojo.com', tags: ['Coworking', 'Community'],                metadata: { kind: 'coworking' } },
+  { id: 'community:gridakl',          name: 'GridAKL',               subtitle: 'Innovation precinct in Auckland\'s Wynyard Quarter', location: 'Auckland', url: 'https://gridakl.co.nz', tags: ['Coworking', 'Innovation', 'Auckland'],                metadata: { kind: 'coworking' } },
+  { id: 'community:epic-chch',        name: 'EPIC Christchurch',     subtitle: 'Post-quake innovation campus for ChCh tech',      location: 'Christchurch', url: 'https://epicinnovation.co.nz', tags: ['Coworking', 'Innovation', 'Christchurch'],                metadata: { kind: 'coworking' } },
 
   // industry bodies / networks
-  { id: 'org:nztech',           name: 'NZTech',                subtitle: 'NZ\'s tech sector representative body',           location: 'Auckland', url: 'https://nztech.org.nz', tags: ['Industry Body', 'Advocacy'],                metadata: { kind: 'industry_body' } },
-  { id: 'org:angelhq',          name: 'AngelHQ',               subtitle: 'Wellington-based angel investor network',         location: 'Wellington', url: 'https://angelhq.nz', tags: ['Angel', 'Investors', 'Wellington'],                metadata: { kind: 'industry_body' } },
-  { id: 'org:fintechnz',        name: 'FinTechNZ',             subtitle: 'NZTech\'s fintech industry group',                location: 'Auckland', url: 'https://fintechnz.org.nz', tags: ['Fintech', 'Industry Body'],                metadata: { kind: 'industry_body' } },
+  { id: 'community:nztech',           name: 'NZTech',                subtitle: 'NZ\'s tech sector representative body',           location: 'Auckland', url: 'https://nztech.org.nz', tags: ['Industry Body', 'Advocacy'],                metadata: { kind: 'industry_body' } },
+  { id: 'community:angelhq',          name: 'AngelHQ',               subtitle: 'Wellington-based angel investor network',         location: 'Wellington', url: 'https://angelhq.nz', tags: ['Angel', 'Investors', 'Wellington'],                metadata: { kind: 'industry_body' } },
+  { id: 'community:fintechnz',        name: 'FinTechNZ',             subtitle: 'NZTech\'s fintech industry group',                location: 'Auckland', url: 'https://fintechnz.org.nz', tags: ['Fintech', 'Industry Body'],                metadata: { kind: 'industry_body' } },
 ];
 
 // Events — real / representative NZ tech & startup events in 2026.
@@ -98,41 +101,41 @@ const RESOURCES = [
 // Links — wire orgs, events, and resources into a connected graph.
 const LINKS = [
   // Government agencies own / fund the public resources
-  { sourceId: 'org:callaghan',  targetId: 'resource:callaghan-rdti',    relationship: 'owns' },
-  { sourceId: 'org:callaghan',  targetId: 'resource:callaghan-grants',  relationship: 'owns' },
-  { sourceId: 'org:nzte',       targetId: 'resource:nzte-beachheads',   relationship: 'owns' },
-  { sourceId: 'org:nzte',       targetId: 'resource:fernmark',          relationship: 'owns' },
-  { sourceId: 'org:nzgcp',      targetId: 'resource:nzgcp-aspire',      relationship: 'owns' },
-  { sourceId: 'org:mbie',       targetId: 'resource:mbie-endeavour',    relationship: 'owns' },
-  { sourceId: 'org:mbie',       targetId: 'resource:startup-council',   relationship: 'publishes' },
-  { sourceId: 'org:nztech',     targetId: 'resource:hitech-report',     relationship: 'publishes' },
-  { sourceId: 'org:angelhq',    targetId: 'resource:equity-calc',       relationship: 'publishes' },
+  { sourceId: 'community:callaghan',  targetId: 'resource:callaghan-rdti',    relationship: 'owns' },
+  { sourceId: 'community:callaghan',  targetId: 'resource:callaghan-grants',  relationship: 'owns' },
+  { sourceId: 'community:nzte',       targetId: 'resource:nzte-beachheads',   relationship: 'owns' },
+  { sourceId: 'community:nzte',       targetId: 'resource:fernmark',          relationship: 'owns' },
+  { sourceId: 'community:nzgcp',      targetId: 'resource:nzgcp-aspire',      relationship: 'owns' },
+  { sourceId: 'community:mbie',       targetId: 'resource:mbie-endeavour',    relationship: 'owns' },
+  { sourceId: 'community:mbie',       targetId: 'resource:startup-council',   relationship: 'publishes' },
+  { sourceId: 'community:nztech',     targetId: 'resource:hitech-report',     relationship: 'publishes' },
+  { sourceId: 'community:angelhq',    targetId: 'resource:equity-calc',       relationship: 'publishes' },
 
   // Event hosts
-  { sourceId: 'org:nztech',          targetId: 'event:techweek-akl-2026',         relationship: 'hosts' },
-  { sourceId: 'org:nztech',          targetId: 'event:hi-tech-awards-2026',       relationship: 'hosts' },
-  { sourceId: 'org:icehouse',        targetId: 'event:icehouse-first-cut-2026',   relationship: 'hosts' },
-  { sourceId: 'org:icehouse',        targetId: 'event:founders-marketplace-2026', relationship: 'hosts' },
-  { sourceId: 'org:sprout-agritech', targetId: 'event:sprout-demo-2026',          relationship: 'hosts' },
-  { sourceId: 'org:angelhq',         targetId: 'event:angelhq-pitch-jun-2026',    relationship: 'hosts' },
-  { sourceId: 'org:nzte',            targetId: 'event:nzte-beachheads-2026',      relationship: 'hosts' },
-  { sourceId: 'org:fintechnz',       targetId: 'event:fintech-forum-2026',        relationship: 'hosts' },
-  { sourceId: 'org:mahuki',          targetId: 'event:mahuki-showcase-2026',      relationship: 'hosts' },
-  { sourceId: 'org:gridakl',         targetId: 'event:startup-grind-akl-may',     relationship: 'hosts' },
-  { sourceId: 'org:bizdojo',         targetId: 'event:startup-grind-wlg-may',     relationship: 'hosts' },
+  { sourceId: 'community:nztech',          targetId: 'event:techweek-akl-2026',         relationship: 'hosts' },
+  { sourceId: 'community:nztech',          targetId: 'event:hi-tech-awards-2026',       relationship: 'hosts' },
+  { sourceId: 'community:icehouse',        targetId: 'event:icehouse-first-cut-2026',   relationship: 'hosts' },
+  { sourceId: 'community:icehouse',        targetId: 'event:founders-marketplace-2026', relationship: 'hosts' },
+  { sourceId: 'community:sprout-agritech', targetId: 'event:sprout-demo-2026',          relationship: 'hosts' },
+  { sourceId: 'community:angelhq',         targetId: 'event:angelhq-pitch-jun-2026',    relationship: 'hosts' },
+  { sourceId: 'community:nzte',            targetId: 'event:nzte-beachheads-2026',      relationship: 'hosts' },
+  { sourceId: 'community:fintechnz',       targetId: 'event:fintech-forum-2026',        relationship: 'hosts' },
+  { sourceId: 'community:mahuki',          targetId: 'event:mahuki-showcase-2026',      relationship: 'hosts' },
+  { sourceId: 'community:gridakl',         targetId: 'event:startup-grind-akl-may',     relationship: 'hosts' },
+  { sourceId: 'community:bizdojo',         targetId: 'event:startup-grind-wlg-may',     relationship: 'hosts' },
 
   // Sponsorship / partnership
-  { sourceId: 'org:callaghan',       targetId: 'event:techweek-akl-2026',         relationship: 'sponsors' },
-  { sourceId: 'org:icehouse-ventures', targetId: 'event:icehouse-first-cut-2026', relationship: 'partners_with' },
-  { sourceId: 'org:movac',           targetId: 'event:southern-saas-2026',        relationship: 'sponsors' },
-  { sourceId: 'org:gd1',             targetId: 'event:southern-saas-2026',        relationship: 'sponsors' },
-  { sourceId: 'org:pacific-channel', targetId: 'event:climate-connect-2026',      relationship: 'sponsors' },
-  { sourceId: 'org:outset-ventures', targetId: 'event:climate-connect-2026',      relationship: 'sponsors' },
-  { sourceId: 'org:blackbird-nz',    targetId: 'event:nz-ai-summit-2026',         relationship: 'sponsors' },
+  { sourceId: 'community:callaghan',       targetId: 'event:techweek-akl-2026',         relationship: 'sponsors' },
+  { sourceId: 'community:icehouse-ventures', targetId: 'event:icehouse-first-cut-2026', relationship: 'partners_with' },
+  { sourceId: 'community:movac',           targetId: 'event:southern-saas-2026',        relationship: 'sponsors' },
+  { sourceId: 'community:gd1',             targetId: 'event:southern-saas-2026',        relationship: 'sponsors' },
+  { sourceId: 'community:pacific-channel', targetId: 'event:climate-connect-2026',      relationship: 'sponsors' },
+  { sourceId: 'community:outset-ventures', targetId: 'event:climate-connect-2026',      relationship: 'sponsors' },
+  { sourceId: 'community:blackbird-nz',    targetId: 'event:nz-ai-summit-2026',         relationship: 'sponsors' },
 
   // Ecosystem capital flows (VCs invest into accelerator cohorts)
-  { sourceId: 'org:icehouse-ventures', targetId: 'org:icehouse',                relationship: 'funds' },
-  { sourceId: 'org:movac',           targetId: 'org:gd1',                        relationship: 'co_invests_with' },
+  { sourceId: 'community:icehouse-ventures', targetId: 'community:icehouse',                relationship: 'funds' },
+  { sourceId: 'community:movac',           targetId: 'community:gd1',                        relationship: 'co_invests_with' },
 ];
 
 const client = await pool.connect();
@@ -154,8 +157,8 @@ try {
   for (const o of ORGS) {
     const r = await client.query(`
       INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
-      VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
-      ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+      VALUES ($1, 'Community', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET type = 'Community', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata, updated_at = NOW()
       RETURNING id, name`,
       [o.id, o.name, o.subtitle, o.location, o.url, o.tags, JSON.stringify(o.metadata ?? {}), COMM]);
@@ -195,15 +198,17 @@ try {
     const tExists = await client.query('SELECT 1 FROM nodes WHERE id = $1', [l.targetId]);
     if (sExists.rowCount === 0) { console.log(`  ⚠ source missing: ${l.sourceId}`); continue; }
     if (tExists.rowCount === 0) { console.log(`  ⚠ target missing: ${l.targetId}`); continue; }
+    // Dedup on the same key the app uses — (community, pairKey, relationship),
+    // not the raw endpoint pair — so a reversed edge counts as the same link.
     const dup = await client.query(
-      'SELECT 1 FROM links WHERE source_id = $1 AND target_id = $2 AND relationship = $3',
-      [l.sourceId, l.targetId, l.relationship]
+      'SELECT 1 FROM links WHERE community_id = $1 AND pair_key = $2 AND relationship = $3',
+      [COMM, pairKey(l.sourceId, l.targetId), l.relationship]
     );
     if (dup.rowCount > 0) { console.log(`  ~ exists: ${l.sourceId} -[${l.relationship}]-> ${l.targetId}`); continue; }
     await client.query(
-      `INSERT INTO links (source_id, target_id, relationship, community_id, metadata, created_at)
-       VALUES ($1, $2, $3, $4, '{}'::jsonb, NOW())`,
-      [l.sourceId, l.targetId, l.relationship, COMM]
+      `INSERT INTO links (source_id, target_id, relationship, community_id, metadata, pair_key, created_at)
+       VALUES ($1, $2, $3, $4, '{}'::jsonb, $5, NOW())`,
+      [l.sourceId, l.targetId, l.relationship, COMM, pairKey(l.sourceId, l.targetId)]
     );
     console.log(`  ✓ ${l.sourceId} -[${l.relationship}]-> ${l.targetId}`);
   }

@@ -5,7 +5,7 @@ import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
-import { Alert, SettingsSection } from '@/components/ui';
+import { Alert } from '@/components/ui';
 import { useConsoleSave } from '@/components/console/ConsoleSaveContext';
 
 // ─── Color helpers ────────────────────────────────────────────────────────────
@@ -240,7 +240,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
       <input
         autoFocus
         className="flex-1 px-3 py-1.5 rounded-lg border border-border-default bg-surface-1 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition-all"
-        placeholder="e.g. Founder, Advisor, Mentor…"
+        placeholder="Alias name"
         value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setShowPicker(false); onCancel(); } }}
@@ -292,9 +292,9 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
   };
 
   return (
-    <div className="border border-border-subtle rounded-xl">
+    <div>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-surface-1 rounded-xl" style={{ borderBottomLeftRadius: expanded ? 0 : undefined, borderBottomRightRadius: expanded ? 0 : undefined }}>
+      <div className="flex items-center gap-3 py-3">
         {/* Expand chevron */}
         <button
           type="button"
@@ -340,35 +340,31 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
         </button>
 
         {/* Alias preview */}
-        <button
-          type="button"
-          onClick={toggleExpanded}
-          className="flex items-center gap-1.5 shrink-0"
-        >
-          {aliases.length > 0 ? (
-            <>
-              {aliases.slice(0, 3).map(a => (
-                <span
-                  key={a.name}
-                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
-                  style={{ background: a.color }}
-                >
-                  {a.name}
-                </span>
-              ))}
-              {aliases.length > 3 && (
-                <span className="text-xs text-text-muted">+{aliases.length - 3}</span>
-              )}
-            </>
-          ) : (
-            <span className="text-xs text-text-muted">No aliases</span>
-          )}
-        </button>
+        {aliases.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleExpanded}
+            className="flex items-center gap-1.5 shrink-0"
+          >
+            {aliases.slice(0, 3).map(a => (
+              <span
+                key={a.name}
+                className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
+                style={{ background: a.color }}
+              >
+                {a.name}
+              </span>
+            ))}
+            {aliases.length > 3 && (
+              <span className="text-xs text-text-muted">+{aliases.length - 3}</span>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Expanded panel */}
       {expanded && (
-        <div className="px-4 py-3 bg-surface-2 border-t border-border-subtle rounded-b-xl space-y-3">
+        <div className="space-y-3 pb-4 pl-8">
           {/* Existing aliases */}
           {aliases.length > 0 && (
             <div className="flex flex-wrap gap-2">
@@ -403,7 +399,7 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
               </svg>
-              Create alias
+              Add alias
             </button>
           )}
         </div>
@@ -472,35 +468,33 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
 
-      <SettingsSection title="Types & aliases">
-        <div className="mb-4 space-y-2">
-          {/* A type whose feature is switched off isn't offered at all — no point
-              curating aliases for something the community can't create. */}
-          {DEFAULT_NODE_TYPES
-            .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
-            .map(defaultType => {
-            const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
-            return (
-              <TypeSection
-                key={liveType.name}
-                typeName={liveType.name}
-                typeColor={liveType.color}
-                aliases={aliasesForType(aliases, liveType.name)}
-                allAliases={aliases}
-                onAddAlias={handleAddAlias}
-                onRemoveAlias={handleRemoveAlias}
-                onUpdateAliasColor={handleUpdateAliasColor}
-                onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
-                saving={saving}
-              />
-            );
-          })}
-        </div>
-
-      </SettingsSection>
+      {/* The tab bar above already says "Types", so the list starts straight
+          away. A type whose tool is switched off isn't offered at all — no point
+          curating aliases for something the community can't create. */}
+      <div className="divide-y divide-border-subtle">
+        {DEFAULT_NODE_TYPES
+          .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
+          .map(defaultType => {
+          const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
+          return (
+            <TypeSection
+              key={liveType.name}
+              typeName={liveType.name}
+              typeColor={liveType.color}
+              aliases={aliasesForType(aliases, liveType.name)}
+              allAliases={aliases}
+              onAddAlias={handleAddAlias}
+              onRemoveAlias={handleRemoveAlias}
+              onUpdateAliasColor={handleUpdateAliasColor}
+              onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
+              saving={saving}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

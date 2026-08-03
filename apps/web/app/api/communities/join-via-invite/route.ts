@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
-import { logActivity } from '@/lib/activityLog';
 import { handleApiError } from '@/lib/api/route';
 
 /**
@@ -45,15 +44,6 @@ export async function POST(request: NextRequest) {
 
     await prisma.userCommunity.create({
       data: { userId: session.userId, communityId: community.id, role: 'member', status: 'pending' },
-    });
-
-    await logActivity({
-      communityId: community.id,
-      actorEmail: session.email,
-      actorName: session.name,
-      action: 'join_requested',
-      targetEmail: session.email,
-      targetName: session.name,
     });
 
     return NextResponse.json({ status: 'pending', communityId: community.id, communityName: community.name });

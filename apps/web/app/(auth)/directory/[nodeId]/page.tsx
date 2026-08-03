@@ -20,6 +20,7 @@ import { useNodeProfile } from '@/hooks/useNodeProfile';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
+import { isOwnCommunityNode } from '@/lib/types/context';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
@@ -226,10 +227,13 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
 // to imitate.
 const ORG_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Overview' };
 // Which ids OrgPageContent is for. Node ids are `<type>:<slug>` (createEntity,
-// syncEntityNode), so the prefix is the type — and the org namespace has
-// accumulated four spellings over time, all of which land on companies/<slug>.md.
-// An id with no prefix at all is a legacy directory row: those predate the
-// structural types entirely, so org is the right guess for them too.
+// syncEntityNode), so the prefix is the type — and organisations have worn four
+// retired spellings before settling on `community:`, all of which now land on
+// communities/<slug>.md. Current data never reaches this list: a `community:`
+// id is forked on by CommunityRoute instead, which needs the node to tell a
+// record apart from the community itself. An id with no prefix at all is a
+// legacy directory row: those predate the structural types entirely, so an
+// organisation is the right guess for them too.
 const ORG_ID_PREFIXES = ['group:', 'org:', 'organization:', 'company:'];
 
 function isOrgId(nodeId: string): boolean {
@@ -539,21 +543,43 @@ function EventRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
-// Same split for communities: a community's page is /communities/<id>, and the
-// node only exists here to carry its context note.
+// `community:` ids cover two different things, so this route forks on which.
 //
-// The community id comes off the NODE, not off the id string. `communityNodeId`
-// (lib/context/entityNodes.ts) only prefixes an id that lacks one, so a
-// community already called `community:local-dev` has a node id identical to its
-// community id — stripping `community:` there would redirect to a 404 — while a
-// community called `blackbird` gets the node id `community:blackbird` and does
-// need the prefix gone. A community node's own `community_id` is the right
-// answer in both cases, which is why this waits for the node before redirecting.
+//  * The node standing for the community you are IN. Its page is
+//    /communities/<id>; the node only exists here to carry its context note.
+//  * An organisation recorded inside that community — what used to be the Group
+//    type. It is a directory record like any other and keeps its profile here.
+//    Redirecting it would throw the reader out of the community they were
+//    browsing and into a workspace that may not even exist.
+//
+// `isOwnCommunityNode` tells them apart, and the community id comes off the
+// NODE rather than the id string. `communityNodeId` only prefixes an id that
+// lacks one, so a community already called `community:local-dev` has a node id
+// identical to its community id — stripping `community:` there would redirect
+// to a 404 — while a community called `blackbird` gets the node id
+// `community:blackbird` and does need the prefix gone. The node's own
+// `community_id` is the right answer in both cases, which is why this waits for
+// the node before deciding anything.
 function CommunityRoute({ nodeId }: { nodeId: string }) {
   const [wantedTab] = useProfileTabParam();
   const { data, error } = useNodeProfile(nodeId);
-  const communityId = data?.node?.community_id ?? null;
+  const node = data?.node ?? null;
+  const communityId = node?.community_id ?? null;
   const href = communityId ? `/communities/${encodeURIComponent(communityId)}` : null;
+
+  // Null while the node is still loading: hold the redirect branch's skeleton
+  // rather than flashing a profile shell we may not want.
+  if (node && !isOwnCommunityNode({ id: node.id ?? nodeId, communityId })) {
+    return (
+      <NodePage
+        nodeId={nodeId}
+        firstTab={ORG_FIRST_TAB}
+        ariaLabel="Page sections"
+        notFoundTitle="Page not found"
+        renderBody={(id) => <OrgPageContent nodeId={id} />}
+      />
+    );
+  }
 
   if (wantedTab) {
     return (

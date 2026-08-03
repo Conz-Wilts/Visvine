@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLog';
 import { sanitizeFeatureConfig } from '@/lib/featureAccess';
 
 /**
@@ -27,7 +26,7 @@ export async function PUT(
     location?: string;
     tags?: string[];
     designConfig?: Record<string, unknown>;
-    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; order?: string[]; more?: string[] };
+    featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; adminOnly?: string[]; order?: string[]; more?: string[] };
     visibility?: string;
   };
 
@@ -57,7 +56,8 @@ export async function PUT(
   }
 
   // Validate featureConfig if provided — must be
-  // { enabled?: { [key]: boolean }, directoryPrivate?: boolean, order?: string[], more?: string[] }
+  // { enabled?: { [key]: boolean }, directoryPrivate?: boolean, adminOnly?: string[],
+  //   order?: string[], more?: string[] }
   if (featureConfig !== undefined) {
     const enabled = featureConfig.enabled;
     if (enabled !== undefined && (typeof enabled !== 'object' || enabled === null || Array.isArray(enabled))) {
@@ -68,6 +68,13 @@ export async function PUT(
     }
     if (featureConfig.directoryPrivate !== undefined && typeof featureConfig.directoryPrivate !== 'boolean') {
       return NextResponse.json({ error: 'featureConfig.directoryPrivate must be a boolean' }, { status: 400 });
+    }
+    const adminOnly = featureConfig.adminOnly;
+    if (adminOnly !== undefined && !Array.isArray(adminOnly)) {
+      return NextResponse.json({ error: 'featureConfig.adminOnly must be an array' }, { status: 400 });
+    }
+    if (adminOnly && adminOnly.some((v) => typeof v !== 'string')) {
+      return NextResponse.json({ error: 'featureConfig.adminOnly values must be strings' }, { status: 400 });
     }
     const order = featureConfig.order;
     if (order !== undefined && !Array.isArray(order)) {
@@ -115,14 +122,6 @@ export async function PUT(
   });
 
   revalidateTag('context-data-v2');
-
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: 'settings_updated',
-    details: { fields: Object.keys(body).filter(k => body[k as keyof typeof body] !== undefined) },
-  });
 
   return NextResponse.json({
     community: {

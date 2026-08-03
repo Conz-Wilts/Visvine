@@ -1,5 +1,5 @@
 /**
- * Rectangle node renderer for Person, Investor, Event, and Group nodes
+ * Rectangle node renderer for Person, Investor, Event, and Resource nodes
  */
 
 import { NBNode, getNodeGlyph } from '@/lib/types';
@@ -10,7 +10,7 @@ import { loadImage } from '../utils/imageCache';
 
 /**
  * Draw a rectangle-shaped node card on canvas
- * Used for Person, Investor, Event, and Group node types
+ * Used for Person, Investor, Event, and Resource node types
  */
 export interface CanvasTheme {
   cardBg: string;

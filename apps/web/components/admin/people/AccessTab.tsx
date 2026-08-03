@@ -31,7 +31,6 @@ import { CONTEXT_NAME_MAX_LENGTH, DEFAULT_CONTEXT_NAME } from '@/lib/notes/share
 import type { TreeNode } from '@/lib/notes/shared/types';
 import {
   accessOfMember,
-  levelLabel,
   pathLabel,
   LevelSelect,
   SubjectIcon,
@@ -172,24 +171,16 @@ export default function AccessTab({ communityId, data, busy, run, reload }: Prop
 
   return (
     <div className="space-y-8">
-      <SettingsSection title="General access">
-        <div className="flex items-center gap-3 rounded-2xl border border-border-default bg-surface-1 px-4 py-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text-secondary">
-            <Users className="h-5 w-5" />
+      <SettingsSection title="Everyone">
+        <div className="flex items-center gap-3">
+          <span className="min-w-0 flex-1 text-sm text-text-primary">
+            What every member gets, everywhere
           </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium text-text-primary">Everyone in the community</div>
-            <div className="text-xs text-text-muted">
-              {generalLevel === 'none'
-                ? 'Members only see folders they, or their teams, were given'
-                : `Every member is at least ${levelLabel(rootCommunityGrant?.level ?? 0)} everywhere`}
-            </div>
-          </div>
           <GeneralAccessSelect value={generalLevel} disabled={busy} onChange={setGeneralAccess} />
         </div>
       </SettingsSection>
 
-      <SettingsSection title="Folders and notes" description="Click anything to share it.">
+      <SettingsSection title="Folders and notes">
         <div className="space-y-0.5">
           {renaming ? (
             <div className="flex items-center gap-2 py-1.5 pl-7">
@@ -259,15 +250,12 @@ export default function AccessTab({ communityId, data, busy, run, reload }: Prop
         <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-semibold text-text-secondary transition-colors hover:text-text-primary [&::-webkit-details-marker]:hidden">
           <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
           Advanced
-          <span className="font-normal text-text-muted">
-            — every grant ({grants.length}), locked folders
-          </span>
         </summary>
 
         <div className="mt-4 space-y-6 pl-1">
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Every grant
+            <h4 className="mb-2 text-xs font-medium text-text-muted">
+              Grants ({grants.length})
             </h4>
             {grantsByPath.length === 0 ? (
               <p className="text-sm text-text-muted">No grants yet.</p>
@@ -275,7 +263,7 @@ export default function AccessTab({ communityId, data, busy, run, reload }: Prop
               <div className="space-y-3">
                 {grantsByPath.map(([path, pathGrants]) => (
                   <div key={path || '<root>'}>
-                    <h5 className="mb-0.5 px-2 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                    <h5 className="mb-0.5 px-2 text-xs font-medium text-text-muted">
                       {pathLabel(path, data.contextName)}
                     </h5>
                     <div className="space-y-0.5">
@@ -319,9 +307,7 @@ export default function AccessTab({ communityId, data, busy, run, reload }: Prop
           </div>
 
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
-              Locked folders
-            </h4>
+            <h4 className="mb-2 text-xs font-medium text-text-muted">Locked folders</h4>
             <div className="space-y-0.5">
               {allFolders.map((folder) => (
                 <div key={folder.path} className="flex items-center gap-3 rounded-lg px-2 py-1 hover:bg-surface-2">

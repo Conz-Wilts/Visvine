@@ -8,6 +8,7 @@
 import prisma from '../prisma';
 import { Prisma } from '@prisma/client';
 import { logger } from '../logger';
+import { entityKindOf } from '../notes/entities';
 import { nameKey, normalizeEmail, linkedinHandle, websiteDomain } from './normalize';
 
 export interface SuggestionItem {
@@ -155,12 +156,14 @@ export async function splitNodeToNewIdentity(
 ): Promise<{ ok: boolean; identityId?: string; error?: string }> {
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { id: true, type: true, name: true, location: true, url: true, imageUrl: true, metadata: true, identityId: true },
+    select: { id: true, type: true, name: true, location: true, url: true, imageUrl: true, metadata: true, identityId: true, communityId: true },
   });
   if (!node) return { ok: false, error: 'node not found' };
 
-  const t = node.type.toLowerCase();
-  const kind = t === 'organization' || t === 'organisation' || t === 'org' || t === 'group' ? 'organization' : 'person';
+  // Every organisation spelling — 'organization', 'group', today's 'community' —
+  // splits to an org identity; anything else is a person. `Identity.kind` keeps
+  // the internal 'organization' name.
+  const kind = entityKindOf(node.type) === 'community' ? 'organization' : 'person';
   const meta = (node.metadata as Record<string, unknown>) ?? {};
   const oldIdentityId = node.identityId;
 

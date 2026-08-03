@@ -42,7 +42,7 @@ const COMM_DESC =
   'This community maps its portfolio companies and the founders behind them.';
 
 const NODE_TYPES = [
-  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
+  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
@@ -50,7 +50,7 @@ const NODE_TYPES = [
 // everywhere (Types & Aliases console, directory cells, node cards), so we use
 // the canonical capitalized base-type names here.
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Group' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
   { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
@@ -189,7 +189,7 @@ for (const c of RAW) {
     while (orgSlugSeen.has(slug)) { slug = base + '-' + suf + '-' + n; n++; }
   }
   orgSlugSeen.add(slug);
-  const id = 'org:' + slug;
+  const id = 'community:' + slug;
   if (c.foundedYear) foundedYearByOrg.set(id, String(c.foundedYear));
 
   const snappedSector = snapSector(c);
@@ -234,7 +234,7 @@ for (const o of orgs) {
     let base = slugify(f.name) || ('founder-' + personByKey.size);
     let slug = base;
     if (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) {
-      const suf = o.id.replace(/^org:/, '');
+      const suf = o.id.replace(/^community:/, '');
       slug = base + '-' + suf;
       let n = 2;
       while (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) { slug = base + '-' + suf + '-' + n; n++; }
@@ -351,8 +351,8 @@ try {
     };
     await client.query(
       `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
-       VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+       VALUES ($1, 'Community', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+       ON CONFLICT (id) DO UPDATE SET type = 'Community', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
          metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
@@ -421,7 +421,7 @@ try {
   console.log('\n--- Company status breakdown ---');
   console.table((await client.query(
     `SELECT metadata->>'status' AS status, COUNT(*)::int AS count FROM nodes
-     WHERE community_id = $1 AND type = 'Group' GROUP BY 1 ORDER BY 1`, [COMM],
+     WHERE community_id = $1 AND type = 'Community' GROUP BY 1 ORDER BY 1`, [COMM],
   )).rows);
 
   console.log('\n--- Link breakdown ---');

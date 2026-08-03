@@ -47,11 +47,11 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'space' vs 'Space'), valued by the feature slug that owns them.
  *
- * Person/Group belong to the always-on directory, Event to the always-on
- * navbar Events surface, and Community/Note/File/Connector to core surfaces —
+ * Person and Community belong to the always-on directory, Event to the
+ * always-on navbar Events surface, and Note/File/Connector to core surfaces —
  * none of them appear here, so they're never hidden.
  */
-export const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
+const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
   space: 'channels',
   channel: 'channels',
@@ -60,6 +60,17 @@ export const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
 export function nodeTypeFeatureKey(typeName: string): string | null {
   return NODE_TYPE_FEATURE_KEYS[typeName.toLowerCase()] ?? null;
+}
+
+/**
+ * The node types a feature brings with it, as display names ('Space', 'Channel').
+ * Adding or removing a tool in the console adds or removes these types too, so
+ * the panel names them on the row rather than letting them vanish silently.
+ */
+export function featureNodeTypeNames(featureKey: string): string[] {
+  return Object.entries(NODE_TYPE_FEATURE_KEYS)
+    .filter(([, key]) => key === featureKey)
+    .map(([type]) => type.charAt(0).toUpperCase() + type.slice(1));
 }
 
 /**
@@ -76,14 +87,35 @@ export function isNodeTypeEnabled(
   return key === null || isFeatureEnabled(config, key);
 }
 
+/**
+ * The features restricted to admins — members get neither the sidebar row nor
+ * the page. Reduced to known, nav-bearing keys, and folded together with the
+ * legacy directory-only `directoryPrivate` flag so old configs keep working.
+ */
+export function adminOnlyFeatureKeys(config: CommunityFeatureConfig | null | undefined): string[] {
+  const keys = (config?.adminOnly ?? []).filter(
+    (key) => typeof key === 'string' && ALL_FEATURE_KEYS.includes(key) && !NAV_HIDDEN_FEATURE_KEYS.includes(key),
+  );
+  if (config?.directoryPrivate === true && !keys.includes('directory')) keys.push('directory');
+  return [...new Set(keys)];
+}
+
+/** Is feature `key` restricted to admins? */
+export function isFeatureAdminOnly(
+  config: CommunityFeatureConfig | null | undefined,
+  key: string,
+): boolean {
+  return adminOnlyFeatureKeys(config).includes(key);
+}
+
 /** Is the community's directory restricted to admins only? */
 export function isDirectoryPrivate(config: CommunityFeatureConfig | null | undefined): boolean {
-  return config?.directoryPrivate === true;
+  return isFeatureAdminOnly(config, 'directory');
 }
 
 /**
  * Can a user open feature `key`? Enabled features are open to everyone, except
- * an admins-only directory, which members can neither see nor visit.
+ * the ones marked admins-only, which members can neither see nor visit.
  */
 export function canAccessFeature(
   config: CommunityFeatureConfig | null | undefined,
@@ -91,7 +123,7 @@ export function canAccessFeature(
   isAdmin: boolean,
 ): boolean {
   if (!isFeatureEnabled(config, key)) return false;
-  if (key === 'directory' && isDirectoryPrivate(config) && !isAdmin) return false;
+  if (!isAdmin && isFeatureAdminOnly(config, key)) return false;
   return true;
 }
 
@@ -134,13 +166,15 @@ export function moreFeatureKeys(config: CommunityFeatureConfig | null | undefine
 /**
  * Normalize a client-submitted featureConfig into the persisted shape: only the
  * known keys, core features stripped from `enabled` (they can never be off),
- * `directoryPrivate` kept only when it's a boolean, and `order`/`more` reduced
+ * `directoryPrivate` kept only when it's a boolean (and re-derived from
+ * `adminOnly` when that's given), and `adminOnly`/`order`/`more` reduced
  * to known keys with duplicates dropped (`more` also drops nav-hidden keys —
  * they have no sidebar row to tuck away).
  */
 export function sanitizeFeatureConfig(input: {
   enabled?: Record<string, boolean>;
   directoryPrivate?: unknown;
+  adminOnly?: unknown;
   order?: unknown;
   more?: unknown;
 }): CommunityFeatureConfig {
@@ -154,6 +188,12 @@ export function sanitizeFeatureConfig(input: {
   }
   if (typeof input.directoryPrivate === 'boolean') {
     out.directoryPrivate = input.directoryPrivate;
+  }
+  if (Array.isArray(input.adminOnly)) {
+    out.adminOnly = adminOnlyFeatureKeys({ adminOnly: input.adminOnly as string[] });
+    // A raw SQL guard in the node-search route still reads directoryPrivate, so
+    // the legacy flag tracks whichever way the directory's switch was left.
+    out.directoryPrivate = out.adminOnly.includes('directory');
   }
   if (Array.isArray(input.order)) {
     // Unknown or repeated keys would silently reshuffle the nav, so drop them

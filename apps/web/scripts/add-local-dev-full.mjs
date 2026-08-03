@@ -41,7 +41,7 @@ const TZ = 'Pacific/Auckland';
 
 const NODE_TYPES = [
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
-  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'hexagon' },
+  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
   { icon: '📅', name: 'Event', color: '#ef4444', shape: 'rectangle' },
   { icon: '📚', name: 'Resource', color: '#0d9488', shape: 'circle' },
 ];
@@ -51,7 +51,7 @@ const COMMUNITY_ALIASES = [
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { name: 'Mentor', color: '#d97706', nodeType: 'Person' },
   { name: 'Operator', color: '#db2777', nodeType: 'Person' },
-  { name: 'Startup', color: '#0891b2', nodeType: 'Group' },
+  { name: 'Startup', color: '#0891b2', nodeType: 'Community' },
 ];
 
 // ---- people ------------------------------------------------------------------
@@ -118,11 +118,11 @@ const CRM_VALUES = {
   'person:priya-nair': { focus: 'Seed cheques, fintech & climate', intro_status: 'Introduced' },
   'person:oliver-grant': { stage: 'Exited', focus: 'Mentoring', intro_status: 'Introduced' },
   'person:felix-wong': { focus: 'Applied AI research', intro_status: 'Requested' },
-  'org:loopwork': { stage: 'Raising', focus: 'Async teamwork' },
-  'org:kite-analytics': { stage: 'Scaling', focus: 'Product analytics' },
-  'org:fernwave': { stage: 'Raising', focus: 'Climate hardware' },
-  'org:solace-health': { stage: 'Building', focus: 'Digital health' },
-  'org:pixelforge': { stage: 'Scaling', focus: 'Design studio' },
+  'community:loopwork': { stage: 'Raising', focus: 'Async teamwork' },
+  'community:kite-analytics': { stage: 'Scaling', focus: 'Product analytics' },
+  'community:fernwave': { stage: 'Raising', focus: 'Climate hardware' },
+  'community:solace-health': { stage: 'Building', focus: 'Digital health' },
+  'community:pixelforge': { stage: 'Scaling', focus: 'Design studio' },
 };
 
 // ---- events ------------------------------------------------------------------
@@ -348,7 +348,7 @@ function note(notes, path, frontmatter, body, pinned = false) {
 // Internal link → graph edge (absolute brain-root href, must include `.md`).
 const link = (label, absPath) => `[${label}](${absPath})`;
 const person = (slug, label) => link(label, `/people/${slug}.md`);
-const company = (slug, label) => link(label, `/companies/${slug}.md`);
+const company = (slug, label) => link(label, `/communities/${slug}.md`);
 
 function buildSharedNotes() {
   const notes = [];
@@ -440,9 +440,9 @@ Exited marketplace founder (2022), now the backbone of the mentor programme. Cur
   p('ruby-thompson', 'Ruby Thompson', ['founder', 'health'], `
 Clinical psychologist, founder of ${company('solace-health', 'Solace Health')}. Building triage tooling with ${person('noah-bennett', 'Noah Bennett')}. Attending investor office hours in August.`);
 
-  // --- entity notes: companies ---
+  // --- entity notes: the organisations, each its own community ---
   const c = (slug, title, tags, body) =>
-    note(notes, `companies/${slug}.md`, { type: 'company', title, tags, node: `org:${slug}` }, body);
+    note(notes, `communities/${slug}.md`, { type: 'Community', title, tags, node: `community:${slug}` }, body);
 
   c('loopwork', 'Loopwork', ['saas', 'portfolio-watch'], `
 Async-first teamwork tool by ${person('ava-chen', 'Ava Chen')} and ${person('jordan-reid', 'Jordan Reid')}. Shipped 2.0 (offline CRDT sync) at July launch night. Raising seed — ${company('southern-ridge-capital', 'Southern Ridge')} in diligence.`);
@@ -471,7 +471,7 @@ Applied AI research lab directed by ${person('felix-wong', 'Felix Wong')}. Runs 
 // seeded folder ends up index-less. Derived from the notes themselves, so new
 // seed content lands in its folder index automatically.
 const FOLDER_BLURBS = {
-  companies: 'Every organisation in the community directory, with the people attached to each.',
+  communities: 'Every organisation in the directory — each one a community in its own right — with the people attached to each.',
   people: 'The regulars — founders, operators, investors and mentors in this community.',
   meetings: 'Notes from community syncs and working sessions.',
   programme: 'How the community programmes — mentoring, cohorts and workshops.',
@@ -621,7 +621,7 @@ try {
   // 3. Orgs + resource nodes
   for (const o of ORGS) {
     await upsertNode(client, {
-      id: `org:${o.slug}`, type: 'Group', name: o.name, subtitle: o.subtitle, location: o.location,
+      id: `community:${o.slug}`, type: 'Community', name: o.name, subtitle: o.subtitle, location: o.location,
       url: o.url, tags: o.tags ?? [], alias: o.alias ?? null, metadata: { seeded: true },
     });
   }

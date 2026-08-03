@@ -23,7 +23,6 @@ import Dropdown from '@/components/ui/Dropdown';
 import { useConsoleAction } from '@/components/console/ConsoleSaveContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { notesApi } from '@/features/notes/lib/notesApi';
-import { effectiveLevel } from '@/lib/notes/shared/authz';
 import {
   accessOfMember,
   levelLabel,
@@ -91,10 +90,7 @@ function InviteLinkRow({ communityId }: { communityId: string }) {
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
-      <div className="mt-2 flex items-center justify-between">
-        <p className="text-xs text-text-muted">
-          New joiners appear below as pending requests for you to approve.
-        </p>
+      <div className="mt-2 flex justify-end">
         <button
           type="button"
           onClick={() => setConfirmRegenerate(true)}
@@ -189,12 +185,13 @@ function InviteModal({ communityId, onDone, onClose }: {
 }
 
 /** The expanded per-member access editor under a member row. */
-function MemberDetail({ communityId, member, data, busy, run }: {
+function MemberDetail({ communityId, member, data, busy, run, onRemove }: {
   communityId: string;
   member: CommunityMember;
   data: PeopleData;
   busy: boolean;
   run: Props['run'];
+  onRemove: () => void;
 }) {
   const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
@@ -213,15 +210,12 @@ function MemberDetail({ communityId, member, data, busy, run }: {
   return (
     <div className="space-y-5 rounded-xl bg-surface-2/60 px-4 py-4">
       {member.role === 'admin' && (
-        <p className="text-xs text-text-muted">
-          Community admins bypass all grants — {member.user.name} already has full access to the
-          entire context.
-        </p>
+        <p className="text-xs text-text-muted">Admins already have full access.</p>
       )}
 
       {/* Teams */}
       <div>
-        <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Teams</h5>
+        <h5 className="mb-1.5 text-xs font-medium text-text-muted">Teams</h5>
         <div className="flex flex-wrap items-center gap-1.5">
           {myTeams.map((team) => (
             <span
@@ -285,16 +279,14 @@ function MemberDetail({ communityId, member, data, busy, run }: {
             </div>
           )}
           {myTeams.length === 0 && joinable.length === 0 && (
-            <span className="text-xs text-text-muted">No teams yet — create one in the Teams tab.</span>
+            <span className="text-xs text-text-muted">No teams yet.</span>
           )}
         </div>
       </div>
 
       {/* Direct grants — fully editable */}
       <div>
-        <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-          Direct access
-        </h5>
+        <h5 className="mb-1.5 text-xs font-medium text-text-muted">Direct access</h5>
         <GrantEditor
           communityId={communityId}
           subjectType="user"
@@ -304,7 +296,7 @@ function MemberDetail({ communityId, member, data, busy, run }: {
           contextName={data.contextName}
           busy={busy}
           run={run}
-          emptyText="No direct grants — access comes from teams or community-wide grants."
+          emptyText="None."
           placeholder="Give access to…"
           addLabel="Add"
         />
@@ -313,9 +305,7 @@ function MemberDetail({ communityId, member, data, busy, run }: {
       {/* Inherited access — read-only, with source */}
       {inherited.length > 0 && member.role !== 'admin' && (
         <div>
-          <h5 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-            Via teams &amp; everyone
-          </h5>
+          <h5 className="mb-1.5 text-xs font-medium text-text-muted">Via teams &amp; everyone</h5>
           <div className="space-y-0.5">
             {inherited.map((grant) => (
               <div key={grant.id} className="flex items-center gap-2.5 px-1 py-1 text-sm">
@@ -332,15 +322,18 @@ function MemberDetail({ communityId, member, data, busy, run }: {
         </div>
       )}
 
-      {/* Effective summary */}
-      {member.role !== 'admin' && (
-        <p className="text-xs text-text-muted">
-          Effective access: <span className="font-medium text-text-secondary">{summarizeAccess(member.role, access)}</span>
-          {effectiveLevel(access, '') === 0 && access.grants.length > 0 && (
-            <> — no grant reaches the context root, so they only see the areas listed above.</>
-          )}
-        </p>
-      )}
+      <div className="flex items-center justify-between gap-3 border-t border-border-subtle pt-3">
+        {member.role === 'admin' ? (
+          <span />
+        ) : (
+          <p className="text-xs text-text-muted">
+            Effective: <span className="font-medium text-text-secondary">{summarizeAccess(member.role, access)}</span>
+          </p>
+        )}
+        <Button variant="pill-danger" onClick={onRemove} disabled={busy} className="!px-3 !py-1.5 !text-xs">
+          Remove from community
+        </Button>
+      </div>
     </div>
   );
 }
@@ -387,13 +380,12 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="Invite people"
-        description="Share the invite link, or add someone directly by email."
+        title="Invite"
         action={
           <Button variant="pill-primary" onClick={() => setShowInvite(true)}>
             <span className="inline-flex items-center gap-1.5">
               <UserPlus size={14} />
-              Invite member
+              Invite by email
             </span>
           </Button>
         }
@@ -402,13 +394,10 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
       </SettingsSection>
 
       {pending.length > 0 && (
-        <SettingsSection
-          title={`Pending requests (${pending.length})`}
-          description="People who joined via the invite link, waiting for approval."
-        >
-          <div className="space-y-3">
+        <SettingsSection title={`Pending (${pending.length})`}>
+          <div className="divide-y divide-border-subtle">
             {pending.map((member) => (
-              <div key={member.id} className="flex items-center justify-between gap-3">
+              <div key={member.id} className="flex items-center justify-between gap-3 py-2.5">
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={member.user.name} imageUrl={member.user.image} size="sm" />
                   <div className="min-w-0">
@@ -440,10 +429,7 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
         </SettingsSection>
       )}
 
-      <SettingsSection
-        title={`Members (${active.length})`}
-        description="Role, teams, and context access for everyone — expand a member to manage their individual permissions."
-      >
+      <SettingsSection title={`Members (${active.length})`}>
         <div className="space-y-4">
           {active.length > 3 && (
             <SearchInput value={query} onChange={setQuery} placeholder="Search members…" />
@@ -453,11 +439,11 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border-subtle text-left">
-                  <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-wider text-text-muted">Member</th>
-                  <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-wider text-text-muted">Role</th>
-                  <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-wider text-text-muted">Teams</th>
-                  <th className="pb-3 pr-4 text-xs font-semibold uppercase tracking-wider text-text-muted">Context access</th>
-                  <th className="pb-3 text-xs font-semibold uppercase tracking-wider text-text-muted"></th>
+                  <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Member</th>
+                  <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Role</th>
+                  <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Teams</th>
+                  <th className="pb-2 pr-4 text-xs font-normal text-text-muted">Access</th>
+                  <th className="pb-2" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle">
@@ -471,10 +457,8 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
                       memberTeams={info?.teams ?? []}
                       summary={info?.summary ?? ''}
                       isOpen={isOpen}
-                      busy={busy}
                       onToggle={() => setExpanded(isOpen ? null : member.userId)}
                       onRole={(role) => { if (role !== member.role) void updateRole(member.userId, role); }}
-                      onRemove={() => setConfirm({ kind: 'remove', userId: member.userId, name: member.user.name })}
                       detail={
                         isOpen ? (
                           <MemberDetail
@@ -483,6 +467,7 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
                             data={data}
                             busy={busy}
                             run={run}
+                            onRemove={() => setConfirm({ kind: 'remove', userId: member.userId, name: member.user.name })}
                           />
                         ) : null
                       }
@@ -535,15 +520,13 @@ export default function PeopleTab({ communityId, data, busy, run }: Props) {
 }
 
 /** A member's main row + (when expanded) its detail row. */
-function MemberRows({ member, memberTeams, summary, isOpen, busy, onToggle, onRole, onRemove, detail }: {
+function MemberRows({ member, memberTeams, summary, isOpen, onToggle, onRole, detail }: {
   member: CommunityMember;
   memberTeams: Array<{ id: string; name: string }>;
   summary: string;
   isOpen: boolean;
-  busy: boolean;
   onToggle: () => void;
   onRole: (role: string) => void;
-  onRemove: () => void;
   detail: React.ReactNode;
 }) {
   return (
@@ -595,19 +578,16 @@ function MemberRows({ member, memberTeams, summary, isOpen, busy, onToggle, onRo
           {summary}
         </td>
         <td className="py-3 text-right">
-          <div className="flex items-center justify-end gap-2">
-            <Button variant="pill-danger" onClick={onRemove} disabled={busy} className="!px-3 !py-1.5 !text-xs">
-              Remove
-            </Button>
-            <button
-              type="button"
-              onClick={onToggle}
-              aria-label={isOpen ? 'Collapse member' : 'Expand member'}
-              className="rounded p-1 text-text-muted transition hover:text-text-primary"
-            >
-              <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
+          {/* Remove lives inside the expanded detail — the row itself is just a
+              summary, so nothing destructive sits one stray click away. */}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={isOpen ? 'Collapse member' : 'Expand member'}
+            className="rounded p-1 text-text-muted transition hover:text-text-primary"
+          >
+            <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </button>
         </td>
       </tr>
       {isOpen && (

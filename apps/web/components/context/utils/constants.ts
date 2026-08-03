@@ -15,7 +15,7 @@ export const CARD_DIMENSIONS = {
   BORDER_WIDTH: 4,
   PADDING: 12,
   TAG_HEIGHT: 20,
-  // Organization card: a SQUARE image (side = SQUARE_SIDE, full width)
+  // Community card: a SQUARE image (side = SQUARE_SIDE, full width)
   // plus a caption strip below for the name + alias chip. So the card itself is a
   // gentle portrait rectangle (SQUARE_SIDE wide × SQUARE_SIDE + SQUARE_CAPTION
   // tall) — taller than wide, but less elongated than the 140×215 rectangle cards.

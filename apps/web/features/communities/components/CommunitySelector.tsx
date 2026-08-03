@@ -157,8 +157,8 @@ export default function CommunitySelector({
             <div className="p-2 border-t border-border-subtle bg-surface-2 flex flex-col gap-1">
               <button
                 type="button"
-                onClick={() => { setIsOpen(false); openCreateModal('community'); }}
-                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"
+                onClick={() => { setIsOpen(false); openCreateModal('workspace'); }}
+                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-text-primary hover:text-brand-dark-green font-medium"
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -167,7 +167,7 @@ export default function CommunitySelector({
               </button>
               <Link
                 href="/discover"
-                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-brand-green hover:text-brand-dark-green font-medium"
+                className="flex w-full items-center justify-center gap-2 px-3 py-2 text-sm text-center text-text-primary hover:text-brand-dark-green font-medium"
                 onClick={() => setIsOpen(false)}
               >
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

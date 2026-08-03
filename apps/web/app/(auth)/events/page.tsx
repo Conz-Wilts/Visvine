@@ -21,6 +21,7 @@ import type { EventView } from '@/components/events/EventsViewSelector';
 import EventsScopeSelector from '@/components/events/EventsScopeSelector';
 import type { EventScope } from '@/components/events/EventsScopeSelector';
 import { PageTitle } from '@/components/ui';
+import PaneTopScrollbarMask from '@/components/pane/PaneTopScrollbarMask';
 
 interface EventWithStats extends NBEvent {
   _stats?: {
@@ -156,6 +157,8 @@ function EventsPageInner() {
           UnderlineTabs draws its own bottom border, so the wrapper stays
           borderless. */}
       <div ref={viewBarRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
+        {/* Keeps the page scrollbar from running up beside the pinned bar. */}
+        <PaneTopScrollbarMask />
         <EventsViewSelector
           currentView={currentView}
           onViewChange={setCurrentView}

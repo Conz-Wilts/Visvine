@@ -1,5 +1,5 @@
 /**
- * Square node renderer — an image-forward rounded card used for Organization
+ * Square node renderer — an image-forward rounded card used for Community
  * nodes.
  *
  * The image fills the majority of the card (a large header that spans the full
@@ -25,7 +25,7 @@ function capitalize(value: string): string {
 const CHIP_RADIUS = 6;
 
 /**
- * Draw an image-forward rounded card on canvas. Used for the Organization node
+ * Draw an image-forward rounded card on canvas. Used for the Community node
  * type: a square image fills the width, with a name + alias-chip caption strip
  * below.
  */

@@ -70,10 +70,12 @@ function ancestorFolders(path: string): string[] {
   return out
 }
 
-// The glyph for a note's frontmatter type. `entityKindOf` catches "company"
-// (which getNodeGlyph doesn't know) so company notes read as the group glyph.
+// The glyph for a note's frontmatter type. `entityKindOf` is the wider net —
+// it catches retired organisation spellings getNodeGlyph has no entry for — so
+// those notes still read as the cluster glyph rather than falling back to
+// initials.
 function noteGlyph(type: string | undefined): NodeGlyph | null {
-  return getNodeGlyph(type) ?? (entityKindOf(type) === 'company' ? 'group' : null)
+  return getNodeGlyph(type) ?? (entityKindOf(type) === 'community' ? 'group' : null)
 }
 
 /** Access adornments for a folder row at ANY depth (shared brain only):

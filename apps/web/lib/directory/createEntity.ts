@@ -31,10 +31,14 @@ import type { NBNode } from '@/lib/types'
  * lib/create/typeFields.ts), which note namespace the entity lives in
  * (ENTITY_DIRS in lib/notes/entities.ts), and whether it resolves to a
  * cross-community identity. Events are excluded because they're created through
- * /events (their detail route redirects there); community/space/channel are
- * structural and belong to admin surfaces.
+ * /events (their detail route redirects there); space/channel are structural
+ * and belong to admin surfaces.
+ *
+ * `community` here means an organisation recorded in the directory — a company,
+ * group or investor — NOT a provisioned workspace. Creating one of those still
+ * goes through POST /api/communities off the community switcher.
  */
-export const CREATABLE_TYPES = ['person', 'group', 'resource'] as const
+export const CREATABLE_TYPES = ['person', 'community', 'resource'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
 
 export function isCreatableType(type: string): type is CreatableType {
@@ -143,9 +147,9 @@ export async function createEntity(
   if (denial) return { ok: false, status: 403, error: denial }
 
   // Collision check against the NOTE, not just the node id. `entityNotePath` is
-  // lossy in the org namespace — legacy `org:halter`, `organization:halter` and
-  // a new `group:halter` all land on companies/halter.md — so an id that looks
-  // free can still point at an occupied path. Hand back the existing node so the
+  // lossy in the organisation namespace — legacy `org:halter`, `group:halter`
+  // and a new `community:halter` all land on communities/halter.md — so an id
+  // that looks free can still point at an occupied path. Hand back the existing node so the
   // caller can offer "already exists — open it" instead of silently creating a
   // second Halter that shadows the first one's note.
   //

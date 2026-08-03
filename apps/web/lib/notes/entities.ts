@@ -1,4 +1,4 @@
-// Pure helpers mapping directory entities (person/organization Nodes) to their
+// Pure helpers mapping directory entities (person/community Nodes) to their
 // canonical per-entity note path, and back. A `[[Craig Piggott]]` mention is
 // stored as an ordinary OKF link to this path, so the note that records context
 // about the entity is a real note — context, backlinks, and search all work with
@@ -9,7 +9,6 @@ import { isIndexPath } from './shared/indexNote'
 
 export type EntityKind =
   | 'person'
-  | 'company'
   | 'resource'
   | 'event'
   | 'community'
@@ -17,10 +16,11 @@ export type EntityKind =
   | 'channel'
   | 'connector'
 
-// community/space/channel are container kinds: they get the same "a note is the
-// context doc" treatment as directory entities, but they describe structure
-// rather than directory records, so the context view and the directory grid hide
-// them by default (see STRUCTURAL_NODE_TYPES in lib/types/context.ts).
+// There is no separate `company` kind: an organisation IS a community, so a
+// company, group or org note lives in communities/ beside the note for the
+// community it sits in. Only space/channel are pure structure, hidden by
+// default in the context view and the directory grid (see
+// STRUCTURAL_NODE_TYPES in lib/types/context.ts).
 //
 // connector is the one kind whose note comes FIRST: an admin authors
 // connectors/<name>.md (frontmatter = machine config, body = agent docs) and the
@@ -28,8 +28,9 @@ export type EntityKind =
 // connector gets the entity treatment — its own node id, backlinks, and
 // [[mentions]] resolving to it — see lib/notes/entityLinks.ts. Creating one from
 // the directory is deliberately NOT possible: CREATABLE_TYPES in
-// lib/directory/createEntity.ts stays person/group/resource, so the admin-only
-// write gate on connectors/ in brainService.writeDenial remains the only door.
+// lib/directory/createEntity.ts stays person/community/resource, so the
+// admin-only write gate on connectors/ in brainService.writeDenial remains the
+// only door.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -40,7 +41,6 @@ export interface EntityNodeLike {
 }
 
 const PEOPLE_DIR = 'people'
-const COMPANIES_DIR = 'companies'
 const RESOURCES_DIR = 'resources'
 const EVENTS_DIR = 'events'
 const COMMUNITIES_DIR = 'communities'
@@ -50,7 +50,6 @@ const CONNECTORS_DIR = 'connectors'
 
 const ENTITY_DIRS: Record<EntityKind, string> = {
   person: PEOPLE_DIR,
-  company: COMPANIES_DIR,
   resource: RESOURCES_DIR,
   event: EVENTS_DIR,
   community: COMMUNITIES_DIR,
@@ -60,20 +59,20 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
 }
 
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
-// copes with 'person'/'people' and 'organization'/'org'/'company'.
-//
-// Order matters around the org branch: 'community'/'communities' must be matched
-// before `t.startsWith('org')` can't claim them (it can't), but they MUST be
-// tested before the plain 'company'/'companies' equality reads — a reader
-// skimming this file will otherwise assume "communities" falls into `company`.
+// copes with 'person'/'people' and with every spelling organisations have worn:
+// 'organization'/'org'/'group'/'company' all mean 'community' now, and all land
+// in communities/. Mirrors TYPE_SYNONYMS in lib/types/context.ts.
 export function entityKindOf(type: string | null | undefined): EntityKind | null {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
-  if (t === 'community' || t === 'communities') return 'community'
+  if (
+    t === 'community' || t === 'communities' ||
+    t.startsWith('org') || t === 'group' || t === 'groups' ||
+    t === 'company' || t === 'companies'
+  ) return 'community'
   if (t === 'space' || t === 'spaces') return 'space'
   if (t === 'channel' || t === 'channels') return 'channel'
   if (t === 'connector' || t === 'connectors') return 'connector'
-  if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'company'
   if (t === 'resource' || t === 'resources') return 'resource'
   if (t === 'event' || t === 'events') return 'event'
   return null
@@ -86,7 +85,7 @@ function idSlug(id: string): string {
 }
 
 // The canonical note path for a directory entity, or null if the node isn't an
-// entity kind. person → people/<slug>.md, organization → companies/<slug>.md,
+// entity kind. person → people/<slug>.md, community → communities/<slug>.md,
 // resource → resources/<slug>.md.
 export function entityNotePath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
@@ -102,7 +101,7 @@ export function entityNotePath(node: EntityNodeLike): string | null {
 export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
-  if (!/^(people|companies|resources|events|communities|spaces|channels|connectors)\/.+\.md$/.test(raw)) return null
+  if (!/^(people|resources|events|communities|spaces|channels|connectors)\/.+\.md$/.test(raw)) return null
   return isIndexPath(raw) ? null : raw
 }
 
@@ -119,10 +118,9 @@ export function sourceHref(path: string): string {
   return `/directory/source/${path.split('/').map(encodeURIComponent).join('/')}`
 }
 
-// The entity kind implied by a note path (people/…, companies/…, resources/…), or null.
+// The entity kind implied by a note path (people/…, communities/…, resources/…), or null.
 export function entityKindOfPath(path: string): EntityKind | null {
   if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
-  if (path.startsWith(`${COMPANIES_DIR}/`)) return 'company'
   if (path.startsWith(`${RESOURCES_DIR}/`)) return 'resource'
   if (path.startsWith(`${EVENTS_DIR}/`)) return 'event'
   if (path.startsWith(`${COMMUNITIES_DIR}/`)) return 'community'
@@ -133,9 +131,10 @@ export function entityKindOfPath(path: string): EntityKind | null {
 }
 
 // Resolve an entity-note path back to its directory node id via the loaded node
-// map. Node ids are NOT reconstructible from paths by string surgery — the org
-// prefix varies ('org:halter' in seeds vs 'organization:<slug>' from the create
-// modal) and idSlug is lossy — so the map, built by entityNotePath over real
+// map. Node ids are NOT reconstructible from paths by string surgery — legacy
+// data still carries retired prefixes ('org:halter', 'group:halter') alongside
+// today's 'community:halter' and idSlug is lossy — so the map, built by
+// entityNotePath over real
 // nodes, is the only sound reverse direction. Null for non-entity paths and for
 // entity paths whose node isn't in the map (deleted node, other community,
 // directory still loading) — callers fall back to opening the note in place.
@@ -147,7 +146,7 @@ export function resolveEntityNode(
   return entityByPath?.get(path)?.id ?? null
 }
 
-// The entity-note paths a note's body links to (people/… & companies/…),
+// The entity-note paths a note's body links to (people/… & communities/…),
 // excluding the note itself. Frontmatter is ignored; each `[[Mention]]` is an
 // ordinary OKF markdown link, so this is just link extraction + the entity
 // namespace filter. Pure — feeds the context-link sync (lib/notes/entityLinks.ts).
@@ -164,7 +163,6 @@ export function entityMentionPaths(notePath: string, content: string): string[] 
 
 const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
   person: 'Person',
-  company: 'Company',
   resource: 'Resource',
   event: 'Event',
   community: 'Community',
@@ -176,7 +174,6 @@ const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
 }
 const ENTITY_TAG: Record<EntityKind, string> = {
   person: 'person',
-  company: 'company',
   resource: 'resource',
   event: 'event',
   community: 'community',

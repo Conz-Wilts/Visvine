@@ -6,6 +6,7 @@ import { clsx } from 'clsx';
 import SaveStatus from '@/components/ui/SaveStatus';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
+import PaneTopScrollbarMask from '@/components/pane/PaneTopScrollbarMask';
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
 /**
@@ -122,6 +123,8 @@ export default function ConsoleShell({ sections, renderSection }: ConsoleShellPr
             the bottom border continues the navbar seam, and "-top-4 -mt-4"
             cancels <main>'s pt-4 so the bar pins flush under the navbar. */}
         <div className="sticky -top-4 -mt-4 -ml-6 z-20">
+          {/* Keeps the page scrollbar from running up beside the pinned bar. */}
+          <PaneTopScrollbarMask />
           <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
             <div
               role="tablist"

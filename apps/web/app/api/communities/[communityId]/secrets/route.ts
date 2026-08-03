@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLog';
 import { encryptSecret } from '@/lib/crypto/secrets';
 import { isValidSecretName } from '@/lib/connectors/config';
 
@@ -65,14 +64,6 @@ export async function PUT(
     update: { ciphertext, createdBy: session.email },
   });
 
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: 'secret_set',
-    details: { name },
-  });
-
   return NextResponse.json({ ok: true, name });
 }
 
@@ -89,14 +80,6 @@ export async function DELETE(
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
   await prisma.communitySecret.deleteMany({ where: { communityId, name } });
-
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: 'secret_deleted',
-    details: { name },
-  });
 
   return NextResponse.json({ ok: true });
 }

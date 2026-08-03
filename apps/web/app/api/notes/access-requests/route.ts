@@ -15,7 +15,6 @@ import {
   resolveAccessRequest,
 } from '@/lib/notes/accessRequests'
 import { parseLevel } from '@/lib/notes/shared/authz'
-import { logActivity } from '@/lib/activityLog'
 
 export async function GET(req: NextRequest) {
   const brain = await requireBrain(req)
@@ -58,15 +57,6 @@ export async function PUT(req: NextRequest) {
   const p = await principalOf(brain)
   try {
     const request = await resolveAccessRequest(p, requestId, approve, level)
-    await logActivity({
-      communityId: brain.communityId,
-      actorEmail: p.email,
-      actorName: p.name,
-      action: approve ? 'access_request.approved' : 'access_request.denied',
-      targetName: request.requesterName ?? null,
-      targetEmail: request.requesterEmail ?? null,
-      details: { resourcePath: request.resourcePath, grantedLevel: request.grantedLevel ?? null },
-    })
     return NextResponse.json({ request })
   } catch (err) {
     if (err instanceof Error && err.message.startsWith('Only someone with full access')) {

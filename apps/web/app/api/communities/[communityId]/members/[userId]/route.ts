@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLog';
 import { removeMemberAccess } from '@/lib/notes/access';
 
 /**
@@ -74,16 +73,6 @@ export async function PUT(
     });
   }
 
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: approving ? 'member_added' : 'role_changed',
-    targetEmail: updated.user.email,
-    targetName: updated.user.name,
-    details: approving ? { approved: true, role: updated.role } : { newRole: role },
-  });
-
   return NextResponse.json({
     member: {
       id: updated.id,
@@ -124,7 +113,6 @@ export async function DELETE(
 
   const membership = await prisma.userCommunity.delete({
     where: { userId_communityId: { userId, communityId } },
-    include: { user: { select: { email: true, name: true } } },
   });
 
   // Brain access leaves with them: direct grants + team memberships here.
@@ -137,15 +125,6 @@ export async function DELETE(
       data: { memberCount: { decrement: 1 } },
     });
   }
-
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: 'member_removed',
-    targetEmail: membership.user.email,
-    targetName: membership.user.name,
-  });
 
   return NextResponse.json({ success: true });
 }

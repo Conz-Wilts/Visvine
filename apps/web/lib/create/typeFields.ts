@@ -1,5 +1,5 @@
 // The per-type property schema behind the note-first create surface: which rows
-// a Person / Group / Resource shows under its title, and where each row's value
+// a Person / Community / Resource shows under its title, and where each row's value
 // lands on the node (a real column vs a metadata key).
 //
 // This lives in lib/create/ rather than lib/types/context.ts on purpose. That
@@ -32,7 +32,7 @@ export interface TypeFieldDef {
   placeholder?: string
   /**
    * Column-backed fields that ALSO mirror into metadata under this key, because
-   * identity resolution reads metadata and not the column (Group's website).
+   * identity resolution reads metadata and not the column (a community's website).
    */
   mirrorMetadataKey?: string
 }
@@ -40,11 +40,13 @@ export interface TypeFieldDef {
 // Node types are stored lowercased (both POST and PUT in /api/data/nodes call
 // `type.toLowerCase()`), so every lookup here normalizes first. The synonym map
 // mirrors `entityKindOf` in lib/notes/entities.ts — 'organization'/'org'/
-// 'company' are all the same thing wearing different legacy prefixes.
+// 'group'/'company' are all the same thing wearing different legacy prefixes,
+// and that thing is now a community.
 function canonicalType(type: string | null | undefined): string {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'people') return 'person'
-  if (t.startsWith('org') || t === 'groups' || t === 'company' || t === 'companies') return 'group'
+  if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'community'
+  if (t === 'communities') return 'community'
   if (t === 'resources') return 'resource'
   if (t === 'events') return 'event'
   if (t === 'notes') return 'note'
@@ -60,7 +62,7 @@ const PERSON_FIELDS: TypeFieldDef[] = [
   { key: 'image_url', label: 'Photo', kind: 'image', target: 'column', column: 'image_url' },
 ]
 
-const GROUP_FIELDS: TypeFieldDef[] = [
+const COMMUNITY_FIELDS: TypeFieldDef[] = [
   { key: 'subtitle', label: 'Tagline', kind: 'text', target: 'column', column: 'subtitle', placeholder: 'What they do' },
   // The column drives the profile link; the metadata mirror is what the
   // organization identity resolver reads (websiteDomain blocking).
@@ -90,7 +92,7 @@ const EVENT_FIELDS: TypeFieldDef[] = [
 
 const FIELDS_BY_TYPE: Record<string, TypeFieldDef[]> = {
   person: PERSON_FIELDS,
-  group: GROUP_FIELDS,
+  community: COMMUNITY_FIELDS,
   resource: RESOURCE_FIELDS,
   event: EVENT_FIELDS,
 }

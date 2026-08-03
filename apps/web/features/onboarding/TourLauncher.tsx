@@ -51,19 +51,19 @@ const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="directory-canvas"]',
     title: 'Browse your community',
     description:
-      'Browse people and organisations as cards. Search and filter from the bar up top to find anyone fast.',
+      'Browse people and communities as cards. Search and filter from the bar up top to find anyone fast.',
     side: 'top',
     align: 'center',
   },
   {
     // Context is its own tool now: the /context page hosts the community
-    // context plus the notes tree, and every person/organization profile
+    // context plus the notes tree, and every person/community profile
     // carries a Context tab.
     leg: 'directory',
     selector: '[data-tour="nav-notes"]',
     title: 'Context: your community brain',
     description:
-      'Open Context to see the community as an interactive map and capture notes about the people and companies here. Link them with [[ ]] to build up your map — every profile carries its context too.',
+      'Open Context to see the community as an interactive map and capture notes about the people and communities here. Link them with [[ ]] to build up your map — every profile carries its context too.',
     side: 'right',
     align: 'start',
   },
@@ -72,7 +72,7 @@ const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="create"]',
     title: 'Add anything',
     description:
-      'People, organisations, notes, events and more, all created from this one button.',
+      'People, communities, notes, events and more, all created from this one button.',
     side: 'right',
     align: 'start',
   },
@@ -100,7 +100,7 @@ const TOUR_STEPS: TourStep[] = [
     selector: '[data-tour="console-tabs"]',
     title: 'Your Community Console',
     description:
-      'This is where you run your community and manage all your connections: invite and manage members, change the look & feel, and see activity. Next, let’s look at your own profile.',
+      'This is where you run your community and manage all your connections: invite and manage members, change the look & feel, and track how it’s growing. Next, let’s look at your own profile.',
     side: 'bottom',
     align: 'center',
   },

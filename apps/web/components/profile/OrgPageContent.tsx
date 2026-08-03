@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * The page for a non-person directory node — an organisation, group, startup,
- * investor, space, channel, or a community-invented type.
+ * The page for a non-person directory node — a community record (the company,
+ * startup or investor that used to be a "Group"), a space, a channel, or a
+ * community-invented type.
  *
  * This is deliberately NOT a profile. It used to be `NodeProfileContent`, a
  * near-copy of the person profile: a silhouette avatar card, a "Connections"
@@ -13,8 +14,10 @@
  * and the type-specific fields (founded, HQ, members, website) are promoted from
  * a buried "Details" row to the rail.
  *
- * Person nodes keep ProfilePageContent; events and communities have their own
- * dedicated pages and never land here.
+ * Person nodes keep ProfilePageContent, and events have their own dedicated
+ * page. Communities land here whenever they are a RECORD — an organisation
+ * inside someone else's community. The node standing for the community you are
+ * in is the one exception: CommunityRoute sends it to /communities/<id>.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -57,7 +60,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
   // Alias colour wins over the base type colour, same derivation as the chips.
   const theme = useMemo(() => {
     const aliasConfig = findAlias(currentCommunity?.communityAliases, node?.alias, node?.type ?? '');
-    const color = aliasConfig?.color ?? getTypeColor(node?.type ?? 'Group', currentCommunity?.nodeTypes);
+    const color = aliasConfig?.color ?? getTypeColor(node?.type ?? 'Community', currentCommunity?.nodeTypes);
     return hexToPalette(color);
   }, [currentCommunity?.communityAliases, currentCommunity?.nodeTypes, node?.alias, node?.type]);
 

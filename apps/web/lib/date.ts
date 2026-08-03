@@ -1,7 +1,7 @@
 // lib/date.ts — canonical date/time formatters for the app.
 //
 // Consolidates the relative-time and date-label helpers that were previously
-// duplicated across feed, messages, notes, and analytics components. Each
+// duplicated across feed, messages, and notes components. Each
 // `timeAgo` style preserves the exact user-visible output of the surface it
 // replaced — do not merge styles without checking every call site.
 //
@@ -32,7 +32,7 @@ export type TimeAgoStyle = 'long' | 'short' | 'compact';
  * most-recent bucket. Styles (each preserves a pre-consolidation surface):
  *
  * - `long`    — "just now", "5 minutes ago" … "2 years ago" (notes editor).
- * - `short`   — "just now", "5m ago", "3h ago", "12d ago"; days uncapped (analytics).
+ * - `short`   — "just now", "5m ago", "3h ago", "12d ago"; days uncapped.
  * - `compact` — "just now", "5m", "3h", "2d", "3w", then "5 Mar" (blog/feed).
  *
  * Pass `now` (epoch ms) for deterministic output in tests.

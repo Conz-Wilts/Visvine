@@ -64,12 +64,15 @@ import '../notes.css'
 export type DraftType =
   | 'note'
   | 'person'
-  | 'group'
+  // The organisation that used to be 'group'. `workspace` below provisions a
+  // real Community row instead of recording that one exists — same kind of
+  // thing, different amount of machinery.
+  | 'community'
   | 'resource'
   | 'connector'
   | 'channel'
   | 'space'
-  | 'community'
+  | 'workspace'
   | 'file'
 
 interface DraftTypeOption {
@@ -90,17 +93,17 @@ const NOTE_COLOR = '#64748b'
 const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
   { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
-  { id: 'group', label: 'Group', configName: 'Group', color: NOTE_COLOR, hint: 'A company or organisation', creatable: 'organization' },
+  { id: 'community', label: 'Community', configName: 'Community', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'community' },
   { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', hint: 'Upload documents into the context', creatable: 'file' },
   { id: 'connector', label: 'Connector', configName: 'Connector', color: '#a855f7', hint: 'A gateway to an external API or database', creatable: 'connector' },
   { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a space', creatable: 'channel' },
   { id: 'space', label: 'Space', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'space' },
-  { id: 'community', label: 'Community', configName: null, color: '#14b8a6', hint: 'A whole new community of your own', creatable: 'community' },
+  { id: 'workspace', label: 'Workspace', configName: null, color: '#14b8a6', hint: 'A whole new community of your own', creatable: 'workspace' },
 ]
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
-const ENTITY_TYPES = new Set<DraftType>(['person', 'group', 'resource'])
+const ENTITY_TYPES = new Set<DraftType>(['person', 'community', 'resource'])
 /** Types whose only inline field is the destination folder in the context. */
 const FOLDERED_TYPES = new Set<DraftType>(['note', 'file'])
 
@@ -220,7 +223,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const searchType = type && ENTITY_TYPES.has(type) ? type : ''
   const { results: matches, loading: matchesLoading } = useNodeSearch(
     searchType ? title : '',
-    searchType === 'group' ? 'organization' : searchType,
+    searchType,
     fields.email ?? '',
   )
 
@@ -518,7 +521,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
       else if (type === 'space') await commitSpace()
-      else if (type === 'community') await commitCommunity()
+      else if (type === 'workspace') await commitCommunity()
       else if (type === 'file') await commitFiles()
       else await commitEntity()
     } catch (err) {
@@ -714,7 +717,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         <ChannelExtras extras={extras} onChange={setExtras} spaces={spaces} accent={theme.base} />
       )}
 
-      {type === 'community' && (
+      {type === 'workspace' && (
         <VisibilityExtras extras={extras} onChange={setExtras} accent={theme.base} />
       )}
 

@@ -8,8 +8,9 @@ import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, moreFeatureKeys, sortFeature
 export {
   NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
-  isDirectoryPrivate,
+  adminOnlyFeatureKeys,
   canAccessFeature,
+  featureNodeTypeNames,
   moreFeatureKeys,
   sortFeatureKeys,
 } from '@/lib/featureAccess';
@@ -48,7 +49,7 @@ export const FEATURES: FeatureDef[] = [
     key: 'notes',
     label: 'Context',
     href: '/context',
-    description: 'An interactive context map of the community, plus shared notes and a Context tab on every person and organization profile.',
+    description: 'An interactive context map of the community, plus shared notes and a Context tab on every person and community profile.',
     // Always on and nav-less: surfaced as the Context tab under the Directory, not
     // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,

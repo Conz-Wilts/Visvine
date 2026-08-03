@@ -47,9 +47,17 @@ test('brain types follow the notes feature, and connectors are admin-only', () =
   assert.equal(canCreateType('connector', off('notes')), true)
 })
 
-test('the note-first types and Community stay open to everyone', () => {
-  for (const type of ['person', 'organization', 'resource', 'context', 'community'] as const) {
+test('the note-first types stay open to everyone', () => {
+  for (const type of ['person', 'community', 'resource', 'context'] as const) {
     assert.equal(canCreateType(type, MEMBER), true, type)
     assert.equal(canCreateType(type, off('channels', 'notes')), true, type)
   }
+})
+
+// `community` above records that an organisation exists; `workspace` provisions
+// a real one. Both are open to a plain member, for different reasons — keep the
+// second covered so a permission change to either can't pass unnoticed.
+test('anyone can start a workspace of their own', () => {
+  assert.equal(canCreateType('workspace', MEMBER), true)
+  assert.equal(canCreateType('workspace', off('channels', 'notes')), true)
 })

@@ -6,7 +6,8 @@ import { Trash2 } from 'lucide-react';
 import { Community } from '@/lib/types';
 import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, SettingsSection, inputBaseClass } from '@/components/ui';
+import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, inputBaseClass } from '@/components/ui';
+import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/components/console/ConsoleSaveContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import CommunityImageUpload from '@/components/community/CommunityImageUpload';
@@ -170,6 +171,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
     community.visibility === 'private' ? 'private' : 'public'
   );
 
+  const [confirmPublic, setConfirmPublic] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -203,71 +205,55 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
     router.replace('/directory');
   };
 
-  const visibilityOptions = [
-    { value: 'public', title: 'Public', desc: 'Anyone can find and join', icon: <GlobeIcon /> },
-    { value: 'private', title: 'Private', desc: 'Invite or admin only', icon: <LockIcon /> },
-  ] as const;
+  const isPrivate = visibility === 'private';
 
+  const applyVisibility = (next: 'public' | 'private') => {
+    setVisibility(next);
+    queue({ visibility: next });
+  };
+
+  // Going public exposes everything in here to anyone, so it asks first.
+  // Going private is the safe direction and applies straight away.
+  const handleVisibilityToggle = (nextIsPrivate: boolean) => {
+    if (nextIsPrivate) applyVisibility('private');
+    else setConfirmPublic(true);
+  };
 
   return (
     <div className="w-full space-y-8">
-      {/* Visibility leads: it's the one setting with consequences for who can
-          see any of the rest, so it shouldn't be buried below the form. The two
-          cards say what they do, so they carry no heading. */}
+      {/* Avatar, name, blurb and where it is — one block, no heading: the field
+          labels already say what each one is. Visibility rides on the avatar
+          row: it's the setting with consequences for who sees the rest, so it
+          stays at the top rather than getting buried below the form. */}
       <section>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {visibilityOptions.map(opt => {
-            const active = visibility === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => {
-                  setVisibility(opt.value);
-                  queue({ visibility: opt.value });
-                }}
-                className={`group flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
-                  active
-                    ? 'border-brand-green bg-brand-green/8 ring-1 ring-brand-green/40'
-                    : 'border-border-subtle hover:border-brand-green/50 hover:bg-surface-2'
-                }`}
-              >
-                <span
-                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg transition-colors ${
-                    active ? 'bg-brand-green/20 text-brand-dark-green' : 'bg-surface-3 text-text-muted'
-                  }`}
-                >
-                  {opt.icon}
-                </span>
-                <span className="min-w-0">
-                  <span className="flex items-center gap-1.5 text-sm font-medium text-text-primary">
-                    {opt.title}
-                    {active && (
-                      <svg className="h-4 w-4 text-brand-green" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className="mt-0.5 block text-xs text-text-muted">{opt.desc}</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Avatar, name, blurb and where it is — one block, no commentary: the
-          field labels already say what each one is. */}
-      <SettingsSection title="Details">
         <div className="space-y-6">
-          <CommunityImageUpload
-            community={{ ...community, imageUrl }}
-            onUploadComplete={url => {
-              setImageUrl(url);
-              onSaved({ imageUrl: url });
-            }}
-            size="xl"
-          />
+          <div className="flex items-start justify-between gap-4">
+            <CommunityImageUpload
+              community={{ ...community, imageUrl }}
+              onUploadComplete={url => {
+                setImageUrl(url);
+                onSaved({ imageUrl: url });
+              }}
+              size="xl"
+            />
+            <div className="flex flex-col items-end text-right">
+              <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <span className={isPrivate ? 'text-brand-dark-green' : 'text-text-muted'}>
+                  {isPrivate ? <LockIcon /> : <GlobeIcon />}
+                </span>
+                {isPrivate ? 'Private' : 'Public'}
+              </div>
+              <p className="mt-0.5 text-xs text-text-muted">
+                {isPrivate ? 'Invite or admin only' : 'Anyone can find and join'}
+              </p>
+              <Toggle
+                className="mt-3"
+                checked={isPrivate}
+                onChange={handleVisibilityToggle}
+                aria-label="Private community"
+              />
+            </div>
+          </div>
           <div className="space-y-5">
             <Field label="Name" error={nameError}>
               <Input
@@ -316,7 +302,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
             </div>
           </div>
         </div>
-      </SettingsSection>
+      </section>
 
       {/* Hand-rolled rather than a SettingsSection: the red wash has to enclose
           the heading too, which that component's hairline-divider shell can't do.
@@ -333,6 +319,23 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
           Delete this community
         </Button>
       </section>
+
+      <ConfirmDialog
+        open={confirmPublic}
+        title="Make this community public?"
+        body={
+          <>
+            Anyone will be able to find <span className="font-semibold">{community.name}</span> in
+            Discover and join it without an invite.
+          </>
+        }
+        confirmLabel="Make public"
+        onConfirm={() => {
+          applyVisibility('public');
+          setConfirmPublic(false);
+        }}
+        onClose={() => setConfirmPublic(false)}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

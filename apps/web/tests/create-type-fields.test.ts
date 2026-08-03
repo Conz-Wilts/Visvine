@@ -14,10 +14,10 @@ test('fieldsForType is case-insensitive and follows the stored lowercase type', 
   assert.ok(fieldsForType('person').length > 0)
 })
 
-test('fieldsForType folds the org/company/group synonyms onto one schema', () => {
-  const group = fieldsForType('group')
-  for (const synonym of ['organization', 'organisation', 'org', 'company', 'companies', 'groups']) {
-    assert.deepEqual(fieldsForType(synonym), group, `${synonym} should resolve to the group schema`)
+test('fieldsForType folds every retired organisation spelling onto the community schema', () => {
+  const community = fieldsForType('community')
+  for (const synonym of ['organization', 'organisation', 'org', 'group', 'groups', 'company', 'companies', 'communities']) {
+    assert.deepEqual(fieldsForType(synonym), community, `${synonym} should resolve to the community schema`)
   }
 })
 
@@ -30,7 +30,7 @@ test('fieldsForType returns an empty array for unknown and empty types', () => {
 })
 
 test('every column-targeted field names its column', () => {
-  for (const type of ['person', 'group', 'resource', 'event']) {
+  for (const type of ['person', 'community', 'resource', 'event']) {
     for (const field of fieldsForType(type)) {
       if (field.target === 'column') {
         assert.ok(field.column, `${type}.${field.key} targets a column but names none`)
@@ -49,8 +49,8 @@ test('person carries the metadata keys identity resolution reads', () => {
   }
 })
 
-test('group website mirrors into the metadata key the org resolver reads', () => {
-  const def = fieldDef('group', 'url')
+test('a community website mirrors into the metadata key the org resolver reads', () => {
+  const def = fieldDef('community', 'url')
   assert.ok(def)
   assert.equal(def.column, 'url')
   assert.equal(def.mirrorMetadataKey, 'website')
@@ -78,7 +78,7 @@ test('applyFields splits values into node columns and metadata', () => {
 })
 
 test('applyFields writes a mirrored column to both places', () => {
-  const { node, metadata } = applyFields('group', { url: 'halter.io' })
+  const { node, metadata } = applyFields('community', { url: 'halter.io' })
   assert.equal(node.url, 'halter.io')
   assert.equal(metadata.website, 'halter.io')
 })
@@ -106,7 +106,7 @@ test('applyFields ignores keys that do not belong to the type', () => {
 })
 
 test('applyFields coerces number fields', () => {
-  const { metadata } = applyFields('group', { founded: '2016', memberCount: '120' })
+  const { metadata } = applyFields('community', { founded: '2016', memberCount: '120' })
   assert.equal(metadata.founded, 2016)
   assert.equal(metadata.memberCount, 120)
 })
@@ -132,6 +132,6 @@ test('readFields omits unset columns and metadata rather than emitting empties',
 })
 
 test('readFields stringifies numeric metadata for the input rows', () => {
-  const back = readFields({ type: 'group', metadata: { founded: 2016 } })
+  const back = readFields({ type: 'community', metadata: { founded: 2016 } })
   assert.equal(back.founded, '2016')
 })

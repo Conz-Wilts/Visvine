@@ -5,14 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import PeopleAccessPanel from '@/components/admin/people/PeopleAccessPanel';
 import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
-import ActivityLogPanel from '@/components/admin/ActivityLogPanel';
 import TypesTab from '@/components/data/TypesTab';
-import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
 import CommunityToolsPanel from '@/components/admin/CommunityToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
-import { Settings2, Puzzle, Users, Shapes, History, BarChart3 } from 'lucide-react';
+import { Settings2, Puzzle, Users, Shapes } from 'lucide-react';
 
 function AdminConsole({ community, onSaved }: {
   community: Community;
@@ -49,8 +47,6 @@ function AdminConsole({ community, onSaved }: {
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
     { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} /> },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
-    { id: 'activity', label: 'Activity', group: 'Insights', width: 'wide', icon: <History size={18} /> },
-    { id: 'analytics', label: 'Analytics', group: 'Insights', width: 'wide', icon: <BarChart3 size={18} /> },
   ];
 
   return (
@@ -66,10 +62,6 @@ function AdminConsole({ community, onSaved }: {
             return <PeopleAccessPanel key={community.id} communityId={community.id} onPendingCountChange={handlePendingCount} />;
           case 'types':
             return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
-          case 'activity':
-            return <ActivityLogPanel communityId={community.id} />;
-          case 'analytics':
-            return <AnalyticsPanel communityId={community.id} />;
           default:
             return null;
         }

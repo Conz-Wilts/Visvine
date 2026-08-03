@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { logActivity } from '@/lib/activityLog';
 
 /**
  * GET: List all members of a community (admin only)
@@ -80,16 +79,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
   await prisma.community.update({
     where: { id: communityId },
     data: { memberCount: { increment: 1 } },
-  });
-
-  await logActivity({
-    communityId,
-    actorEmail: session.email,
-    actorName: session.name,
-    action: 'member_added',
-    targetEmail: membership.user.email,
-    targetName: membership.user.name,
-    details: { role },
   });
 
   return NextResponse.json({

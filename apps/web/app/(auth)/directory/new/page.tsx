@@ -45,8 +45,8 @@ const DRAFT_TABS: PaneTabItem[] = [
 // Every type the draft surface can commit — `?type=` is only a pre-pick, so an
 // unknown value just leaves the Type row unset rather than erroring.
 const DRAFT_TYPES = new Set<DraftType>([
-  'note', 'person', 'group', 'resource',
-  'file', 'connector', 'channel', 'space', 'community',
+  'note', 'person', 'community', 'resource',
+  'file', 'connector', 'channel', 'space', 'workspace',
 ]);
 
 function DraftRoute() {

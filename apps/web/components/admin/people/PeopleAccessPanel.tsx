@@ -98,7 +98,7 @@ export default function PeopleAccessPanel({ communityId, onPendingCountChange }:
         tabs={[
           { id: 'people', label: 'Members' },
           { id: 'teams', label: 'Teams' },
-          { id: 'access', label: 'Context access' },
+          { id: 'access', label: 'Access' },
           { id: 'requests', label: pendingRequests > 0 ? `Requests (${pendingRequests})` : 'Requests' },
         ]}
         value={tab}
@@ -109,7 +109,7 @@ export default function PeopleAccessPanel({ communityId, onPendingCountChange }:
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
 
       {data === null ? (
-        <p className="text-sm text-text-muted">Loading people and access…</p>
+        <p className="text-sm text-text-muted">Loading…</p>
       ) : tab === 'people' ? (
         <PeopleTab communityId={communityId} data={data} busy={busy} run={run} />
       ) : tab === 'teams' ? (

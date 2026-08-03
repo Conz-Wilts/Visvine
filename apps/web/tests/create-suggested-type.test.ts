@@ -37,7 +37,7 @@ test('a prefix only matches on a path boundary', () => {
 })
 
 test('unmapped routes get no suggestion', () => {
-  for (const p of ['/home', '/discover', '/messages', '/settings', '/admin', '/tasks', '/analytics', '/']) {
+  for (const p of ['/home', '/discover', '/messages', '/settings', '/admin', '/tasks', '/']) {
     assert.equal(suggestedCreateType(p), null, `expected no suggestion for ${p}`)
   }
 })

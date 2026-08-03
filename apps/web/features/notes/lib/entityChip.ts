@@ -1,5 +1,5 @@
 // Tiptap extension that renders directory-entity links (people/<slug>.md,
-// companies/<slug>.md) as an inline mention — `⬛ Name`, where the avatar square
+// communities/<slug>.md) as an inline mention — `⬛ Name`, where the avatar square
 // only appears when the entity has a real photo. Like the Hashtag extension it
 // is decoration-only: the stored markdown stays a plain OKF link
 // `[Name](/people/<slug>.md)`, and we only layer a ProseMirror decoration
@@ -14,7 +14,7 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as PMNode, Mark } from '@tiptap/pm/model'
-import { parseEntityHref } from '@/lib/notes/entities'
+import { entityKindOf, parseEntityHref } from '@/lib/notes/entities'
 
 interface ChipEntity {
   id: string
@@ -65,7 +65,10 @@ function buildDecorations(doc: PMNode, getEntity: EntityChipOptions['getEntity']
     if (!entity) return // unknown node (map loading / stale) → leave as a normal link
     const start = pos
     const end = pos + node.nodeSize
-    const kindClass = entity.type.toLowerCase().startsWith('org') ? 'entity-company' : 'entity-person'
+    // entityKindOf, not a prefix test: an organisation's stored type has been
+    // 'organization', then 'group', and is now 'community', and only the first
+    // of those starts with "org".
+    const kindClass = entityKindOf(entity.type) === 'community' ? 'entity-community' : 'entity-person'
     if (entity.image_url) {
       decorations.push(
         Decoration.widget(start, () => buildWidget(entity, path, kindClass), {

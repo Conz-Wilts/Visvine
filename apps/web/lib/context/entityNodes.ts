@@ -10,7 +10,7 @@
  *
  * Two kinds of thing go through here:
  *
- *  * **Records and containers** (person, group, resource, event, community,
+ *  * **Records and containers** (person, resource, event, community,
  *    space, channel) get BOTH a node and a canonical note under their fixed
  *    namespace — `spaces/general.md`, `channels/announcements.md`, and so on.
  *  * **Documents** (a note, an uploaded file) get ONLY a node: the artifact IS
@@ -28,12 +28,12 @@ import { slugify } from '../eventUtils'
 import { logger } from '../logger'
 import { createNote, SHARED_OWNER_KEY, type Actor } from '../notes/store'
 import { entityDraftContent, entityKindOf, entityNotePath } from '../notes/entities'
+import { communityNodeId } from '../types/context'
 import { upsertLink } from './links'
 
 /** The node `type` values this module knows how to place in the graph. */
 export type EntityNodeType =
   | 'person'
-  | 'group'
   | 'resource'
   | 'event'
   | 'community'
@@ -117,19 +117,11 @@ export interface SyncEntityNodeResult {
   noteError: string | null
 }
 
-/**
- * The graph node standing for the community itself.
- *
- * Community ids are usually already `community:`-prefixed (`community:blackbird`
- * from the slugified name), so prefixing blindly would produce
- * `community:community:blackbird` — and, worse, a note path with a colon in it,
- * because entityNotePath slugs everything after the FIRST colon. Normalising
- * here keeps the id and the note path (`communities/blackbird.md`) clean whether
- * or not the caller's id carries the prefix.
- */
-export function communityNodeId(communityId: string): string {
-  return `community:${communityId.replace(/^community:/, '')}`
-}
+// Lives in lib/types/context.ts (alongside its sibling `isOwnCommunityNode`) so
+// client components can reach it — this module imports prisma. Re-exported here
+// because every server call site has always asked entityNodes for the
+// community's node id.
+export { communityNodeId }
 
 function bustContextCache(): void {
   // revalidateTag throws outside a Next.js request scope (scripts, tests).

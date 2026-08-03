@@ -107,12 +107,16 @@ export interface LinkTypeConfig {
 // "everything is grey on first paint" race condition.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Person',    color: '#2563eb', shape: 'rectangle' },
-  { name: 'Group',     color: '#9333ea', shape: 'square'    },
+  // An organisation IS a community: the company, group or org you record in the
+  // directory is the same kind of thing as the workspace you could run for it,
+  // so there is one type for both. A record living in someone else's graph is
+  // just a community nobody has provisioned yet — see isOwnCommunityNode in
+  // lib/context/entityNodes.ts for how the two are told apart.
+  { name: 'Community', color: '#78d870', shape: 'square'    },
   { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
   { name: 'Resource',  color: '#f59e0b', shape: 'rectangle' },
   // Structural types — the container and document kinds. Colours match the
   // Create panel's tiles so a thing looks the same wherever you meet it.
-  { name: 'Community', color: '#78d870', shape: 'square'    },
   { name: 'Space',     color: '#0ea5e9', shape: 'square'    },
   { name: 'Channel',   color: '#e0685f', shape: 'rectangle' },
   { name: 'Note',      color: '#ec4899', shape: 'rectangle' },
@@ -136,15 +140,54 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  * are hidden by default in the context view and excluded from the directory
  * grid; the type filter turns them back on. Lowercase — compare against a
  * node's stored `type`, which is canonicalised lowercase on write.
+ *
+ * `community` is deliberately NOT here. It carries the organisations that used
+ * to be the Group type, which are directory records people expect to see; the
+ * cost is that a community's own root node shows up in its grid too, which
+ * reads as a "this community" card and links to /communities/<id>.
  */
 export const STRUCTURAL_NODE_TYPES: readonly string[] = [
-  'community',
   'space',
   'channel',
   'note',
   'file',
   'connector',
 ];
+
+/**
+ * The graph node standing for a community itself.
+ *
+ * Community ids are usually already `community:`-prefixed (`community:blackbird`
+ * from the slugified name), so prefixing blindly would produce
+ * `community:community:blackbird` — and, worse, a note path with a colon in it,
+ * because entityNotePath slugs everything after the FIRST colon. Normalising
+ * here keeps the id and the note path (`communities/blackbird.md`) clean whether
+ * or not the caller's id carries the prefix.
+ *
+ * Lives here rather than in lib/context/entityNodes.ts (which re-exports it)
+ * because client components need it and that module imports prisma.
+ */
+export function communityNodeId(communityId: string): string {
+  return `community:${communityId.replace(/^community:/, '')}`;
+}
+
+/**
+ * Does this `community`-typed node stand for the community it lives in, or for
+ * an organisation recorded inside it?
+ *
+ * Both wear `type: 'community'` and a `community:<slug>` id since organisations
+ * stopped being their own "Group" type — an org IS a community, just one nobody
+ * has provisioned a workspace for. The community's own root node is the one
+ * whose id derives from its own `communityId`; anything else is a record.
+ *
+ * This is the discriminator every consumer needs: the root node redirects to
+ * /communities/<id>, a record renders its profile in place, and only records
+ * resolve to a cross-community organisation Identity.
+ */
+export function isOwnCommunityNode(node: { id: string; communityId?: string | null }): boolean {
+  if (!node.communityId) return false;
+  return communityNodeId(node.communityId) === node.id;
+}
 
 /** Whether a node type is structural (see {@link STRUCTURAL_NODE_TYPES}). */
 export function isStructuralNodeType(type: string | null | undefined): boolean {
@@ -160,13 +203,20 @@ export function isStructuralNodeType(type: string | null | undefined): boolean {
  * Get node type configuration for a specific type within a community
  */
 // Legacy/synonym type names that map onto a canonical base type. Keeps nodes
-// still stored (or cached) as "organization" rendering identically to "Group"
-// after the Organization→Group rename, so un-migrated or stale-cache data never
-// falls through to the grey "unknown type" placeholder.
+// still stored (or cached) under a retired spelling rendering identically to
+// the current one, so un-migrated or stale-cache data never falls through to
+// the grey "unknown type" placeholder. Organisations have been through two
+// renames now — Organization → Group → Community — so all five spellings land
+// on `community`.
 const TYPE_SYNONYMS: Record<string, string> = {
-  organization: 'group',
-  organisation: 'group',
-  org: 'group',
+  organization: 'community',
+  organisation: 'community',
+  org: 'community',
+  group: 'community',
+  groups: 'community',
+  company: 'community',
+  companies: 'community',
+  communities: 'community',
   // An uploaded file is stored as a ContextSource; "File" is what the Create
   // panel and the graph call it, so both names resolve to the same config.
   source: 'file',
@@ -202,9 +252,9 @@ export function getNodeTypeConfig(
 
 /**
  * The avatar-fallback glyph a node type should draw when it has no image. People
- * get the person silhouette; groups/organisations the cluster; events a calendar;
- * resources a document. Any other type returns null and the caller falls back to
- * name initials. This is a clean SVG-glyph system — deliberately not emoji.
+ * get the person silhouette; communities and the other containers the cluster;
+ * events a calendar; resources a document. Any other type returns null and the
+ * caller falls back to name initials. A clean SVG-glyph system, not emoji.
  */
 export function getNodeGlyph(
   type: string | null | undefined
@@ -213,11 +263,11 @@ export function getNodeGlyph(
   const normalized = type.toLowerCase();
   const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
   if (canonical === 'person' || canonical === 'people') return 'person';
-  if (canonical === 'group') return 'group';
   if (canonical === 'event' || canonical === 'events') return 'event';
   if (canonical === 'resource' || canonical === 'resources') return 'resource';
-  // Structural types reuse the existing glyphs rather than inventing new ones:
-  // containers read as a cluster, documents as a page.
+  // Containers reuse the existing glyphs rather than inventing new ones: a
+  // community/space/channel reads as a cluster, a document as a page. The glyph
+  // key is still called 'group' — it is the shape's name, not a node type.
   if (canonical === 'community' || canonical === 'space' || canonical === 'channel') return 'group';
   if (canonical === 'note' || canonical === 'file') return 'resource';
   if (canonical === 'connector') return 'connector';
@@ -260,7 +310,7 @@ export function findAlias(
  * alias when the community actually configures one by that name for the node's
  * type — events reuse the same column for their public /e/<slug> slug, which
  * must never surface as a type label. Anything unrecognised falls back to the
- * canonical type name ("Event", "Group", …).
+ * canonical type name ("Event", "Community", …).
  */
 export function nodeTypeLabel(
   type: string | null | undefined,

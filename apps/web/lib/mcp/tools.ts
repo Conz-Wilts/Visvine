@@ -189,7 +189,7 @@ export function registerTools(server: McpServer): void {
         type: z
           .string()
           .optional()
-          .describe("Only entities of this type, e.g. 'person', 'group', 'resource', 'event'"),
+          .describe("Only entities of this type, e.g. 'person', 'community', 'resource', 'event'"),
         path_prefix: z.string().optional().describe("Only notes under this path, e.g. 'people/'"),
         limit: z.number().int().min(1).max(500).optional().describe('Max entries per list (default 100)'),
       },
@@ -426,9 +426,11 @@ export function registerTools(server: McpServer): void {
       description:
         'Create a directory entity — a typed node plus its context note, in one step. The TYPE decides which ' +
         'fields apply and where the note lives:\n' +
-        '  • person   → people/<slug>.md   fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
-        '  • group    → companies/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
-        '  • resource → resources/<slug>.md fields: subtitle (description), url\n' +
+        '  • person    → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
+        '  • community → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
+        '  • resource  → resources/<slug>.md   fields: subtitle (description), url\n' +
+        'A "community" here is an organisation — a company, group or investor — recorded in the directory. It shares ' +
+        'the type with the workspace you are in, which is NOT creatable from here.\n' +
         'Use exactly these field keys — email, companyName, linkedinUrl and url/website are what match a person or ' +
         'organization to their identity across communities, and an unrecognised key is silently dropped. ' +
         'Only these three types are creatable; events are made in the events surface, and channels/spaces are admin-only. ' +

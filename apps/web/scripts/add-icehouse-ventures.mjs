@@ -36,22 +36,28 @@ const COMM = community.id;
 // type plus a community-specific alias label (mirrors Blackbird), so collapse
 // the custom types onto base types and carry the label across as the alias.
 const TYPE_REMAP = {
-  Investor:     { type: 'Group', alias: 'Investor' },
-  Startup:      { type: 'Group', alias: 'Startup'  },
+  Investor:     { type: 'Community', alias: 'Investor' },
+  Startup:      { type: 'Community', alias: 'Startup'  },
   Person:       { type: 'person', alias: null },
-  Organization: { type: 'Group', alias: null },
+  Organization: { type: 'Community', alias: null },
 };
 
 // Base node types shown in the Types & Aliases console.
 const NODE_TYPES = [
-  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
+  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
+// The research data still prefixes organisation ids `org:`, the spelling that
+// preceded Group and then Community. Remapped here rather than in the JSON so
+// the source file stays a faithful copy of the research export — nodes and both
+// ends of every link go through this.
+const nodeId = (id) => String(id).replace(/^org:/, 'community:');
+
 // `nodeType` matching is case-insensitive across the app; use canonical names.
 const COMMUNITY_ALIASES = [
-  { name: 'Investor', color: '#0ea5e9', nodeType: 'Group' },
-  { name: 'Startup',  color: '#f59e0b', nodeType: 'Group' },
+  { name: 'Investor', color: '#0ea5e9', nodeType: 'Community' },
+  { name: 'Startup',  color: '#f59e0b', nodeType: 'Community' },
 ];
 
 const pool = new pg.Pool({ connectionString });
@@ -92,7 +98,7 @@ try {
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata,
          community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [
-        n.id, m.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
+        nodeId(n.id), m.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
         n.tags ?? [], JSON.stringify(n.metadata ?? {}), COMM, n.alias ?? m.alias,
       ]
     );
@@ -102,7 +108,8 @@ try {
   // 3. Links (skip if an endpoint is missing or the edge already exists)
   console.log(`\n--- Upserting ${links.length} links ---`);
   let added = 0, skipped = 0;
-  for (const l of links) {
+  for (const raw of links) {
+    const l = { ...raw, sourceId: nodeId(raw.sourceId), targetId: nodeId(raw.targetId) };
     const s = await client.query('SELECT 1 FROM nodes WHERE id = $1', [l.sourceId]);
     const t = await client.query('SELECT 1 FROM nodes WHERE id = $1', [l.targetId]);
     if (s.rowCount === 0 || t.rowCount === 0) {

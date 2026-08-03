@@ -6,14 +6,28 @@
 
 import prisma from '@/lib/prisma'
 import type { NBNode } from '@/lib/types'
+import { entityKindOf } from '@/lib/notes/entities'
+import { isOwnCommunityNode } from '@/lib/types/context'
 import { tryResolveIdentity, confirmIdentity, type ResolveResult } from './resolve'
 import type { IdentityKind } from './match'
 
-/** Which canonical-identity kind (if any) a node type participates in. */
-function identityKindFor(type: string): IdentityKind | null {
-  const t = type.toLowerCase()
+/**
+ * Which canonical-identity kind (if any) a node participates in.
+ *
+ * `Identity.kind` keeps its internal 'organization' spelling — it is a matching
+ * rule (website domains, no email), not a display label, and renaming it would
+ * churn every stored row for nothing.
+ *
+ * The community's own root node is excluded: it is the workspace you are in,
+ * not an organisation recorded inside it, and merging those across communities
+ * would collapse unrelated workspaces onto one identity.
+ */
+function identityKindFor(node: { id: string; type: string; community_id?: string | null }): IdentityKind | null {
+  const t = node.type.toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
-  if (t === 'organization' || t === 'organisation' || t === 'org' || t === 'group') return 'organization'
+  if (entityKindOf(t) === 'community') {
+    return isOwnCommunityNode({ id: node.id, communityId: node.community_id }) ? null : 'organization'
+  }
   return null
 }
 
@@ -31,13 +45,13 @@ export interface AttachIdentityResult {
  * can never silently force a merge.
  *
  * Returns `{ identityId: null, resolution: null }` for types with no identity
- * (resources, events, community-invented types).
+ * (resources, events, community-invented types, and a community's own node).
  */
 export async function attachIdentity(
-  node: Pick<NBNode, 'id' | 'type' | 'name' | 'url' | 'location' | 'metadata'>,
+  node: Pick<NBNode, 'id' | 'type' | 'name' | 'url' | 'location' | 'metadata' | 'community_id'>,
   opts: { identityId?: string | null; actorUserId?: string | null } = {},
 ): Promise<AttachIdentityResult> {
-  const kind = identityKindFor(node.type)
+  const kind = identityKindFor(node)
   if (!kind) return { identityId: null, resolution: null }
 
   const meta = (node.metadata as Record<string, unknown>) ?? {}

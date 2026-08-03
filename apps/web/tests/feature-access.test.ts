@@ -5,9 +5,12 @@ import {
   CORE_FEATURE_KEYS,
   NAV_HIDDEN_FEATURE_KEYS,
   isFeatureEnabled,
+  featureNodeTypeNames,
   isNodeTypeEnabled,
   nodeTypeFeatureKey,
   isDirectoryPrivate,
+  adminOnlyFeatureKeys,
+  isFeatureAdminOnly,
   canAccessFeature,
   moreFeatureKeys,
   sortFeatureKeys,
@@ -232,7 +235,7 @@ describe('moreFeatureKeys', () => {
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    for (const type of ['Person', 'Group', 'Event', 'Community', 'Note', 'File', 'Connector']) {
+    for (const type of ['Person', 'Community', 'Event', 'Note', 'File', 'Connector']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
     }
@@ -251,5 +254,54 @@ describe('isNodeTypeEnabled', () => {
     assert.equal(isNodeTypeEnabled({ enabled: { resources: false } }, 'Resource'), false);
     assert.equal(isNodeTypeEnabled(null, 'Resource'), true);
     assert.equal(isNodeTypeEnabled({}, 'Channel'), true);
+  });
+});
+
+describe('adminOnlyFeatureKeys', () => {
+  it('folds the legacy directoryPrivate flag in', () => {
+    assert.deepEqual(adminOnlyFeatureKeys({ directoryPrivate: true }), ['directory']);
+    assert.deepEqual(adminOnlyFeatureKeys({ adminOnly: ['directory'], directoryPrivate: true }), ['directory']);
+    assert.deepEqual(adminOnlyFeatureKeys({}), []);
+  });
+
+  it('drops unknown, nav-hidden and repeated keys', () => {
+    assert.deepEqual(
+      adminOnlyFeatureKeys({ adminOnly: ['tasks', 'tasks', 'messages', 'nope', 42 as never] }),
+      ['tasks'],
+    );
+  });
+
+  it('hides an admins-only tool from members, not from admins', () => {
+    const config = { adminOnly: ['tasks'] };
+    assert.equal(isFeatureAdminOnly(config, 'tasks'), true);
+    assert.equal(canAccessFeature(config, 'tasks', false), false);
+    assert.equal(canAccessFeature(config, 'tasks', true), true);
+    assert.equal(canAccessFeature(config, 'channels', false), true);
+  });
+});
+
+describe('sanitizeFeatureConfig adminOnly', () => {
+  it('keeps directoryPrivate in step with adminOnly', () => {
+    assert.equal(sanitizeFeatureConfig({ adminOnly: ['directory'] }).directoryPrivate, true);
+    assert.equal(sanitizeFeatureConfig({ adminOnly: ['tasks'] }).directoryPrivate, false);
+    // An adminOnly-less save leaves the legacy flag exactly as it was sent.
+    assert.equal(sanitizeFeatureConfig({ directoryPrivate: true }).directoryPrivate, true);
+  });
+
+  it('reduces adminOnly to known, nav-bearing keys', () => {
+    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['tasks', 'events', 'bogus'] }).adminOnly, ['tasks']);
+    assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
+  });
+});
+
+describe('featureNodeTypeNames', () => {
+  it('names the types a tool carries in and out with it', () => {
+    assert.deepEqual(featureNodeTypeNames('channels'), ['Space', 'Channel']);
+    assert.deepEqual(featureNodeTypeNames('resources'), ['Resource']);
+  });
+
+  it('is empty for tools that own no node type', () => {
+    assert.deepEqual(featureNodeTypeNames('tasks'), []);
+    assert.deepEqual(featureNodeTypeNames('directory'), []);
   });
 });

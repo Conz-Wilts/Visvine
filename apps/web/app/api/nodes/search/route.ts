@@ -13,6 +13,10 @@ import { handleApiError, requireApiSession } from '@/lib/api/route';
  */
 const TYPE_ALIASES: Record<string, string[]> = {
   person: ['person', 'people'],
+  // Organisations have worn four retired spellings before settling on
+  // `community`. All of them must match, or the duplicate check that guards the
+  // note-first create surface silently finds nothing on legacy data.
+  community: ['community', 'communities', 'group', 'groups', 'organization', 'organisation', 'org', 'company'],
   resource: ['resource', 'resources'],
   event: ['event', 'events'],
 };

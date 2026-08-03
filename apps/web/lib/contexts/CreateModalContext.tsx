@@ -7,10 +7,14 @@ import { suggestedCreateType } from '@/lib/create/suggestedType';
 
 export type CreateableType =
   | 'person'
-  | 'organization'
+  // An organisation recorded in the directory — a company, group or investor.
+  // It IS a community, just one nobody has provisioned a workspace for, so it
+  // shares the node type. `workspace` below is the other half: provisioning a
+  // real Community row with members, spaces and a brain of its own.
+  | 'community'
   | 'resource'
   | 'event'
-  | 'community'
+  | 'workspace'
   | 'channel'
   | 'space'
   // Brain surfaces: a written note, and an uploaded file ingested as a Context
@@ -26,7 +30,7 @@ export type CreateableType =
  * in the docked panel — which is now everything except an Event (whose detail
  * route redirects to /events/<id>, so the draft has nowhere to land).
  *
- * A channel, space, community and uploaded file used to be panel-only on the
+ * A channel, space, workspace and uploaded file used to be panel-only on the
  * grounds that they have no note to open. They do: each writes a context note
  * (channels/<slug>.md, spaces/…, communities/…) or lands in the context tree,
  * so the draft surface takes a name and a starting body for them just like the
@@ -37,12 +41,12 @@ export type CreateableType =
 const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   context: 'note',
   person: 'person',
-  organization: 'group',
+  community: 'community',
   resource: 'resource',
   connector: 'connector',
   channel: 'channel',
   space: 'space',
-  community: 'community',
+  workspace: 'workspace',
   file: 'file',
 };
 

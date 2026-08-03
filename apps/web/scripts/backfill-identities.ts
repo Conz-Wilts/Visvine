@@ -21,11 +21,19 @@ import 'dotenv/config';
 import prisma from '../lib/prisma';
 import { resolveIdentity } from '../lib/identity/resolve';
 import type { IdentityKind } from '../lib/identity/match';
+import { entityKindOf } from '../lib/notes/entities';
+import { isOwnCommunityNode } from '../lib/types/context';
 
-function kindFor(type: string): IdentityKind | null {
-  const t = type.toLowerCase();
+// Every organisation spelling — 'organization', 'group', today's 'community' —
+// resolves to an org identity. The community's OWN node is excluded: it is the
+// workspace, not an organisation recorded inside it, and giving it an identity
+// would merge unrelated workspaces that happen to share a name.
+function kindFor(node: { id: string; type: string; communityId: string | null }): IdentityKind | null {
+  const t = node.type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';
-  if (t === 'organization' || t === 'organisation' || t === 'org' || t === 'group') return 'organization';
+  if (entityKindOf(t) === 'community') {
+    return isOwnCommunityNode(node) ? null : 'organization';
+  }
   return null;
 }
 
@@ -39,7 +47,7 @@ async function main() {
   });
 
   const targets = nodes
-    .map((n) => ({ ...n, kind: kindFor(n.type) }))
+    .map((n) => ({ ...n, kind: kindFor(n) }))
     .filter((n): n is typeof n & { kind: IdentityKind } => n.kind !== null);
 
   console.log(`Found ${targets.length} person/org node(s) without an identity (of ${nodes.length} unresolved nodes).`);

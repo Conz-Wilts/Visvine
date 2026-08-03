@@ -9,7 +9,8 @@ import { clsx } from 'clsx';
  * container). No card chrome — children render directly under the header.
  */
 interface SettingsSectionProps {
-  title: string;
+  /** Usually a plain string; a node when the heading carries a glyph. */
+  title: React.ReactNode;
   /** One-line supporting text under the title. */
   description?: React.ReactNode;
   /** Optional node pinned to the right of the header (e.g. a button). */

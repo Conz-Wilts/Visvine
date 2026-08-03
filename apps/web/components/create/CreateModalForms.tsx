@@ -10,6 +10,7 @@ import { validateImageFile } from '@/lib/imageUpload';
 import { slugify } from '@/lib/eventUtils';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, EmojiIconPicker } from '@/components/messages/ChannelIcon';
+import Toggle from '@/components/ui/Toggle';
 import {
   MAX_SOURCE_BYTES,
   SOURCE_ACCEPT,
@@ -26,14 +27,22 @@ export interface TypeOption {
   description: string;
   color: string;
   icon: React.ReactNode;
-  inGrid?: boolean; // shown in the "Create new" type grid. Person, Resource and
-                    // Context are false: they're context notes, so they're
-                    // created on the note-first surface (/directory/new), not in
-                    // this panel. Their entries stay for label/title lookups.
-                    // Community lives in the
-                    // registry (for title/label lookups) but is created from the
-                    // community dropdown, so it's excluded from the grid.
+  inGrid?: boolean; // shown in the "Create new" type grid. Person, Community,
+                    // Resource and Context are false: they're context notes, so
+                    // they're created on the note-first surface
+                    // (/directory/new), not in this panel. Their entries stay
+                    // for label/title lookups. Workspace lives in the registry
+                    // (for title/label lookups) but is created from the
+                    // community dropdown, so it's excluded from the grid too.
 }
+
+// Shared by both community entries below — a record and a workspace are the
+// same kind of thing, so they read the same.
+const COMMUNITY_ICON = (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+  </svg>
+);
 
 export const TYPE_OPTIONS: TypeOption[] = [
   {
@@ -47,6 +56,17 @@ export const TYPE_OPTIONS: TypeOption[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
       </svg>
     ),
+  },
+  {
+    // An organisation in the directory. It shares the Community node type with
+    // the workspace entry at the bottom of this list — same kind of thing, one
+    // of them just hasn't been provisioned.
+    id: 'community',
+    label: 'Community',
+    description: 'A company, organisation or group',
+    color: '#78d870',
+    inGrid: false,
+    icon: COMMUNITY_ICON,
   },
   {
     id: 'resource',
@@ -137,16 +157,15 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
-    id: 'community',
-    label: 'Community',
-    description: 'A new community workspace',
+    // The other half of Community: this one provisions a real workspace with
+    // members, spaces and a brain, rather than recording that an organisation
+    // exists. Reached from the community dropdown, never from the grid.
+    id: 'workspace',
+    label: 'Workspace',
+    description: 'A whole new community of your own',
     color: '#78d870',
     inGrid: false,
-    icon: (
-      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-      </svg>
-    ),
+    icon: COMMUNITY_ICON,
   },
 ];
 
@@ -598,28 +617,22 @@ export function CommunityForm({
         />
       </Field>
       <Field label="Visibility">
-        <div className="grid grid-cols-2 gap-2">
-          {([
-            { value: 'public', title: 'Public', desc: 'Anyone can find & join from Discover' },
-            { value: 'private', title: 'Private', desc: 'Hidden — join by invite link or admin add' },
-          ] as const).map((opt) => {
-            const active = data.visibility === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => onChange({ ...data, visibility: opt.value })}
-                className={`flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all ${
-                  active
-                    ? 'border-brand-green bg-brand-green/10'
-                    : 'border-border-default hover:border-brand-green/60'
-                }`}
-              >
-                <span className="text-sm font-medium text-text-primary">{opt.title}</span>
-                <span className="text-xs text-text-muted">{opt.desc}</span>
-              </button>
-            );
-          })}
+        {/* Binary setting — one switch under the line that says which side it's on. */}
+        <div>
+          <p className="text-sm font-medium text-text-primary">
+            {data.visibility === 'private' ? 'Private' : 'Public'}
+          </p>
+          <p className="text-xs text-text-muted">
+            {data.visibility === 'private'
+              ? 'Hidden — join by invite link or admin add'
+              : 'Anyone can find & join from Discover'}
+          </p>
+          <Toggle
+            className="mt-2"
+            checked={data.visibility === 'private'}
+            onChange={(checked) => onChange({ ...data, visibility: checked ? 'private' : 'public' })}
+            aria-label="Private community"
+          />
         </div>
       </Field>
       {/* The note lands in the NEW community's own brain — its description is
