@@ -79,10 +79,14 @@ export async function provisionPersonalCommunity(user: {
       name: displayName,
       description: 'Your personal space',
       personalOwnerId: user.userId,
+      // Explicitly private: the column defaults to 'public', and a personal space
+      // must never be discoverable or self-joinable.
+      visibility: 'private',
       dataFile: `${communityId}.json`,
       memberCount: 1,
     },
-    update: {},
+    // Repair rows provisioned before visibility was set on create.
+    update: { visibility: 'private' },
   })
 
   // 2. Membership as admin (so the user can edit notes/context in their own space).

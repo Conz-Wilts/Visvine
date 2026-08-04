@@ -10,8 +10,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityNodes } from '@/lib/eventRepo';
 import { normalizeNode } from '@/lib/context/normalize';
 import { isStructuralNodeType } from '@/lib/types/context';
+import { visibleNodes } from '@/lib/context/featureVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
-import { communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
+import { communityReadForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -39,9 +40,13 @@ export async function GET(
     // channels, notes and files are nodes too (so they're in the context graph),
     // but listing them here would drown the actual directory — they're reachable
     // from the channel rail and the brain, where they belong.
-    const nodes = (await getCommunityNodes(communityId))
-      .filter((node) => !isStructuralNodeType(node.type))
-      .map(normalizeNode);
+    // …and a type whose tool has been switched off is gone from here too, the
+    // same way it's gone from the create list and the console's Types tab.
+    const featureConfig = await getFeatureConfig(communityId);
+    const nodes = visibleNodes(
+      (await getCommunityNodes(communityId)).filter((node) => !isStructuralNodeType(node.type)),
+      featureConfig,
+    ).map(normalizeNode);
 
     return NextResponse.json(
       { nodes },

@@ -46,7 +46,7 @@ const DRAFT_TABS: PaneTabItem[] = [
 // unknown value just leaves the Type row unset rather than erroring.
 const DRAFT_TYPES = new Set<DraftType>([
   'note', 'person', 'community', 'resource',
-  'file', 'connector', 'channel', 'space', 'workspace',
+  'file', 'connector', 'channel', 'space',
 ]);
 
 function DraftRoute() {

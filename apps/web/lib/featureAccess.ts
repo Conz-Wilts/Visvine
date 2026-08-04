@@ -10,14 +10,14 @@ import type { CommunityFeatureConfig } from '@/lib/types';
  * Feature keys that are always on and can never be persisted off. Must stay in
  * sync with the `core: true` entries in lib/features.tsx#FEATURES.
  */
-export const CORE_FEATURE_KEYS: string[] = ['directory', 'messages', 'notes', 'events'];
+export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
  * with lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
  * reject unknown keys from a client-submitted `order`.
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'tasks', 'resources', 'connectors', 'messages'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors'];
 
 /**
  * Feature keys that are admins-only by nature rather than by choice — their
@@ -32,14 +32,12 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
 /**
  * Feature keys that carry NO sidebar nav item (and no console toggle):
- * - `messages` is always on (core) and lives in the top navbar beside the
- *   profile icon.
  * - `notes` ("Context") is always on (core) and surfaced as the Context tab under
  *   the Directory page, so it has no rail item and is not a toggleable tool.
  * - `events` is always on (core) and reached from the calendar button in the top
  *   navbar, so it has no rail item either.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['messages', 'notes', 'events'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events'];
 
 /**
  * Is `key` enabled for a community? Core features are always enabled; any other
@@ -58,9 +56,9 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'space' vs 'Space'), valued by the feature slug that owns them.
  *
- * Person and Community belong to the always-on directory, Event to the
- * always-on navbar Events surface, and Note/File to core surfaces — none of
- * them appear here, so they're never hidden.
+ * Person and Community belong to the always-on directory and Event to the
+ * always-on navbar Events surface — neither appears here, so they're never
+ * hidden.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',

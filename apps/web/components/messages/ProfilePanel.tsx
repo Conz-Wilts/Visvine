@@ -1,37 +1,14 @@
 'use client';
 
 /**
- * ProfilePanel — the right-hand floating layer on the Messages page.
- *
- * For DMs it shows the other participant's profile (resolved via
- * /api/profile/by-user/[userId]); for groups and channels it shows the
- * conversation details and member list with admin management actions.
+ * ProfilePanel — the right-hand details layer on the Channels page: the open
+ * channel's description, view style and member list, with admin management
+ * actions.
  */
 
-import { useEffect, useState } from 'react';
-import { Globe, Linkedin, Twitter, MapPin, Mail, UserPlus, Pencil, LogOut, X, Hash, MessageCircle, Newspaper } from 'lucide-react';
+import { UserPlus, Pencil, LogOut, X, Hash, MessageCircle, Newspaper } from 'lucide-react';
 import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
-
-interface PersonProfile {
-  id: string;
-  name: string;
-  subtitle: string | null;
-  bio: string | null;
-  location: string | null;
-  website: string | null;
-  linkedinUrl: string | null;
-  twitterUrl: string | null;
-  pronouns: string | null;
-  openToWork: boolean;
-  imageUrl: string | null;
-  tags: string[];
-}
-
-interface ProfileResponse {
-  user: { id: string; name: string; email: string; image: string | null; createdAt: string };
-  person: PersonProfile | null;
-}
 
 export interface ProfilePanelProps {
   conversation: ConversationSummary;
@@ -51,137 +28,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{children}</p>;
 }
 
-function ProfileLink({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
-    >
-      <Icon className="h-4 w-4 shrink-0 text-text-muted" />
-      <span className="truncate">{label}</span>
-    </a>
-  );
-}
-
-function DmProfile({ conversation, currentUserId }: { conversation: ConversationSummary; currentUserId: string }) {
-  const other = conversation.participants.find((p) => p.id !== currentUserId) ?? conversation.participants[0];
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!other?.id) return;
-    let cancelled = false;
-    setLoading(true);
-    setProfile(null);
-    // Default cache mode on purpose: the route sets a 60s private max-age so
-    // flipping between conversations doesn't refetch the same profile.
-    fetch(`/api/profile/by-user/${other.id}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (!cancelled) setProfile(data); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [other?.id]);
-
-  if (!other) return null;
-
-  const person = profile?.person ?? null;
-  const displayName = person?.name ?? other.name;
-  const imageUrl = person?.imageUrl ?? profile?.user.image ?? other.image;
-  const memberSince = profile?.user.createdAt
-    ? new Date(profile.user.createdAt).toLocaleDateString([], { month: 'long', year: 'numeric' })
-    : null;
-
-  return (
-    <div className="custom-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
-      {/* Identity */}
-      <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
-        <Avatar name={displayName} imageUrl={imageUrl} size="xl" className="!h-16 !w-16 !text-lg" />
-        <p className="mt-3 text-base font-semibold text-text-primary">{displayName}</p>
-        {person?.subtitle && <p className="mt-1 text-sm text-text-secondary">{person.subtitle}</p>}
-        {person?.openToWork && (
-          <span className="mt-2 rounded-full bg-brand-green/15 px-2.5 py-1 text-[11px] font-semibold text-brand-dark-green">
-            Open to work
-          </span>
-        )}
-      </div>
-
-      {loading && (
-        <div className="space-y-3 px-6 py-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-3 animate-pulse rounded bg-surface-3" style={{ width: `${80 - i * 15}%` }} />
-          ))}
-        </div>
-      )}
-
-      {!loading && (
-        <div className="space-y-5 px-5 pb-6">
-          {/* Quick facts */}
-          <div className="space-y-0.5">
-            {(profile?.user.email ?? other.email) && (
-              <ProfileLink href={`mailto:${profile?.user.email ?? other.email}`} icon={Mail} label={profile?.user.email ?? other.email} />
-            )}
-            {person?.location && (
-              <div className="flex items-center gap-2.5 px-2.5 py-2 text-sm text-text-secondary">
-                <MapPin className="h-4 w-4 shrink-0 text-text-muted" />
-                <span className="truncate">{person.location}</span>
-              </div>
-            )}
-            {memberSince && (
-              <p className="px-2.5 pt-1 text-xs text-text-muted">Member since {memberSince}</p>
-            )}
-          </div>
-
-          {/* Bio */}
-          {person?.bio && (
-            <div className="space-y-1.5 px-2.5">
-              <SectionLabel>About</SectionLabel>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-text-secondary">{person.bio}</p>
-            </div>
-          )}
-
-          {/* Links */}
-          {(person?.website || person?.linkedinUrl || person?.twitterUrl) && (
-            <div className="space-y-1 px-0">
-              <div className="px-2.5 pb-0.5"><SectionLabel>Links</SectionLabel></div>
-              {person?.website && <ProfileLink href={person.website} icon={Globe} label={person.website.replace(/^https?:\/\//, '')} />}
-              {person?.linkedinUrl && <ProfileLink href={person.linkedinUrl} icon={Linkedin} label="LinkedIn" />}
-              {person?.twitterUrl && <ProfileLink href={person.twitterUrl} icon={Twitter} label="Twitter / X" />}
-            </div>
-          )}
-
-          {/* Tags */}
-          {person && person.tags.length > 0 && (
-            <div className="space-y-1.5 px-2.5">
-              <SectionLabel>Tags</SectionLabel>
-              <div className="flex flex-wrap gap-1.5">
-                {person.tags.map((tag) => (
-                  <span key={tag} className="rounded-full bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-text-secondary">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember, onChangeViewMode }: ProfilePanelProps) {
-  const isChannel = conversation.type === 'CHANNEL';
+function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRename, onLeave, onRemoveMember, onChangeViewMode }: ProfilePanelProps) {
   const viewMode: ChannelViewMode = conversation.viewMode ?? 'CHAT';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Identity */}
       <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
-        {!isChannel && <Avatar name={conversation.name} size="xl" className="!h-16 !w-16 !text-lg" />}
-        <p className={`flex items-center gap-1 text-base font-semibold text-text-primary ${isChannel ? '' : 'mt-3'}`}>
-          {isChannel && <Hash className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />}
+        <p className="flex items-center gap-1 text-base font-semibold text-text-primary">
+          <Hash className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />
           <span>{conversation.name}</span>
         </p>
         <p className="mt-0.5 text-xs text-text-muted">
@@ -194,7 +49,7 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
 
       {/* View style (channel admins): chat thread vs feed cards — lossless
           rendering switch over the same messages, flip any time. */}
-      {isChannel && isAdmin && onChangeViewMode && (
+      {isAdmin && onChangeViewMode && (
         <div className="space-y-1.5 px-5 pb-4">
           <SectionLabel>View style</SectionLabel>
           <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
@@ -265,7 +120,7 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
               className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
             >
               <Pencil className="h-4 w-4 text-text-muted" />
-              Rename {isChannel ? 'channel' : 'group'}
+              Rename channel
             </button>
           </>
         )}
@@ -275,7 +130,7 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
           className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-red-500 transition-colors hover:bg-red-50"
         >
           <LogOut className="h-4 w-4" />
-          Leave {isChannel ? 'channel' : 'group'}
+          Leave channel
         </button>
       </div>
     </div>
@@ -283,15 +138,13 @@ function GroupDetails({ conversation, currentUserId, isAdmin, onAddMembers, onRe
 }
 
 export default function ProfilePanel(props: ProfilePanelProps) {
-  const { conversation, onClose } = props;
+  const { onClose } = props;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {onClose ? (
         <div className="flex items-center justify-between border-b border-border-subtle px-4 py-3">
-          <p className="text-sm font-semibold text-text-primary">
-            {conversation.type === 'DM' ? 'Profile' : 'Details'}
-          </p>
+          <p className="text-sm font-semibold text-text-primary">Details</p>
           <button
             type="button"
             onClick={onClose}
@@ -303,14 +156,10 @@ export default function ProfilePanel(props: ProfilePanelProps) {
         </div>
       ) : (
         <div className="px-6 pt-5">
-          <p className="text-sm font-semibold text-text-primary">
-            {conversation.type === 'DM' ? 'Profile' : 'Details'}
-          </p>
+          <p className="text-sm font-semibold text-text-primary">Details</p>
         </div>
       )}
-      {conversation.type === 'DM'
-        ? <DmProfile conversation={conversation} currentUserId={props.currentUserId} />
-        : <GroupDetails {...props} />}
+      <ChannelDetails {...props} />
     </div>
   );
 }

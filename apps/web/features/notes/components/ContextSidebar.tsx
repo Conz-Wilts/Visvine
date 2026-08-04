@@ -18,7 +18,7 @@ import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
 import type { CommunityFeatureConfig } from '@/lib/types'
-import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
+import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
 import { notesApi, type AccessOverviewResponse } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, prefetchNoteContext, swrFetch } from '../lib/contextPrefetch'
@@ -56,6 +56,7 @@ export function ContextSidebar({
   const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
   const [contextName, setContextName] = useState<string | null>(null)
   const [shareTarget, setShareTarget] = useState<{ path: string; kind: 'note' | 'folder' } | null>(null)
+  const [trash, setTrash] = useState<TrashEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [wide, setWide] = useState(false)
@@ -106,6 +107,26 @@ export function ContextSidebar({
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [communityId, notesEnabled, treeVersion])
+
+  // The brain's trash, for the folder pinned to the bottom of the tree. Re-runs
+  // on treeVersion so a delete lands in the trash row immediately; the GET also
+  // purges anything past its retention window, so the list is what the server
+  // would keep. A failure just leaves the row empty.
+  useEffect(() => {
+    if (!communityId || !notesEnabled) return
+    let cancelled = false
+    notesApi
+      .trash(communityId)
+      .then(({ trash }) => {
+        if (!cancelled) setTrash(trash ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setTrash([])
       })
     return () => {
       cancelled = true
@@ -230,7 +251,8 @@ export function ContextSidebar({
     [communityId],
   )
 
-  // Delete = move to the brain's trash (restorable from the console). Authority
+  // Delete = move to the brain's trash (restorable from the tree's Trash folder
+  // for 7 days, then purged). Authority
   // is enforced server-side per note — the menu can't know each viewer's level,
   // so a rejected delete just surfaces its message. Deleting the note that's
   // open navigates back to the context canvas.
@@ -238,7 +260,7 @@ export function ContextSidebar({
     (path: string) => {
       if (!communityId) return
       const title = notes.find((n) => n.path === path)?.title ?? path
-      if (!window.confirm(`Delete “${title}”? It moves to the context trash and can be restored.`)) return
+      if (!window.confirm(`Delete “${title}”? It moves to Trash and can be restored for 7 days.`)) return
       notesApi
         .remove(communityId, path)
         .then(() => {
@@ -264,7 +286,7 @@ export function ContextSidebar({
       const contents =
         count === 0
           ? 'It is empty.'
-          : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to the context trash, restorable).`
+          : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to Trash, restorable for 7 days).`
       if (!window.confirm(`Delete the folder “${name}”? ${contents}`)) return
       notesApi
         .deleteFolder(communityId, folderPath)
@@ -279,6 +301,54 @@ export function ContextSidebar({
     },
     [communityId, notes, currentPath, router],
   )
+
+  // Restoring puts the note back at its original path (suffixed if something
+  // else took it while it sat in the trash) — bumping treeVersion reloads the
+  // tree, the note list and the trash together.
+  const handleRestoreTrash = useCallback(
+    (id: string) => {
+      if (!communityId) return
+      notesApi
+        .restoreTrash(communityId, id)
+        .then(() => {
+          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          setTreeVersion((v) => v + 1)
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to restore the note')
+        })
+    },
+    [communityId],
+  )
+
+  // Force-delete, ahead of the 7-day retention. Irreversible, hence the confirm
+  // (the server also restricts it to admins in a community brain).
+  const handlePurgeTrash = useCallback(
+    (id: string) => {
+      if (!communityId) return
+      const name = trash.find((t) => t.id === id)?.name ?? 'this note'
+      if (!window.confirm(`Permanently delete “${name}”? This cannot be undone.`)) return
+      notesApi
+        .purgeTrash(communityId, id)
+        .then(() => setTreeVersion((v) => v + 1))
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
+        })
+    },
+    [communityId, trash],
+  )
+
+  const handleEmptyTrash = useCallback(() => {
+    if (!communityId) return
+    const count = trash.length
+    if (!window.confirm(`Permanently delete ${count === 1 ? 'the note' : `all ${count} notes`} in the trash? This cannot be undone.`)) return
+    notesApi
+      .emptyTrash(communityId)
+      .then(() => setTreeVersion((v) => v + 1))
+      .catch((e: unknown) => {
+        window.alert(e instanceof Error ? e.message : 'Failed to empty the trash')
+      })
+  }, [communityId, trash])
 
   // Nothing to render until the Sidebar's portal host is mounted and we're docking.
   if (!host || !wide || !notesEnabled || !communityId) return null
@@ -295,7 +365,7 @@ export function ContextSidebar({
           <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
         ) : error ? (
           <div className="px-3 py-4 text-sm text-red-500">{error}</div>
-        ) : notes.length === 0 ? (
+        ) : notes.length === 0 && trash.length === 0 ? (
           <div className="px-3 py-4 text-sm text-text-muted">No context notes yet.</div>
         ) : (
           <>
@@ -324,6 +394,10 @@ export function ContextSidebar({
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
               onDeleteFolder={handleDeleteFolder}
+              trash={trash}
+              onRestoreTrash={handleRestoreTrash}
+              onPurgeTrash={handlePurgeTrash}
+              onEmptyTrash={handleEmptyTrash}
             />
             {shareTarget !== null && (
               <SharePanel

@@ -17,6 +17,7 @@ import type {
   NoteRevisionOrigin,
   TrashEntry,
 } from './shared/types'
+import { TRASH_RETENTION_DAYS } from './shared/types'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
 // Import cycles with vaultCache (it reads via listRaw) and publications (it
@@ -394,7 +395,24 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
   invalidateVault(brain)
 }
 
+// Trashed notes are kept for TRASH_RETENTION_DAYS and then purged for good.
+// There is no cron behind this: the trash is only ever observed through
+// listTrash, so expiring on read is enough to make the promise true everywhere
+// it's visible.
+export async function purgeExpiredTrash(brain: Brain): Promise<void> {
+  const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+  const { count } = await prisma.communityNote.deleteMany({
+    where: {
+      communityId: brain.communityId,
+      ownerKey: brain.ownerKey,
+      deletedAt: { not: null, lt: cutoff },
+    },
+  })
+  if (count > 0) invalidateVault(brain)
+}
+
 export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
+  await purgeExpiredTrash(brain)
   const rows = await prisma.communityNote.findMany({
     where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
     orderBy: { deletedAt: 'desc' },
@@ -426,6 +444,15 @@ export async function restoreTrash(brain: Brain, id: string): Promise<string> {
   await syncContextLinks(brain, dest, row.content) // restored entity note re-owns its links
   invalidateVault(brain)
   return dest
+}
+
+// Force-delete a single trash entry ahead of its 7 days. Irreversible.
+export async function purgeTrashEntry(brain: Brain, id: string): Promise<void> {
+  const { count } = await prisma.communityNote.deleteMany({
+    where: { id, communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+  })
+  if (count === 0) throw new Error('Trash entry not found')
+  invalidateVault(brain)
 }
 
 export async function emptyTrash(brain: Brain): Promise<void> {

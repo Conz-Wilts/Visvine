@@ -47,35 +47,72 @@ function isConnectorNote(fm: NoteFrontmatter): boolean {
   return typeof fm.type === 'string' && fm.type.trim().toLowerCase() === 'connector'
 }
 
+/** Human-readable form of an allow rule — the shape admins wrote in the note. */
+function formatAllowRule(rule: { method: string; path: string; prefix: boolean }): string {
+  return `${rule.method} ${rule.path}${rule.prefix ? '*' : ''}`
+}
+
+/** One connector note → its summary, or null when the note isn't a connector. */
+function summariseNote(path: string, content: string): ConnectorSummary | null {
+  const fm = parseFrontmatter(content)
+  if (!isConnectorNote(fm)) return null
+  const parsed = parseConnectorConfig(fm)
+  const body = splitFrontmatter(content).body.trim()
+  return {
+    name: connectorName(path),
+    path,
+    alias: typeof fm.alias === 'string' ? fm.alias : null,
+    description: typeof fm.description === 'string' ? fm.description : null,
+    allow: parsed.ok && parsed.config.alias === 'http' ? parsed.config.allow.map(formatAllowRule) : [],
+    invalid: parsed.ok ? null : parsed.error,
+    secrets: !parsed.ok
+      ? []
+      : parsed.config.alias === 'http'
+        ? [...new Set(Object.values(parsed.config.headers).flatMap(findSecretRefs))]
+        : findSecretRefs(parsed.config.dsn),
+    docs: body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body,
+  }
+}
+
 /** Every valid-or-broken connector note the principal can see. */
 export async function listConnectors(p: BrainPrincipal, brain: Brain): Promise<ConnectorSummary[]> {
   const { raws } = await visibleVault(p, brain)
   const summaries: ConnectorSummary[] = []
   for (const raw of raws) {
     if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
-    const fm = parseFrontmatter(raw.content)
-    if (!isConnectorNote(fm)) continue
-    const parsed = parseConnectorConfig(fm)
-    const body = splitFrontmatter(raw.content).body.trim()
-    summaries.push({
-      name: connectorName(raw.path),
-      path: raw.path,
-      alias: typeof fm.alias === 'string' ? fm.alias : null,
-      description: typeof fm.description === 'string' ? fm.description : null,
-      allow:
-        parsed.ok && parsed.config.alias === 'http'
-          ? parsed.config.allow.map((r) => `${r.method} ${r.path}${r.prefix ? '*' : ''}`)
-          : [],
-      invalid: parsed.ok ? null : parsed.error,
-      secrets: !parsed.ok
-        ? []
-        : parsed.config.alias === 'http'
-          ? [...new Set(Object.values(parsed.config.headers).flatMap(findSecretRefs))]
-          : findSecretRefs(parsed.config.dsn),
-      docs: body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body,
-    })
+    const summary = summariseNote(raw.path, raw.content)
+    if (summary) summaries.push(summary)
   }
   return summaries.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * One connector, in the detail the console's Connector tab renders: the summary
+ * every caller gets, plus the parsed config it draws the connection card from.
+ * `config` is null exactly when `invalid` is set — a broken note still describes
+ * itself so an admin can see what to fix.
+ *
+ * Null (rather than an error) when the note is absent, invisible to this
+ * principal, or isn't a connector at all — the same indistinguishable
+ * not-found readVisible gives, so a page can 404 uniformly.
+ */
+export interface ConnectorDetail extends ConnectorSummary {
+  config: ConnectorConfig | null
+}
+
+export async function describeConnector(
+  p: BrainPrincipal,
+  brain: Brain,
+  name: string,
+): Promise<ConnectorDetail | null> {
+  if (!NAME_RE.test(name)) return null
+  const path = `${CONNECTORS_DIR}${name}.md`
+  const content = await readVisible(p, brain, path)
+  if (content === null) return null
+  const summary = summariseNote(path, content)
+  if (!summary) return null
+  const parsed = parseConnectorConfig(parseFrontmatter(content))
+  return { ...summary, config: parsed.ok ? parsed.config : null }
 }
 
 export interface LoadedConnector {

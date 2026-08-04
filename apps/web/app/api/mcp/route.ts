@@ -1,5 +1,5 @@
 /**
- * The Visvine MCP endpoint (Streamable HTTP, SSE disabled).
+ * The Visvine MCP endpoint (Streamable HTTP).
  *
  * Every request must carry a Bearer access token minted by our own OAuth 2.1
  * server (app/api/oauth/*). An unauthenticated request gets a 401 whose
@@ -22,12 +22,9 @@ const handler = createMcpHandler(
   (server) => {
     registerTools(server)
   },
-  { serverInfo: { name: 'visvine', version: '1.0.0' } },
   {
-    basePath: '/api',
-    disableSse: true,
+    serverInfo: { name: 'visvine', version: '1.0.0' },
     verboseLogs: process.env.NODE_ENV !== 'production',
-    maxDuration: 60,
   },
 )
 

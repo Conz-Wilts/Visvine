@@ -9,9 +9,7 @@ import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
 import { getEventBySlug, submitRsvp, EventFullError } from '@/lib/eventRepo';
 import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
-import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { takeToken } from '@/lib/messages/rateLimit';
-import { logger } from '@/lib/logger';
 import { handleApiError } from '@/lib/api/route';
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -60,10 +58,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const plusOnes = Math.min(submission.plusOnes ?? 0, event.allowPlusOnes ?? 0);
     const { status, created } = await submitRsvp(event.communityId, event, { ...submission, plusOnes });
-
-    void sendRsvpConfirmation(event, submission.email, submission.name, status).catch((err) =>
-      logger.error('email.rsvp.failed', { err }),
-    );
 
     return NextResponse.json(
       { status, message: rsvpMessage(status), created },

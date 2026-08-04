@@ -64,15 +64,14 @@ import '../notes.css'
 export type DraftType =
   | 'note'
   | 'person'
-  // The organisation that used to be 'group'. `workspace` below provisions a
-  // real Community row instead of recording that one exists — same kind of
-  // thing, different amount of machinery.
+  // The organisation that used to be 'group' — a node and a note recording that
+  // one exists. Provisioning a real Community row of your own isn't a draft
+  // type; it's on the community switcher.
   | 'community'
   | 'resource'
   | 'connector'
   | 'channel'
   | 'space'
-  | 'workspace'
   | 'file'
 
 interface DraftTypeOption {
@@ -99,7 +98,6 @@ const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'connector', label: 'Connector', configName: 'Connector', color: '#a855f7', hint: 'A gateway to an external API or database', creatable: 'connector' },
   { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a space', creatable: 'channel' },
   { id: 'space', label: 'Space', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'space' },
-  { id: 'workspace', label: 'Workspace', configName: null, color: '#14b8a6', hint: 'A whole new community of your own', creatable: 'workspace' },
 ]
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
@@ -147,8 +145,6 @@ interface Extras {
   /** channel */
   viewMode: 'CHAT' | 'FEED'
   spaceId: string
-  /** community */
-  visibility: 'public' | 'private'
 }
 
 const EMPTY_EXTRAS: Extras = {
@@ -158,7 +154,6 @@ const EMPTY_EXTRAS: Extras = {
   secretName: '',
   viewMode: 'CHAT',
   spaceId: '',
-  visibility: 'public',
 }
 
 function readStash(): Partial<Stash> {
@@ -172,7 +167,7 @@ function readStash(): Partial<Stash> {
 
 export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initialType = null }: DraftContextPanelProps) {
   const router = useRouter()
-  const { currentCommunity, refreshCommunity, isAdmin } = useCommunity()
+  const { currentCommunity, isAdmin } = useCommunity()
   const communityId = currentCommunity?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
@@ -194,6 +189,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<{ message: string; nodeId: string | null; path: string } | null>(null)
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
+  // The organisation picked out of the match list, remembered WITH the name it
+  // was picked under: edit the title afterwards and you meant a different org,
+  // so the binding has to fall away rather than quietly attach your card to
+  // whatever you first clicked.
+  const [pickedCommunity, setPickedCommunity] = useState<{ ref: string; name: string } | null>(null)
   const [dismissedMatches, setDismissedMatches] = useState(false)
 
   // The editor body lives in a ref, not state: it changes on every keystroke and
@@ -329,6 +329,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       image_url: result.image_url ?? prev.image_url ?? '',
     }))
     setSelectedIdentityId(result.identity_id)
+    const ref = typeof meta.communityRef === 'string' ? meta.communityRef : null
+    setPickedCommunity(ref ? { ref, name: result.name } : null)
     setDismissedMatches(true)
   }, [])
 
@@ -358,6 +360,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         name: title.trim(),
         alias,
         identityId: selectedIdentityId,
+        // Only while the title still says what they picked — see pickedCommunity.
+        communityRef:
+          pickedCommunity && pickedCommunity.name.trim() === title.trim()
+            ? pickedCommunity.ref
+            : null,
         fields,
         tags,
         body: bodyRef.current,
@@ -390,7 +397,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
     sessionStorage.removeItem(STASH_KEY)
     router.replace(`/directory/${encodeURIComponent(node.id)}?tab=context`)
-  }, [communityId, type, title, alias, selectedIdentityId, fields, tags, router])
+  }, [communityId, type, title, alias, selectedIdentityId, pickedCommunity, fields, tags, router])
 
   // ── The non-note commits ──────────────────────────────────────────────────
   // Each one is the same shape: the title is the name, the editor body is the
@@ -463,24 +470,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     router.replace('/channels')
   }, [communityId, title, router])
 
-  const commitCommunity = useCallback(async () => {
-    const res = await fetch('/api/communities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: title.trim(),
-        description: bodyRef.current.trim(),
-        visibility: extras.visibility,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create community')
-    // The switcher has to see it before we land anywhere inside it.
-    await refreshCommunity()
-    sessionStorage.removeItem(STASH_KEY)
-    router.replace('/directory')
-  }, [title, extras, refreshCommunity, router])
-
   // Uploaded one at a time: each request runs the whole extract → chunk → embed
   // pipeline synchronously, so a parallel burst would just contend. A file that
   // fails leaves the others alone and keeps its row.
@@ -521,7 +510,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
       else if (type === 'space') await commitSpace()
-      else if (type === 'workspace') await commitCommunity()
       else if (type === 'file') await commitFiles()
       else await commitEntity()
     } catch (err) {
@@ -534,7 +522,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
   }, [
     ready, committing, communityId, type,
-    commitNote, commitEntity, commitConnector, commitChannel, commitSpace, commitCommunity, commitFiles,
+    commitNote, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
 
   const pickType = useCallback((next: DraftType, nextAlias: string | null = null) => {
@@ -715,10 +703,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
       {type === 'channel' && (
         <ChannelExtras extras={extras} onChange={setExtras} spaces={spaces} accent={theme.base} />
-      )}
-
-      {type === 'workspace' && (
-        <VisibilityExtras extras={extras} onChange={setExtras} accent={theme.base} />
       )}
 
       {conflict && (
@@ -931,7 +915,7 @@ function TypeMenu({
 // choosing what a thing is and naming it — anything editable on the thing's own
 // page afterwards does NOT belong here. What's left is the irreducible part:
 // a connector's transport and endpoint (its note is its config, and one without
-// them is invalid), a channel's view style and space, a community's visibility.
+// them is invalid), and a channel's view style and space.
 
 function ExtraField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1103,28 +1087,3 @@ function ChannelExtras({
   )
 }
 
-function VisibilityExtras({
-  extras,
-  onChange,
-  accent,
-}: {
-  extras: Extras
-  onChange: (next: Extras) => void
-  accent: string
-}) {
-  return (
-    <div className="mt-4">
-      <ExtraField label="Visibility">
-        <SegmentedChoice
-          value={extras.visibility}
-          onPick={(visibility) => onChange({ ...extras, visibility })}
-          accent={accent}
-          options={[
-            { value: 'public', label: 'Public', hint: 'Findable from Discover' },
-            { value: 'private', label: 'Private', hint: 'Invite or admin add only' },
-          ] as const}
-        />
-      </ExtraField>
-    </div>
-  )
-}

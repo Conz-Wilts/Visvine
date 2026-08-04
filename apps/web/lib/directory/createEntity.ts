@@ -34,9 +34,10 @@ import type { NBNode } from '@/lib/types'
  * /events (their detail route redirects there); space/channel are structural
  * and belong to admin surfaces.
  *
- * `community` here means an organisation recorded in the directory — a company,
- * group or investor — NOT a provisioned workspace. Creating one of those still
- * goes through POST /api/communities off the community switcher.
+ * A `community` is an organisation — a company, group or investor — recorded in
+ * the directory. Recording one never provisions a community: real communities
+ * are only ever created deliberately, from the switcher. When the name resolves
+ * to one that already runs here, `communityRef` links the card to it.
  */
 export const CREATABLE_TYPES = ['person', 'community', 'resource'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
@@ -53,6 +54,12 @@ export interface CreateEntityInput {
   name: string
   alias?: string | null
   identityId?: string | null
+  /**
+   * For `community` only: the community this card refers to, set when the user
+   * picked one that already runs here out of the match list. Null for an org
+   * that's only a directory record — nothing is provisioned for those.
+   */
+  communityRef?: string | null
   /** Flat `{ fieldKey: value }`, split into columns + metadata by `applyFields`. */
   fields?: Record<string, unknown>
   /** Markdown body appended under the generated frontmatter. */
@@ -217,6 +224,20 @@ export async function createEntity(
   })
   if (identityId) {
     await prisma.node.update({ where: { id: row.id }, data: { identityId } })
+  }
+
+  // An organisation the user RESOLVED to a community that already runs here
+  // keeps a pointer to it, so the card and the real thing are the same thing.
+  // Nothing is provisioned when it doesn't resolve: recording that Movac exists
+  // is a note in your directory, and communities are only ever created
+  // deliberately, from the switcher. An unresolved card is just a card.
+  const communityRef = rawType === 'community' ? input.communityRef?.trim() : null
+  if (communityRef) {
+    row = await prisma.node.update({
+      where: { id: row.id },
+      data: { metadata: { ...metadata, communityRef } as Prisma.InputJsonObject },
+      select: NODE_SELECT,
+    })
   }
 
   // The note path follows the id that won, so a suffixed `person:jane-2` gets

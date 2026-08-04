@@ -1,20 +1,5 @@
 import { z } from 'zod';
 
-// Accepts either the peer's user id or their person-node id (resolved server-side),
-// so profile surfaces that only know the node can open a DM directly.
-export const createDmSchema = z.object({
-  userId: z.string().min(1).optional(),
-  nodeId: z.string().min(1).optional(),
-}).refine((data) => Boolean(data.userId || data.nodeId), {
-  message: 'userId or nodeId is required',
-});
-
-export const createGroupSchema = z.object({
-  name: z.string().trim().min(1).max(120),
-  memberIds: z.array(z.string().min(1)).min(1),
-  avatarUrl: z.string().url().optional(),
-});
-
 /** A short emoji string (grapheme clusters can be several code units long). */
 const emojiSchema = z.string().trim().min(1).max(16);
 

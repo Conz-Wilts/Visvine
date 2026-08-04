@@ -46,8 +46,6 @@ model Community {
   secrets          CommunitySecret[]
   noteEmbeddings   CommunityNoteEmbedding[]
   contextSources   ContextSource[]
-  taskColumns      TaskColumn[]
-  tasks            Task[]
   teams            Team[]
   brainGrants      BrainGrant[]
   accessRequests   BrainAccessRequest[]
@@ -347,52 +345,6 @@ model ContextSourceChunk {
   @@unique([sourceId, seq])
   @@index([communityId, ownerKey, model])
   @@map("context_source_chunks")
-}
-
-/// A column on a community's Tasks kanban board. One board per community, so
-/// columns key directly on communityId (no board model). Defaults ("To do" /
-/// "In progress" / "Done") are seeded lazily on first board fetch. Ordering is
-/// dense integers: the reorder endpoint rewrites every position in one
-/// transaction — communities have a handful of columns, so full reindex is
-/// trivially correct.
-model TaskColumn {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String    @map("community_id")
-  name        String
-  color       String    @default("#94a3b8")
-  position    Int
-  createdAt   DateTime  @default(now()) @map("created_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  tasks       Task[]
-
-  @@index([communityId, position])
-  @@map("task_columns")
-}
-
-/// A card on the Tasks board. `position` is a float ordered within its column:
-/// a drag writes one row ((prev+next)/2); when midpoints exhaust the gap the
-/// domain layer renormalizes the column in the same transaction. `assigneeId`
-/// is a plain userId string with no FK (same convention as createdBy on
-/// CommunityNote) — the UI tolerates ids missing from the member list.
-model Task {
-  id          String     @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String     @map("community_id")
-  columnId    String     @map("column_id")
-  title       String
-  description String     @default("")
-  assigneeId  String?    @map("assignee_id")
-  dueDate     DateTime?  @map("due_date")
-  labels      String[]   @default([])
-  position    Float
-  createdBy   String     @map("created_by")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  community   Community  @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  column      TaskColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
-
-  @@index([columnId, position])
-  @@index([communityId])
-  @@map("tasks")
 }
 
 /// Persisted force-directed layout for a community's directory Context view.

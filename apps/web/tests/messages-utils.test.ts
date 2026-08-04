@@ -1,14 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateUnreadCount, createDmKey } from '../lib/messages/utils';
-
-test('createDmKey is order-independent for DM uniqueness', () => {
-  const keyA = createDmKey('user-a', 'user-b');
-  const keyB = createDmKey('user-b', 'user-a');
-
-  assert.equal(keyA, 'user-a:user-b');
-  assert.equal(keyA, keyB);
-});
+import { calculateUnreadCount } from '../lib/messages/utils';
 
 test('calculateUnreadCount excludes own messages and respects lastReadAt', () => {
   const now = new Date('2026-02-18T12:00:00.000Z');

@@ -7,10 +7,8 @@ import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, getAttendees, getCommunityNodes, submitRsvp, EventFullError } from '@/lib/eventRepo';
 import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
-import { sendRsvpConfirmation } from '@/lib/email/eventEmails';
 import { requireEventManager } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
-import { logger } from '@/lib/logger';
 
 type RouteContext = {
   params: Promise<{ eventId: string }>;
@@ -117,11 +115,6 @@ export async function POST(
       ...submission,
       plusOnes,
     });
-
-    // Fire-and-forget confirmation email (no-op unless a mail provider is configured).
-    void sendRsvpConfirmation(event, submission.email, submission.name, status).catch((err) =>
-      logger.error('email.rsvp.failed', { err }),
-    );
 
     return NextResponse.json(
       { attendee, status, message: rsvpMessage(status) },

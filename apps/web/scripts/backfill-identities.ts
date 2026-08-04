@@ -26,8 +26,8 @@ import { isOwnCommunityNode } from '../lib/types/context';
 
 // Every organisation spelling — 'organization', 'group', today's 'community' —
 // resolves to an org identity. The community's OWN node is excluded: it is the
-// workspace, not an organisation recorded inside it, and giving it an identity
-// would merge unrelated workspaces that happen to share a name.
+// community itself, not an organisation recorded inside it, and giving it an
+// identity would merge unrelated communities that happen to share a name.
 function kindFor(node: { id: string; type: string; communityId: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';

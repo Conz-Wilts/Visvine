@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Events page - supports Calendar, Grid, and Map views
+ * Events page - supports Calendar and Feed views
  * Layout matches Directory page pattern: header row + filters row + content
  */
 
@@ -15,7 +15,6 @@ import type { NBEvent } from '@/lib/types';
 import EventsToolbar from '@/components/events/EventsToolbar';
 import EventsCalendarView from '@/components/events/EventsCalendarView';
 import EventsFeedView from '@/components/events/EventsFeedView';
-import EventsMapView from '@/components/events/EventsMapView';
 import EventsViewSelector from '@/components/events/EventsViewSelector';
 import type { EventView } from '@/components/events/EventsViewSelector';
 import EventsScopeSelector from '@/components/events/EventsScopeSelector';
@@ -109,15 +108,11 @@ function EventsPageInner() {
         if (!event.startAt || isEventUpcoming(event.startAt)) return false;
       }
 
-      // Location filter
+      // Location filter — an event counts as in-person once it names a venue.
       if (locationFilter === 'in-person') {
-        if (!event.location || event.location.lat == null || event.location.lon == null) {
-          return false;
-        }
+        if (!event.location?.label) return false;
       } else if (locationFilter === 'virtual') {
-        if (event.location && event.location.lat != null && event.location.lon != null) {
-          return false;
-        }
+        if (event.location?.label) return false;
       }
 
       // Search filter
@@ -223,10 +218,6 @@ function EventsPageInner() {
             onEdit={(eventId) => router.push(`/events/${eventId}/edit`)}
             onEventClick={handleEventClick}
           />
-        )}
-
-        {currentView === 'map' && (
-          <EventsMapView events={filteredEvents} />
         )}
       </div>
     </div>

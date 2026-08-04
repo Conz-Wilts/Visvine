@@ -3,10 +3,6 @@ export interface UnreadMessageCandidate {
   senderId: string;
 }
 
-export function createDmKey(userIdA: string, userIdB: string): string {
-  return [userIdA, userIdB].sort().join(':');
-}
-
 export function calculateUnreadCount(
   messages: UnreadMessageCandidate[],
   currentUserId: string,

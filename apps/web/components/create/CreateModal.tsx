@@ -21,7 +21,6 @@ import {
   TypeList,
   PersonForm, type PersonFormData,
   EventForm, type EventFormData,
-  CommunityForm, type CommunityFormData,
   ChannelForm, type ChannelFormData,
   SpaceForm, type SpaceFormData,
   ContextForm, type ContextFormData,
@@ -67,7 +66,7 @@ export default function CreateModal() {
   const router = useRouter();
   const pathname = usePathname();
   const { isOpen, defaultType, close } = useCreateModal();
-  const { currentCommunity, refreshCommunity, isAdmin } = useCommunity();
+  const { currentCommunity, isAdmin } = useCommunity();
   const { reduced } = useSidebar();
 
   // The "Create new" grid: the registry's grid types, minus any this person
@@ -104,7 +103,6 @@ export default function CreateModal() {
   const [personData, setPersonData] = useState<PersonFormData>({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
   const [resourceData, setResourceData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [eventData, setEventData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
-  const [communityData, setCommunityData] = useState<CommunityFormData>({ name: '', description: '', location: '', visibility: 'public' });
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
@@ -205,7 +203,6 @@ export default function CreateModal() {
     setPersonData({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
     setResourceData({ name: '', subtitle: '', location: '', tags: '' });
     setEventData({ name: '', subtitle: '', location: '', tags: '' });
-    setCommunityData({ name: '', description: '', location: '', visibility: 'public' });
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
@@ -282,7 +279,6 @@ export default function CreateModal() {
       if (selectedType === 'person') return personData.name.trim().length > 0;
       if (selectedType === 'resource') return resourceData.name.trim().length > 0;
       if (selectedType === 'event') return eventData.name.trim().length > 0;
-      if (selectedType === 'workspace') return communityData.name.trim().length > 0;
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
       if (selectedType === 'space') return spaceData.name.trim().length > 0;
       if (selectedType === 'context') return contextTitle.length > 0;
@@ -307,10 +303,7 @@ export default function CreateModal() {
     setError(null);
 
     try {
-      if (selectedType === 'workspace') {
-        await createCommunity();
-        setStep(3);
-      } else if (selectedType === 'channel') {
+      if (selectedType === 'channel') {
         // Land the user straight in the new channel — the channels page mounts
         // fresh and picks it up (no success screen needed).
         const id = await createChannel();
@@ -581,30 +574,6 @@ export default function CreateModal() {
     }
   };
 
-  const createCommunity = async () => {
-    const name = communityData.name.trim();
-
-    // User-facing create: any signed-in user, server derives the id and makes the
-    // creator an admin. (The /api/data/communities POST is super-admin-only bulk.)
-    const res = await fetch('/api/communities', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name,
-        description: communityData.description.trim(),
-        location: communityData.location.trim() || undefined,
-        visibility: communityData.visibility,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to create');
-    }
-
-    await refreshCommunity();
-  };
-
   // ─────────────────────────────────────────────────────────────────────────
   const handleCropDone = (blob: Blob) => {
     if (personData.imagePreview) URL.revokeObjectURL(personData.imagePreview);
@@ -631,7 +600,7 @@ export default function CreateModal() {
       ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : selectedType === 'connector'
       ? connectorSlug(connectorData.name) || 'Connector'
-      : communityData.name || 'Workspace'
+      : typeOpt.label
     : '';
 
   const stepTitles: Record<number, string> = {
@@ -783,9 +752,6 @@ export default function CreateModal() {
                   />
                 </div>
               </div>
-            )}
-            {step === 1 && selectedType === 'workspace' && (
-              <CommunityForm data={communityData} onChange={setCommunityData} nameRef={nameRef} />
             )}
             {step === 1 && selectedType === 'channel' && (
               <ChannelForm data={channelData} onChange={setChannelData} nameRef={nameRef} spaces={spaces} />

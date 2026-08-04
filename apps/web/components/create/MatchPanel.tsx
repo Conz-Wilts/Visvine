@@ -46,6 +46,11 @@ export default function MatchPanel({
       <div className="flex flex-col gap-1 overflow-y-auto max-h-[340px] pr-1">
         {results.map((r) => {
           const email = r.metadata?.email as string | undefined;
+          // A result carrying communityRef is a community that actually runs
+          // here (see searchCommunities), not a card in somebody's directory —
+          // worth saying out loud, because picking it links the two.
+          const isLiveCommunity = typeof r.metadata?.communityRef === 'string';
+          const memberCount = typeof r.metadata?.memberCount === 'number' ? r.metadata.memberCount : 0;
           return (
             <button
               key={`${r.id}-${r.community_id}`}
@@ -75,6 +80,12 @@ export default function MatchPanel({
                   {r.community_name && (
                     <span className="text-[10px] text-text-muted bg-surface-2 px-1.5 py-0.5 rounded-full truncate">
                       {r.community_name}
+                    </span>
+                  )}
+                  {isLiveCommunity && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-brand-dark-green bg-brand-green/10 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+                      Community · {memberCount} member{memberCount === 1 ? '' : 's'}
                     </span>
                   )}
                 </div>

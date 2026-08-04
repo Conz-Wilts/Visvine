@@ -50,6 +50,10 @@ export interface TreeNode {
 }
 
 // A note sitting in the trash (soft-deleted), awaiting restore or purge.
+// How long a soft-deleted note is kept before it is purged for good. Shared so
+// the tree can show the countdown the server enforces.
+export const TRASH_RETENTION_DAYS = 7
+
 export interface TrashEntry {
   id: string // the note row id
   name: string // the note's original base filename

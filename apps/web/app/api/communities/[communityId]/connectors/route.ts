@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { resolveBrain, principalOf } from '@/lib/notes/brain';
 import { listConnectors } from '@/lib/connectors/service';
@@ -24,7 +25,23 @@ export async function GET(
 
   const principal = await principalOf(resolved);
   const connectors = await listConnectors(principal, resolved);
+
+  // Which referenced secrets actually exist — the list can't tell a working
+  // connector from a broken one without it, and one query covers every row.
+  const stored = new Set(
+    (
+      await prisma.communitySecret.findMany({
+        where: { communityId },
+        select: { name: true },
+      })
+    ).map((row) => row.name)
+  );
+
   return NextResponse.json({
-    connectors: connectors.map(({ docs: _docs, ...rest }) => rest),
+    connectors: connectors.map(({ docs: _docs, secrets, ...rest }) => ({
+      ...rest,
+      secrets,
+      missingSecrets: secrets.filter((name) => !stored.has(name)),
+    })),
   });
 }

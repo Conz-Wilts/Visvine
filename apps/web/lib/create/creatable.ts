@@ -7,8 +7,8 @@
 // and got an error on submit. This module is the single gate both now ask.
 //
 // It answers "may this person create this here", NOT "does this surface list
-// it": a workspace is creatable but deliberately absent from the grid (it has
-// its own flow off the community dropdown), which is what `inGrid` is for.
+// it" — the note-first types are creatable everywhere but shown only on
+// /directory/new, which is what `inGrid` is for.
 
 import type { CreateableType } from '@/lib/contexts/CreateModalContext'
 import type { CommunityFeatureConfig } from '@/lib/types'
@@ -45,15 +45,12 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'resource':
       return isFeatureEnabled(featureConfig, 'resources')
 
-    // Anyone can start a workspace of their own.
-    case 'workspace':
-      return true
-
     // The remaining note-first types: person, community, context. A community
-    // here is a directory record, not a provisioned workspace — recording that
-    // an organisation exists is as ordinary as writing a note about it. Writing
-    // a context note is the baseline capability of a member, gated per-folder
-    // server-side rather than per-type here.
+    // here is a directory record — recording that an organisation exists is as
+    // ordinary as writing a note about it. (Provisioning a community of your
+    // own isn't a create type at all; it lives on the community switcher.)
+    // Writing a context note is the baseline capability of a member, gated
+    // per-folder server-side rather than per-type here.
     default:
       return true
   }

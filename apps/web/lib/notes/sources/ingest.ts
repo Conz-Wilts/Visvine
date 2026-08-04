@@ -7,8 +7,7 @@
 // free search paths work; only the vector stage skips them).
 
 import { getStorage, RESOURCES_BUCKET, uploadResourceFile } from '@/lib/gcs'
-import { communityNodeId, syncEntityNodeSafe } from '@/lib/context/entityNodes'
-import { SHARED_OWNER_KEY, type Brain } from '../store'
+import { type Brain } from '../store'
 import { embedTexts, embeddingsConfig } from '../embeddings'
 import { chunkSourceText } from '../shared/chunking'
 import type { ContextSourceMeta, SourceKind } from '../shared/sourceTypes'
@@ -105,23 +104,8 @@ export async function ingestSource(brain: Brain, input: IngestInput): Promise<Co
       console.error('[context-sources] original upload failed, indexing text only', err)
     }
   }
-  // An uploaded file is a document, so it IS its own context — it gets a graph
-  // node (contained by the community) but no `.md` written about it. Personal
-  // brains have no community graph to join, so they're skipped.
-  if (brain.ownerKey === SHARED_OWNER_KEY) {
-    await syncEntityNodeSafe({
-      communityId: brain.communityId,
-      type: 'file',
-      name: input.name,
-      recordId: created.id,
-      slugSource: created.path.replace(/\.[^./]+$/, ''),
-      subtitle: input.kind.toUpperCase(),
-      metadata: { sourcePath: created.path, kind: input.kind, mimeType: input.mimeType },
-      parentNodeId: communityNodeId(brain.communityId),
-      actor: { id: input.createdBy, name: '' },
-    })
-  }
-
+  // An uploaded file is content in the brain, not a node in the graph: it is
+  // retrievable through the context surfaces and nothing else stands for it.
   return processSource(brain, { id: created.id, path: created.path, kind: input.kind }, input.buffer)
 }
 

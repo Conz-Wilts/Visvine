@@ -212,6 +212,8 @@ export const notesApi = {
   trash: (c: string) => getJson<{ trash: TrashEntry[] }>(`/api/notes/trash?${qs(c)}`),
   restoreTrash: (c: string, id: string) =>
     sendJson<{ path: string }>('/api/notes/trash/restore', 'POST', { communityId: c, id }),
+  purgeTrash: (c: string, id: string) =>
+    sendJson<{ ok: true }>('/api/notes/trash/purge', 'POST', { communityId: c, id }),
   emptyTrash: (c: string) =>
     sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { communityId: c }),
 

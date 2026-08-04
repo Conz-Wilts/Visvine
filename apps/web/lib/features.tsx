@@ -91,18 +91,6 @@ export const FEATURES: FeatureDef[] = [
     ),
   },
   {
-    key: 'tasks',
-    label: 'Tasks',
-    href: '/tasks',
-    description: 'A kanban board for planning and tracking the community’s work.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <path d="m8.5 12 2.5 2.5L16 9" />
-      </svg>
-    ),
-  },
-  {
     key: 'resources',
     label: 'Resources',
     href: '/resources',
@@ -121,18 +109,6 @@ export const FEATURES: FeatureDef[] = [
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
         <path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-10 0V8zM12 17v4" />
-      </svg>
-    ),
-  },
-  {
-    key: 'messages',
-    label: 'Messages',
-    href: '/messages',
-    description: 'Direct messages and group chats.',
-    core: true,
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
       </svg>
     ),
   },
@@ -157,8 +133,8 @@ function visibleFeatures(
 
 /**
  * The nav features split between the sidebar rail and its "More" popup. Both
- * lists exclude nav-hidden features (messages, notes, events — all reached from
- * the top navbar or the Directory rather than the rail) and keep the configured display
+ * lists exclude nav-hidden features (notes, events — reached from the top navbar
+ * or the Directory rather than the rail) and keep the configured display
  * order; `more` membership comes from `featureConfig.more`.
  */
 function navFeatures(

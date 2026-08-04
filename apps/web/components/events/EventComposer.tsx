@@ -14,7 +14,6 @@ import { uploadImage, validateImageFile } from '@/lib/imageUpload';
 import { copyToClipboard } from '@/lib/utils';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
-import { LocationAutocomplete } from './LocationAutocomplete';
 import Select from '@/components/ui/Select';
 import {
   Loader2, ImagePlus, MapPin, Video, Globe, Users, Lock, ChevronDown, ChevronUp,
@@ -410,10 +409,11 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
           ))}
         </div>
         {(eventType === 'in-person' || eventType === 'hybrid') && (
-          <LocationAutocomplete
+          <input
+            type="text"
             value={location.label || ''}
-            onChange={(place) => setLocation({ label: place.label, address: place.address, lat: place.lat, lon: place.lon })}
-            placeholder="Search for a venue or address…"
+            onChange={(e) => setLocation({ label: e.target.value })}
+            placeholder="Venue or address…"
             className={inputClass()}
           />
         )}

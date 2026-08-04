@@ -3,7 +3,6 @@
   "entry": ["scripts/**/*.{ts,mjs}", "tests/**/*.test.ts"],
   "project": ["app/**", "components/**", "features/**", "hooks/**", "lib/**", "scripts/**", "tests/**"],
   "ignoreDependencies": [
-    "@types/google.maps",
     "eslint-config-next",
     "eslint-plugin-react-hooks",
     "@next/eslint-plugin-next"

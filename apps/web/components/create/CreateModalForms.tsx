@@ -10,7 +10,6 @@ import { validateImageFile } from '@/lib/imageUpload';
 import { slugify } from '@/lib/eventUtils';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, EmojiIconPicker } from '@/components/messages/ChannelIcon';
-import Toggle from '@/components/ui/Toggle';
 import {
   MAX_SOURCE_BYTES,
   SOURCE_ACCEPT,
@@ -31,18 +30,8 @@ export interface TypeOption {
                     // Resource and Context are false: they're context notes, so
                     // they're created on the note-first surface
                     // (/directory/new), not in this panel. Their entries stay
-                    // for label/title lookups. Workspace lives in the registry
-                    // (for title/label lookups) but is created from the
-                    // community dropdown, so it's excluded from the grid too.
+                    // for label/title lookups.
 }
-
-// Shared by both community entries below — a record and a workspace are the
-// same kind of thing, so they read the same.
-const COMMUNITY_ICON = (
-  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-  </svg>
-);
 
 export const TYPE_OPTIONS: TypeOption[] = [
   {
@@ -58,15 +47,18 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
-    // An organisation in the directory. It shares the Community node type with
-    // the workspace entry at the bottom of this list — same kind of thing, one
-    // of them just hasn't been provisioned.
+    // An organisation in the directory — a node and a note, not a community you
+    // run. Starting one of those is on the community switcher.
     id: 'community',
     label: 'Community',
     description: 'A company, organisation or group',
     color: '#78d870',
     inGrid: false,
-    icon: COMMUNITY_ICON,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
   },
   {
     id: 'resource',
@@ -155,17 +147,6 @@ export const TYPE_OPTIONS: TypeOption[] = [
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-5 5 5 5 0 01-5-5V8zM12 17v4" />
       </svg>
     ),
-  },
-  {
-    // The other half of Community: this one provisions a real workspace with
-    // members, spaces and a brain, rather than recording that an organisation
-    // exists. Reached from the community dropdown, never from the grid.
-    id: 'workspace',
-    label: 'Workspace',
-    description: 'A whole new community of your own',
-    color: '#78d870',
-    inGrid: false,
-    icon: COMMUNITY_ICON,
   },
 ];
 
@@ -566,78 +547,6 @@ export function EventForm({
         </Field>
       </div>
       <EntityNotePreview dir={entityDir} name={data.name} />
-    </div>
-  );
-}
-
-// ─── Community Form ─────────────────────────────────────────────────────────
-
-export interface CommunityFormData {
-  name: string;
-  description: string;
-  location: string;
-  visibility: 'public' | 'private';
-}
-
-export function CommunityForm({
-  data,
-  onChange,
-  nameRef,
-}: {
-  data: CommunityFormData;
-  onChange: (d: CommunityFormData) => void;
-  nameRef: React.RefObject<HTMLInputElement | null>;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <Field label="Community Name" required>
-        <input
-          ref={nameRef as React.RefObject<HTMLInputElement>}
-          className={inputClass}
-          placeholder="e.g. Web3 Builders"
-          value={data.name}
-          onChange={(e) => onChange({ ...data, name: e.target.value })}
-        />
-      </Field>
-      <Field label="Description">
-        <textarea
-          className={`${inputClass} resize-none`}
-          rows={3}
-          placeholder="What's this community about?"
-          value={data.description}
-          onChange={(e) => onChange({ ...data, description: e.target.value })}
-        />
-      </Field>
-      <Field label="Location">
-        <input
-          className={inputClass}
-          placeholder="e.g. Global, Bay Area"
-          value={data.location}
-          onChange={(e) => onChange({ ...data, location: e.target.value })}
-        />
-      </Field>
-      <Field label="Visibility">
-        {/* Binary setting — one switch under the line that says which side it's on. */}
-        <div>
-          <p className="text-sm font-medium text-text-primary">
-            {data.visibility === 'private' ? 'Private' : 'Public'}
-          </p>
-          <p className="text-xs text-text-muted">
-            {data.visibility === 'private'
-              ? 'Hidden — join by invite link or admin add'
-              : 'Anyone can find & join from Discover'}
-          </p>
-          <Toggle
-            className="mt-2"
-            checked={data.visibility === 'private'}
-            onChange={(checked) => onChange({ ...data, visibility: checked ? 'private' : 'public' })}
-            aria-label="Private community"
-          />
-        </div>
-      </Field>
-      {/* The note lands in the NEW community's own brain — its description is
-          the starting text, so there's no second textarea here. */}
-      <EntityNotePreview dir="communities" name={data.name} />
     </div>
   );
 }

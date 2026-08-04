@@ -8,13 +8,13 @@ import { suggestedCreateType } from '@/lib/create/suggestedType';
 export type CreateableType =
   | 'person'
   // An organisation recorded in the directory — a company, group or investor.
-  // It IS a community, just one nobody has provisioned a workspace for, so it
-  // shares the node type. `workspace` below is the other half: provisioning a
-  // real Community row with members, spaces and a brain of its own.
+  // A node and a note, in the community you're already in. Provisioning a real
+  // Community row of your own is NOT a create type: it's the one act that takes
+  // you somewhere else, and lives on the community switcher instead
+  // (features/communities/components/NewCommunityDialog).
   | 'community'
   | 'resource'
   | 'event'
-  | 'workspace'
   | 'channel'
   | 'space'
   // Brain surfaces: a written note, and an uploaded file ingested as a Context
@@ -30,9 +30,9 @@ export type CreateableType =
  * in the docked panel — which is now everything except an Event (whose detail
  * route redirects to /events/<id>, so the draft has nowhere to land).
  *
- * A channel, space, workspace and uploaded file used to be panel-only on the
- * grounds that they have no note to open. They do: each writes a context note
- * (channels/<slug>.md, spaces/…, communities/…) or lands in the context tree,
+ * A channel, space and uploaded file used to be panel-only on the grounds that
+ * they have no note to open. They do: each writes a context note
+ * (channels/<slug>.md, spaces/…) or lands in the context tree,
  * so the draft surface takes a name and a starting body for them just like the
  * rest. The docked panel is still reachable from the places that open it
  * directly (the community switcher, the channel list) — it just isn't the only
@@ -46,7 +46,6 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   connector: 'connector',
   channel: 'channel',
   space: 'space',
-  workspace: 'workspace',
   file: 'file',
 };
 

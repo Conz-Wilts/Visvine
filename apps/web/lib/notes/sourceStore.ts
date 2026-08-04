@@ -7,7 +7,6 @@
 
 import prisma from '@/lib/prisma'
 import { deleteResourceFile } from '@/lib/gcs'
-import { removeEntityNode } from '@/lib/context/entityNodes'
 import { sanitizePath, type Brain } from './store'
 import { vectorLiteral } from './vectorStage'
 import type { ContextSourceMeta, SourceKind, SourceStatus } from './shared/sourceTypes'
@@ -141,8 +140,6 @@ export async function deleteSource(brain: Brain, path: string): Promise<boolean>
   const row = await findSource(brain, path)
   if (!row) return false
   await prisma.contextSource.delete({ where: { id: row.id } })
-  // The file's graph node goes with it (its links cascade off the node FK).
-  await removeEntityNode(brain.communityId, 'file', row.id)
   // gcsPath '' = the original was never stored (storage unconfigured at upload).
   if (row.gcsPath && process.env.GCS_RESOURCES_BUCKET) await deleteResourceFile(row.gcsPath)
   return true

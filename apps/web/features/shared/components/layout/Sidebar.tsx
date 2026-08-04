@@ -43,7 +43,7 @@ const ICON_LEFT = 17; // (COLLAPSED_W - 2px border - ICON_SIZE) / 2 — centers 
 const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
-const CHANNELS_PANEL_W = 300; // /channels + /messages list panel width — keep in sync with MessagesClient
+const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
 const SETTINGS_PANEL_W = 260; // /settings sections panel width
 export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the context page inset
 export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
@@ -67,7 +67,6 @@ export default function Sidebar() {
   // enabled surfaces (empty config → everything on) and to what this user may
   // see (an admins-only directory is hidden from members), then split between
   // the rail and the "More" popup per featureConfig.more. See lib/features.tsx.
-  // (Messages lives in the top navbar — toggleable but nav-less.)
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const allNav = railFeatures(featureConfig, isAdmin);
   const moreNav = moreFeatures(featureConfig, isAdmin);
@@ -82,9 +81,9 @@ export default function Sidebar() {
   // Close on navigation (a tool card was clicked, or back/forward).
   useEffect(() => setMoreOpen(false), [pathname]);
 
-  // On /channels, /messages and /settings (wide viewports only) the rail docks
-  // into a full-height card hosting a side panel — the channel/conversation
-  // list or the settings sections. The page then portals its content via
+  // On /channels and /settings (wide viewports only) the rail docks into a
+  // full-height card hosting a side panel — the channel list or the settings
+  // sections. The page then portals its content via
   // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
   // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
   // own inline list there instead).
@@ -99,9 +98,6 @@ export default function Sidebar() {
   // Channels honours the navbar's panel toggle (open by default) — the page
   // raises dockRequested so the toggle shows, and closing hides the list.
   const dockedChannels = pathname.startsWith("/channels") && wide && contextOpen;
-  // Messages docks its conversation list the same way — the inbox reads as an
-  // attached sidebar rather than a floating card in the content area.
-  const dockedMessages = pathname.startsWith("/messages") && wide;
   // The Community Console used to dock its section list here; it now carries a
   // pane-top tab bar instead (see ConsoleShell), so /admin gets the plain rail.
   // Settings still docks its section list.
@@ -110,7 +106,7 @@ export default function Sidebar() {
   // wide-gated by the requesting page) when the tree is available; the panel
   // only opens once the user asks for it (contextOpen).
   const dockedContext = dockRequested && contextOpen && wide;
-  const docked = dockedChannels || dockedMessages || dockedSettings || dockedContext;
+  const docked = dockedChannels || dockedSettings || dockedContext;
   const panelW = dockedSettings ? SETTINGS_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // "Create new" takes over this same column: it replaces whatever panel is

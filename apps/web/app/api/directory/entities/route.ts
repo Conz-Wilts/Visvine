@@ -1,7 +1,7 @@
 // The note-first create commit: turns a filled-in draft into a real directory
 // node AND its canonical context note in one gated call.
 //
-//   POST { communityId, type, name, alias?, identityId?, fields?, body?, tags? }
+//   POST { communityId, type, name, alias?, identityId?, communityRef?, fields?, body?, tags? }
 //     → 201 { node, notePath, resolution, noteError? }
 //     → 409 { error, existingNodeId, existingPath }
 //     → 403 { error }
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       name: typeof body.name === 'string' ? body.name : '',
       alias: typeof body.alias === 'string' ? body.alias : null,
       identityId: typeof body.identityId === 'string' ? body.identityId : null,
+      communityRef: typeof body.communityRef === 'string' ? body.communityRef : null,
       fields: (body.fields ?? {}) as Record<string, unknown>,
       body: typeof body.body === 'string' ? body.body : '',
       tags: Array.isArray(body.tags)

@@ -45,7 +45,10 @@ if [[ -z "${CLOUD_SQL_CONNECTION_NAME:-}" ]]; then
   exit 1
 fi
 
-DB_PORT="${DB_PORT:-5432}"
+# PROXY_PORT is the local port the proxy listens on. It defaults to 5433 so the
+# proxy can run alongside the Docker Postgres on 5432 (DB_PORT is only a
+# fallback, for envs that still use the discrete DB_* form).
+DB_PORT="${PROXY_PORT:-${DB_PORT:-5433}}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
 
 # ---------------------------------------------------------------------------

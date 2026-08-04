@@ -2,8 +2,7 @@
  * The gate every MCP tool runs behind: bearer verification for the transport,
  * and `withCtx` — auth + scope check + uniform error mapping — for tool bodies.
  */
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
+import type { AuthInfo, CallToolResult } from '@modelcontextprotocol/server'
 import { verifyAccessToken } from '@/lib/mcp/tokens'
 import { TOOL_SCOPES, type McpToolName } from '@/lib/mcp/scopes'
 
@@ -56,9 +55,12 @@ function contextFromAuthInfo(info: AuthInfo | undefined): McpContext | null {
   }
 }
 
-/** The subset of the SDK's tool-handler `extra` we rely on. */
+/**
+ * The subset of the SDK's tool-handler context we rely on. As of SDK v2 the
+ * verified token hangs off `http`, not the context root.
+ */
 export interface ToolExtra {
-  authInfo?: AuthInfo
+  http?: { authInfo?: AuthInfo }
 }
 
 function toText(value: unknown): string {
@@ -82,7 +84,7 @@ export async function withCtx(
   fn: (ctx: McpContext) => Promise<unknown>,
 ): Promise<CallToolResult> {
   const scope = TOOL_SCOPES[tool]
-  const ctx = contextFromAuthInfo(extra.authInfo)
+  const ctx = contextFromAuthInfo(extra.http?.authInfo)
   if (!ctx) return err('Unauthorized: no valid MCP access token')
   if (!ctx.scopes.includes(scope)) {
     return err(`Forbidden: this tool requires the '${scope}' scope`)

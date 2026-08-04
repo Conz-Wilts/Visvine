@@ -17,7 +17,7 @@ const off = (...keys: string[]): { featureConfig: CommunityFeatureConfig; isAdmi
   // off means listing the others.
   featureConfig: {
     enabled: Object.fromEntries(
-      ['channels', 'notes', 'tasks', 'resources', 'connectors'].map((k) => [k, !keys.includes(k)]),
+      ['channels', 'notes', 'resources', 'connectors'].map((k) => [k, !keys.includes(k)]),
     ),
   } as CommunityFeatureConfig,
   isAdmin: true,
@@ -57,12 +57,4 @@ test('the note-first types stay open to everyone', () => {
     assert.equal(canCreateType(type, MEMBER), true, type)
     assert.equal(canCreateType(type, off('channels', 'notes')), true, type)
   }
-})
-
-// `community` above records that an organisation exists; `workspace` provisions
-// a real one. Both are open to a plain member, for different reasons — keep the
-// second covered so a permission change to either can't pass unnoticed.
-test('anyone can start a workspace of their own', () => {
-  assert.equal(canCreateType('workspace', MEMBER), true)
-  assert.equal(canCreateType('workspace', off('channels', 'notes')), true)
 })

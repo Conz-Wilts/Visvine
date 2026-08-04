@@ -7,11 +7,11 @@
 // the shell. Only non-note bodies render here as page children.
 //
 // A node only earns a first tab when there is something behind it that isn't the
-// context note. People get a profile, organisations an Overview, connectors
-// their configuration, resources a preview, and events/communities a link out to
-// their dedicated routes (/events/<id>, /communities/<id>). Everything else —
-// channels, spaces, notes, files, any type we haven't given a page — is nothing
-// but its context, so those get Context/Raw and no first tab at all.
+// context note. People get a profile, communities a Community page, the retired
+// org spellings an Overview, connectors their configuration, resources a
+// preview, and events a link out to /events/<id>. Everything else — channels,
+// spaces, notes, files, any type we haven't given a page — is nothing but its
+// context, so those get Context/Raw and no first tab at all.
 
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -28,7 +28,9 @@ import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 import ProfilePageContent from '@/components/profile/ProfilePageContent';
 import OrgPageContent from '@/components/profile/OrgPageContent';
+import CommunityPageContent from '@/components/profile/CommunityPageContent';
 import ResourcePreviewContent from '@/components/profile/ResourcePreviewContent';
+import ConnectorPageContent from '@/components/profile/ConnectorPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
  *  takes plain string ids via the shell registration. */
@@ -230,10 +232,9 @@ const ORG_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Overview' };
 // syncEntityNode), so the prefix is the type — and organisations have worn four
 // retired spellings before settling on `community:`, all of which now land on
 // communities/<slug>.md. Current data never reaches this list: a `community:`
-// id is forked on by CommunityRoute instead, which needs the node to tell a
-// record apart from the community itself. An id with no prefix at all is a
-// legacy directory row: those predate the structural types entirely, so an
-// organisation is the right guess for them too.
+// id goes to CommunityRoute, which gives it a Community page either way. An id
+// with no prefix at all is a legacy directory row: those predate the structural
+// types entirely, so an organisation is the right guess for them too.
 const ORG_ID_PREFIXES = ['group:', 'org:', 'organization:', 'company:'];
 
 function isOrgId(nodeId: string): boolean {
@@ -521,6 +522,41 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   );
 }
 
+// ── Connector nodes → Connector + Context/Raw ────────────────────────────────
+
+// The note IS the connector — frontmatter is the config, body is the docs — but
+// the note is not the whole truth: whether the secrets it references are stored,
+// and whether a call through it actually works, live outside the vault. That's
+// what the first tab shows, so it exists for the people who can act on it and
+// only for them. Reading connector config is admin-only at the API (see the
+// connectors routes), so a member gets the note and nothing else rather than a
+// tab that 403s.
+const CONNECTOR_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Connector' };
+
+function ConnectorRoute({ nodeId }: { nodeId: string }) {
+  const { isAdmin, loading } = useCommunity();
+
+  // isAdmin is false until memberships resolve; branching on it early would
+  // mount the member view and then swap the whole page a beat later.
+  if (loading) return <ProfileSkeletonLoader mode="fullpage" />;
+
+  return isAdmin ? (
+    <NodePage
+      nodeId={nodeId}
+      firstTab={CONNECTOR_FIRST_TAB}
+      ariaLabel="Connector sections"
+      notFoundTitle="Connector not found"
+      renderBody={(id) => <ConnectorPageContent nodeId={id} />}
+    />
+  ) : (
+    <ContextOnlyPage
+      nodeId={nodeId}
+      ariaLabel="Connector sections"
+      notFoundTitle="Connector not found"
+    />
+  );
+}
+
 // ── Route entry ───────────────────────────────────────────────────────────────
 
 const noop = () => {};
@@ -543,40 +579,64 @@ function EventRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
-// `community:` ids cover two different things, so this route forks on which.
+/** The id of the live community this node stands for, or null if the node is a
+ *  record with no community behind it.
+ *
+ *  Two node shapes have a real workspace:
+ *
+ *   * The node standing for the community you are IN. `isOwnCommunityNode` spots
+ *     it, and the community id comes off the NODE rather than the id string.
+ *     `communityNodeId` only prefixes an id that lacks one, so a community
+ *     already called `community:local-dev` has a node id identical to its
+ *     community id — stripping `community:` there would 404 — while a community
+ *     called `blackbird` gets the node id `community:blackbird` and does need
+ *     the prefix gone. The node's own `community_id` is right in both cases.
+ *   * A record carrying `metadata.communityRef` — the field the create flow
+ *     writes (createEntity, /api/nodes/search) when the thing you are recording
+ *     is a community that actually runs here. Its `community_id` is the graph it
+ *     was filed in, NOT the community it names, so the ref is the only honest
+ *     answer.
+ *
+ *  Everything else is a record with nothing to redirect to.
+ */
+function liveCommunityId(node: NBNode | null, nodeId: string): string | null {
+  if (!node) return null;
+  const communityId = node.community_id ?? null;
+  if (isOwnCommunityNode({ id: node.id ?? nodeId, communityId })) return communityId;
+  const ref = node.metadata?.communityRef;
+  return typeof ref === 'string' && ref.trim() ? ref.trim() : null;
+}
+
+// Every `community:` node gets a community page — the type is the page, whether
+// the community runs here or is only recorded here for CRM. What differs is
+// where the page comes from:
 //
-//  * The node standing for the community you are IN. Its page is
-//    /communities/<id>; the node only exists here to carry its context note.
-//  * An organisation recorded inside that community — what used to be the Group
-//    type. It is a directory record like any other and keeps its profile here.
-//    Redirecting it would throw the reader out of the community they were
-//    browsing and into a workspace that may not even exist.
+//  * A live community (its own node, or a record pointing at one via
+//    `communityRef`) has a workspace, members and events, so it redirects to
+//    /communities/<id> and that page renders from the overview API.
+//  * A record has none of those, so it renders here from the node itself —
+//    CommunityPageContent, same visual language, minus the parts that need a
+//    membership. Redirecting it would throw the reader out of the community
+//    they were browsing and into a workspace that doesn't exist.
 //
-// `isOwnCommunityNode` tells them apart, and the community id comes off the
-// NODE rather than the id string. `communityNodeId` only prefixes an id that
-// lacks one, so a community already called `community:local-dev` has a node id
-// identical to its community id — stripping `community:` there would redirect
-// to a 404 — while a community called `blackbird` gets the node id
-// `community:blackbird` and does need the prefix gone. The node's own
-// `community_id` is the right answer in both cases, which is why this waits for
-// the node before deciding anything.
+// Both need the node before they can decide, which is why this waits for it.
 function CommunityRoute({ nodeId }: { nodeId: string }) {
   const [wantedTab] = useProfileTabParam();
   const { data, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
-  const communityId = node?.community_id ?? null;
-  const href = communityId ? `/communities/${encodeURIComponent(communityId)}` : null;
+  const liveId = liveCommunityId(node, nodeId);
+  const href = liveId ? `/communities/${encodeURIComponent(liveId)}` : null;
 
   // Null while the node is still loading: hold the redirect branch's skeleton
-  // rather than flashing a profile shell we may not want.
-  if (node && !isOwnCommunityNode({ id: node.id ?? nodeId, communityId })) {
+  // rather than flashing a page shell we may not want.
+  if (node && !liveId) {
     return (
       <NodePage
         nodeId={nodeId}
-        firstTab={ORG_FIRST_TAB}
-        ariaLabel="Page sections"
-        notFoundTitle="Page not found"
-        renderBody={(id) => <OrgPageContent nodeId={id} />}
+        firstTab={COMMUNITY_FIRST_TAB}
+        ariaLabel="Community sections"
+        notFoundTitle="Community not found"
+        renderBody={(id) => <CommunityPageContent nodeId={id} />}
       />
     );
   }
@@ -627,15 +687,7 @@ function NodeRoute() {
     return <ResourceNodePage nodeId={nodeId} />;
   }
   if (nodeId.startsWith('connector:')) {
-    // The note IS the connector — frontmatter is the config, the body is the doc
-    // agents read — so there is nothing left for a first tab to show.
-    return (
-      <ContextOnlyPage
-        nodeId={nodeId}
-        ariaLabel="Connector sections"
-        notFoundTitle="Connector not found"
-      />
-    );
+    return <ConnectorRoute nodeId={nodeId} />;
   }
   if (isOrgId(nodeId)) {
     return (

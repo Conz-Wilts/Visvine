@@ -21,7 +21,6 @@ export default async function ChannelConversationPage({
 
   return (
     <MessagesClient
-      variant="channels"
       currentUser={{
         id: user.id,
         name: user.name,

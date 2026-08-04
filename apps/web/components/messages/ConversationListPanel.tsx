@@ -2,14 +2,11 @@
 
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
-import type { Dispatch, ElementType, FormEvent, RefObject, SetStateAction } from 'react';
+import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
 import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2, Newspaper } from 'lucide-react';
 import { useCreateModal } from '@/lib/contexts/CreateModalContext';
-import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
-import { formatChatTimestamp } from '@/lib/date';
 import type { ChannelDirectoryEntry, ChannelSpaceEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
-import type { MessageTab } from './messagesTabs';
 
 /** Circle-style rail section: one per space (joined + browsable channels filed there), then an unfiled bucket. */
 export interface ChannelSection {
@@ -24,20 +21,12 @@ interface ConversationListPanelProps {
   // Layout / docking
   docked: boolean;
   host: HTMLElement | null;
-  channelsVariant: boolean;
-  // Docked messages-variant header (title / new chat / tab switcher)
-  onShowNewChat?: () => void;
-  onTabChange?: (tab: MessageTab) => void;
-  tabCounts?: Record<MessageTab, number>;
-  tabs?: { id: MessageTab; label: string; icon: ElementType }[];
   // Sidebar search (docked panel header)
   sidebarSearchRef: RefObject<HTMLInputElement | null>;
   conversationSearch: string;
   setConversationSearch: (value: string) => void;
-  // Tab + list data
-  activeTab: MessageTab;
+  // List data
   conversationsLoading: boolean;
-  filteredConversations: ConversationSummary[];
   channelSections: ChannelSection[];
   channelSpaces: ChannelSpaceEntry[];
   collapsedSpaces: Record<string, boolean>;
@@ -77,24 +66,17 @@ interface ConversationListPanelProps {
 }
 
 /**
- * List box — users or channels depending on the selected chip. On the
- * Channels page (wide) this same content is portaled into the Sidebar dock
- * instead of floating as its own box (see dockChannels).
+ * Channel rail — the community's channels grouped by space. On the Channels
+ * page (wide) this content is portaled into the Sidebar dock instead of
+ * floating as its own box (see dockChannels).
  */
 export default function ConversationListPanel({
   docked,
   host,
-  channelsVariant,
-  onShowNewChat,
-  onTabChange,
-  tabCounts,
-  tabs,
   sidebarSearchRef,
   conversationSearch,
   setConversationSearch,
-  activeTab,
   conversationsLoading,
-  filteredConversations,
   channelSections,
   channelSpaces,
   collapsedSpaces,
@@ -163,7 +145,7 @@ export default function ConversationListPanel({
   // lives in the global sidebar "+" (Create new → Channel), not here. Only
   // rendered inside the Sidebar dock (the page's centered controls cover the
   // un-docked cases).
-  const channelControls = channelsVariant ? (
+  const channelControls = (
     <div className="px-3 pb-2 pt-3">
       <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
         <Search className="h-4 w-4 shrink-0 text-text-muted" />
@@ -181,81 +163,15 @@ export default function ConversationListPanel({
         )}
       </div>
     </div>
-  ) : null;
-
-  // The docked messages panel's header: title + "new chat" button and search —
-  // everything that floats centered on the page in the un-docked layout moves
-  // in here so the inbox reads as one attached sidebar (mirrors what other
-  // pages do with the Sidebar dock).
-  const messagesControls = !channelsVariant ? (
-    <div className="space-y-2.5 px-3 pb-2 pt-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-semibold text-text-primary">Messages</span>
-        {onShowNewChat && (
-          <button
-            type="button"
-            onClick={onShowNewChat}
-            title="New chat"
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-green text-white shadow-sm transition-opacity hover:opacity-90 active:scale-95"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-          </button>
-        )}
-      </div>
-      <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
-        <Search className="h-4 w-4 shrink-0 text-text-muted" />
-        <input
-          ref={sidebarSearchRef}
-          value={conversationSearch}
-          onChange={(e) => setConversationSearch(e.target.value)}
-          placeholder="Search conversations…"
-          className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
-        />
-        {conversationSearch && (
-          <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-      {onTabChange && tabs && tabs.length > 1 && (
-        <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
-          {tabs.map(({ id, label, icon: Icon }) => {
-            const active = activeTab === id;
-            const count = tabCounts?.[id] ?? 0;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => onTabChange(id)}
-                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
-                }`}
-                aria-label={`${label} tab`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-                {count > 0 && (
-                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                    active ? 'bg-white/25 text-white' : 'bg-brand-green/15 text-brand-dark-green'
-                  }`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  ) : null;
+  );
 
   const inbox = (
     <>
-    {/* Docked panel gets its own title + New button + search up top */}
-    {docked && (channelsVariant ? channelControls : messagesControls)}
+    {/* Docked panel gets its own search up top */}
+    {docked && channelControls}
 
     {/* Channel creation (community admins only) */}
-    {activeTab === 'channels' && showChannelForm && (
+    {showChannelForm && (
       <form onSubmit={onCreateChannel} className="space-y-2 border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -352,7 +268,6 @@ export default function ConversationListPanel({
     {/* List area */}
     <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto pb-3">
 
-      {/* ── Conversations (Chats / Channels tabs) ── */}
       <>
           {conversationsLoading && (
             <div className="space-y-1 px-3 py-2">
@@ -368,76 +283,22 @@ export default function ConversationListPanel({
             </div>
           )}
 
-          {!conversationsLoading && (activeTab === 'channels'
-            ? channelSections.length === 0
-            : filteredConversations.length === 0) && (
+          {!conversationsLoading && channelSections.length === 0 && (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
-                {activeTab === 'channels'
-                  ? <Hash className="h-6 w-6 text-text-muted" />
-                  : <MessageCircle className="h-6 w-6 text-text-muted" />}
+                <Hash className="h-6 w-6 text-text-muted" />
               </div>
-              <p className="text-sm font-medium text-text-secondary">
-                {activeTab === 'channels' ? 'No channels yet' : 'No conversations yet'}
-              </p>
+              <p className="text-sm font-medium text-text-secondary">No channels yet</p>
               <p className="mt-1 text-xs text-text-muted">
-                {activeTab === 'channels'
-                  ? (communityIsAdmin
-                    ? 'Create the first channel with the + button in the sidebar.'
-                    : 'Channels created by your community admins will appear here.')
-                  : 'Start one with the + button above.'}
+                {communityIsAdmin
+                  ? 'Create the first channel with the + button in the sidebar.'
+                  : 'Channels created by your community admins will appear here.'}
               </p>
             </div>
           )}
 
-          {!conversationsLoading && activeTab !== 'channels' && filteredConversations.length > 0 && (
-            <div className="px-2.5 py-1">
-              {filteredConversations.map((conversation) => {
-                const isActive = selectedConversationId === conversation.id;
-                const hasUnread = conversation.unreadCount > 0 && !isActive;
-                return (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => onSelectConversation(conversation.id)}
-                    className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-150 ${
-                      isActive ? 'bg-brand-green/10 ring-1 ring-brand-green/20' : 'hover:bg-surface-2'
-                    }`}
-                  >
-                    <div className="relative shrink-0">
-                      <Avatar name={conversation.name} />
-                      {hasUnread && (
-                        <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-surface-1 bg-brand-green" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className={`truncate text-sm ${isActive || conversation.unreadCount > 0 ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
-                          {conversation.name}
-                        </p>
-                        <span className="shrink-0 text-[11px] text-text-muted">
-                          {formatChatTimestamp(conversation.lastMessage?.createdAt ?? conversation.updatedAt)}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex items-center justify-between gap-2">
-                        <p className={`truncate text-xs ${hasUnread ? 'font-medium text-text-secondary' : 'text-text-muted'}`}>
-                          {conversation.lastMessage?.text ?? 'No messages yet'}
-                        </p>
-                        {hasUnread && (
-                          <span className="shrink-0 rounded-full bg-brand-green px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
-                            {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ── Channels tab: sections grouped by space (Circle-style) ── */}
-          {!conversationsLoading && activeTab === 'channels' && channelSections.length > 0 && (
+          {/* ── Channels grouped by space (Circle-style) ── */}
+          {!conversationsLoading && channelSections.length > 0 && (
             <div className="px-2.5 py-1">
               {channelSections.map((section) => {
                 const hasSpaces = channelSpaces.length > 0;
@@ -577,7 +438,7 @@ export default function ConversationListPanel({
           )}
 
           {/* ── New space (community admins) ── */}
-          {activeTab === 'channels' && communityIsAdmin && (
+          {communityIsAdmin && (
             <div className="px-2.5 pt-1">
               {/* Space form is just an input — Enter creates, Escape cancels. */}
               {showSpaceForm ? (

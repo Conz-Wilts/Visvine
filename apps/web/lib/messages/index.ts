@@ -12,8 +12,6 @@ export { ensureConversationMember } from './core';
 
 export {
   listConversationsForUser,
-  createDmConversation,
-  createGroupConversation,
   createChannelConversation,
   listChannelsForCommunity,
   listChannelSpaces,

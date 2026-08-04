@@ -50,21 +50,28 @@ export function useDirectoryBrowse() {
 
   // Always show all configured types (even those with zero nodes) — except the
   // ones belonging to a switched-off feature, which shouldn't advertise a filter
-  // for something the community doesn't have. Existing nodes of such a type still
-  // pull it back in below, so nothing becomes unfilterable.
+  // for something the community doesn't have.
+  //
+  // Unrecognised types found on real nodes are folded back in, so a legacy or
+  // hand-written type never becomes unfilterable. A type belonging to a
+  // switched-off tool is NOT: those nodes don't reach the client any more (the
+  // directory route filters them server-side), so a filter for them would sit
+  // there matching nothing.
+  //
   // Stored node.type casing ('person') can differ from the configured name
   // ('Person'); canonicalize by lowercase so the two collapse into a single
   // entry (preferring the configured casing) instead of showing duplicates.
   const presentTypes = useMemo(() => {
+    const featureConfig = community?.featureConfig ?? null;
     const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
     const byLower = new Map<string, string>();
     for (const t of configuredTypes) {
-      if (!isNodeTypeEnabled(community?.featureConfig ?? null, t.name)) continue;
+      if (!isNodeTypeEnabled(featureConfig, t.name)) continue;
       byLower.set(t.name.toLowerCase(), t.name);
     }
     nodes.forEach(n => {
       const key = n.type.toLowerCase();
-      if (!byLower.has(key)) byLower.set(key, n.type);
+      if (!byLower.has(key) && isNodeTypeEnabled(featureConfig, n.type)) byLower.set(key, n.type);
     });
     return Array.from(byLower.values()).sort();
   }, [nodes, community?.nodeTypes, community?.featureConfig]);

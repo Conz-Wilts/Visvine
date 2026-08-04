@@ -51,6 +51,63 @@ function fieldScore(r: SearchRow): number {
 }
 
 /**
+ * The COMMUNITY half of organisation resolution: fuzzy-match the `communities`
+ * table and hand back rows in the {@link SearchRow} shape the finder renders.
+ *
+ * Typing an org name searches two places — communities that actually run here
+ * (this function) and organisations recorded in directories (the node search
+ * below) — because both are things you might mean, and a real community is
+ * always the better answer when it exists.
+ *
+ * `metadata.memberCount` is what marks a result as a live community in the
+ * picker; `metadata.communityRef` is what the create surface sends back so the
+ * new directory card binds to THAT community instead
+ * of typing a second, unconnected record for the same organisation.
+ *
+ * Hidden: personal spaces (never an organisation), and private communities the
+ * caller isn't an active member of.
+ */
+async function searchCommunities(q: string, session: { userId: string; email: string }) {
+  const rows = await prisma.community.findMany({
+    where: {
+      name: { contains: q, mode: 'insensitive' },
+      personalOwnerId: null,
+      ...(isSuperAdmin(session.email)
+        ? {}
+        : {
+            OR: [
+              { visibility: 'public' },
+              { userCommunities: { some: { userId: session.userId, status: 'active' } } },
+            ],
+          }),
+    },
+    select: {
+      id: true, name: true, description: true, location: true, tags: true,
+      imageUrl: true, memberCount: true,
+    },
+    orderBy: { name: 'asc' },
+    take: 10,
+  });
+
+  return rows.map((c) => ({
+    id: c.id,
+    identity_id: null,
+    name: c.name,
+    subtitle: c.description,
+    location: c.location,
+    tags: c.tags ?? [],
+    image_url: c.imageUrl,
+    community_id: null,
+    community_name: null,
+    communities: [],
+    metadata: {
+      communityRef: c.id,
+      memberCount: c.memberCount,
+    } as Record<string, unknown>,
+  }));
+}
+
+/**
  * GET /api/nodes/search?q=<query>&field=name|email&type=person|resource|event
  * Fuzzy-search nodes of a given type across all communities.
  */
@@ -84,6 +141,12 @@ export async function GET(req: NextRequest) {
     const isAny = type.toLowerCase() === 'any'; // 'any' = search every node kind (the link picker)
     const like = `%${q}%`;
 
+    // Organisations resolve against communities as well as nodes — see
+    // searchCommunities. Fetched up front so they can lead the results below.
+    // The link picker's `type=any` is node-only and skips this.
+    const communityMatches =
+      type.toLowerCase() === 'community' ? await searchCommunities(q, session) : [];
+
     // Email lives in person metadata only; for any other type fall back to name.
     const matchExpr =
       field === 'email' && type.toLowerCase() === 'person'
@@ -105,6 +168,19 @@ export async function GET(req: NextRequest) {
           SELECT 1 FROM user_communities uc
           WHERE uc.community_id = c.id AND uc.user_id = ${session.userId} AND uc.role = 'admin'
         ))`;
+    // A PRIVATE community is hidden from everyone who isn't in it — and that has
+    // to cover its contents, not just its name. Its people, organisations and
+    // resources are exactly what makes it worth hiding, so nothing inside one
+    // reaches a cross-community search unless the caller is an active member.
+    // (`directoryPrivate` above is a different, weaker setting: a PUBLIC
+    // community whose directory is admins-only.) Null-community nodes have no
+    // owner and pass.
+    const privateCommunityClause = isSuperAdmin(session.email)
+      ? Prisma.empty
+      : Prisma.sql` AND (c.id IS NULL OR c.visibility IS DISTINCT FROM 'private' OR EXISTS (
+          SELECT 1 FROM user_communities uc2
+          WHERE uc2.community_id = c.id AND uc2.user_id = ${session.userId} AND uc2.status = 'active'
+        ))`;
 
     const rows = await prisma.$queryRaw<SearchRow[]>`
       SELECT
@@ -120,7 +196,7 @@ export async function GET(req: NextRequest) {
         c.name AS community_name
       FROM nodes n
       LEFT JOIN communities c ON c.id = n.community_id
-      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}${personalClause}${privateDirectoryClause}
+      WHERE ${matchExpr}${typeClause}${communityClause}${excludeClause}${personalClause}${privateDirectoryClause}${privateCommunityClause}
       ORDER BY n.name ASC
       LIMIT 30
     `;
@@ -146,21 +222,29 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const results = Array.from(groups.values())
-      .slice(0, 10)
-      .map(({ rep, communities }) => ({
-        id: rep.id,
-        identity_id: rep.identity_id,
-        name: rep.name,
-        subtitle: rep.subtitle,
-        location: rep.location,
-        tags: rep.tags,
-        image_url: rep.image_url,
-        community_id: rep.community_id,
-        community_name: rep.community_name,
-        communities: Array.from(communities),
-        metadata: rep.metadata as Record<string, unknown> | null,
-      }));
+    const nodeResults = Array.from(groups.values()).map(({ rep, communities }) => ({
+      id: rep.id,
+      identity_id: rep.identity_id,
+      name: rep.name,
+      subtitle: rep.subtitle,
+      location: rep.location,
+      tags: rep.tags,
+      image_url: rep.image_url,
+      community_id: rep.community_id,
+      community_name: rep.community_name,
+      communities: Array.from(communities),
+      metadata: rep.metadata as Record<string, unknown> | null,
+    }));
+
+    // Communities lead, and swallow any directory record of the same name: if
+    // Movac runs a community here, "Movac the card in someone's directory" is
+    // the same organisation and offering both would just ask the user to pick
+    // between two spellings of one answer.
+    const claimedNames = new Set(communityMatches.map((c) => c.name.trim().toLowerCase()));
+    const results = [
+      ...communityMatches,
+      ...nodeResults.filter((n) => !claimedNames.has(n.name.trim().toLowerCase())),
+    ].slice(0, 10);
 
     return NextResponse.json({ results });
   } catch (err) {

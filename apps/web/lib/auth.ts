@@ -66,6 +66,21 @@ export async function directoryAccessForbidden(
 }
 
 /**
+ * A community's feature config, or null when it has none (or doesn't exist).
+ * The directory and context routes read it to hide the node types belonging to
+ * a switched-off tool — see lib/context/featureVisibility.ts.
+ */
+export async function getFeatureConfig(
+  communityId: string,
+): Promise<CommunityFeatureConfig | null> {
+  const community = await prisma.community.findUnique({
+    where: { id: communityId },
+    select: { featureConfig: true },
+  });
+  return (community?.featureConfig as CommunityFeatureConfig | null) ?? null;
+}
+
+/**
  * Session + community-admin gate, as a value (not a Response). Returns the
  * session payload if the caller is a community admin (or super admin),
  * otherwise null — mirrors the gate several admin routes used to inline.
@@ -77,23 +92,6 @@ export async function getAdminSession(communityId: string): Promise<SessionPaylo
   const session = await getSession();
   if (!session) return null;
   return (await isAdmin(session.userId, communityId, session.email)) ? session : null;
-}
-
-/**
- * Session + active-membership gate, as a value (not a Response). Returns the
- * session payload if the caller is an active member of the community (or a
- * super admin), otherwise null — pending members and non-members both get null.
- * Mirrors getAdminSession for member-level routes (e.g. the Tasks board).
- */
-export async function getMemberSession(communityId: string): Promise<SessionPayload | null> {
-  const session = await getSession();
-  if (!session) return null;
-  if (isSuperAdmin(session.email)) return session;
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId } },
-    select: { status: true },
-  });
-  return membership?.status === 'active' ? session : null;
 }
 
 /**

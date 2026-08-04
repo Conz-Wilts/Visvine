@@ -200,18 +200,6 @@ export function missingRequiredAnswers(
 }
 
 /**
- * Format date for display (shorter format)
- */
-export function formatEventDate(date: string): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-/**
  * Format time for display
  */
 export function formatEventTime(date: string): string {

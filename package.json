@@ -13,6 +13,7 @@
   "scripts": {
     "setup": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:seed",
     "dev": "docker compose up -d --wait && pnpm --filter @visvine/web dev",
+    "dev:cloud": "concurrently -k -n proxy,web -c blue,green \"pnpm db:proxy:cloud\" \"node scripts/with-prod-env.mjs pnpm --filter @visvine/web dev\"",
     "proxy": "bash scripts/start-cloud-sql-proxy.sh",
     "build": "pnpm --filter @visvine/web build",
     "start": "pnpm --filter @visvine/web start",
@@ -35,6 +36,7 @@
     "db:reset": "node scripts/guard-local-db.mjs && node scripts/db-reset.mjs",
     "db:fresh": "pnpm --filter @visvine/web db:fresh",
     "db:check": "node scripts/db-check.mjs",
+    "env:pull:prod": "node scripts/env-pull-prod.mjs",
     "env:check": "node scripts/check-no-env-committed.mjs",
     "env:check:staged": "node scripts/check-no-env-committed.mjs --staged",
     "prisma:generate": "pnpm --filter @visvine/web prisma:generate",

@@ -1,5 +1,5 @@
 /**
- * The MCP tool surface: seven tools over the context layer.
+ * The MCP tool surface: ten tools over the context layer.
  *
  * The shape of this surface follows the shape of the model, deliberately:
  *
@@ -16,7 +16,7 @@
  * the same functions the web routes use, and every read goes through the
  * visibility lens while every write goes through the folder gate.
  */
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { withCtx, McpError } from '@/lib/mcp/auth'
@@ -430,7 +430,7 @@ export function registerTools(server: McpServer): void {
         '  • community → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
         '  • resource  → resources/<slug>.md   fields: subtitle (description), url\n' +
         'A "community" here is an organisation — a company, group or investor — recorded in the directory. It shares ' +
-        'the type with the workspace you are in, which is NOT creatable from here.\n' +
+        'the type with the community you are in, which is NOT creatable from here.\n' +
         'Use exactly these field keys — email, companyName, linkedinUrl and url/website are what match a person or ' +
         'organization to their identity across communities, and an unrecognised key is silently dropped. ' +
         'Only these three types are creatable; events are made in the events surface, and channels/spaces are admin-only. ' +

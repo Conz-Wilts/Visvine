@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VirtuosoHandle } from 'react-virtuoso';
-import { Plus, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useHeader } from '@/lib/contexts/HeaderContext';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
@@ -18,12 +18,11 @@ import type {
   SerializedMessage,
   SerializedReplyTo,
 } from '@/lib/messages/types';
-import NewChatModal from './NewChatModal';
+import AddMembersModal from './AddMembersModal';
 import { mergeMessages } from './MessageRow';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
 import PageTitle from '@/components/ui/PageTitle';
-import { MESSAGE_TABS, type MessageTab } from './messagesTabs';
 import ConversationListPanel, { type ChannelSection } from './ConversationListPanel';
 import ThreadPanel from './ThreadPanel';
 import { useConversations } from './useConversations';
@@ -37,18 +36,11 @@ interface MessagesClientProps {
     image: string | null;
   };
   initialConversationId?: string;
-  /**
-   * 'messages' (default) → chats at /messages (bubble threads).
-   * 'channels' → the Channels page at /channels: a channel rail beside the
-   * selected channel, each rendered as a flat feed (feed-style rows + slim
-   * composer) on the same realtime message backend.
-   */
-  variant?: 'messages' | 'channels';
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function MessagesClient({ currentUser, initialConversationId, variant = 'messages' }: MessagesClientProps) {
+export default function MessagesClient({ currentUser, initialConversationId }: MessagesClientProps) {
   const { setHeaderContent } = useHeader();
   const communityCtx = useCommunity();
   // On wide viewports the Channels page docks its channel list INTO the global
@@ -59,15 +51,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // from anywhere via this context.
   const { open: openCreateModal } = useCreateModal();
 
-  // The Channels page locks the experience to channels and embeds the posts feed.
-  const channelsVariant = variant === 'channels';
-  const basePath = channelsVariant ? '/channels' : '/messages';
-  // Which conversation tabs this variant exposes (channels has no tab strip —
-  // it's channels-only with the posts feed as the default view).
-  const availableTabs = useMemo<MessageTab[]>(
-    () => (channelsVariant ? ['channels'] : ['direct']),
-    [channelsVariant],
-  );
+  const basePath = '/channels';
 
   const [activeConversation, setActiveConversation] = useState<ConversationSummary | null>(null);
   const [messages, setMessages] = useState<SerializedMessage[]>([]);
@@ -85,7 +69,6 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // DOCK_MIN_WIDTH in Sidebar.tsx). Below it, keep the page's own inline list
   // so a 300px panel doesn't crowd the thread.
   const [isWide, setIsWide] = useState(true);
-  const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   // Channels: the docked right-hand Details pane is toggleable (Slack-style) —
   // closed by default, opened via the channel header, remembered for the session.
@@ -102,7 +85,6 @@ export default function MessagesClient({ currentUser, initialConversationId, var
       return value;
     });
   }, []);
-  const [activeTab, setActiveTab] = useState<MessageTab>(variant === 'channels' ? 'channels' : 'direct');
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
   const [channelSpaces, setChannelSpaces] = useState<ChannelSpaceEntry[]>([]);
   // Collapsed rail sections, persisted per browser (keyed by space id, '__none__' = unfiled).
@@ -115,11 +97,11 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   const router = useRouter();
   const searchParams = useSearchParams();
   useEffect(() => {
-    if (channelsVariant && searchParams.get('new') === 'channel') {
+    if (searchParams.get('new') === 'channel') {
       openCreateModal('channel');
       router.replace(basePath);
     }
-  }, [channelsVariant, searchParams, router, basePath, openCreateModal]);
+  }, [searchParams, router, basePath, openCreateModal]);
   const [channelName, setChannelName] = useState('');
   const [channelDescription, setChannelDescription] = useState('');
   const [channelIcon, setChannelIcon] = useState<string | null>(null);
@@ -319,9 +301,6 @@ export default function MessagesClient({ currentUser, initialConversationId, var
         messagesConvoRef.current = conversationId;
       }
       setActiveConversation(payload.conversation ?? null);
-      // Deep links to a channel should land on the Channels tab (messages variant only —
-      // the channels variant is already locked to 'channels').
-      if (!channelsVariant && payload.conversation?.type === 'CHANNEL') setActiveTab('channels');
       if (!keepCursor) {
         setMessageCursor(payload.nextCursor ?? null);
         setHasMoreMessages(Boolean(payload.hasMore));
@@ -336,9 +315,9 @@ export default function MessagesClient({ currentUser, initialConversationId, var
         setLoadingOlderMessages(false);
       }
     }
-  }, [currentUser.id, channelsVariant]);
+  }, [currentUser.id]);
 
-  // Header: inject nothing for messages page — the page is self-contained
+  // Header: inject nothing for the channels page — the page is self-contained
   useEffect(() => {
     setHeaderContent(null);
     return () => setHeaderContent(null);
@@ -347,11 +326,9 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
   useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
 
-  // Channel directory: refresh whenever the Channels tab is shown.
   useEffect(() => {
-    if (activeTab !== 'channels') return;
     void fetchChannels();
-  }, [activeTab, fetchChannels]);
+  }, [fetchChannels]);
 
   useEffect(() => {
     const update = () => {
@@ -707,33 +684,31 @@ export default function MessagesClient({ currentUser, initialConversationId, var
     handleScrollToMessage,
   } = useMessageActions({ selectedConversationRef, virtuosoRef, messages, setMessages });
 
-  const handleLeaveGroup = async () => {
+  const handleLeaveChannel = async () => {
     if (!selectedConversationId) return;
-    const prompt = selectedConversation?.type === 'CHANNEL' ? 'Leave this channel?' : 'Leave this group chat?';
-    if (!window.confirm(prompt)) return;
+    if (!window.confirm('Leave this channel?')) return;
     try {
       await fetchJson(`/api/messages/conversations/${selectedConversationId}/leave`, { method: 'POST' });
       handleBackToList();
       await fetchConversations(conversationSearch, false);
-    } catch (e) { setError((e as Error).message || 'Unable to leave group.'); }
+    } catch (e) { setError((e as Error).message || 'Unable to leave the channel.'); }
   };
 
-  const handleRenameGroup = async () => {
+  const handleRenameChannel = async () => {
     if (!selectedConversationId || !selectedConversation) return;
-    const label = selectedConversation.type === 'CHANNEL' ? 'Enter a new channel name' : 'Enter a new group name';
-    const nextName = window.prompt(label, selectedConversation.name);
+    const nextName = window.prompt('Enter a new channel name', selectedConversation.name);
     if (!nextName?.trim()) return;
     try {
       const payload = await fetchJsonBody<{ conversation: ConversationSummary }>(`/api/messages/conversations/${selectedConversationId}`, 'PATCH', { name: nextName.trim() });
       await fetchConversations(conversationSearch);
       setActiveConversation(payload.conversation);
-    } catch (e) { setError((e as Error).message || 'Unable to rename group.'); }
+    } catch (e) { setError((e as Error).message || 'Unable to rename the channel.'); }
   };
 
   const handleRemoveMember = async (memberUserId: string) => {
     if (!selectedConversationId || !selectedConversation) return;
     const target = selectedConversation.participants.find((p) => p.id === memberUserId);
-    if (!target || !window.confirm(`Remove ${target.name} from the group?`)) return;
+    if (!target || !window.confirm(`Remove ${target.name} from the channel?`)) return;
     try {
       await fetchJson(`/api/messages/conversations/${selectedConversationId}/members/${memberUserId}`, { method: 'DELETE' });
       await fetchConversations(conversationSearch);
@@ -743,11 +718,10 @@ export default function MessagesClient({ currentUser, initialConversationId, var
 
   // ─── Derived data ───────────────────────────────────────────────────────────
 
-  const filteredConversations = useMemo(() => conversations.filter((c) => {
-    if (activeTab === 'direct') return c.type === 'DM' || c.type === 'GROUP';
-    if (activeTab === 'channels') return c.type === 'CHANNEL';
-    return false;
-  }), [conversations, activeTab]);
+  const filteredConversations = useMemo(
+    () => conversations.filter((c) => c.type === 'CHANNEL'),
+    [conversations],
+  );
 
   // Channels in the community directory the user hasn't joined yet.
   const browsableChannels = useMemo(() => {
@@ -786,7 +760,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // Back doesn't step through the auto-selection. Skipped on mobile, where
   // selecting would immediately hide the channel list.
   useEffect(() => {
-    if (!channelsVariant || isMobile || conversationsLoading) return;
+    if (isMobile || conversationsLoading) return;
     if (selectedConversationRef.current) return;
     const first = channelSections.find((s) => s.joined.length > 0)?.joined[0];
     if (!first) return;
@@ -794,12 +768,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
     selectedConversationRef.current = first.id;
     setActiveConversation(first);
     window.history.replaceState(null, '', `${basePath}/${first.id}`);
-  }, [channelsVariant, isMobile, conversationsLoading, channelSections, basePath]);
-
-  const tabCounts = useMemo<Record<MessageTab, number>>(() => ({
-    channels: conversations.filter((c) => c.type === 'CHANNEL' && c.unreadCount > 0).length,
-    direct: conversations.filter((c) => c.type !== 'CHANNEL' && c.unreadCount > 0).length,
-  }), [conversations]);
+  }, [isMobile, conversationsLoading, channelSections, basePath]);
 
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
 
@@ -807,7 +776,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // top), so treat the viewer as permanently "at bottom": incoming realtime
   // messages patch straight into the feed and reads keep being marked instead
   // of accumulating in the new-messages pill (which only exists in chat mode).
-  const feedActive = channelsVariant && selectedConversation?.type === 'CHANNEL' && selectedConversation.viewMode === 'FEED';
+  const feedActive = selectedConversation?.type === 'CHANNEL' && selectedConversation.viewMode === 'FEED';
   useEffect(() => {
     if (feedActive) {
       atBottomRef.current = true;
@@ -819,31 +788,29 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   const hasOpenThread = Boolean(selectedConversationId);
   const showInbox = !isMobile || !hasOpenThread;
   const showThread = !isMobile || hasOpenThread;
-  const showProfile = !isMobile && Boolean(selectedConversation) && (!channelsVariant || detailsOpen);
+  const showProfile = !isMobile && Boolean(selectedConversation) && detailsOpen;
   // On mobile, give the open thread the full viewport — hide the centered controls.
   const showCenterControls = !isMobile || !hasOpenThread;
 
-  // Whether to dock the list into the Sidebar (wide viewport, host mounted) —
-  // both variants: /channels docks its channel rail, /messages docks its inbox.
-  // When docked we hide the page's title/search/tab chrome (it moves into the
-  // docked panel) and pad the thread to clear the docked card.
+  // Whether to dock the channel rail into the Sidebar (wide viewport, host
+  // mounted). When docked we hide the page's title/search chrome (it moves into
+  // the docked panel) and pad the thread to clear the docked card.
   const docked = isWide && Boolean(host);
 
   // Channels surfaces the navbar's panel toggle (dockRequested) so the docked
   // list can be closed; closed = the list is hidden entirely (thread gets the
   // full width), NOT the un-docked inline layout.
   useEffect(() => {
-    if (!channelsVariant) return;
     setDockRequested(isWide);
     return () => setDockRequested(false);
-  }, [channelsVariant, isWide, setDockRequested]);
+  }, [isWide, setDockRequested]);
   // Channels always opens with the channel-list sidebar showing. contextOpen is
   // shared session state (the notes/admin docks close it too), so landing on
   // /channels re-opens it by default; the navbar toggle can still close it after.
   useEffect(() => {
-    if (channelsVariant) setContextOpen(true);
-  }, [channelsVariant, setContextOpen]);
-  const channelsCollapsed = channelsVariant && isWide && !contextOpen;
+    setContextOpen(true);
+  }, [setContextOpen]);
+  const channelsCollapsed = isWide && !contextOpen;
 
   // The inbox / channel list. When docked it portals into the Sidebar host;
   // un-docked it renders inline beside the thread.
@@ -851,17 +818,10 @@ export default function MessagesClient({ currentUser, initialConversationId, var
     <ConversationListPanel
       docked={docked}
       host={host}
-      onShowNewChat={() => setShowNewChatModal(true)}
-      onTabChange={setActiveTab}
-      tabCounts={tabCounts}
-      tabs={MESSAGE_TABS.filter((t) => availableTabs.includes(t.id))}
-      channelsVariant={channelsVariant}
       sidebarSearchRef={sidebarSearchRef}
       conversationSearch={conversationSearch}
       setConversationSearch={setConversationSearch}
-      activeTab={activeTab}
       conversationsLoading={conversationsLoading}
-      filteredConversations={filteredConversations}
       channelSections={channelSections}
       channelSpaces={channelSpaces}
       collapsedSpaces={collapsedSpaces}
@@ -904,38 +864,21 @@ export default function MessagesClient({ currentUser, initialConversationId, var
   // the navbar (h-full, no gutters) and we pad left by exactly CHANNELS_PANEL_W
   // (Sidebar.tsx) so the thread's border lands on the docked card's right edge —
   // only while the panel is actually open (channelsCollapsed animates it away).
-  // Messages keeps the floating-panels layout: the shell wraps pages in
-  // mt-16 + pt-4 + pb-6 (120px) and the docked card needs 300px + 12px gutter.
   return (
-    <div className={channelsVariant
-      ? `flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''} ${!docked && !channelsCollapsed ? 'px-6 pt-4 pb-6' : ''}`
-      : `flex h-[calc(100dvh-120px)] min-h-0 w-full flex-col px-6 ${docked ? 'lg:pl-[312px]' : ''}`}
+    <div
+      className={`flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''} ${!docked && !channelsCollapsed ? 'px-6 pt-4 pb-6' : ''}`}
       style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
     >
 
-      {/* ── Page header — centered title (un-docked layouts only) ───────── */}
+      {/* ── Page header — centered title (un-docked layouts only). Channel
+             creation lives in the global sidebar "+" (Create new → Channel). ── */}
       {!docked && !channelsCollapsed && (
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 pt-0 pb-0">
-        <div />
-        <PageTitle title={channelsVariant ? 'Channels' : 'Messages'} />
-        <div className="justify-self-end">
-          {/* Channel creation lives in the global sidebar "+" (Create new →
-              Channel) — no header button on the channels variant. */}
-          {activeTab !== 'channels' && (
-            <button
-              type="button"
-              onClick={() => setShowNewChatModal(true)}
-              className="flex items-center gap-1.5 rounded-full bg-brand-green px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:opacity-90 transition-opacity active:scale-95"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-              <span className="hidden sm:inline">New Chat</span>
-            </button>
-          )}
+        <div className="flex items-center justify-center pt-0 pb-0">
+          <PageTitle title="Channels" />
         </div>
-      </div>
       )}
 
-      {/* ── Centered controls: search + tab switcher (un-docked layouts) ── */}
+      {/* ── Centered search (un-docked layouts) ─────────────────────────── */}
       {showCenterControls && !docked && !channelsCollapsed && (
         <div className="flex flex-col items-center gap-3 pt-6 pb-5">
           <div className="w-full max-w-2xl">
@@ -945,7 +888,7 @@ export default function MessagesClient({ currentUser, initialConversationId, var
                 ref={sidebarSearchRef}
                 value={conversationSearch}
                 onChange={(e) => setConversationSearch(e.target.value)}
-                placeholder={channelsVariant ? 'Search channels…' : 'Search conversations…'}
+                placeholder="Search channels…"
                 className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
               />
               {conversationSearch && (
@@ -961,8 +904,8 @@ export default function MessagesClient({ currentUser, initialConversationId, var
       {/* ╭── List box — docked: portals into the Sidebar ──╮ */}
       {docked && listPanel}
 
-      {/* ── List · open thread · profile box (Chats / Channels) ─────────── */}
-      <div className={channelsVariant && (docked || channelsCollapsed)
+      {/* ── List · open channel · details box ───────────────────────────── */}
+      <div className={docked || channelsCollapsed
         ? "flex min-h-0 w-full flex-1 items-stretch"
         : "flex min-h-0 w-full flex-1 items-stretch gap-6 pb-2 md:gap-12 md:px-6"}>
 
@@ -970,10 +913,9 @@ export default function MessagesClient({ currentUser, initialConversationId, var
           closed the channels panel from the navbar toggle) */}
       {!docked && !channelsCollapsed && showInbox && listPanel}
 
-      {/* ╭── Thread — open on the page, just floating message bubbles ─────╮ */}
+      {/* ╭── Thread — the open channel, chat thread or feed ───────────────╮ */}
       {showThread && (
         <ThreadPanel
-          channelsVariant={channelsVariant}
           selectedConversation={selectedConversation}
           selectedConversationId={selectedConversationId}
           currentUser={currentUser}
@@ -983,7 +925,6 @@ export default function MessagesClient({ currentUser, initialConversationId, var
           communityId={communityCtx?.currentCommunity?.id}
           hasChannelsInList={filteredConversations.length > 0}
           onShowChannelForm={() => openCreateModal('channel')}
-          onShowNewChat={() => setShowNewChatModal(true)}
           onShowAddMembers={() => setShowAddMembersModal(true)}
           onBackToList={handleBackToList}
           showHeaderIconPicker={showHeaderIconPicker}
@@ -1025,16 +966,16 @@ export default function MessagesClient({ currentUser, initialConversationId, var
           onSendMessage={handleSendMessage}
           typingLabel={typingLabel}
           onComposerTyping={handleComposerTyping}
-          onLeaveGroup={handleLeaveGroup}
-          onRenameGroup={handleRenameGroup}
+          onLeaveChannel={handleLeaveChannel}
+          onRenameChannel={handleRenameChannel}
           detailsShown={showProfile}
-          onToggleDetails={channelsVariant ? () => toggleDetails() : undefined}
+          onToggleDetails={() => toggleDetails()}
         />
       )}
 
-      {/* ╭── Profile box — the person (or group) you're talking to ────────╮ */}
+      {/* ╭── Details box — the open channel's members and settings ────────╮ */}
       {showProfile && selectedConversation && (
-        <aside className={channelsVariant && (docked || channelsCollapsed)
+        <aside className={docked || channelsCollapsed
           ? "hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-surface-1 xl:flex"
           : "hidden w-72 shrink-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float xl:flex"}>
           <ProfilePanel
@@ -1042,11 +983,11 @@ export default function MessagesClient({ currentUser, initialConversationId, var
             currentUserId={currentUser.id}
             isAdmin={isAdmin}
             onAddMembers={() => setShowAddMembersModal(true)}
-            onRename={handleRenameGroup}
-            onLeave={handleLeaveGroup}
+            onRename={handleRenameChannel}
+            onLeave={handleLeaveChannel}
             onRemoveMember={handleRemoveMember}
             onChangeViewMode={(mode) => void updateSelectedChannel({ viewMode: mode })}
-            onClose={channelsVariant ? () => toggleDetails(false) : undefined}
+            onClose={() => toggleDetails(false)}
           />
         </aside>
       )}
@@ -1054,26 +995,11 @@ export default function MessagesClient({ currentUser, initialConversationId, var
       </div>
 
       {/* ── Modals ──────────────────────────────────────────────────────── */}
-      <NewChatModal
-        isOpen={showNewChatModal}
-        onClose={() => setShowNewChatModal(false)}
-        onConversationSelected={(conversationId) => {
-          setShowNewChatModal(false);
-          void fetchConversations(conversationSearch).then(() => handleSelectConversation(conversationId));
-        }}
-      />
-
-      <NewChatModal
+      <AddMembersModal
         isOpen={showAddMembersModal}
-        mode="addMembers"
         existingMemberIds={selectedConversation?.participants.map((p) => p.id) ?? []}
-        addMembersConversationId={selectedConversationId ?? undefined}
+        conversationId={selectedConversationId ?? undefined}
         onClose={() => setShowAddMembersModal(false)}
-        onConversationSelected={(conversationId) => {
-          setShowAddMembersModal(false);
-          void fetchConversations(conversationSearch);
-          void loadMessages(conversationId, { query: messageSearch });
-        }}
         onMembersUpdated={() => {
           if (selectedConversationId) {
             void fetchConversations(conversationSearch);

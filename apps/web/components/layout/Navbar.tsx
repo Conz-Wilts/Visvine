@@ -4,21 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CommunitySelector } from "@/features/communities";
 import UserMenu from "@/components/auth/UserMenu";
-import MessagesDropdown from "@/components/messages/MessagesDropdown";
 import { useHeader } from "@/lib/contexts/HeaderContext";
 import { useCommunity } from "@/lib/contexts/CommunityContext";
 import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
 import { useSidebar, shellEntranceStyle } from "@/lib/contexts/SidebarContext";
 import { useSession } from "@/lib/auth-client";
-import { isFeatureEnabled } from "@/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
-import type { CommunityFeatureConfig } from "@/lib/types";
 
 const SEAM_R = 10; // radius of the concave fillet joining the navbar to the sidebar rail
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
-  const { isAdmin, currentCommunity } = useCommunity();
+  const { isAdmin } = useCommunity();
   const { expanded, entered, reduced } = useSidebar();
   const { dockRequested, contextOpen, setContextOpen } = useContextPanel();
   const { data: session } = useSession();
@@ -26,8 +23,6 @@ export default function Navbar() {
   const eventsActive = pathname.startsWith("/events");
   const adminActive = pathname.startsWith("/admin");
   const canAccessAdmin = isAdmin || session?.user?.isSuperAdmin === true;
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const messagesEnabled = isFeatureEnabled(featureConfig, "messages");
 
   return (
     <header
@@ -137,7 +132,6 @@ export default function Navbar() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </Link>
-          {messagesEnabled && <MessagesDropdown />}
           <UserMenu />
         </div>
       </div>

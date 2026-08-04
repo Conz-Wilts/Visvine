@@ -2,7 +2,7 @@
 
 import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateAction } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, MessageCircle, Star } from 'lucide-react';
+import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, Star } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
@@ -20,7 +20,6 @@ import type {
 const GROUP_WINDOW_MS = 7 * 60 * 1000;
 
 interface ThreadPanelProps {
-  channelsVariant: boolean;
   selectedConversation: ConversationSummary | null;
   selectedConversationId: string | null;
   currentUser: { id: string; name: string; image: string | null };
@@ -31,7 +30,6 @@ interface ThreadPanelProps {
   /** Whether the channel list has any joined channels (drives the empty-state copy). */
   hasChannelsInList: boolean;
   onShowChannelForm: () => void;
-  onShowNewChat: () => void;
   onShowAddMembers: () => void;
   onBackToList: () => void;
   // Channel header extras
@@ -83,17 +81,16 @@ interface ThreadPanelProps {
   }) => Promise<void>;
   typingLabel: string | null;
   onComposerTyping: () => void;
-  // Group management
-  onLeaveGroup: () => Promise<void>;
-  onRenameGroup: () => Promise<void>;
-  // Slack-style docked details pane (channels variant only)
+  // Channel management
+  onLeaveChannel: () => Promise<void>;
+  onRenameChannel: () => Promise<void>;
+  // Slack-style docked details pane
   detailsShown?: boolean;
   onToggleDetails?: () => void;
 }
 
-/** Thread — open on the page, just floating message bubbles (or a flat feed on Channels). */
+/** Thread — the open channel, as a chat thread or a flat feed. */
 export default function ThreadPanel({
-  channelsVariant,
   selectedConversation,
   selectedConversationId,
   currentUser,
@@ -103,7 +100,6 @@ export default function ThreadPanel({
   communityId,
   hasChannelsInList,
   onShowChannelForm,
-  onShowNewChat,
   onShowAddMembers,
   onBackToList,
   showHeaderIconPicker,
@@ -145,22 +141,20 @@ export default function ThreadPanel({
   onSendMessage,
   typingLabel,
   onComposerTyping,
-  onLeaveGroup,
-  onRenameGroup,
+  onLeaveChannel,
+  onRenameChannel,
   detailsShown,
   onToggleDetails,
 }: ThreadPanelProps) {
   // Feed-style channels swap the chat thread + bottom composer for FeedView
   // (post cards, composer on top); the header/search chrome stays shared.
-  const isFeed = channelsVariant
-    && selectedConversation?.type === 'CHANNEL'
-    && selectedConversation.viewMode === 'FEED';
+  const isFeed = selectedConversation?.viewMode === 'FEED';
 
   return (
-    <section className={`flex w-full min-w-0 flex-1 flex-col overflow-hidden ${channelsVariant ? 'bg-surface-1' : ''}`}>
+    <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden bg-surface-1">
 
-      {/* ── Channels: empty state when no channel feed is open ── */}
-      {!selectedConversation && channelsVariant && (
+      {/* ── Empty state when no channel is open ── */}
+      {!selectedConversation && (
         <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-2">
             <Hash className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
@@ -188,31 +182,10 @@ export default function ThreadPanel({
         </div>
       )}
 
-      {/* ── Conversation thread ── */}
-      {!selectedConversation && !channelsVariant && (
-        <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-2">
-            <MessageCircle className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
-          </div>
-          <div>
-            <p className="text-base font-semibold text-text-primary">No conversation selected</p>
-            <p className="mt-1 text-sm text-text-muted">Pick a chat from the list or start a new one.</p>
-          </div>
-          <button
-            type="button"
-            onClick={onShowNewChat}
-            className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            Start a new chat
-          </button>
-        </div>
-      )}
-
       {selectedConversation && (
         <>
-          {/* Conversation header */}
-          <header className={`relative flex items-center justify-between gap-3 ${channelsVariant ? 'border-b border-border-subtle px-4 py-2.5' : 'px-5 py-3'}`}>
+          {/* Channel header */}
+          <header className="relative flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-2.5">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               {isMobile && (
                 <button
@@ -222,11 +195,6 @@ export default function ThreadPanel({
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-              )}
-              {selectedConversation.type !== 'CHANNEL' && (
-                <div className="hidden sm:block">
-                  <Avatar name={selectedConversation.name} size="lg" />
-                </div>
               )}
               <div
                 className={`min-w-0 ${onToggleDetails ? 'cursor-pointer rounded-lg px-1.5 py-0.5 -mx-1.5 -my-0.5 transition-colors hover:bg-surface-2' : ''}`}
@@ -240,47 +208,40 @@ export default function ThreadPanel({
                   },
                 } : {})}
               >
-                <p className={`flex items-center truncate text-text-primary ${channelsVariant ? 'gap-1.5 text-lg font-bold' : 'gap-1 text-sm font-semibold'}`}>
-                  {selectedConversation.type === 'CHANNEL' && (
-                    isAdmin ? (
-                      <span className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => setShowHeaderIconPicker((v) => !v)}
-                          title="Change channel icon"
-                          className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-2"
-                        >
-                          <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className={channelsVariant ? 'h-5 w-5' : 'h-4 w-4'} />
-                        </button>
-                        {showHeaderIconPicker && (
-                          <span className="absolute left-0 top-7 z-30">
-                            <EmojiIconPicker
-                              onSelect={(emoji) => void updateSelectedChannel({ icon: emoji })}
-                              onClear={selectedConversation.icon ? () => void updateSelectedChannel({ icon: null }) : undefined}
-                              onClose={() => setShowHeaderIconPicker(false)}
-                            />
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className={channelsVariant ? 'h-5 w-5' : 'h-4 w-4'} />
-                    )
+                <p className="flex items-center gap-1.5 truncate text-lg font-bold text-text-primary">
+                  {isAdmin ? (
+                    <span className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setShowHeaderIconPicker((v) => !v)}
+                        title="Change channel icon"
+                        className="flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-surface-2"
+                      >
+                        <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className="h-5 w-5" />
+                      </button>
+                      {showHeaderIconPicker && (
+                        <span className="absolute left-0 top-7 z-30">
+                          <EmojiIconPicker
+                            onSelect={(emoji) => void updateSelectedChannel({ icon: emoji })}
+                            onClear={selectedConversation.icon ? () => void updateSelectedChannel({ icon: null }) : undefined}
+                            onClose={() => setShowHeaderIconPicker(false)}
+                          />
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <ChannelIcon icon={selectedConversation.icon} fallback={isFeed ? 'feed' : 'hash'} className="h-5 w-5" />
                   )}
                   <span className="truncate">{selectedConversation.name}</span>
                 </p>
-                {/* Channels show only the icon + name (members/description live in
-                    the Details pane and the member cluster on the right). */}
-                {selectedConversation.type !== 'CHANNEL' && (
-                  <p className="truncate text-xs text-text-muted">
-                    {selectedConversation.participants.map((p) => p.name).join(', ')}
-                  </p>
-                )}
+                {/* Only the icon + name here — members/description live in the
+                    Details pane and the member cluster on the right. */}
               </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-1.5">
               {/* Slack-style member cluster — toggles the docked Details pane */}
-              {onToggleDetails && selectedConversation.type !== 'DM' && (
+              {onToggleDetails && (
                 <button
                   type="button"
                   onClick={onToggleDetails}
@@ -313,8 +274,8 @@ export default function ThreadPanel({
                 <Search className="h-4 w-4" />
               </button>
 
-              {/* Below xl the profile/details layer is hidden — keep management actions here */}
-              {selectedConversation.type !== 'DM' && isAdmin && (
+              {/* Below xl the details layer is hidden — keep management actions here */}
+              {isAdmin && (
                 <>
                   <button
                     type="button"
@@ -326,25 +287,23 @@ export default function ThreadPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={onRenameGroup}
+                    onClick={onRenameChannel}
                     className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
-                    title={selectedConversation.type === 'CHANNEL' ? 'Rename channel' : 'Rename group'}
+                    title="Rename channel"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                 </>
               )}
 
-              {selectedConversation.type !== 'DM' && (
-                <button
-                  type="button"
-                  onClick={onLeaveGroup}
-                  className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500 xl:hidden"
-                  title={selectedConversation.type === 'CHANNEL' ? 'Leave channel' : 'Leave group'}
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={onLeaveChannel}
+                className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500 xl:hidden"
+                title="Leave channel"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
 
             {/* Saved-messages dropdown panel */}
@@ -497,21 +456,15 @@ export default function ThreadPanel({
                   const showUnreadDivider = unreadMarker === message.id;
                   return (
                     <div
-                      className={channelsVariant ? 'w-full px-2 md:px-4' : 'w-full px-3 md:px-6'}
+                      className="w-full px-2 md:px-4"
                       data-message-id={message.id}
                     >
                       {showDateSeparator && (
-                        <div className={`flex items-center px-3 ${channelsVariant ? 'my-4 gap-0' : 'my-4 gap-3'}`}>
+                        <div className="my-4 flex items-center gap-0 px-3">
                           <div className="h-px flex-1 bg-border-subtle" />
-                          {channelsVariant ? (
-                            <span className="rounded-full border border-border-subtle bg-surface-1 px-3 py-0.5 text-xs font-semibold text-text-primary">
-                              {formatDateLabel(message.createdAt)}
-                            </span>
-                          ) : (
-                            <span className="text-[11px] font-medium text-text-muted">
-                              {formatDateLabel(message.createdAt)}
-                            </span>
-                          )}
+                          <span className="rounded-full border border-border-subtle bg-surface-1 px-3 py-0.5 text-xs font-semibold text-text-primary">
+                            {formatDateLabel(message.createdAt)}
+                          </span>
                           <div className="h-px flex-1 bg-border-subtle" />
                         </div>
                       )}
@@ -527,7 +480,7 @@ export default function ThreadPanel({
                       <MessageRow
                         message={message}
                         showHeader={showHeader}
-                        variant={channelsVariant ? 'feed' : 'bubble'}
+                        variant="feed"
                         onReply={setReplyTo}
                         onReaction={onReaction}
                         onEdit={onEdit}
@@ -595,8 +548,8 @@ export default function ThreadPanel({
           {/* Accessibility: announce incoming messages */}
           <div role="status" aria-live="polite" className="sr-only">{announce}</div>
 
-          {/* Composer — slim feed bar on Channels, full card on DMs.
-              Feed mode has its own top composer inside FeedView. */}
+          {/* Composer — slim feed bar. Feed mode has its own top composer
+              inside FeedView. */}
           {!isFeed && (
           <MessageComposer
             onSend={onSendMessage}
@@ -606,13 +559,9 @@ export default function ThreadPanel({
             typingLabel={typingLabel}
             onTyping={onComposerTyping}
             conversationId={selectedConversationId}
-            variant={channelsVariant ? 'slim' : 'full'}
-            currentUser={channelsVariant ? currentUser : undefined}
-            placeholder={
-              channelsVariant && selectedConversation
-                ? `${selectedConversation.name}…`
-                : undefined
-            }
+            variant="slim"
+            currentUser={currentUser}
+            placeholder={`${selectedConversation.name}…`}
           />
           )}
         </>

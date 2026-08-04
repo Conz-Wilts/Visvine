@@ -1,11 +1,15 @@
 /**
  * One-off backfill: give every existing thing its context.
  *
- * Communities, spaces, channels, notes and uploaded files became graph nodes
- * (and, for the container kinds, gained a canonical context note) — but only on
- * the create path. Everything that already existed is invisible in the context
- * graph until this runs. It also fills the gap events have always had: they were
- * nodes from day one but never got their events/<slug>.md note.
+ * Communities, spaces and channels became graph nodes (and gained a canonical
+ * context note) — but only on the create path. Everything that already existed
+ * is invisible in the context graph until this runs. It also fills the gap
+ * events have always had: they were nodes from day one but never got their
+ * events/<slug>.md note.
+ *
+ * Notes and uploaded files are NOT nodes — they are content in a brain — so
+ * nothing here creates one for them; the last step rebuilds only the mention
+ * edges that entity notes and connectors own.
  *
  * Order matters. The community node goes first because every other node hangs a
  * `contains` edge off it, and `Link.sourceId` is a foreign key — a child synced
@@ -48,10 +52,8 @@ interface Counts {
   spaces: number;
   channels: number;
   notes: number;
-  files: number;
   eventNotes: number;
   entityNotes: number;
-  staleConnectorNodes: number;
 }
 
 async function backfillCommunity(community: { id: string; name: string; description: string | null; location: string | null }): Promise<Counts> {
@@ -60,10 +62,8 @@ async function backfillCommunity(community: { id: string; name: string; descript
     spaces: 0,
     channels: 0,
     notes: 0,
-    files: 0,
     eventNotes: 0,
     entityNotes: 0,
-    staleConnectorNodes: 0,
   };
   const communityNode = communityNodeId(community.id);
 
@@ -135,36 +135,16 @@ async function backfillCommunity(community: { id: string; name: string; descript
     counts.channels++;
   }
 
-  // ── 4. Uploaded files ──────────────────────────────────────────────────────
-  const sources = await prisma.contextSource.findMany({
-    where: { communityId: community.id, ownerKey: SHARED_OWNER_KEY },
-    select: { id: true, name: true, path: true, kind: true, mimeType: true },
-  });
-  for (const source of sources) {
-    if (!dryRun) {
-      await syncEntityNode({
-        communityId: community.id,
-        type: 'file',
-        name: source.name,
-        recordId: source.id,
-        slugSource: source.path.replace(/\.[^./]+$/, ''),
-        subtitle: source.kind.toUpperCase(),
-        metadata: { sourcePath: source.path, kind: source.kind, mimeType: source.mimeType },
-        parentNodeId: communityNode,
-        revalidate: false,
-      });
-    }
-    counts.files++;
-  }
-
-  // ── 5. Existing nodes missing their canonical note (events especially) ──────
+  // ── 4. Existing nodes missing their canonical note (events especially) ──────
   const nodes = await prisma.node.findMany({
     where: { communityId: community.id },
     select: { id: true, type: true, name: true, subtitle: true, tags: true },
   });
   for (const node of nodes) {
     if (node.type === 'community' || node.type === 'space' || node.type === 'channel') continue;
-    if (node.type === 'note' || node.type === 'file' || node.type === 'connector') continue;
+    // A connector's note came first, and any leftover note:/file: row from when
+    // those types existed has no note to write either (scripts/prune-note-file-nodes.ts).
+    if (node.type === 'connector' || node.type === 'note' || node.type === 'file') continue;
     // Counts are notes actually written — an entity that already had its note is
     // the common case, and reporting it as work done would hide what changed.
     if (!dryRun) {
@@ -175,25 +155,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
     else counts.entityNotes++;
   }
 
-  // ── 6. Retire pre-Connector-type nodes ─────────────────────────────────────
-  // connectors/<name>.md used to sync as a plain `note:` node. Now it has its
-  // own `connector:` type, so the old row would sit beside the new one drawing
-  // a duplicate. Deleting it takes its `contains`/`mentioned` edges with it
-  // (Link cascades), and step 7 immediately re-creates them off the new node.
-  const staleConnectorNotes = await prisma.node.findMany({
-    where: {
-      communityId: community.id,
-      type: 'note',
-      metadata: { path: ['notePath'], string_starts_with: 'connectors/' },
-    },
-    select: { id: true },
-  });
-  if (!dryRun && staleConnectorNotes.length > 0) {
-    await prisma.node.deleteMany({ where: { id: { in: staleConnectorNotes.map((n) => n.id) } } });
-  }
-  counts.staleConnectorNodes = staleConnectorNotes.length;
-
-  // ── 7. Note nodes + every mention edge, now that the rest of the graph exists ─
+  // ── 5. Connector nodes + every mention edge, now the rest of the graph exists ─
   if (!dryRun) {
     counts.notes = await backfillContextLinks(community.id);
   } else {
@@ -224,9 +186,8 @@ async function main() {
     const c = await backfillCommunity(community);
     console.log(
       `${community.name} (${community.id}): ` +
-        `${c.spaces} spaces, ${c.channels} channels, ${c.files} files, ${c.notes} notes, ` +
-        `${c.eventNotes} event notes, ${c.entityNotes} other entity notes` +
-        (c.staleConnectorNodes > 0 ? `, ${c.staleConnectorNodes} stale connector note-nodes retired` : ''),
+        `${c.spaces} spaces, ${c.channels} channels, ${c.notes} notes, ` +
+        `${c.eventNotes} event notes, ${c.entityNotes} other entity notes`,
     );
   }
   if (dryRun) console.log('\nNothing was written — re-run without --dry-run to apply.');

@@ -9,11 +9,14 @@
 // toolbar's star toggles, so both surfaces always agree. Nesting is shown
 // VS Code style: each level is wrapped in an indented container with a left guide
 // line so folder depth reads at a glance. The tree scrolls with its scrollbar on
-// the right (normal) edge.
+// the right (normal) edge. A Trash folder is pinned below everything: deleted
+// notes live there for a week (restore or delete-forever from the row menu)
+// before the server purges them.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import type { NoteMeta, TreeNode } from '@/lib/notes/shared/types'
+import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
+import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
@@ -35,6 +38,11 @@ const ROW_BLEED = '-ml-[999px] pl-[999px]'
 
 const ROOT_PATH = ''
 const OPEN_STORE_PREFIX = 'visvine:notes-tree-open:'
+
+// The Trash row's expansion key. Not a real brain path (a note can never live at
+// a `:` prefix — sanitizePath strips it), so it shares openPaths without ever
+// colliding with a folder.
+const TRASH_PATH = ':trash:'
 
 // Where the tree was scrolled to, per scope, kept for the lifetime of the tab.
 // The docked tree re-mounts on every navigation (each page renders its own
@@ -116,6 +124,14 @@ interface NoteSidebarProps {
   /** Scopes the persisted expand/collapse state (pass the community id). Omit to
    *  keep the state in memory only. */
   storageKey?: string | null
+  /** Soft-deleted notes for this brain, shown as a Trash folder pinned to the
+   *  bottom of the tree. Omit (or pass null) to hide the row entirely. */
+  trash?: TrashEntry[] | null
+  /** Trash row actions. Restore puts the note back at its original path;
+   *  purge/empty delete permanently, ahead of the retention window. */
+  onRestoreTrash?: (id: string) => void
+  onPurgeTrash?: (id: string) => void
+  onEmptyTrash?: () => void
   /** Note to temporarily expand the tree down to (the context search's focused
    *  match, or the note a profile page has open). Unlike a click this never
    *  changes the saved expansion — clearing it collapses the peek back to
@@ -136,6 +152,10 @@ export function NoteSidebar({
   onFolderAccess,
   onShareNote,
   onDeleteFolder,
+  trash = null,
+  onRestoreTrash,
+  onPurgeTrash,
+  onEmptyTrash,
   bare = false,
   root,
   storageKey = null,
@@ -351,8 +371,140 @@ export function NoteSidebar({
               onDeleteFolder={onDeleteFolder}
             />
           )}
+
+          {/* Trash sits at the very bottom of every brain, below the whole tree
+              — a folder-shaped row rather than a modal, so restoring reads as
+              moving a note back rather than a separate admin surface. */}
+          {trash && (
+            <TrashFolder
+              entries={trash}
+              open={effectiveOpenPaths.has(TRASH_PATH)}
+              onToggle={() => toggleFolder(TRASH_PATH, effectiveOpenPaths.has(TRASH_PATH))}
+              onRestore={onRestoreTrash}
+              onPurge={onPurgeTrash}
+              onEmpty={onEmptyTrash}
+            />
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Trash ─────────────────────────────────────────────────────────────────────
+
+/** Whole days left before the server purges an entry (0 = purges within the day). */
+function daysLeft(deletedAt: number): number {
+  const ms = deletedAt + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000 - Date.now()
+  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
+}
+
+function TrashFolder({
+  entries,
+  open,
+  onToggle,
+  onRestore,
+  onPurge,
+  onEmpty,
+}: {
+  entries: TrashEntry[]
+  open: boolean
+  onToggle: () => void
+  onRestore?: (id: string) => void
+  onPurge?: (id: string) => void
+  onEmpty?: () => void
+}) {
+  return (
+    <div className="mt-1">
+      <div className={`group/trash flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
+        <button
+          type="button"
+          aria-label={open ? 'Collapse trash' : 'Expand trash'}
+          onClick={onToggle}
+          className="shrink-0 py-1.5 pl-1 pr-0.5 text-text-secondary hover:text-text-primary"
+        >
+          <Chevron open={open} />
+        </button>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px] text-text-secondary"
+        >
+          <span className="shrink-0 text-text-muted">
+            <TrashIcon />
+          </span>
+          <span className="truncate font-medium">Trash</span>
+          {entries.length > 0 && (
+            <span className="shrink-0 text-[11px] font-semibold text-text-muted">{entries.length}</span>
+          )}
+        </button>
+        <RowMenu
+          selected={false}
+          hoverClass="group-hover/trash:opacity-100"
+          items={
+            onEmpty && entries.length > 0
+              ? [{ label: 'Empty trash', icon: <TrashIcon />, danger: true, onClick: onEmpty }]
+              : []
+          }
+        />
+      </div>
+      {open && (
+        <div className="ml-[15px] border-l border-border-default/70 pl-[2px]">
+          {entries.length === 0 ? (
+            <div className="py-1.5 pl-3 text-[13px] text-text-muted">Trash is empty.</div>
+          ) : (
+            entries.map((entry) => (
+              <TrashRow
+                key={entry.id}
+                entry={entry}
+                onRestore={onRestore}
+                onPurge={onPurge}
+              />
+            ))
+          )}
+          {entries.length > 0 && (
+            <div className="py-1 pl-3 text-[11px] text-text-muted">
+              Deleted notes are removed for good after {TRASH_RETENTION_DAYS} days.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TrashRow({
+  entry,
+  onRestore,
+  onPurge,
+}: {
+  entry: TrashEntry
+  onRestore?: (id: string) => void
+  onPurge?: (id: string) => void
+}) {
+  const left = daysLeft(entry.deletedAt)
+  return (
+    <div className={`group flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
+      {/* A trashed note has nothing to open — the row is a label, and the ⋯ menu
+          carries the only two things you can do with it. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-[15px]" title={entry.path}>
+        <span className="shrink-0 text-text-muted">
+          <FileIcon />
+        </span>
+        <span className="truncate text-text-secondary">{entry.name}</span>
+        <span className="shrink-0 text-[11px] text-text-muted">
+          {left === 0 ? 'today' : `${left}d`}
+        </span>
+      </div>
+      <RowMenu
+        selected={false}
+        items={[
+          ...(onRestore ? [{ label: 'Restore', icon: <RestoreIcon />, onClick: () => onRestore(entry.id) }] : []),
+          ...(onPurge
+            ? [{ label: 'Delete forever', icon: <TrashIcon />, danger: true, onClick: () => onPurge(entry.id) }]
+            : []),
+        ]}
+      />
     </div>
   )
 }
@@ -523,7 +675,7 @@ function FolderRow(props: {
           hoverClass="group-hover/folder:opacity-100"
           items={[
             ...(showAccess
-              ? [{ label: 'Share', icon: <ShieldIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
+              ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
             // Starring a folder stars its index note — the same note the folder
             // row opens on click, so the two always agree. No index, no star.
@@ -867,10 +1019,12 @@ function ShareIcon() {
   )
 }
 
-function ShieldIcon() {
+// Counter-clockwise arrow (lucide RotateCcw) — the trash rows' Restore action.
+function RestoreIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+      <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+      <path d="M3 3v5h5" />
     </svg>
   )
 }

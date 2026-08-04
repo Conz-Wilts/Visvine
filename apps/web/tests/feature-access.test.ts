@@ -34,20 +34,20 @@ describe('isFeatureEnabled', () => {
   });
 
   it('turns a non-core feature off when explicitly false', () => {
-    assert.equal(isFeatureEnabled({ enabled: { tasks: false } }, 'tasks'), false);
-    assert.equal(isFeatureEnabled({ enabled: { tasks: true } }, 'tasks'), true);
+    assert.equal(isFeatureEnabled({ enabled: { resources: false } }, 'resources'), false);
+    assert.equal(isFeatureEnabled({ enabled: { resources: true } }, 'resources'), true);
   });
 
   it('keeps the directory on even when the config says false', () => {
     assert.equal(isFeatureEnabled({ enabled: { directory: false } }, 'directory'), true);
   });
 
-  it('lists directory, messages, notes and events as the core features', () => {
-    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'messages', 'notes', 'events']);
+  it('lists directory, notes and events as the core features', () => {
+    assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events']);
   });
 
-  it('hides messages, notes and events from the nav rail and console toggles', () => {
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['messages', 'notes', 'events']);
+  it('hides notes and events from the nav rail and console toggles', () => {
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events']);
     // notes ("Context") is core: surfaced as the Context tab under the
     // Directory, always on, and can never be persisted off.
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);
@@ -71,9 +71,9 @@ describe('isDirectoryPrivate', () => {
 
 describe('canAccessFeature', () => {
   it('blocks a disabled feature for everyone', () => {
-    const config = { enabled: { tasks: false } };
-    assert.equal(canAccessFeature(config, 'tasks', false), false);
-    assert.equal(canAccessFeature(config, 'tasks', true), false);
+    const config = { enabled: { resources: false } };
+    assert.equal(canAccessFeature(config, 'resources', false), false);
+    assert.equal(canAccessFeature(config, 'resources', true), false);
   });
 
   it('hides a private directory from members but not admins', () => {
@@ -106,7 +106,7 @@ describe('canAccessFeature', () => {
 });
 
 describe('sortFeatureKeys', () => {
-  const NAV = ['directory', 'channels', 'tasks', 'resources'];
+  const NAV = ['directory', 'channels', 'resources'];
 
   it('leaves the registry order alone when no order is configured', () => {
     assert.deepEqual(sortFeatureKeys(null, NAV), NAV);
@@ -115,21 +115,21 @@ describe('sortFeatureKeys', () => {
   });
 
   it('applies a full configured order', () => {
-    const order = ['tasks', 'resources', 'directory', 'channels'];
+    const order = ['resources', 'directory', 'channels'];
     assert.deepEqual(sortFeatureKeys({ order }, NAV), order);
   });
 
   it('puts listed keys first and keeps the rest in registry order behind them', () => {
-    assert.deepEqual(sortFeatureKeys({ order: ['tasks'] }, NAV), [
-      'tasks', 'directory', 'channels', 'resources',
+    assert.deepEqual(sortFeatureKeys({ order: ['resources'] }, NAV), [
+      'resources', 'directory', 'channels',
     ]);
   });
 
   it('ignores ordered keys the caller did not ask for', () => {
     // `notes` is a real key but not in this (already-filtered) nav list, and
     // `bogus` is not a key at all — neither may appear in the output.
-    assert.deepEqual(sortFeatureKeys({ order: ['notes', 'bogus', 'tasks'] }, NAV), [
-      'tasks', 'directory', 'channels', 'resources',
+    assert.deepEqual(sortFeatureKeys({ order: ['notes', 'bogus', 'resources'] }, NAV), [
+      'resources', 'directory', 'channels',
     ]);
   });
 
@@ -142,7 +142,7 @@ describe('sortFeatureKeys', () => {
   it('drops a key from the output when it is filtered out upstream', () => {
     // A disabled feature never reaches sortFeatureKeys, so a stale order entry
     // for it must not resurrect it.
-    assert.deepEqual(sortFeatureKeys({ order: ['tasks', 'directory'] }, ['directory', 'channels']), [
+    assert.deepEqual(sortFeatureKeys({ order: ['resources', 'directory'] }, ['directory', 'channels']), [
       'directory', 'channels',
     ]);
   });
@@ -150,8 +150,8 @@ describe('sortFeatureKeys', () => {
 
 describe('sanitizeFeatureConfig', () => {
   it('strips core features from enabled so directory can never be persisted off', () => {
-    const out = sanitizeFeatureConfig({ enabled: { directory: false, tasks: false, notes: true } });
-    assert.deepEqual(out.enabled, { tasks: false });
+    const out = sanitizeFeatureConfig({ enabled: { directory: false, resources: false, notes: true } });
+    assert.deepEqual(out.enabled, { resources: false });
   });
 
   it('keeps directoryPrivate only when it is a boolean', () => {
@@ -162,25 +162,25 @@ describe('sanitizeFeatureConfig', () => {
   });
 
   it('drops unknown top-level keys', () => {
-    const out = sanitizeFeatureConfig({ enabled: { tasks: true }, extra: 1 } as never);
+    const out = sanitizeFeatureConfig({ enabled: { resources: true }, extra: 1 } as never);
     assert.deepEqual(Object.keys(out).sort(), ['enabled']);
   });
 
   it('keeps a valid order', () => {
-    const order = ['tasks', 'directory', 'channels'];
+    const order = ['resources', 'directory', 'channels'];
     assert.deepEqual(sanitizeFeatureConfig({ order }).order, order);
   });
 
   it('strips unknown and duplicate keys from order, keeping first occurrence', () => {
     assert.deepEqual(
-      sanitizeFeatureConfig({ order: ['tasks', 'bogus', 'tasks', 'directory'] }).order,
-      ['tasks', 'directory'],
+      sanitizeFeatureConfig({ order: ['resources', 'bogus', 'resources', 'directory'] }).order,
+      ['resources', 'directory'],
     );
   });
 
   it('omits order when it is absent, not an array, or has nothing usable left', () => {
     assert.equal('order' in sanitizeFeatureConfig({}), false);
-    assert.equal('order' in sanitizeFeatureConfig({ order: 'tasks' }), false);
+    assert.equal('order' in sanitizeFeatureConfig({ order: 'resources' }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: {} }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: [] }), false);
     assert.equal('order' in sanitizeFeatureConfig({ order: [1, null, 'bogus'] }), false);
@@ -196,24 +196,24 @@ describe('sanitizeFeatureConfig', () => {
 
   it('keeps a valid more list, dropping unknowns, duplicates and nav-hidden keys', () => {
     assert.deepEqual(
-      sanitizeFeatureConfig({ more: ['tasks', 'bogus', 'tasks', 'messages', 'resources'] }).more,
-      ['tasks', 'resources'],
+      sanitizeFeatureConfig({ more: ['resources', 'bogus', 'resources', 'notes', 'channels'] }).more,
+      ['resources', 'channels'],
     );
   });
 
   it('omits more when it is absent, not an array, or has nothing usable left', () => {
     assert.equal('more' in sanitizeFeatureConfig({}), false);
-    assert.equal('more' in sanitizeFeatureConfig({ more: 'tasks' }), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: 'resources' }), false);
     assert.equal('more' in sanitizeFeatureConfig({ more: [] }), false);
-    assert.equal('more' in sanitizeFeatureConfig({ more: [1, null, 'bogus', 'messages'] }), false);
+    assert.equal('more' in sanitizeFeatureConfig({ more: [1, null, 'bogus', 'notes'] }), false);
   });
 
   it('keeps core and disabled feature keys in more — placement, not enablement', () => {
     // A disabled tool keeps its More slot for when it's re-enabled, and core
     // `directory` may be tucked away just like any other rail item.
     assert.deepEqual(
-      sanitizeFeatureConfig({ enabled: { tasks: false }, more: ['tasks', 'directory'] }).more,
-      ['tasks', 'directory'],
+      sanitizeFeatureConfig({ enabled: { resources: false }, more: ['resources', 'directory'] }).more,
+      ['resources', 'directory'],
     );
   });
 });
@@ -226,24 +226,24 @@ describe('moreFeatureKeys', () => {
   });
 
   it('returns the configured keys, dropping unknowns, duplicates and nav-hidden keys', () => {
-    // messages and notes are nav-hidden, so neither can live in "More".
+    // events and notes are nav-hidden, so neither can live in "More".
     assert.deepEqual(
-      moreFeatureKeys({ more: ['tasks', 'bogus', 'tasks', 'messages', 'notes'] }),
-      ['tasks'],
+      moreFeatureKeys({ more: ['resources', 'bogus', 'resources', 'events', 'notes'] }),
+      ['resources'],
     );
   });
 
   it('keeps a disabled feature key — enablement is filtered by the caller', () => {
     assert.deepEqual(
-      moreFeatureKeys({ enabled: { tasks: false }, more: ['tasks'] }),
-      ['tasks'],
+      moreFeatureKeys({ enabled: { resources: false }, more: ['resources'] }),
+      ['resources'],
     );
   });
 });
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    for (const type of ['Person', 'Community', 'Event', 'Note', 'File']) {
+    for (const type of ['Person', 'Community', 'Event']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
     }
@@ -284,16 +284,16 @@ describe('adminOnlyFeatureKeys', () => {
 
   it('drops unknown, nav-hidden and repeated keys', () => {
     assert.deepEqual(
-      adminOnlyFeatureKeys({ adminOnly: ['tasks', 'tasks', 'messages', 'nope', 42 as never] }),
-      ['tasks', 'connectors'],
+      adminOnlyFeatureKeys({ adminOnly: ['resources', 'resources', 'notes', 'nope', 42 as never] }),
+      ['resources', 'connectors'],
     );
   });
 
   it('hides an admins-only tool from members, not from admins', () => {
-    const config = { adminOnly: ['tasks'] };
-    assert.equal(isFeatureAdminOnly(config, 'tasks'), true);
-    assert.equal(canAccessFeature(config, 'tasks', false), false);
-    assert.equal(canAccessFeature(config, 'tasks', true), true);
+    const config = { adminOnly: ['resources'] };
+    assert.equal(isFeatureAdminOnly(config, 'resources'), true);
+    assert.equal(canAccessFeature(config, 'resources', false), false);
+    assert.equal(canAccessFeature(config, 'resources', true), true);
     assert.equal(canAccessFeature(config, 'channels', false), true);
   });
 });
@@ -301,13 +301,13 @@ describe('adminOnlyFeatureKeys', () => {
 describe('sanitizeFeatureConfig adminOnly', () => {
   it('keeps directoryPrivate in step with adminOnly', () => {
     assert.equal(sanitizeFeatureConfig({ adminOnly: ['directory'] }).directoryPrivate, true);
-    assert.equal(sanitizeFeatureConfig({ adminOnly: ['tasks'] }).directoryPrivate, false);
+    assert.equal(sanitizeFeatureConfig({ adminOnly: ['resources'] }).directoryPrivate, false);
     // An adminOnly-less save leaves the legacy flag exactly as it was sent.
     assert.equal(sanitizeFeatureConfig({ directoryPrivate: true }).directoryPrivate, true);
   });
 
   it('reduces adminOnly to known, nav-bearing keys', () => {
-    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['tasks', 'events', 'bogus'] }).adminOnly, ['tasks']);
+    assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['resources', 'events', 'bogus'] }).adminOnly, ['resources']);
     assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
     // The always-admins-only keys are implicit — never written back to the row.
     assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['connectors'] }).adminOnly, []);
@@ -322,7 +322,7 @@ describe('featureNodeTypeNames', () => {
   });
 
   it('is empty for tools that own no node type', () => {
-    assert.deepEqual(featureNodeTypeNames('tasks'), []);
+    assert.deepEqual(featureNodeTypeNames('events'), []);
     assert.deepEqual(featureNodeTypeNames('directory'), []);
   });
 });

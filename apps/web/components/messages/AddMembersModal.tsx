@@ -6,8 +6,6 @@ import { fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Mode = 'dm' | 'group' | 'addMembers';
-
 interface UserOption {
   id: string;
   name: string;
@@ -24,67 +22,53 @@ interface DirectoryPerson {
   communityName: string | null;
 }
 
-interface NewChatModalProps {
+interface AddMembersModalProps {
   isOpen: boolean;
-  mode?: Mode;
+  /** Members already in the channel — filtered out of the picker. */
   existingMemberIds?: string[];
-  addMembersConversationId?: string;
+  conversationId?: string;
   onClose: () => void;
-  onConversationSelected: (conversationId: string) => void;
   onMembersUpdated?: () => void;
 }
 
-
 // ─── Main modal ───────────────────────────────────────────────────────────────
 
-export default function NewChatModal({
+/** Invite platform members into a channel. Directory people with no account are
+ *  listed too, with their contact details copyable for an off-platform invite. */
+export default function AddMembersModal({
   isOpen,
-  mode = 'dm',
   existingMemberIds = [],
-  addMembersConversationId,
+  conversationId,
   onClose,
-  onConversationSelected,
   onMembersUpdated,
-}: NewChatModalProps) {
-  const [activeMode, setActiveMode] = useState<Mode>(mode);
+}: AddMembersModalProps) {
   const [users, setUsers] = useState<UserOption[]>([]);
   const [directoryPeople, setDirectoryPeople] = useState<DirectoryPerson[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedDmUserId, setSelectedDmUserId] = useState<string | null>(null);
-  const [selectedGroupMembers, setSelectedGroupMembers] = useState<Set<string>>(new Set());
-  const [groupName, setGroupName] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
-  const isAddMembers = activeMode === 'addMembers';
-
-  // Users that can actually be selected (exclude already-in-group users for addMembers mode)
   const eligibleUsers = useMemo(() => {
-    if (!isAddMembers) return users;
     const existing = new Set(existingMemberIds);
     return users.filter((u) => !existing.has(u.id));
-  }, [isAddMembers, users, existingMemberIds]);
+  }, [users, existingMemberIds]);
 
   // Selected user objects for chips display
-  const selectedUserObjects = useMemo(() => {
-    const ids = activeMode === 'dm'
-      ? (selectedDmUserId ? [selectedDmUserId] : [])
-      : Array.from(selectedGroupMembers);
-    return ids.map((id) => users.find((u) => u.id === id)).filter(Boolean) as UserOption[];
-  }, [activeMode, selectedDmUserId, selectedGroupMembers, users]);
+  const selectedUserObjects = useMemo(
+    () => Array.from(selectedMembers).map((id) => users.find((u) => u.id === id)).filter(Boolean) as UserOption[],
+    [selectedMembers, users],
+  );
 
   // Reset state when modal opens
   useEffect(() => {
     if (!isOpen) return;
-    setActiveMode(mode);
-    setSelectedDmUserId(null);
-    setSelectedGroupMembers(new Set());
-    setGroupName('');
+    setSelectedMembers(new Set());
     setQuery('');
     setError(null);
-  }, [isOpen, mode]);
+  }, [isOpen]);
 
   // Fetch users with debounced query
   useEffect(() => {
@@ -112,8 +96,8 @@ export default function NewChatModal({
 
   if (!isOpen) return null;
 
-  const handleToggleGroupMember = (userId: string) => {
-    setSelectedGroupMembers((prev) => {
+  const handleToggleMember = (userId: string) => {
+    setSelectedMembers((prev) => {
       const next = new Set(prev);
       if (next.has(userId)) next.delete(userId);
       else next.add(userId);
@@ -125,32 +109,10 @@ export default function NewChatModal({
     setError(null);
     try {
       setSubmitting(true);
-
-      if (activeMode === 'dm') {
-        if (!selectedDmUserId) { setError('Select someone to message.'); return; }
-        const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/dm', 'POST', { userId: selectedDmUserId });
-        onConversationSelected(payload.conversation.id);
-        onClose();
-        return;
-      }
-
-      if (activeMode === 'group') {
-        if (!groupName.trim()) { setError('Give your group a name.'); return; }
-        if (selectedGroupMembers.size === 0) { setError('Add at least one member.'); return; }
-        const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/group', 'POST', {
-          name: groupName.trim(),
-          memberIds: Array.from(selectedGroupMembers),
-        });
-        onConversationSelected(payload.conversation.id);
-        onClose();
-        return;
-      }
-
-      // addMembers mode
-      if (!addMembersConversationId) { setError('Conversation ID is required.'); return; }
-      if (selectedGroupMembers.size === 0) { setError('Pick at least one person to add.'); return; }
-      await fetchJsonBody(`/api/messages/conversations/${addMembersConversationId}/members`, 'POST', {
-        memberIds: Array.from(selectedGroupMembers),
+      if (!conversationId) { setError('Conversation ID is required.'); return; }
+      if (selectedMembers.size === 0) { setError('Pick at least one person to add.'); return; }
+      await fetchJsonBody(`/api/messages/conversations/${conversationId}/members`, 'POST', {
+        memberIds: Array.from(selectedMembers),
       });
       onMembersUpdated?.();
       onClose();
@@ -162,28 +124,11 @@ export default function NewChatModal({
   };
 
   const handleInvite = (person: DirectoryPerson) => {
-    // Copy their contact info or a friendly invite snippet to clipboard
-    const contact = person.email ?? person.name;
-    const text = person.email
-      ? `Invite ${person.name} (${person.email}) to join the platform.`
-      : `Invite ${person.name} to join the platform.`;
-    navigator.clipboard.writeText(contact).catch(() => {});
+    // Copy their contact info so they can be invited off-platform.
+    navigator.clipboard.writeText(person.email ?? person.name).catch(() => {});
     setCopiedId(person.id);
     setTimeout(() => setCopiedId(null), 2000);
-    void text; // info available if needed for toast
   };
-
-  const submitLabel = submitting
-    ? 'Saving…'
-    : activeMode === 'dm'
-      ? 'Start conversation'
-      : activeMode === 'group'
-        ? 'Create group'
-        : 'Add members';
-
-  const canSubmit = activeMode === 'dm'
-    ? Boolean(selectedDmUserId)
-    : selectedGroupMembers.size > 0;
 
   return (
     <Modal
@@ -196,16 +141,8 @@ export default function NewChatModal({
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
           <div>
-            <h2 className="text-lg font-bold text-text-primary">
-              {isAddMembers ? 'Add members' : 'New conversation'}
-            </h2>
-            <p className="mt-0.5 text-xs text-text-muted">
-              {activeMode === 'dm'
-                ? 'Send a direct message to someone'
-                : activeMode === 'group'
-                  ? 'Create a group chat with multiple people'
-                  : 'Invite people to this group'}
-            </p>
+            <h2 className="text-lg font-bold text-text-primary">Add members</h2>
+            <p className="mt-0.5 text-xs text-text-muted">Invite people to this channel</p>
           </div>
           <button
             type="button"
@@ -218,69 +155,6 @@ export default function NewChatModal({
           </button>
         </div>
 
-        {/* Chat type selector — DM vs Group (hidden in addMembers mode) */}
-        {!isAddMembers && (
-          <div className="grid grid-cols-2 gap-3 px-5 pb-4">
-            {/* Direct message card */}
-            <button
-              type="button"
-              onClick={() => { setActiveMode('dm'); setSelectedGroupMembers(new Set()); }}
-              className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-150 ${
-                activeMode === 'dm'
-                  ? 'border-brand-green bg-brand-green/5'
-                  : 'border-border-subtle bg-surface-2 hover:border-border-default'
-              }`}
-            >
-              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${activeMode === 'dm' ? 'bg-brand-green text-white' : 'bg-gray-200 text-text-muted'}`}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${activeMode === 'dm' ? 'text-brand-green' : 'text-text-secondary'}`}>Direct</p>
-                <p className="text-[11px] text-text-muted mt-0.5">One-on-one chat</p>
-              </div>
-            </button>
-
-            {/* Group chat card */}
-            <button
-              type="button"
-              onClick={() => { setActiveMode('group'); setSelectedDmUserId(null); }}
-              className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 text-center transition-all duration-150 ${
-                activeMode === 'group'
-                  ? 'border-brand-green bg-brand-green/5'
-                  : 'border-border-subtle bg-surface-2 hover:border-border-default'
-              }`}
-            >
-              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${activeMode === 'group' ? 'bg-brand-green text-white' : 'bg-gray-200 text-text-muted'}`}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
-                </svg>
-              </div>
-              <div>
-                <p className={`text-sm font-semibold ${activeMode === 'group' ? 'text-brand-green' : 'text-text-secondary'}`}>Group</p>
-                <p className="text-[11px] text-text-muted mt-0.5">Chat with many people</p>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Group name input — only for group mode */}
-        {activeMode === 'group' && (
-          <div className="px-5 pb-3">
-            <SearchInput
-              value={groupName}
-              onChange={setGroupName}
-              placeholder="Group name…"
-              icon={
-                <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                </svg>
-              }
-            />
-          </div>
-        )}
-
         {/* Selected members chips */}
         {selectedUserObjects.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-5 pb-3">
@@ -290,10 +164,7 @@ export default function NewChatModal({
                 <span className="text-xs font-medium text-brand-green">{user.name.split(' ')[0]}</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (activeMode === 'dm') setSelectedDmUserId(null);
-                    else handleToggleGroupMember(user.id);
-                  }}
+                  onClick={() => handleToggleMember(user.id)}
                   className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-green/20 text-brand-green hover:bg-brand-green/40 transition-colors"
                 >
                   <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -352,21 +223,13 @@ export default function NewChatModal({
                 </p>
               )}
               {eligibleUsers.map((user) => {
-                const isSelectedDm = selectedDmUserId === user.id;
-                const isSelectedGroup = selectedGroupMembers.has(user.id);
-                const isSelected = activeMode === 'dm' ? isSelectedDm : isSelectedGroup;
+                const isSelected = selectedMembers.has(user.id);
 
                 return (
                   <button
                     key={user.id}
                     type="button"
-                    onClick={() => {
-                      if (activeMode === 'dm') {
-                        setSelectedDmUserId(isSelectedDm ? null : user.id);
-                      } else {
-                        handleToggleGroupMember(user.id);
-                      }
-                    }}
+                    onClick={() => handleToggleMember(user.id)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all duration-150 ${
                       isSelected ? 'bg-brand-green/8 ring-1 ring-brand-green/20' : 'hover:bg-surface-2'
                     }`}
@@ -468,10 +331,10 @@ export default function NewChatModal({
             <button
               type="button"
               onClick={() => void handleSubmit()}
-              disabled={submitting || !canSubmit}
+              disabled={submitting || selectedMembers.size === 0}
               className="flex-1 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98]"
             >
-              {submitLabel}
+              {submitting ? 'Saving…' : 'Add members'}
             </button>
           </div>
         </div>

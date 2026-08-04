@@ -18,9 +18,9 @@ import type { IdentityKind } from './match'
  * rule (website domains, no email), not a display label, and renaming it would
  * churn every stored row for nothing.
  *
- * The community's own root node is excluded: it is the workspace you are in,
+ * The community's own root node is excluded: it is the community you are in,
  * not an organisation recorded inside it, and merging those across communities
- * would collapse unrelated workspaces onto one identity.
+ * would collapse unrelated communities onto one identity.
  */
 function identityKindFor(node: { id: string; type: string; community_id?: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase()

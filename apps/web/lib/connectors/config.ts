@@ -71,6 +71,16 @@ const TIMEOUT_MAX_MS = 30_000
 const MAX_ROWS_DEFAULT = 100
 const MAX_ROWS_MAX = 1_000
 
+/**
+ * The ranges {@link parseConnectorConfig} clamps to. Exported so an editor can
+ * refuse an out-of-range value up front rather than accepting a number the note
+ * keeps and the executor quietly ignores.
+ */
+export const CONNECTOR_LIMITS = {
+  timeoutMs: { min: TIMEOUT_MIN_MS, max: TIMEOUT_MAX_MS, default: TIMEOUT_DEFAULT_MS },
+  maxRows: { min: 1, max: MAX_ROWS_MAX, default: MAX_ROWS_DEFAULT },
+} as const
+
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/
 const SECRET_REF_RE = /\{\{\s*secret:([A-Za-z0-9_]+)\s*\}\}/g
 

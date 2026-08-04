@@ -1,9 +1,10 @@
 'use client';
 
 /**
- * The page for a non-person directory node — a community record (the company,
- * startup or investor that used to be a "Group"), a space, a channel, or a
- * community-invented type.
+ * The page for a non-person directory node under one of the retired
+ * organisation id spellings (`group:`, `org:`, `organization:`, `company:`) or
+ * a legacy prefix-less directory row — plus any community-invented type that
+ * routes here.
  *
  * This is deliberately NOT a profile. It used to be `NodeProfileContent`, a
  * near-copy of the person profile: a silhouette avatar card, a "Connections"
@@ -15,9 +16,10 @@
  * a buried "Details" row to the rail.
  *
  * Person nodes keep ProfilePageContent, and events have their own dedicated
- * page. Communities land here whenever they are a RECORD — an organisation
- * inside someone else's community. The node standing for the community you are
- * in is the one exception: CommunityRoute sends it to /communities/<id>.
+ * page. `community:` nodes no longer land here at all — every one of them gets
+ * a community page, either /communities/<id> for a community that actually runs
+ * here or CommunityPageContent for a record. This page survives for the ids
+ * that predate that type.
  */
 
 import React, { useMemo, useState } from 'react';

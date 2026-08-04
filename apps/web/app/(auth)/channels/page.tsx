@@ -16,7 +16,6 @@ export default async function ChannelsPage() {
 
   return (
     <MessagesClient
-      variant="channels"
       currentUser={{
         id: user.id,
         name: user.name,

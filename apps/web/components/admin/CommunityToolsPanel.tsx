@@ -500,18 +500,18 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
       {/* No heading here — the console shell already titles the pane "Tools".
           Only the Add tool button sits above the list. */}
       <section>
-        {availableFeatures.length > 0 && (
-          <div className="mb-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => { setPickerQuery(''); setPickerOpen(true); }}
-              className="inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-            >
-              <PlusIcon />
-              Add tool
-            </button>
-          </div>
-        )}
+        {/* Always shown, even with nothing left to add — the picker says so
+            itself rather than the button vanishing. */}
+        <div className="mb-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => { setPickerQuery(''); setPickerOpen(true); }}
+            className="inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            <PlusIcon />
+            Add tool
+          </button>
+        </div>
         {/* -mt-3 cancels the first row's top padding so the gap above the list
             matches every other section, while the rows themselves stay evenly
             padded. */}
@@ -564,13 +564,19 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
         panelClassName="bg-surface-1 rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
       >
         <div className="space-y-3 p-4">
-          <SearchInput
-            value={pickerQuery}
-            onChange={setPickerQuery}
-            placeholder="Search tools…"
-            autoFocus
-          />
-          {pickerResults.length === 0 ? (
+          {availableFeatures.length > 0 && (
+            <SearchInput
+              value={pickerQuery}
+              onChange={setPickerQuery}
+              placeholder="Search tools…"
+              autoFocus
+            />
+          )}
+          {availableFeatures.length === 0 ? (
+            <p className="py-6 text-center text-sm text-text-muted">
+              Every tool is already added.
+            </p>
+          ) : pickerResults.length === 0 ? (
             <p className="py-6 text-center text-sm text-text-muted">No tools match “{pickerQuery}”.</p>
           ) : (
             <ul className="space-y-1">

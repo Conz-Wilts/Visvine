@@ -18,7 +18,7 @@
  * runs outside it and adds `scope=` to the 401 the auth wrapper emits for an
  * unauthenticated request — mcp-handler builds that header itself and omits it.
  */
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js'
+import type { AuthInfo } from '@modelcontextprotocol/server'
 import { MCP_SCOPES, scopeForTool, serializeScopes } from '@/lib/mcp/scopes'
 
 type Handler = (req: Request) => Response | Promise<Response>
