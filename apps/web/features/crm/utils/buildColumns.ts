@@ -1,5 +1,4 @@
 import { FieldDefinition } from "@/lib/schemas/crm";
-import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 
 type ColumnLayer = "public" | "private";
 
@@ -13,12 +12,13 @@ export interface ColumnDef {
   activeUserLocked?: boolean; // if true + row is active → read-only
 }
 
+/** `canManage` = the viewer holds an alias that manages the community. */
 export function buildColumns(
   fields: FieldDefinition[],
-  currentUserRole: string
+  canManage: boolean
 ): ColumnDef[] {
-  const canEditPublic = currentUserRole === "admin";
-  const canEditPrivate = currentUserRole === "admin";
+  const canEditPublic = canManage;
+  const canEditPrivate = canManage;
 
   const publicColumns: ColumnDef[] = [
     {
@@ -57,14 +57,6 @@ export function buildColumns(
       type: "badge",
       layer: "public",
       editable: false,
-    },
-    {
-      key: "role",
-      label: "Role",
-      type: "select",
-      layer: "private",
-      editable: canEditPublic,
-      options: [...COMMUNITY_ROLES],
     },
   ];
 

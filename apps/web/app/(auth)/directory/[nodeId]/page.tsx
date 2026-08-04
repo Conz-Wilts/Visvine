@@ -587,10 +587,10 @@ function EventRoute({ nodeId }: { nodeId: string }) {
  *   * The node standing for the community you are IN. `isOwnCommunityNode` spots
  *     it, and the community id comes off the NODE rather than the id string.
  *     `communityNodeId` only prefixes an id that lacks one, so a community
- *     already called `community:local-dev` has a node id identical to its
- *     community id — stripping `community:` there would 404 — while a community
- *     called `blackbird` gets the node id `community:blackbird` and does need
- *     the prefix gone. The node's own `community_id` is right in both cases.
+ *     already called `community:blackbird-ventures` has a node id identical to
+ *     its community id — stripping `community:` there would 404 — while a
+ *     community called `blackbird` gets the node id `community:blackbird` and
+ *     does need the prefix gone. The node's own `community_id` is right in both.
  *   * A record carrying `metadata.communityRef` — the field the create flow
  *     writes (createEntity, /api/nodes/search) when the thing you are recording
  *     is a community that actually runs here. Its `community_id` is the graph it

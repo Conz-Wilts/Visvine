@@ -10,10 +10,11 @@
 //
 //   2. Admin is a real human, not the @local.dev seed users. It upserts a
 //      single User row for BLACKBIRD_ADMIN_EMAIL (default connor@visvine.com)
-//      as an ACTIVE account and grants it `admin` on the community. Active +
-//      matched-by-email means the Google OAuth callback (see
+//      as an ACTIVE account and gives it the built-in Owner alias, which is
+//      what "admin" means (lib/auth.ts#isAdmin — membership has no role
+//      column). Active + matched-by-email means the Google OAuth callback (see
 //      app/api/auth/callback/google/route.ts step 7) links the real Google
-//      identity to THIS row on first login, so the admin grant carries over.
+//      identity to THIS row on first login, so ownership carries over.
 //
 //   3. Idempotent + non-destructive by default. The data transform is
 //      deterministic, so re-running is safe. On a deploy where the community
@@ -81,17 +82,26 @@ const COMM_DESC =
   'Blackbird Ventures is a leading Australian & New Zealand venture capital firm. ' +
   'This community maps its portfolio companies and the founders behind them.';
 
+// The base node type is `Community` — `Group` was renamed by migration
+// 20260803_rename_group_to_community.
 const NODE_TYPES = [
-  { icon: '👥', name: 'Group', color: '#9333ea', shape: 'square' },
+  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
+// Owner is the built-in alias whose holders manage the community; it is the
+// only definition of admin (lib/auth.ts#isAdmin), so it must be in this list
+// for the admin below to actually administer anything.
+const OWNER_ALIAS_NAME = 'Owner';
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Group' },
+  { name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
-  { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { name: 'Employee', color: '#db2777', nodeType: 'Person' },
+  { name: 'LP', color: '#d97706', nodeType: 'Person' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
+  { name: 'Fund', color: '#0f766e', nodeType: 'Community' },
 ];
 
 const SECTOR_OPTIONS = [
@@ -313,18 +323,25 @@ try {
   await client.query(
     `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, image_url, created_at)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, NOW())
+     -- node_types and community_aliases are NOT updated on conflict: the alias
+     -- list is the permission model (who owns the community, what each alias
+     -- reaches), so re-running an import must never overwrite it.
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
-       location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
-       community_aliases = EXCLUDED.community_aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       location = EXCLUDED.location, tags = EXCLUDED.tags,
+       country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
     [COMM, COMM_NAME, COMM_DESC, 'Sydney, Australia', ['VC', 'Portfolio', 'Australia', 'New Zealand'],
       JSON.stringify(NODE_TYPES), JSON.stringify(COMMUNITY_ALIASES)],
   );
   console.log(`  ✓ ${COMM}`);
 
-  // 1b. Ensure the human admin exists as an ACTIVE user + grant admin.
+  // 1b. Ensure the human admin exists as an ACTIVE user and holds Owner.
   // Active + matched-by-email means the Google OAuth callback links the real
-  // Google identity to this row on first login (see callback step 7), so the
-  // admin role carries over without a separate claim flow.
+  // Google identity to this row on first login (see callback step 7), so
+  // ownership carries over without a separate claim flow.
+  //
+  // Membership carries no role — an admin is someone holding a Person alias
+  // flagged `owner`, so the Owner user_aliases row below is what actually
+  // grants administration (lib/auth.ts#isAdmin).
   console.log('\n--- Ensuring community admin ---');
   const adminRow = await client.query(
     `INSERT INTO "user" (name, email, email_verified, is_active, created_at, updated_at)
@@ -335,12 +352,18 @@ try {
   );
   const adminId = adminRow.rows[0].id;
   await client.query(
-    `INSERT INTO user_communities (user_id, community_id, role, joined_at, private_meta)
-     VALUES ($1, $2, 'admin', NOW(), '{}'::jsonb)
-     ON CONFLICT (user_id, community_id) DO UPDATE SET role = 'admin'`,
+    `INSERT INTO user_communities (user_id, community_id, status, joined_at, private_meta)
+     VALUES ($1, $2, 'active', NOW(), '{}'::jsonb)
+     ON CONFLICT (user_id, community_id) DO UPDATE SET status = 'active'`,
     [adminId, COMM],
   );
-  console.log(`  ✓ ${ADMIN_EMAIL} (user ${adminId}) is admin of ${COMM}`);
+  await client.query(
+    `INSERT INTO user_aliases (community_id, user_id, alias_name, created_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (community_id, user_id, alias_name) DO NOTHING`,
+    [COMM, adminId, OWNER_ALIAS_NAME],
+  );
+  console.log(`  ✓ ${ADMIN_EMAIL} (user ${adminId}) holds ${OWNER_ALIAS_NAME} in ${COMM}`);
 
   // Decide whether to (re)build the node graph. Non-destructive by default: if
   // the community already has nodes and we weren't told to reseed, leave the
@@ -367,7 +390,7 @@ try {
       const col = COLUMNS[i];
       const r = await client.query(
         `INSERT INTO community_columns (community_id, column_key, column_name, column_type, options, position, node_type, created_at)
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'Group', NOW())
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'Community', NOW())
          ON CONFLICT (community_id, column_key) DO UPDATE SET column_name = EXCLUDED.column_name,
            column_type = EXCLUDED.column_type, options = EXCLUDED.options, position = EXCLUDED.position,
            node_type = EXCLUDED.node_type
@@ -412,8 +435,8 @@ try {
       };
       await client.query(
         `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
-         VALUES ($1, 'Group', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-         ON CONFLICT (id) DO UPDATE SET type = 'Group', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+         VALUES ($1, 'Community', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+         ON CONFLICT (id) DO UPDATE SET type = 'Community', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
            location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
            metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
         [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],

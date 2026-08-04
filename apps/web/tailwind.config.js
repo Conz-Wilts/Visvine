@@ -19,6 +19,9 @@ module.exports = {
         'brand-green': '#78d870',
         'brand-dark-green': '#2f7a3e',
         'brand-bg': '#ffffff',
+        // The built-in Owner alias — the one thing in People & access you cannot change.
+        'brand-gold': '#b4881b',
+        'brand-gold-soft': '#fdf6e3',
       },
       boxShadow: {
         'soft': '0 8px 24px rgba(0,0,0,0.06)',

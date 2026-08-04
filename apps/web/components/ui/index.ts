@@ -2,6 +2,7 @@ export { default as Alert } from './Alert';
 export { default as Avatar } from './Avatar';
 export { default as Badge } from './Badge';
 export { default as Button } from './Button';
+export { default as ColorPicker } from './ColorPicker';
 export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as CountryFlagIcon } from './CountryFlagIcon';
 export { default as EmptyState } from './EmptyState';

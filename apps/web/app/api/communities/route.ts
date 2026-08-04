@@ -4,6 +4,8 @@ import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
+import { OWNER_ALIAS_NAME } from '@/lib/types/context';
+import { markAccessSeeded } from '@/lib/notes/access';
 import { communityNodeId, syncEntityNodeSafe } from '@/lib/context/entityNodes';
 
 /**
@@ -51,9 +53,19 @@ export async function POST(request: NextRequest) {
           inviteToken: randomUUID(),
         },
       });
-      // Creator becomes admin of their own community.
       await tx.userCommunity.create({
-        data: { userId: session.userId, communityId: id, role: 'admin', status: 'active' },
+        data: { userId: session.userId, communityId: id, status: 'active' },
+      });
+      // Every community's Person aliases start with the built-in Owner one
+      // (the communityAliases column default). The creator holds it — otherwise
+      // nobody could ever manage the community (lib/auth.ts#isAdmin).
+      await tx.userAlias.create({
+        data: {
+          communityId: id,
+          userId: session.userId,
+          aliasName: OWNER_ALIAS_NAME,
+          addedBy: session.userId,
+        },
       });
       // Every community starts with a default space; admins can rename or delete it.
       const space = await tx.channelSpace.create({
@@ -61,6 +73,11 @@ export async function POST(request: NextRequest) {
       });
       return { community, space };
     });
+
+    // Access here is decided by aliases from the start, so there is nothing to
+    // grandfather — without this, the first brain touch would hand a root grant
+    // to every member and swamp the alias grants (lib/notes/access.ts).
+    await markAccessSeeded(id);
 
     // Give the new community its place in its own context graph: a node for the
     // community, a node for its default space, and the containment edge between

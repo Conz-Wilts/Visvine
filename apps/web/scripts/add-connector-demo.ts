@@ -13,7 +13,7 @@
  * the same way the admin console writes them.
  *
  * Usage:
- *   pnpm db:connectors:demo                      # community:local-dev
+ *   pnpm db:connectors:demo                      # community:blackbird-ventures
  *   pnpm db:connectors:demo <communityId>
  *   pnpm db:connectors:demo <communityId> --remove
  *
@@ -27,6 +27,7 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
+import { OWNER_ALIAS_NAME } from '../lib/types/context';
 import { encryptSecret } from '../lib/crypto/secrets';
 import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 
@@ -35,8 +36,8 @@ import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 const SANDBOX_KEY = process.env.CONNECTOR_SANDBOX_KEY || 'sk_sandbox_local_dev';
 
 const communityId = process.argv[2]?.startsWith('--')
-  ? 'community:local-dev'
-  : (process.argv[2] ?? 'community:local-dev');
+  ? 'community:blackbird-ventures'
+  : (process.argv[2] ?? 'community:blackbird-ventures');
 const REMOVE = process.argv.includes('--remove');
 const SHARED = 'shared';
 
@@ -146,7 +147,8 @@ explicit about columns rather than relying on the cap.
 | --- | --- |
 | \`communities\` | \`id\`, \`name\`, \`slug\`, \`personal_owner_id\` |
 | \`"user"\` | \`id\`, \`name\`, \`email\` — note the table name is a reserved word and must be quoted |
-| \`user_communities\` | \`user_id\`, \`community_id\`, \`role\` (\`admin\` / \`member\`) |
+| \`user_communities\` | \`user_id\`, \`community_id\`, \`status\` (\`active\` / \`pending\`) |
+| \`aliases\` / \`user_aliases\` | who holds what; \`aliases.owner\` = its holders manage the community |
 | \`nodes\` | \`id\`, \`community_id\`, \`type\` (\`person\`/\`group\`/\`resource\`/\`event\`…), \`name\`, \`slug\` |
 | \`links\` | \`source_id\`, \`target_id\`, \`relationship\`, \`origin\` (\`context\`/\`manual\`/\`structure\`…) |
 | \`community_notes\` | \`community_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
@@ -203,10 +205,10 @@ async function main() {
     return;
   }
 
-  // The community's first admin owns the seeded notes; fall back to any member.
+  // Someone who manages the community owns the seeded notes; else any member.
   const owner =
-    (await prisma.userCommunity.findFirst({
-      where: { communityId, role: 'admin' },
+    (await prisma.userAlias.findFirst({
+      where: { communityId, aliasName: OWNER_ALIAS_NAME },
       select: { userId: true },
     })) ?? (await prisma.userCommunity.findFirst({ where: { communityId }, select: { userId: true } }));
   if (!owner) throw new Error(`community ${communityId} has no members to attribute the notes to`);

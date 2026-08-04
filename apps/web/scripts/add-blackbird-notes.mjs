@@ -296,7 +296,7 @@ for (const key of noteworthy) founderSlugByKey.set(key, personByKey.get(key).slu
 const sectorPath = (label) => `/sectors/${slugify(label)}.md`;
 const sectorLink = (label) =>
   companiesBySector.has(label) ? link(label, sectorPath(label)) : label;
-const companyPath = (org) => `/companies/${org.slug}.md`;
+const companyPath = (org) => `/communities/${org.slug}.md`;
 const companyLink = (org) => link(org.c.name, companyPath(org));
 // Reference a company by display name (plain text if it isn't in the portfolio).
 function coLink(name) {
@@ -322,7 +322,7 @@ and New Zealand.
 
 ## Start here
 
-- ${link('Portfolio', '/companies/index.md')} — all ${orgs.length} companies, grouped by sector
+- ${link('Portfolio', '/communities/index.md')} — all ${orgs.length} companies, grouped by sector
 - ${link('Sectors', '/sectors/index.md')} — where we invest and why
 - ${link('Investment thesis', '/thesis.md')} — what we're looking for
 - ${link('Team', '/team/index.md')} — the partners and who covers what
@@ -346,23 +346,23 @@ Most of the fund is reserved for follow-on, concentrated into the breakouts.
 ${thesisSectors.map((s) => `- ${sectorLink(s)} — ${SECTOR_BLURB[s]}`).join('\n')}
 
 The full sector map lives in ${link('Sectors', '/sectors/index.md')}; the realised
-track record is in ${link('Exits', '/companies/exits.md')}, and the honest other
-side is the ${link('Graveyard', '/companies/graveyard.md')}.
+track record is in ${link('Exits', '/communities/exits.md')}, and the honest other
+side is the ${link('Graveyard', '/communities/graveyard.md')}.
 `, true);
 
-// companies/index.md (pinned) — grouped by sector
+// communities/index.md (pinned) — grouped by sector
 const portfolioBody = [];
 portfolioBody.push(`# Portfolio\n`);
-portfolioBody.push(`${orgs.length} companies across ${sectorsPresent.length} sectors. See also ${link('Exits', '/companies/exits.md')} and the ${link('Graveyard', '/companies/graveyard.md')}.\n`);
+portfolioBody.push(`${orgs.length} companies across ${sectorsPresent.length} sectors. See also ${link('Exits', '/communities/exits.md')} and the ${link('Graveyard', '/communities/graveyard.md')}.\n`);
 for (const s of sectorsPresent) {
   const list = [...companiesBySector.get(s)].sort(cmpName);
   portfolioBody.push(`## ${sectorLink(s)} (${list.length})`);
   for (const o of list) portfolioBody.push(`- ${companyLink(o)} — ${o.c.status}`);
   portfolioBody.push('');
 }
-note(shared, 'companies/index.md', { type: 'Index', title: 'Companies', tags: ['portfolio'] }, portfolioBody.join('\n'), true);
+note(shared, 'communities/index.md', { type: 'Index', title: 'Companies', tags: ['portfolio'] }, portfolioBody.join('\n'), true);
 
-// companies/<slug>.md — one per company (the directory entity note for `[[ ]]`)
+// communities/<slug>.md — one per company (the directory entity note for `[[ ]]`)
 for (const o of orgs) {
   const c = o.c;
   const facts = [
@@ -389,9 +389,9 @@ for (const o of orgs) {
   if (links.length) sections.push('', '## Links', `- ${links.join('  ·  ')}`);
 
   const exited = c.status === 'Exited' || c.status === 'IPO';
-  sections.push('', '---', `Part of ${link('Portfolio', '/companies/index.md')} · ${sectorLink(o.sector)}${exited ? ` · ${link('Exits', '/companies/exits.md')}` : ''}${c.status === 'Written Off' ? ` · ${link('Graveyard', '/companies/graveyard.md')}` : ''}`);
+  sections.push('', '---', `Part of ${link('Portfolio', '/communities/index.md')} · ${sectorLink(o.sector)}${exited ? ` · ${link('Exits', '/communities/exits.md')}` : ''}${c.status === 'Written Off' ? ` · ${link('Graveyard', '/communities/graveyard.md')}` : ''}`);
 
-  note(shared, `companies/${o.slug}.md`, {
+  note(shared, `communities/${o.slug}.md`, {
     type: 'Company', title: c.name,
     description: c.subtitle || null,
     node: `org:${o.slug}`,
@@ -399,7 +399,7 @@ for (const o of orgs) {
   }, sections.join('\n'));
 }
 
-// companies/exits.md + graveyard.md
+// communities/exits.md + graveyard.md
 // exitDetails in the research JSON is a structured object ({type, acquirer,
 // year, amount, ticker}) — render it as a short human line, never interpolate
 // the object itself (that prints "[object Object]").
@@ -416,18 +416,18 @@ function fmtExit(d) {
 }
 
 const exits = orgs.filter((o) => o.c.status === 'Exited' || o.c.status === 'IPO').sort(cmpName);
-note(shared, 'companies/exits.md', { type: 'Index', title: 'Exits', tags: ['portfolio', 'exits'] }, `
+note(shared, 'communities/exits.md', { type: 'Index', title: 'Exits', tags: ['portfolio', 'exits'] }, `
 # Exits
 
 Realised outcomes — acquisitions and public listings (${exits.length}).
 
 ${exits.map((o) => { let d = fmtExit(o.c.exitDetails); if (d && d.startsWith(o.c.status)) d = d.slice(o.c.status.length).replace(/^\s*—\s*/, '').trim() || null; return `- ${companyLink(o)} — ${o.c.status}${d ? ` · ${d}` : ''}`; }).join('\n')}
 
-Back to ${link('Portfolio', '/companies/index.md')} · ${link('Fund roll-up', '/data/fund-roll-up.md')}
+Back to ${link('Portfolio', '/communities/index.md')} · ${link('Fund roll-up', '/data/fund-roll-up.md')}
 `);
 
 const graveyard = orgs.filter((o) => o.c.status === 'Written Off').sort(cmpName);
-note(shared, 'companies/graveyard.md', { type: 'Index', title: 'Graveyard', tags: ['portfolio', 'written-off'] }, `
+note(shared, 'communities/graveyard.md', { type: 'Index', title: 'Graveyard', tags: ['portfolio', 'written-off'] }, `
 # Graveyard
 
 The companies that didn't make it (${graveyard.length}). We keep them visible —
@@ -435,7 +435,7 @@ the losses are part of the venture power-law, and there are lessons in each.
 
 ${graveyard.map((o) => `- ${companyLink(o)}`).join('\n')}
 
-Back to ${link('Portfolio', '/companies/index.md')}
+Back to ${link('Portfolio', '/communities/index.md')}
 `);
 
 // sectors/index.md + per-sector pages
@@ -456,7 +456,7 @@ for (const s of sectorsPresent) {
 
 ${SECTOR_BLURB[s]}
 
-Part of the ${link('portfolio', '/companies/index.md')}; see the ${link('thesis', '/thesis.md')}.
+Part of the ${link('portfolio', '/communities/index.md')}; see the ${link('thesis', '/thesis.md')}.
 
 ## Companies (${list.length})
 
@@ -598,7 +598,7 @@ ${sectorsPresent.map((s) => `| ${s} | ${companiesBySector.get(s).length} |`).joi
 
 ${biggest.map((o) => `- ${companyLink(o)} — ${o.c.totalRaised || fmtUsd(o.c.totalRaisedUsd)}`).join('\n')}
 
-See ${link('Exits', '/companies/exits.md')} and the ${link('Graveyard', '/companies/graveyard.md')} for realised outcomes.
+See ${link('Exits', '/communities/exits.md')} and the ${link('Graveyard', '/communities/graveyard.md')} for realised outcomes.
 `);
 
 note(shared, 'data/mark-to-market.md', { type: 'Note', title: 'Mark-to-market', tags: ['data', 'reporting'] }, `
@@ -737,11 +737,23 @@ try {
     throw new Error(`community "${COMM}" not found — run \`pnpm db:blackbird\` first`);
   }
 
+  // Whoever manages the community gets the personal brain. There is no role
+  // column — an admin is someone holding a Person alias flagged `owner` or
+  // `system` in communities.community_aliases (lib/auth.ts#isAdmin), so ask
+  // that list directly and fall back to the earliest member.
   const adminRes = await client.query(
     `SELECT u.id, u.name FROM user_communities uc
        JOIN "user" u ON u.id = uc.user_id
       WHERE uc.community_id = $1
-      ORDER BY (uc.role = 'admin') DESC, uc.joined_at ASC
+      ORDER BY EXISTS (
+        SELECT 1 FROM user_aliases ua
+          JOIN communities c ON c.id = uc.community_id
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.community_aliases, '[]'::jsonb)) AS a
+         WHERE ua.community_id = uc.community_id
+           AND ua.user_id = uc.user_id
+           AND ua.alias_name = a->>'name'
+           AND (a->>'owner' = 'true' OR a->>'system' = 'true')
+      ) DESC, uc.joined_at ASC
       LIMIT 1`,
     [COMM],
   );

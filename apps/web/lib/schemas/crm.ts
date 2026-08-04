@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { COMMUNITY_ROLES } from "@/lib/crm/roles";
 
 const FieldDefinitionSchema = z
   .object({
@@ -71,6 +70,3 @@ export const PrivateFieldPatchSchema = z.object({
   value: z.unknown(),
 });
 
-export const RolePatchSchema = z.object({
-  role: z.enum(COMMUNITY_ROLES),
-});

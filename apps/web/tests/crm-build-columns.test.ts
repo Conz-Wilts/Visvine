@@ -7,33 +7,33 @@ const sampleFields = [
   { key: "notes", label: "Notes", type: "text" as const },
 ];
 
-test("admin can edit public fields and private fields", () => {
-  const cols = buildColumns(sampleFields, "admin");
+test("a manager can edit public fields and private fields", () => {
+  const cols = buildColumns(sampleFields, true);
   const nameCol = cols.find((c) => c.key === "name");
   const leadCol = cols.find((c) => c.key === "lead_status");
   const emailCol = cols.find((c) => c.key === "email");
 
-  assert.ok(nameCol?.editable, "admin should edit name");
-  assert.ok(leadCol?.editable, "admin should edit lead_status");
+  assert.ok(nameCol?.editable, "a manager should edit name");
+  assert.ok(leadCol?.editable, "a manager should edit lead_status");
   assert.ok(!emailCol?.editable, "email should never be editable");
 });
 
-test("member cannot edit anything", () => {
-  const cols = buildColumns(sampleFields, "member");
+test("a non-manager cannot edit anything", () => {
+  const cols = buildColumns(sampleFields, false);
   for (const col of cols) {
-    assert.ok(!col.editable, `member should not edit ${col.key}`);
+    assert.ok(!col.editable, `a non-manager should not edit ${col.key}`);
   }
 });
 
 test("public columns come before private columns", () => {
-  const cols = buildColumns(sampleFields, "admin");
+  const cols = buildColumns(sampleFields, true);
   const publicIdx = cols.findIndex((c) => c.key === "name");
   const privateIdx = cols.findIndex((c) => c.key === "lead_status");
   assert.ok(publicIdx < privateIdx, "public columns should come first");
 });
 
 test("activeUserLocked is set for name and headline", () => {
-  const cols = buildColumns([], "admin");
+  const cols = buildColumns([], true);
   const nameCol = cols.find((c) => c.key === "name");
   const headlineCol = cols.find((c) => c.key === "headline");
   const emailCol = cols.find((c) => c.key === "email");

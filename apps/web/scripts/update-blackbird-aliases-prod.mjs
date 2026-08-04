@@ -26,11 +26,14 @@ import pg from 'pg';
 // Keep this array byte-for-byte in sync with COMMUNITY_ALIASES in
 // scripts/seed-blackbird-prod.mjs and scripts/add-blackbird-ventures.mjs.
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Group' },
+  { name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
-  { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { name: 'Employee', color: '#db2777', nodeType: 'Person' },
+  { name: 'LP', color: '#d97706', nodeType: 'Person' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
+  { name: 'Fund', color: '#0f766e', nodeType: 'Community' },
 ];
 
 const COMM = 'community:blackbird-ventures';

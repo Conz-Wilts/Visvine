@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import prisma from "@/lib/prisma";
 
 type RouteContext = { params: Promise<{ communityId: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(
-      session.userId,
-      session.email,
-      communityId,
-      "manage_members"
-    );
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json(
-        { error: "permission_denied" },
-        { status: 403 }
-      );
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const page = Math.max(
     1,

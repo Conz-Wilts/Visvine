@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import { parseCSV, processImport } from "@/lib/crm/importService";
 import { checkImportRateLimit } from "@/lib/crm/rateLimit";
 import { FieldDefinition } from "@/lib/schemas/crm";
@@ -12,18 +11,10 @@ const MAX_ROWS = 1000;
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "manage_members");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json({ error: "permission_denied" }, { status: 403 });
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   // Rate limit: 5 imports per hour per user/community
   const rl = checkImportRateLimit(session.userId, communityId);

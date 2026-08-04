@@ -62,9 +62,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
 
     const membership = await prisma.userCommunity.upsert({
       where: { userId_communityId: { userId: session.userId, communityId } },
-      create: { userId: session.userId, communityId, role: 'member' },
+      create: { userId: session.userId, communityId },
       update: {},
-      select: { id: true, role: true },
+      select: { id: true, status: true },
     });
 
     // Sync the user's public profile to their person node in this community
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
     // Bust the context cache so the node appears immediately
     revalidateTag('context-data-v2');
 
-    return NextResponse.json({ membership: { id: membership.id, role: membership.role } }, { status: 201 });
+    return NextResponse.json({ membership: { id: membership.id, status: membership.status } }, { status: 201 });
   } catch (err) {
     logger.error('api.community.join.failed', { err });
     return NextResponse.json({ error: 'Internal server error', detail: String(err) }, { status: 500 });

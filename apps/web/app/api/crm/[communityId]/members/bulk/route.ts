@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseBody, requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { parseBody, requireCommunityAdmin } from "@/lib/api/route";
 import { revalidateTag } from "next/cache";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { z } from "zod";
-import { COMMUNITY_ROLES } from "@/lib/crm/roles";
-import { LastAdminError, guardLastAdminThenMutate } from "@/lib/crm/lastAdminGuard";
+import { assertMembersCanLeave } from "@/lib/notes/aliases";
 import { removeMemberAccess } from "@/lib/notes/access";
 
 type RouteContext = { params: Promise<{ communityId: string }> };
@@ -19,37 +17,16 @@ const BulkActionSchema = z.discriminatedUnion("action", [
     value: z.unknown(),
   }),
   z.object({
-    action: z.literal("change_role"),
-    user_ids: z.array(z.string().min(1)).min(1).max(200),
-    role: z.enum(COMMUNITY_ROLES),
-  }),
-  z.object({
     action: z.literal("remove"),
     user_ids: z.array(z.string().min(1)).min(1).max(200),
   }),
 ]);
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(
-      session.userId,
-      session.email,
-      communityId,
-      "manage_members"
-    );
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json(
-        { error: "permission_denied" },
-        { status: 403 }
-      );
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const body = await parseBody(req, BulkActionSchema);
   if (body instanceof NextResponse) return body;
@@ -121,65 +98,23 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         } as unknown as Prisma.InputJsonObject,
       },
     });
-  } else if (data.action === "change_role") {
-    // Demotions to a non-admin role are guarded against stripping the last
-    // admin; promotions to admin leave the headcount safe so skip the guard.
-    try {
-      affected = await guardLastAdminThenMutate(
-        { communityId, userIds: data.user_ids, guard: data.role !== "admin" },
-        async (tx) => {
-          const result = await tx.userCommunity.updateMany({
-            where: { communityId, userId: { in: data.user_ids } },
-            data: { role: data.role },
-          });
-          return result.count;
-        }
-      );
-    } catch (e) {
-      if (e instanceof LastAdminError) {
-        return NextResponse.json(
-          { error: "last_admin_protected", message: "Cannot demote the last admin." },
-          { status: 409 }
-        );
-      }
-      throw e;
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        actorId: session.userId,
-        communityId,
-        action: "bulk_change_role",
-        diff: {
-          role: data.role,
-          user_ids: data.user_ids,
-          affected,
-        } as unknown as Prisma.InputJsonObject,
-      },
-    });
   } else if (data.action === "remove") {
-    // Atomic last-admin guard (see change_role above).
+    // Somebody must still be able to manage the community afterwards.
     try {
-      affected = await guardLastAdminThenMutate(
-        { communityId, userIds: data.user_ids, guard: true },
-        async (tx) => {
-          const result = await tx.userCommunity.deleteMany({
-            where: { communityId, userId: { in: data.user_ids } },
-          });
-          return result.count;
-        }
-      );
+      await assertMembersCanLeave(communityId, data.user_ids);
     } catch (e) {
-      if (e instanceof LastAdminError) {
-        return NextResponse.json(
-          { error: "last_admin_protected", message: "Cannot remove the last admin." },
-          { status: 409 }
-        );
-      }
-      throw e;
+      return NextResponse.json(
+        { error: "last_admin_protected", message: (e as Error).message },
+        { status: 409 }
+      );
     }
 
-    // Brain access leaves with them: direct grants + team memberships here.
+    const result = await prisma.userCommunity.deleteMany({
+      where: { communityId, userId: { in: data.user_ids } },
+    });
+    affected = result.count;
+
+    // Brain access leaves with them: direct grants + the aliases they held here.
     for (const userId of data.user_ids) {
       await removeMemberAccess(communityId, userId);
     }

@@ -29,6 +29,7 @@ import {
   LockOpen,
   Radio,
   Link2Off,
+  Bot,
   Check,
   ChevronDown,
 } from 'lucide-react'
@@ -52,10 +53,10 @@ import { contextKeys, invalidateContextCache } from '../lib/contextPrefetch'
 
 const PERSONAL_ID_PREFIX = 'me:'
 
-/** A person or team picked in the add-people input, waiting to be shared. */
+/** A person or alias picked in the add-people input, waiting to be shared. */
 interface PendingSubject {
-  key: string // 'user:<id>' | 'team:<id>'
-  type: 'user' | 'team'
+  key: string // 'user:<id>' | 'alias:<id>'
+  type: 'user' | 'alias'
   id: string
   name: string
   image: string | null
@@ -306,7 +307,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h4 className="mb-1 text-sm font-semibold text-text-primary">{children}</h4>
 }
 
-/** Avatar for a row: the shared square Avatar for people, a tile for teams. */
+/** Avatar for a row: the shared square Avatar for people, a tile for aliases. */
 function SubjectAvatar({
   type,
   name,
@@ -319,7 +320,7 @@ function SubjectAvatar({
   /** 'chip' for the compact pills in the add step. */
   size?: 'md' | 'chip'
 }) {
-  if (type === 'team') {
+  if (type === 'alias') {
     return (
       <span
         className={`flex shrink-0 items-center justify-center rounded-xl bg-surface-2 text-text-muted ${
@@ -453,7 +454,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   )
 
   const grant = (
-    subjectType: 'community' | 'team' | 'user',
+    subjectType: 'community' | 'alias' | 'user',
     subjectId: string,
     lvl: AccessLevelName,
   ) => notesApi.accessAction(communityId, { action: 'grant', subjectType, subjectId, path, level: lvl })
@@ -472,7 +473,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     run(async () => {
       for (const s of pending) await grant(s.type, s.id, pendingLevel)
       cancelAdd()
-    }, `Shared with ${pending.length} ${pending.length === 1 ? 'person or team' : 'people and teams'}.`)
+    }, `Shared with ${pending.length} ${pending.length === 1 ? 'person or alias' : 'people and aliases'}.`)
 
   const openRequests = useMemo(
     () => requests.filter((r) => r.status === 'pending' && r.resourcePath === path),
@@ -514,7 +515,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       },
       confirm: {
         on: { title: 'Restore inherited access?', body: `People with access to the folders above “${path}/” will be able to see inside it again.`, cta: 'Restore inheritance' },
-        off: { title: 'Limit access to this folder?', body: `Only people and teams added on “${path}/” and community admins will see inside. Everyone who reached it through a parent folder loses access.`, cta: 'Limit access' },
+        off: { title: 'Limit access to this folder?', body: `Only people and aliases added on “${path}/” and community admins will see inside. Everyone who reached it through a parent folder loses access.`, cta: 'Limit access' },
       },
     },
   }[kind]
@@ -531,6 +532,20 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
         action: 'restrict',
         folderPath: path,
         restricted: !isRestricted,
+      }),
+    )
+
+  // Locking is orthogonal to who can read: it freezes a folder against the AI
+  // maintenance passes (review fixes, reorganize, enrichment). It lives here
+  // because this panel is the one place a folder's settings are managed.
+  const isLocked = access?.locked?.includes(path) ?? false
+
+  const toggleLock = () =>
+    run(() =>
+      notesApi.accessAction(communityId, {
+        action: 'setLock',
+        folderPath: path,
+        locked: !isLocked,
       }),
     )
 
@@ -567,7 +582,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     return [...rows].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
   }, [entries, myUserId, path])
 
-  // Typeahead suggestions: members and teams matching the query, minus anyone
+  // Typeahead suggestions: members and aliases matching the query, minus anyone
   // already picked. People already on the list can be re-picked to change role,
   // but the per-row menu is the cleaner path, so we leave them out too.
   const suggestions = useMemo(() => {
@@ -577,14 +592,16 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       ...pending.map((p) => p.key),
       ...peopleEntries.map((e) => `${e.subjectType}:${e.subjectId}`),
     ])
-    const teams = access.subjects.teams
-      .filter((t) => !taken.has(`team:${t.id}`) && (!q || t.name.toLowerCase().includes(q)))
-      .map((t) => ({
-        key: `team:${t.id}`,
-        type: 'team' as const,
-        id: t.id,
-        name: t.name,
-        sub: `Team · ${t.memberCount} member${t.memberCount === 1 ? '' : 's'}`,
+    const aliases = access.subjects.aliases
+      .filter((a) => !taken.has(`alias:${a.name}`) && (!q || a.name.toLowerCase().includes(q)))
+      .map((a) => ({
+        key: `alias:${a.name}`,
+        type: 'alias' as const,
+        id: a.name,
+        name: a.name,
+        sub: a.owner
+          ? 'Alias · owns the community'
+          : `Alias · ${a.holderCount} ${a.holderCount === 1 ? 'person' : 'people'}`,
         image: null as string | null,
       }))
     const members = access.subjects.members
@@ -601,7 +618,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
         sub: m.email ?? '',
         image: m.image,
       }))
-    return [...teams, ...members].slice(0, 8)
+    return [...aliases, ...members].slice(0, 8)
   }, [access?.subjects, query, pending, peopleEntries])
 
   // The typeahead results are a popover like the role menus — same escape hatch
@@ -676,7 +693,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     </div>
   ) : (
     <>
-      {/* Add people and teams */}
+      {/* Add people and aliases */}
       {canManage && access.subjects && (
         <div
           ref={typeaheadRef}
@@ -689,7 +706,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setInputFocused(true)}
             onBlur={() => setTimeout(() => setInputFocused(false), 150)}
-            placeholder="Add people and teams"
+            placeholder="Add people and aliases"
             className="min-w-0 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
           />
         </div>
@@ -757,7 +774,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                     {isMe && <span className="font-normal text-text-muted"> (you)</span>}
                   </div>
                   <div className="truncate text-[11px] text-text-muted">
-                    {entry.subjectType === 'team' && 'Team · '}
+                    {entry.subjectType === 'alias' && 'Alias · '}
                     {direct
                       ? entry.email ?? (kind === 'note' ? 'Added on this note' : 'Added on this folder')
                       : entry.via === ''
@@ -770,7 +787,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                   levels={levels}
                   disabled={busy}
                   onLevel={(l) =>
-                    void run(() => grant(entry.subjectType as 'team' | 'user', entry.subjectId, l))
+                    void run(() => grant(entry.subjectType as 'alias' | 'user', entry.subjectId, l))
                   }
                   onRemove={direct && canManage ? () => void revokeGrants(directGrantIds) : undefined}
                 />
@@ -867,6 +884,29 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
               disabled={busy}
               aria-label={restrictRow.title}
               onChange={() => setConfirmRestrict(true)}
+              className="mr-1 shrink-0"
+            />
+          </div>
+        )}
+
+        {canManage && kind === 'folder' && path !== '' && (
+          <div className={`-mx-2 mt-0.5 ${ROW_CLASS}`}>
+            <IconTile tone="muted">
+              <Bot className="h-4 w-4" />
+            </IconTile>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-text-primary">Freeze for AI</div>
+              <div className="text-[11px] text-text-muted">
+                {isLocked
+                  ? 'On — maintenance passes leave this folder alone'
+                  : 'Off — review fixes and reorganizing may touch this folder'}
+              </div>
+            </div>
+            <Toggle
+              checked={isLocked}
+              disabled={busy}
+              aria-label="Freeze for AI"
+              onChange={toggleLock}
               className="mr-1 shrink-0"
             />
           </div>
@@ -981,7 +1021,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
           <div className="flex items-start justify-between gap-3 px-5 pt-4">
             <div className="min-w-0">
               <h3 className="truncate text-[17px] font-semibold text-text-primary">
-                {adding ? 'Share with people and teams' : `Share “${displayName}”`}
+                {adding ? 'Share with people and aliases' : `Share “${displayName}”`}
               </h3>
               {!adding && kind === 'folder' && path !== '' && (
                 <p className="truncate text-[11px] text-text-muted">{path}/</p>

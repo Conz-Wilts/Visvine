@@ -61,7 +61,11 @@ export async function resolveBrain(
   if (!community) {
     return NextResponse.json({ error: 'Unknown community' }, { status: 404 })
   }
-  const admin = await isAdmin(session.userId, communityId, session.email)
+  // A personal space's owner administers it by definition — it holds no
+  // aliases, and never will (grants don't apply there at all).
+  const admin =
+    community.personalOwnerId === session.userId ||
+    (await isAdmin(session.userId, communityId, session.email))
   const member = admin || (await isMember(session.userId, communityId))
   if (!member) {
     return NextResponse.json({ error: 'Not a member of this community' }, { status: 403 })
@@ -96,7 +100,7 @@ export async function resolvePersonalBrain(identity: {
 /**
  * The BrainPrincipal for an already-resolved brain — the explicit identity every
  * brainService call takes. Loads the caller's grant rows per call so membership,
- * team, and grant changes apply immediately; for normal communities this also
+ * alias, and grant changes apply immediately; for normal communities this also
  * seeds the grant rows on first touch (migrating a legacy registry, or
  * grandfathering current members — lib/notes/access.ts). Personal spaces are
  * never gated (OPEN_ACCESS).

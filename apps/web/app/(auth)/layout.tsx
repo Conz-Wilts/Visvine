@@ -44,7 +44,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
     <AuthLayoutClient
       initialSession={initialSession}
       initialCommunities={communities}
-      initialMemberships={memberships.map(m => ({ id: m.id, role: m.role }))}
+      initialMemberships={memberships.map(m => ({ id: m.id, isAdmin: m.isAdmin }))}
     >
       {children}
     </AuthLayoutClient>

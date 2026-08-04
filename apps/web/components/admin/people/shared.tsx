@@ -1,14 +1,15 @@
 'use client';
 
-// Shared types + small controls for the unified People & access console section
-// (PeopleAccessPanel and its tabs). The permission math is the SAME pure core
-// the server enforces (lib/notes/shared/authz.ts), so the "effective access"
-// shown per member is exactly what the brain will let them do.
+// Shared types + small controls for the three People console sections (People,
+// Aliases, Invite), which read one snapshot from PeopleDataContext. The
+// permission math is the SAME pure core the server enforces
+// (lib/notes/shared/authz.ts), so the "effective access" shown per member is
+// exactly what the brain will let them do.
 
 import { useMemo, useRef, useState } from 'react';
-import { ChevronDown, Users, UsersRound, User, FileText, Folder } from 'lucide-react';
+import { ChevronDown, Users, FileText, Folder } from 'lucide-react';
 import { useClickOutside } from '@/hooks/useClickOutside';
-import type { TeamInfo } from '@/lib/notes/teams';
+import type { AliasInfo } from '@/lib/notes/aliases';
 import type { AccessOverviewResponse } from '@/features/notes/lib/notesApi';
 import {
   ACCESS_LEVELS,
@@ -29,7 +30,8 @@ import { Button } from '@/components/ui';
 export interface CommunityMember {
   id: string;
   userId: string;
-  role: string;
+  /** The Person aliases this person holds — their entire standing here. */
+  aliases: string[];
   status: string;
   joinedAt: string;
   user: {
@@ -49,10 +51,10 @@ export interface PathOption {
   title?: string;
 }
 
-/** Everything the tabs share, loaded once by PeopleAccessPanel. */
+/** Everything the sections share, loaded once by PeopleDataProvider. */
 export interface PeopleData {
   members: CommunityMember[];
-  teams: TeamInfo[];
+  aliases: AliasInfo[];
   overview: AccessOverviewResponse | null;
   paths: PathOption[];
   /** Context access requests — own + everything an admin may resolve. */
@@ -61,6 +63,42 @@ export interface PeopleData {
   tree: TreeNode | null;
   /** Admin-set display name for the brain root (default "Community context"). */
   contextName: string;
+}
+
+/**
+ * A single alias, on or off. The only control a person's standing needs, shared
+ * by the member drawer on People and the invite form on Invite.
+ *
+ * The built-in Owner alias wears gold whichever way it is flipped, so the one
+ * thing that grants the community is never mistaken for an ordinary label.
+ */
+export function AliasToggle({ name, owner, system, on, onClick, disabled }: {
+  name: string;
+  owner: boolean;
+  system: boolean;
+  on: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const tone = system
+    ? on
+      ? 'bg-brand-gold text-white'
+      : 'bg-brand-gold-soft text-brand-gold hover:brightness-95'
+    : on
+      ? 'bg-text-primary text-surface-1'
+      : 'bg-surface-2 text-text-muted hover:text-text-primary';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-pressed={on}
+      title={owner ? `${name} — owns the community` : name}
+      className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-40 ${tone}`}
+    >
+      {name}
+    </button>
+  );
 }
 
 /** Display label for a numeric level (30 → 'Editor'). */
@@ -94,22 +132,22 @@ export function flattenTree(root: TreeNode | null): PathOption[] {
 
 /**
  * The BrainAccess a specific member holds, assembled from the admin overview:
- * community-wide grants + grants of the teams they're in + their direct grants.
+ * community-wide grants + grants of the aliases they hold + their direct grants.
  * Mirrors lib/notes/access.ts:brainAccessFor.
  */
 export function accessOfMember(
   userId: string,
-  teams: TeamInfo[],
+  aliases: AliasInfo[],
   overview: AccessOverviewResponse | null,
 ): BrainAccess {
-  const teamIds = new Set(
-    teams.filter((t) => t.members.some((m) => m.userId === userId)).map((t) => t.id),
+  const held = new Set(
+    aliases.filter((a) => a.holders.some((h) => h.userId === userId)).map((a) => a.name),
   );
   const grants = (overview?.grants ?? [])
     .filter(
       (g) =>
         g.subjectType === 'community' ||
-        (g.subjectType === 'team' && teamIds.has(g.subjectId)) ||
+        (g.subjectType === 'alias' && held.has(g.subjectId)) ||
         (g.subjectType === 'user' && g.subjectId === userId),
     )
     .map((g) => ({
@@ -126,20 +164,14 @@ export function accessOfMember(
 }
 
 /** One-line summary of what a member can effectively reach in the brain. */
-export function summarizeAccess(role: string, access: BrainAccess): string {
-  if (role === 'admin') return 'Full · admin';
+export function summarizeAccess(manages: boolean, access: BrainAccess): string {
+  if (manages) return 'Everything';
   const roots = readableRoots(access);
   if (roots.length === 0) return 'No access';
   const rootLevel = effectiveLevel(access, '');
   if (rootLevel > 0) return `${levelLabel(rootLevel)} · everywhere`;
   const top = Math.max(...roots.map((r) => effectiveLevel(access, r)));
   return `${levelLabel(top)} · ${roots.length} ${roots.length === 1 ? 'area' : 'areas'}`;
-}
-
-export function SubjectIcon({ type, className = 'h-4 w-4' }: { type: GrantSubjectType; className?: string }) {
-  if (type === 'community') return <Users className={className} />;
-  if (type === 'team') return <UsersRound className={className} />;
-  return <User className={className} />;
 }
 
 /** Compact level select for dense grant rows (upserts on change). */
@@ -270,7 +302,7 @@ function PathPicker({
 }
 
 /**
- * The per-subject grant editor shared by the member drawer and team cards:
+ * The per-subject grant editor shared by the member drawer and alias cards:
  * the subject's grants as rows (path + in-place level change / remove) plus a
  * composer to grant a new path. subjectType/subjectId pick who receives them.
  */

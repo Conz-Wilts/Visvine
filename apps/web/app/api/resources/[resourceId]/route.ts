@@ -3,6 +3,7 @@ import prisma from '@/lib/prisma';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
 import { isSuperAdmin } from '@/lib/session';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { isAdmin } from '@/lib/auth';
 
 /**
  * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
@@ -24,13 +25,13 @@ export async function GET(
 
   const membership = await prisma.userCommunity.findUnique({
     where: { userId_communityId: { userId: session.userId, communityId: resource.communityId } },
-    select: { role: true },
+    select: { id: true },
   });
   const superAdmin = isSuperAdmin(session.email);
   if (!membership && !superAdmin) {
     return forbiddenResponse();
   }
-  const role = superAdmin ? 'admin' : membership?.role ?? null;
+  const canManage = await isAdmin(session.userId, resource.communityId, session.email);
 
   // Signed URLs stored in DB expire after 15 min — regenerate from gcsPath.
   const meta = resource.metadata as Record<string, unknown> | null;
@@ -66,6 +67,6 @@ export async function GET(
         }
       : null,
     counts: { comments: _count.comments, changes: _count.changes, pendingChanges },
-    viewer: { role },
+    viewer: { canManage },
   });
 }

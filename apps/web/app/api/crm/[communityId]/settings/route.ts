@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import { CommunitySettingsSchema } from "@/lib/schemas/crm";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -8,18 +7,10 @@ import prisma from "@/lib/prisma";
 type RouteContext = { params: Promise<{ communityId: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "view_crm");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json({ error: "permission_denied" }, { status: 403 });
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const community = await prisma.community.findUnique({
     where: { id: communityId },
@@ -33,18 +24,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 export async function PUT(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "configure_fields");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json({ error: "permission_denied" }, { status: 403 });
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const body = CommunitySettingsSchema.safeParse(await req.json());
   if (!body.success)

@@ -11,13 +11,14 @@
  */
 import 'dotenv/config';
 import prisma from '../lib/prisma';
+import { OWNER_ALIAS_NAME } from '../lib/types/context';
 import { resolveBrain, principalOf } from '../lib/notes/brain';
 import { listConnectors, loadConnector, resolveSecretValues } from '../lib/connectors/service';
 import { findSecretRefs, ConnectorError } from '../lib/connectors/config';
 import { executeHttpConnector } from '../lib/connectors/http';
 import { executePostgresQuery } from '../lib/connectors/postgres';
 
-const COMMUNITY = process.argv[2] ?? 'community:local-dev';
+const COMMUNITY = process.argv[2] ?? 'community:blackbird-ventures';
 
 let pass = 0;
 let fail = 0;
@@ -28,12 +29,17 @@ function check(label: string, ok: boolean, detail: string) {
 }
 
 async function main() {
-  const admin = await prisma.userCommunity.findFirst({
-    where: { communityId: COMMUNITY, role: 'admin' },
-    select: { user: { select: { id: true, name: true, email: true } } },
+  const holder = await prisma.userAlias.findFirst({
+    where: { communityId: COMMUNITY, aliasName: OWNER_ALIAS_NAME },
+    select: { userId: true },
   });
-  if (!admin) throw new Error(`no admin in ${COMMUNITY}`);
-  const session = { userId: admin.user.id, name: admin.user.name ?? '', email: admin.user.email ?? '' };
+  if (!holder) throw new Error(`nobody manages ${COMMUNITY}`);
+  const admin = await prisma.user.findUnique({
+    where: { id: holder.userId },
+    select: { id: true, name: true, email: true },
+  });
+  if (!admin) throw new Error(`alias holder ${holder.userId} has no user row`);
+  const session = { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' };
 
   const resolved = await resolveBrain(session, COMMUNITY);
   if (resolved instanceof Response) throw new Error(`resolveBrain: ${resolved.status}`);

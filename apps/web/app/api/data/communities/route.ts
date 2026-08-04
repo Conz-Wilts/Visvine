@@ -6,6 +6,7 @@ import { isAdmin } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleCommunities } from '@/lib/communities/queries';
+import { reconcilePersonAliases } from '@/lib/notes/aliases';
 
 /**
  * GET: Fetch all communities
@@ -122,6 +123,23 @@ export async function PUT(request: NextRequest) {
       );
     }
 
+    // Person aliases ARE the permission model, so a save here can strip one
+    // that people hold and grants point at. Reconcile first: it refuses if the
+    // community would be left with nobody owning it, drops the holders and
+    // grants of every alias that disappeared, and returns the list to store —
+    // with the `owner` flags carried over, since this page cannot edit them.
+    let personAliasesToStore: CommunityAlias[];
+    try {
+      personAliasesToStore = await reconcilePersonAliases(
+        community.id,
+        ((community.communityAliases ?? []) as unknown as CommunityAlias[]),
+      );
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    }
+    const otherAliases = ((community.communityAliases ?? []) as unknown as CommunityAlias[])
+      .filter((a) => a.nodeType?.toLowerCase() !== 'person');
+
     const updated = await prisma.community.update({
       where: { id: community.id },
       data: {
@@ -133,7 +151,7 @@ export async function PUT(request: NextRequest) {
         dataFile: community.dataFile,
         imageUrl: community.imageUrl ?? null,
         nodeTypes: community.nodeTypes as object ?? null,
-        communityAliases: community.communityAliases as object ?? [],
+        communityAliases: [...otherAliases, ...personAliasesToStore] as unknown as object,
         linkTypes: community.linkTypes as object ?? null,
       },
     });

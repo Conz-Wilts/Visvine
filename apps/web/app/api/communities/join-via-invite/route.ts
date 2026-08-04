@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     await prisma.userCommunity.create({
-      data: { userId: session.userId, communityId: community.id, role: 'member', status: 'pending' },
+      data: { userId: session.userId, communityId: community.id, status: 'pending' },
     });
 
     return NextResponse.json({ status: 'pending', communityId: community.id, communityName: community.name });

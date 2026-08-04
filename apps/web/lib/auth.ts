@@ -2,11 +2,34 @@ import prisma from '@/lib/prisma';
 import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { isForeignPersonalSpace } from '@/lib/communities/personalSpace';
 import { isDirectoryPrivate } from '@/lib/featureAccess';
+import { personAliases, type CommunityAlias } from '@/lib/types/context';
 import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
- * Checks whether a user has admin access to a community.
- * Super-admins bypass the DB lookup.
+ * The names of a community's Person aliases whose holders own (manage) it.
+ * Aliases live in `Community.communityAliases`, created on the Types page — the
+ * same list that colours a person's chip in the directory.
+ */
+async function owningAliasNames(communityIds: string[]): Promise<Map<string, Set<string>>> {
+  const communities = await prisma.community.findMany({
+    where: { id: { in: communityIds } },
+    select: { id: true, communityAliases: true },
+  });
+  const out = new Map<string, Set<string>>();
+  for (const c of communities) {
+    const owning = personAliases((c.communityAliases ?? []) as unknown as CommunityAlias[])
+      .filter((a) => a.owner === true || a.system === true)
+      .map((a) => a.name);
+    out.set(c.id, new Set(owning));
+  }
+  return out;
+}
+
+/**
+ * Whether a user manages a community: they hold at least one of its Person
+ * aliases marked `owner` (always including the built-in Owner alias). That is
+ * the only definition of admin in the app — there is no role column.
+ * Super-admins (env `SUPER_ADMIN_EMAILS`) bypass the DB lookup.
  */
 export async function isAdmin(
   userId: string,
@@ -14,11 +37,37 @@ export async function isAdmin(
   email?: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId, communityId } },
-    select: { role: true },
+  const owning = (await owningAliasNames([communityId])).get(communityId);
+  if (!owning || owning.size === 0) return false;
+  const held = await prisma.userAlias.findFirst({
+    where: { userId, communityId, aliasName: { in: [...owning] } },
+    select: { id: true },
   });
-  return membership?.role === 'admin';
+  return held !== null;
+}
+
+/**
+ * The same question for many communities at once, for the session/community
+ * list endpoints that would otherwise fire one isAdmin query per membership.
+ * Super-admins get every id back.
+ */
+export async function adminCommunityIds(
+  userId: string,
+  communityIds: string[],
+  email?: string | null,
+): Promise<Set<string>> {
+  if (isSuperAdmin(email)) return new Set(communityIds);
+  if (communityIds.length === 0) return new Set();
+  const owning = await owningAliasNames(communityIds);
+  const held = await prisma.userAlias.findMany({
+    where: { userId, communityId: { in: communityIds } },
+    select: { communityId: true, aliasName: true },
+  });
+  const out = new Set<string>();
+  for (const h of held) {
+    if (owning.get(h.communityId)?.has(h.aliasName)) out.add(h.communityId);
+  }
+  return out;
 }
 
 // Re-exported so routes can import the personal-space predicate + DB guard from

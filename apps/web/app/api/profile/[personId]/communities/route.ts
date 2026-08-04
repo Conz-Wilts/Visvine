@@ -2,7 +2,7 @@
  * Profile communities API — which communities appear on a person's profile.
  *
  * GET  /api/profile/[personId]/communities
- *   Communities the person manages (role=admin — always listed) plus member
+ *   Communities the person manages (holds an alias that manages it — always listed) plus member
  *   communities they've opted into showing (UserCommunity.privateMeta.showOnProfile).
  *   The owner gets ALL their communities with visibility flags so the panel
  *   can render toggles; other viewers only get the visible ones.
@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
+import { adminCommunityIds } from '@/lib/auth';
 
 type RouteContext = { params: Promise<{ personId: string }> };
 
@@ -25,10 +26,11 @@ export interface ProfileCommunity {
   emoji: string | null;
   visibility: string;
   memberCount: number;
-  role: string;
+  /** Whether this person holds an alias that manages the community. */
+  isAdmin: boolean;
   /** Member communities only — owner has opted in to showing it. */
   showOnProfile: boolean;
-  /** admin roles are always visible; members only when opted in. */
+  /** Managed communities are always visible; the rest only when opted in. */
   visible: boolean;
 }
 
@@ -66,11 +68,15 @@ export async function GET(_req: NextRequest, context: RouteContext) {
 
   const isOwner = person.userId === session.userId;
   const rows = await loadRows(person.userId);
+  const adminIds = await adminCommunityIds(
+    person.userId,
+    rows.map((r) => r.community.id),
+  );
 
   const communities: ProfileCommunity[] = rows.map((row) => {
     const meta = (row.privateMeta ?? {}) as Record<string, unknown>;
     const showOnProfile = meta.showOnProfile === true;
-    const isAdmin = row.role === 'admin';
+    const isAdmin = adminIds.has(row.community.id);
     return {
       id: row.community.id,
       name: row.community.name,
@@ -78,7 +84,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       emoji: row.community.emoji,
       visibility: row.community.visibility,
       memberCount: row.community._count.userCommunities,
-      role: row.role,
+      isAdmin,
       showOnProfile,
       visible: isAdmin || showOnProfile,
     };

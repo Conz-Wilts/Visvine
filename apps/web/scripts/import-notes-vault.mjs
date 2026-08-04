@@ -5,8 +5,8 @@
 // in the DB (the source-of-truth markdown is in `content`).
 //
 // Usage (local only — guarded):
-//   node scripts/import-notes-vault.mjs --community community:local-dev [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
-//   pnpm db:notes-vault -- --community community:local-dev
+//   node scripts/import-notes-vault.mjs --community community:blackbird-ventures [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
+//   pnpm db:notes-vault -- --community community:blackbird-ventures
 //
 // Defaults: --scope shared. For --scope personal you must pass --owner <userId>
 // (the brain owner). created_by is resolved to a community admin if not given.
@@ -86,8 +86,22 @@ async function main() {
     }
 
     if (!createdBy) {
+      // Membership carries no role — an admin is someone holding a Person
+      // alias flagged `owner`/`system` in communities.community_aliases
+      // (lib/auth.ts#isAdmin). Prefer one of those, else the earliest member.
       const admin = await client.query(
-        `SELECT user_id FROM user_communities WHERE community_id = $1 ORDER BY (role = 'admin') DESC, joined_at ASC LIMIT 1`,
+        `SELECT uc.user_id FROM user_communities uc
+          WHERE uc.community_id = $1
+          ORDER BY EXISTS (
+            SELECT 1 FROM user_aliases ua
+              JOIN communities c ON c.id = uc.community_id
+              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.community_aliases, '[]'::jsonb)) AS a
+             WHERE ua.community_id = uc.community_id
+               AND ua.user_id = uc.user_id
+               AND ua.alias_name = a->>'name'
+               AND (a->>'owner' = 'true' OR a->>'system' = 'true')
+          ) DESC, uc.joined_at ASC
+          LIMIT 1`,
         [communityId],
       )
       createdBy = admin.rows[0]?.user_id

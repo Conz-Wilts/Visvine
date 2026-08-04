@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import { listCommunityMembers } from "@/lib/crm/memberService";
 import { MemberListQuerySchema, CreateShadowMemberSchema } from "@/lib/schemas/crm";
 import { Prisma } from "@prisma/client";
@@ -10,21 +9,10 @@ import prisma from "@/lib/prisma";
 type RouteContext = { params: Promise<{ communityId: string }> };
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "view_crm");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json(
-        { error: "permission_denied", action: e.action, required_role: e.requiredRole },
-        { status: 403 }
-      );
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const query = MemberListQuerySchema.safeParse(
     Object.fromEntries(req.nextUrl.searchParams)
@@ -43,21 +31,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "manage_members");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json(
-        { error: "permission_denied", action: e.action, required_role: e.requiredRole },
-        { status: 403 }
-      );
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const body = CreateShadowMemberSchema.safeParse(await req.json());
   if (!body.success)

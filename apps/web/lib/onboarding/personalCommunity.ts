@@ -89,10 +89,11 @@ export async function provisionPersonalCommunity(user: {
     update: { visibility: 'private' },
   })
 
-  // 2. Membership as admin (so the user can edit notes/context in their own space).
+  // 2. Membership. No alias needed: a personal space's owner administers it by
+  //    definition (lib/notes/brain.ts#resolveBrain) and grants never apply here.
   await prisma.userCommunity.upsert({
     where: { userId_communityId: { userId: user.userId, communityId } },
-    create: { userId: user.userId, communityId, role: 'admin' },
+    create: { userId: user.userId, communityId },
     update: {},
   })
 

@@ -21,5 +21,5 @@ function run(cmd, args) {
 run("docker", ["compose", "down", "-v"]);
 run("docker", ["compose", "up", "-d", "--wait"]);
 run("pnpm", ["db:migrate"]);
-run("pnpm", ["db:seed"]);
+run("pnpm", ["db:blackbird:full"]);
 console.log("Database reset and reseeded.");

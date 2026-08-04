@@ -1,6 +1,7 @@
 // Server-side only (imports prisma) — do not import from client components.
 import prisma from '@/lib/prisma';
 import { isSuperAdmin, type SessionPayload } from '@/lib/session';
+import { adminCommunityIds } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
 
 /**
@@ -98,21 +99,21 @@ export interface UserCommunityMembership {
   communityAliases: unknown;
   linkTypes: unknown;
   designConfig: unknown;
-  role: string;
+  /** Whether the user holds an alias of this community that manages it. */
+  isAdmin: boolean;
   joinedAt: string;
 }
 
 /**
  * The current user's community memberships, serialized to the exact shape
- * `GET /api/user/communities` returns (super-admins are mapped to 'admin').
+ * `GET /api/user/communities` returns. `isAdmin` is resolved in one query
+ * across every membership (lib/auth.ts#adminCommunityIds); super-admins are
+ * admins everywhere.
  */
 export async function listUserCommunities(session: SessionPayload): Promise<UserCommunityMembership[]> {
-  const superAdmin = isSuperAdmin(session.email);
-
   const memberships = await prisma.userCommunity.findMany({
     where: { userId: session.userId },
     select: {
-      role: true,
       joinedAt: true,
       community: {
         select: {
@@ -135,6 +136,12 @@ export async function listUserCommunities(session: SessionPayload): Promise<User
     orderBy: { joinedAt: 'asc' },
   });
 
+  const adminIds = await adminCommunityIds(
+    session.userId,
+    memberships.map(m => m.community.id),
+    session.email,
+  );
+
   return memberships.map(m => ({
     id: m.community.id,
     name: m.community.name,
@@ -150,7 +157,7 @@ export async function listUserCommunities(session: SessionPayload): Promise<User
     communityAliases: m.community.communityAliases,
     linkTypes: m.community.linkTypes,
     designConfig: m.community.designConfig,
-    role: superAdmin ? 'admin' : m.role,
+    isAdmin: adminIds.has(m.community.id),
     joinedAt: m.joinedAt.toISOString(),
   }));
 }

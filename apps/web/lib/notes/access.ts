@@ -23,12 +23,15 @@ import {
   type BrainAccess,
   type GrantSubjectType,
 } from './shared/authz'
+import { loadAliasSummaries, loadPersonAliases } from './aliases'
+import { holdsOwner } from './shared/aliases'
 
 const STATE_FILE = 'access-state.json'
 
 interface AccessState {
   seededAt?: number
-  seededFrom?: 'registry' | 'grandfather'
+  /** 'aliases' = born after the alias model, so nothing to grandfather. */
+  seededFrom?: 'registry' | 'grandfather' | 'aliases'
 }
 
 // Seeding runs at most once per community per process; the sidecar marker makes
@@ -55,11 +58,26 @@ export function normalizeResourcePath(input: string): string {
 // --- seeding (legacy migration / grandfathering) --------------------------------
 
 /**
+ * Mark a community's access as already established, so ensureAccessSeeded never
+ * grandfathers it. Communities born after the alias model get this at creation:
+ * their standing comes entirely from aliases, and grandfathering would hand a
+ * root grant to whoever happened to be a member on first brain touch — which
+ * would swamp every alias grant with blanket edit-everywhere.
+ */
+export async function markAccessSeeded(communityId: string): Promise<void> {
+  await writeJson(sharedBrain(communityId), STATE_FILE, {
+    seededAt: Date.now(),
+    seededFrom: 'aliases',
+  } satisfies AccessState)
+  seeded.add(communityId)
+}
+
+/**
  * Make sure a normal community's grant rows exist, exactly once:
  * - a legacy `folders.json` registry migrates via authz.migrateLegacyRegistry
  *   (member levels → grants, private folders → restricted, locks carried);
  * - a community with no registry grandfathers its CURRENT active members at the
- *   root (members edit, community admins full) — the old ensureBrainGate
+ *   root (holders of an owner alias full, everyone else edit) — the old ensureBrainGate
  *   behavior: joining later grants nothing until someone shares.
  * Personal spaces must never call this (they are never gated).
  */
@@ -97,10 +115,13 @@ export async function ensureAccessSeeded(communityId: string): Promise<void> {
     }
   } else {
     seededFrom = 'grandfather'
-    const memberships = await prisma.userCommunity.findMany({
-      where: { communityId, status: 'active' },
-      select: { userId: true, role: true },
-    })
+    const [memberships, aliases] = await Promise.all([
+      prisma.userCommunity.findMany({
+        where: { communityId, status: 'active' },
+        select: { userId: true },
+      }),
+      loadAliasSummaries(communityId),
+    ])
     if (memberships.length) {
       await prisma.brainGrant.createMany({
         data: memberships.map((m) => ({
@@ -108,7 +129,7 @@ export async function ensureAccessSeeded(communityId: string): Promise<void> {
           subjectType: 'user',
           subjectId: m.userId,
           resourcePath: '',
-          level: m.role === 'admin' ? LEVEL_FULL : LEVEL_EDIT,
+          level: holdsOwner(aliases, m.userId) ? LEVEL_FULL : LEVEL_EDIT,
           grantedBy: 'system',
         })),
         skipDuplicates: true,
@@ -145,22 +166,22 @@ async function loadFolderFlags(communityId: string): Promise<FolderFlags> {
   }
 }
 
-/** The teamIds the user belongs to inside this community. */
-async function teamIdsOf(communityId: string, userId: string): Promise<string[]> {
-  const rows = await prisma.teamMember.findMany({
-    where: { userId, team: { communityId } },
-    select: { teamId: true },
+/** The Person alias names the user holds inside this community. */
+async function aliasNamesOf(communityId: string, userId: string): Promise<string[]> {
+  const rows = await prisma.userAlias.findMany({
+    where: { userId, communityId },
+    select: { aliasName: true },
   })
-  return rows.map((r) => r.teamId)
+  return rows.map((r) => r.aliasName)
 }
 
 /**
  * The pre-scoped BrainAccess for one member: community-wide grants + their
- * teams' grants + their direct grants, plus the brain's folder boundaries.
+ * aliases' grants + their direct grants, plus the brain's folder boundaries.
  * A handful of indexed rows — this is the whole per-request cost.
  */
 export async function brainAccessFor(communityId: string, userId: string): Promise<BrainAccess> {
-  const teamIds = await teamIdsOf(communityId, userId)
+  const aliasNames = await aliasNamesOf(communityId, userId)
   const [rows, flags] = await Promise.all([
     prisma.brainGrant.findMany({
       where: {
@@ -168,7 +189,9 @@ export async function brainAccessFor(communityId: string, userId: string): Promi
         OR: [
           { subjectType: 'community' },
           { subjectType: 'user', subjectId: userId },
-          ...(teamIds.length ? [{ subjectType: 'team' as const, subjectId: { in: teamIds } }] : []),
+          ...(aliasNames.length
+            ? [{ subjectType: 'alias' as const, subjectId: { in: aliasNames } }]
+            : []),
         ],
       },
       select: { subjectType: true, subjectId: true, resourcePath: true, level: true },
@@ -227,7 +250,7 @@ export async function loadCommunityAccess(communityId: string): Promise<Communit
 export interface AccessListEntry {
   subjectType: GrantSubjectType
   subjectId: string
-  /** Display name: the community's name, the team's name, or the member's. */
+  /** Display name: the community's name, the alias's name, or the member's. */
   name: string
   email?: string
   /** Effective level from this subject's own reaching grants (max). */
@@ -256,17 +279,14 @@ export async function accessListFor(communityId: string, path: string): Promise<
     bySubject.set(key, list)
   }
 
-  const teamIds = [...bySubject.keys()]
-    .filter((k) => k.startsWith('team:'))
-    .map((k) => k.slice('team:'.length))
+  // Alias subjects are stored by NAME (they live in the community's Types
+  // config, not a table), so they need no lookup at all.
+
   const userIds = [...bySubject.keys()]
     .filter((k) => k.startsWith('user:'))
     .map((k) => k.slice('user:'.length))
-  const [community, teams, users] = await Promise.all([
+  const [community, users] = await Promise.all([
     prisma.community.findUnique({ where: { id: communityId }, select: { name: true } }),
-    teamIds.length
-      ? prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } })
-      : Promise.resolve([]),
     userIds.length
       ? prisma.user.findMany({
           where: { id: { in: userIds } },
@@ -274,7 +294,6 @@ export async function accessListFor(communityId: string, path: string): Promise<
         })
       : Promise.resolve([]),
   ])
-  const teamName = new Map(teams.map((t) => [t.id, t.name]))
   const userById = new Map(users.map((u) => [u.id, u]))
 
   const entries: AccessListEntry[] = []
@@ -285,8 +304,8 @@ export async function accessListFor(communityId: string, path: string): Promise<
     const name =
       subjectType === 'community'
         ? `Everyone in ${community?.name ?? 'this community'}`
-        : subjectType === 'team'
-          ? (teamName.get(subjectId) ?? 'Deleted team')
+        : subjectType === 'alias'
+          ? subjectId
           : (userById.get(subjectId)?.name ?? 'Former member')
     entries.push({
       subjectType,
@@ -299,8 +318,8 @@ export async function accessListFor(communityId: string, path: string): Promise<
       grants: rows.map((r) => ({ id: r.id, resourcePath: r.resourcePath, level: r.level })),
     })
   }
-  // Broadest audience first (community, teams, people), then by level desc.
-  const order: Record<GrantSubjectType, number> = { community: 0, team: 1, user: 2 }
+  // Broadest audience first (community, aliases, people), then by level desc.
+  const order: Record<GrantSubjectType, number> = { community: 0, alias: 1, user: 2 }
   return entries.sort(
     (a, b) => order[a.subjectType] - order[b.subjectType] || b.level - a.level || a.name.localeCompare(b.name),
   )
@@ -323,7 +342,7 @@ interface Actor {
 /**
  * Create or update one grant (unique per subject × resource — a re-grant is a
  * level change). Validates the subject really belongs to the community: a user
- * must be an active member, a team must be the community's. The CALLER's
+ * must be an active member, an alias must be the community's. The CALLER's
  * authority (full at the path, or community admin) is checked by the route.
  */
 export async function grantAccess(
@@ -348,12 +367,11 @@ export async function grantAccess(
       throw new Error('That person is not an active member of this community')
     }
   }
-  if (input.subjectType === 'team') {
-    const team = await prisma.team.findFirst({
-      where: { id: subjectId, communityId },
-      select: { id: true },
-    })
-    if (!team) throw new Error('Unknown team')
+  if (input.subjectType === 'alias') {
+    const known = await loadPersonAliases(communityId)
+    if (!known.some((a) => a.name === subjectId)) {
+      throw new Error(`Unknown alias "${subjectId}" — add it on the Types page first`)
+    }
   }
 
   const row = await prisma.brainGrant.upsert({
@@ -470,14 +488,13 @@ export async function setFolderLocked(
 
 /**
  * Membership-lifecycle cleanup: when someone leaves (or is removed from) a
- * community, their direct grants and team memberships there go with them —
- * community/team grants stop matching by themselves, so nothing else to sweep.
+ * community, their direct grants and the aliases they held there go with them —
+ * community/alias grants stop matching by themselves, so nothing else to sweep.
+ * The caller must have already checked `adminSurvives` for the departure.
  */
 export async function removeMemberAccess(communityId: string, userId: string): Promise<void> {
   await prisma.brainGrant.deleteMany({
     where: { communityId, subjectType: 'user', subjectId: userId },
   })
-  await prisma.teamMember.deleteMany({
-    where: { userId, team: { communityId } },
-  })
+  await prisma.userAlias.deleteMany({ where: { userId, communityId } })
 }

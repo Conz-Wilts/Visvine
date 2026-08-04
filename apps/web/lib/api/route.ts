@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import { getSession, type SessionPayload } from '@/lib/session';
+import { isAdmin } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
 // Shared plumbing for app/api route handlers: session-or-401, zod-body-or-400,
@@ -36,6 +37,24 @@ export function forbiddenResponse(message = 'Forbidden') {
 export async function requireApiSession(): Promise<SessionPayload | NextResponse> {
   const session = await getSession();
   if (!session) return unauthorizedResponse();
+  return session;
+}
+
+/**
+ * Session + community-admin gate, or 401/403. "Admin" has one definition in
+ * this app: holding a Person alias flagged `owner` (lib/auth.ts#isAdmin, super
+ * admins bypass). Membership carries no role, so there is nothing finer than
+ * this to check. Usage:
+ * `const session = await requireCommunityAdmin(communityId); if (session instanceof NextResponse) return session;`
+ */
+export async function requireCommunityAdmin(
+  communityId: string,
+): Promise<SessionPayload | NextResponse> {
+  const session = await getSession();
+  if (!session) return unauthorizedResponse();
+  if (!(await isAdmin(session.userId, communityId, session.email))) {
+    return forbiddenResponse('permission_denied');
+  }
   return session;
 }
 

@@ -5,7 +5,7 @@
 //   GET ?communityId=&path=<p>   → per-path view: the caller's effective level
 //        (canRead/canWrite/canManage), the merged who-has-access list with
 //        provenance (when readable), restricted ancestors, and — for managers —
-//        the grantable subjects (members + teams). `path` may be '' (the root).
+//        the grantable subjects (members + aliases). `path` may be '' (the root).
 //   GET ?communityId=            → overview: restricted/locked folders, whether
 //        the caller is gated out of the brain entirely, their readable roots.
 //   POST { communityId, action, ... }:
@@ -26,7 +26,7 @@ import {
   setFolderLocked,
   setFolderRestricted,
 } from '@/lib/notes/access'
-import { listTeams } from '@/lib/notes/teams'
+import { listAliases } from '@/lib/notes/aliases'
 import {
   principalCanManage,
   principalCanRead,
@@ -71,25 +71,19 @@ export async function GET(req: NextRequest) {
     let grants = null
     if (p.communityAdmin && !brain.isPersonalSpace) {
       const all = await loadCommunityAccess(brain.communityId)
-      const teamIds = [...new Set(all.grants.filter((g) => g.subjectType === 'team').map((g) => g.subjectId))]
+      // Alias grants are stored by NAME — no lookup needed.
       const userIds = [...new Set(all.grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId))]
-      const [teams, users] = await Promise.all([
-        teamIds.length
-          ? prisma.team.findMany({ where: { id: { in: teamIds } }, select: { id: true, name: true } })
-          : Promise.resolve([]),
-        userIds.length
-          ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
-          : Promise.resolve([]),
-      ])
-      const teamName = new Map(teams.map((t) => [t.id, t.name]))
+      const users = userIds.length
+        ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+        : []
       const userName = new Map(users.map((u) => [u.id, u.name]))
       grants = all.grants.map((g) => ({
         ...g,
         subjectName:
           g.subjectType === 'community'
             ? 'Everyone'
-            : g.subjectType === 'team'
-              ? (teamName.get(g.subjectId) ?? 'Deleted team')
+            : g.subjectType === 'alias'
+              ? g.subjectId
               : (userName.get(g.subjectId) ?? 'Former member'),
       }))
     }
@@ -113,13 +107,13 @@ export async function GET(req: NextRequest) {
     entries = await accessListFor(brain.communityId, path)
   }
   if (!brain.isPersonalSpace && canManage) {
-    const [members, teams] = await Promise.all([
+    const [members, aliases] = await Promise.all([
       prisma.userCommunity.findMany({
         where: { communityId: brain.communityId, status: 'active' },
         select: { userId: true, user: { select: { name: true, email: true, image: true } } },
         orderBy: { joinedAt: 'asc' },
       }),
-      listTeams(brain.communityId),
+      listAliases(brain.communityId),
     ])
     subjects = {
       members: members.map((m) => ({
@@ -128,7 +122,7 @@ export async function GET(req: NextRequest) {
         email: m.user?.email ?? null,
         image: m.user?.image ?? null,
       })),
-      teams: teams.map((t) => ({ id: t.id, name: t.name, memberCount: t.members.length })),
+      aliases: aliases.map((a) => ({ name: a.name, color: a.color, owner: a.owner, system: a.system, holderCount: a.holders.length })),
     }
   }
 
@@ -141,6 +135,7 @@ export async function GET(req: NextRequest) {
     canManage,
     myLevel: brain.isPersonalSpace ? 'full' : principalLevelName(p, path),
     restricted: brain.isPersonalSpace ? [] : visibleRestricted(p, path),
+    locked: brain.isPersonalSpace ? [] : p.access.locked,
     entries,
     subjects,
   })

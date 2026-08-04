@@ -153,16 +153,16 @@ test('the model has no deny rules: adding a grant can never remove access', () =
   }
 })
 
-// --- team and community subjects (pre-scoped, so reach is subject-agnostic) --------
+// --- alias and community subjects (pre-scoped, so reach is subject-agnostic) -------
 
-test('community, team, and user grants compose additively for one principal', () => {
+test('community, alias, and user grants compose additively for one principal', () => {
   const acc = access([
     grant('', LEVEL_VIEW, { type: 'community', id: '' }),
-    grant('teams/engineering', LEVEL_EDIT, { type: 'team', id: 't-eng' }),
+    grant('teams/engineering', LEVEL_EDIT, { type: 'alias', id: 'a-eng' }),
     grant('strategy/plan.md', LEVEL_FULL, { type: 'user', id: 'u-me' }),
   ], ['teams/engineering'])
   assert.equal(effectiveLevel(acc, 'handbook/intro.md'), LEVEL_VIEW) // community
-  assert.equal(effectiveLevel(acc, 'teams/engineering/oncall.md'), LEVEL_EDIT) // team, through the cut
+  assert.equal(effectiveLevel(acc, 'teams/engineering/oncall.md'), LEVEL_EDIT) // alias, through the cut
   assert.equal(effectiveLevel(acc, 'strategy/plan.md'), LEVEL_FULL) // direct note grant
   assert.equal(effectiveLevel(acc, 'strategy/other.md'), LEVEL_VIEW) // note grant does not spread
 })
@@ -189,14 +189,14 @@ test('isRestrictedPath and isLockedPath cover boundaries and their subtrees', ()
 
 // --- provenance and signatures ----------------------------------------------------
 
-test('winningGrant picks highest level, then deepest resource, then user > team > community', () => {
+test('winningGrant picks highest level, then deepest resource, then user > alias > community', () => {
   const cuts: string[] = []
   const g1 = grant('', LEVEL_EDIT, { type: 'community', id: '' })
-  const g2 = grant('portfolio', LEVEL_EDIT, { type: 'team', id: 't1' })
+  const g2 = grant('portfolio', LEVEL_EDIT, { type: 'alias', id: 'a1' })
   const g3 = grant('portfolio', LEVEL_EDIT, { type: 'user', id: 'u1' })
   const g4 = grant('portfolio', LEVEL_FULL, { type: 'community', id: '' })
   assert.equal(winningGrant([g1, g2], 'portfolio/x.md', cuts), g2) // deeper beats shallower
-  assert.equal(winningGrant([g2, g3], 'portfolio/x.md', cuts), g3) // user beats team
+  assert.equal(winningGrant([g2, g3], 'portfolio/x.md', cuts), g3) // user beats alias
   assert.equal(winningGrant([g3, g4], 'portfolio/x.md', cuts), g4) // level beats everything
   assert.equal(winningGrant([g1], 'unreached.md', ['unreachable']), g1)
   assert.equal(winningGrant([], 'x.md', cuts), null)

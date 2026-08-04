@@ -1,12 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
-import { assertCrmPermission, PermissionError } from '@/lib/crm/permissions';
+import { requireCommunityAdmin } from '@/lib/api/route';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ resourceId: string; changeId: string }> }) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { resourceId, changeId } = await params;
   const change = await prisma.resourceChange.findUnique({
     where: { id: changeId },
@@ -16,12 +12,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ reso
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  try {
-    await assertCrmPermission(session.userId, session.email, change.resource.communityId, 'manage_members');
-  } catch (e) {
-    if (e instanceof PermissionError) return forbiddenResponse();
-    throw e;
-  }
+  const session = await requireCommunityAdmin(change.resource.communityId);
+  if (session instanceof NextResponse) return session;
 
   const body = await req.json();
   const { status } = body;

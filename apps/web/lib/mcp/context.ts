@@ -10,6 +10,7 @@
  */
 import prisma from '@/lib/prisma'
 import type { SessionPayload } from '@/lib/session'
+import { adminCommunityIds } from '@/lib/auth'
 import {
   resolveBrain,
   resolvePersonalBrain,
@@ -102,14 +103,26 @@ export async function listMyCommunities(ctx: McpContext) {
   const rows = await prisma.userCommunity.findMany({
     where: { userId: ctx.userId, status: 'active' },
     select: {
-      role: true,
       community: { select: { id: true, name: true, personalOwnerId: true } },
     },
   })
+  const communityIds = rows.map((r) => r.community.id)
+  const [held, owns] = await Promise.all([
+    prisma.userAlias.findMany({
+      where: { userId: ctx.userId, communityId: { in: communityIds } },
+      select: { communityId: true, aliasName: true },
+    }),
+    adminCommunityIds(ctx.userId, communityIds),
+  ])
+  const aliasesByCommunity = new Map<string, string[]>()
+  for (const h of held) {
+    aliasesByCommunity.set(h.communityId, [...(aliasesByCommunity.get(h.communityId) ?? []), h.aliasName])
+  }
   return rows.map((r) => ({
     id: r.community.id,
     name: r.community.name,
-    your_role: r.role,
+    your_aliases: aliasesByCommunity.get(r.community.id) ?? [],
+    you_manage_it: owns.has(r.community.id),
     is_personal_space: r.community.personalOwnerId !== null,
   }))
 }

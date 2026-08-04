@@ -20,7 +20,7 @@ import type {
 } from '@/lib/notes/shared/brainTypes'
 import type { AccessLevelName, GrantSubjectType } from '@/lib/notes/shared/authz'
 import type { AccessListEntry } from '@/lib/notes/access'
-import type { TeamInfo, TeamRole } from '@/lib/notes/teams'
+import type { AliasInfo } from '@/lib/notes/aliases'
 import type { PublicationInfo } from '@/lib/notes/publications'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
@@ -39,10 +39,12 @@ export interface PathAccessResponse {
   canManage: boolean
   myLevel: AccessLevelName | null
   restricted: string[]
+  /** Locked (AI-frozen) folders at or under `path` — managers only. */
+  locked: string[]
   entries: AccessListEntry[] | null
   subjects: {
     members: Array<{ userId: string; name: string; email: string | null; image: string | null }>
-    teams: Array<{ id: string; name: string; memberCount: number }>
+    aliases: Array<{ name: string; color: string; owner: boolean; system: boolean; holderCount: number }>
   } | null
 }
 
@@ -250,16 +252,17 @@ export const notesApi = {
   accessAction: (c: string, input: AccessActionInput) =>
     sendJson<{ ok?: boolean }>('/api/notes/access', 'POST', { communityId: c, ...input }),
 
-  listTeams: (c: string) => getJson<{ teams: TeamInfo[] }>(`/api/teams?${qs(c)}`),
-  teamAction: (
+  listAliases: (c: string) => getJson<{ aliases: AliasInfo[] }>(`/api/aliases?${qs(c)}`),
+  aliasAction: (
     c: string,
     input:
-      | { action: 'create'; name: string; description?: string }
-      | { action: 'update'; teamId: string; name?: string; description?: string }
-      | { action: 'delete'; teamId: string }
-      | { action: 'setMember'; teamId: string; userId: string; role?: TeamRole }
-      | { action: 'removeMember'; teamId: string; userId: string },
-  ) => sendJson<{ ok?: boolean; team?: TeamInfo }>('/api/teams', 'POST', { communityId: c, ...input }),
+      | { action: 'create'; name: string; color: string }
+      | { action: 'update'; name: string; newName?: string; color?: string }
+      | { action: 'delete'; name: string }
+      | { action: 'setOwner'; name: string; owner: boolean }
+      | { action: 'addHolder'; name: string; userId: string }
+      | { action: 'removeHolder'; name: string; userId: string },
+  ) => sendJson<{ ok?: boolean }>('/api/aliases', 'POST', { communityId: c, ...input }),
 
   /** How `path` participates in publishing, from community `c`'s point of view. */
   getPublications: (c: string, path: string) =>

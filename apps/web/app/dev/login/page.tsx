@@ -23,10 +23,20 @@ export default async function DevLoginPage({
       id: true,
       name: true,
       email: true,
-      userCommunities: { select: { role: true } },
     },
     orderBy: { email: "asc" },
   });
+
+  // UserAlias carries no FK to User (the repo keeps relations off the large
+  // User model), so the aliases come back in a second query.
+  const held = await prisma.userAlias.findMany({
+    where: { userId: { in: users.map((u) => u.id) } },
+    select: { userId: true, aliasName: true },
+  });
+  const aliasNames = new Map<string, string[]>();
+  for (const h of held) {
+    aliasNames.set(h.userId, [...(aliasNames.get(h.userId) ?? []), h.aliasName]);
+  }
 
   return (
     <main style={styles.main}>
@@ -44,7 +54,7 @@ export default async function DevLoginPage({
       ) : (
         <ul style={styles.list}>
           {users.map((u) => {
-            const role = u.userCommunities[0]?.role ?? "member";
+            const aliases = aliasNames.get(u.id) ?? [];
             return (
               <li key={u.id} style={styles.item}>
                 <div style={styles.row}>
@@ -56,7 +66,7 @@ export default async function DevLoginPage({
                     <button type="submit" style={styles.button}>
                       <span style={styles.name}>{u.name}</span>
                       <span style={styles.meta}>
-                        {u.email} · {role}
+                        {u.email} · {aliases.length ? aliases.join(", ") : "no aliases"}
                       </span>
                     </button>
                   </form>

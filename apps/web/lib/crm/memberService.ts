@@ -5,7 +5,6 @@ export interface MemberRow {
   user_id: string;
   email: string;
   is_active: boolean;
-  role: string;
   joined_at: string;
   added_by: string | null;
   name: string;
@@ -18,7 +17,6 @@ export interface MemberRow {
 
 function flattenMember(row: {
   userId: string;
-  role: string;
   joinedAt: Date;
   addedBy: string | null;
   privateMeta: Prisma.JsonValue;
@@ -35,7 +33,6 @@ function flattenMember(row: {
     user_id: row.userId,
     email: row.user.email,
     is_active: row.user.isActive,
-    role: row.role,
     joined_at: row.joinedAt.toISOString(),
     added_by: row.addedBy,
     name: (meta.name as string) || row.user.name,
@@ -90,7 +87,6 @@ export async function listCommunityMembers(
         user_id: string;
         email: string;
         is_active: boolean;
-        role: string;
         joined_at: Date;
         added_by: string | null;
         private_meta: unknown;
@@ -99,7 +95,7 @@ export async function listCommunityMembers(
         public_meta: unknown;
       }>
     >`
-      SELECT uc.user_id, uc.role, uc.joined_at, uc.added_by, uc.private_meta,
+      SELECT uc.user_id, uc.joined_at, uc.added_by, uc.private_meta,
              u.email, u.is_active, u.name, u.image, u.public_meta
       FROM user_communities uc
       JOIN "user" u ON u.id = uc.user_id
@@ -124,7 +120,6 @@ export async function listCommunityMembers(
         user_id: r.user_id,
         email: r.email,
         is_active: r.is_active,
-        role: r.role,
         joined_at: r.joined_at.toISOString(),
         added_by: r.added_by,
         name: (meta.name as string) || r.name,

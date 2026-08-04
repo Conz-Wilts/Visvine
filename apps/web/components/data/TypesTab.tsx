@@ -1,166 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, aliasesForType, personAliases } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
-import { Alert } from '@/components/ui';
+import { Alert, ColorPicker } from '@/components/ui';
 import { useConsoleSave } from '@/components/console/ConsoleSaveContext';
 
-// ─── Color helpers ────────────────────────────────────────────────────────────
-
-function hexToHsl(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
-    }
-  }
-  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => {
-    const k = (n + h / 30) % 12;
-    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * color).toString(16).padStart(2, '0');
-  };
-  return `#${f(0)}${f(8)}${f(4)}`;
-}
-
-// ─── Color Picker ─────────────────────────────────────────────────────────────
-
-function ColorPicker({ color, onChange, onClose }: {
-  color: string;
-  onChange: (c: string) => void;
-  onClose: () => void;
-}) {
-  const safeHex = /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#6b7280';
-  const [h, s, l] = hexToHsl(safeHex);
-
-  const [hue, setHue] = useState(h);
-  const [sat, setSat] = useState(s);
-  const [lit, setLit] = useState(l);
-  const [hexInput, setHexInput] = useState(safeHex);
-
-  const gradientRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-
-  // Sync hex input whenever sliders change
-  useEffect(() => {
-    const next = hslToHex(hue, sat, lit);
-    setHexInput(next);
-    onChange(next);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hue, sat, lit]);
-
-  const pickFromGradient = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    const el = gradientRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    // x = saturation 0→100, y = lightness 100→0 (top=bright, bottom=dark)
-    setSat(Math.round(x * 100));
-    setLit(Math.round((1 - y) * 100));
-  }, []);
-
-  return (
-    <div
-      className="bg-surface-1 border border-border-subtle rounded-xl p-3 shadow-xl flex flex-col gap-3 w-52"
-      onClick={e => e.stopPropagation()}
-    >
-      {/* Saturation / lightness gradient box */}
-      <div
-        ref={gradientRef}
-        className="w-full h-32 rounded-lg cursor-crosshair relative select-none"
-        style={{
-          background: `
-            linear-gradient(to bottom, transparent, black),
-            linear-gradient(to right, white, hsl(${hue}, 100%, 50%))
-          `,
-        }}
-        onMouseDown={e => { dragging.current = true; pickFromGradient(e); }}
-        onMouseMove={e => { if (dragging.current) pickFromGradient(e); }}
-        onMouseUp={() => { dragging.current = false; }}
-        onMouseLeave={() => { dragging.current = false; }}
-      >
-        {/* Crosshair */}
-        <div
-          className="absolute w-3 h-3 rounded-full border-2 border-white shadow -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{
-            left: `${sat}%`,
-            top: `${100 - lit}%`,
-            background: hslToHex(hue, sat, lit),
-          }}
-        />
-      </div>
-
-      {/* Hue rainbow slider */}
-      <div className="flex items-center gap-2">
-        <div
-          className="h-3 rounded-full flex-1"
-          style={{ background: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
-        >
-          <input
-            type="range"
-            min={0} max={360}
-            value={hue}
-            onChange={e => setHue(Number(e.target.value))}
-            className="w-full h-3 opacity-0 cursor-pointer"
-            style={{ marginTop: '-0.75rem' }}
-          />
-        </div>
-        {/* Current colour preview */}
-        <div className="w-6 h-6 rounded-md border border-border-default shrink-0" style={{ background: hslToHex(hue, sat, lit) }} />
-      </div>
-
-      {/* Hex input */}
-      <div className="flex items-center gap-2 border-t border-border-subtle pt-2">
-        <span className="text-xs text-text-muted font-mono">HEX</span>
-        <input
-          className="flex-1 px-2 py-1 rounded-md border border-border-default bg-surface-2 text-xs font-mono text-text-primary focus:outline-none focus:ring-1 focus:ring-brand-green/40"
-          value={hexInput}
-          onChange={e => {
-            setHexInput(e.target.value);
-            if (/^#[0-9a-fA-F]{6}$/.test(e.target.value)) {
-              const [nh, ns, nl] = hexToHsl(e.target.value);
-              setHue(nh); setSat(ns); setLit(nl);
-            }
-          }}
-          maxLength={7}
-          spellCheck={false}
-        />
-        <button
-          type="button"
-          onClick={onClose}
-          className="text-xs text-text-muted hover:text-text-primary px-1.5 py-1 rounded hover:bg-surface-3 transition-colors"
-        >
-          Done
-        </button>
-      </div>
-    </div>
-  );
-}
+// The Person type is the one exception on this page: its aliases are the
+// permission model (holders, ownership, context grants), so they are created and
+// edited on Console → Aliases and only shown here, read-only, so the vocabulary
+// still reads as one list. Every other type's aliases are plain directory labels
+// and are edited in place.
+const PERMISSION_TYPE = 'person';
 
 // ─── Alias Pill ───────────────────────────────────────────────────────────────
 
-function AliasPill({ alias, onColorChange, onRemove, disabled }: {
+function AliasPill({ alias, readOnly, onColorChange, onRemove, disabled }: {
   alias: CommunityAlias;
+  /** Person aliases are shown but not edited here — see PERMISSION_TYPE. */
+  readOnly?: boolean;
   onColorChange: (c: string) => void;
   onRemove: () => void;
   disabled: boolean;
@@ -169,6 +29,25 @@ function AliasPill({ alias, onColorChange, onRemove, disabled }: {
   const [localColor, setLocalColor] = useState(alias.color);
 
   const commit = (c: string) => { setLocalColor(c); setShowPicker(false); onColorChange(c); };
+
+  // The built-in Owner alias is fixed the way the system link types are: it
+  // decides who manages the community (lib/auth.ts#isAdmin), so it keeps its
+  // gold and cannot be recoloured or removed here.
+  if (alias.system || readOnly) {
+    return (
+      <span
+        title={
+          alias.system
+            ? 'Built in — holders own the community. Give it out in Console → Aliases.'
+            : `${alias.name} — edit it in Console → Aliases`
+        }
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
+        style={{ background: alias.color }}
+      >
+        {alias.name}
+      </span>
+    );
+  }
 
   return (
     <div className="relative inline-flex items-center gap-1 group">
@@ -265,11 +144,13 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
 
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
+function TypeSection({ typeName, typeColor, aliases, allAliases, aliasesReadOnly, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
   typeName: string;
   typeColor: string;
   aliases: CommunityAlias[];
   allAliases: CommunityAlias[];
+  /** True for Person: its aliases are the permission model, edited on Aliases. */
+  aliasesReadOnly?: boolean;
   onAddAlias: (a: CommunityAlias) => void;
   onRemoveAlias: (name: string, nodeType: string) => void;
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
@@ -372,6 +253,7 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
                 <AliasPill
                   key={`${alias.nodeType}:${alias.name}`}
                   alias={alias}
+                  readOnly={aliasesReadOnly}
                   onColorChange={c => onUpdateAliasColor(alias.name, alias.nodeType, c)}
                   onRemove={() => onRemoveAlias(alias.name, alias.nodeType)}
                   disabled={saving}
@@ -380,8 +262,14 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, onAddAlias, onR
             </div>
           )}
 
-          {/* Add alias toggle / form */}
-          {adding ? (
+          {/* Add alias toggle / form — Person's list is owned by Console → Aliases */}
+          {aliasesReadOnly ? (
+            <p className="text-xs text-text-muted">
+              These decide what a person can do here, so they live in{' '}
+              <span className="font-medium text-text-secondary">Console → Aliases</span>, alongside
+              who holds each one and what it reaches.
+            </p>
+          ) : adding ? (
             <AddAliasRow
               nodeType={typeName}
               defaultColor={typeColor}
@@ -479,13 +367,15 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
           .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
           .map(defaultType => {
           const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
+          const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
           return (
             <TypeSection
               key={liveType.name}
               typeName={liveType.name}
               typeColor={liveType.color}
-              aliases={aliasesForType(aliases, liveType.name)}
+              aliases={isPerson ? personAliases(aliases) : aliasesForType(aliases, liveType.name)}
               allAliases={aliases}
+              aliasesReadOnly={isPerson}
               onAddAlias={handleAddAlias}
               onRemoveAlias={handleRemoveAlias}
               onUpdateAliasColor={handleUpdateAliasColor}

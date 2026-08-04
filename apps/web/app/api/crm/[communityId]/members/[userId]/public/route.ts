@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import { PublicFieldPatchSchema } from "@/lib/schemas/crm";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
@@ -9,18 +8,10 @@ import { revalidateTag } from "next/cache";
 type RouteContext = { params: Promise<{ communityId: string; userId: string }> };
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId, userId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "edit_public");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json({ error: "permission_denied" }, { status: 403 });
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target) return NextResponse.json({ error: "not_found" }, { status: 404 });

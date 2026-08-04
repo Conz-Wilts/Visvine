@@ -20,7 +20,7 @@ model Community {
   imageUrl         String?                  @map("image_url")
   nodeTypes        Json?                    @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏘️\", \"name\": \"Community\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
   emoji            String?
-  communityAliases Json?                    @default("[]") @map("community_aliases")
+  communityAliases Json?                    @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]") @map("community_aliases")
   linkTypes        Json?                    @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country          String?
   crmSettings      Json                     @default("{}") @map("crm_settings")
@@ -46,7 +46,7 @@ model Community {
   secrets          CommunitySecret[]
   noteEmbeddings   CommunityNoteEmbedding[]
   contextSources   ContextSource[]
-  teams            Team[]
+  userAliases      UserAlias[]
   brainGrants      BrainGrant[]
   accessRequests   BrainAccessRequest[]
   publicationsOut  NotePublication[]        @relation("PublicationSource")
@@ -165,40 +165,29 @@ model CommunitySecret {
   @@map("community_secrets")
 }
 
-/// A named group of members inside a community (Engineering, GTM, Board…).
-/// Deliberately NOT a permission concept by itself — it's a subject a BrainGrant
-/// can target, which keeps teams reusable for future features (mentions,
-/// channels, invites) without entangling them with access control.
-model Team {
-  id          String       @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String       @map("community_id")
-  name        String
-  description String?
-  createdBy   String       @map("created_by")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  community   Community    @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  members     TeamMember[]
-
-  @@unique([communityId, name], name: "team_identity")
-  @@index([communityId])
-  @@map("teams")
-}
-
-/// Membership of a user in a Team. `role` is 'lead' (manages the team's
-/// membership) or 'member'. Rows are deleted when the user leaves the community
+/// Which of its community's PERSON ALIASES a member holds. The aliases
+/// themselves live in `Community.communityAliases` (created on the Types page,
+/// lib/types/context.ts#CommunityAlias) — the same vocabulary that colours a
+/// person's chip in the directory IS the permission model, so `aliasName` is a
+/// name from that list, not a foreign key.
+///
+/// A person holds any number of them, with no restrictions on which. An alias
+/// marked `owner` there means its holders manage the community; the built-in
+/// Owner alias always does. Rows are deleted when the user leaves the community
 /// (lib/notes/access.ts#removeMemberAccess) — grants stop matching instantly.
-model TeamMember {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  teamId    String   @map("team_id")
-  userId    String   @map("user_id")
-  role      String   @default("member") // 'lead' | 'member'
-  addedBy   String?  @map("added_by")
-  createdAt DateTime @default(now()) @map("created_at")
-  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+model UserAlias {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  communityId String    @map("community_id")
+  userId      String    @map("user_id")
+  aliasName   String    @map("alias_name")
+  addedBy     String?   @map("added_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
-  @@unique([teamId, userId], name: "team_member_identity")
+  @@unique([communityId, userId, aliasName], name: "user_alias_identity")
   @@index([userId])
-  @@map("team_members")
+  @@index([communityId, aliasName])
+  @@map("user_aliases")
 }
 
 /// One access grant on a community's SHARED brain: *subject* gets *level* on
@@ -207,12 +196,12 @@ model TeamMember {
 /// tree from `resourcePath` ('' = brain root, a folder path at any depth, or a
 /// single note path), a restricted folder cuts inheritance at its boundary, and
 /// a member's effective level on a note is the MAX across every grant that
-/// reaches it (community-wide + their teams' + their own). Grants only ever add.
+/// reaches it (community-wide + their aliases' + their own). Grants only ever add.
 model BrainGrant {
   id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   communityId  String    @map("community_id")
-  subjectType  String    @map("subject_type") // 'community' | 'team' | 'user'
-  subjectId    String    @default("") @map("subject_id") // '' | teamId | userId
+  subjectType  String    @map("subject_type") // 'community' | 'alias' | 'user'
+  subjectId    String    @default("") @map("subject_id") // '' | Person alias name | userId
   resourcePath String    @default("") @map("resource_path") // '' = brain root
   level        Int // 10 view · 20 comment · 30 edit · 40 full
   grantedBy    String    @map("granted_by")
@@ -230,7 +219,7 @@ model BrainGrant {
 /// exist, so the denial copy never has to admit whether it does). Whoever
 /// MANAGES that path resolves it: approval writes a BrainGrant at exactly the
 /// requested path (lib/notes/accessRequests.ts). Resolved rows are kept as the
-/// audit trail behind Console → People & access → Requests.
+/// audit trail behind Console → People → Waiting.
 model BrainAccessRequest {
   id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   communityId  String    @map("community_id")
@@ -498,11 +487,12 @@ model User {
   @@map("user")
 }
 
+/// A person's membership of a community. Deliberately carries no role — what
+/// they can do comes entirely from the Aliases they hold.
 model UserCommunity {
   id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
   userId      String    @map("user_id")
   communityId String    @map("community_id")
-  role        String    @default("member")
   // "active" = full member; "pending" = requested to join via invite link, awaiting
   // admin approval in the community console.
   status      String    @default("active")
@@ -516,7 +506,6 @@ model UserCommunity {
   @@unique([userId, communityId])
   @@index([userId])
   @@index([communityId])
-  @@index([communityId, role])
   @@map("user_communities")
 }
 

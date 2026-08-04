@@ -49,12 +49,20 @@ const NODE_TYPES = [
 // `nodeType` ties an alias to a base node type. Matching is case-insensitive
 // everywhere (Types & Aliases console, directory cells, node cards), so we use
 // the canonical capitalized base-type names here.
+// Kept in step with prisma/seed.ts, which owns this list when the full stack is
+// seeded — these values only take effect when the community doesn't exist yet
+// (a standalone `pnpm db:blackbird` run), since the upsert below deliberately
+// leaves aliases alone on conflict rather than clobbering who owns what.
+const OWNER_ALIAS_NAME = 'Owner';
 const COMMUNITY_ALIASES = [
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
+  { name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
-  { name: 'LP', color: '#d97706', nodeType: 'Person' },
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { name: 'Employee', color: '#db2777', nodeType: 'Person' },
+  { name: 'LP', color: '#d97706', nodeType: 'Person' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
+  { name: 'Fund', color: '#0f766e', nodeType: 'Community' },
 ];
 
 const SECTOR_OPTIONS = [
@@ -276,9 +284,12 @@ try {
   await client.query(
     `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, image_url, created_at)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, NOW())
+     -- node_types and community_aliases are NOT updated on conflict: the alias
+     -- list is the permission model (who owns the community, what each alias
+     -- reaches), so a data re-import must never overwrite it.
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
-       location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
-       community_aliases = EXCLUDED.community_aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       location = EXCLUDED.location, tags = EXCLUDED.tags,
+       country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
     [COMM, COMM_NAME, COMM_DESC, 'Sydney, Australia', ['VC', 'Portfolio', 'Australia', 'New Zealand'],
       JSON.stringify(NODE_TYPES), JSON.stringify(COMMUNITY_ALIASES)],
   );
@@ -286,20 +297,38 @@ try {
 
   // 1b. Make the community visible to local dev users (admin@local.dev etc.) so
   // it shows up in their community list and is browsable in the UI.
-  const devUsers = await client.query(`SELECT id FROM "user" WHERE email LIKE '%@local.dev'`);
+  //
+  // Membership carries no role — what a person can do comes entirely from the
+  // aliases they hold (lib/auth.ts#isAdmin), so admin@local.dev also gets a
+  // user_aliases row for Owner. Everyone else is just an active member; the
+  // full seed (prisma/seed.ts) is what hands out the rest of the aliases.
+  const devUsers = await client.query(`SELECT id, email FROM "user" WHERE email LIKE '%@local.dev'`);
   for (const u of devUsers.rows) {
     await client.query(
-      `INSERT INTO user_communities (user_id, community_id, role, joined_at, private_meta)
-       VALUES ($1, $2, 'admin', NOW(), '{}'::jsonb)
-       ON CONFLICT (user_id, community_id) DO UPDATE SET role = 'admin'`,
+      `INSERT INTO user_communities (user_id, community_id, status, joined_at, private_meta)
+       VALUES ($1, $2, 'active', NOW(), '{}'::jsonb)
+       ON CONFLICT (user_id, community_id) DO UPDATE SET status = 'active'`,
       [u.id, COMM],
+    );
+  }
+  const owner =
+    devUsers.rows.find((u) => u.email === 'admin@local.dev') ?? devUsers.rows[0] ?? null;
+  if (owner) {
+    await client.query(
+      `INSERT INTO user_aliases (community_id, user_id, alias_name, created_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (community_id, user_id, alias_name) DO NOTHING`,
+      [COMM, owner.id, OWNER_ALIAS_NAME],
     );
   }
   await client.query(
     `UPDATE communities SET member_count = (SELECT COUNT(*) FROM user_communities WHERE community_id = $1) WHERE id = $1`,
     [COMM],
   );
-  console.log(`  ✓ ${devUsers.rowCount} local dev user(s) added as admin`);
+  console.log(
+    `  ✓ ${devUsers.rowCount} local dev user(s) joined` +
+      (owner ? `, ${owner.email} holds ${OWNER_ALIAS_NAME}` : ''),
+  );
 
   // 2. CRM columns (before values so column_id exists). DB defaults the uuid id.
   console.log('\n--- Upserting CRM columns ---');
@@ -318,9 +347,15 @@ try {
     console.log(`  ✓ ${col.key.padEnd(14)} (${col.type})`);
   }
 
-  // Clear this community's existing nodes first so re-runs (and any id-scheme
-  // change) don't leave orphans. Cascades to links + community_column_values.
-  const cleared = await client.query('DELETE FROM nodes WHERE community_id = $1', [COMM]);
+  // Clear this community's existing portfolio nodes first so re-runs (and any
+  // id-scheme change) don't leave orphans. Cascades to links +
+  // community_column_values. The `anchor` nodes from prisma/seed.ts are the
+  // dev users' own person nodes and are left alone — they have Person rows
+  // pointing at them, so deleting them would strand a profile.
+  const cleared = await client.query(
+    `DELETE FROM nodes WHERE community_id = $1 AND COALESCE(metadata->>'anchor', 'false') <> 'true'`,
+    [COMM],
+  );
   console.log(`\n--- Cleared ${cleared.rowCount} existing node(s) for a clean rebuild ---`);
 
   // 3. Organization (company) nodes

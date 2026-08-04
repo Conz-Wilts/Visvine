@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireApiSession } from "@/lib/api/route";
-import { assertCrmPermission, PermissionError } from "@/lib/crm/permissions";
+import { requireCommunityAdmin } from "@/lib/api/route";
 import { listCommunityMembers, MemberRow } from "@/lib/crm/memberService";
 import { FieldDefinition } from "@/lib/schemas/crm";
 import { MemberListQuerySchema } from "@/lib/schemas/crm";
@@ -18,18 +17,10 @@ function escapeCSV(value: unknown): string {
 }
 
 export async function GET(req: NextRequest, { params }: RouteContext) {
-  const session = await requireApiSession();
-  if (session instanceof NextResponse) return session;
-
   const { communityId } = await params;
 
-  try {
-    await assertCrmPermission(session.userId, session.email, communityId, "view_crm");
-  } catch (e) {
-    if (e instanceof PermissionError)
-      return NextResponse.json({ error: "permission_denied" }, { status: 403 });
-    throw e;
-  }
+  const session = await requireCommunityAdmin(communityId);
+  if (session instanceof NextResponse) return session;
 
   const query = MemberListQuerySchema.safeParse({
     ...Object.fromEntries(req.nextUrl.searchParams),
@@ -60,7 +51,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     page++;
   }
 
-  const publicHeaders = ["email", "name", "headline", "bio", "location", "status", "role", "joined_at"];
+  const publicHeaders = ["email", "name", "headline", "bio", "location", "status", "joined_at"];
   const privateHeaders = privateFields.map((f) => f.key);
   const headers = [...publicHeaders, ...privateHeaders];
 
@@ -74,7 +65,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         m.bio ?? "",
         m.location ?? "",
         m.is_active ? "active" : "shadow",
-        m.role,
         m.joined_at,
       ].map(escapeCSV);
 

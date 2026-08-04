@@ -19,10 +19,13 @@ if (!connectionString) throw new Error('add-test-communities: no DATABASE_URL or
 
 const pool = new pg.Pool({ connectionString });
 
-// The two seeded /dev/login users (see prisma/seed.ts).
+// The seeded /dev/login users (see prisma/seed.ts). Membership carries no role;
+// `owner` marks who also gets the Owner alias here, which is what makes someone
+// an admin (lib/auth.ts#isAdmin).
+const OWNER_ALIAS_NAME = 'Owner';
 const ANCHORS = [
-  { id: 'user_dev_admin', role: 'admin' },
-  { id: 'user_dev_member', role: 'member' },
+  { id: 'user_dev_admin', owner: true },
+  { id: 'user_dev_member', owner: false },
 ];
 
 const COMMUNITIES = [
@@ -55,12 +58,24 @@ try {
     for (const a of ANCHORS) {
       await client.query(
         `
-        INSERT INTO user_communities (user_id, community_id, role, joined_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_communities (user_id, community_id, status, joined_at)
+        VALUES ($1, $2, 'active', NOW())
         ON CONFLICT (user_id, community_id) DO NOTHING
         `,
-        [a.id, c.id, a.role],
+        [a.id, c.id],
       );
+      if (a.owner) {
+        // The schema default for community_aliases already carries the built-in
+        // Owner alias, so holding it here is enough to manage the community.
+        await client.query(
+          `
+          INSERT INTO user_aliases (community_id, user_id, alias_name, created_at)
+          VALUES ($1, $2, $3, NOW())
+          ON CONFLICT (community_id, user_id, alias_name) DO NOTHING
+          `,
+          [c.id, a.id, OWNER_ALIAS_NAME],
+        );
+      }
     }
     console.log(`  ✓ ${c.name}`);
   }

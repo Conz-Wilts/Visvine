@@ -10,6 +10,7 @@ import { isSuperAdmin } from '@/lib/session';
 import { requireApiSession, handleApiError } from '@/lib/api/route';
 import { getEventsData } from '@/lib/eventRepo';
 import { normalizeStatus, isEventPast } from '@/lib/eventUtils';
+import { personAliases, type CommunityAlias } from '@/lib/types/context';
 
 export async function GET(
   _req: NextRequest,
@@ -25,16 +26,28 @@ export async function GET(
       select: {
         id: true, name: true, description: true, location: true, country: true,
         tags: true, imageUrl: true, emoji: true, nodeTypes: true, createdAt: true,
+        communityAliases: true,
       },
     });
     if (!community) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const membership = await prisma.userCommunity.findUnique({
-      where: { userId_communityId: { userId: session.userId, communityId } },
-      select: { role: true },
-    });
-    const role = isSuperAdmin(session.email) ? 'admin' : membership?.role ?? null;
-    const isMember = role !== null;
+    const [membership, adminIds] = await Promise.all([
+      prisma.userCommunity.findUnique({
+        where: { userId_communityId: { userId: session.userId, communityId } },
+        select: { id: true },
+      }),
+      // Who "organizes" this community = who holds a Person alias that owns it.
+      prisma.userAlias.findMany({ where: { communityId }, select: { userId: true, aliasName: true } }),
+    ]);
+    const owning = new Set(
+      personAliases((community.communityAliases ?? []) as unknown as CommunityAlias[])
+        .filter((a) => a.owner === true || a.system === true)
+        .map((a) => a.name),
+    );
+    const organizerIds = new Set(
+      adminIds.filter((a) => owning.has(a.aliasName)).map((a) => a.userId),
+    );
+    const isMember = membership !== null || isSuperAdmin(session.email);
 
     const [memberTotal, nodeCount, resourceCount, memberships, latestResources] =
       await Promise.all([
@@ -63,10 +76,10 @@ export async function GET(
       image: m.user.person?.imageUrl ?? m.user.image,
       subtitle: m.user.person?.subtitle ?? null,
       personId: m.user.person?.id ?? null,
-      role: m.role,
+      isAdmin: organizerIds.has(m.userId),
       joinedAt: m.joinedAt.toISOString(),
     });
-    const organizers = memberships.filter((m) => m.role === 'admin').map(toMember);
+    const organizers = memberships.filter((m) => organizerIds.has(m.userId)).map(toMember);
     const members = isMember ? memberships.map(toMember) : [];
 
     // Events live in the node context; reuse the event repo rather than re-deriving
@@ -99,7 +112,7 @@ export async function GET(
 
     return NextResponse.json({
       community: { ...community, createdAt: community.createdAt.toISOString(), memberCount: memberTotal },
-      viewer: { role },
+      viewer: { isMember, isAdmin: organizerIds.has(session.userId) },
       counts: {
         members: memberTotal,
         nodes: nodeCount,

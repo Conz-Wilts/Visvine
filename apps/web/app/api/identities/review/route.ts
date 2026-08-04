@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { isAdmin, isSuperAdmin } from '@/lib/auth';
+import { adminCommunityIds, isAdmin, isSuperAdmin } from '@/lib/auth';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { listSuggestions, mergeIdentities, splitNodeToNewIdentity } from '@/lib/identity/steward';
 import { confirmIdentity, rejectIdentityMatch } from '@/lib/identity/resolve';
@@ -28,11 +28,19 @@ export async function GET() {
 
     let communityIds: string[] | null = null;
     if (!isSuperAdmin(session.email)) {
+      // The communities this user manages = those where they hold an alias
+      // marked `owner` (lib/notes/shared/aliases.ts).
       const memberships = await prisma.userCommunity.findMany({
-        where: { userId: session.userId, role: 'admin' },
+        where: { userId: session.userId },
         select: { communityId: true },
       });
-      communityIds = memberships.map((m) => m.communityId);
+      communityIds = [
+        ...(await adminCommunityIds(
+          session.userId,
+          memberships.map((m) => m.communityId),
+          session.email,
+        )),
+      ];
       if (communityIds.length === 0) return NextResponse.json({ suggestions: [] });
     }
 

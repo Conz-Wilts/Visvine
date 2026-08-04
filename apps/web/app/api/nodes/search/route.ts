@@ -165,8 +165,16 @@ export async function GET(req: NextRequest) {
     const privateDirectoryClause = isSuperAdmin(session.email)
       ? Prisma.empty
       : Prisma.sql` AND (c.id IS NULL OR c.feature_config->>'directoryPrivate' IS DISTINCT FROM 'true' OR EXISTS (
-          SELECT 1 FROM user_communities uc
-          WHERE uc.community_id = c.id AND uc.user_id = ${session.userId} AND uc.role = 'admin'
+          -- Owns the community = holds a Person alias flagged owner (or the
+          -- built-in "Owner") in communities.community_aliases.
+          SELECT 1 FROM user_aliases ua
+          WHERE ua.community_id = c.id AND ua.user_id = ${session.userId}
+            AND (ua.alias_name = 'Owner' OR EXISTS (
+              SELECT 1 FROM jsonb_array_elements(c.community_aliases::jsonb) al
+              WHERE al->>'name' = ua.alias_name
+                AND lower(al->>'nodeType') = 'person'
+                AND (al->>'owner')::boolean IS TRUE
+            ))
         ))`;
     // A PRIVATE community is hidden from everyone who isn't in it — and that has
     // to cover its contents, not just its name. Its people, organisations and

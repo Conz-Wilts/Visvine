@@ -84,11 +84,43 @@ export interface ContextData {
   links: NBLink[];
 }
 
-// A named alias with a display color, scoped to a specific node type within a community
+// A named alias with a display color, scoped to a specific node type within a
+// community. Created on the Types page — and for the Person type they are also
+// the community's PERMISSION model: a member holds any number of their Person
+// aliases (UserAlias rows), `owner` says holders manage the community, and a
+// BrainGrant with subjectType 'alias' targets one by name. So "Engineering" is
+// one thing: a chip in the directory and a set of permissions.
 export interface CommunityAlias {
   name: string;    // e.g. "Founder"
   color: string;   // Hex color e.g. "#16a34a"
-  nodeType: string; // e.g. "Person", "Organization"
+  nodeType: string; // e.g. "Person", "Community"
+  // --- Person aliases only ---------------------------------------------------
+  /** Holders manage the community (lib/auth.ts#isAdmin). */
+  owner?: boolean;
+  /** The built-in Owner alias — like the system link types, it can't be removed
+   *  or recoloured, and it always owns the community. */
+  system?: boolean;
+}
+
+/** The built-in Person alias every community has. Gold, fixed, always owns. */
+export const OWNER_ALIAS_NAME = 'Owner';
+export const OWNER_ALIAS: CommunityAlias = {
+  name: OWNER_ALIAS_NAME,
+  color: '#b4881b',
+  nodeType: 'Person',
+  owner: true,
+  system: true,
+};
+
+/**
+ * A community's Person aliases — its permission vocabulary. The built-in Owner
+ * alias is grafted in first whether or not it is stored, so a community can
+ * never present itself as having nothing that owns it.
+ */
+export function personAliases(aliases: CommunityAlias[] | undefined): CommunityAlias[] {
+  const stored = aliasesForType(aliases, 'Person').filter((a) => a.name !== OWNER_ALIAS_NAME);
+  const owner = aliasesForType(aliases, 'Person').find((a) => a.name === OWNER_ALIAS_NAME);
+  return [{ ...OWNER_ALIAS, ...owner, owner: true, system: true }, ...stored];
 }
 
 // A community-configurable relationship (edge) type — mirrors NodeTypeConfig.

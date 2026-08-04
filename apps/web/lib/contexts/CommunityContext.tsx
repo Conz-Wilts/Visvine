@@ -32,7 +32,7 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
 /** Minimal membership shape needed to hydrate the provider server-side. */
 export interface InitialMembership {
   id: string;
-  role: string;
+  isAdmin: boolean;
 }
 
 interface CommunityProviderProps {
@@ -50,9 +50,10 @@ interface CommunityProviderProps {
 export function CommunityProvider({ children, initialCommunities, initialMemberships }: CommunityProviderProps) {
   const hasInitialData = initialCommunities !== undefined && initialMemberships !== undefined;
   const [communities, setCommunities] = useState<Community[]>(initialCommunities ?? []);
-  // Map of communityId → role for the current user
-  const [membershipRoles, setMembershipRoles] = useState<Map<string, string>>(
-    () => new Map((initialMemberships ?? []).map(m => [m.id, m.role]))
+  // communityId → whether the user manages it (holds an alias marked `admin`
+  // there). Membership is the key's presence; standing is the value.
+  const [memberships, setMemberships] = useState<Map<string, boolean>>(
+    () => new Map((initialMemberships ?? []).map(m => [m.id, m.isAdmin]))
   );
   const [currentCommunityId, setCurrentCommunityId] = useState<string | null>(null);
   const [loading, setLoading] = useState(!hasInitialData);
@@ -77,11 +78,11 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
     const res = await fetch('/api/user/communities');
     if (!res.ok) return; // unauthenticated — leave empty
     const data = await res.json();
-    const roles = new Map<string, string>();
+    const next = new Map<string, boolean>();
     for (const c of (data.communities || [])) {
-      roles.set(c.id, c.role);
+      next.set(c.id, c.isAdmin === true);
     }
-    setMembershipRoles(roles);
+    setMemberships(next);
   }, []);
 
   useEffect(() => {
@@ -116,24 +117,24 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
       const data = await res.json().catch(() => ({}));
       throw new Error(data.detail || data.error || 'Failed to join community');
     }
-    setMembershipRoles(prev => new Map(prev).set(communityId, 'member'));
+    setMemberships(prev => new Map(prev).set(communityId, false));
   }, []);
 
   const leaveCommunity = useCallback(async (communityId: string) => {
     const res = await fetch(`/api/communities/${communityId}/join`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to leave community');
-    setMembershipRoles(prev => {
+    setMemberships(prev => {
       const next = new Map(prev);
       next.delete(communityId);
       return next;
     });
     if (currentCommunityId === communityId) {
-      const remaining = Array.from(membershipRoles.keys()).filter(id => id !== communityId);
+      const remaining = Array.from(memberships.keys()).filter(id => id !== communityId);
       const next = remaining[0] ?? null;
       setCurrentCommunityId(next);
       try { if (next) localStorage.setItem(CURRENT_COMMUNITY_KEY, next); else localStorage.removeItem(CURRENT_COMMUNITY_KEY); } catch {}
     }
-  }, [currentCommunityId, membershipRoles]);
+  }, [currentCommunityId, memberships]);
 
   const refreshCommunity = useCallback(async () => {
     await Promise.all([loadAllCommunities(), loadUserCommunities()]);
@@ -142,9 +143,9 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
   const joinedCommunities = useMemo(
     () =>
       communities
-        .filter(c => membershipRoles.has(c.id))
+        .filter(c => memberships.has(c.id))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [communities, membershipRoles]
+    [communities, memberships]
   );
 
   // Use the stored selection when it still resolves; otherwise fall back to the
@@ -155,9 +156,10 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
     [communities, currentCommunityId, joinedCommunities]
   );
 
-  // Derive isAdmin from the resolved current community (super-admins already
-  // mapped to 'admin' server-side).
-  const isAdmin = currentCommunity ? membershipRoles.get(currentCommunity.id) === 'admin' : false;
+  // Derive isAdmin from the resolved current community. Managing a community
+  // means holding one of its aliases marked `admin` — resolved server-side, so
+  // super-admins are already folded in here.
+  const isAdmin = currentCommunity ? memberships.get(currentCommunity.id) === true : false;
 
   const value = useMemo<CommunityContextValue>(
     () => ({

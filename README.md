@@ -62,10 +62,11 @@ pnpm db:down            # stop container (data preserved in named volume)
 pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # prisma db push (sync schema)
-pnpm db:seed            # seed the local-dev community + anchor users
+pnpm db:seed            # base seed: the community, aliases + anchor users (WIPES the DB)
+pnpm db:blackbird:full  # db:seed + portfolio + brain + extras + connectors
 pnpm db:nz              # load the NZ startup ecosystem demo content
-pnpm db:fresh           # drop tables + push + seed (volume preserved)
-pnpm db:reset           # destroy volume + rebuild + push + seed (prompts)
+pnpm db:fresh           # drop tables + push + db:blackbird:full (volume preserved)
+pnpm db:reset           # destroy volume + rebuild + push + db:blackbird:full (prompts)
 
 pnpm prisma:studio      # open Prisma Studio
 pnpm prisma:generate    # regenerate Prisma client
@@ -78,17 +79,29 @@ pnpm — see `apps/mobile/README.md`.
 
 ## Seed
 
-`pnpm db:seed` creates the minimal local-dev scaffolding: a single
-`local-dev` community with two anchor users for the `/dev/login` pickers.
-Demo content (the NZ startup ecosystem — organizations, events, resources)
-loads separately via `pnpm db:nz`.
+The seeded community is **Blackbird Ventures** (`community:blackbird-ventures`),
+built in layers. `pnpm db:blackbird:full` runs all of them:
 
-Anchor users (always present, listed in the dev login pickers):
+| step | what it adds |
+|---|---|
+| `db:seed` | the community, its node types and aliases, the four anchor users. **Wipes the whole local DB first.** |
+| `db:blackbird:ventures` | ~182 portfolio companies + their founders, `founded` links, seven CRM columns |
+| `db:blackbird:notes` | the shared brain (companies, sectors, people, team, deals, data) + the admin's personal brain |
+| `db:blackbird:extras` | events + attendees, the resource library, channels + messages + a DM, feed posts |
+| `db:connectors:demo` | two working connectors in the shared brain |
+| `db:context-links` | directory links derived from the shared-brain entity notes |
 
-| email               | role   | notes |
-|---------------------|--------|-------|
-| `admin@local.dev`   | admin  | also super admin via env |
-| `member@local.dev`  | member | |
+Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
+
+Anchor users (always present, listed in the dev login pickers). There is no role
+column — what someone can do comes entirely from the aliases they hold:
+
+| email                | aliases          | notes |
+|----------------------|------------------|-------|
+| `admin@local.dev`    | Owner, Partner   | manages the community; also super admin via env |
+| `partner@local.dev`  | Partner          | edit on companies/, deals/, data/ |
+| `member@local.dev`   | Founder          | view on companies/ |
+| `lp@local.dev`       | LP               | view on one note — the tightest grant there is |
 
 ## Multi-machine
 

@@ -3,70 +3,66 @@
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import PeopleAccessPanel from '@/components/admin/people/PeopleAccessPanel';
+import PeopleDataProvider from '@/components/admin/people/PeopleDataContext';
+import PeoplePanel from '@/components/admin/people/PeoplePanel';
+import AliasesPanel from '@/components/admin/people/AliasesPanel';
+import InvitePanel from '@/components/admin/people/InvitePanel';
 import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
 import TypesTab from '@/components/data/TypesTab';
 import CommunityToolsPanel from '@/components/admin/CommunityToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
-import { Settings2, Puzzle, Users, Shapes } from 'lucide-react';
+import { Settings2, Puzzle, Users, Tag, UserPlus, Shapes } from 'lucide-react';
 
+// People, Aliases and Invite are three top-level sections rather than tabs
+// inside one, so nothing in the console is ever two clicks deep. They share a
+// single data load (PeopleDataProvider), which is also where the People badge
+// count comes from — one definition of "waiting", not one per component.
 function AdminConsole({ community, onSaved }: {
   community: Community;
   onSaved: (updated: Partial<Community>) => void;
 }) {
   const [pendingPeople, setPendingPeople] = useState(0);
-
-  // Seed the People & access badge without opening the section: members waiting
-  // to join + members waiting on context access, the same sum the panel reports
-  // back once it's open.
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      fetch(`/api/communities/${community.id}/members`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => (data?.members
-          ? data.members.filter((m: { status: string }) => m.status === 'pending').length
-          : 0))
-        .catch(() => 0),
-      fetch(`/api/notes/access-requests?communityId=${encodeURIComponent(community.id)}`)
-        .then(r => (r.ok ? r.json() : null))
-        .then(data => (typeof data?.pending === 'number' ? data.pending : 0))
-        .catch(() => 0),
-    ]).then(([members, requests]) => {
-      if (active) setPendingPeople(members + requests);
-    });
-    return () => { active = false; };
-  }, [community.id]);
-
   const handlePendingCount = useCallback((count: number) => setPendingPeople(count), []);
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
-    { id: 'members', label: 'People & access', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} /> },
+    { id: 'people', label: 'People', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} /> },
+    { id: 'aliases', label: 'Aliases', group: 'People', width: 'wide', icon: <Tag size={18} /> },
+    { id: 'invite', label: 'Invite', group: 'People', width: 'form', icon: <UserPlus size={18} /> },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
   ];
 
   return (
-    <ConsoleShell
-      sections={sections}
-      renderSection={(id) => {
-        switch (id) {
-          case 'general':
-            return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
-          case 'tools':
-            return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
-          case 'members':
-            return <PeopleAccessPanel key={community.id} communityId={community.id} onPendingCountChange={handlePendingCount} />;
-          case 'types':
-            return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
-          default:
-            return null;
-        }
-      }}
-    />
+    <PeopleDataProvider
+      key={community.id}
+      communityId={community.id}
+      onPendingCountChange={handlePendingCount}
+    >
+      <ConsoleShell
+        sections={sections}
+        renderSection={(id) => {
+          switch (id) {
+            case 'general':
+              return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
+            case 'tools':
+              return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
+            case 'people':
+              return <PeoplePanel />;
+            case 'aliases':
+              return <AliasesPanel />;
+            case 'invite':
+              return <InvitePanel />;
+            case 'types':
+              return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
+            default:
+              return null;
+          }
+        }}
+      />
+    </PeopleDataProvider>
   );
 }
 
