@@ -39,15 +39,13 @@ export type EntityNodeType =
   | 'community'
   | 'space'
   | 'channel'
-  | 'note'
-  | 'file'
   | 'connector'
 
 /** Document kinds: their own artifact is the context, so no `.md` is written. */
 // A connector counts as a document even though it lives in an entity namespace:
 // the admin authored connectors/<name>.md first and the node follows it, so
 // there is nothing left to write.
-const DOCUMENT_TYPES = new Set<EntityNodeType>(['note', 'file', 'connector'])
+const DOCUMENT_TYPES = new Set<EntityNodeType>(['connector'])
 
 /** The containment relationship every structural edge uses. */
 const CONTAINS_RELATIONSHIP = 'contains'
@@ -62,8 +60,6 @@ const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   community: 'communityRef',
   space: 'spaceId',
   channel: 'conversationId',
-  note: 'notePath',
-  file: 'sourceId',
   connector: 'notePath',
 }
 

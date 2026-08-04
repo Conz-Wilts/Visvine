@@ -93,13 +93,15 @@ test("isSystemRelationship is false for ordinary manual relationships", () => {
 // ── Structural node types: everything creatable is a node, but the graph and the
 //    directory only show the structure kinds when asked ─────────────────────────
 
-test("isStructuralNodeType covers the container and document kinds", () => {
-  for (const type of ["space", "channel", "note", "file"]) {
+test("isStructuralNodeType covers the container kinds", () => {
+  for (const type of ["space", "channel", "connector"]) {
     assert.equal(isStructuralNodeType(type), true, type);
   }
-  // Case-insensitive, and 'source' is the stored alias for an uploaded file.
   assert.equal(isStructuralNodeType("Channel"), true);
-  assert.equal(isStructuralNodeType("source"), true);
+  // Note and File are retired types. Nothing writes them, but a row left over
+  // from before stays filtered out rather than surfacing in the grid.
+  assert.equal(isStructuralNodeType("note"), true);
+  assert.equal(isStructuralNodeType("file"), true);
 });
 
 // `community` belongs here, not above: it carries the organisations that used
@@ -112,8 +114,13 @@ test("isStructuralNodeType leaves the directory kinds alone", () => {
   assert.equal(isStructuralNodeType(""), false);
 });
 
-test("every structural type resolves to a non-grey colour", () => {
+// Retired types are exempt: they're listed only so leftover rows stay filtered
+// out, and DEFAULT_NODE_TYPES no longer describes them.
+const RETIRED_TYPES = ["note", "file"];
+
+test("every live structural type resolves to a non-grey colour", () => {
   for (const type of STRUCTURAL_NODE_TYPES) {
+    if (RETIRED_TYPES.includes(type)) continue;
     assert.notEqual(getNodeTypeConfig(type).color, "#6b7280", type);
   }
 });

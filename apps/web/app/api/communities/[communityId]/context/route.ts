@@ -5,8 +5,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityContextData } from '@/lib/eventRepo';
 import { normalizeNode, normalizeLink } from '@/lib/context/normalize';
+import { visibleGraph } from '@/lib/context/featureVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
-import { communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
+import { communityReadForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -31,8 +32,15 @@ export async function GET(
     }
 
     const contextData = await getCommunityContextData(communityId);
-    const nodes = contextData.nodes.map(normalizeNode);
-    const links = contextData.links.map(normalizeLink);
+    // Types belonging to a switched-off tool leave the graph with their edges —
+    // see lib/context/featureVisibility.ts.
+    const featureConfig = await getFeatureConfig(communityId);
+    const graph = visibleGraph(
+      contextData.nodes.map(normalizeNode),
+      contextData.links.map(normalizeLink),
+      featureConfig,
+    );
+    const { nodes, links } = graph;
 
     return NextResponse.json(
       { nodes, links },

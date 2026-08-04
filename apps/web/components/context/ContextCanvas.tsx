@@ -2,14 +2,16 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as d3Force from 'd3-force';
-import { NodeTypeConfig, CommunityAlias, getNodeTypeConfig, findAlias } from '@/lib/types';
+import { NodeTypeConfig, CommunityAlias, LinkTypeConfig, getNodeTypeConfig, findAlias } from '@/lib/types';
 import { CARD_DIMENSIONS, LOD_THRESHOLDS, OBSIDIAN_PHYSICS as P, type NodeLOD } from './utils/constants';
-import { drawLinks } from './renderers/LinkRenderer';
+import { drawLinks, drawEdgeLabels, type PendingLabel } from './renderers/LinkRenderer';
 import { drawRectangleNode, type CanvasTheme } from './renderers/RectangleNodeRenderer';
 import { drawCircleNode } from './renderers/CircleNodeRenderer';
 import { drawSquareNode } from './renderers/SquareNodeRenderer';
+import { drawFolderNode, drawAliasNode, drawNoteNode } from './renderers/FolderNodeRenderer';
+import { isFolderNodeId, isAliasNodeId, folderCount, folderRadius, aliasRadius } from '@/lib/context/folderView';
+import { isNoteNodeId, NOTE_NODE_RADIUS } from '@/lib/context/brainView';
 import { preloadImages, onImageLoad } from './utils/imageCache';
-import { createRectCollideForce } from './utils/forceRectCollide';
 import { useLayoutPersistence } from './hooks/useLayoutPersistence';
 import { prefersReducedMotion } from '@/lib/motion';
 
@@ -38,6 +40,10 @@ export interface SimLink {
   source: SimNode | string;
   target: SimNode | string;
   relationship?: string;
+  /** Aggregated edges (folder view) carry how many underlying links they stand for. */
+  weight?: number;
+  /** Quiet edges (brain view mentions) draw only while focus/hover lights them. */
+  quiet?: boolean;
 }
 
 export interface Transform {
@@ -54,6 +60,60 @@ export interface Transform {
 // drag. Used both to start a drag and to fire onNodeClick — keep them in sync.
 const DRAG_THRESHOLD = 5;
 
+const endpointIdOf = (v: SimLink['source']): string =>
+  typeof v === 'string' ? v : String((v as SimNode).id);
+
+/**
+ * Unweighted shortest path between two nodes — the "how are these two
+ * connected" answer. BFS over an adjacency map built per call; at community
+ * scale (hundreds of nodes) this is sub-millisecond, so it runs live while the
+ * user moves the mouse with a node focused. Returns null when unreachable.
+ */
+function findShortestPath(
+  links: SimLink[],
+  fromId: string,
+  toId: string,
+): { nodeIds: Set<string>; links: Set<SimLink> } | null {
+  if (fromId === toId) return null;
+  const adjacency = new Map<string, Array<{ other: string; link: SimLink }>>();
+  links.forEach(link => {
+    const s = endpointIdOf(link.source);
+    const t = endpointIdOf(link.target);
+    if (!adjacency.has(s)) adjacency.set(s, []);
+    if (!adjacency.has(t)) adjacency.set(t, []);
+    adjacency.get(s)!.push({ other: t, link });
+    adjacency.get(t)!.push({ other: s, link });
+  });
+  if (!adjacency.has(fromId) || !adjacency.has(toId)) return null;
+
+  const parent = new Map<string, { prev: string; link: SimLink }>();
+  const visited = new Set<string>([fromId]);
+  const queue: string[] = [fromId];
+  let found = false;
+  while (queue.length > 0 && !found) {
+    const id = queue.shift()!;
+    for (const { other, link } of adjacency.get(id) ?? []) {
+      if (visited.has(other)) continue;
+      visited.add(other);
+      parent.set(other, { prev: id, link });
+      if (other === toId) { found = true; break; }
+      queue.push(other);
+    }
+  }
+  if (!found) return null;
+
+  const nodeIds = new Set<string>([toId]);
+  const pathLinks = new Set<SimLink>();
+  let cursor = toId;
+  while (cursor !== fromId) {
+    const step = parent.get(cursor)!;
+    pathLinks.add(step.link);
+    nodeIds.add(step.prev);
+    cursor = step.prev;
+  }
+  return { nodeIds, links: pathLinks };
+}
+
 const ContextCanvas: React.FC<{
   nodes: SimNode[];
   links: SimLink[];
@@ -65,10 +125,18 @@ const ContextCanvas: React.FC<{
   savedPositionsRef?: React.MutableRefObject<Map<string, { x: number; y: number }>>;
   nodeTypes?: NodeTypeConfig[];
   communityAliases?: CommunityAlias[];
+  /** Community's relationship type registry — colours + labels + directedness
+   *  for highlighted edges. Falls back to DEFAULT_LINK_TYPES when omitted. */
+  linkTypes?: LinkTypeConfig[];
   /** When false, the incoming node positions are a final layout (server
    *  restore or precomputed engine result) — freeze the simulation and apply
    *  `initialTransform` (or auto-fit) instead of running a cold burst. */
   coldStart?: boolean;
+  /** Structure-transition targets: nodes arrive seeded at their start
+   *  positions and glide to these (the engine's force-directed,
+   *  crossing-reduced layout), then the camera refits and the result
+   *  persists. */
+  targetPositions?: ReadonlyMap<string, { x: number; y: number }> | null;
   initialTransform?: Transform | null;
   /** Persist the frozen layout once after mounting it. Used for freshly
    *  precomputed layouts (which the server hasn't seen yet) — a plain server
@@ -85,7 +153,7 @@ const ContextCanvas: React.FC<{
   /** Click (not a pan) on empty canvas background — lets the parent clear any
    *  current selection. */
   onBackgroundClick?: () => void;
-}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, coldStart = true, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick, onBackgroundClick }) => {
+}> = ({ nodes, links, focusNodeId, dimmedNodeIds, autoZoomToFocus = false, onNodeClick, onNodeHover, savedPositionsRef, nodeTypes, communityAliases, linkTypes, coldStart = true, targetPositions = null, initialTransform = null, persistOnRestore = false, onPersistLayout, onNodeContextMenu, onNodeDoubleClick, onBackgroundClick }) => {
 
   /* --------------------------------------------------------------------------
      STATE & REFS
@@ -93,9 +161,13 @@ const ContextCanvas: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const renderScheduledRef = useRef<boolean>(false);
-  // Tracks the last pointer position while panning. Nodes are static (not
-  // draggable), so this is used only for canvas panning.
+  // Tracks the last pointer position while panning the canvas.
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Node currently being dragged (press on a node + travel past the click
+  // threshold). While active the node is pinned to the cursor via fx/fy and
+  // the simulation is reheated so its neighbours react.
+  const dragNodeRef = useRef<SimNode | null>(null);
+  const dragActiveRef = useRef(false);
   const hasInitialFitRef = useRef(false);
   const prevFocusNodeIdRef = useRef<string | null>(null);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -120,6 +192,8 @@ const ContextCanvas: React.FC<{
   const { markDirty, flushOnSettle, schedulePersist } = useLayoutPersistence(onPersistLayout);
   const coldStartRef = useRef(coldStart);
   coldStartRef.current = coldStart;
+  const targetPositionsRef = useRef(targetPositions);
+  targetPositionsRef.current = targetPositions;
   const initialTransformRef = useRef(initialTransform);
   initialTransformRef.current = initialTransform;
   const persistOnRestoreRef = useRef(persistOnRestore);
@@ -138,6 +212,9 @@ const ContextCanvas: React.FC<{
   // Refs to stabilize render callback - these are synced from props before rendering
   const focusNodeIdRef = useRef<string | null>(null);
   const dimmedNodeIdsRef = useRef<Set<string>>(new Set());
+  // Node currently under the pointer. A ref (not state) so hover highlighting
+  // repaints without a React render — it changes on every mousemove.
+  const hoveredNodeIdRef = useRef<string | null>(null);
 
   const [isLayoutReady, setIsLayoutReady] = useState(false);
   const isLayoutReadyRef = useRef(false);
@@ -161,6 +238,17 @@ const ContextCanvas: React.FC<{
     return nodes.find(node => {
       if (typeof node.x !== 'number' || typeof node.y !== 'number') return false;
 
+      if (isFolderNodeId(String(node.id))) {
+        const r = folderRadius(folderCount(node));
+        return Math.hypot(contextPos.x - node.x, contextPos.y - node.y) <= r;
+      }
+      if (isAliasNodeId(String(node.id))) {
+        const r = aliasRadius(folderCount(node));
+        return Math.hypot(contextPos.x - node.x, contextPos.y - node.y) <= r;
+      }
+      if (isNoteNodeId(String(node.id))) {
+        return Math.hypot(contextPos.x - node.x, contextPos.y - node.y) <= NOTE_NODE_RADIUS;
+      }
       const shape = getNodeTypeConfig(node.type, nodeTypes).shape;
 
       if (shape === 'square' || shape === 'hexagon') {
@@ -234,6 +322,19 @@ const ContextCanvas: React.FC<{
     const borderColor = aliasConfig?.color ?? typeConfig.color;
     const shape = typeConfig.shape;
 
+    if (isFolderNodeId(String(node.id))) {
+      drawFolderNode(ctx, node, node.x, node.y, isFocused, shouldDim, borderColor, theme);
+      return;
+    }
+    if (isAliasNodeId(String(node.id))) {
+      drawAliasNode(ctx, node, node.x, node.y, isFocused, shouldDim, borderColor, theme);
+      return;
+    }
+    if (isNoteNodeId(String(node.id))) {
+      drawNoteNode(ctx, node, node.x, node.y, isFocused, shouldDim, borderColor, theme);
+      return;
+    }
+
     const borderWidth = isFocused ? CARD_DIMENSIONS.BORDER_WIDTH * 1.6 : CARD_DIMENSIONS.BORDER_WIDTH;
 
     // 'hexagon' is treated as 'square': the hexagon look was retired in favour of
@@ -294,36 +395,54 @@ const ContextCanvas: React.FC<{
     // per card per frame was a measurable chunk of the draw loop.
     const theme = getCanvasTheme();
 
-    // Calculate connected nodes if there's a focused node
-    const connectedNodeIds = new Set<string>();
-    let focusNodeExists = false;
-    if (currentFocusNodeId) {
-      focusNodeExists = nodes.some(n => String(n.id) === String(currentFocusNodeId));
+    // Neighbour sets for the focused and hovered nodes drive the highlight
+    // modes below. Both are cheap O(L) sweeps per frame.
+    const neighborsOf = (centerId: string): Set<string> => {
+      const out = new Set<string>();
+      links.forEach(link => {
+        const sourceId = endpointIdOf(link.source);
+        const targetId = endpointIdOf(link.target);
+        if (sourceId === centerId) out.add(targetId);
+        else if (targetId === centerId) out.add(sourceId);
+      });
+      return out;
+    };
 
-      if (focusNodeExists) {
-        links.forEach(link => {
-          const sourceId = typeof link.source === 'string' ? link.source : (link.source as SimNode).id;
-          const targetId = typeof link.target === 'string' ? link.target : (link.target as SimNode).id;
+    const focusId = currentFocusNodeId != null ? String(currentFocusNodeId) : null;
+    const focusNodeExists = focusId != null && nodes.some(n => String(n.id) === focusId);
+    const connectedToFocus = focusNodeExists ? neighborsOf(focusId!) : new Set<string>();
 
-          if (String(sourceId) === String(currentFocusNodeId)) {
-            connectedNodeIds.add(String(targetId));
-          } else if (String(targetId) === String(currentFocusNodeId)) {
-            connectedNodeIds.add(String(sourceId));
-          }
-        });
-      }
-    }
+    const hoveredId = hoveredNodeIdRef.current;
+    const hoverNodeExists = hoveredId != null && nodes.some(n => String(n.id) === hoveredId);
+    const connectedToHover = hoverNodeExists ? neighborsOf(hoveredId!) : new Set<string>();
+
+    // With a node focused, hovering any other node lights the shortest path
+    // between them — the "how are these two connected" answer, live under the
+    // mouse. Direct neighbours produce a one-hop path, which reads naturally.
+    const path = focusNodeExists && hoverNodeExists && hoveredId !== focusId
+      ? findShortestPath(links, focusId!, hoveredId!)
+      : null;
 
     const renderNow = performance.now();
 
     // Draw Links
     const allNodesDimmed = nodes.length > 0 && nodes.every(n => currentDimmedNodeIds.has(String(n.id)));
-    const shouldDrawLinks = (!currentFocusNodeId && !allNodesDimmed) || focusNodeExists;
+    const shouldDrawLinks = (!currentFocusNodeId && !allNodesDimmed) || focusNodeExists || hoverNodeExists;
 
+    let pendingLabels: PendingLabel[] = [];
     if (shouldDrawLinks) {
-      drawLinks(ctx, links, nodes, transform, currentFocusNodeId, renderNow, reduceMotionRef.current, {
-        left: viewLeft, top: viewTop, right: viewRight, bottom: viewBottom,
-      });
+      pendingLabels = drawLinks(
+        ctx, links, nodes, transform,
+        {
+          focusNodeId: focusNodeExists ? focusId : null,
+          hoveredNodeId: hoverNodeExists ? hoveredId : null,
+          pathLinks: path?.links ?? null,
+        },
+        linkTypes,
+        renderNow, reduceMotionRef.current,
+        { left: viewLeft, top: viewTop, right: viewRight, bottom: viewBottom },
+        nodeTypes,
+      );
     }
 
     // Draw Nodes with viewport culling
@@ -335,11 +454,35 @@ const ContextCanvas: React.FC<{
         node.y < viewTop - cullPad || node.y > viewBottom + cullPad
       ) return;
 
-      const isFocused = currentFocusNodeId != null && String(node.id) === String(currentFocusNodeId);
-      const isConnected = currentFocusNodeId != null && connectedNodeIds.has(String(node.id));
-      const isInDimmedSet = currentDimmedNodeIds?.has(String(node.id)) ?? false;
+      const id = String(node.id);
+      const isFocused = focusNodeExists && id === focusId;
+      const isHovered = hoverNodeExists && id === hoveredId;
+      const isInDimmedSet = currentDimmedNodeIds?.has(id) ?? false;
 
-      const shouldDim = !isFocused && !isConnected && (isInDimmedSet || currentFocusNodeId != null);
+      // Four highlight modes, most specific first:
+      // path lit → only the route stays bright; focus → node + neighbours;
+      // hover → node + neighbours, softer dim; rest → search dimming only.
+      let isConnected: boolean;
+      let shouldDim: boolean;
+      let dimAlpha = 0.15;
+      if (path) {
+        const onPath = path.nodeIds.has(id);
+        isConnected = onPath && !isFocused && !isHovered;
+        shouldDim = !onPath;
+        dimAlpha = 0.1;
+      } else if (focusNodeExists) {
+        isConnected = connectedToFocus.has(id);
+        shouldDim = !isFocused && !isConnected && !isHovered;
+      } else if (hoverNodeExists) {
+        isConnected = connectedToHover.has(id);
+        shouldDim = !isHovered && !isConnected;
+        // Hover is a glance, not a mode — dim gently so it feels like the
+        // neighbourhood glows rather than the community disappearing.
+        dimAlpha = isInDimmedSet ? 0.15 : 0.4;
+      } else {
+        isConnected = false;
+        shouldDim = isInDimmedSet;
+      }
 
       const stagger = (node.spawnIndex ?? 0) * P.fadeInStaggerMs;
       const elapsed = renderNow - (node.spawnTime ?? renderNow) - stagger;
@@ -348,17 +491,20 @@ const ContextCanvas: React.FC<{
         : Math.max(0, Math.min(1, elapsed / P.fadeInDurationMs));
 
       ctx.save();
-      ctx.globalAlpha = (shouldDim ? 0.15 : 1) * fadeAlpha;
+      ctx.globalAlpha = (shouldDim ? dimAlpha : 1) * fadeAlpha;
       // Ease each node up into place as it fades in. Purely a draw-time offset —
       // node.x/node.y (and the persisted layout) are never touched.
       const rise = (1 - fadeAlpha) * P.fadeInRiseY;
       if (rise) ctx.translate(0, rise);
-      drawNodeCard(ctx, node, lod, isFocused, isConnected, shouldDim, theme);
+      drawNodeCard(ctx, node, lod, isFocused || isHovered, isConnected, shouldDim, theme);
       ctx.restore();
     });
 
+    // Relationship pills draw last so a card never hides them.
+    drawEdgeLabels(ctx, pendingLabels, transform);
+
     ctx.restore();
-  }, [nodes, links, drawNodeCard, getCanvasTheme]);
+  }, [nodes, links, linkTypes, nodeTypes, drawNodeCard, getCanvasTheme]);
 
   const scheduleRender = useCallback(() => {
     if (!renderScheduledRef.current) {
@@ -479,6 +625,13 @@ const ContextCanvas: React.FC<{
 
     setIsLayoutReady(false);
     setIsInitialFitComplete(false);
+    // The node objects are replaced on a structure change — drop any drag in
+    // progress so a stale reference can't pin a discarded node.
+    dragNodeRef.current = null;
+    dragActiveRef.current = false;
+    // A transition glide keeps the current camera (draws must not be
+    // suppressed mid-animation), so remember whether it was ever fitted.
+    const wasFitted = hasInitialFitRef.current;
     hasInitialFitRef.current = false;
     ticksRef.current = 0;
 
@@ -509,18 +662,34 @@ const ContextCanvas: React.FC<{
       connectedIds.add(tgt);
     });
 
-    // Card-aware rectangular collision (Obsidian dots don't need this; cards do).
-    // Charge does most of the spacing work — rectCollide just guarantees no overlap.
-    const GAP = P.rectCollideGap;
-    const RECT_HALF_W = CARD_DIMENSIONS.WIDTH / 2 + GAP / 2;
-    const RECT_HALF_H = CARD_DIMENSIONS.HEIGHT / 2 + GAP / 2;
-    const rectCollide = createRectCollideForce<SimNode>({
-      halfW: RECT_HALF_W,
-      halfH: RECT_HALF_H,
-      strength: P.rectCollideStrength,
-      iterations: 8,
-      cellSize: Math.max(RECT_HALF_W, RECT_HALF_H) * 2.5,
-    });
+    // Per-node collision footprint: folders, alias circles, the home card and
+    // entity cards each reserve their real drawn size (cards by circumscribed
+    // circle, so no corner can peek under a neighbour) plus breathing room.
+    const collideRadiusFor = (n: SimNode): number => {
+      const id = String(n.id);
+      if (isFolderNodeId(id)) return folderRadius(folderCount(n)) + 40;
+      if (isAliasNodeId(id)) return aliasRadius(folderCount(n)) + 18;
+      const shape = getNodeTypeConfig(n.type, nodeTypes).shape;
+      return shape === 'square' || shape === 'hexagon'
+        ? (CARD_DIMENSIONS.SQUARE_SIDE / 2) * Math.SQRT2 + 56
+        : Math.hypot(CARD_DIMENSIONS.WIDTH, CARD_DIMENSIONS.HEIGHT) / 2 + 56;
+    };
+
+    // Meta edges sit closer than the card default so structures hug their
+    // hubs: alias circles ring their folder tightly, folders orbit home.
+    const linkDistanceFor = (link: SimLink): number => {
+      const s = link.source as SimNode;
+      const t = link.target as SimNode;
+      const sId = String(s.id);
+      const tId = String(t.id);
+      if (isAliasNodeId(sId) || isAliasNodeId(tId)) {
+        return collideRadiusFor(s) + collideRadiusFor(t) + 60;
+      }
+      if (isFolderNodeId(sId) || isFolderNodeId(tId)) {
+        return collideRadiusFor(s) + collideRadiusFor(t) + 340;
+      }
+      return P.linkDistance;
+    };
 
     // Obsidian-tuned simulation. centerStrength maps to forceX/forceY (soft pull
     // toward origin), repelStrength to forceManyBody, linkStrength + linkDistance
@@ -534,7 +703,7 @@ const ContextCanvas: React.FC<{
       .force('link',
         d3Force.forceLink<SimNode, SimLink>(links)
           .id(d => String(d.id))
-          .distance(P.linkDistance)
+          .distance(linkDistanceFor)
           .strength(P.linkStrength)
       )
       .force('charge',
@@ -545,7 +714,12 @@ const ContextCanvas: React.FC<{
       )
       .force('x', d3Force.forceX<SimNode>(0).strength(P.centerStrength))
       .force('y', d3Force.forceY<SimNode>(0).strength(P.centerStrength))
-      .force('rectCollide', rectCollide)
+      .force('collide',
+        d3Force.forceCollide<SimNode>()
+          .radius(collideRadiusFor)
+          .strength(1)
+          .iterations(3)
+      )
       .force('isolatedRing',
         d3Force.forceRadial<SimNode>(
           d => connectedIds.has(String(d.id)) ? 0 : P.linkDistance * P.isolatedRingMultiplier,
@@ -571,7 +745,61 @@ const ContextCanvas: React.FC<{
     const totalStaggerMs = nodes.length * P.fadeInStaggerMs * staggerScale;
 
     let fitRaf: number | null = null;
-    if (coldStartRef.current === false) {
+    const glideTargets = targetPositionsRef.current;
+    if (coldStartRef.current === false && glideTargets && wasFitted) {
+      // Structure transition: the nodes arrived seeded at their start
+      // positions; glide them to the engine's force-directed,
+      // crossing-reduced layout, then refit the camera and persist. The
+      // glide itself is the animation — no fade re-cascade on top of it.
+      sim.alpha(0);
+      hasInitialFitRef.current = true;
+      setIsInitialFitComplete(true);
+      isLayoutReadyRef.current = true;
+      setIsLayoutReady(true);
+      nodes.forEach(node => {
+        node.spawnTime = introStart - P.fadeInDurationMs - 1000;
+        node.spawnIndex = 0;
+      });
+
+      const finishGlide = () => {
+        const positions = collectPositions();
+        Object.entries(positions).forEach(([id, p]) => savedPositionsRef?.current.set(id, p));
+        fitToScreenRef.current?.(!reduceMotionRef.current);
+        markDirty();
+        flushOnSettle(positions, transformRef.current);
+      };
+
+      if (reduceMotionRef.current) {
+        nodes.forEach(node => {
+          const target = glideTargets.get(String(node.id));
+          if (target) { node.x = target.x; node.y = target.y; }
+        });
+        scheduleRender();
+        finishGlide();
+      } else {
+        const starts = new Map(nodes.map(n => [String(n.id), { x: n.x ?? 0, y: n.y ?? 0 }]));
+        const GLIDE_MS = 700;
+        const frame = (now: number) => {
+          const progress = Math.min(1, (now - introStart) / GLIDE_MS);
+          const eased = 1 - Math.pow(1 - progress, 3);
+          nodes.forEach(node => {
+            const start = starts.get(String(node.id));
+            const target = glideTargets.get(String(node.id));
+            if (!start || !target) return;
+            node.x = start.x + (target.x - start.x) * eased;
+            node.y = start.y + (target.y - start.y) * eased;
+          });
+          scheduleRender();
+          if (progress < 1) {
+            introRafRef.current = requestAnimationFrame(frame);
+          } else {
+            introRafRef.current = null;
+            finishGlide();
+          }
+        };
+        introRafRef.current = requestAnimationFrame(frame);
+      }
+    } else if (coldStartRef.current === false) {
       // Final layout (server restore or precomputed engine result): freeze the
       // simulation so the seeded positions stay put.
       sim.alpha(0);
@@ -621,7 +849,7 @@ const ContextCanvas: React.FC<{
       }
       if (fitRaf !== null) cancelAnimationFrame(fitRaf);
     };
-  }, [nodes, links, startSimLoop, markDirty, flushOnSettle, collectPositions, playFadeIn, scheduleRender]);
+  }, [nodes, links, nodeTypes, startSimLoop, markDirty, flushOnSettle, collectPositions, playFadeIn, scheduleRender, savedPositionsRef]);
 
   // Repaint (RAF-deduped) whenever an image the renderers requested on demand
   // finishes loading — at mid/full zoom cards draw a placeholder first and this
@@ -692,17 +920,50 @@ const ContextCanvas: React.FC<{
     mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
     mouseDownNodeRef.current = node || null;
 
-    // Nodes are static — a press never moves a node. It resolves to a click
-    // (released within DRAG_THRESHOLD) or pans the canvas, whether the press
-    // started on a node or on empty space.
-    isPanningRef.current = true;
+    if (node) {
+      // Press on a node: within DRAG_THRESHOLD it's a click; past it the node
+      // itself is dragged (live physics — see handleMouseMove).
+      dragNodeRef.current = node;
+      isPanningRef.current = false;
+    } else {
+      // Press on empty canvas pans.
+      isPanningRef.current = true;
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+    }
     setCursorStyle('grabbing');
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
   }, [findNodeAt]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Node drag: pin the node to the cursor and reheat the simulation so its
+    // neighbours pull along and the rest shuffles out of the way.
+    if (dragNodeRef.current && mouseDownPosRef.current) {
+      const rect = canvas.getBoundingClientRect();
+      if (!dragActiveRef.current) {
+        const dx = e.clientX - mouseDownPosRef.current.x;
+        const dy = e.clientY - mouseDownPosRef.current.y;
+        if (Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return; // still a click
+        dragActiveRef.current = true;
+        markDirty();
+        const sim = simulationRef.current;
+        if (sim) {
+          // Warm, not hot: neighbours pull along springily without the whole
+          // graph re-forming under the cursor.
+          sim.alphaTarget(0.18);
+          if (simRafRef.current === null) startSimLoop();
+        }
+      }
+      const p = screenToContext(e.clientX - rect.left, e.clientY - rect.top);
+      const node = dragNodeRef.current;
+      node.fx = p.x;
+      node.fy = p.y;
+      node.x = p.x;
+      node.y = p.y;
+      scheduleRender();
+      return;
+    }
 
     if (isPanningRef.current && dragStartRef.current) {
       const dx = e.clientX - dragStartRef.current.x;
@@ -722,6 +983,12 @@ const ContextCanvas: React.FC<{
       const y = e.clientY - rect.top;
       const node = findNodeAt(x, y);
 
+      const hoveredId = node ? String(node.id) : null;
+      if (hoveredId !== hoveredNodeIdRef.current) {
+        hoveredNodeIdRef.current = hoveredId;
+        scheduleRender();
+      }
+
       if (node) {
         setCursorStyle('pointer');
         onNodeHover?.(node);
@@ -730,11 +997,31 @@ const ContextCanvas: React.FC<{
         onNodeHover?.(null);
       }
     }
-  }, [updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions]);
+  }, [updateTransform, findNodeAt, onNodeHover, schedulePersist, collectPositions, scheduleRender, markDirty, startSimLoop, screenToContext]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Release a node drag: unpin and let the simulation cool to a settle
+    // (which persists the moved layout).
+    if (dragActiveRef.current) {
+      const node = dragNodeRef.current;
+      if (node) {
+        node.fx = null;
+        node.fy = null;
+      }
+      simulationRef.current?.alphaTarget(0);
+      dragActiveRef.current = false;
+      dragNodeRef.current = null;
+      isPanningRef.current = false;
+      dragStartRef.current = null;
+      mouseDownPosRef.current = null;
+      mouseDownNodeRef.current = null;
+      setCursorStyle(node ? 'pointer' : 'grab');
+      return;
+    }
+    dragNodeRef.current = null;
 
     if (mouseDownPosRef.current && mouseDownNodeRef.current && onNodeClick) {
       const dx = e.clientX - mouseDownPosRef.current.x;
@@ -775,6 +1062,18 @@ const ContextCanvas: React.FC<{
     const node = findNodeAt(x, y);
     setCursorStyle(node ? 'pointer' : 'grab');
   }, [onNodeClick, onBackgroundClick, findNodeAt]);
+
+  // Leaving the canvas ends any pan (same as mouse-up) and clears the hover
+  // highlight, which would otherwise stay lit on whatever was last under the
+  // pointer.
+  const handleMouseLeave = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    handleMouseUp(e);
+    if (hoveredNodeIdRef.current !== null) {
+      hoveredNodeIdRef.current = null;
+      scheduleRender();
+    }
+    onNodeHover?.(null);
+  }, [handleMouseUp, scheduleRender, onNodeHover]);
 
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!onNodeDoubleClick) return;
@@ -1022,10 +1321,12 @@ const ContextCanvas: React.FC<{
     }
 
     if (prevAutoZoomFocusRef.current === focusNodeId) return;
-    prevAutoZoomFocusRef.current = focusNodeId;
 
     const focusedNode = nodes.find(n => String(n.id) === String(focusNodeId));
+    // Not on screen yet (search reveals/expansions land a commit later) —
+    // leave the ref unstamped so the next nodes update retries the zoom.
     if (!focusedNode || typeof focusedNode.x !== 'number' || typeof focusedNode.y !== 'number') return;
+    prevAutoZoomFocusRef.current = focusNodeId;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -1076,7 +1377,7 @@ const ContextCanvas: React.FC<{
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
         className={`w-full h-full ${cursorClass}`}

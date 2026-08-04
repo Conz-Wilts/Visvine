@@ -107,20 +107,20 @@ export interface LinkTypeConfig {
 // "everything is grey on first paint" race condition.
 export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Person',    color: '#2563eb', shape: 'rectangle' },
-  // An organisation IS a community: the company, group or org you record in the
-  // directory is the same kind of thing as the workspace you could run for it,
-  // so there is one type for both. A record living in someone else's graph is
-  // just a community nobody has provisioned yet — see isOwnCommunityNode in
-  // lib/context/entityNodes.ts for how the two are told apart.
+  // An organisation IS a community. There is one type because there is one
+  // thing: every org card in every directory points at a real Community row via
+  // `metadata.communityRef`, unclaimed until somebody runs it (lib/communities/
+  // stub.ts). isOwnCommunityNode below tells the community you're IN apart from
+  // the organisations recorded inside it.
   { name: 'Community', color: '#78d870', shape: 'square'    },
   { name: 'Event',     color: '#ef4444', shape: 'rectangle' },
   { name: 'Resource',  color: '#f59e0b', shape: 'rectangle' },
-  // Structural types — the container and document kinds. Colours match the
-  // Create panel's tiles so a thing looks the same wherever you meet it.
+  // Structural types — the container kinds. Colours match the Create panel's
+  // tiles so a thing looks the same wherever you meet it. Notes and uploaded
+  // files are deliberately absent: they are content in a brain, not nodes in
+  // the graph, so nothing syncs a `note:`/`file:` node for them.
   { name: 'Space',     color: '#0ea5e9', shape: 'square'    },
   { name: 'Channel',   color: '#e0685f', shape: 'rectangle' },
-  { name: 'Note',      color: '#ec4899', shape: 'rectangle' },
-  { name: 'File',      color: '#14b8a6', shape: 'rectangle' },
   // A connector is a community's gateway to an external API or database, kept
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
@@ -135,16 +135,18 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
 
 /**
  * Node types that describe where things live rather than who/what they are.
- * Everything creatable now has a node, which is what makes the context graph
- * complete — but a community with 400 notes would drown its 40 people. So these
- * are hidden by default in the context view and excluded from the directory
- * grid; the type filter turns them back on. Lowercase — compare against a
- * node's stored `type`, which is canonicalised lowercase on write.
+ * These are hidden by default in the context view and excluded from the
+ * directory grid; the type filter turns them back on. Lowercase — compare
+ * against a node's stored `type`, which is canonicalised lowercase on write.
  *
  * `community` is deliberately NOT here. It carries the organisations that used
  * to be the Group type, which are directory records people expect to see; the
  * cost is that a community's own root node shows up in its grid too, which
  * reads as a "this community" card and links to /communities/<id>.
+ *
+ * `note` and `file` are still listed so any row left over from when those types
+ * existed stays filtered out of the grid and the graph rather than surfacing as
+ * a grey unknown. Nothing writes them any more.
  */
 export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'space',
@@ -176,9 +178,10 @@ export function communityNodeId(communityId: string): string {
  * an organisation recorded inside it?
  *
  * Both wear `type: 'community'` and a `community:<slug>` id since organisations
- * stopped being their own "Group" type — an org IS a community, just one nobody
- * has provisioned a workspace for. The community's own root node is the one
- * whose id derives from its own `communityId`; anything else is a record.
+ * stopped being their own "Group" type — an org IS a community, and now always
+ * has a real row behind it. The community's own root node is the one whose id
+ * derives from its own `communityId`; anything else is a card pointing at some
+ * other community (see `metadata.communityRef`).
  *
  * This is the discriminator every consumer needs: the root node redirects to
  * /communities/<id>, a record renders its profile in place, and only records
@@ -217,9 +220,6 @@ const TYPE_SYNONYMS: Record<string, string> = {
   company: 'community',
   companies: 'community',
   communities: 'community',
-  // An uploaded file is stored as a ContextSource; "File" is what the Create
-  // panel and the graph call it, so both names resolve to the same config.
-  source: 'file',
 };
 
 export function getNodeTypeConfig(
@@ -266,10 +266,9 @@ export function getNodeGlyph(
   if (canonical === 'event' || canonical === 'events') return 'event';
   if (canonical === 'resource' || canonical === 'resources') return 'resource';
   // Containers reuse the existing glyphs rather than inventing new ones: a
-  // community/space/channel reads as a cluster, a document as a page. The glyph
-  // key is still called 'group' — it is the shape's name, not a node type.
+  // community/space/channel reads as a cluster. The glyph key is still called
+  // 'group' — it is the shape's name, not a node type.
   if (canonical === 'community' || canonical === 'space' || canonical === 'channel') return 'group';
-  if (canonical === 'note' || canonical === 'file') return 'resource';
   if (canonical === 'connector') return 'connector';
   return null;
 }
