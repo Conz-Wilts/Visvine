@@ -32,6 +32,7 @@ import {
   FileForm,
   connectorSlug,
   connectorFormReady,
+  type ConnectorAlias,
   type ConnectorFormData,
   type FileEntry,
   type FileFormData,
@@ -138,7 +139,7 @@ interface Stash {
  */
 interface Extras {
   /** connector */
-  connectorAlias: 'http' | 'postgres'
+  connectorAlias: ConnectorAlias
   baseUrl: string
   allow: string
   secretName: string
@@ -564,7 +565,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
               : !titleUsable
                 ? 'Give it a name first'
                 : type === 'connector'
-                  ? extras.connectorAlias === 'postgres'
+                  ? extras.connectorAlias === 'postgres' || extras.connectorAlias === 'mysql'
                     ? 'Name the DSN secret first'
                     : 'Give it a base URL first'
                   : 'Pick a type first'
@@ -989,32 +990,39 @@ function ConnectorExtras({
           options={[
             { value: 'http', label: 'http', hint: 'A REST API' },
             { value: 'postgres', label: 'postgres', hint: 'A read-only database' },
+            { value: 'mysql', label: 'mysql', hint: 'A read-only database' },
+            { value: 'mcp', label: 'mcp', hint: 'A remote MCP server' },
           ] as const}
         />
       </ExtraField>
 
-      {extras.connectorAlias === 'http' ? (
+      {extras.connectorAlias === 'http' || extras.connectorAlias === 'mcp' ? (
         <>
-          <ExtraField label="Base URL">
+          <ExtraField label={extras.connectorAlias === 'mcp' ? 'Server URL' : 'Base URL'}>
             <input
               className={`${extraInput} font-mono`}
-              placeholder="https://api.example.com"
+              placeholder={extras.connectorAlias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
               value={extras.baseUrl}
               onChange={(e) => onChange({ ...extras, baseUrl: e.target.value })}
             />
           </ExtraField>
-          <ExtraField label="Allowed calls">
+          <ExtraField label={extras.connectorAlias === 'mcp' ? 'Allowed tools' : 'Allowed calls'}>
             <textarea
               className={`${extraInput} resize-none font-mono`}
               rows={3}
-              placeholder={'GET /customers\nGET /customers/*\nPOST /customers'}
+              placeholder={
+                extras.connectorAlias === 'mcp'
+                  ? 'search_issues\nget_issue\ncreate_*'
+                  : 'GET /customers\nGET /customers/*\nPOST /customers'
+              }
               value={extras.allow}
               onChange={(e) => onChange({ ...extras, allow: e.target.value })}
             />
           </ExtraField>
           <p className="text-xs text-text-muted">
-            One <span className="font-mono">METHOD /path</span> per line — anything not listed is refused
-            before a request is sent. API keys go in the note&apos;s{' '}
+            {extras.connectorAlias === 'mcp'
+              ? 'One tool name per line (a trailing * allows a prefix) — anything not listed is refused before a request is sent. Auth tokens go in the note\u2019s '
+              : 'One METHOD /path per line — anything not listed is refused before a request is sent. API keys go in the note\u2019s '}
             <span className="font-mono">headers</span> as <span className="font-mono">{'{{secret:NAME}}'}</span>,
             never as raw values.
           </p>

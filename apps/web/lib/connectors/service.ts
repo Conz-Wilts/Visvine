@@ -13,7 +13,7 @@ import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Brain } from '@/lib/notes/store'
 import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
-import { ConnectorError, findSecretRefs, parseConnectorConfig, type ConnectorConfig } from './config'
+import { configSecretRefs, ConnectorError, parseConnectorConfig, type ConnectorConfig } from './config'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -25,7 +25,7 @@ export interface ConnectorSummary {
   /** Raw frontmatter `alias` — loose, so a broken note still lists with its error. */
   alias: string | null
   description: string | null
-  /** Human-readable allow entries; empty = documentation-only. */
+  /** Human-readable allow entries (http calls or mcp tool names); empty = documentation-only. */
   allow: string[]
   /** Parse failure, so admins (and agents) can see a broken connector. */
   invalid: string | null
@@ -63,13 +63,15 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     path,
     alias: typeof fm.alias === 'string' ? fm.alias : null,
     description: typeof fm.description === 'string' ? fm.description : null,
-    allow: parsed.ok && parsed.config.alias === 'http' ? parsed.config.allow.map(formatAllowRule) : [],
-    invalid: parsed.ok ? null : parsed.error,
-    secrets: !parsed.ok
+    allow: !parsed.ok
       ? []
       : parsed.config.alias === 'http'
-        ? [...new Set(Object.values(parsed.config.headers).flatMap(findSecretRefs))]
-        : findSecretRefs(parsed.config.dsn),
+        ? parsed.config.allow.map(formatAllowRule)
+        : parsed.config.alias === 'mcp'
+          ? [...parsed.config.allow]
+          : [],
+    invalid: parsed.ok ? null : parsed.error,
+    secrets: parsed.ok ? configSecretRefs(parsed.config) : [],
     docs: body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body,
   }
 }

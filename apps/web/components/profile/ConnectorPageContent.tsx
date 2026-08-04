@@ -38,7 +38,7 @@ import {
 } from 'lucide-react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import { CONNECTOR_LIMITS, type ConnectorConfig } from '@/lib/connectors/config';
+import { CONNECTOR_LIMITS, isSqlConnector, type ConnectorConfig } from '@/lib/connectors/config';
 import { Skeleton } from '@/components/ui';
 
 interface SecretStatus {
@@ -64,9 +64,16 @@ interface HttpTestResult {
   result: { status: number; content_type: string | null; body: string; truncated: boolean };
 }
 
-interface PostgresTestResult {
-  kind: 'postgres';
+interface SqlTestResult {
+  kind: 'postgres' | 'mysql';
   result: { columns: string[]; rows: unknown[][]; row_count: number; truncated: boolean };
+}
+
+interface McpTestResult {
+  kind: 'mcp';
+  result:
+    | { tools: Array<{ name: string; description: string | null; allowed: boolean }> }
+    | { content: unknown; is_error: boolean };
 }
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
@@ -263,21 +270,25 @@ function ConnectionEditor({
   error: string | null;
   onDone: () => void;
 }) {
-  const http = config.alias === 'http' ? config : null;
-  const [baseUrl, setBaseUrl] = useState(http?.baseUrl ?? '');
+  // http and mcp share the URL + headers form; the PATCH route maps `baseUrl`
+  // onto whichever frontmatter key the alias uses.
+  const urlLike = config.alias === 'http' || config.alias === 'mcp' ? config : null;
+  const [baseUrl, setBaseUrl] = useState(
+    urlLike ? (urlLike.alias === 'http' ? urlLike.baseUrl : urlLike.url) : '',
+  );
   const [headers, setHeaders] = useState<HeaderPair[]>(
-    http ? Object.entries(http.headers).map(([key, value]) => ({ key, value })) : [],
+    urlLike ? Object.entries(urlLike.headers).map(([key, value]) => ({ key, value })) : [],
   );
   const [dsnSecret, setDsnSecret] = useState(
-    config.alias === 'postgres' ? (config.dsn.match(/secret:([A-Za-z0-9_]+)/)?.[1] ?? '') : '',
+    isSqlConnector(config) ? (config.dsn.match(/secret:([A-Za-z0-9_]+)/)?.[1] ?? '') : '',
   );
-  const [maxRows, setMaxRows] = useState(config.alias === 'postgres' ? String(config.maxRows) : '');
+  const [maxRows, setMaxRows] = useState(isSqlConnector(config) ? String(config.maxRows) : '');
   const [timeoutMs, setTimeoutMs] = useState(String(config.timeoutMs));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const patch: Record<string, unknown> = { timeoutMs: Number(timeoutMs) };
-    if (http) {
+    if (urlLike) {
       patch.baseUrl = baseUrl;
       patch.headers = Object.fromEntries(
         headers.filter((h) => h.key.trim()).map((h) => [h.key, h.value]),
@@ -291,13 +302,13 @@ function ConnectionEditor({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      {http ? (
+      {urlLike ? (
         <>
-          <FieldRow label="Base URL">
+          <FieldRow label={urlLike.alias === 'mcp' ? 'Server URL' : 'Base URL'}>
             <input
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://api.example.com"
+              placeholder={urlLike.alias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
               className={FIELD}
             />
           </FieldRow>
@@ -463,6 +474,66 @@ function AllowlistEditor({
       <p className="text-xs text-text-muted">
         A trailing <code className="font-mono">*</code> matches by prefix; a{' '}
         <code className="font-mono">{'/*'}</code> segment matches exactly one segment.
+      </p>
+      <FormError message={error} />
+      <EditActions saving={saving} onCancel={onDone} />
+    </form>
+  );
+}
+
+/** The mcp allowlist: plain tool-name rows, no method to pick. */
+function ToolAllowlistEditor({
+  rules,
+  save,
+  saving,
+  error,
+  onDone,
+}: {
+  rules: string[];
+  save: (patch: Record<string, unknown>) => Promise<boolean>;
+  saving: boolean;
+  error: string | null;
+  onDone: () => void;
+}) {
+  const [rows, setRows] = useState<string[]>(rules);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (await save({ allow: rows.map((r) => r.trim()).filter(Boolean) })) onDone();
+  };
+
+  return (
+    <form onSubmit={submit} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        {rows.map((row, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              value={row}
+              onChange={(e) => setRows((all) => all.map((r, j) => (j === i ? e.target.value : r)))}
+              placeholder="search_issues"
+              className={FIELD}
+            />
+            <button
+              type="button"
+              onClick={() => setRows((all) => all.filter((_, j) => j !== i))}
+              aria-label="Remove tool"
+              className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setRows((all) => [...all, ''])}
+          className={`${GHOST_BUTTON} inline-flex w-fit items-center gap-1.5`}
+        >
+          <Plus className="h-3 w-3" /> Add tool
+        </button>
+      </div>
+      <p className="text-xs text-text-muted">
+        Exact tool names; a trailing <code className="font-mono">*</code> allows a prefix. The Test card
+        below lists what the server exposes.
       </p>
       <FormError message={error} />
       <EditActions saving={saving} onCancel={onDone} />
@@ -753,7 +824,7 @@ function HttpTester({
   );
 }
 
-function PostgresTester({
+function SqlTester({
   connector,
   communityId,
 }: {
@@ -762,7 +833,7 @@ function PostgresTester({
 }) {
   const [sql, setSql] = useState('');
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<PostgresTestResult['result'] | null>(null);
+  const [result, setResult] = useState<SqlTestResult['result'] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const run = async () => {
@@ -770,7 +841,7 @@ function PostgresTester({
     setError(null);
     setResult(null);
     try {
-      const res = await fetchJsonBody<PostgresTestResult>(
+      const res = await fetchJsonBody<SqlTestResult>(
         `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
         'POST',
         { sql },
@@ -843,6 +914,123 @@ function PostgresTester({
   );
 }
 
+function McpTester({
+  connector,
+  communityId,
+}: {
+  connector: ConnectorDetail;
+  communityId: string;
+}) {
+  const [tool, setTool] = useState('');
+  const [args, setArgs] = useState('');
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<McpTestResult['result'] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // One endpoint, two shapes: no tool → the server's tool list, a tool → a call.
+  const run = async (calledTool: string | null) => {
+    setRunning(true);
+    setError(null);
+    setResult(null);
+    let parsedArgs: Record<string, unknown> | undefined;
+    if (calledTool && args.trim()) {
+      try {
+        parsedArgs = JSON.parse(args) as Record<string, unknown>;
+      } catch {
+        setError('Arguments must be a JSON object');
+        setRunning(false);
+        return;
+      }
+    }
+    try {
+      const res = await fetchJsonBody<McpTestResult>(
+        `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
+        'POST',
+        calledTool ? { tool: calledTool, arguments: parsedArgs } : {},
+      );
+      setResult(res.result);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(tool.trim() || null);
+        }}
+      >
+        <input
+          value={tool}
+          onChange={(e) => setTool(e.target.value)}
+          placeholder="Tool name — leave empty to list tools"
+          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
+        />
+        <button
+          type="submit"
+          disabled={running}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          <Play className="h-3.5 w-3.5" />
+          {running ? 'Running…' : tool.trim() ? 'Call tool' : 'List tools'}
+        </button>
+      </form>
+
+      {tool.trim() && (
+        <textarea
+          value={args}
+          onChange={(e) => setArgs(e.target.value)}
+          rows={3}
+          spellCheck={false}
+          placeholder='Arguments as JSON, e.g. {"query": "open bugs"}'
+          className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 font-mono text-[12.5px] text-text-primary outline-none focus:border-brand-green"
+        />
+      )}
+
+      {error && <TestError message={error} />}
+      {result && 'tools' in result ? (
+        result.tools.length === 0 ? (
+          <p className="text-sm text-text-muted">The server reports no tools.</p>
+        ) : (
+          <ul className="flex flex-col gap-1.5">
+            {result.tools.map((t) => (
+              <li key={t.name} className="flex items-baseline gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTool(t.name)}
+                  className="shrink-0 font-mono text-[13px] font-medium text-text-primary underline-offset-2 hover:underline"
+                >
+                  {t.name}
+                </button>
+                {!t.allowed && (
+                  <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    Not allowed
+                  </span>
+                )}
+                {t.description && (
+                  <span className="min-w-0 truncate text-xs text-text-muted">{t.description}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )
+      ) : result ? (
+        <div className="flex flex-col gap-2">
+          {'is_error' in result && result.is_error && (
+            <p className="text-xs font-semibold text-red-700">The tool reported an error.</p>
+          )}
+          <ResultBody text={JSON.stringify('content' in result ? result.content : result)} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TestError({ message }: { message: string }) {
   return (
     <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -883,20 +1071,26 @@ function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'wa
       hint: `${unset.map((s) => s.name).join(', ')} ${unset.length === 1 ? 'is' : 'are'} referenced but not stored — calls fail until set.`,
     };
   }
-  if (connector.config?.alias === 'http' && connector.config.allow.length === 0) {
+  const alias = connector.config?.alias;
+  if ((alias === 'http' || alias === 'mcp') && connector.config?.allow.length === 0) {
     return {
-      label: 'Documentation only',
+      label: alias === 'mcp' ? 'Discovery only' : 'Documentation only',
       tone: 'warn',
-      hint: 'No allow entries, so no call is permitted. Agents can still read the docs.',
+      hint:
+        alias === 'mcp'
+          ? 'No allowed tools, so no call is permitted. Agents can still list the server’s tools and read the docs.'
+          : 'No allow entries, so no call is permitted. Agents can still read the docs.',
     };
   }
   return {
     label: 'Ready',
     tone: 'ok',
     hint:
-      connector.config?.alias === 'postgres'
+      alias === 'postgres' || alias === 'mysql'
         ? 'Agents can run read-only queries through this connector.'
-        : `Agents can make the ${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}.`,
+        : alias === 'mcp'
+          ? `Agents can call the ${connector.allow.length} allowed tool${connector.allow.length === 1 ? '' : 's'}.`
+          : `Agents can make the ${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}.`,
   };
 }
 
@@ -979,8 +1173,9 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
   const status = statusOf(connector);
   const config = connector.config;
-  const isPostgres = config?.alias === 'postgres';
-  const Icon = isPostgres ? Database : Globe;
+  const isSql = config?.alias === 'postgres' || config?.alias === 'mysql';
+  const isMcp = config?.alias === 'mcp';
+  const Icon = isSql ? Database : isMcp ? Plug : Globe;
   const runnable = !connector.invalid && connector.secrets.every((s) => s.set);
 
   return (
@@ -1071,7 +1266,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         <Card
           title="Connection"
           icon={<Icon className="h-4 w-4" />}
-          subtitle={isPostgres ? 'Read-only postgres' : 'Outbound HTTP'}
+          subtitle={isSql ? `Read-only ${config.alias}` : isMcp ? 'Remote MCP server' : 'Outbound HTTP'}
           action={editing === 'connection' ? undefined : <EditButton onClick={() => openEditor('connection')} />}
         >
           {editing === 'connection' ? (
@@ -1084,9 +1279,11 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             />
           ) : (
           <div className="flex flex-col gap-3">
-            {config.alias === 'http' ? (
+            {config.alias === 'http' || config.alias === 'mcp' ? (
               <>
-                <Detail label="Base URL">{config.baseUrl}</Detail>
+                <Detail label={config.alias === 'mcp' ? 'Server URL' : 'Base URL'}>
+                  {config.alias === 'mcp' ? config.url : config.baseUrl}
+                </Detail>
                 {Object.entries(config.headers).length > 0 && (
                   <Detail label="Headers">
                     <span className="flex flex-col gap-1">
@@ -1116,34 +1313,61 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* ══ ALLOWLIST — http only; postgres is governed by the SQL guard ══ */}
-        {config?.alias === 'http' && (
+        {/* ══ ALLOWLIST — http calls or mcp tools; SQL is governed by the guard ══ */}
+        {(config?.alias === 'http' || config?.alias === 'mcp') && (
           <Card
-            title="Allowlist"
+            title={config.alias === 'mcp' ? 'Allowed tools' : 'Allowlist'}
             icon={<ListChecks className="h-4 w-4" />}
-            subtitle={`${config.allow.length} rule${config.allow.length === 1 ? '' : 's'}`}
+            subtitle={`${config.allow.length} ${config.alias === 'mcp' ? 'tool' : 'rule'}${config.allow.length === 1 ? '' : 's'}`}
             action={
               editing === 'allow' ? undefined : (
                 <EditButton
                   onClick={() => openEditor('allow')}
-                  label={config.allow.length === 0 ? 'Add rules' : 'Edit'}
+                  label={config.allow.length === 0 ? (config.alias === 'mcp' ? 'Add tools' : 'Add rules') : 'Edit'}
                 />
               )
             }
           >
             {editing === 'allow' ? (
-              <AllowlistEditor
-                rules={connector.allow}
-                save={save}
-                saving={saving}
-                error={saveError}
-                onDone={() => openEditor(null)}
-              />
+              config.alias === 'mcp' ? (
+                <ToolAllowlistEditor
+                  rules={connector.allow}
+                  save={save}
+                  saving={saving}
+                  error={saveError}
+                  onDone={() => openEditor(null)}
+                />
+              ) : (
+                <AllowlistEditor
+                  rules={connector.allow}
+                  save={save}
+                  saving={saving}
+                  error={saveError}
+                  onDone={() => openEditor(null)}
+                />
+              )
             ) : config.allow.length === 0 ? (
               <p className="text-sm text-text-muted">
-                No calls are permitted, so this connector is documentation only. Add a rule like{' '}
-                <code className="font-mono text-[12px]">GET /customers</code> to let agents call it.
+                {config.alias === 'mcp' ? (
+                  <>
+                    No tools are permitted, so this connector is discovery only. Test below to list the
+                    server&apos;s tools, then allow the ones agents may call.
+                  </>
+                ) : (
+                  <>
+                    No calls are permitted, so this connector is documentation only. Add a rule like{' '}
+                    <code className="font-mono text-[12px]">GET /customers</code> to let agents call it.
+                  </>
+                )}
               </p>
+            ) : config.alias === 'mcp' ? (
+              <ul className="flex flex-col gap-1.5">
+                {connector.allow.map((rule) => (
+                  <li key={rule} className="min-w-0 truncate font-mono text-[13px] text-text-primary">
+                    {rule}
+                  </li>
+                ))}
+              </ul>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {connector.allow.map((rule) => {
@@ -1162,7 +1386,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           </Card>
         )}
 
-        {config?.alias === 'postgres' && (
+        {config && isSqlConnector(config) && (
           <Card title="Query limits" icon={<ShieldCheck className="h-4 w-4" />} subtitle="Enforced server-side">
             <ul className="flex flex-col gap-1.5 text-sm text-text-muted">
               <li>One statement per call, SELECT-shaped only.</li>
@@ -1210,7 +1434,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           title="Test"
           icon={<Play className="h-4 w-4" />}
           subtitle={
-            isPostgres
+            isSql
               ? 'Runs for real, under the same limits and secret an agent gets'
               : 'Runs for real, through the same allowlist and secrets an agent gets'
           }
@@ -1226,8 +1450,10 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             </div>
           ) : config.alias === 'http' ? (
             <HttpTester connector={connector} communityId={communityId} />
+          ) : config.alias === 'mcp' ? (
+            <McpTester connector={connector} communityId={communityId} />
           ) : (
-            <PostgresTester connector={connector} communityId={communityId} />
+            <SqlTester connector={connector} communityId={communityId} />
           )}
         </Card>
       )}

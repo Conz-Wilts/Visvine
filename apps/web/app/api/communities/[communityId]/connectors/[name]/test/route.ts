@@ -3,7 +3,10 @@ import { requireSession } from '@/lib/session';
 import { resolveBrain, principalOf } from '@/lib/notes/brain';
 import { executeHttpConnector } from '@/lib/connectors/http';
 import { executePostgresQuery } from '@/lib/connectors/postgres';
+import { executeMysqlQuery } from '@/lib/connectors/mysql';
+import { callMcpTool, listMcpTools } from '@/lib/connectors/mcp';
 import {
+  configSecretRefs,
   ConnectorError,
   findSecretRefs,
   interpolateSecrets,
@@ -50,7 +53,15 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { method?: unknown; path?: unknown; query?: unknown; sql?: unknown; body?: unknown };
+  let body: {
+    method?: unknown;
+    path?: unknown;
+    query?: unknown;
+    sql?: unknown;
+    body?: unknown;
+    tool?: unknown;
+    arguments?: unknown;
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -83,10 +94,7 @@ export async function POST(
                 .map(([k, v]) => [k, v as string]),
             )
           : undefined;
-      const secrets = await resolveSecretValues(
-        communityId,
-        Object.values(loaded.config.headers).flatMap(findSecretRefs),
-      );
+      const secrets = await resolveSecretValues(communityId, configSecretRefs(loaded.config));
       const result = await executeHttpConnector(loaded.config, secrets, {
         method,
         path,
@@ -97,15 +105,36 @@ export async function POST(
       return NextResponse.json({ kind: 'http', result });
     }
 
+    if (loaded.config.alias === 'mcp') {
+      const secrets = await resolveSecretValues(communityId, configSecretRefs(loaded.config));
+      // No tool named = discovery; the page's tester lists before it calls.
+      if (typeof body.tool !== 'string' || !body.tool) {
+        const tools = await listMcpTools(loaded.config, secrets);
+        describe(`tools/list → ${tools.length} tools`);
+        return NextResponse.json({ kind: 'mcp', result: { tools } });
+      }
+      const args =
+        body.arguments && typeof body.arguments === 'object' && !Array.isArray(body.arguments)
+          ? (body.arguments as Record<string, unknown>)
+          : {};
+      const result = await callMcpTool(loaded.config, secrets, body.tool, args);
+      describe(`tools/call ${body.tool} → ${result.is_error ? 'error' : 'ok'}`);
+      return NextResponse.json({ kind: 'mcp', result });
+    }
+
+    const config = loaded.config;
     const sql = typeof body.sql === 'string' ? body.sql : '';
-    const secrets = await resolveSecretValues(communityId, findSecretRefs(loaded.config.dsn));
-    const dsn = interpolateSecrets(loaded.config.dsn, secrets);
+    const secrets = await resolveSecretValues(communityId, findSecretRefs(config.dsn));
+    const dsn = interpolateSecrets(config.dsn, secrets);
     if (!dsn.ok) {
       throw new ConnectorError('missing_secret', `Secret ${dsn.missing.join(', ')} not set`);
     }
-    const result = await executePostgresQuery(loaded.config, dsn.value, sql);
+    const result =
+      config.alias === 'postgres'
+        ? await executePostgresQuery(config, dsn.value, sql)
+        : await executeMysqlQuery(config, dsn.value, sql);
     describe(`query → ${result.row_count} rows`);
-    return NextResponse.json({ kind: 'postgres', result });
+    return NextResponse.json({ kind: config.alias, result });
   } catch (e) {
     if (e instanceof ConnectorError) {
       describe(`${e.code}: ${e.message}`);

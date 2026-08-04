@@ -120,19 +120,19 @@ export async function PATCH(
 
   const fm = parseFrontmatter(content);
   const alias = typeof fm.alias === 'string' ? fm.alias : null;
-  if (alias !== 'http' && alias !== 'postgres') {
+  if (alias !== 'http' && alias !== 'postgres' && alias !== 'mysql' && alias !== 'mcp') {
     // Nothing below knows which fields are even meaningful. Switching a
     // connector between executors rewrites every other key with it, so that
     // stays a Raw-tab edit rather than a half-applied merge here.
-    return bad('Set `alias: http` or `alias: postgres` in the Raw tab first');
+    return bad('Set `alias: http`, `postgres`, `mysql` or `mcp` in the Raw tab first');
   }
 
-  // Reject fields belonging to the other executor outright: silently dropping
-  // them would look like a successful save that didn't save.
-  const wrongAlias =
-    alias === 'http'
-      ? ['dsnSecret', 'maxRows'].filter((k) => body[k as keyof PatchBody] !== undefined)
-      : ['baseUrl', 'allow', 'headers'].filter((k) => body[k as keyof PatchBody] !== undefined);
+  // Reject fields belonging to another executor outright: silently dropping
+  // them would look like a successful save that didn't save. mcp shares the
+  // http field names (baseUrl carries its `url`, allow its tool names).
+  const wrongAlias = (
+    alias === 'http' || alias === 'mcp' ? ['dsnSecret', 'maxRows'] : ['baseUrl', 'allow', 'headers']
+  ).filter((k) => body[k as keyof PatchBody] !== undefined);
   if (wrongAlias.length > 0) {
     return bad(`${wrongAlias.join(', ')} ${wrongAlias.length === 1 ? 'is' : 'are'} not a ${alias} connector field`);
   }
@@ -149,14 +149,16 @@ export async function PATCH(
     fm.timeout_ms = timeout;
   }
 
-  if (alias === 'http') {
+  if (alias === 'http' || alias === 'mcp') {
     if (body.baseUrl !== undefined) {
-      if (typeof body.baseUrl !== 'string') return bad('Base URL must be a string');
-      fm.base_url = body.baseUrl.trim().replace(/\/+$/, '');
+      if (typeof body.baseUrl !== 'string') return bad('URL must be a string');
+      fm[alias === 'mcp' ? 'url' : 'base_url'] = body.baseUrl.trim().replace(/\/+$/, '');
     }
     if (body.allow !== undefined) {
       if (!Array.isArray(body.allow) || body.allow.some((r) => typeof r !== 'string')) {
-        return bad('Allow must be a list of "METHOD /path" strings');
+        return bad(
+          alias === 'mcp' ? 'Allow must be a list of tool names' : 'Allow must be a list of "METHOD /path" strings',
+        );
       }
       fm.allow = (body.allow as string[]).map((r) => r.trim()).filter(Boolean);
     }

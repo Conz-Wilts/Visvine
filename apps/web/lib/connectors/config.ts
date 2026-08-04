@@ -7,17 +7,17 @@
  * logic: the allowlist grammar, `{{secret:NAME}}` reference handling, and
  * output redaction. No I/O lives here — everything is unit-testable.
  *
- * `alias` (http | postgres) picks the executor. It's called an alias, not a
- * kind, because it IS the node alias: a connector note syncs a `connector:`
- * node whose `Node.alias` mirrors this field, so the same value that routes the
- * call also colours the chip in the directory (see DEFAULT_ALIASES in
- * lib/types/context.ts).
+ * `alias` (http | postgres | mysql | mcp) picks the executor. It's called an
+ * alias, not a kind, because it IS the node alias: a connector note syncs a
+ * `connector:` node whose `Node.alias` mirrors this field, so the same value
+ * that routes the call also colours the chip in the directory (see the alias
+ * notes in lib/types/context.ts).
  *
  * Two invariants the executors rely on:
  *   • Secret VALUES never appear in config — only `{{secret:NAME}}` references.
- *     A postgres `dsn` must be exactly one reference; an http `base_url` may
- *     not contain any (the host the SSRF check judges must be the host the
- *     admin actually wrote).
+ *     A postgres/mysql `dsn` (and an http OAuth `client_secret`) must be
+ *     exactly one reference; an http/mcp base URL may not contain any (the
+ *     host the SSRF check judges must be the host the admin actually wrote).
  *   • No `allow` list means no call is permitted — a connector with docs but
  *     no allow entries is a valid, describe-only connector.
  */
@@ -47,12 +47,28 @@ export interface AllowRule {
   prefix: boolean
 }
 
+/**
+ * OAuth2 client-credentials auth for an http connector, from the frontmatter
+ * `auth:` block. The executor exchanges these for a bearer token server-side
+ * and caches it until expiry — the model never sees the client secret or the
+ * token. `clientSecret` is always exactly one `{{secret:NAME}}` reference;
+ * `clientId` may be a literal or a single reference.
+ */
+export interface OAuth2Config {
+  tokenUrl: string
+  clientId: string
+  clientSecret: string
+  scope: string | null
+}
+
 export interface HttpConnectorConfig {
   alias: 'http'
   baseUrl: string
   allow: AllowRule[]
   headers: Record<string, string>
   timeoutMs: number
+  /** Null = static-header auth only (the common case). */
+  oauth: OAuth2Config | null
 }
 
 export interface PostgresConnectorConfig {
@@ -63,7 +79,33 @@ export interface PostgresConnectorConfig {
   timeoutMs: number
 }
 
-export type ConnectorConfig = HttpConnectorConfig | PostgresConnectorConfig
+export interface MysqlConnectorConfig {
+  alias: 'mysql'
+  /** Always a single `{{secret:NAME}}` reference, never a raw DSN. */
+  dsn: string
+  maxRows: number
+  timeoutMs: number
+}
+
+/** The two DSN-shaped executors share every field except the dialect. */
+export type SqlConnectorConfig = PostgresConnectorConfig | MysqlConnectorConfig
+
+export interface McpConnectorConfig {
+  alias: 'mcp'
+  /** The remote MCP server's streamable-HTTP endpoint. */
+  url: string
+  /** Tool names this connector may call; a trailing `*` is a prefix match. Empty = discovery-only. */
+  allow: string[]
+  headers: Record<string, string>
+  timeoutMs: number
+}
+
+export type ConnectorConfig = HttpConnectorConfig | SqlConnectorConfig | McpConnectorConfig
+
+/** Is this a DSN-backed SQL connector (postgres or mysql)? */
+export function isSqlConnector(config: ConnectorConfig): config is SqlConnectorConfig {
+  return config.alias === 'postgres' || config.alias === 'mysql'
+}
 
 const TIMEOUT_DEFAULT_MS = 10_000
 const TIMEOUT_MIN_MS = 1_000
@@ -187,67 +229,187 @@ export type ParseConfigResult =
   | { ok: true; config: ConnectorConfig }
   | { ok: false; error: string }
 
-/** Frontmatter → validated config. Never throws; errors are admin-readable. */
-export function parseConnectorConfig(fm: NoteFrontmatter): ParseConfigResult {
-  const alias = fm.alias
-  if (alias !== 'http' && alias !== 'postgres') {
-    return { ok: false, error: "Connector frontmatter needs `alias: http` or `alias: postgres`" }
-  }
-  const timeoutMs = clamp(fm.timeout_ms, TIMEOUT_DEFAULT_MS, TIMEOUT_MIN_MS, TIMEOUT_MAX_MS)
+/** Exactly one `{{secret:NAME}}` reference and nothing else? Returns the NAME. */
+function singleSecretRef(text: string): string | null {
+  const refs = findSecretRefs(text)
+  if (refs.length !== 1 || text.replace(SECRET_REF_RE, '') !== '') return null
+  return refs[0]
+}
 
-  if (alias === 'postgres') {
-    const dsn = typeof fm.dsn === 'string' ? fm.dsn.trim() : ''
-    const refs = findSecretRefs(dsn)
-    if (refs.length !== 1 || !dsn.match(SECRET_REF_RE) || dsn.replace(SECRET_REF_RE, '') !== '') {
-      return {
-        ok: false,
-        error:
-          'A postgres connector `dsn` must be exactly one secret reference like ' +
-          '"{{secret:ANALYTICS_DSN}}" — raw connection strings are not allowed in notes',
-      }
-    }
-    if (!isValidSecretName(refs[0])) {
-      return { ok: false, error: `Invalid secret name '${refs[0]}' (use A-Z, 0-9 and _)` }
-    }
-    return {
-      ok: true,
-      config: {
-        alias: 'postgres',
-        dsn,
-        maxRows: clamp(fm.max_rows, MAX_ROWS_DEFAULT, 1, MAX_ROWS_MAX),
-        timeoutMs,
-      },
-    }
-  }
-
-  const baseUrl = typeof fm.base_url === 'string' ? fm.base_url.trim() : ''
-  if (findSecretRefs(baseUrl).length > 0) {
-    return { ok: false, error: '`base_url` may not contain secret references — put them in `headers`' }
+/**
+ * A URL an executor will connect to must be written literally in the note —
+ * no secret refs steering the host past the SSRF check — and be https outside
+ * dev. Returns the parsed URL or an admin-readable error string.
+ */
+function parseTargetUrl(raw: string, field: string, allowPathQuery = false): URL | string {
+  if (findSecretRefs(raw).length > 0) {
+    return `\`${field}\` may not contain secret references`
   }
   let url: URL
   try {
-    url = new URL(baseUrl)
+    url = new URL(raw)
   } catch {
-    return { ok: false, error: 'An http connector needs a valid absolute `base_url`' }
+    return `A valid absolute \`${field}\` is required`
   }
   const httpsOk = url.protocol === 'https:'
   const devHttpOk = url.protocol === 'http:' && process.env.NODE_ENV === 'development'
-  if (!httpsOk && !devHttpOk) {
-    return { ok: false, error: '`base_url` must be https' }
+  if (!httpsOk && !devHttpOk) return `\`${field}\` must be https`
+  if (!allowPathQuery && (url.search || url.hash)) {
+    return `\`${field}\` may not include a query string or fragment`
   }
-  if (url.search || url.hash) {
-    return { ok: false, error: '`base_url` may not include a query string or fragment' }
-  }
+  return url
+}
 
-  const headers = parseHeaders(fm.headers)
-  if (headers === null) {
-    return { ok: false, error: '`headers` must map header names to string values' }
+const MCP_TOOL_RULE_RE = /^[A-Za-z0-9][\w.-]{0,127}\*?$/
+
+/**
+ * Does the mcp allowlist permit this tool? Exact name, or prefix when the rule
+ * ends in `*`. An empty list denies every call (discovery stays possible —
+ * that is how an admin finds the names to allow).
+ */
+export function matchToolAllowlist(allow: readonly string[], tool: string): boolean {
+  return allow.some((rule) =>
+    rule.endsWith('*') ? tool.startsWith(rule.slice(0, -1)) : tool === rule,
+  )
+}
+
+/**
+ * Every secret NAME a connector's config references — the set the executor
+ * needs resolved, and the set the console shows against stored secrets.
+ */
+export function configSecretRefs(config: ConnectorConfig): string[] {
+  switch (config.alias) {
+    case 'postgres':
+    case 'mysql':
+      return findSecretRefs(config.dsn)
+    case 'mcp':
+      return [...new Set(Object.values(config.headers).flatMap(findSecretRefs))]
+    case 'http': {
+      const refs = Object.values(config.headers).flatMap(findSecretRefs)
+      if (config.oauth) refs.push(...findSecretRefs(config.oauth.clientId), ...findSecretRefs(config.oauth.clientSecret))
+      return [...new Set(refs)]
+    }
   }
+}
+
+function parseSqlConfig(alias: 'postgres' | 'mysql', fm: NoteFrontmatter, timeoutMs: number): ParseConfigResult {
+  const dsn = typeof fm.dsn === 'string' ? fm.dsn.trim() : ''
+  const ref = singleSecretRef(dsn)
+  if (ref === null) {
+    return {
+      ok: false,
+      error:
+        `A ${alias} connector \`dsn\` must be exactly one secret reference like ` +
+        '"{{secret:ANALYTICS_DSN}}" — raw connection strings are not allowed in notes',
+    }
+  }
+  if (!isValidSecretName(ref)) {
+    return { ok: false, error: `Invalid secret name '${ref}' (use A-Z, 0-9 and _)` }
+  }
+  return {
+    ok: true,
+    config: { alias, dsn, maxRows: clamp(fm.max_rows, MAX_ROWS_DEFAULT, 1, MAX_ROWS_MAX), timeoutMs },
+  }
+}
+
+/** Validated headers map, or an admin-readable error. */
+function parseHeadersOrError(
+  raw: unknown,
+): { ok: true; headers: Record<string, string> } | { ok: false; error: string } {
+  const headers = parseHeaders(raw)
+  if (headers === null) return { ok: false, error: '`headers` must map header names to string values' }
   for (const name of Object.values(headers).flatMap(findSecretRefs)) {
     if (!isValidSecretName(name)) {
       return { ok: false, error: `Invalid secret name '${name}' (use A-Z, 0-9 and _)` }
     }
   }
+  return { ok: true, headers }
+}
+
+function parseOAuth(raw: unknown): OAuth2Config | null | { error: string } {
+  if (raw === undefined || raw === null) return null
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: '`auth` must be a map with token_url, client_id and client_secret' }
+  }
+  const auth = raw as Record<string, unknown>
+  const tokenUrl = typeof auth.token_url === 'string' ? auth.token_url.trim() : ''
+  const url = parseTargetUrl(tokenUrl, 'auth.token_url')
+  if (typeof url === 'string') return { error: url }
+
+  const clientId = typeof auth.client_id === 'string' ? auth.client_id.trim() : ''
+  if (!clientId) return { error: '`auth.client_id` is required' }
+  const idRefs = findSecretRefs(clientId)
+  if (idRefs.length > 0 && singleSecretRef(clientId) === null) {
+    return { error: '`auth.client_id` must be a literal or a single secret reference' }
+  }
+
+  const clientSecret = typeof auth.client_secret === 'string' ? auth.client_secret.trim() : ''
+  const secretRef = singleSecretRef(clientSecret)
+  if (secretRef === null) {
+    return {
+      error:
+        '`auth.client_secret` must be exactly one secret reference like ' +
+        '"{{secret:CRM_CLIENT_SECRET}}" — raw secrets are not allowed in notes',
+    }
+  }
+  for (const name of [...idRefs, secretRef]) {
+    if (!isValidSecretName(name)) return { error: `Invalid secret name '${name}' (use A-Z, 0-9 and _)` }
+  }
+
+  const scope = typeof auth.scope === 'string' && auth.scope.trim() ? auth.scope.trim() : null
+  return { tokenUrl, clientId, clientSecret, scope }
+}
+
+/** Frontmatter → validated config. Never throws; errors are admin-readable. */
+export function parseConnectorConfig(fm: NoteFrontmatter): ParseConfigResult {
+  const alias = fm.alias
+  if (alias !== 'http' && alias !== 'postgres' && alias !== 'mysql' && alias !== 'mcp') {
+    return { ok: false, error: 'Connector frontmatter needs `alias: http`, `postgres`, `mysql` or `mcp`' }
+  }
+  const timeoutMs = clamp(fm.timeout_ms, TIMEOUT_DEFAULT_MS, TIMEOUT_MIN_MS, TIMEOUT_MAX_MS)
+
+  if (alias === 'postgres' || alias === 'mysql') return parseSqlConfig(alias, fm, timeoutMs)
+
+  if (alias === 'mcp') {
+    const rawUrl = typeof fm.url === 'string' ? fm.url.trim() : ''
+    // An MCP endpoint is a full path (…/mcp), but still no query/fragment.
+    const url = parseTargetUrl(rawUrl, 'url')
+    if (typeof url === 'string') return { ok: false, error: url }
+
+    const parsedHeaders = parseHeadersOrError(fm.headers)
+    if (!parsedHeaders.ok) return { ok: false, error: parsedHeaders.error }
+
+    const allowRaw = Array.isArray(fm.allow) ? fm.allow : []
+    const allow: string[] = []
+    for (const entry of allowRaw) {
+      if (typeof entry !== 'string' || !MCP_TOOL_RULE_RE.test(entry.trim())) {
+        return {
+          ok: false,
+          error: `Bad allow entry ${JSON.stringify(entry)} — use a tool name, optionally ending in * for a prefix`,
+        }
+      }
+      allow.push(entry.trim())
+    }
+    return {
+      ok: true,
+      config: { alias: 'mcp', url: rawUrl.replace(/\/+$/, ''), allow, headers: parsedHeaders.headers, timeoutMs },
+    }
+  }
+
+  const baseUrl = typeof fm.base_url === 'string' ? fm.base_url.trim() : ''
+  const url = parseTargetUrl(baseUrl, 'base_url')
+  if (typeof url === 'string') {
+    return {
+      ok: false,
+      error: url === '`base_url` may not contain secret references' ? url + ' — put them in `headers`' : url,
+    }
+  }
+
+  const parsedHeaders = parseHeadersOrError(fm.headers)
+  if (!parsedHeaders.ok) return { ok: false, error: parsedHeaders.error }
+
+  const oauth = parseOAuth(fm.auth)
+  if (oauth !== null && 'error' in oauth) return { ok: false, error: oauth.error }
 
   const allowRaw = Array.isArray(fm.allow) ? fm.allow : []
   const allow: AllowRule[] = []
@@ -261,7 +423,7 @@ export function parseConnectorConfig(fm: NoteFrontmatter): ParseConfigResult {
 
   return {
     ok: true,
-    config: { alias: 'http', baseUrl: baseUrl.replace(/\/+$/, ''), allow, headers, timeoutMs },
+    config: { alias: 'http', baseUrl: baseUrl.replace(/\/+$/, ''), allow, headers: parsedHeaders.headers, timeoutMs, oauth },
   }
 }
 
@@ -278,40 +440,60 @@ export function parseConnectorConfig(fm: NoteFrontmatter): ParseConfigResult {
  */
 export function newConnectorNote(input: {
   name: string
-  alias: 'http' | 'postgres'
+  alias: 'http' | 'postgres' | 'mysql' | 'mcp'
   description?: string
-  /** http only. */
+  /** http: the API's base URL. mcp: the server's streamable-HTTP endpoint. */
   baseUrl?: string
-  /** http only — already-split "METHOD /path" rules. */
+  /** http: already-split "METHOD /path" rules. mcp: tool names (trailing `*` = prefix). */
   allow?: readonly string[]
-  /** postgres only — the secret NAME holding the DSN. */
+  /** postgres/mysql only — the secret NAME holding the DSN. */
   secretName?: string
 }): string {
   const description = (input.description ?? '').trim()
   const front = [`type: connector`, `alias: ${input.alias}`, `title: ${JSON.stringify(input.name)}`]
   if (description) front.push(`description: ${JSON.stringify(description)}`)
 
-  if (input.alias === 'postgres') {
+  const allow = (input.allow ?? []).map((r) => r.trim()).filter(Boolean)
+  const allowYaml =
+    allow.length > 0 ? `allow:\n${allow.map((r) => `  - ${JSON.stringify(r)}`).join('\n')}` : `allow: []`
+
+  if (input.alias === 'postgres' || input.alias === 'mysql') {
     front.push(`dsn: "{{secret:${(input.secretName ?? '').trim().toUpperCase()}}}"`)
     front.push(`max_rows: ${MAX_ROWS_DEFAULT}`)
+  } else if (input.alias === 'mcp') {
+    front.push(`url: ${(input.baseUrl ?? '').trim().replace(/\/+$/, '')}`)
+    front.push(allowYaml)
   } else {
     front.push(`base_url: ${(input.baseUrl ?? '').trim().replace(/\/+$/, '')}`)
-    const allow = (input.allow ?? []).map((r) => r.trim()).filter(Boolean)
-    front.push(
-      allow.length > 0
-        ? `allow:\n${allow.map((r) => `  - ${JSON.stringify(r)}`).join('\n')}`
-        : `allow: []`,
-    )
+    front.push(allowYaml)
   }
   front.push(`timeout_ms: ${TIMEOUT_DEFAULT_MS}`)
 
   const body =
-    input.alias === 'postgres'
+    input.alias === 'postgres' || input.alias === 'mysql'
       ? [
           `${description || `The ${input.name} database.`}`,
           ``,
           `Queries run read-only inside a transaction, one statement at a time, capped at`,
           `${MAX_ROWS_DEFAULT} rows. Describe the tables an agent should know about here.`,
+        ]
+      : input.alias === 'mcp'
+      ? [
+          `${description || `The ${input.name} MCP server.`}`,
+          ``,
+          ...(allow.length
+            ? [`Only the tools listed in \`allow\` may be called; anything else is refused before a`,
+               `request is sent. Document what each tool does here.`]
+            : [`No tools are allowed yet — list the server's tools to find their names, then add`,
+               `\`allow\` entries to the frontmatter above. Until then this connector is discovery-only.`]),
+          ``,
+          `If the server needs auth, add it to the frontmatter as a header referencing a stored`,
+          `secret, never as a raw value:`,
+          ``,
+          '```yaml',
+          `headers:`,
+          `  Authorization: "Bearer {{secret:${input.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_TOKEN}}"`,
+          '```',
         ]
       : [
           `${description || `The ${input.name} API.`}`,

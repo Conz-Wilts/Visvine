@@ -430,7 +430,7 @@ export default function CreateModal() {
     // the note itself one tab away on Context.
     setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
     setCreatedDetail(
-      connectorData.alias === 'postgres'
+      connectorData.alias === 'postgres' || connectorData.alias === 'mysql'
         ? `Saved to ${path} — add the ${connectorData.secretName.trim().toUpperCase()} secret on its page before using it.`
         : `Saved to ${path}`,
     );

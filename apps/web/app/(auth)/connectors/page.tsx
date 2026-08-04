@@ -57,7 +57,7 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
       tone: 'warn',
     };
   }
-  if (connector.alias === 'postgres') {
+  if (connector.alias === 'postgres' || connector.alias === 'mysql') {
     return { label: 'Ready', detail: 'Read-only SQL', tone: 'ok' };
   }
   if (connector.allow.length === 0) {
@@ -65,7 +65,10 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
   }
   return {
     label: 'Ready',
-    detail: `${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}`,
+    detail:
+      connector.alias === 'mcp'
+        ? `${connector.allow.length} allowed tool${connector.allow.length === 1 ? '' : 's'}`
+        : `${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}`,
     tone: 'ok',
   };
 }
@@ -78,7 +81,12 @@ const TONE_CLASSES: Record<Tone, string> = {
 
 function ConnectorCard({ connector }: { connector: ConnectorRow }) {
   const status = statusOf(connector);
-  const Icon = connector.alias === 'postgres' ? Database : connector.alias === 'http' ? Globe : Plug;
+  const Icon =
+    connector.alias === 'postgres' || connector.alias === 'mysql'
+      ? Database
+      : connector.alias === 'http'
+        ? Globe
+        : Plug;
 
   return (
     <Link

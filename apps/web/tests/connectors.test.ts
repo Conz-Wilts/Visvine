@@ -10,8 +10,10 @@ import {
   parseConnectorConfig,
   parseAllowRule,
   matchAllowlist,
+  matchToolAllowlist,
   normalizeRequestPath,
   findSecretRefs,
+  configSecretRefs,
   interpolateSecrets,
   redactSecrets,
   isValidSecretName,
@@ -20,6 +22,7 @@ import {
 } from '@/lib/connectors/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { assertSingleReadOnlyStatement } from '@/lib/connectors/postgres'
+import { assertSingleReadOnlyMysqlStatement } from '@/lib/connectors/mysql'
 import { isPrivateAddress } from '@/lib/net/ssrf'
 
 // Read lazily inside getSecretsKey, so setting it after imports is enough.
@@ -93,6 +96,74 @@ test('a valid postgres connector parses; raw DSNs are refused', () => {
   }
 })
 
+test('a valid mysql connector parses with the same DSN rule as postgres', () => {
+  const parsed = parseConnectorConfig({ alias: 'mysql', dsn: '{{secret:SHOP_DSN}}', max_rows: 50 })
+  assert.ok(parsed.ok)
+  if (!parsed.ok || parsed.config.alias !== 'mysql') return
+  assert.equal(parsed.config.maxRows, 50)
+  assert.deepEqual(configSecretRefs(parsed.config), ['SHOP_DSN'])
+  assert.ok(!parseConnectorConfig({ alias: 'mysql', dsn: 'mysql://u:p@db.example.com/app' }).ok)
+})
+
+test('a valid mcp connector parses; bad tool rules and secret-ref urls are refused', () => {
+  const parsed = parseConnectorConfig({
+    alias: 'mcp',
+    url: 'https://mcp.example.com/mcp',
+    headers: { Authorization: 'Bearer {{secret:LINEAR_TOKEN}}' },
+    allow: ['search_issues', 'get_*'],
+  })
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  if (!parsed.ok || parsed.config.alias !== 'mcp') return
+  assert.deepEqual(parsed.config.allow, ['search_issues', 'get_*'])
+  assert.deepEqual(configSecretRefs(parsed.config), ['LINEAR_TOKEN'])
+
+  assert.ok(!parseConnectorConfig({ alias: 'mcp', url: 'https://x.com/mcp', allow: ['bad tool'] }).ok)
+  assert.ok(!parseConnectorConfig({ alias: 'mcp', url: 'https://{{secret:HOST}}/mcp' }).ok)
+  assert.ok(!parseConnectorConfig({ alias: 'mcp', url: 'not-a-url' }).ok)
+})
+
+test('the mcp tool allowlist matches exact names and prefixes; empty denies', () => {
+  assert.ok(matchToolAllowlist(['search_issues', 'get_*'], 'search_issues'))
+  assert.ok(matchToolAllowlist(['search_issues', 'get_*'], 'get_issue'))
+  assert.ok(!matchToolAllowlist(['search_issues', 'get_*'], 'delete_issue'))
+  assert.ok(!matchToolAllowlist(['search_issues'], 'search_issues_admin'))
+  assert.ok(!matchToolAllowlist([], 'anything'))
+})
+
+test('http oauth: client_secret must be one secret ref; refs are collected', () => {
+  const parsed = parseConnectorConfig({
+    alias: 'http',
+    base_url: 'https://api.example.com',
+    allow: ['GET /v1/things'],
+    auth: {
+      token_url: 'https://login.example.com/oauth/token',
+      client_id: 'my-app',
+      client_secret: '{{secret:CRM_CLIENT_SECRET}}',
+      scope: 'read',
+    },
+  })
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  if (!parsed.ok || parsed.config.alias !== 'http') return
+  assert.equal(parsed.config.oauth?.tokenUrl, 'https://login.example.com/oauth/token')
+  assert.equal(parsed.config.oauth?.scope, 'read')
+  assert.deepEqual(configSecretRefs(parsed.config), ['CRM_CLIENT_SECRET'])
+
+  // A raw client secret in the note is the thing this exists to prevent.
+  for (const auth of [
+    { token_url: 'https://l.example.com/t', client_id: 'x', client_secret: 'raw-secret-value' },
+    { token_url: 'https://l.example.com/t', client_id: 'x' }, // no secret at all
+    { token_url: 'https://{{secret:HOST}}/t', client_id: 'x', client_secret: '{{secret:S}}' },
+    { client_id: 'x', client_secret: '{{secret:S}}' }, // no token_url
+  ]) {
+    assert.ok(!parseConnectorConfig({ alias: 'http', base_url: 'https://x.com', auth }).ok)
+  }
+
+  // No auth block at all stays valid, with oauth null.
+  const plain = parseConnectorConfig({ alias: 'http', base_url: 'https://x.com' })
+  assert.ok(plain.ok)
+  if (plain.ok && plain.config.alias === 'http') assert.equal(plain.config.oauth, null)
+})
+
 test('config validation catches the dangerous shapes', () => {
   assert.ok(!parseConnectorConfig({}).ok) // no alias
   assert.ok(!parseConnectorConfig({ alias: 'graphql' }).ok) // unknown alias
@@ -153,6 +224,26 @@ test('newConnectorNote emits a postgres connector whose dsn is one secret ref', 
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
   if (!parsed.ok || parsed.config.alias !== 'postgres') return
   assert.deepEqual(findSecretRefs(parsed.config.dsn), ['APPDB_DSN']) // upper-cased for the store
+})
+
+test('newConnectorNote emits mysql and mcp connectors that parse back', () => {
+  const mysqlNote = newConnectorNote({ name: 'shop', alias: 'mysql', secretName: 'shop_dsn' })
+  assert.ok(!/mysql:\/\//.test(mysqlNote))
+  const mysqlParsed = parseConnectorConfig(parseFrontmatter(mysqlNote))
+  assert.ok(mysqlParsed.ok, mysqlParsed.ok ? '' : mysqlParsed.error)
+  if (mysqlParsed.ok) assert.equal(mysqlParsed.config.alias, 'mysql')
+
+  const mcpNote = newConnectorNote({
+    name: 'linear',
+    alias: 'mcp',
+    baseUrl: 'https://mcp.linear.app/mcp/',
+    allow: ['search_issues', 'get_*'],
+  })
+  const mcpParsed = parseConnectorConfig(parseFrontmatter(mcpNote))
+  assert.ok(mcpParsed.ok, mcpParsed.ok ? '' : mcpParsed.error)
+  if (!mcpParsed.ok || mcpParsed.config.alias !== 'mcp') return
+  assert.equal(mcpParsed.config.url, 'https://mcp.linear.app/mcp') // trailing slash stripped
+  assert.deepEqual(mcpParsed.config.allow, ['search_issues', 'get_*'])
 })
 
 // ── allowlist grammar ──
@@ -252,6 +343,34 @@ test('the SQL guard rejects writes and multi-statements', () => {
     '',
   ]) {
     assert.throws(() => assertSingleReadOnlyStatement(sql), `should reject: ${sql}`)
+  }
+})
+
+test('the MySQL guard speaks its own dialect', () => {
+  for (const sql of [
+    'select 1',
+    'select `weird;name` from t', // backtick identifier with ; inside
+    "select 'it''s' as escaped",
+    "select 'back\\'slash' as escaped", // backslash escape, MySQL-specific
+    'select 1 # hash comment with ; in it',
+    'select 1 -- comment',
+    'with t as (select 1) select * from t',
+    'explain select * from users',
+    'show tables',
+    'describe users',
+  ]) {
+    assert.doesNotThrow(() => assertSingleReadOnlyMysqlStatement(sql), `should accept: ${sql}`)
+  }
+  for (const sql of [
+    'select 1; drop table users',
+    'insert into users values (1)',
+    'update users set a = 1',
+    'delete from users',
+    'truncate users',
+    'create table x (id int)',
+    '',
+  ]) {
+    assert.throws(() => assertSingleReadOnlyMysqlStatement(sql), `should reject: ${sql}`)
   }
 })
 

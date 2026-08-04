@@ -793,17 +793,22 @@ export function ContextForm({
 
 // ─── Connector Form ─────────────────────────────────────────────────────────
 
+export type ConnectorAlias = 'http' | 'postgres' | 'mysql' | 'mcp';
+
 export interface ConnectorFormData {
   name: string;
-  alias: 'http' | 'postgres';
+  alias: ConnectorAlias;
   description: string;
-  /** http only — the absolute base URL every call hangs off. */
+  /** http: the absolute base URL every call hangs off. mcp: the server's endpoint URL. */
   baseUrl: string;
-  /** http only — one "METHOD /path" rule per line; empty means docs-only. */
+  /** http: one "METHOD /path" rule per line. mcp: one tool name per line. Empty means docs-only. */
   allow: string;
-  /** postgres only — the NAME of a stored secret holding the DSN. */
+  /** postgres/mysql only — the NAME of a stored secret holding the DSN. */
   secretName: string;
 }
+
+/** Is this a DSN-backed SQL alias (shares the secret-name form)? */
+const isSqlAlias = (alias: ConnectorAlias) => alias === 'postgres' || alias === 'mysql';
 
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 
@@ -825,7 +830,7 @@ function connectorFormError(data: ConnectorFormData): string | null {
   const name = data.name.trim();
   if (!name) return null; // not an error yet — just nothing typed
   if (!connectorSlug(name)) return 'Use letters and numbers — that name has none.';
-  if (data.alias === 'postgres') {
+  if (isSqlAlias(data.alias)) {
     const secret = data.secretName.trim().toUpperCase();
     if (!secret) return null;
     if (!SECRET_NAME_RE.test(secret)) return 'Secret names are UPPER_SNAKE_CASE: A-Z, 0-9 and _, starting with a letter.';
@@ -837,12 +842,16 @@ function connectorFormError(data: ConnectorFormData): string | null {
   try {
     parsed = new URL(url);
   } catch {
-    return 'Base URL must be a full absolute URL, e.g. https://api.example.com';
+    return `${data.alias === 'mcp' ? 'Server' : 'Base'} URL must be a full absolute URL, e.g. https://api.example.com`;
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'Base URL must be http(s).';
-  if (parsed.search || parsed.hash) return 'Base URL may not include a query string or fragment.';
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'The URL must be http(s).';
+  if (parsed.search || parsed.hash) return 'The URL may not include a query string or fragment.';
   for (const line of data.allow.split('\n').map((l) => l.trim()).filter(Boolean)) {
-    if (!/^[A-Za-z]+\s+\/\S*$/.test(line)) return `Bad allow rule "${line}" — use "GET /widgets".`;
+    if (data.alias === 'mcp') {
+      if (!/^[A-Za-z0-9][\w.-]*\*?$/.test(line)) return `Bad tool name "${line}" — letters, digits, _ . -, optionally ending in *.`;
+    } else if (!/^[A-Za-z]+\s+\/\S*$/.test(line)) {
+      return `Bad allow rule "${line}" — use "GET /widgets".`;
+    }
   }
   return null;
 }
@@ -850,7 +859,7 @@ function connectorFormError(data: ConnectorFormData): string | null {
 /** True when there's enough here to write a connector note. */
 export function connectorFormReady(data: ConnectorFormData): boolean {
   if (!connectorSlug(data.name) || connectorFormError(data)) return false;
-  return data.alias === 'postgres' ? !!data.secretName.trim() : !!data.baseUrl.trim();
+  return isSqlAlias(data.alias) ? !!data.secretName.trim() : !!data.baseUrl.trim();
 }
 
 export function ConnectorForm({
@@ -880,7 +889,7 @@ export function ConnectorForm({
 
       <Field label="Alias" required>
         <div className="flex gap-2">
-          {(['http', 'postgres'] as const).map((alias) => (
+          {(['http', 'postgres', 'mysql', 'mcp'] as const).map((alias) => (
             <button
               key={alias}
               type="button"
@@ -906,30 +915,46 @@ export function ConnectorForm({
         />
       </Field>
 
-      {data.alias === 'http' ? (
+      {data.alias === 'http' || data.alias === 'mcp' ? (
         <>
-          <Field label="Base URL" required>
+          <Field label={data.alias === 'mcp' ? 'Server URL' : 'Base URL'} required>
             <input
               className={`${inputClass} font-mono`}
-              placeholder="https://api.example.com"
+              placeholder={data.alias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
               value={data.baseUrl}
               onChange={(e) => onChange({ ...data, baseUrl: e.target.value })}
             />
           </Field>
-          <Field label="Allowed calls">
+          <Field label={data.alias === 'mcp' ? 'Allowed tools' : 'Allowed calls'}>
             <textarea
               className={`${inputClass} font-mono resize-none`}
               rows={3}
-              placeholder={'GET /customers\nGET /customers/*\nPOST /customers'}
+              placeholder={
+                data.alias === 'mcp'
+                  ? 'search_issues\nget_issue\ncreate_*'
+                  : 'GET /customers\nGET /customers/*\nPOST /customers'
+              }
               value={data.allow}
               onChange={(e) => onChange({ ...data, allow: e.target.value })}
             />
           </Field>
           <p className="text-xs text-text-muted">
-            One <span className="font-mono">METHOD /path</span> per line. Anything not listed is refused
-            before a request is sent — leave it empty for a documentation-only connector. API keys go in
-            the note&apos;s <span className="font-mono">headers</span> as{' '}
-            <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
+            {data.alias === 'mcp' ? (
+              <>
+                One tool name per line (a trailing <span className="font-mono">*</span> allows a prefix).
+                Anything not listed is refused before a request is sent — leave it empty to discover the
+                server&apos;s tools first. Auth tokens go in the note&apos;s{' '}
+                <span className="font-mono">headers</span> as{' '}
+                <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
+              </>
+            ) : (
+              <>
+                One <span className="font-mono">METHOD /path</span> per line. Anything not listed is refused
+                before a request is sent — leave it empty for a documentation-only connector. API keys go in
+                the note&apos;s <span className="font-mono">headers</span> as{' '}
+                <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
+              </>
+            )}
           </p>
         </>
       ) : (

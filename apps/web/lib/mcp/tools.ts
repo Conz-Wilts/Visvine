@@ -36,9 +36,11 @@ import { isStructuralNodeType } from '@/lib/types/context'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
-import { ConnectorError, findSecretRefs, interpolateSecrets } from '@/lib/connectors/config'
+import { configSecretRefs, ConnectorError, findSecretRefs, interpolateSecrets, isSqlConnector } from '@/lib/connectors/config'
 import { executeHttpConnector } from '@/lib/connectors/http'
 import { executePostgresQuery } from '@/lib/connectors/postgres'
+import { executeMysqlQuery } from '@/lib/connectors/mysql'
+import { callMcpTool, listMcpTools } from '@/lib/connectors/mcp'
 import {
   auditConnectorCall,
   listConnectors,
@@ -557,11 +559,11 @@ export function registerTools(server: McpServer): void {
     'list_connectors',
     {
       description:
-        "List the community's connectors — admin-configured gateways to external APIs and databases. " +
-        'Each entry carries its docs (what the system is and how to use it), its alias, and for http connectors ' +
-        'the allowlist of calls it permits. Use call_connector for alias `http` and query_connector for alias ' +
-        '`postgres`; a connector with an empty allowlist is documentation-only. Executing needs the ' +
-        "'connectors:use' scope.",
+        "List the community's connectors — admin-configured gateways to external APIs, databases and MCP servers. " +
+        'Each entry carries its docs (what the system is and how to use it), its alias, and its allowlist. ' +
+        'Use call_connector for alias `http`, query_connector for `postgres` or `mysql`, and ' +
+        'list_connector_tools + call_mcp_connector for `mcp`; a connector with an empty allowlist is ' +
+        "documentation-only. Executing needs the 'connectors:use' scope.",
       inputSchema: { community_id: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -593,11 +595,15 @@ export function registerTools(server: McpServer): void {
         const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
         const loaded = await loadConnectorOr404(principal, brain, args.connector)
         if (loaded.config.alias !== 'http') {
-          throw new McpError(400, `'${args.connector}' is a ${loaded.config.alias} connector — use query_connector`)
+          throw new McpError(
+            400,
+            `'${args.connector}' is a ${loaded.config.alias} connector — use ${
+              loaded.config.alias === 'mcp' ? 'call_mcp_connector' : 'query_connector'
+            }`,
+          )
         }
         try {
-          const refs = Object.values(loaded.config.headers).flatMap(findSecretRefs)
-          const secrets = await resolveSecretValues(args.community_id, refs)
+          const secrets = await resolveSecretValues(args.community_id, configSecretRefs(loaded.config))
           const result = await executeHttpConnector(loaded.config, secrets, {
             method: args.method,
             path: args.path,
@@ -619,35 +625,122 @@ export function registerTools(server: McpServer): void {
     'query_connector',
     {
       description:
-        "Run one read-only SQL statement against a community's postgres connector (see list_connectors). " +
+        "Run one read-only SQL statement against a community's postgres or mysql connector (see list_connectors). " +
         'Only a single SELECT-shaped statement is accepted, executed in a READ ONLY transaction with a ' +
         "statement timeout and a row cap — the connector's docs describe the schema. The connection string " +
         'is resolved server-side from an admin-stored secret; never ask for or supply one.',
       inputSchema: {
         community_id: z.string(),
         connector: z.string().describe("The connector's name, e.g. 'analytics' for connectors/analytics.md"),
-        sql: z.string().describe('A single read-only SQL statement'),
+        sql: z.string().describe("A single read-only SQL statement, in the connector's dialect"),
       },
     },
     (args, extra) =>
       withCtx(extra, 'query_connector', async (ctx) => {
         const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
         const loaded = await loadConnectorOr404(principal, brain, args.connector)
-        if (loaded.config.alias !== 'postgres') {
-          throw new McpError(400, `'${args.connector}' is a ${loaded.config.alias} connector — use call_connector`)
+        if (!isSqlConnector(loaded.config)) {
+          throw new McpError(
+            400,
+            `'${args.connector}' is a ${loaded.config.alias} connector — use ${
+              loaded.config.alias === 'mcp' ? 'call_mcp_connector' : 'call_connector'
+            }`,
+          )
         }
+        const config = loaded.config
         try {
-          const secrets = await resolveSecretValues(args.community_id, findSecretRefs(loaded.config.dsn))
-          const interpolated = interpolateSecrets(loaded.config.dsn, secrets)
+          const secrets = await resolveSecretValues(args.community_id, findSecretRefs(config.dsn))
+          const interpolated = interpolateSecrets(config.dsn, secrets)
           if (!interpolated.ok) {
             throw new ConnectorError('missing_secret', `Secret ${interpolated.missing.join(', ')} not set`)
           }
-          const result = await executePostgresQuery(loaded.config, interpolated.value, args.sql)
+          const result =
+            config.alias === 'postgres'
+              ? await executePostgresQuery(config, interpolated.value, args.sql)
+              : await executeMysqlQuery(config, interpolated.value, args.sql)
           auditConnectorCall(principal, loaded.path, `query → ${result.row_count} rows`)
           return result
         } catch (e) {
           if (e instanceof ConnectorError) {
             auditConnectorCall(principal, loaded.path, `query → ${e.code}: ${e.message}`)
+          }
+          throw mapConnectorError(e)
+        }
+      }),
+  )
+
+  server.registerTool(
+    'list_connector_tools',
+    {
+      description:
+        "Discover the tools a community's mcp connector exposes (see list_connectors). Returns each remote " +
+        "tool's name, description and input schema, flagged with whether this connector's allowlist permits " +
+        'calling it — only allowed tools can be run with call_mcp_connector.',
+      inputSchema: {
+        community_id: z.string(),
+        connector: z.string().describe("The connector's name, e.g. 'linear' for connectors/linear.md"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'list_connector_tools', async (ctx) => {
+        const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
+        const loaded = await loadConnectorOr404(principal, brain, args.connector)
+        if (loaded.config.alias !== 'mcp') {
+          throw new McpError(400, `'${args.connector}' is a ${loaded.config.alias} connector — it has no remote tools`)
+        }
+        try {
+          const secrets = await resolveSecretValues(args.community_id, configSecretRefs(loaded.config))
+          const tools = await listMcpTools(loaded.config, secrets)
+          auditConnectorCall(principal, loaded.path, `tools/list → ${tools.length} tools`)
+          return { tools }
+        } catch (e) {
+          if (e instanceof ConnectorError) {
+            auditConnectorCall(principal, loaded.path, `tools/list → ${e.code}: ${e.message}`)
+          }
+          throw mapConnectorError(e)
+        }
+      }),
+  )
+
+  server.registerTool(
+    'call_mcp_connector',
+    {
+      description:
+        "Call one tool on a community's mcp connector — a remote MCP server an admin has configured (see " +
+        "list_connectors; list_connector_tools shows the tools and their schemas). The tool must match the " +
+        "connector's allowlist; auth headers are filled in server-side from admin-stored secrets, so never " +
+        'ask for or supply credentials.',
+      inputSchema: {
+        community_id: z.string(),
+        connector: z.string().describe("The connector's name, e.g. 'linear' for connectors/linear.md"),
+        tool: z.string().describe('The remote tool name, exactly as list_connector_tools reports it'),
+        arguments: z
+          .record(z.string(), z.unknown())
+          .optional()
+          .describe("The tool's arguments, matching its input schema"),
+      },
+    },
+    (args, extra) =>
+      withCtx(extra, 'call_mcp_connector', async (ctx) => {
+        const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
+        const loaded = await loadConnectorOr404(principal, brain, args.connector)
+        if (loaded.config.alias !== 'mcp') {
+          throw new McpError(
+            400,
+            `'${args.connector}' is a ${loaded.config.alias} connector — use ${
+              loaded.config.alias === 'http' ? 'call_connector' : 'query_connector'
+            }`,
+          )
+        }
+        try {
+          const secrets = await resolveSecretValues(args.community_id, configSecretRefs(loaded.config))
+          const result = await callMcpTool(loaded.config, secrets, args.tool, args.arguments ?? {})
+          auditConnectorCall(principal, loaded.path, `tools/call ${args.tool} → ${result.is_error ? 'error' : 'ok'}`)
+          return result
+        } catch (e) {
+          if (e instanceof ConnectorError) {
+            auditConnectorCall(principal, loaded.path, `tools/call ${args.tool} → ${e.code}: ${e.message}`)
           }
           throw mapConnectorError(e)
         }

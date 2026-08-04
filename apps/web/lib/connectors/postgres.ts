@@ -82,8 +82,8 @@ export interface QueryResult {
   truncated: boolean
 }
 
-/** JSON-safe, size-capped cell for the tool result. */
-function toCell(value: unknown): unknown {
+/** JSON-safe, size-capped cell for the tool result. Shared with mysql.ts. */
+export function toCell(value: unknown): unknown {
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return value
   const text =
     typeof value === 'string'

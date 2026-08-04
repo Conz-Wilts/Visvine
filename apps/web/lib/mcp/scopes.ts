@@ -45,6 +45,10 @@ export const TOOL_SCOPES = {
   list_connectors: 'context:read',
   call_connector: 'connectors:use',
   query_connector: 'connectors:use',
+  // tools/list is discovery, but unlike list_connectors it reaches the remote
+  // server with the community's credentials — so it rides the execution scope.
+  list_connector_tools: 'connectors:use',
+  call_mcp_connector: 'connectors:use',
 } as const satisfies Record<string, McpScope>
 
 export type McpToolName = keyof typeof TOOL_SCOPES
