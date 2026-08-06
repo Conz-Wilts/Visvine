@@ -24,17 +24,17 @@ import {
   ChannelForm, type ChannelFormData,
   SpaceForm, type SpaceFormData,
   ContextForm, type ContextFormData,
-  FileForm, type FileFormData, type FileEntry,
   ConnectorForm, type ConnectorFormData, connectorSlug, connectorFormReady,
+  FileForm, type FileFormData, type FileEntry,
   AliasSelector,
   SuccessScreen,
 } from './CreateModalForms';
-import { newConnectorNote } from '@/lib/connectors/config';
 import { useBrainTree } from './ContextDestination';
 import type { ChannelSpaceEntry } from '@/lib/messages/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
+import { newConnectorNote } from '@/lib/connectors/config';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,8 +106,8 @@ export default function CreateModal() {
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
+  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', hosts: '', secretName: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
-  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', alias: 'http', description: '', baseUrl: '', allow: '', secretName: '' });
   // Where the just-created note/file lives, so the success screen can offer to
   // open it (null for types that have no viewer to jump to).
   const [createdHref, setCreatedHref] = useState<string | null>(null);
@@ -206,8 +206,8 @@ export default function CreateModal() {
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
+    setConnectorData({ name: '', description: '', hosts: '', secretName: '' });
     setFileData({ files: [], folder: '' });
-    setConnectorData({ name: '', alias: 'http', description: '', baseUrl: '', allow: '', secretName: '' });
     setCreatedHref(null);
     setCreatedDetail(null);
   }, []);
@@ -282,9 +282,11 @@ export default function CreateModal() {
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
       if (selectedType === 'space') return spaceData.name.trim().length > 0;
       if (selectedType === 'context') return contextTitle.length > 0;
+      // Mirrors the server's perimeter validation, so Create can't write a note
+      // the connectors layer would immediately call invalid.
+      if (selectedType === 'connector') return connectorFormReady(connectorData);
       // Only files that passed the pick-time check can be uploaded.
       if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
-      if (selectedType === 'connector') return connectorFormReady(connectorData);
     }
     return true;
   };
@@ -316,11 +318,11 @@ export default function CreateModal() {
       } else if (selectedType === 'context') {
         await createContextNote();
         setStep(3);
+      } else if (selectedType === 'connector') {
+        await createConnectorNote();
+        setStep(3);
       } else if (selectedType === 'file') {
         await uploadFiles();
-        setStep(3);
-      } else if (selectedType === 'connector') {
-        await createConnector();
         setStep(3);
       } else {
         await createNode();
@@ -398,12 +400,11 @@ export default function CreateModal() {
   };
 
   // ── Connector ─────────────────────────────────────────────────────────────
-  // Just a note at connectors/<name>.md — the connectors layer reads its
-  // frontmatter as config, so newConnectorNote (which lives beside the parser)
-  // is what guarantees the panel can't write one that won't parse. The
-  // admin-only gate is the server's: writeDenial refuses this path for anyone
-  // else, so a non-admin who reached this form still gets a 403.
-  const createConnector = async () => {
+  // A connector is a note whose frontmatter IS its perimeter, so creating one
+  // is just writing that note — same path the MCP tools and the describe agent
+  // take. The secret's VALUE is deliberately not collected here: it's set on
+  // the connector's own page, which is where the success screen points.
+  const createConnectorNote = async () => {
     if (!currentCommunity) throw new Error('Select a community first');
     const name = connectorSlug(connectorData.name);
     const path = `connectors/${name}.md`;
@@ -412,11 +413,9 @@ export default function CreateModal() {
       path,
       newConnectorNote({
         name,
-        alias: connectorData.alias,
-        description: connectorData.description,
-        baseUrl: connectorData.baseUrl,
-        allow: connectorData.allow.split('\n').map((l) => l.trim()).filter(Boolean),
-        secretName: connectorData.secretName,
+        description: connectorData.description.trim(),
+        hosts: connectorData.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
+        secretName: connectorData.secretName.trim().toUpperCase(),
       }),
     );
     invalidateContextCache(
@@ -424,14 +423,10 @@ export default function CreateModal() {
       contextKeys.list(currentCommunity.id),
       contextKeys.read(currentCommunity.id, path),
     );
-    // Land on the connector's own page rather than the bare note: the write
-    // above already synced the `connector:<name>` node (syncConnectorNode, and
-    // store.ts awaits it), and that page is where the secret gets set — with
-    // the note itself one tab away on Context.
     setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
     setCreatedDetail(
-      connectorData.alias === 'postgres' || connectorData.alias === 'mysql'
-        ? `Saved to ${path} — add the ${connectorData.secretName.trim().toUpperCase()} secret on its page before using it.`
+      connectorData.secretName.trim()
+        ? `Saved to ${path} — set ${connectorData.secretName.trim().toUpperCase()} on its page to finish.`
         : `Saved to ${path}`,
     );
   };
@@ -596,10 +591,10 @@ export default function CreateModal() {
       ? eventData.name || 'Event'
       : selectedType === 'context'
       ? contextTitle || 'Note'
-      : selectedType === 'file'
-      ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : selectedType === 'connector'
       ? connectorSlug(connectorData.name) || 'Connector'
+      : selectedType === 'file'
+      ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : typeOpt.label
     : '';
 
@@ -771,6 +766,9 @@ export default function CreateModal() {
                 loading={brainTree.loading}
               />
             )}
+            {step === 1 && selectedType === 'connector' && (
+              <ConnectorForm data={connectorData} onChange={setConnectorData} nameRef={nameRef} />
+            )}
             {step === 1 && selectedType === 'file' && (
               <FileForm
                 data={fileData}
@@ -779,9 +777,6 @@ export default function CreateModal() {
                 contextName={contextName}
                 loading={brainTree.loading}
               />
-            )}
-            {step === 1 && selectedType === 'connector' && (
-              <ConnectorForm data={connectorData} onChange={setConnectorData} nameRef={nameRef} />
             )}
 
             {step === 2 && (
@@ -799,7 +794,13 @@ export default function CreateModal() {
                 detail={createdDetail ?? undefined}
                 verb={selectedType === 'file' ? 'added' : 'created'}
                 actionLabel={
-                  createdHref ? (selectedType === 'file' ? 'Open' : 'Open note') : undefined
+                  createdHref
+                    ? selectedType === 'file'
+                      ? 'Open'
+                      : selectedType === 'connector'
+                      ? 'Open connector'
+                      : 'Open note'
+                    : undefined
                 }
                 onAction={
                   createdHref

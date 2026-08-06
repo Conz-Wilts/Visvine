@@ -17,27 +17,16 @@ export interface EmbeddingsConfig {
 
 /** The resolved embeddings backend, or null when unconfigured. */
 export function embeddingsConfig(): EmbeddingsConfig | null {
-  const gemmaKey = process.env.GEMMA_API_KEY
-  const gemmaBase = process.env.GEMMA_BASE_URL
-  if (gemmaKey && gemmaBase) {
-    return { apiKey: gemmaKey, baseURL: gemmaBase, model: process.env.EMBED_MODEL ?? EMBED_MODEL }
-  }
-  const geminiKey = process.env.GEMINI_API_KEY
-  if (geminiKey) {
-    return {
-      apiKey: geminiKey,
-      baseURL: process.env.GEMMA_BASE_URL ?? GEMINI_BASE_URL,
-      model: process.env.EMBED_MODEL ?? EMBED_MODEL,
-    }
-  }
-  return null
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return null
+  return { apiKey, baseURL: GEMINI_BASE_URL, model: process.env.EMBED_MODEL ?? EMBED_MODEL }
 }
 
 /** Embed texts (order-preserving), batched to keep request sizes bounded. */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const config = embeddingsConfig()
   if (!config) {
-    throw new Error('Embeddings are not configured: set GEMINI_API_KEY, or GEMMA_API_KEY + GEMMA_BASE_URL.')
+    throw new Error('Embeddings are not configured: set GEMINI_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL.slice(0, -1) : config.baseURL
   const out: number[][] = []

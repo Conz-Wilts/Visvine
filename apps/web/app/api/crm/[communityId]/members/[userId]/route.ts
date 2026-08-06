@@ -43,7 +43,7 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
   // Brain access leaves with them: direct grants + the aliases they held here.
   await removeMemberAccess(communityId, userId);
 
-  revalidateTag(`crm-list-${communityId}`);
+  revalidateTag(`crm-list-${communityId}`, { expire: 0 });
 
   await prisma.auditLog.create({
     data: {

@@ -399,7 +399,7 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
 // There is no cron behind this: the trash is only ever observed through
 // listTrash, so expiring on read is enough to make the promise true everywhere
 // it's visible.
-export async function purgeExpiredTrash(brain: Brain): Promise<void> {
+async function purgeExpiredTrash(brain: Brain): Promise<void> {
   const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000)
   const { count } = await prisma.communityNote.deleteMany({
     where: {

@@ -10,7 +10,7 @@
  *
  * Dev-only, guarded exactly like the rest of /api/dev: 404 unless both
  * NODE_ENV=development and ENABLE_DEV_AUTH=true. `/api/dev` is already in
- * middleware's PUBLIC_PATHS under that same flag, which is what lets the
+ * the proxy's PUBLIC_PATHS under that same flag, which is what lets the
  * connector's own fetch reach it without a session cookie.
  *
  * Seed the matching connector + secret with `pnpm db:connectors:demo`.
@@ -70,7 +70,7 @@ async function handle(req: Request, segments: string[]): Promise<Response> {
   }
 
   // GET /widgets — collection, with ?q= and ?limit= so you can see query params
-  // survive the trip through call_connector's `query` argument.
+  // survive the trip through a connector's fetch query string.
   if (method === 'GET' && path === '/widgets') {
     const q = (url.searchParams.get('q') || '').toLowerCase()
     const limit = intParam(url, 'limit', WIDGETS.length, WIDGETS.length)
@@ -101,7 +101,7 @@ async function handle(req: Request, segments: string[]): Promise<Response> {
   }
 
   // DELETE /widgets/:id — real here, but deliberately left OUT of the seeded
-  // connector's allowlist, so call_connector refuses it before any request is
+  // connector's allow rules, so hostFetch refuses it before any request is
   // made. If you ever see this response, the allowlist isn't doing its job.
   if (method === 'DELETE' && segments[0] === 'widgets' && segments.length === 2) {
     return json({ deleted: segments[1], warning: 'the seeded connector should never have allowed this' })

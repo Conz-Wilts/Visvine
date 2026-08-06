@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 /**
  * Sign-in is now a popup over the marketing home rather than a standalone page.
- * Everything that still points at `/signin` — middleware's auth redirect,
+ * Everything that still points at `/signin` — the proxy's auth redirect,
  * protected-page `redirect()`s, the OAuth error callbacks, old links/bookmarks —
  * bounces here and is forwarded to the home screen with the popup auto-opened
  * (see `?signin=1` handling in `MarketingShell`). `callbackUrl`/`error` ride

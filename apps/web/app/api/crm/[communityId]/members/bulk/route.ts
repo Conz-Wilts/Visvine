@@ -132,6 +132,6 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     });
   }
 
-  revalidateTag(`crm-list-${communityId}`);
+  revalidateTag(`crm-list-${communityId}`, { expire: 0 });
   return NextResponse.json({ affected });
 }

@@ -8,8 +8,8 @@ import {
   parseFrontmatter,
   splitFrontmatter,
 } from '@/lib/notes/shared/markdown';
-import { CONNECTOR_LIMITS, isValidSecretName, parseConnectorConfig } from '@/lib/connectors/config';
-import { describeConnector } from '@/lib/connectors/service';
+import { parseConnectorPerimeter, SANDBOX_LIMITS } from '@/lib/connectors/config';
+import { describeConnector, listConnectorCalls } from '@/lib/connectors/service';
 
 /**
  * One connector, for its page in the directory. The list route's row plus the
@@ -70,32 +70,22 @@ export async function GET(
         updatedAt: updatedByName.get(secretName) ?? null,
       })),
     },
+    // Who ran this connector and what came back — the audit trail narrowed to
+    // this note, so the page answers "is anything using this?" without a
+    // second round trip.
+    calls: await listConnectorCalls(communityId, connector.path),
   });
 }
 
 interface PatchBody {
   description?: unknown;
-  baseUrl?: unknown;
+  hosts?: unknown;
   allow?: unknown;
-  headers?: unknown;
+  env?: unknown;
   timeoutMs?: unknown;
-  dsnSecret?: unknown;
-  maxRows?: unknown;
 }
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
-
-/** An integer within a clamp range, or the message saying why it isn't. */
-function inRange(
-  value: unknown,
-  label: string,
-  range: { min: number; max: number },
-): number | string {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return `${label} must be a number`;
-  const n = Math.floor(value);
-  if (n < range.min || n > range.max) return `${label} must be between ${range.min} and ${range.max}`;
-  return n;
-}
 
 export async function PATCH(
   req: NextRequest,
@@ -119,23 +109,6 @@ export async function PATCH(
   if (content === null) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   const fm = parseFrontmatter(content);
-  const alias = typeof fm.alias === 'string' ? fm.alias : null;
-  if (alias !== 'http' && alias !== 'postgres' && alias !== 'mysql' && alias !== 'mcp') {
-    // Nothing below knows which fields are even meaningful. Switching a
-    // connector between executors rewrites every other key with it, so that
-    // stays a Raw-tab edit rather than a half-applied merge here.
-    return bad('Set `alias: http`, `postgres`, `mysql` or `mcp` in the Raw tab first');
-  }
-
-  // Reject fields belonging to another executor outright: silently dropping
-  // them would look like a successful save that didn't save. mcp shares the
-  // http field names (baseUrl carries its `url`, allow its tool names).
-  const wrongAlias = (
-    alias === 'http' || alias === 'mcp' ? ['dsnSecret', 'maxRows'] : ['baseUrl', 'allow', 'headers']
-  ).filter((k) => body[k as keyof PatchBody] !== undefined);
-  if (wrongAlias.length > 0) {
-    return bad(`${wrongAlias.join(', ')} ${wrongAlias.length === 1 ? 'is' : 'are'} not a ${alias} connector field`);
-  }
 
   if (body.description !== undefined) {
     const description = typeof body.description === 'string' ? body.description.trim() : '';
@@ -144,57 +117,48 @@ export async function PATCH(
   }
 
   if (body.timeoutMs !== undefined) {
-    const timeout = inRange(body.timeoutMs, 'Timeout', CONNECTOR_LIMITS.timeoutMs);
-    if (typeof timeout === 'string') return bad(timeout);
+    if (typeof body.timeoutMs !== 'number' || !Number.isFinite(body.timeoutMs)) {
+      return bad('Timeout must be a number');
+    }
+    const { min, max } = SANDBOX_LIMITS.timeoutMs;
+    const timeout = Math.floor(body.timeoutMs);
+    if (timeout < min || timeout > max) return bad(`Timeout must be between ${min} and ${max}`);
     fm.timeout_ms = timeout;
   }
 
-  if (alias === 'http' || alias === 'mcp') {
-    if (body.baseUrl !== undefined) {
-      if (typeof body.baseUrl !== 'string') return bad('URL must be a string');
-      fm[alias === 'mcp' ? 'url' : 'base_url'] = body.baseUrl.trim().replace(/\/+$/, '');
+  if (body.hosts !== undefined) {
+    if (!Array.isArray(body.hosts) || body.hosts.some((h) => typeof h !== 'string')) {
+      return bad('Hosts must be a list of host or host:port strings');
     }
-    if (body.allow !== undefined) {
-      if (!Array.isArray(body.allow) || body.allow.some((r) => typeof r !== 'string')) {
-        return bad(
-          alias === 'mcp' ? 'Allow must be a list of tool names' : 'Allow must be a list of "METHOD /path" strings',
-        );
-      }
-      fm.allow = (body.allow as string[]).map((r) => r.trim()).filter(Boolean);
-    }
-    if (body.headers !== undefined) {
-      if (typeof body.headers !== 'object' || body.headers === null || Array.isArray(body.headers)) {
-        return bad('Headers must be an object of name → value');
-      }
-      const headers = Object.fromEntries(
-        Object.entries(body.headers as Record<string, unknown>)
-          .map(([key, value]) => [key.trim(), typeof value === 'string' ? value.trim() : ''])
-          .filter(([key]) => key.length > 0),
-      );
-      if (Object.keys(headers).length > 0) fm.headers = headers;
-      else delete fm.headers;
-    }
-  } else {
-    if (body.dsnSecret !== undefined) {
-      const secretName = typeof body.dsnSecret === 'string' ? body.dsnSecret.trim().toUpperCase() : '';
-      if (!isValidSecretName(secretName)) {
-        return bad(`Invalid secret name '${secretName}' (use A-Z, 0-9 and _)`);
-      }
-      // The connector never holds a DSN, only the reference to one — the same
-      // invariant parseConnectorConfig enforces on read.
-      fm.dsn = `{{secret:${secretName}}}`;
-    }
-    if (body.maxRows !== undefined) {
-      const maxRows = inRange(body.maxRows, 'Row cap', CONNECTOR_LIMITS.maxRows);
-      if (typeof maxRows === 'string') return bad(maxRows);
-      fm.max_rows = maxRows;
-    }
+    fm.hosts = (body.hosts as string[]).map((h) => h.trim()).filter(Boolean);
   }
 
-  // The merged note has to be a connector the executors would accept, or the
+  if (body.allow !== undefined) {
+    if (!Array.isArray(body.allow) || body.allow.some((r) => typeof r !== 'string')) {
+      return bad('Allow must be a list of "METHOD /path" strings');
+    }
+    const allow = (body.allow as string[]).map((r) => r.trim()).filter(Boolean);
+    if (allow.length > 0) fm.allow = allow;
+    else delete fm.allow;
+  }
+
+  if (body.env !== undefined) {
+    if (typeof body.env !== 'object' || body.env === null || Array.isArray(body.env)) {
+      return bad('Env must be an object of NAME \u2192 value template');
+    }
+    const env = Object.fromEntries(
+      Object.entries(body.env as Record<string, unknown>)
+        .map(([key, value]) => [key.trim(), typeof value === 'string' ? value.trim() : ''])
+        .filter(([key]) => key.length > 0),
+    );
+    if (Object.keys(env).length > 0) fm.env = env;
+    else delete fm.env;
+  }
+
+  // The merged note has to be a connector the runtime would accept, or the
   // save is refused: an admin editing here can't be allowed to write a note
   // that only the Raw tab could get back out of.
-  const parsed = parseConnectorConfig(fm);
+  const parsed = parseConnectorPerimeter(fm);
   if (!parsed.ok) return bad(parsed.error);
 
   const written = await writeGated(

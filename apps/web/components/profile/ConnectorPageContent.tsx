@@ -6,39 +6,33 @@
  *
  * The note is still the source of truth: every field here is read from — and
  * written back to — the frontmatter the Raw tab edits, as a merge that leaves
- * the body and any key this page doesn't know about alone. So Raw stays the
- * full-power escape hatch (it can change `alias`, which reshapes everything
- * else) while the ordinary edits happen in fields that can't produce a note the
- * executors would refuse: the server re-parses the merged frontmatter and
- * rejects the save if it wouldn't load.
+ * the body and any key this page doesn't know about alone. The server re-parses
+ * the merged frontmatter and rejects a save the runtime would refuse.
  *
- * What this page adds beyond the note is the half of a connector's state the
- * note cannot hold — whether the secrets it references are actually stored, and
- * whether a call through it succeeds. Secrets live in CommunitySecret and are
- * write-only by design (PUT to set/replace, DELETE to remove, never read back);
- * they are the usual reason a connector that parses still fails.
+ * One flat page (docs/connectors-v2.md), not a grid of cards: a status header,
+ * the perimeter (hosts and allow rules — what the sandbox enforces), the
+ * environment, the console — the exact path an agent's run_connector takes, so
+ * a green run here is a green run for the agent by construction — and the call
+ * log. Sections are separated by a rule, not by boxes: everything here is one
+ * connector, and four containers implied four subjects.
+ *
+ * Secrets have no card of their own. Every secret this page can show is a
+ * `{{secret:NAME}}` reference inside an env value (the server derives the list
+ * that way), so a separate card listed the same names a second time and left
+ * the reader to pair them up. The reference IS the control: click the chip to
+ * store, replace or clear the value behind it.
+ *
+ * The note body isn't rendered here. It's prose, it's long, and the Context and
+ * Raw tabs one click away already show it better than a scrolling box would.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  AlertTriangle,
-  BookText,
-  CheckCircle2,
-  Database,
-  Globe,
-  KeyRound,
-  ListChecks,
-  Pencil,
-  Play,
-  Plug,
-  Plus,
-  ShieldCheck,
-  Trash2,
-} from 'lucide-react';
+import { AlertTriangle, Check, KeyRound, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import { CONNECTOR_LIMITS, isSqlConnector, type ConnectorConfig } from '@/lib/connectors/config';
+import { timeAgo } from '@/lib/date';
+import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
 import { Skeleton } from '@/components/ui';
 
 interface SecretStatus {
@@ -51,34 +45,35 @@ interface ConnectorDetail {
   name: string;
   path: string;
   alias: string | null;
-  description: string | null;
+  hosts: string[];
   allow: string[];
   invalid: string | null;
+  warnings: string[];
   secrets: SecretStatus[];
-  docs: string;
-  config: ConnectorConfig | null;
+  perimeter: ConnectorPerimeter | null;
 }
 
-interface HttpTestResult {
-  kind: 'http';
-  result: { status: number; content_type: string | null; body: string; truncated: boolean };
+/** One past run, as the audit trail recorded it (server: listConnectorCalls). */
+interface ConnectorCall {
+  at: number;
+  by: string;
+  code: string;
+  outcome: string;
 }
 
-interface SqlTestResult {
-  kind: 'postgres' | 'mysql';
-  result: { columns: string[]; rows: unknown[][]; row_count: number; truncated: boolean };
-}
-
-interface McpTestResult {
-  kind: 'mcp';
-  result:
-    | { tools: Array<{ name: string; description: string | null; allowed: boolean }> }
-    | { content: unknown; is_error: boolean };
+interface RunResult {
+  ok: boolean;
+  value: unknown;
+  logs: string;
+  error: { name: string; message: string; stack: string | null } | null;
+  truncated: boolean;
+  timed_out: boolean;
+  denials: string[];
+  duration_ms: number;
 }
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
 
-const CARD = 'rounded-2xl border border-border-subtle bg-surface-1 shadow-soft';
 const FIELD =
   'w-full min-w-0 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green';
 const GHOST_BUTTON =
@@ -87,10 +82,9 @@ const SAVE_BUTTON =
   'rounded-lg bg-brand-green px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50';
 
 /**
- * PATCH one slice of the connector's frontmatter, then reload. Every editor on
- * the page shares this: the server owns validation (it re-parses the merged
- * note), so an editor's job is to send the fields and show back whatever it
- * refused — never to guess at the rules a second time.
+ * PATCH one slice of the connector's frontmatter, then reload. The server owns
+ * validation (it re-parses the merged note), so an editor's job is to send the
+ * fields and show back whatever it refused.
  */
 function useConnectorSave(communityId: string, name: string, reload: () => Promise<void>) {
   const [saving, setSaving] = useState(false);
@@ -121,7 +115,6 @@ function useConnectorSave(communityId: string, name: string, reload: () => Promi
   return { save, saving, error, setError };
 }
 
-/** The Save/Cancel pair every card's edit mode ends with. */
 function EditActions({ saving, onCancel }: { saving: boolean; onCancel: () => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -135,11 +128,17 @@ function EditActions({ saving, onCancel }: { saving: boolean; onCancel: () => vo
   );
 }
 
-function EditButton({ onClick, label = 'Edit' }: { onClick: () => void; label?: string }) {
+/** Icon-only: the pencil is unambiguous, and the word repeated on every card is noise. */
+function EditButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button type="button" onClick={onClick} className={`${GHOST_BUTTON} inline-flex shrink-0 items-center gap-1.5`}>
-      <Pencil className="h-3 w-3" />
-      {label}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+    >
+      <Pencil className="h-3.5 w-3.5" />
     </button>
   );
 }
@@ -154,57 +153,33 @@ function FormError({ message }: { message: string | null }) {
   );
 }
 
-/** A labelled field in an edit form — same label column as {@link Detail}. */
-function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-text-muted sm:w-32">
-        {label}
-      </span>
-      <span className="min-w-0 flex-1">{children}</span>
-    </label>
-  );
-}
-
-function Card({
+/**
+ * Title, an optional one-word meta, and at most one action, over a rule. No
+ * box: the page is one connector, and each section is a part of it rather than
+ * a thing of its own.
+ */
+function Section({
   title,
-  icon,
-  subtitle,
+  meta,
   action,
   children,
 }: {
   title: string;
-  icon: React.ReactNode;
-  subtitle?: string;
+  meta?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className={CARD}>
-      <header className="flex items-start justify-between gap-3 border-b border-border-subtle px-5 py-3.5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className="text-text-muted">{icon}</span>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-text-primary">{title}</h2>
-            {subtitle && <p className="truncate text-xs text-text-muted">{subtitle}</p>}
-          </div>
-        </div>
+    <section className="border-t border-border-subtle py-5">
+      <header className="flex items-center justify-between gap-3 pb-3">
+        <h2 className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-sm font-semibold text-text-primary">{title}</span>
+          {meta && <span className="shrink-0 font-mono text-[11px] text-text-muted">{meta}</span>}
+        </h2>
         {action}
       </header>
-      <div className="px-5 py-4">{children}</div>
+      {children}
     </section>
-  );
-}
-
-/** Label/value row for the connection card — values are code, labels are not. */
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
-      <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-text-muted sm:w-32">
-        {label}
-      </span>
-      <span className="min-w-0 break-all font-mono text-[13px] text-text-primary">{children}</span>
-    </div>
   );
 }
 
@@ -226,24 +201,45 @@ function MethodBadge({ method }: { method: string }) {
 }
 
 /**
- * Frontmatter text with its `{{secret:NAME}}` references picked out, so a header
+ * Env template text with its `{{secret:NAME}}` references picked out, so a
  * value reads as "Bearer «STRIPE_KEY»" rather than as an opaque template.
+ *
+ * The chip doubles as the secret's control: amber when nothing is stored behind
+ * it, and clicking opens the write-only form for that name.
  */
-function SecretTemplate({ text }: { text: string }) {
+function SecretTemplate({
+  text,
+  statusOfSecret,
+  onPick,
+}: {
+  text: string;
+  statusOfSecret: (name: string) => SecretStatus | undefined;
+  onPick: (name: string) => void;
+}) {
   const parts = text.split(/(\{\{\s*secret:[A-Za-z0-9_]+\s*\}\})/g);
   return (
     <>
       {parts.map((part, i) => {
         const match = part.match(/^\{\{\s*secret:([A-Za-z0-9_]+)\s*\}\}$/);
         if (!match) return <span key={i}>{part}</span>;
+        const secretName = match[1];
+        const stored = statusOfSecret(secretName)?.set ?? false;
         return (
-          <span
+          <button
             key={i}
-            className="mx-0.5 inline-flex items-center gap-1 rounded bg-brand-light-bg px-1.5 py-0.5 text-[12px] font-semibold text-brand-dark-green"
+            type="button"
+            onClick={() => onPick(secretName)}
+            title={stored ? `Replace or clear ${secretName}` : `${secretName} is not stored — set it`}
+            className={`mx-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[12px] font-semibold transition-colors ${
+              stored
+                ? 'bg-brand-light-bg text-brand-dark-green hover:bg-brand-green/20'
+                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+            }`}
           >
             <KeyRound className="h-3 w-3" />
-            {match[1]}
-          </span>
+            {secretName}
+            {!stored && <span className="font-normal">· not set</span>}
+          </button>
         );
       })}
     </>
@@ -252,254 +248,90 @@ function SecretTemplate({ text }: { text: string }) {
 
 // ── Editors ──────────────────────────────────────────────────────────────────
 
-const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'] as const;
-
-/** Headers as ordered pairs — an object can't hold a half-typed blank key. */
-type HeaderPair = { key: string; value: string };
-
-function ConnectionEditor({
-  config,
+/**
+ * The perimeter as three plain fields — hosts and allow rules one per line, the
+ * grammar is the server's to judge and it answers with the offending entry.
+ */
+function PerimeterEditor({
+  detail,
   save,
   saving,
   error,
   onDone,
 }: {
-  config: ConnectorConfig;
+  detail: ConnectorDetail;
   save: (patch: Record<string, unknown>) => Promise<boolean>;
   saving: boolean;
   error: string | null;
   onDone: () => void;
 }) {
-  // http and mcp share the URL + headers form; the PATCH route maps `baseUrl`
-  // onto whichever frontmatter key the alias uses.
-  const urlLike = config.alias === 'http' || config.alias === 'mcp' ? config : null;
-  const [baseUrl, setBaseUrl] = useState(
-    urlLike ? (urlLike.alias === 'http' ? urlLike.baseUrl : urlLike.url) : '',
-  );
-  const [headers, setHeaders] = useState<HeaderPair[]>(
-    urlLike ? Object.entries(urlLike.headers).map(([key, value]) => ({ key, value })) : [],
-  );
-  const [dsnSecret, setDsnSecret] = useState(
-    isSqlConnector(config) ? (config.dsn.match(/secret:([A-Za-z0-9_]+)/)?.[1] ?? '') : '',
-  );
-  const [maxRows, setMaxRows] = useState(isSqlConnector(config) ? String(config.maxRows) : '');
-  const [timeoutMs, setTimeoutMs] = useState(String(config.timeoutMs));
+  const [hosts, setHosts] = useState(detail.hosts.join('\n'));
+  const [allow, setAllow] = useState(detail.allow.join('\n'));
+  const [timeoutMs, setTimeoutMs] = useState(String(detail.perimeter?.timeoutMs ?? SANDBOX_LIMITS.timeoutMs.default));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const patch: Record<string, unknown> = { timeoutMs: Number(timeoutMs) };
-    if (urlLike) {
-      patch.baseUrl = baseUrl;
-      patch.headers = Object.fromEntries(
-        headers.filter((h) => h.key.trim()).map((h) => [h.key, h.value]),
-      );
-    } else {
-      patch.dsnSecret = dsnSecret;
-      patch.maxRows = Number(maxRows);
-    }
-    if (await save(patch)) onDone();
+    const lines = (text: string) => text.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (await save({ hosts: lines(hosts), allow: lines(allow), timeoutMs: Number(timeoutMs) })) onDone();
   };
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3">
-      {urlLike ? (
-        <>
-          <FieldRow label={urlLike.alias === 'mcp' ? 'Server URL' : 'Base URL'}>
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder={urlLike.alias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
-              className={FIELD}
-            />
-          </FieldRow>
-          <FieldRow label="Headers">
-            <span className="flex flex-col gap-1.5">
-              {headers.map((header, i) => (
-                <span key={i} className="flex items-center gap-2">
-                  <input
-                    value={header.key}
-                    onChange={(e) =>
-                      setHeaders((rows) => rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))
-                    }
-                    placeholder="Authorization"
-                    className={`${FIELD} sm:w-44`}
-                  />
-                  <input
-                    value={header.value}
-                    onChange={(e) =>
-                      setHeaders((rows) => rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
-                    }
-                    placeholder="Bearer {{secret:API_KEY}}"
-                    className={FIELD}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setHeaders((rows) => rows.filter((_, j) => j !== i))}
-                    aria-label="Remove header"
-                    className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ))}
-              <span className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHeaders((rows) => [...rows, { key: '', value: '' }])}
-                  className={`${GHOST_BUTTON} inline-flex items-center gap-1.5`}
-                >
-                  <Plus className="h-3 w-3" /> Add header
-                </button>
-                <span className="text-xs text-text-muted">
-                  Reference a stored secret as{' '}
-                  <code className="font-mono">{'{{secret:NAME}}'}</code>, never a raw key.
-                </span>
-              </span>
-            </span>
-          </FieldRow>
-        </>
-      ) : (
-        <>
-          <FieldRow label="DSN secret">
-            <input
-              value={dsnSecret}
-              onChange={(e) => setDsnSecret(e.target.value.toUpperCase())}
-              placeholder="ANALYTICS_DSN"
-              className={FIELD}
-            />
-          </FieldRow>
-          <FieldRow label="Row cap">
-            <input
-              type="number"
-              min={CONNECTOR_LIMITS.maxRows.min}
-              max={CONNECTOR_LIMITS.maxRows.max}
-              value={maxRows}
-              onChange={(e) => setMaxRows(e.target.value)}
-              className={`${FIELD} sm:w-32`}
-            />
-          </FieldRow>
-        </>
-      )}
-      <FieldRow label="Timeout (ms)">
+      <textarea
+        value={hosts}
+        onChange={(e) => setHosts(e.target.value)}
+        rows={3}
+        spellCheck={false}
+        placeholder={'api.stripe.com\ndb.internal:5432'}
+        className={`${FIELD} py-2`}
+      />
+      <textarea
+        value={allow}
+        onChange={(e) => setAllow(e.target.value)}
+        rows={2}
+        spellCheck={false}
+        placeholder={'GET /v1/customers*   (optional — leave empty for host-gated only)'}
+        className={`${FIELD} py-2`}
+      />
+      <div className="flex items-center gap-2">
         <input
           type="number"
-          min={CONNECTOR_LIMITS.timeoutMs.min}
-          max={CONNECTOR_LIMITS.timeoutMs.max}
+          min={SANDBOX_LIMITS.timeoutMs.min}
+          max={SANDBOX_LIMITS.timeoutMs.max}
           value={timeoutMs}
           onChange={(e) => setTimeoutMs(e.target.value)}
           className={`${FIELD} sm:w-32`}
         />
-      </FieldRow>
-      <FormError message={error} />
-      <EditActions saving={saving} onCancel={onDone} />
-    </form>
-  );
-}
-
-/**
- * The allowlist, as rows rather than a YAML block. A rule's path may end in `*`
- * (prefix match) or contain a `*` segment, so the path stays free text — the
- * grammar is the server's to judge, and it answers with the offending entry.
- */
-function AllowlistEditor({
-  rules,
-  save,
-  saving,
-  error,
-  onDone,
-}: {
-  rules: string[];
-  save: (patch: Record<string, unknown>) => Promise<boolean>;
-  saving: boolean;
-  error: string | null;
-  onDone: () => void;
-}) {
-  const [rows, setRows] = useState(() =>
-    rules.map((rule) => {
-      const [method, ...rest] = rule.split(' ');
-      return { method, path: rest.join(' ') };
-    }),
-  );
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const allow = rows
-      .filter((row) => row.path.trim())
-      .map((row) => `${row.method} ${row.path.trim()}`);
-    if (await save({ allow })) onDone();
-  };
-
-  return (
-    <form onSubmit={submit} className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        {rows.map((row, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <select
-              value={row.method}
-              onChange={(e) =>
-                setRows((all) => all.map((r, j) => (j === i ? { ...r, method: e.target.value } : r)))
-              }
-              className="shrink-0 rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-            >
-              {METHODS.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-            <input
-              value={row.path}
-              onChange={(e) =>
-                setRows((all) => all.map((r, j) => (j === i ? { ...r, path: e.target.value } : r)))
-              }
-              placeholder="/v1/customers"
-              className={FIELD}
-            />
-            <button
-              type="button"
-              onClick={() => setRows((all) => all.filter((_, j) => j !== i))}
-              aria-label="Remove rule"
-              className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => setRows((all) => [...all, { method: 'GET', path: '' }])}
-          className={`${GHOST_BUTTON} inline-flex w-fit items-center gap-1.5`}
-        >
-          <Plus className="h-3 w-3" /> Add rule
-        </button>
+        <span className="text-xs text-text-muted">ms</span>
       </div>
-      <p className="text-xs text-text-muted">
-        A trailing <code className="font-mono">*</code> matches by prefix; a{' '}
-        <code className="font-mono">{'/*'}</code> segment matches exactly one segment.
-      </p>
       <FormError message={error} />
       <EditActions saving={saving} onCancel={onDone} />
     </form>
   );
 }
 
-/** The mcp allowlist: plain tool-name rows, no method to pick. */
-function ToolAllowlistEditor({
-  rules,
+/** Env vars as ordered pairs — an object can't hold a half-typed blank key. */
+type EnvPair = { key: string; value: string };
+
+function EnvEditor({
+  env,
   save,
   saving,
   error,
   onDone,
 }: {
-  rules: string[];
+  env: Record<string, string>;
   save: (patch: Record<string, unknown>) => Promise<boolean>;
   saving: boolean;
   error: string | null;
   onDone: () => void;
 }) {
-  const [rows, setRows] = useState<string[]>(rules);
+  const [rows, setRows] = useState<EnvPair[]>(Object.entries(env).map(([key, value]) => ({ key, value })));
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (await save({ allow: rows.map((r) => r.trim()).filter(Boolean) })) onDone();
+    const patch = Object.fromEntries(rows.filter((r) => r.key.trim()).map((r) => [r.key, r.value]));
+    if (await save({ env: patch })) onDone();
   };
 
   return (
@@ -508,69 +340,40 @@ function ToolAllowlistEditor({
         {rows.map((row, i) => (
           <div key={i} className="flex items-center gap-2">
             <input
-              value={row}
-              onChange={(e) => setRows((all) => all.map((r, j) => (j === i ? e.target.value : r)))}
-              placeholder="search_issues"
+              value={row.key}
+              onChange={(e) => setRows((all) => all.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))}
+              placeholder="STRIPE_KEY"
+              className={`${FIELD} sm:w-44`}
+            />
+            <input
+              value={row.value}
+              onChange={(e) => setRows((all) => all.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))}
+              placeholder="{{secret:STRIPE_KEY}}"
               className={FIELD}
             />
             <button
               type="button"
               onClick={() => setRows((all) => all.filter((_, j) => j !== i))}
-              aria-label="Remove tool"
+              aria-label="Remove variable"
               className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
-        <button
-          type="button"
-          onClick={() => setRows((all) => [...all, ''])}
-          className={`${GHOST_BUTTON} inline-flex w-fit items-center gap-1.5`}
-        >
-          <Plus className="h-3 w-3" /> Add tool
-        </button>
+        <span className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRows((all) => [...all, { key: '', value: '' }])}
+            className={`${GHOST_BUTTON} inline-flex items-center gap-1.5`}
+          >
+            <Plus className="h-3 w-3" /> Add variable
+          </button>
+          <span className="text-xs text-text-muted">
+            Use <code className="font-mono">{'{{secret:NAME}}'}</code>, never a raw value.
+          </span>
+        </span>
       </div>
-      <p className="text-xs text-text-muted">
-        Exact tool names; a trailing <code className="font-mono">*</code> allows a prefix. The Test card
-        below lists what the server exposes.
-      </p>
-      <FormError message={error} />
-      <EditActions saving={saving} onCancel={onDone} />
-    </form>
-  );
-}
-
-/** The description, edited where it is read rather than behind a card. */
-function DescriptionEditor({
-  description,
-  save,
-  saving,
-  error,
-  onDone,
-}: {
-  description: string;
-  save: (patch: Record<string, unknown>) => Promise<boolean>;
-  saving: boolean;
-  error: string | null;
-  onDone: () => void;
-}) {
-  const [value, setValue] = useState(description);
-  return (
-    <form
-      className="mt-3 flex flex-col gap-2"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (await save({ description: value })) onDone();
-      }}
-    >
-      <input
-        value={value}
-        autoFocus
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="What this connector is, in one line"
-        className={`${FIELD} font-open-sauce text-sm`}
-      />
       <FormError message={error} />
       <EditActions saving={saving} onCancel={onDone} />
     </form>
@@ -579,17 +382,22 @@ function DescriptionEditor({
 
 // ── Secrets ──────────────────────────────────────────────────────────────────
 
-/** One referenced secret: its stored state, and the write-only form to fix it. */
-function SecretRow({
+/**
+ * The write-only form for the one secret chip that was clicked. Values are
+ * never read back, so this is always a fresh write — there is nothing to
+ * pre-fill and no reason to keep more than one open.
+ */
+function SecretEditor({
   secret,
   communityId,
   onChanged,
+  onClose,
 }: {
   secret: SecretStatus;
   communityId: string;
   onChanged: () => void;
+  onClose: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -603,8 +411,8 @@ function SecretRow({
         value,
       });
       setValue('');
-      setEditing(false);
       onChanged();
+      onClose();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -618,6 +426,7 @@ function SecretRow({
     try {
       await fetchJsonBody(`/api/communities/${communityId}/secrets`, 'DELETE', { name: secret.name });
       onChanged();
+      onClose();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -626,433 +435,224 @@ function SecretRow({
   };
 
   return (
-    <li className="py-3 first:pt-0 last:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <KeyRound className={`h-4 w-4 shrink-0 ${secret.set ? 'text-brand-dark-green' : 'text-amber-500'}`} />
-          <span className="truncate font-mono text-[13px] font-medium text-text-primary">{secret.name}</span>
-          {secret.set ? (
-            <span className="shrink-0 rounded-full bg-brand-light-bg px-2 py-0.5 text-[11px] font-semibold text-brand-dark-green">
-              Stored
-            </span>
-          ) : (
-            <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-              Not set
-            </span>
-          )}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
+    <div className="mt-3 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2.5">
+      <form
+        className="flex flex-wrap items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (value.length > 0) void save();
+        }}
+      >
+        <input
+          type="password"
+          autoComplete="off"
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={`Value for ${secret.name}`}
+          className={`${FIELD} min-w-0 flex-1`}
+        />
+        <button type="submit" disabled={busy || value.length === 0} className={SAVE_BUTTON}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button type="button" onClick={onClose} disabled={busy} className={GHOST_BUTTON}>
+          Cancel
+        </button>
+        {secret.set && (
           <button
             type="button"
-            onClick={() => setEditing((v) => !v)}
-            className="rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2"
+            onClick={remove}
+            disabled={busy}
+            aria-label={`Clear ${secret.name}`}
+            title={`Clear ${secret.name}`}
+            className="rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
           >
-            {secret.set ? 'Replace' : 'Set value'}
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
-          {secret.set && (
-            <button
-              type="button"
-              onClick={remove}
-              disabled={busy}
-              aria-label={`Remove ${secret.name}`}
-              className="rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {editing && (
-        <form
-          className="mt-2.5 flex flex-wrap items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (value.length > 0) void save();
-          }}
-        >
-          <input
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={`Value for ${secret.name}`}
-            className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-          />
-          <button
-            type="submit"
-            disabled={busy || value.length === 0}
-            className="rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {busy ? 'Saving…' : 'Save'}
-          </button>
-        </form>
-      )}
-      {editing && (
-        <p className="mt-1.5 text-xs text-text-muted">
-          Stored encrypted and never shown again — only the server reads it, while a call runs.
-        </p>
-      )}
+        )}
+      </form>
+      <p className="mt-1.5 text-xs text-text-muted">Encrypted on save, never shown again.</p>
       {error && <p className="mt-1.5 text-xs text-red-600">{error}</p>}
-    </li>
+    </div>
   );
 }
 
-// ── Test console ─────────────────────────────────────────────────────────────
+// ── Console ──────────────────────────────────────────────────────────────────
 
-function HttpTester({
+/**
+ * One command, one run — through the same route an agent's run_connector
+ * takes. History accumulates newest-first so a probe/fix loop reads naturally.
+ */
+function ConnectorConsole({
   connector,
   communityId,
 }: {
   connector: ConnectorDetail;
   communityId: string;
 }) {
-  const [method, setMethod] = useState('GET');
-  const [path, setPath] = useState('');
-  const [body, setBody] = useState('');
+  const [code, setCode] = useState('');
   const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<HttpTestResult['result'] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // The allowlist is the menu: anything off it is refused before a request
-  // leaves, so filling the form from a rule is the only way to get a green run.
-  const fill = (rule: string) => {
-    const [ruleMethod, rulePath] = rule.split(' ');
-    setMethod(ruleMethod);
-    setPath(rulePath.replace(/\*$/, ''));
-  };
+  const [runs, setRuns] = useState<Array<{ code: string; result: RunResult | null; error: string | null }>>([]);
 
   const run = async () => {
+    const source = code.trim();
+    if (!source) return;
     setRunning(true);
-    setError(null);
-    setResult(null);
     try {
-      const res = await fetchJsonBody<HttpTestResult>(
+      const res = await fetchJsonBody<{ result: RunResult }>(
         `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
         'POST',
-        { method, path, body: body.trim() || undefined },
+        { code: source },
       );
-      setResult(res.result);
+      setRuns((all) => [{ code: source, result: res.result, error: null }, ...all].slice(0, 10));
+      setCode('');
     } catch (e) {
-      setError((e as Error).message);
+      setRuns((all) => [{ code: source, result: null, error: (e as Error).message }, ...all].slice(0, 10));
     } finally {
       setRunning(false);
     }
   };
 
-  const bodyless = method === 'GET' || method === 'HEAD';
-
   return (
     <div className="flex flex-col gap-3">
-      {connector.allow.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {connector.allow.map((rule) => (
-            <button
-              key={rule}
-              type="button"
-              onClick={() => fill(rule)}
-              className="rounded-lg border border-border-subtle bg-surface-2 px-2 py-1 font-mono text-[11.5px] text-text-secondary transition-colors hover:border-brand-green hover:text-text-primary"
-            >
-              {rule}
-            </button>
-          ))}
-        </div>
-      )}
-
       <form
-        className="flex flex-wrap items-center gap-2"
+        className="flex flex-col gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           void run();
         }}
       >
-        <select
-          value={method}
-          onChange={(e) => setMethod(e.target.value)}
-          className="rounded-lg border border-border-default bg-surface-1 px-2 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-        >
-          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'].map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-        <input
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          placeholder="/v1/customers"
-          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-        />
-        <button
-          type="submit"
-          disabled={running || path.length === 0}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <Play className="h-3.5 w-3.5" />
-          {running ? 'Running…' : 'Run'}
-        </button>
-      </form>
-
-      {!bodyless && (
         <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={3}
-          placeholder="Request body (optional)"
-          className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 font-mono text-[12.5px] text-text-primary outline-none focus:border-brand-green"
-        />
-      )}
-
-      {error && <TestError message={error} />}
-      {result && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={`rounded-md px-2 py-0.5 font-mono font-semibold ${
-                result.status < 400
-                  ? 'bg-brand-light-bg text-brand-dark-green'
-                  : 'bg-red-50 text-red-700'
-              }`}
-            >
-              {result.status}
-            </span>
-            {result.content_type && <span className="text-text-muted">{result.content_type}</span>}
-            {result.truncated && <span className="text-text-muted">· truncated</span>}
-          </div>
-          <ResultBody text={result.body} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SqlTester({
-  connector,
-  communityId,
-}: {
-  connector: ConnectorDetail;
-  communityId: string;
-}) {
-  const [sql, setSql] = useState('');
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<SqlTestResult['result'] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const run = async () => {
-    setRunning(true);
-    setError(null);
-    setResult(null);
-    try {
-      const res = await fetchJsonBody<SqlTestResult>(
-        `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
-        'POST',
-        { sql },
-      );
-      setResult(res.result);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-3">
-      <textarea
-        value={sql}
-        onChange={(e) => setSql(e.target.value)}
-        rows={3}
-        spellCheck={false}
-        placeholder="select id, name from customers limit 10"
-        className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 font-mono text-[12.5px] text-text-primary outline-none focus:border-brand-green"
-      />
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-text-muted">
-          One read-only statement, run in a READ ONLY transaction.
-        </p>
-        <button
-          type="button"
-          onClick={() => void run()}
-          disabled={running || sql.trim().length === 0}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <Play className="h-3.5 w-3.5" />
-          {running ? 'Running…' : 'Run query'}
-        </button>
-      </div>
-
-      {error && <TestError message={error} />}
-      {result && (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-text-muted">
-            {result.row_count} row{result.row_count === 1 ? '' : 's'}
-            {result.truncated && ' · capped'}
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-border-subtle">
-            <table className="min-w-full text-left font-mono text-[12px]">
-              <thead className="bg-surface-2 text-text-muted">
-                <tr>
-                  {result.columns.map((col) => (
-                    <th key={col} className="whitespace-nowrap px-3 py-2 font-semibold">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border-subtle text-text-primary">
-                {result.rows.map((row, i) => (
-                  <tr key={i}>
-                    {row.map((cell, j) => (
-                      <td key={j} className="whitespace-nowrap px-3 py-1.5">
-                        {cell === null ? <span className="text-text-muted">null</span> : String(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function McpTester({
-  connector,
-  communityId,
-}: {
-  connector: ConnectorDetail;
-  communityId: string;
-}) {
-  const [tool, setTool] = useState('');
-  const [args, setArgs] = useState('');
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<McpTestResult['result'] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // One endpoint, two shapes: no tool → the server's tool list, a tool → a call.
-  const run = async (calledTool: string | null) => {
-    setRunning(true);
-    setError(null);
-    setResult(null);
-    let parsedArgs: Record<string, unknown> | undefined;
-    if (calledTool && args.trim()) {
-      try {
-        parsedArgs = JSON.parse(args) as Record<string, unknown>;
-      } catch {
-        setError('Arguments must be a JSON object');
-        setRunning(false);
-        return;
-      }
-    }
-    try {
-      const res = await fetchJsonBody<McpTestResult>(
-        `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
-        'POST',
-        calledTool ? { tool: calledTool, arguments: parsedArgs } : {},
-      );
-      setResult(res.result);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-3">
-      <form
-        className="flex flex-wrap items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run(tool.trim() || null);
-        }}
-      >
-        <input
-          value={tool}
-          onChange={(e) => setTool(e.target.value)}
-          placeholder="Tool name — leave empty to list tools"
-          className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface-1 px-3 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-        />
-        <button
-          type="submit"
-          disabled={running}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
-          <Play className="h-3.5 w-3.5" />
-          {running ? 'Running…' : tool.trim() ? 'Call tool' : 'List tools'}
-        </button>
-      </form>
-
-      {tool.trim() && (
-        <textarea
-          value={args}
-          onChange={(e) => setArgs(e.target.value)}
-          rows={3}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter is a newline here — code is multi-line far more often than
+            // it is one expression — so submitting needs the modifier.
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              void run();
+            }
+          }}
           spellCheck={false}
-          placeholder='Arguments as JSON, e.g. {"query": "open bugs"}'
-          className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 font-mono text-[12.5px] text-text-primary outline-none focus:border-brand-green"
+          rows={4}
+          placeholder={'const res = await fetch(`${env.API_BASE}/v1/things`, {\n  headers: { Authorization: `Bearer ${env.API_KEY}` },\n})\nreturn JSON.parse(res.body)'}
+          className={`${FIELD} resize-y font-mono text-[12px] leading-relaxed`}
         />
-      )}
-
-      {error && <TestError message={error} />}
-      {result && 'tools' in result ? (
-        result.tools.length === 0 ? (
-          <p className="text-sm text-text-muted">The server reports no tools.</p>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {result.tools.map((t) => (
-              <li key={t.name} className="flex items-baseline gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTool(t.name)}
-                  className="shrink-0 font-mono text-[13px] font-medium text-text-primary underline-offset-2 hover:underline"
-                >
-                  {t.name}
-                </button>
-                {!t.allowed && (
-                  <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                    Not allowed
-                  </span>
-                )}
-                {t.description && (
-                  <span className="min-w-0 truncate text-xs text-text-muted">{t.description}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )
-      ) : result ? (
-        <div className="flex flex-col gap-2">
-          {'is_error' in result && result.is_error && (
-            <p className="text-xs font-semibold text-red-700">The tool reported an error.</p>
-          )}
-          <ResultBody text={JSON.stringify('content' in result ? result.content : result)} />
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-[11px] text-text-muted">
+            JavaScript · return the answer · ⌘↵ to run
+          </span>
+          <button
+            type="submit"
+            disabled={running || code.trim().length === 0}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            <Play className="h-3.5 w-3.5" />
+            {running ? 'Running…' : 'Run'}
+          </button>
         </div>
-      ) : null}
+      </form>
+
+      {runs.map((entry, i) => (
+        <div key={runs.length - i} className="flex flex-col gap-1.5">
+          <pre className="overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 font-mono text-[12px] text-text-muted">
+            {entry.code}
+          </pre>
+          {entry.error ? (
+            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 break-words">{entry.error}</span>
+            </div>
+          ) : entry.result ? (
+            <RunOutput result={entry.result} />
+          ) : null}
+        </div>
+      ))}
     </div>
   );
 }
 
-function TestError({ message }: { message: string }) {
+function RunOutput({ result }: { result: RunResult }) {
+  const returned = result.value === undefined ? null : JSON.stringify(result.value, null, 2);
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
-      <span className="min-w-0 break-words">{message}</span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span
+          className={`rounded-md px-2 py-0.5 font-mono font-semibold ${
+            result.ok ? 'bg-brand-light-bg text-brand-dark-green' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {result.timed_out ? 'timeout' : result.ok ? 'ok' : 'error'}
+        </span>
+        <span className="text-text-muted">{result.duration_ms} ms</span>
+        {result.truncated && <span className="text-text-muted">· truncated</span>}
+      </div>
+      {result.denials.length > 0 && (
+        <ul className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {result.denials.map((denial, i) => (
+            <li key={i} className="break-words">{denial}</li>
+          ))}
+        </ul>
+      )}
+      {result.error && (
+        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words font-mono">{result.error.message}</span>
+        </div>
+      )}
+      {returned !== null && (
+        <pre className="max-h-80 overflow-auto rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 font-mono text-[12px] leading-relaxed text-text-primary">
+          {returned}
+        </pre>
+      )}
+      {result.logs && (
+        <pre className="max-h-40 overflow-auto rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 font-mono text-[12px] leading-relaxed text-text-muted">
+          {result.logs}
+        </pre>
+      )}
     </div>
   );
 }
 
-/** Response bodies are usually JSON; pretty-print when they are, verbatim when not. */
-function ResultBody({ text }: { text: string }) {
-  const pretty = useMemo(() => {
-    try {
-      return JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      return text;
-    }
-  }, [text]);
+// ── Call log ─────────────────────────────────────────────────────────────────
+
+/**
+ * Every run of this connector, whoever made it — an agent through
+ * run_connector, or an admin through the console above. Read straight from the
+ * brain's audit trail, so it is the compliance record rather than a prettier
+ * copy of one.
+ *
+ * "Why" is the code: the audit line records what was asked for, which is the
+ * only intent the runtime ever sees. Nobody declares a reason to the sandbox.
+ */
+function CallLog({ calls }: { calls: ConnectorCall[] }) {
+  if (calls.length === 0) {
+    return <p className="text-sm text-text-muted">No runs yet.</p>;
+  }
   return (
-    <pre className="max-h-80 overflow-auto rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 font-mono text-[12px] leading-relaxed text-text-primary">
-      {pretty || '(empty body)'}
-    </pre>
+    <ul className="flex flex-col divide-y divide-border-subtle">
+      {calls.map((call, i) => {
+        const failed = !/^exit 0\b/.test(call.outcome);
+        return (
+          <li key={`${call.at}-${i}`} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+              <span className="font-medium text-text-primary">{call.by}</span>
+              <span className="text-text-muted">{timeAgo(call.at, { style: 'short' })}</span>
+              <span
+                className={`ml-auto shrink-0 font-mono ${failed ? 'text-red-600' : 'text-text-muted'}`}
+              >
+                {call.outcome}
+              </span>
+            </div>
+            {call.code && (
+              <p className="truncate font-mono text-[12px] text-text-secondary" title={call.code}>
+                {call.code}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -1061,36 +661,30 @@ function ResultBody({ text }: { text: string }) {
 /** The one-line verdict in the header: what an agent can do through this today. */
 function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'warn' | 'bad'; hint: string } {
   if (connector.invalid) {
-    return { label: 'Not usable', tone: 'bad', hint: 'The frontmatter does not parse, so every call is refused.' };
+    return { label: 'Not usable', tone: 'bad', hint: 'The frontmatter does not parse, so every run is refused.' };
   }
   const unset = connector.secrets.filter((s) => !s.set);
   if (unset.length > 0) {
     return {
       label: 'Missing secrets',
       tone: 'warn',
-      hint: `${unset.map((s) => s.name).join(', ')} ${unset.length === 1 ? 'is' : 'are'} referenced but not stored — calls fail until set.`,
+      hint: `${unset.map((s) => s.name).join(', ')} ${unset.length === 1 ? 'is' : 'are'} referenced but not stored — runs fail until set.`,
     };
   }
-  const alias = connector.config?.alias;
-  if ((alias === 'http' || alias === 'mcp') && connector.config?.allow.length === 0) {
+  if (connector.warnings.length > 0) {
+    return { label: 'Needs migration', tone: 'warn', hint: connector.warnings[0] };
+  }
+  if (connector.hosts.length === 0) {
     return {
-      label: alias === 'mcp' ? 'Discovery only' : 'Documentation only',
+      label: 'No network',
       tone: 'warn',
-      hint:
-        alias === 'mcp'
-          ? 'No allowed tools, so no call is permitted. Agents can still list the server’s tools and read the docs.'
-          : 'No allow entries, so no call is permitted. Agents can still read the docs.',
+      hint: 'No hosts declared, so commands run without network. Add hosts to let agents reach a service.',
     };
   }
   return {
     label: 'Ready',
     tone: 'ok',
-    hint:
-      alias === 'postgres' || alias === 'mysql'
-        ? 'Agents can run read-only queries through this connector.'
-        : alias === 'mcp'
-          ? `Agents can call the ${connector.allow.length} allowed tool${connector.allow.length === 1 ? '' : 's'}.`
-          : `Agents can make the ${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}.`,
+    hint: `Agents can run commands that reach ${connector.hosts.join(', ')}.`,
   };
 }
 
@@ -1111,17 +705,23 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   // Which card is in edit mode. One at a time: two open forms over the same
   // frontmatter would race, and the second save would be written against a
   // reloaded connector the form no longer matches.
-  const [editing, setEditing] = useState<'description' | 'connection' | 'allow' | null>(null);
+  const [editing, setEditing] = useState<'perimeter' | 'env' | null>(null);
+  // The secret chip that was clicked, if any — its write-only form opens below
+  // the env list. Cleared on reload so a stored secret doesn't reopen.
+  const [pickedSecret, setPickedSecret] = useState<string | null>(null);
+  const [calls, setCalls] = useState<ConnectorCall[]>([]);
+  // The last Test result, as one line. Null until the button is pressed.
+  const [test, setTest] = useState<{ ok: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
 
-  // Awaited by every save, so a form closes on the reloaded value rather than
-  // on the one it optimistically hoped for.
   const reload = useCallback(async () => {
     if (!communityId) return;
     try {
-      const data = await fetchJson<{ connector: ConnectorDetail }>(
+      const data = await fetchJson<{ connector: ConnectorDetail; calls: ConnectorCall[] }>(
         `/api/communities/${communityId}/connectors/${encodeURIComponent(name)}`,
       );
       setConnector(data.connector);
+      setCalls(data.calls);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -1146,114 +746,132 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
     reload,
   );
 
-  // A card's error belongs to the form that produced it; opening or closing one
-  // clears it rather than carrying it to the next.
   const openEditor = (which: typeof editing) => {
     setSaveError(null);
     setEditing(which);
   };
 
+  /**
+   * The status button: run a trivial script down the real execution path.
+   * That is a genuine check rather than a re-reading of the config, because
+   * secrets are decrypted and interpolated into env BEFORE the code runs —
+   * so a missing or undecryptable secret, an unparseable note, or an isolate
+   * that won't start all fail here exactly as they would for an agent.
+   *
+   * What it does NOT claim is that the upstream service is up: reaching it
+   * needs the connector's own code, which is what the console is for.
+   */
+  const runTest = async () => {
+    if (!communityId) return;
+    setTesting(true);
+    setTest(null);
+    try {
+      const res = await fetchJsonBody<{ result: RunResult }>(
+        `/api/communities/${communityId}/connectors/${encodeURIComponent(name)}/test`,
+        'POST',
+        { code: "return 'connector ok'" },
+      );
+      const ok = res.result.ok && res.result.value === 'connector ok';
+      setTest({
+        ok,
+        message: ok
+          ? `Secrets resolve and the isolate ran in ${res.result.duration_ms} ms`
+          : res.result.timed_out
+            ? 'The isolate timed out before it could start'
+            : `The isolate failed: ${res.result.error?.message ?? 'unknown error'}`,
+      });
+      await reload();
+    } catch (e) {
+      setTest({ ok: false, message: (e as Error).message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const allowRules = useMemo(
+    () =>
+      (connector?.perimeter?.allow ?? []).map(
+        (rule: AllowRule) => `${rule.method} ${rule.path}${rule.prefix ? '*' : ''}`,
+      ),
+    [connector],
+  );
+
   if (loading || communityLoading) {
     return (
       <div className="flex flex-col gap-4">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <Skeleton className="h-40 w-full rounded-2xl" />
+        <Skeleton className="h-8 w-48 rounded-lg" />
+        <Skeleton className="h-40 w-full rounded-lg" />
       </div>
     );
   }
 
   if (error || !connector) {
-    return (
-      <div className={`${CARD} px-5 py-10 text-center`}>
-        <Plug className="mx-auto mb-3 h-8 w-8 text-text-muted" />
-        <p className="text-sm text-text-muted">{error ?? 'Connector not found'}</p>
-      </div>
-    );
+    return <p className="py-10 text-center text-sm text-text-muted">{error ?? 'Connector not found'}</p>;
   }
 
   const status = statusOf(connector);
-  const config = connector.config;
-  const isSql = config?.alias === 'postgres' || config?.alias === 'mysql';
-  const isMcp = config?.alias === 'mcp';
-  const Icon = isSql ? Database : isMcp ? Plug : Globe;
-  const runnable = !connector.invalid && connector.secrets.every((s) => s.set);
+  const missingSecrets = connector.secrets.filter((s) => !s.set);
+  const runnable = !connector.invalid && missingSecrets.length === 0;
+  const env = connector.perimeter?.env ?? {};
+  const pickedSecretStatus = connector.secrets.find((s) => s.name === pickedSecret) ?? null;
 
   return (
-    <div className="profile-content-fade flex flex-col gap-4">
-      {/* ══ HEADER ══ */}
-      <section className={`${CARD} px-5 py-5 sm:px-6`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-light-bg text-brand-dark-green">
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="truncate font-ginto text-xl font-semibold text-text-primary">
-                  {connector.name}
-                </h1>
-                <span className="rounded-md bg-surface-3 px-1.5 py-0.5 font-mono text-[11px] font-medium text-text-muted">
-                  {connector.alias ?? 'no alias'}
-                </span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
-                  {status.label}
-                </span>
-              </div>
-              {editing !== 'description' && (
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-text-muted">
-                  {connector.description ?? status.hint}
-                  <button
-                    type="button"
-                    onClick={() => openEditor('description')}
-                    aria-label="Edit description"
-                    className="rounded-md p-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
-                </p>
-              )}
-            </div>
-          </div>
-          <Link
-            href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`}
-            className="shrink-0 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2"
-          >
-            Edit frontmatter
-          </Link>
+    <div className="profile-content-fade flex flex-col">
+      {/* ══ HEADER — the name, what it is, whether it works ══ */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h1 className="truncate font-title text-xl font-semibold text-text-primary">
+            {connector.name}
+          </h1>
+          {connector.alias && (
+            <span className="font-mono text-[12px] text-text-muted">{connector.alias}</span>
+          )}
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+            {status.label}
+          </span>
         </div>
+        <button
+          type="button"
+          onClick={runTest}
+          disabled={testing || !runnable}
+          title={runnable ? undefined : status.hint}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          <Play className="h-3.5 w-3.5" />
+          {testing ? 'Testing…' : 'Test'}
+        </button>
+      </div>
 
-        {editing === 'description' && (
-          <DescriptionEditor
-            description={connector.description ?? ''}
-            save={save}
-            saving={saving}
-            error={saveError}
-            onDone={() => openEditor(null)}
-          />
-        )}
-
-        {connector.description && editing !== 'description' && (
-          <p className="mt-3 flex items-start gap-2 text-xs text-text-muted">
-            {status.tone === 'ok' ? (
-              <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0 text-brand-dark-green" />
-            ) : (
-              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
-            )}
+      {/* The status hint, or the last Test verdict — one line, never both. */}
+      {test ? (
+        <p
+          className={`flex items-start gap-2 pb-5 text-xs ${test.ok ? 'text-brand-dark-green' : 'text-red-600'}`}
+        >
+          {test.ok ? (
+            <Check className="mt-px h-3.5 w-3.5 shrink-0" />
+          ) : (
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+          )}
+          <span className="min-w-0 break-words">{test.message}</span>
+        </p>
+      ) : (
+        status.tone !== 'ok' && (
+          <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
+            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
             {status.hint}
           </p>
-        )}
-      </section>
+        )
+      )}
 
       {/* ══ PARSE ERROR — the note exists but nothing below it is live ══ */}
       {connector.invalid && (
-        <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+        <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-red-700">This connector&apos;s frontmatter is invalid</p>
-            <p className="mt-1 break-words text-sm text-red-700">{connector.invalid}</p>
+            <p className="break-words text-sm text-red-700">{connector.invalid}</p>
             <Link
               href={`/directory/${encodeURIComponent(nodeId)}?tab=raw`}
-              className="mt-2 inline-block text-xs font-semibold text-red-700 underline"
+              className="mt-1 inline-block text-xs font-semibold text-red-700 underline"
             >
               Fix it in the Raw tab
             </Link>
@@ -1261,228 +879,137 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         </div>
       )}
 
-      {/* ══ CONNECTION ══ */}
-      {config && (
-        <Card
-          title="Connection"
-          icon={<Icon className="h-4 w-4" />}
-          subtitle={isSql ? `Read-only ${config.alias}` : isMcp ? 'Remote MCP server' : 'Outbound HTTP'}
-          action={editing === 'connection' ? undefined : <EditButton onClick={() => openEditor('connection')} />}
+      {/* ══ PERIMETER — what the sandbox enforces ══ */}
+      {connector.perimeter && (
+        <Section
+          title="Perimeter"
+          meta={`${Math.round(connector.perimeter.timeoutMs / 1000)}s timeout`}
+          action={
+            editing === 'perimeter' ? undefined : (
+              <EditButton onClick={() => openEditor('perimeter')} label="Edit perimeter" />
+            )
+          }
         >
-          {editing === 'connection' ? (
-            <ConnectionEditor
-              config={config}
+          {editing === 'perimeter' ? (
+            <PerimeterEditor
+              detail={connector}
               save={save}
               saving={saving}
               error={saveError}
               onDone={() => openEditor(null)}
             />
           ) : (
-          <div className="flex flex-col gap-3">
-            {config.alias === 'http' || config.alias === 'mcp' ? (
-              <>
-                <Detail label={config.alias === 'mcp' ? 'Server URL' : 'Base URL'}>
-                  {config.alias === 'mcp' ? config.url : config.baseUrl}
-                </Detail>
-                {Object.entries(config.headers).length > 0 && (
-                  <Detail label="Headers">
-                    <span className="flex flex-col gap-1">
-                      {Object.entries(config.headers).map(([key, value]) => (
-                        <span key={key}>
-                          <span className="text-text-muted">{key}: </span>
-                          <SecretTemplate text={value} />
-                        </span>
-                      ))}
+            <div className="flex flex-col gap-3">
+              {connector.hosts.length === 0 ? (
+                <p className="text-sm text-text-muted">No hosts — commands run without network.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {connector.hosts.map((host) => (
+                    <span key={host} className="font-mono text-[13px] text-text-primary">
+                      {host}
                     </span>
-                  </Detail>
-                )}
-                <Detail label="Timeout">{config.timeoutMs} ms</Detail>
-              </>
-            ) : (
-              <>
-                <Detail label="DSN">
-                  <SecretTemplate text={config.dsn} />
-                </Detail>
-                <Detail label="Row cap">{config.maxRows}</Detail>
-                <Detail label="Timeout">{config.timeoutMs} ms</Detail>
-              </>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+              {allowRules.length > 0 && (
+                <ul className="flex flex-col gap-1.5">
+                  {allowRules.map((rule) => {
+                    const [method, ...rest] = rule.split(' ');
+                    return (
+                      <li key={rule} className="flex items-center gap-2">
+                        <MethodBadge method={method} />
+                        <span className="min-w-0 truncate font-mono text-[13px] text-text-primary">
+                          {rest.join(' ')}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           )}
-        </Card>
+        </Section>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* ══ ALLOWLIST — http calls or mcp tools; SQL is governed by the guard ══ */}
-        {(config?.alias === 'http' || config?.alias === 'mcp') && (
-          <Card
-            title={config.alias === 'mcp' ? 'Allowed tools' : 'Allowlist'}
-            icon={<ListChecks className="h-4 w-4" />}
-            subtitle={`${config.allow.length} ${config.alias === 'mcp' ? 'tool' : 'rule'}${config.allow.length === 1 ? '' : 's'}`}
-            action={
-              editing === 'allow' ? undefined : (
-                <EditButton
-                  onClick={() => openEditor('allow')}
-                  label={config.allow.length === 0 ? (config.alias === 'mcp' ? 'Add tools' : 'Add rules') : 'Edit'}
-                />
-              )
-            }
-          >
-            {editing === 'allow' ? (
-              config.alias === 'mcp' ? (
-                <ToolAllowlistEditor
-                  rules={connector.allow}
-                  save={save}
-                  saving={saving}
-                  error={saveError}
-                  onDone={() => openEditor(null)}
-                />
-              ) : (
-                <AllowlistEditor
-                  rules={connector.allow}
-                  save={save}
-                  saving={saving}
-                  error={saveError}
-                  onDone={() => openEditor(null)}
-                />
-              )
-            ) : config.allow.length === 0 ? (
-              <p className="text-sm text-text-muted">
-                {config.alias === 'mcp' ? (
-                  <>
-                    No tools are permitted, so this connector is discovery only. Test below to list the
-                    server&apos;s tools, then allow the ones agents may call.
-                  </>
-                ) : (
-                  <>
-                    No calls are permitted, so this connector is documentation only. Add a rule like{' '}
-                    <code className="font-mono text-[12px]">GET /customers</code> to let agents call it.
-                  </>
-                )}
-              </p>
-            ) : config.alias === 'mcp' ? (
+      {/* ══ ENV — the variables a command sees, and the secrets behind them ══ */}
+      {connector.perimeter && (
+        <Section
+          title="Environment"
+          meta={
+            missingSecrets.length > 0
+              ? `${missingSecrets.length} secret${missingSecrets.length === 1 ? '' : 's'} missing`
+              : undefined
+          }
+          action={
+            editing === 'env' ? undefined : (
+              <EditButton onClick={() => openEditor('env')} label="Edit environment variables" />
+            )
+          }
+        >
+          {editing === 'env' ? (
+            <EnvEditor
+              env={env}
+              save={save}
+              saving={saving}
+              error={saveError}
+              onDone={() => openEditor(null)}
+            />
+          ) : Object.keys(env).length === 0 ? (
+            <p className="text-sm text-text-muted">No variables.</p>
+          ) : (
+            <>
               <ul className="flex flex-col gap-1.5">
-                {connector.allow.map((rule) => (
-                  <li key={rule} className="min-w-0 truncate font-mono text-[13px] text-text-primary">
-                    {rule}
+                {Object.entries(env).map(([key, value]) => (
+                  <li key={key} className="min-w-0 break-all font-mono text-[13px] text-text-primary">
+                    <span className="text-text-muted">{key}=</span>
+                    <SecretTemplate
+                      text={value}
+                      statusOfSecret={(secretName) =>
+                        connector.secrets.find((s) => s.name === secretName)
+                      }
+                      onPick={(secretName) =>
+                        setPickedSecret((current) => (current === secretName ? null : secretName))
+                      }
+                    />
                   </li>
                 ))}
               </ul>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {connector.allow.map((rule) => {
-                  const [method, ...rest] = rule.split(' ');
-                  return (
-                    <li key={rule} className="flex items-center gap-2">
-                      <MethodBadge method={method} />
-                      <span className="min-w-0 truncate font-mono text-[13px] text-text-primary">
-                        {rest.join(' ')}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </Card>
-        )}
-
-        {config && isSqlConnector(config) && (
-          <Card title="Query limits" icon={<ShieldCheck className="h-4 w-4" />} subtitle="Enforced server-side">
-            <ul className="flex flex-col gap-1.5 text-sm text-text-muted">
-              <li>One statement per call, SELECT-shaped only.</li>
-              <li>Runs inside a READ ONLY transaction.</li>
-              <li>Capped at {config.maxRows} rows and {config.timeoutMs} ms.</li>
-            </ul>
-          </Card>
-        )}
-
-        {/* ══ SECRETS — the half of the config that isn't in the note ══ */}
-        <Card
-          title="Secrets"
-          icon={<KeyRound className="h-4 w-4" />}
-          subtitle={
-            connector.secrets.length === 0
-              ? 'None referenced'
-              : `${connector.secrets.filter((s) => s.set).length} of ${connector.secrets.length} stored`
-          }
-        >
-          {connector.secrets.length === 0 ? (
-            <p className="text-sm text-text-muted">
-              This connector references no secrets. Reference one from the frontmatter as{' '}
-              <code className="font-mono text-[12px]">{'{{secret:NAME}}'}</code> and it will appear here to
-              fill in.
-            </p>
-          ) : (
-            <ul className="divide-y divide-border-subtle">
-              {communityId &&
-                connector.secrets.map((secret) => (
-                  <SecretRow
-                    key={secret.name}
-                    secret={secret}
-                    communityId={communityId}
-                    onChanged={reload}
-                  />
-                ))}
-            </ul>
+              {pickedSecretStatus && communityId && (
+                <SecretEditor
+                  key={pickedSecretStatus.name}
+                  secret={pickedSecretStatus}
+                  communityId={communityId}
+                  onChanged={reload}
+                  onClose={() => setPickedSecret(null)}
+                />
+              )}
+            </>
           )}
-        </Card>
-      </div>
+        </Section>
+      )}
 
-      {/* ══ TEST — same executors an agent's call goes through ══ */}
-      {config && communityId && (
-        <Card
-          title="Test"
-          icon={<Play className="h-4 w-4" />}
-          subtitle={
-            isSql
-              ? 'Runs for real, under the same limits and secret an agent gets'
-              : 'Runs for real, through the same allowlist and secrets an agent gets'
-          }
-        >
+      {/* ══ TERMINAL — the same path an agent's run_connector takes ══ */}
+      {connector.perimeter && communityId && (
+        <Section title="Console" meta="runs for real">
           {!runnable ? (
-            <div className="flex items-start gap-2 text-sm text-text-muted">
+            <p className="flex items-start gap-2 text-sm text-text-muted">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
               <span>
                 {connector.invalid
-                  ? 'Fix the frontmatter before testing.'
-                  : 'Store the missing secrets above before testing.'}
+                  ? 'Fix the frontmatter before running.'
+                  : `Set ${missingSecrets.map((s) => s.name).join(', ')} in Environment above before running.`}
               </span>
-            </div>
-          ) : config.alias === 'http' ? (
-            <HttpTester connector={connector} communityId={communityId} />
-          ) : config.alias === 'mcp' ? (
-            <McpTester connector={connector} communityId={communityId} />
+            </p>
           ) : (
-            <SqlTester connector={connector} communityId={communityId} />
+            <ConnectorConsole connector={connector} communityId={communityId} />
           )}
-        </Card>
+        </Section>
       )}
 
-      {/* ══ DOCS — the note body, which is what an agent actually reads ══ */}
-      <Card
-        title="Agent documentation"
-        icon={<BookText className="h-4 w-4" />}
-        subtitle="The note body, returned with every list_connectors call"
-        action={
-          <Link
-            href={`/directory/${encodeURIComponent(nodeId)}?tab=context`}
-            className="shrink-0 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2"
-          >
-            Edit
-          </Link>
-        }
-      >
-        {connector.docs ? (
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-open-sauce text-[13px] leading-relaxed text-text-secondary">
-            {connector.docs}
-          </pre>
-        ) : (
-          <p className="flex items-center gap-2 text-sm text-text-muted">
-            <Plus className="h-4 w-4" />
-            Nothing written yet — agents get the config and no explanation of what this system is.
-          </p>
-        )}
-      </Card>
+      {/* ══ CALLS — who ran this, and what came back ══ */}
+      <Section title="Activity" meta={calls.length > 0 ? `last ${calls.length}` : undefined}>
+        <CallLog calls={calls} />
+      </Section>
     </div>
   );
 }

@@ -249,7 +249,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6">
                   <div className="absolute inset-0 opacity-30"
                        style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.25) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }} />
-                  <span className="relative text-6xl font-bold font-ginto leading-none">{day}</span>
+                  <span className="relative text-6xl font-bold font-title leading-none">{day}</span>
                   <span className="relative text-xl font-bold tracking-[0.3em] mt-1">{month}</span>
                   <span className="relative mt-4 text-center text-base font-semibold opacity-90 line-clamp-3">{event.title}</span>
                 </div>
@@ -274,7 +274,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* GUESTS — attendee list lives in the poster column, under the edit box */}
             {event.guestListVisible !== false && goingCount > 0 && (
               <InfoCard>
-                <h2 className="flex items-center gap-2 text-[15px] font-bold font-ginto text-text-primary mb-3">
+                <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary mb-3">
                   <Users className="w-[18px] h-[18px]" style={{ color: theme.dark }} />
                   {goingCount} going
                 </h2>
@@ -316,7 +316,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 </div>
               )}
 
-              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary leading-tight font-ginto">{event.title}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-text-primary leading-tight font-title">{event.title}</h1>
             </div>
 
             {/* analytics strip (manage view) */}
@@ -334,7 +334,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
               <div className="flex items-center gap-3.5">
                 <div className="flex flex-col items-center w-12 rounded-xl overflow-hidden border border-border-subtle flex-none">
                   <span className="w-full text-center text-[10px] font-bold text-white py-0.5" style={{ background: theme.base }}>{month}</span>
-                  <span className="text-lg font-bold font-ginto text-text-primary leading-tight py-0.5">{day}</span>
+                  <span className="text-lg font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-bold text-text-primary">
@@ -423,7 +423,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* ABOUT */}
             {event.description && (
               <InfoCard>
-                <h2 className="text-[15px] font-bold font-ginto text-text-primary mb-2">About this event</h2>
+                <h2 className="text-[15px] font-bold font-title text-text-primary mb-2">About this event</h2>
                 <AboutText text={event.description} theme={theme} />
               </InfoCard>
             )}
@@ -556,7 +556,7 @@ function RsvpCard({
     <div className="rounded-2xl border-2 shadow-soft px-5 py-4"
          style={{ borderColor: `${theme.base}40`, background: `linear-gradient(180deg, ${theme.light}, var(--surface-1, #fff) 70%)` }}>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[15px] font-bold font-ginto text-text-primary">Registration</h2>
+        <h2 className="text-[15px] font-bold font-title text-text-primary">Registration</h2>
         {capacity != null && !isPast && (
           <span className="text-xs font-semibold" style={{ color: spotsLeft !== null && spotsLeft <= capacity * 0.2 ? '#be123c' : theme.dark }}>
             {spotsLeft === 0
@@ -742,7 +742,7 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
   return (
     <div className="max-w-2xl flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-[15px] font-bold font-ginto text-text-primary">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary">
           <ClipboardList className="w-[18px] h-[18px]" style={{ color: theme.dark }} /> RSVP form
         </h2>
         <button onClick={onCopy}
@@ -826,7 +826,7 @@ function Pill({ bg, fg, border, children }: { bg: string; fg: string; border: st
 function StatCell({ value, label }: { value: number; label: string }) {
   return (
     <div className="flex-1 min-w-0 text-center px-2">
-      <b className="block text-base font-bold font-ginto text-text-primary leading-tight">{value}</b>
+      <b className="block text-base font-bold font-title text-text-primary leading-tight">{value}</b>
       <span className="block text-[11px] text-text-muted">{label}</span>
     </div>
   );

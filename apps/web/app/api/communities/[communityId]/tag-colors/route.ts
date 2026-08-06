@@ -53,6 +53,6 @@ export async function PATCH(
     data: { designConfig: { ...design, tagColors } },
   });
 
-  revalidateTag('context-data-v2');
+  revalidateTag('context-data-v2', { expire: 0 });
   return NextResponse.json({ tag: key, color: tagColors[key] });
 }

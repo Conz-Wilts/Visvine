@@ -92,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
     }
 
     // Bust the context cache so the node appears immediately
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
 
     return NextResponse.json({ membership: { id: membership.id, status: membership.status } }, { status: 201 });
   } catch (err) {

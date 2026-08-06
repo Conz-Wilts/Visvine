@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /**
  * Community invite landing page (/invite/<token>).
  *
- * This route is NOT public: middleware bounces a logged-out visitor to
+ * This route is NOT public: the proxy bounces a logged-out visitor to
  * /signin?callbackUrl=/invite/<token>, so by the time we render, the user is
  * authenticated and returns here after signing in / creating an account. We then
  * resolve the community by its invite token and show a join screen. Accepting

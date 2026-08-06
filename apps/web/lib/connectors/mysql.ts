@@ -1,15 +1,17 @@
 /**
- * The MySQL connector executor — the postgres executor's shape with the
- * dialect swapped: backtick identifiers and `#` comments in the statement
- * guard instead of dollar-quoting, `START TRANSACTION READ ONLY` plus
- * `max_execution_time` instead of `statement_timeout`, and mysql2 error
- * numbers in place of SQLSTATEs. Each query gets a fresh short-lived
- * connection that is always destroyed.
+ * The MySQL capability — the postgres one's shape with the dialect swapped:
+ * backtick identifiers and `#` comments in the statement guard instead of
+ * dollar-quoting, `START TRANSACTION READ ONLY` plus `max_execution_time`
+ * instead of `statement_timeout`, and mysql2 error numbers in place of
+ * SQLSTATEs. Each query gets a fresh short-lived connection that is always
+ * destroyed.
+ *
+ * As with postgres.ts, the perimeter gate lives in lib/connectors/hostSql and
+ * has already judged the DSN before this module runs.
  */
 import { createConnection, type FieldPacket } from 'mysql2/promise'
-import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
-import { allowPrivateHosts, ConnectorError, redactSecrets, type MysqlConnectorConfig } from './config'
-import { toCell, type QueryResult } from './postgres'
+import { ConnectorError, redactSecrets } from './config'
+import { toCell, type QueryResult, type SqlQueryOptions } from './postgres'
 
 const CONNECT_TIMEOUT_MS = 5_000
 const READ_KEYWORDS = new Set(['select', 'with', 'values', 'table', 'explain', 'show', 'describe', 'desc'])
@@ -70,30 +72,20 @@ export function assertSingleReadOnlyMysqlStatement(sql: string): void {
 }
 
 export async function executeMysqlQuery(
-  config: MysqlConnectorConfig,
   dsn: string,
   sql: string,
+  options: SqlQueryOptions,
 ): Promise<QueryResult> {
   assertSingleReadOnlyMysqlStatement(sql)
 
-  let host: string
-  let password: string
+  // Never let the DSN (or its password) surface in anything the model sees.
+  let password = ''
   try {
-    const url = new URL(dsn)
-    host = url.hostname
-    password = decodeURIComponent(url.password)
+    password = decodeURIComponent(new URL(dsn).password)
   } catch {
     throw new ConnectorError('config', 'The connector DSN is not a valid mysql:// URL')
   }
-  // Never let the DSN (or its password) surface in anything the model sees.
   const sensitive = [dsn, password].filter((s) => s.length > 0)
-
-  try {
-    await assertPubliclyRoutable(host, { allowPrivate: allowPrivateHosts() })
-  } catch (e) {
-    if (e instanceof SsrfError) throw new ConnectorError('ssrf', e.message)
-    throw e
-  }
 
   let conn
   try {
@@ -105,11 +97,11 @@ export async function executeMysqlQuery(
   try {
     await conn.query('START TRANSACTION READ ONLY')
     // max_execution_time only bounds SELECT; the JS race below covers the rest.
-    await conn.query(`SET SESSION max_execution_time = ${Math.floor(config.timeoutMs)}`)
+    await conn.query(`SET SESSION max_execution_time = ${Math.floor(options.timeoutMs)}`)
     const timeout = new Promise<never>((_, reject) =>
       setTimeout(
-        () => reject(new ConnectorError('timeout', `Query timed out after ${config.timeoutMs}ms`)),
-        config.timeoutMs,
+        () => reject(new ConnectorError('timeout', `Query timed out after ${options.timeoutMs}ms`)),
+        options.timeoutMs,
       ).unref?.(),
     )
     const [allRows, fields] = (await Promise.race([conn.query(sql), timeout])) as [
@@ -119,18 +111,18 @@ export async function executeMysqlQuery(
     await conn.query('ROLLBACK')
 
     const all = Array.isArray(allRows) ? allRows : []
-    const rows = all.slice(0, config.maxRows).map((row) => (row as unknown[]).map(toCell))
+    const rows = all.slice(0, options.maxRows).map((row) => (row as unknown[]).map(toCell))
     return {
       columns: (fields ?? []).map((f) => f.name),
       rows,
       row_count: rows.length,
-      truncated: all.length > config.maxRows,
+      truncated: all.length > options.maxRows,
     }
   } catch (e) {
     if (e instanceof ConnectorError) throw e
     const errno = (e as { errno?: number }).errno
     if (errno === 3024) {
-      throw new ConnectorError('timeout', `Query timed out after ${config.timeoutMs}ms`)
+      throw new ConnectorError('timeout', `Query timed out after ${options.timeoutMs}ms`)
     }
     const message = e instanceof Error ? e.message : String(e)
     if (errno === 1792 || /read.only/i.test(message)) {

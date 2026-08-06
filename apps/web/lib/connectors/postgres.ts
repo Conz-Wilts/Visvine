@@ -1,21 +1,31 @@
 /**
- * The Postgres connector executor. Deliberately NOT the app's Prisma
- * singleton — a connector DSN is a foreign database, so each query gets a
- * fresh short-lived pg Client that is always ended.
+ * The Postgres capability behind a connector's `sql()`. Deliberately NOT the
+ * app's Prisma singleton — a connector DSN is a foreign database, so each query
+ * gets a fresh short-lived pg Client that is always ended.
  *
- * Read-only is enforced in layers: a pure statement guard rejects anything
- * that isn't a single SELECT-shaped statement (cheap, clear errors), and the
- * query then runs inside `BEGIN TRANSACTION READ ONLY` with a statement
- * timeout — the transaction is what actually stops a write that slips past
- * string analysis (e.g. a writing CTE or function).
+ * Read-only is enforced in layers: a pure statement guard rejects anything that
+ * isn't a single SELECT-shaped statement (cheap, clear errors), and the query
+ * then runs inside `BEGIN TRANSACTION READ ONLY` with a statement timeout — the
+ * transaction is what actually stops a write that slips past string analysis
+ * (e.g. a writing CTE or function).
+ *
+ * The perimeter gate (host allowlist + SSRF) is NOT here: lib/connectors/hostSql
+ * judges the DSN before this module ever sees it, so that a refusal can be
+ * worded without naming a host that came out of a decrypted secret.
  */
 import { Client } from 'pg'
-import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
-import { allowPrivateHosts, ConnectorError, redactSecrets, type PostgresConnectorConfig } from './config'
+import { ConnectorError, redactSecrets } from './config'
 
 const CONNECT_TIMEOUT_MS = 5_000
 const CELL_CAP_CHARS = 4_096
 const READ_KEYWORDS = new Set(['select', 'with', 'values', 'table', 'explain', 'show'])
+
+/** Per-query limits, passed in rather than read from a v1 connector config. */
+export interface SqlQueryOptions {
+  /** Statement timeout — the caller passes the run's REMAINING wall clock. */
+  timeoutMs: number
+  maxRows: number
+}
 
 /**
  * Reject multi-statement SQL and anything not SELECT-shaped. Pure and exported
@@ -82,7 +92,7 @@ export interface QueryResult {
   truncated: boolean
 }
 
-/** JSON-safe, size-capped cell for the tool result. Shared with mysql.ts. */
+/** JSON-safe, size-capped cell for the run result. Shared with mysql.ts. */
 export function toCell(value: unknown): unknown {
   if (value === null || typeof value === 'number' || typeof value === 'boolean') return value
   const text =
@@ -101,52 +111,42 @@ export function toCell(value: unknown): unknown {
 }
 
 export async function executePostgresQuery(
-  config: PostgresConnectorConfig,
   dsn: string,
   sql: string,
+  options: SqlQueryOptions,
 ): Promise<QueryResult> {
   assertSingleReadOnlyStatement(sql)
 
-  let host: string
-  let password: string
+  // Never let the DSN (or its password) surface in anything the model sees.
+  let password = ''
   try {
-    const url = new URL(dsn)
-    host = url.hostname
-    password = decodeURIComponent(url.password)
+    password = decodeURIComponent(new URL(dsn).password)
   } catch {
     throw new ConnectorError('config', 'The connector DSN is not a valid postgres:// URL')
   }
-  // Never let the DSN (or its password) surface in anything the model sees.
   const sensitive = [dsn, password].filter((s) => s.length > 0)
-
-  try {
-    await assertPubliclyRoutable(host, { allowPrivate: allowPrivateHosts() })
-  } catch (e) {
-    if (e instanceof SsrfError) throw new ConnectorError('ssrf', e.message)
-    throw e
-  }
 
   const client = new Client({ connectionString: dsn, connectionTimeoutMillis: CONNECT_TIMEOUT_MS })
   try {
     await client.connect()
     await client.query('BEGIN TRANSACTION READ ONLY')
-    await client.query(`SET LOCAL statement_timeout = ${Math.floor(config.timeoutMs)}`)
+    await client.query(`SET LOCAL statement_timeout = ${Math.floor(options.timeoutMs)}`)
     const result = await client.query({ text: sql, rowMode: 'array' })
     await client.query('ROLLBACK')
 
     const all = result.rows ?? []
-    const rows = all.slice(0, config.maxRows).map((row: unknown[]) => row.map(toCell))
+    const rows = all.slice(0, options.maxRows).map((row: unknown[]) => row.map(toCell))
     return {
       columns: (result.fields ?? []).map((f) => f.name),
       rows,
       row_count: rows.length,
-      truncated: all.length > config.maxRows,
+      truncated: all.length > options.maxRows,
     }
   } catch (e) {
     if (e instanceof ConnectorError) throw e
     const pgCode = (e as { code?: string }).code
     if (pgCode === '57014') {
-      throw new ConnectorError('timeout', `Query timed out after ${config.timeoutMs}ms`)
+      throw new ConnectorError('timeout', `Query timed out after ${options.timeoutMs}ms`)
     }
     const message = e instanceof Error ? e.message : String(e)
     if (pgCode === '25006' || /read-only transaction/i.test(message)) {

@@ -141,7 +141,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
     label: 'Connector',
     description: 'A gateway to an external API or database',
     color: '#6366f1',
-    inGrid: true,
+    inGrid: false,
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-5 5 5 5 0 01-5-5V8zM12 17v4" />
@@ -793,24 +793,17 @@ export function ContextForm({
 
 // ─── Connector Form ─────────────────────────────────────────────────────────
 
-export type ConnectorAlias = 'http' | 'postgres' | 'mysql' | 'mcp';
-
 export interface ConnectorFormData {
   name: string;
-  alias: ConnectorAlias;
   description: string;
-  /** http: the absolute base URL every call hangs off. mcp: the server's endpoint URL. */
-  baseUrl: string;
-  /** http: one "METHOD /path" rule per line. mcp: one tool name per line. Empty means docs-only. */
-  allow: string;
-  /** postgres/mysql only — the NAME of a stored secret holding the DSN. */
+  /** One `host` or `host:port` per line — what the sandbox may reach. Empty = no network yet. */
+  hosts: string;
+  /** Optional NAME of a stored secret, exposed to commands as $NAME. */
   secretName: string;
 }
 
-/** Is this a DSN-backed SQL alias (shares the secret-name form)? */
-const isSqlAlias = (alias: ConnectorAlias) => alias === 'postgres' || alias === 'mysql';
-
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const HOST_LINE_RE = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d{1,5})?$/i;
 
 /**
  * A connector's name IS its filename and the handle agents call it by, so it's
@@ -823,43 +816,28 @@ export function connectorSlug(name: string): string {
 
 /**
  * What's wrong with this draft, or null when it's ready. Mirrors the checks
- * parseConnectorConfig runs server-side so the panel can't write a note the
+ * parseConnectorPerimeter runs server-side so the panel can't write a note the
  * connectors layer would immediately call invalid.
  */
 function connectorFormError(data: ConnectorFormData): string | null {
   const name = data.name.trim();
   if (!name) return null; // not an error yet — just nothing typed
   if (!connectorSlug(name)) return 'Use letters and numbers — that name has none.';
-  if (isSqlAlias(data.alias)) {
-    const secret = data.secretName.trim().toUpperCase();
-    if (!secret) return null;
-    if (!SECRET_NAME_RE.test(secret)) return 'Secret names are UPPER_SNAKE_CASE: A-Z, 0-9 and _, starting with a letter.';
-    return null;
-  }
-  const url = data.baseUrl.trim();
-  if (!url) return null;
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return `${data.alias === 'mcp' ? 'Server' : 'Base'} URL must be a full absolute URL, e.g. https://api.example.com`;
-  }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return 'The URL must be http(s).';
-  if (parsed.search || parsed.hash) return 'The URL may not include a query string or fragment.';
-  for (const line of data.allow.split('\n').map((l) => l.trim()).filter(Boolean)) {
-    if (data.alias === 'mcp') {
-      if (!/^[A-Za-z0-9][\w.-]*\*?$/.test(line)) return `Bad tool name "${line}" — letters, digits, _ . -, optionally ending in *.`;
-    } else if (!/^[A-Za-z]+\s+\/\S*$/.test(line)) {
-      return `Bad allow rule "${line}" — use "GET /widgets".`;
+  for (const line of data.hosts.split('\n').map((l) => l.trim()).filter(Boolean)) {
+    if (!HOST_LINE_RE.test(line)) {
+      return `Bad host "${line}" — a bare hostname like api.stripe.com or db.internal:5432, no scheme or path.`;
     }
+  }
+  const secret = data.secretName.trim().toUpperCase();
+  if (secret && !SECRET_NAME_RE.test(secret)) {
+    return 'Secret names are UPPER_SNAKE_CASE: A-Z, 0-9 and _, starting with a letter.';
   }
   return null;
 }
 
 /** True when there's enough here to write a connector note. */
 export function connectorFormReady(data: ConnectorFormData): boolean {
-  if (!connectorSlug(data.name) || connectorFormError(data)) return false;
-  return isSqlAlias(data.alias) ? !!data.secretName.trim() : !!data.baseUrl.trim();
+  return !!connectorSlug(data.name) && !connectorFormError(data);
 }
 
 export function ConnectorForm({
@@ -887,25 +865,6 @@ export function ConnectorForm({
         />
       </Field>
 
-      <Field label="Alias" required>
-        <div className="flex gap-2">
-          {(['http', 'postgres', 'mysql', 'mcp'] as const).map((alias) => (
-            <button
-              key={alias}
-              type="button"
-              onClick={() => onChange({ ...data, alias })}
-              className={`flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
-                data.alias === alias
-                  ? 'border-brand-green bg-brand-green/10 text-text-primary'
-                  : 'border-border-default bg-surface-2 text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {alias}
-            </button>
-          ))}
-        </div>
-      </Field>
-
       <Field label="Description">
         <input
           className={inputClass}
@@ -915,71 +874,37 @@ export function ConnectorForm({
         />
       </Field>
 
-      {data.alias === 'http' || data.alias === 'mcp' ? (
-        <>
-          <Field label={data.alias === 'mcp' ? 'Server URL' : 'Base URL'} required>
-            <input
-              className={`${inputClass} font-mono`}
-              placeholder={data.alias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
-              value={data.baseUrl}
-              onChange={(e) => onChange({ ...data, baseUrl: e.target.value })}
-            />
-          </Field>
-          <Field label={data.alias === 'mcp' ? 'Allowed tools' : 'Allowed calls'}>
-            <textarea
-              className={`${inputClass} font-mono resize-none`}
-              rows={3}
-              placeholder={
-                data.alias === 'mcp'
-                  ? 'search_issues\nget_issue\ncreate_*'
-                  : 'GET /customers\nGET /customers/*\nPOST /customers'
-              }
-              value={data.allow}
-              onChange={(e) => onChange({ ...data, allow: e.target.value })}
-            />
-          </Field>
-          <p className="text-xs text-text-muted">
-            {data.alias === 'mcp' ? (
-              <>
-                One tool name per line (a trailing <span className="font-mono">*</span> allows a prefix).
-                Anything not listed is refused before a request is sent — leave it empty to discover the
-                server&apos;s tools first. Auth tokens go in the note&apos;s{' '}
-                <span className="font-mono">headers</span> as{' '}
-                <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
-              </>
-            ) : (
-              <>
-                One <span className="font-mono">METHOD /path</span> per line. Anything not listed is refused
-                before a request is sent — leave it empty for a documentation-only connector. API keys go in
-                the note&apos;s <span className="font-mono">headers</span> as{' '}
-                <span className="font-mono">{'{{secret:NAME}}'}</span>, never as raw values.
-              </>
-            )}
-          </p>
-        </>
-      ) : (
-        <>
-          <Field label="DSN secret name" required>
-            <input
-              className={`${inputClass} font-mono`}
-              placeholder="ANALYTICS_DSN"
-              value={data.secretName}
-              onChange={(e) => onChange({ ...data, secretName: e.target.value })}
-            />
-          </Field>
-          <p className="text-xs text-text-muted">
-            The connection string itself never lives in the note — add it under{' '}
-            <span className="font-mono">{data.secretName.trim().toUpperCase() || 'THIS NAME'}</span> on
-            the connector&apos;s page once it exists. Queries run read-only.
-          </p>
-        </>
-      )}
+      <Field label="Hosts">
+        <textarea
+          className={`${inputClass} font-mono resize-none`}
+          rows={2}
+          placeholder={'api.stripe.com'}
+          value={data.hosts}
+          onChange={(e) => onChange({ ...data, hosts: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Secret">
+        <input
+          className={`${inputClass} font-mono`}
+          placeholder="STRIPE_KEY"
+          value={data.secretName}
+          onChange={(e) => onChange({ ...data, secretName: e.target.value })}
+        />
+      </Field>
+
+      <p className="text-xs text-text-muted">
+        Agents run JavaScript in an isolate that can only reach the hosts above. The secret&apos;s
+        value is set on the connector&apos;s page afterwards and reaches the code as{' '}
+        <span className="font-mono">env.{data.secretName.trim().toUpperCase() || 'NAME'}</span> — it never
+        lives in the note.
+      </p>
 
       {slug && <EntityNotePreview dir="connectors" name={slug} />}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-text-muted">
-        Only community admins can create or edit connectors. You can refine the note afterwards — its
-        body is the documentation agents read.
+        Only community admins can create or edit connectors. Refine the note afterwards — its body is
+        the documentation agents read.
       </p>
     </div>
   );

@@ -2,6 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Native/CJS packages the bundler must leave alone. The QuickJS build is the
+  // load-bearing one: the singlefile variant base64-inlines its wasm into a CJS
+  // module precisely so `output: "standalone"` has a file to trace. Bundling it
+  // is what breaks that, and it breaks in the image, not in dev.
+  serverExternalPackages: [
+    "@jitl/quickjs-singlefile-cjs-release-sync",
+    "pg",
+    "mysql2",
+  ],
   async redirects() {
     return [
       // The directory's old graph view mode is the standalone Context tool now.

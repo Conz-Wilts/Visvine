@@ -262,6 +262,6 @@ export async function createEntity(
     }
   }
 
-  revalidateTag('context-data-v2')
+  revalidateTag('context-data-v2', { expire: 0 })
   return { ok: true, node: nodeRowToNBNode(row), notePath, resolution, noteError }
 }

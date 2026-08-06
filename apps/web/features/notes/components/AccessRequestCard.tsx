@@ -1,15 +1,17 @@
 'use client'
 
-// The request-access dead-end card, shared by every surface that denies a read:
+// The request-access dead end, shared by every surface that denies a read:
 // the notes workspace and profile Context tab when the brain ROOT gate is closed
 // (scope 'brain'), and a single note/folder the viewer can't open (scope 'path').
 //
-// The 'path' copy is deliberately existence-neutral — a hidden note and a deleted
-// one are indistinguishable by design (lib/notes/brainService.ts#readVisible), so
-// the card must not become the oracle that tells them apart. Requesting records
-// the path either way; an admin resolving it knows whether anything is there.
+// The 'path' heading is deliberately existence-neutral — a hidden note and a
+// deleted one are indistinguishable by design (lib/notes/brainService.ts#readVisible),
+// so this must not become the oracle that tells them apart. Keep any copy added
+// here neutral too. Requesting records the path either way; an admin resolving it
+// knows whether anything is there.
 
 import { useState } from 'react'
+import { Lock } from 'lucide-react'
 import { Textarea } from '@/components/ui'
 
 interface AccessRequestCardProps {
@@ -39,18 +41,22 @@ export function AccessRequestCard({
 
   const heading =
     scope === 'brain' ? `${communityName}'s ${contextName} is private` : 'You can’t open this note'
+  // 'path' carries no body: the heading plus the request button already say the
+  // whole thing. 'brain' keeps its line — that heading names a gate the viewer
+  // has no other way to understand.
   const body =
     scope === 'brain'
       ? `Access to ${communityName}'s shared notes is limited. Request access and an admin will review it.`
-      : 'It may have been moved or deleted, or you may not have access to it. Request access and whoever manages it will review.'
+      : null
 
   return (
-    <div className="flex w-full max-w-md flex-col items-center gap-3 rounded-2xl border border-border-subtle bg-surface-1 px-8 py-10 text-center shadow-float">
-      <span className="text-3xl" aria-hidden="true">
-        🔒
-      </span>
+    // Deliberately chrome-less: this is a dead end inside the context surface,
+    // not a dialog over it. A card + shadow read as a modal the viewer could
+    // dismiss, so the state sits flat on the context background instead.
+    <div className="flex w-full max-w-md flex-col items-center gap-3 px-8 py-10 text-center">
+      <Lock className="h-6 w-6 text-text-muted" aria-hidden="true" strokeWidth={1.5} />
       <h2 className="text-base font-semibold text-text-primary">{heading}</h2>
-      <p className="text-sm text-text-secondary">{body}</p>
+      {body && <p className="text-sm text-text-secondary">{body}</p>}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -84,7 +90,7 @@ export function AccessRequestCard({
             <button
               onClick={() => onRequest(message.trim() || undefined)}
               disabled={requesting}
-              className="rounded-xl bg-brand-green px-4 py-2 text-sm font-semibold text-brand-black hover:brightness-95 disabled:opacity-40"
+              className="rounded-xl bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-40"
             >
               {requesting ? 'Sending…' : 'Send request'}
             </button>
@@ -94,7 +100,7 @@ export function AccessRequestCard({
         <button
           onClick={() => setComposing(true)}
           disabled={requesting}
-          className="rounded-xl bg-brand-green px-4 py-2 text-sm font-semibold text-brand-black hover:brightness-95 disabled:opacity-40"
+          className="rounded-xl bg-brand-green px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-40"
         >
           Request access
         </button>

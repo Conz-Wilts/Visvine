@@ -9,10 +9,10 @@ interface Props {
 export default function WelcomeStep({ onStart }: Props) {
   return (
     <div className="p-8 py-16 text-center">
-      <h1 className="font-ginto text-4xl font-bold text-gray-900 mb-3">
+      <h1 className="font-title text-4xl font-bold text-gray-900 mb-3">
         Welcome to Visvine
       </h1>
-      <p className="font-ginto text-gray-500 mb-10 max-w-sm mx-auto">
+      <p className="font-title text-gray-500 mb-10 max-w-sm mx-auto">
         Let&apos;s set up your profile so people in the community can find and connect with you.
       </p>
 

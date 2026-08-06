@@ -202,7 +202,7 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 12)
+  assert.equal(tools.length, 9)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
@@ -210,11 +210,7 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   assert.equal(scopeForTool('get_entity'), 'context:read')
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
-  assert.equal(scopeForTool('call_connector'), 'connectors:use')
-  assert.equal(scopeForTool('query_connector'), 'connectors:use')
-  // mcp tool discovery reaches the remote server, so it is NOT a plain read.
-  assert.equal(scopeForTool('list_connector_tools'), 'connectors:use')
-  assert.equal(scopeForTool('call_mcp_connector'), 'connectors:use')
+  assert.equal(scopeForTool('run_connector'), 'connectors:use')
   assert.equal(scopeForTool('no_such_tool'), null)
 })
 

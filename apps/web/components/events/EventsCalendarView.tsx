@@ -190,7 +190,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
         <div ref={monthCardRef} className="relative overflow-hidden">
           {/* Navigation row */}
           <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-3xl sm:text-4xl font-normal tracking-tight font-ginto text-text-primary">
+            <h2 className="text-3xl sm:text-4xl font-normal tracking-tight font-title text-text-primary">
               {monthLabel} <span className="text-text-muted">{yearLabel}</span>
             </h2>
             <div className="flex items-center gap-1">
@@ -318,7 +318,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
             <div className="text-xs font-medium uppercase tracking-wide text-brand-dark-green">
               {selectedWeekday}
             </div>
-            <div className="text-2xl font-normal tracking-tight font-ginto text-text-primary">
+            <div className="text-2xl font-normal tracking-tight font-title text-text-primary">
               {selectedDateLabel}
             </div>
             {!loading && (

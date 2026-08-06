@@ -1,13 +1,13 @@
 /**
  * Seeds a community's SHARED brain with working connectors, so the MCP tools
- * `list_connectors` / `call_connector` / `query_connector` have something real
+ * `list_connectors` / `run_connector` have something real
  * to talk to in local dev.
  *
  * Two connectors, one per alias:
  *   • connectors/sandbox.md  (http)     → /api/dev/connector-sandbox, the fake
  *     external API in this same app. Needs the SANDBOX_KEY secret.
  *   • connectors/appdb.md    (postgres) → the local dev Postgres itself, via
- *     the APPDB_DSN secret. Read-only is enforced by the executor, not by us.
+ *     the APPDB_DSN secret. Read-only is enforced by the sql() capability.
  *
  * Both secrets are written to community_secrets encrypted under SECRETS_KEY,
  * the same way the admin console writes them.
@@ -43,6 +43,8 @@ const SHARED = 'shared';
 
 const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 const sandboxBaseUrl = `${appOrigin}/api/dev/connector-sandbox`;
+/** What `hosts:` gates on — host[:port], never a URL. */
+const sandboxHost = new URL(appOrigin).host;
 
 /** The DSN the app itself uses — the connector connects as a foreign database. */
 function resolveDsn(): string {
@@ -55,23 +57,31 @@ function resolveDsn(): string {
   return 'postgresql://postgres:postgres@127.0.0.1:5432/app';
 }
 
+/** The DSN's own host, which is what the perimeter must list for `sql()`. */
+const appdbHost = (() => {
+  const url = new URL(resolveDsn());
+  return url.port ? `${url.hostname}:${url.port}` : url.hostname;
+})();
+
 // ---- the connector notes ----------------------------------------------------
 
 const SANDBOX_NOTE = `---
 type: connector
 alias: http
+title: Widgets Sandbox
 description: Widgets sandbox — a fake external API served by this app, for testing connectors
-base_url: ${sandboxBaseUrl}
-headers:
-  X-Sandbox-Key: "{{secret:SANDBOX_KEY}}"
+hosts:
+  - ${sandboxHost}
 allow:
-  - "GET /widgets"
-  - "GET /widgets/*"
-  - "POST /widgets"
-  - "GET /whoami"
-  - "GET /slow"
-  - "GET /big"
-  - "GET /redirect"
+  - "GET /api/dev/connector-sandbox/widgets*"
+  - "POST /api/dev/connector-sandbox/widgets"
+  - "GET /api/dev/connector-sandbox/whoami"
+  - "GET /api/dev/connector-sandbox/slow"
+  - "GET /api/dev/connector-sandbox/big"
+  - "GET /api/dev/connector-sandbox/redirect"
+env:
+  SANDBOX_KEY: "{{secret:SANDBOX_KEY}}"
+  SANDBOX_API: "${sandboxBaseUrl}"
 timeout_ms: 3000
 ---
 
@@ -100,10 +110,15 @@ A widget looks like
 
 ### Example
 
+\`\`\`js
+const res = await fetch(\`\${env.SANDBOX_API}/widgets?q=rubber\`, {
+  headers: { 'x-sandbox-key': env.SANDBOX_KEY },
+})
+return JSON.parse(res.body).widgets
 \`\`\`
-call_connector(connector: 'sandbox', method: 'GET', path: '/widgets', query: { q: 'rubber' })
-call_connector(connector: 'sandbox', method: 'GET', path: '/widgets/wid_002')
-\`\`\`
+
+Every request needs the \`x-sandbox-key\` header; the value is in
+\`env.SANDBOX_KEY\` and the base URL in \`env.SANDBOX_API\`.
 
 ## Deliberately unhappy paths
 
@@ -111,7 +126,7 @@ These exist to demonstrate the guard rails, and are the interesting part of this
 connector:
 
 - \`DELETE /widgets/{id}\` is a **real** route on the service but is **not** in the
-  allowlist above, so \`call_connector\` refuses it before any request goes out.
+  allow rules above, so \`fetch\` refuses it before any request goes out.
 - \`GET /whoami\` reflects the API key back at you. The response you see should
   read \`[redacted]\` — output redaction scrubs resolved secret values out of
   everything a connector returns.
@@ -119,20 +134,23 @@ connector:
   aborts rather than hanging.
 - \`GET /big?kb=512\` returns more than the 256 KB response cap, so the body comes
   back cut short with \`truncated: true\`.
-- \`GET /redirect\` answers 302. Connector fetches refuse redirects, so this
-  surfaces as an upstream error instead of quietly following the hop.
+- \`GET /redirect\` answers 302. Redirects are never followed — the 3xx comes
+  back with \`location\` set, and re-issuing it goes through the perimeter again.
 `;
 
 const APPDB_NOTE = `---
 type: connector
 alias: postgres
+title: App Database
 description: The local dev Postgres behind this app, read-only
-dsn: "{{secret:APPDB_DSN}}"
-max_rows: 50
+hosts:
+  - ${appdbHost}
+env:
+  APPDB_DSN: "{{secret:APPDB_DSN}}"
 timeout_ms: 5000
 ---
 
-The application's own database, exposed read-only for testing \`query_connector\`.
+The application's own database, exposed read-only, reached with \`sql()\`.
 **Local development only** — a real deployment would point this at an analytics
 replica, never at the primary.
 
@@ -155,13 +173,15 @@ explicit about columns rather than relying on the cap.
 
 ### Example
 
-\`\`\`sql
-SELECT type, count(*) AS n
-FROM nodes
-WHERE community_id = '${communityId}'
-GROUP BY type
-ORDER BY n DESC;
+\`\`\`js
+return await sql(
+  env.APPDB_DSN,
+  \`SELECT type, count(*) AS n FROM nodes
+   WHERE community_id = '${communityId}' GROUP BY type ORDER BY n DESC\`,
+)
 \`\`\`
+
+\`sql()\` gives back \`{ columns, rows, row_count, truncated }\`.
 
 ## What not to read
 

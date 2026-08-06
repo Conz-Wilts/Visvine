@@ -356,12 +356,12 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
     name: event.title,
     subtitle: event.description ?? null,
   });
-  revalidateTag('context-data-v2');
+  revalidateTag('context-data-v2', { expire: 0 });
 }
 
 export async function deleteEvent(communityId: string, eventId: string): Promise<void> {
   await prisma.node.deleteMany({ where: { id: eventId, communityId, type: 'event' } });
-  revalidateTag('context-data-v2');
+  revalidateTag('context-data-v2', { expire: 0 });
 }
 
 async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {

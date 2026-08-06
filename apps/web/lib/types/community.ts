@@ -15,7 +15,7 @@ export interface CommunityDesignConfig {
     imageUrl?: string;    // GCS URL for uploaded image
   };
   fonts?: {
-    main?: CommunityDesignFont;    // titles — replaces ABC Ginto Rounded
+    main?: CommunityDesignFont;    // titles (.font-title) — defaults to Open Sauce One
     utility?: CommunityDesignFont; // body — replaces Open Sauce One
   };
   // Community-wide tag → base-colour registry (key = lower-cased tag). Set once

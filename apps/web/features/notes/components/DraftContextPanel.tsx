@@ -32,7 +32,6 @@ import {
   FileForm,
   connectorSlug,
   connectorFormReady,
-  type ConnectorAlias,
   type ConnectorFormData,
   type FileEntry,
   type FileFormData,
@@ -139,9 +138,7 @@ interface Stash {
  */
 interface Extras {
   /** connector */
-  connectorAlias: ConnectorAlias
-  baseUrl: string
-  allow: string
+  hosts: string
   secretName: string
   /** channel */
   viewMode: 'CHAT' | 'FEED'
@@ -149,9 +146,7 @@ interface Extras {
 }
 
 const EMPTY_EXTRAS: Extras = {
-  connectorAlias: 'http',
-  baseUrl: '',
-  allow: '',
+  hosts: '',
   secretName: '',
   viewMode: 'CHAT',
   spaceId: '',
@@ -245,15 +240,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // would produce the id `person:`. The SLUG is the readiness test, not the text.
   const titleUsable = slug !== 'untitled' || title.trim().toLowerCase() === 'untitled'
 
-  // A connector's note IS its config, so the two settings the parser demands
-  // (a base URL, or the name of the secret holding the DSN) have to be here —
-  // writing the note without them produces one the connectors layer rejects.
+  // A connector's note IS its config, so the perimeter settings (hosts, the
+  // name of a secret) have to be here — the note is written with them inline.
   const connectorDraft: ConnectorFormData = {
     name: title,
-    alias: extras.connectorAlias,
     description: '',
-    baseUrl: extras.baseUrl,
-    allow: extras.allow,
+    hosts: extras.hosts,
     secretName: extras.secretName,
   }
   const queuedFiles = files.filter((f) => f.status === 'queued')
@@ -413,9 +405,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     const body = bodyRef.current.trim()
     const note = newConnectorNote({
       name,
-      alias: extras.connectorAlias,
-      baseUrl: extras.baseUrl,
-      allow: extras.allow.split('\n').map((l) => l.trim()).filter(Boolean),
+      hosts: extras.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
       secretName: extras.secretName,
     })
     // The generated note already carries a documentation body; anything typed
@@ -565,9 +555,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
               : !titleUsable
                 ? 'Give it a name first'
                 : type === 'connector'
-                  ? extras.connectorAlias === 'postgres' || extras.connectorAlias === 'mysql'
-                    ? 'Name the DSN secret first'
-                    : 'Give it a base URL first'
+                  ? 'Check the connector fields first'
                   : 'Pick a type first'
       }
       className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
@@ -982,68 +970,28 @@ function ConnectorExtras({
 }) {
   return (
     <div className="mt-4 space-y-3" style={{ ['--accent' as string]: accent }}>
-      <ExtraField label="Transport">
-        <SegmentedChoice
-          value={extras.connectorAlias}
-          onPick={(connectorAlias) => onChange({ ...extras, connectorAlias })}
-          accent={accent}
-          options={[
-            { value: 'http', label: 'http', hint: 'A REST API' },
-            { value: 'postgres', label: 'postgres', hint: 'A read-only database' },
-            { value: 'mysql', label: 'mysql', hint: 'A read-only database' },
-            { value: 'mcp', label: 'mcp', hint: 'A remote MCP server' },
-          ] as const}
+      <ExtraField label="Hosts">
+        <textarea
+          className={`${extraInput} resize-none font-mono`}
+          rows={2}
+          placeholder={'api.stripe.com'}
+          value={extras.hosts}
+          onChange={(e) => onChange({ ...extras, hosts: e.target.value })}
         />
       </ExtraField>
-
-      {extras.connectorAlias === 'http' || extras.connectorAlias === 'mcp' ? (
-        <>
-          <ExtraField label={extras.connectorAlias === 'mcp' ? 'Server URL' : 'Base URL'}>
-            <input
-              className={`${extraInput} font-mono`}
-              placeholder={extras.connectorAlias === 'mcp' ? 'https://mcp.example.com/mcp' : 'https://api.example.com'}
-              value={extras.baseUrl}
-              onChange={(e) => onChange({ ...extras, baseUrl: e.target.value })}
-            />
-          </ExtraField>
-          <ExtraField label={extras.connectorAlias === 'mcp' ? 'Allowed tools' : 'Allowed calls'}>
-            <textarea
-              className={`${extraInput} resize-none font-mono`}
-              rows={3}
-              placeholder={
-                extras.connectorAlias === 'mcp'
-                  ? 'search_issues\nget_issue\ncreate_*'
-                  : 'GET /customers\nGET /customers/*\nPOST /customers'
-              }
-              value={extras.allow}
-              onChange={(e) => onChange({ ...extras, allow: e.target.value })}
-            />
-          </ExtraField>
-          <p className="text-xs text-text-muted">
-            {extras.connectorAlias === 'mcp'
-              ? 'One tool name per line (a trailing * allows a prefix) — anything not listed is refused before a request is sent. Auth tokens go in the note\u2019s '
-              : 'One METHOD /path per line — anything not listed is refused before a request is sent. API keys go in the note\u2019s '}
-            <span className="font-mono">headers</span> as <span className="font-mono">{'{{secret:NAME}}'}</span>,
-            never as raw values.
-          </p>
-        </>
-      ) : (
-        <>
-          <ExtraField label="DSN secret name">
-            <input
-              className={`${extraInput} font-mono`}
-              placeholder="ANALYTICS_DSN"
-              value={extras.secretName}
-              onChange={(e) => onChange({ ...extras, secretName: e.target.value })}
-            />
-          </ExtraField>
-          <p className="text-xs text-text-muted">
-            The connection string itself never lives in the note — add it under{' '}
-            <span className="font-mono">{extras.secretName.trim().toUpperCase() || 'THIS NAME'}</span> on the
-            connector&apos;s page once it exists. Queries run read-only.
-          </p>
-        </>
-      )}
+      <ExtraField label="Secret">
+        <input
+          className={`${extraInput} font-mono`}
+          placeholder="STRIPE_KEY"
+          value={extras.secretName}
+          onChange={(e) => onChange({ ...extras, secretName: e.target.value })}
+        />
+      </ExtraField>
+      <p className="text-xs text-text-muted">
+        Agents run commands in a sandbox that can only reach these hosts (one per line). The
+        secret&apos;s value is set on the connector&apos;s page afterwards and reaches commands as{' '}
+        <span className="font-mono">${extras.secretName.trim().toUpperCase() || 'NAME'}</span>.
+      </p>
 
       {slug && <PathPreview path={`connectors/${slug}.md`} />}
     </div>

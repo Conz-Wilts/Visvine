@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       },
     );
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     // `resolution` lets the client surface possible-match suggestions (Tier C) for
     // inline confirmation; null when the type has no identity or an explicit pick won.
     return NextResponse.json({ node: nodeRowToNBNode(row), resolution }, { status: 201 });
@@ -193,7 +193,7 @@ export async function PUT(request: NextRequest) {
       });
     }
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({ node: nodeRowToNBNode(row) });
   } catch (err) {
     return handleApiError(err, 'api.data.nodes.put.failed');
@@ -220,7 +220,7 @@ export async function DELETE(request: NextRequest) {
 
     await prisma.node.deleteMany({ where: { id, communityId } });
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, 'api.data.nodes.delete.failed');

@@ -18,7 +18,7 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
   const session = await getSession();
 
   if (!session) {
-    // Signed out (middleware normally redirects before this renders). Pass an
+    // Signed out (the proxy normally redirects before this renders). Pass an
     // explicit null session so the client doesn't re-fetch it, but leave the
     // community props undefined — the provider keeps its old client-side path.
     return <AuthLayoutClient initialSession={null}>{children}</AuthLayoutClient>;

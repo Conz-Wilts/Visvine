@@ -203,7 +203,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
         <FileTypeIcon type={resource.fileType} className="h-14 w-14 flex-none" />
         <div className="min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-lg sm:text-xl font-bold text-text-primary font-ginto leading-tight truncate">{resource.name}</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-text-primary font-title leading-tight truncate">{resource.name}</h1>
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border flex-none ${badge}`}>{label}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-1 text-xs text-text-muted flex-wrap">

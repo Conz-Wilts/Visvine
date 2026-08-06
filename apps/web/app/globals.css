@@ -70,7 +70,7 @@
   --color-brand-dark-green: #2f7a3e;
   --color-brand-bg: #ffffff;
   --shadow-soft: 0 8px 24px rgba(0,0,0,0.06);
-  --font-ginto: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-brand: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-open-sauce: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   /* ── Semantic surface tokens (runtime-swapped by ThemeContext) ── */
@@ -84,8 +84,19 @@
   --color-text-muted: var(--text-muted, #6b7280);
 }
 
-/* Explicit font-family utility classes — use CSS vars so CommunityDesignContext can override */
-.font-ginto {
+/* Explicit font-family utility classes — use CSS vars so CommunityDesignContext
+   can override. Two families, and the split is a rule not a preference:
+
+   .font-brand  — ABC Ginto Rounded, the Visvine wordmark face. Marketing pages
+                  and marketing only. It is never correct inside the product,
+                  where a heading in the house font reads as an ad.
+   .font-title  — headings inside the product. Defaults to the same face as body
+                  text; a community that uploads its own title font (see
+                  CommunityDesignContext) repaints these and nothing else. */
+.font-brand {
+  font-family: var(--font-brand) !important;
+}
+.font-title {
   font-family: var(--font-main) !important;
 }
 .font-open-sauce {
@@ -100,7 +111,8 @@ html, body {
 }
 
 :root {
-  --font-main: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Product titles default to the body face — the brand font is marketing-only. */
+  --font-main: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-utility: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
   --shimmer-base: #f0f0f0;

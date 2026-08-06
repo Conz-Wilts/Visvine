@@ -87,7 +87,7 @@ export default function ConfirmDialog({
         onClick={() => closeOnBackdrop && !busy && onClose()}
       />
       <div className="relative w-full max-w-md rounded-2xl border border-border-subtle bg-surface-1 p-6 shadow-float">
-        <h3 className="font-ginto text-lg font-medium text-text-primary">{title}</h3>
+        <h3 className="font-title text-lg font-medium text-text-primary">{title}</h3>
         {body && <div className="mt-2 text-sm leading-relaxed text-text-secondary">{body}</div>}
 
         {error && (

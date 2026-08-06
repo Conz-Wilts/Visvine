@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
     data: { publicMeta: { ...current, [field]: value } as Prisma.InputJsonObject },
   });
 
-  revalidateTag(`crm-user-public-${session.userId}`);
+  revalidateTag(`crm-user-public-${session.userId}`, { expire: 0 });
 
   await prisma.auditLog.create({
     data: {

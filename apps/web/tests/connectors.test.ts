@@ -10,7 +10,6 @@ import {
   parseConnectorConfig,
   parseAllowRule,
   matchAllowlist,
-  matchToolAllowlist,
   normalizeRequestPath,
   findSecretRefs,
   configSecretRefs,
@@ -18,12 +17,14 @@ import {
   redactSecrets,
   isValidSecretName,
   newConnectorNote,
+  parseConnectorPerimeter,
+  perimeterSecretRefs,
   type AllowRule,
 } from '@/lib/connectors/config'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { isPrivateAddress } from '@/lib/net/ssrf'
 import { assertSingleReadOnlyStatement } from '@/lib/connectors/postgres'
 import { assertSingleReadOnlyMysqlStatement } from '@/lib/connectors/mysql'
-import { isPrivateAddress } from '@/lib/net/ssrf'
 
 // Read lazily inside getSecretsKey, so setting it after imports is enough.
 process.env.SECRETS_KEY ??= 'ab'.repeat(32)
@@ -122,13 +123,6 @@ test('a valid mcp connector parses; bad tool rules and secret-ref urls are refus
   assert.ok(!parseConnectorConfig({ alias: 'mcp', url: 'not-a-url' }).ok)
 })
 
-test('the mcp tool allowlist matches exact names and prefixes; empty denies', () => {
-  assert.ok(matchToolAllowlist(['search_issues', 'get_*'], 'search_issues'))
-  assert.ok(matchToolAllowlist(['search_issues', 'get_*'], 'get_issue'))
-  assert.ok(!matchToolAllowlist(['search_issues', 'get_*'], 'delete_issue'))
-  assert.ok(!matchToolAllowlist(['search_issues'], 'search_issues_admin'))
-  assert.ok(!matchToolAllowlist([], 'anything'))
-})
 
 test('http oauth: client_secret must be one secret ref; refs are collected', () => {
   const parsed = parseConnectorConfig({
@@ -182,73 +176,41 @@ test('config validation catches the dangerous shapes', () => {
 })
 
 // ── the note the Create panel writes ──
-// The panel's whole safety property: whatever newConnectorNote emits must parse,
-// or an admin gets a connector flagged invalid the moment they create it.
 
-test('newConnectorNote emits an http connector that parses back', () => {
+test('newConnectorNote emits a v2 note that parses back, secret and hosts included', () => {
   const note = newConnectorNote({
     name: 'stripe',
-    alias: 'http',
-    description: 'Billing — customers and charges',
-    baseUrl: 'https://api.stripe.com/v1/',
-    allow: ['GET /customers', 'GET /customers/*', 'POST /customers'],
+    description: 'Billing',
+    hosts: ['API.Stripe.com', ''],
+    secretName: 'stripe_key',
   })
-  const fm = parseFrontmatter(note)
-  assert.equal(fm.type, 'connector')
-  assert.equal(fm.alias, 'http')
-
-  const parsed = parseConnectorConfig(fm)
+  const parsed = parseConnectorPerimeter(parseFrontmatter(note))
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
-  if (!parsed.ok || parsed.config.alias !== 'http') return
-  // The trailing slash is stripped, so paths don't end up doubled.
-  assert.equal(parsed.config.baseUrl, 'https://api.stripe.com/v1')
-  assert.equal(parsed.config.allow.length, 3)
-  assert.ok(matchAllowlist(parsed.config.allow, 'GET', '/customers/cus_1'))
-  assert.ok(!matchAllowlist(parsed.config.allow, 'DELETE', '/customers/cus_1'))
+  assert.equal(parsed.legacy, null)
+  assert.deepEqual(parsed.perimeter.hosts, ['api.stripe.com'])
+  assert.equal(parsed.perimeter.env.STRIPE_KEY, '{{secret:STRIPE_KEY}}')
+  assert.deepEqual(perimeterSecretRefs(parsed.perimeter), ['STRIPE_KEY'])
+  // The value never appears — only the reference.
+  assert.ok(!note.includes('sk_'))
+  assert.ok(note.includes('env.STRIPE_KEY'))
 })
 
-test('newConnectorNote emits a docs-only http connector when no calls are allowed', () => {
-  const parsed = parseConnectorConfig(parseFrontmatter(
-    newConnectorNote({ name: 'docs', alias: 'http', baseUrl: 'https://api.example.com', allow: [] }),
-  ))
-  assert.ok(parsed.ok)
-  if (parsed.ok && parsed.config.alias === 'http') assert.deepEqual(parsed.config.allow, [])
-})
-
-test('newConnectorNote emits a postgres connector whose dsn is one secret ref', () => {
-  const note = newConnectorNote({ name: 'appdb', alias: 'postgres', secretName: 'appdb_dsn' })
-  // A raw connection string must never reach the note.
-  assert.ok(!/postgres(ql)?:\/\//.test(note))
-
-  const parsed = parseConnectorConfig(parseFrontmatter(note))
+test('newConnectorNote without hosts or secret is a valid no-network connector', () => {
+  const note = newConnectorNote({ name: 'scratch' })
+  const parsed = parseConnectorPerimeter(parseFrontmatter(note))
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
-  if (!parsed.ok || parsed.config.alias !== 'postgres') return
-  assert.deepEqual(findSecretRefs(parsed.config.dsn), ['APPDB_DSN']) // upper-cased for the store
+  assert.deepEqual(parsed.perimeter.hosts, [])
+  assert.deepEqual(parsed.perimeter.env, {})
 })
 
-test('newConnectorNote emits mysql and mcp connectors that parse back', () => {
-  const mysqlNote = newConnectorNote({ name: 'shop', alias: 'mysql', secretName: 'shop_dsn' })
-  assert.ok(!/mysql:\/\//.test(mysqlNote))
-  const mysqlParsed = parseConnectorConfig(parseFrontmatter(mysqlNote))
-  assert.ok(mysqlParsed.ok, mysqlParsed.ok ? '' : mysqlParsed.error)
-  if (mysqlParsed.ok) assert.equal(mysqlParsed.config.alias, 'mysql')
-
-  const mcpNote = newConnectorNote({
-    name: 'linear',
-    alias: 'mcp',
-    baseUrl: 'https://mcp.linear.app/mcp/',
-    allow: ['search_issues', 'get_*'],
+/** Parse a list of rule strings, asserting each is well-formed. */
+function rules(raw: string[]): AllowRule[] {
+  return raw.map((r) => {
+    const rule = parseAllowRule(r)
+    assert.ok(rule, `bad test rule: ${r}`)
+    return rule
   })
-  const mcpParsed = parseConnectorConfig(parseFrontmatter(mcpNote))
-  assert.ok(mcpParsed.ok, mcpParsed.ok ? '' : mcpParsed.error)
-  if (!mcpParsed.ok || mcpParsed.config.alias !== 'mcp') return
-  assert.equal(mcpParsed.config.url, 'https://mcp.linear.app/mcp') // trailing slash stripped
-  assert.deepEqual(mcpParsed.config.allow, ['search_issues', 'get_*'])
-})
-
-// ── allowlist grammar ──
-
-const rules = (raws: string[]): AllowRule[] => raws.map((r) => parseAllowRule(r)!).filter(Boolean)
+}
 
 test('allowlist: exact, prefix and one-segment wildcard matching', () => {
   const allow = rules(['GET /v1/customers*', 'GET /v1/charges/*', 'POST /v1/search'])
@@ -401,4 +363,124 @@ test('isPrivateAddress knows the non-routable space', () => {
   for (const addr of ['8.8.8.8', '1.1.1.1', '172.32.0.1', '2606:4700::1111', '::ffff:8.8.8.8']) {
     assert.ok(!isPrivateAddress(addr), `${addr} should be public`)
   }
+})
+
+// ---------------------------------------------------------------------------
+// Connectors v2 — perimeter parsing and the legacy shim
+// ---------------------------------------------------------------------------
+
+test('v2 frontmatter parses into a perimeter', () => {
+  const fm = parseFrontmatter(`---
+type: connector
+alias: http
+hosts:
+  - API.Stripe.com.
+  - db.internal:5432
+allow:
+  - "GET /v1/customers*"
+env:
+  STRIPE_KEY: "{{secret:STRIPE_KEY}}"
+  MODE: live
+timeout_ms: 45000
+---`)
+  const parsed = parseConnectorPerimeter(fm)
+  assert.ok(parsed.ok)
+  assert.equal(parsed.legacy, null)
+  assert.deepEqual(parsed.perimeter.hosts, ['api.stripe.com', 'db.internal:5432'])
+  assert.deepEqual(parsed.perimeter.allow, [{ method: 'GET', path: '/v1/customers', prefix: true }])
+  assert.equal(parsed.perimeter.env.STRIPE_KEY, '{{secret:STRIPE_KEY}}')
+  assert.equal(parsed.perimeter.env.MODE, 'live')
+  assert.equal(parsed.perimeter.timeoutMs, 45_000)
+  assert.deepEqual(perimeterSecretRefs(parsed.perimeter), ['STRIPE_KEY'])
+})
+
+test('v2 hosts validation refuses schemes, refs and junk; env validates names', () => {
+  const bad = (fm: Record<string, unknown>, re: RegExp) => {
+    const parsed = parseConnectorPerimeter(fm)
+    assert.ok(!parsed.ok, JSON.stringify(fm))
+    assert.match(parsed.error, re)
+  }
+  bad({ type: 'connector', hosts: ['https://api.stripe.com'] }, /Bad hosts entry/)
+  bad({ type: 'connector', hosts: ['api.stripe.com/v1'] }, /Bad hosts entry/)
+  bad({ type: 'connector', hosts: ['{{secret:HOST}}'] }, /Bad hosts entry/)
+  bad({ type: 'connector', hosts: 'api.stripe.com' }, /must be a list/)
+  bad({ type: 'connector', hosts: [], env: { '2BAD': 'x' } }, /Bad env variable name/)
+  bad({ type: 'connector', hosts: [], env: { KEY: '{{secret:lower}}' } }, /Invalid secret name/)
+
+  bad({ type: 'connector', hosts: [], env: { BIG: 'x'.repeat(70_000) } }, /too large/)
+
+  // There is no reserved-name list any more: the proxy variables it protected
+  // don't exist under the isolate, and `env` is a namespace so nothing shadows.
+  const proxyVar = parseConnectorPerimeter({ type: 'connector', hosts: [], env: { HTTPS_PROXY: 'x' } })
+  assert.ok(proxyVar.ok)
+  assert.equal(proxyVar.perimeter.env.HTTPS_PROXY, 'x')
+
+  const empty = parseConnectorPerimeter({ type: 'connector', hosts: [] })
+  assert.ok(empty.ok)
+  assert.deepEqual(empty.perimeter.hosts, [])
+})
+
+test('legacy http notes map onto perimeters: hosts from base_url + token_url, env from refs', () => {
+  const fm = parseFrontmatter(`---
+type: connector
+alias: http
+base_url: https://api.example.com/v2
+headers:
+  Authorization: "Bearer {{secret:EX_KEY}}"
+auth:
+  token_url: https://id.example.com/token
+  client_id: my-app
+  client_secret: "{{secret:EX_CLIENT_SECRET}}"
+allow:
+  - "GET /v1/things"
+timeout_ms: 3000
+---`)
+  const parsed = parseConnectorPerimeter(fm)
+  assert.ok(parsed.ok)
+  assert.equal(parsed.legacy, 'http')
+  assert.deepEqual(parsed.perimeter.hosts, ['api.example.com', 'id.example.com'])
+  // The base_url path prefix folds into each rule — the proxy matches full paths.
+  assert.deepEqual(parsed.perimeter.allow, [{ method: 'GET', path: '/v2/v1/things', prefix: false }])
+  assert.equal(parsed.perimeter.env.EX_KEY, '{{secret:EX_KEY}}')
+  assert.equal(parsed.perimeter.env.EX_CLIENT_SECRET, '{{secret:EX_CLIENT_SECRET}}')
+  // v1 allowed 3s; the sandbox floor is 1s so the value survives.
+  assert.equal(parsed.perimeter.timeoutMs, 3000)
+})
+
+test('legacy sql notes map with empty hosts and say why; mcp notes carry the endpoint host', () => {
+  const sql = parseConnectorPerimeter(
+    parseFrontmatter(`---
+type: connector
+alias: postgres
+dsn: "{{secret:ANALYTICS_DSN}}"
+---`),
+  )
+  assert.ok(sql.ok)
+  assert.equal(sql.legacy, 'postgres')
+  assert.deepEqual(sql.perimeter.hosts, [])
+  assert.equal(sql.perimeter.env.ANALYTICS_DSN, '{{secret:ANALYTICS_DSN}}')
+  assert.match(sql.warnings[0] ?? '', /hosts/)
+
+  const mcp = parseConnectorPerimeter(
+    parseFrontmatter(`---
+type: connector
+alias: mcp
+url: https://mcp.linear.app/mcp
+headers:
+  Authorization: "Bearer {{secret:LINEAR_TOKEN}}"
+allow:
+  - list_issues
+---`),
+  )
+  assert.ok(mcp.ok)
+  assert.equal(mcp.legacy, 'mcp')
+  assert.deepEqual(mcp.perimeter.hosts, ['mcp.linear.app'])
+  assert.equal(mcp.perimeter.env.LINEAR_TOKEN, '{{secret:LINEAR_TOKEN}}')
+  assert.match(mcp.warnings[0] ?? '', /tool/)
+})
+
+test('a note that is neither v2 nor a valid legacy config reads as a hosts problem', () => {
+  const parsed = parseConnectorPerimeter({ type: 'connector', description: 'just words' })
+  assert.ok(!parsed.ok)
+  assert.match(parsed.error, /needs `hosts:`/)
 })

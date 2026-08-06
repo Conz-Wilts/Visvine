@@ -122,7 +122,7 @@ export { communityNodeId }
 function bustContextCache(): void {
   // revalidateTag throws outside a Next.js request scope (scripts, tests).
   try {
-    revalidateTag('context-data-v2')
+    revalidateTag('context-data-v2', { expire: 0 })
   } catch {
     /* outside request scope */
   }

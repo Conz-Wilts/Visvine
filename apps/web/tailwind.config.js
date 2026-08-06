@@ -9,7 +9,8 @@ module.exports = {
     extend: {
       fontFamily: {
         'open-sauce': ['Open Sauce One', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        ginto:        ['ABC Ginto Rounded', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        // Marketing surfaces only — the product uses the body face for titles.
+        brand:        ['ABC Ginto Rounded', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       colors: {
         'brand-black': '#111827',

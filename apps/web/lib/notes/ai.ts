@@ -3,9 +3,8 @@
 // reorganize}.ts, with the OpenAI SDK swapped for plain `fetch` against the same
 // OpenAI-compatible chat endpoint so no new dependency is needed.
 //
-// Configure with either GEMINI_API_KEY (wired to Gemini's OpenAI-compatible
-// endpoint) or GEMMA_API_KEY + GEMMA_BASE_URL (any OpenAI-compatible host, e.g.
-// a self-hosted Gemma or a Claude-compatible gateway). When nothing is set,
+// Configure with GEMINI_API_KEY (Gemini's OpenAI-compatible endpoint); the
+// model can be overridden with GEMINI_MODEL. When the key is unset,
 // aiConfigured() is false and the UI hides the refactor/reorganize affordances.
 
 import { buildNoteIndex } from './shared/context'
@@ -25,35 +24,27 @@ interface ChatConfig {
   model: string
 }
 
-const DEFAULT_MODEL = 'gemma-3-27b-it'
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
 
 function resolveConfig(): ChatConfig | null {
-  const gemmaKey = process.env.GEMMA_API_KEY
-  const gemmaBase = process.env.GEMMA_BASE_URL
-  if (gemmaKey && gemmaBase) {
-    return { apiKey: gemmaKey, baseURL: gemmaBase, model: process.env.GEMMA_MODEL ?? DEFAULT_MODEL }
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return null
+  return {
+    apiKey,
+    baseURL: GEMINI_BASE_URL,
+    model: process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL,
   }
-  const geminiKey = process.env.GEMINI_API_KEY
-  if (geminiKey) {
-    return {
-      apiKey: geminiKey,
-      baseURL: process.env.GEMMA_BASE_URL ?? GEMINI_BASE_URL,
-      model: process.env.GEMMA_MODEL ?? DEFAULT_GEMINI_MODEL,
-    }
-  }
-  return null
 }
 
-/** Whether an LLM backend is configured (Gemini key, or Gemma key + host). */
+/** Whether the LLM backend is configured (GEMINI_API_KEY set). */
 export function aiConfigured(): boolean {
   return resolveConfig() !== null
 }
 
 /** The chat model in use — recorded on AI-refactor revisions for attribution. */
 export function aiModelName(): string {
-  return resolveConfig()?.model ?? DEFAULT_MODEL
+  return resolveConfig()?.model ?? DEFAULT_GEMINI_MODEL
 }
 
 // One chat completion over the OpenAI-compatible REST API. Throws if unconfigured.
@@ -61,7 +52,7 @@ export function aiModelName(): string {
 export async function chat(messages: ChatMessage[]): Promise<string> {
   const config = resolveConfig()
   if (!config) {
-    throw new Error('AI is not configured: set GEMINI_API_KEY, or GEMMA_API_KEY + GEMMA_BASE_URL.')
+    throw new Error('AI is not configured: set GEMINI_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`
   const res = await fetch(`${base}chat/completions`, {
@@ -77,6 +68,83 @@ export async function chat(messages: ChatMessage[]): Promise<string> {
   const content = data.choices?.[0]?.message?.content
   if (!content) throw new Error('The model returned an empty response.')
   return stripReasoning(content)
+}
+
+// ── Tool-calling chat, for agent loops (the connectors creation agent) ──────
+// Same endpoint and config as chat(), plus the OpenAI-compatible `tools`
+// wire format. Kept here so every AI pass shares one config resolution.
+
+export interface ToolSpec {
+  name: string
+  description: string
+  /** JSON Schema for the arguments object. */
+  parameters: Record<string, unknown>
+}
+
+export interface ToolCall {
+  id: string
+  name: string
+  /** Raw JSON string as the model produced it — the caller parses and validates. */
+  arguments: string
+}
+
+export type AgentMessage =
+  | { role: 'system' | 'user'; content: string }
+  | {
+      role: 'assistant'
+      content: string | null
+      tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[]
+    }
+  | { role: 'tool'; tool_call_id: string; content: string }
+
+/**
+ * One completion turn that may answer in text, tool calls, or both. Throws if
+ * unconfigured — callers gate on {@link aiConfigured} first.
+ */
+export async function chatWithTools(
+  messages: AgentMessage[],
+  tools: ToolSpec[],
+): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
+  const config = resolveConfig()
+  if (!config) {
+    throw new Error('AI is not configured: set GEMINI_API_KEY.')
+  }
+  const base = config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`
+  const res = await fetch(`${base}chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      tools: tools.map((t) => ({
+        type: 'function',
+        function: { name: t.name, description: t.description, parameters: t.parameters },
+      })),
+    }),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`)
+  }
+  const data = (await res.json()) as {
+    choices?: {
+      message?: {
+        content?: string | null
+        tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[]
+      }
+    }[]
+  }
+  const message = data.choices?.[0]?.message
+  if (!message) throw new Error('The model returned an empty response.')
+  const toolCalls = (message.tool_calls ?? [])
+    .filter((c) => c.function?.name)
+    .map((c, i) => ({
+      id: c.id ?? `call_${i}`,
+      name: c.function!.name!,
+      arguments: c.function!.arguments ?? '{}',
+    }))
+  const content = typeof message.content === 'string' ? stripReasoning(message.content) : null
+  return { content, toolCalls }
 }
 
 // Gemma instruction-tuned models prepend a <thought>…</thought> reasoning trace.
@@ -188,7 +256,7 @@ const SYNTH_SYSTEM =
 /** Analyse a brain's notes and propose a folder reorganization (never applied here). */
 export async function reorganizeNotes(brain: Brain): Promise<ReorganizePlan> {
   if (!aiConfigured()) {
-    throw new Error('Reorganize needs an LLM: set GEMINI_API_KEY, or GEMMA_API_KEY + GEMMA_BASE_URL.')
+    throw new Error('Reorganize needs an LLM: set GEMINI_API_KEY.')
   }
   const raw = await listRaw(brain)
   const index = buildNoteIndex(raw)

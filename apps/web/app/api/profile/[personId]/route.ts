@@ -133,7 +133,7 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 
   if (hasNodeUpdate) {
     // Bust the context cache so the sidebar picks up the new data on next load
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
   }
 
   updated.imageUrl = normalizeImageUrl(updated.imageUrl) ?? updated.imageUrl;

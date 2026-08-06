@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       metadata: link.metadata,
     });
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({
       link: {
         id: created.id,
@@ -151,7 +151,7 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({
       link: {
         source: updated.sourceId,
@@ -192,7 +192,7 @@ export async function DELETE(request: NextRequest) {
     // ?relationship= narrows the delete to one edge type between the pair.
     await removeLink(communityId, sourceId, targetId, relationship);
 
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, 'api.data.links.delete.failed');

@@ -1,25 +1,22 @@
 /**
  * Connector configuration — the pure half of the connectors feature.
  *
- * A connector is a note at `connectors/<name>.md` whose frontmatter is machine
- * config and whose body is agent-facing docs. This module turns frontmatter
- * into a validated ConnectorConfig and hosts the security-critical string
- * logic: the allowlist grammar, `{{secret:NAME}}` reference handling, and
- * output redaction. No I/O lives here — everything is unit-testable.
+ * A connector is a note at `connectors/<name>.md` whose frontmatter declares a
+ * perimeter (docs/connectors-v2.md) and whose body is agent-facing docs. This
+ * module hosts the security-critical string logic — the allowlist grammar,
+ * `{{secret:NAME}}` reference handling, output redaction, perimeter parsing —
+ * plus the legacy v1 parser the back-compat shim and migration script feed on.
+ * No I/O lives here; everything is unit-testable.
  *
- * `alias` (http | postgres | mysql | mcp) picks the executor. It's called an
- * alias, not a kind, because it IS the node alias: a connector note syncs a
- * `connector:` node whose `Node.alias` mirrors this field, so the same value
- * that routes the call also colours the chip in the directory (see the alias
- * notes in lib/types/context.ts).
+ * `alias` is display metadata only (any string): a connector note syncs a
+ * `connector:` node whose `Node.alias` mirrors this field, which colours the
+ * chip in the directory (see the alias notes in lib/types/context.ts).
  *
- * Two invariants the executors rely on:
- *   • Secret VALUES never appear in config — only `{{secret:NAME}}` references.
- *     A postgres/mysql `dsn` (and an http OAuth `client_secret`) must be
- *     exactly one reference; an http/mcp base URL may not contain any (the
- *     host the SSRF check judges must be the host the admin actually wrote).
- *   • No `allow` list means no call is permitted — a connector with docs but
- *     no allow entries is a valid, describe-only connector.
+ * The invariants the runtime relies on:
+ *   • Secret VALUES never appear in notes — only `{{secret:NAME}}` references,
+ *     and under v2 only inside `env:` values.
+ *   • `hosts` entries are written literally — no secret refs steering the host
+ *     past the egress gate — and empty `hosts` means no network at all.
  */
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 
@@ -54,14 +51,14 @@ export interface AllowRule {
  * token. `clientSecret` is always exactly one `{{secret:NAME}}` reference;
  * `clientId` may be a literal or a single reference.
  */
-export interface OAuth2Config {
+interface OAuth2Config {
   tokenUrl: string
   clientId: string
   clientSecret: string
   scope: string | null
 }
 
-export interface HttpConnectorConfig {
+interface HttpConnectorConfig {
   alias: 'http'
   baseUrl: string
   allow: AllowRule[]
@@ -71,7 +68,7 @@ export interface HttpConnectorConfig {
   oauth: OAuth2Config | null
 }
 
-export interface PostgresConnectorConfig {
+interface PostgresConnectorConfig {
   alias: 'postgres'
   /** Always a single `{{secret:NAME}}` reference, never a raw DSN. */
   dsn: string
@@ -79,7 +76,7 @@ export interface PostgresConnectorConfig {
   timeoutMs: number
 }
 
-export interface MysqlConnectorConfig {
+interface MysqlConnectorConfig {
   alias: 'mysql'
   /** Always a single `{{secret:NAME}}` reference, never a raw DSN. */
   dsn: string
@@ -88,9 +85,9 @@ export interface MysqlConnectorConfig {
 }
 
 /** The two DSN-shaped executors share every field except the dialect. */
-export type SqlConnectorConfig = PostgresConnectorConfig | MysqlConnectorConfig
+type SqlConnectorConfig = PostgresConnectorConfig | MysqlConnectorConfig
 
-export interface McpConnectorConfig {
+interface McpConnectorConfig {
   alias: 'mcp'
   /** The remote MCP server's streamable-HTTP endpoint. */
   url: string
@@ -102,26 +99,11 @@ export interface McpConnectorConfig {
 
 export type ConnectorConfig = HttpConnectorConfig | SqlConnectorConfig | McpConnectorConfig
 
-/** Is this a DSN-backed SQL connector (postgres or mysql)? */
-export function isSqlConnector(config: ConnectorConfig): config is SqlConnectorConfig {
-  return config.alias === 'postgres' || config.alias === 'mysql'
-}
-
 const TIMEOUT_DEFAULT_MS = 10_000
 const TIMEOUT_MIN_MS = 1_000
 const TIMEOUT_MAX_MS = 30_000
 const MAX_ROWS_DEFAULT = 100
 const MAX_ROWS_MAX = 1_000
-
-/**
- * The ranges {@link parseConnectorConfig} clamps to. Exported so an editor can
- * refuse an out-of-range value up front rather than accepting a number the note
- * keeps and the executor quietly ignores.
- */
-export const CONNECTOR_LIMITS = {
-  timeoutMs: { min: TIMEOUT_MIN_MS, max: TIMEOUT_MAX_MS, default: TIMEOUT_DEFAULT_MS },
-  maxRows: { min: 1, max: MAX_ROWS_MAX, default: MAX_ROWS_DEFAULT },
-} as const
 
 const SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/
 const SECRET_REF_RE = /\{\{\s*secret:([A-Za-z0-9_]+)\s*\}\}/g
@@ -261,17 +243,6 @@ function parseTargetUrl(raw: string, field: string, allowPathQuery = false): URL
 }
 
 const MCP_TOOL_RULE_RE = /^[A-Za-z0-9][\w.-]{0,127}\*?$/
-
-/**
- * Does the mcp allowlist permit this tool? Exact name, or prefix when the rule
- * ends in `*`. An empty list denies every call (discovery stays possible —
- * that is how an admin finds the names to allow).
- */
-export function matchToolAllowlist(allow: readonly string[], tool: string): boolean {
-  return allow.some((rule) =>
-    rule.endsWith('*') ? tool.startsWith(rule.slice(0, -1)) : tool === rule,
-  )
-}
 
 /**
  * Every secret NAME a connector's config references — the set the executor
@@ -430,93 +401,281 @@ export function parseConnectorConfig(fm: NoteFrontmatter): ParseConfigResult {
 /**
  * The starting note for a connector created from the Create panel.
  *
- * Lives here, beside {@link parseConnectorConfig}, because the whole point is
- * that it round-trips: whatever this writes must parse. The body is a stub of
- * the agent-facing docs, since an admin refines those in the editor afterwards.
+ * Lives here, beside {@link parseConnectorPerimeter}, because the whole point
+ * is that it round-trips: whatever this writes must parse. The body is a stub
+ * of the agent-facing docs, since an admin refines those in the editor
+ * afterwards.
  *
- * Secrets are referenced, never carried: an http connector gets a commented-out
- * `headers` block to fill in, and a postgres `dsn` is written as the single
- * `{{secret:NAME}}` reference the parser demands.
+ * Secrets are referenced, never carried: `secretName` becomes an `env:` entry
+ * whose value is the `{{secret:NAME}}` reference the runtime resolves.
  */
 export function newConnectorNote(input: {
   name: string
-  alias: 'http' | 'postgres' | 'mysql' | 'mcp'
   description?: string
-  /** http: the API's base URL. mcp: the server's streamable-HTTP endpoint. */
-  baseUrl?: string
-  /** http: already-split "METHOD /path" rules. mcp: tool names (trailing `*` = prefix). */
-  allow?: readonly string[]
-  /** postgres/mysql only — the secret NAME holding the DSN. */
+  /** `host` or `host:port` entries the isolate may reach. Empty = no network yet. */
+  hosts?: readonly string[]
+  /** Optional NAME of a stored secret, exposed to the code as env.NAME. */
   secretName?: string
 }): string {
   const description = (input.description ?? '').trim()
-  const front = [`type: connector`, `alias: ${input.alias}`, `title: ${JSON.stringify(input.name)}`]
+  const hosts = (input.hosts ?? []).map((h) => h.trim().toLowerCase()).filter(Boolean)
+  const secret = (input.secretName ?? '').trim().toUpperCase()
+
+  const front = [`type: connector`, `title: ${JSON.stringify(input.name)}`]
   if (description) front.push(`description: ${JSON.stringify(description)}`)
+  front.push(hosts.length > 0 ? `hosts:\n${hosts.map((h) => `  - ${h}`).join('\n')}` : `hosts: []`)
+  if (secret) front.push(`env:\n  ${secret}: "{{secret:${secret}}}"`)
+  front.push(`timeout_ms: ${SANDBOX_LIMITS.timeoutMs.default}`)
 
-  const allow = (input.allow ?? []).map((r) => r.trim()).filter(Boolean)
-  const allowYaml =
-    allow.length > 0 ? `allow:\n${allow.map((r) => `  - ${JSON.stringify(r)}`).join('\n')}` : `allow: []`
-
-  if (input.alias === 'postgres' || input.alias === 'mysql') {
-    front.push(`dsn: "{{secret:${(input.secretName ?? '').trim().toUpperCase()}}}"`)
-    front.push(`max_rows: ${MAX_ROWS_DEFAULT}`)
-  } else if (input.alias === 'mcp') {
-    front.push(`url: ${(input.baseUrl ?? '').trim().replace(/\/+$/, '')}`)
-    front.push(allowYaml)
-  } else {
-    front.push(`base_url: ${(input.baseUrl ?? '').trim().replace(/\/+$/, '')}`)
-    front.push(allowYaml)
-  }
-  front.push(`timeout_ms: ${TIMEOUT_DEFAULT_MS}`)
-
-  const body =
-    input.alias === 'postgres' || input.alias === 'mysql'
+  const host = hosts[0] ?? 'api.example.com'
+  const body = [
+    `${description || `The ${input.name} service.`}`,
+    ``,
+    `Agents use this by writing JavaScript in an isolate`,
+    hosts.length > 0
+      ? `that can only reach ${hosts.join(', ')}. Document the service here with working`
+      : `with no network yet — add \`hosts:\` above to let the code reach the service, then`,
+    hosts.length > 0 ? `example code, e.g.:` : `document it here with working example code, e.g.:`,
+    ``,
+    '```js',
+    secret
+      ? `const res = await fetch('https://${host}/v1/things', {`
+      : `const res = await fetch('https://${host}/v1/things')`,
+    ...(secret ? [`  headers: { Authorization: \`Bearer \${env.${secret}}\` },`, `})`] : []),
+    `return JSON.parse(res.body)`,
+    '```',
+    ``,
+    "`fetch` gives you { status, ok, headers, body, truncated } — `body` is a string,",
+    'so parse it yourself. `sql(dsn, query)` and `mcp(url)` are available too.',
+    ...(secret
       ? [
-          `${description || `The ${input.name} database.`}`,
           ``,
-          `Queries run read-only inside a transaction, one statement at a time, capped at`,
-          `${MAX_ROWS_DEFAULT} rows. Describe the tables an agent should know about here.`,
+          `The ${secret} secret is set on the connector's page and reaches the code as`,
+          `env.${secret} — never write its value into this note.`,
         ]
-      : input.alias === 'mcp'
-      ? [
-          `${description || `The ${input.name} MCP server.`}`,
-          ``,
-          ...(allow.length
-            ? [`Only the tools listed in \`allow\` may be called; anything else is refused before a`,
-               `request is sent. Document what each tool does here.`]
-            : [`No tools are allowed yet — list the server's tools to find their names, then add`,
-               `\`allow\` entries to the frontmatter above. Until then this connector is discovery-only.`]),
-          ``,
-          `If the server needs auth, add it to the frontmatter as a header referencing a stored`,
-          `secret, never as a raw value:`,
-          ``,
-          '```yaml',
-          `headers:`,
-          `  Authorization: "Bearer {{secret:${input.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_TOKEN}}"`,
-          '```',
-        ]
-      : [
-          `${description || `The ${input.name} API.`}`,
-          ``,
-          ...(input.allow?.length
-            ? [`Only the calls listed in \`allow\` are permitted; anything else is refused before a`,
-               `request is sent. Document what each one returns here.`]
-            : [`No calls are allowed yet — add \`allow\` entries like \`"GET /customers"\` to the`,
-               `frontmatter above. Until then this connector is documentation only.`]),
-          ``,
-          `If this API needs a key, add it to the frontmatter as a header referencing a stored`,
-          `secret, never as a raw value:`,
-          ``,
-          '```yaml',
-          `headers:`,
-          `  Authorization: "Bearer {{secret:${input.name.toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_KEY}}"`,
-          '```',
-        ]
+      : []),
+  ]
 
   return `---\n${front.join('\n')}\n---\n\n${body.join('\n')}\n`
 }
 
-/** The connector-path escape hatch for dev/VPC-internal targets. */
+/** True when this process is serving real traffic, not a dev machine or a test run. */
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
+/**
+ * The connector-path escape hatch for dev/VPC-internal targets.
+ *
+ * In production this is not an escape hatch but a hole: it disarms the SSRF
+ * check, so a connector could name an internal host and reach the database,
+ * the cloud metadata service, or the app's own loopback. Refusing loudly beats
+ * silently ignoring it — a misconfigured deploy should fail the call, not
+ * quietly run with a weaker perimeter than the operator believes.
+ */
 export function allowPrivateHosts(): boolean {
-  return process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === 'true'
+  if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS !== 'true') return false
+  if (isProductionRuntime()) {
+    throw new ConnectorError(
+      'config',
+      'CONNECTORS_ALLOW_PRIVATE_HOSTS is set in production — that disables the SSRF guard on every connector. Unset it and redeploy.',
+    )
+  }
+  return true
+}
+
+// ---------------------------------------------------------------------------
+// Connectors v2 — the perimeter (docs/connectors-v2.md)
+//
+// A v2 connector's frontmatter no longer picks an executor; it declares a
+// perimeter the isolate runtime enforces: hosts the run may reach, env vars it
+// receives (secret refs resolved server-side), and limits. `alias` survives as
+// pure display metadata — any string, coloured by the same Node.alias chip
+// mechanism — and the body teaches the agent how to call the service.
+//
+// Legacy notes (`alias: http|postgres|mysql|mcp` with the old fields) still
+// parse: parseConnectorPerimeter maps them onto perimeters until the migration
+// script rewrites them. Detection is by shape, not alias — `hosts:` or `env:`
+// present means v2.
+// ---------------------------------------------------------------------------
+
+export interface ConnectorPerimeter {
+  /** `host` or `host:port` entries the run may reach. Empty = no network. */
+  hosts: string[]
+  /** Optional method+path rules, enforced on plain-HTTP forwards. */
+  allow: AllowRule[]
+  /** Env var templates — values may hold `{{secret:NAME}}` refs, resolved at run time. */
+  env: Record<string, string>
+  timeoutMs: number
+}
+
+/** Limits the isolate runtime clamps to; exported so editors can refuse out-of-range values up front. */
+export const SANDBOX_LIMITS = {
+  timeoutMs: { min: 1_000, max: 120_000, default: 30_000 },
+  outputCapBytes: 256 * 1024,
+} as const
+
+/**
+ * Total size of a perimeter's env, so a note can't eat the isolate's memory
+ * budget before a line of its code runs.
+ *
+ * There is deliberately no reserved-NAME list any more. v2 kept one because the
+ * proxy environment variables WERE the perimeter enforcement, so a note setting
+ * HTTP_PROXY was a note escaping itself. The isolate has no proxy and no shell:
+ * egress is a host function, and no environment variable anywhere in the chain
+ * influences it. `env` is also a namespace object, so a variable called `fetch`
+ * is `env.fetch` and shadows nothing.
+ */
+const ENV_MAX_BYTES = 64 * 1024
+
+/** Hostname (or IP) with optional :port — no scheme, path, wildcard or secret ref. */
+const HOST_ENTRY_RE = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:\d{1,5})?$/i
+
+const ENV_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/
+
+export type ParsePerimeterResult =
+  | {
+      ok: true
+      perimeter: ConnectorPerimeter
+      /** Set when this came from a legacy alias note the migration hasn't rewritten. */
+      legacy: 'http' | 'postgres' | 'mysql' | 'mcp' | null
+      /** Admin-facing caveats (e.g. a legacy SQL note whose host lives inside its DSN). */
+      warnings: string[]
+    }
+  | { ok: false; error: string }
+
+/** Every secret NAME a perimeter's env references — the set the runtime resolves. */
+export function perimeterSecretRefs(perimeter: ConnectorPerimeter): string[] {
+  return [...new Set(Object.values(perimeter.env).flatMap(findSecretRefs))]
+}
+
+function parseHostsList(raw: unknown): { ok: true; hosts: string[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, hosts: [] }
+  if (!Array.isArray(raw)) return { ok: false, error: '`hosts` must be a list of host or host:port entries' }
+  const hosts: string[] = []
+  for (const entry of raw) {
+    const value = typeof entry === 'string' ? entry.trim().toLowerCase().replace(/\.$/, '') : ''
+    if (!value || findSecretRefs(value).length > 0 || !HOST_ENTRY_RE.test(value)) {
+      return {
+        ok: false,
+        error: `Bad hosts entry ${JSON.stringify(entry)} — use a bare hostname like "api.stripe.com" or "db.internal:5432", written literally`,
+      }
+    }
+    hosts.push(value)
+  }
+  return { ok: true, hosts }
+}
+
+function parsePerimeterEnv(raw: unknown): { ok: true; env: Record<string, string> } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, env: {} }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: '`env` must map variable names to string values' }
+  }
+  const env: Record<string, string> = {}
+  let bytes = 0
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!ENV_NAME_RE.test(key)) return { ok: false, error: `Bad env variable name '${key}'` }
+    if (typeof value !== 'string') return { ok: false, error: `\`env.${key}\` must be a string` }
+    bytes += key.length + value.length
+    if (bytes > ENV_MAX_BYTES) return { ok: false, error: '`env` is too large' }
+    for (const name of findSecretRefs(value)) {
+      if (!isValidSecretName(name)) return { ok: false, error: `Invalid secret name '${name}' (use A-Z, 0-9 and _)` }
+    }
+    env[key] = value
+  }
+  return { ok: true, env }
+}
+
+/** The v1 alias → v2 perimeter mapping — the back-compat shim, pure and testable. */
+export function perimeterFromLegacy(config: ConnectorConfig): {
+  perimeter: ConnectorPerimeter
+  warnings: string[]
+} {
+  const env: Record<string, string> = {}
+  for (const name of configSecretRefs(config)) env[name] = `{{secret:${name}}}`
+  const timeoutMs = Math.max(config.timeoutMs, SANDBOX_LIMITS.timeoutMs.min)
+
+  const hostOf = (raw: string): string => {
+    const url = new URL(raw)
+    return url.port ? `${url.hostname}:${url.port}` : url.hostname
+  }
+
+  switch (config.alias) {
+    case 'http': {
+      const hosts = [hostOf(config.baseUrl)]
+      if (config.oauth) {
+        const tokenHost = hostOf(config.oauth.tokenUrl)
+        if (!hosts.includes(tokenHost)) hosts.push(tokenHost)
+      }
+      // v1 rules were relative to base_url; the proxy matches full request
+      // paths, so a base_url with a path prefix must be folded into each rule.
+      const prefix = new URL(config.baseUrl).pathname.replace(/\/$/, '')
+      const allow = config.allow.map((rule) => ({ ...rule, path: prefix + rule.path }))
+      return { perimeter: { hosts, allow, env, timeoutMs }, warnings: [] }
+    }
+    case 'postgres':
+    case 'mysql':
+      return {
+        perimeter: { hosts: [], allow: [], env, timeoutMs },
+        warnings: [
+          `This legacy ${config.alias} note keeps its database host inside the DSN secret, so the ` +
+            'perimeter cannot allow it — add `hosts:` (e.g. "db.example.com:5432") or run the v2 migration',
+        ],
+      }
+    case 'mcp': {
+      const warnings =
+        config.allow.length > 0
+          ? [
+              'Legacy per-tool allow rules cannot be tunnel-enforced under v2 — they become guidance in the note body after migration',
+            ]
+          : []
+      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs }, warnings }
+    }
+  }
+}
+
+/**
+ * Frontmatter → perimeter, for v2 and legacy notes alike. Never throws; errors
+ * are admin-readable. The v2 shape is anything that declares `hosts` or `env`;
+ * a note with neither falls back to the legacy alias parser.
+ */
+export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResult {
+  // Presence decides, not well-formedness — a malformed `hosts:` must surface
+  // its own error, not fall back to the legacy parser's unrelated one.
+  const isV2 = fm.hosts !== undefined || fm.env !== undefined
+  if (!isV2) {
+    const legacy = parseConnectorConfig(fm)
+    if (!legacy.ok) {
+      return {
+        ok: false,
+        error:
+          'Connector frontmatter needs `hosts:` (a list of hosts the run may reach; ' +
+          '`hosts: []` for a no-network connector) — or a legacy `alias:` config: ' +
+          legacy.error,
+      }
+    }
+    const mapped = perimeterFromLegacy(legacy.config)
+    return { ok: true, perimeter: mapped.perimeter, legacy: legacy.config.alias, warnings: mapped.warnings }
+  }
+
+  const hosts = parseHostsList(fm.hosts)
+  if (!hosts.ok) return { ok: false, error: hosts.error }
+  const env = parsePerimeterEnv(fm.env)
+  if (!env.ok) return { ok: false, error: env.error }
+
+  const allowRaw = Array.isArray(fm.allow) ? fm.allow : []
+  const allow: AllowRule[] = []
+  for (const entry of allowRaw) {
+    const rule = typeof entry === 'string' ? parseAllowRule(entry) : null
+    if (!rule) return { ok: false, error: `Bad allow entry ${JSON.stringify(entry)} — use "METHOD /path"` }
+    allow.push(rule)
+  }
+
+  const { min, max, default: dflt } = SANDBOX_LIMITS.timeoutMs
+  return {
+    ok: true,
+    perimeter: { hosts: hosts.hosts, allow, env: env.env, timeoutMs: clamp(fm.timeout_ms, dflt, min, max) },
+    legacy: null,
+    warnings: [],
+  }
 }

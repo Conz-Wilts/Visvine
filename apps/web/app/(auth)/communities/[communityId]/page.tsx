@@ -263,7 +263,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
             )}
           </div>
 
-          <h1 className="text-2xl sm:text-3xl font-bold text-text-primary leading-tight font-ginto">{community.name}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-text-primary leading-tight font-title">{community.name}</h1>
           {tagline && <p className="mt-1.5 text-[15px] sm:text-base text-text-secondary max-w-[60ch]">{tagline}</p>}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
@@ -344,7 +344,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
                 <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
                      style={{ background: `conic-gradient(${theme.base} ${(checklistDone / checklist.length) * 100}%, var(--surface-3,#f3f4f6) 0)` }}>
                   <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
-                  <b className="relative text-[13px] font-bold font-ginto">{checklistDone}/{checklist.length}</b>
+                  <b className="relative text-[13px] font-bold font-title">{checklistDone}/{checklist.length}</b>
                 </div>
                 <p className="text-[13px] text-text-secondary">A complete page helps new members understand what this community is about.</p>
               </div>
@@ -507,7 +507,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
 function Stat({ value, label, onClick }: { value: number; label: string; onClick?: () => void }) {
   const inner = (
     <>
-      <b className="text-lg font-bold font-ginto text-text-primary">{value}</b>
+      <b className="text-lg font-bold font-title text-text-primary">{value}</b>
       <span className="text-xs text-text-muted">{label}</span>
     </>
   );
@@ -523,7 +523,7 @@ function SectionCard({ id, icon, title, theme, action, children }: {
   return (
     <section id={id} className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft scroll-mt-16">
       <div className="flex items-center justify-between px-5 pt-4 pb-2.5">
-        <h2 className="flex items-center gap-2 text-[15px] font-bold font-ginto text-text-primary">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary">
           <span style={{ color: theme.dark }}>{icon}</span>{title}
         </h2>
         {action}
@@ -583,7 +583,7 @@ function EventMiniCard({ event, theme }: { event: OverviewEvent; theme: ThemePal
           : <Calendar className="w-8 h-8 text-white/70" />}
         <span className="absolute top-2 left-2 flex flex-col items-center w-10 rounded-lg overflow-hidden bg-surface-1 shadow-sm">
           <span className="w-full text-center text-[9px] font-bold text-white py-0.5" style={{ background: accent }}>{month}</span>
-          <span className="text-sm font-bold font-ginto text-text-primary leading-tight py-0.5">{day}</span>
+          <span className="text-sm font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
         </span>
       </div>
       <div className="p-3">

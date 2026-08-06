@@ -18,7 +18,7 @@ interface PageTitleProps {
 export default function PageTitle({ title, subtitle, className }: PageTitleProps) {
   return (
     <div className={clsx('flex flex-col items-center justify-center px-4 pt-6 pb-0 text-center sm:px-6', className)}>
-      <h1 className="text-5xl font-normal tracking-tight text-text-primary font-ginto">{title}</h1>
+      <h1 className="text-5xl font-normal tracking-tight text-text-primary font-title">{title}</h1>
       {subtitle && (
         <p className="mt-2 max-w-2xl text-base text-text-muted">{subtitle}</p>
       )}

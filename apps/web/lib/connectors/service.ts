@@ -1,19 +1,32 @@
 /**
- * The connectors service — the only file that touches both the notes layer and
- * the secrets table. Deliberately MCP-free: not-found is `null`, everything
- * else is a ConnectorError, and the tool layer maps both onto McpError. All
- * note reads go through the brain visibility lens (readVisible/visibleVault),
- * so folder permissions govern who can even see a connector exists.
+ * The connectors service — the only file that touches the notes layer, the
+ * secrets table AND the isolate runtime. Deliberately MCP-free: not-found is
+ * `null`, everything else is a ConnectorError, and the tool layer maps both
+ * onto McpError. All note reads go through the brain visibility lens
+ * (readVisible/visibleVault), so folder permissions govern who can even see a
+ * connector exists.
+ *
+ * Execution is one path for everyone: {@link executeConnectorScript} is what
+ * an agent's run_connector calls and what the console's terminal calls — same
+ * perimeter, same secrets, same audit line. There is no thinner admin path.
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
 import { readVisible, visibleVault } from '@/lib/notes/brainService'
-import { logAudit } from '@/lib/notes/audit'
+import { listAudit, logAudit } from '@/lib/notes/audit'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Brain } from '@/lib/notes/store'
 import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
-import { configSecretRefs, ConnectorError, parseConnectorConfig, type ConnectorConfig } from './config'
+import {
+  allowPrivateHosts,
+  ConnectorError,
+  interpolateSecrets,
+  parseConnectorPerimeter,
+  perimeterSecretRefs,
+  type ConnectorPerimeter,
+} from './config'
+import { runInIsolate, type IsolateRunResult } from './isolate'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -22,13 +35,17 @@ const DOCS_CAP_CHARS = 4_000
 export interface ConnectorSummary {
   name: string
   path: string
-  /** Raw frontmatter `alias` — loose, so a broken note still lists with its error. */
+  /** Raw frontmatter `alias` — display metadata only (chip colour), any string. */
   alias: string | null
   description: string | null
-  /** Human-readable allow entries (http calls or mcp tool names); empty = documentation-only. */
+  /** Hosts the run may reach; empty = no network (documentation-only connector). */
+  hosts: string[]
+  /** Human-readable method+path rules; empty = host-gated only. */
   allow: string[]
   /** Parse failure, so admins (and agents) can see a broken connector. */
   invalid: string | null
+  /** Caveats worth surfacing (mostly legacy notes the migration hasn't rewritten). */
+  warnings: string[]
   /** Secret NAMES this connector references — never values. */
   secrets: string[]
   docs: string
@@ -56,22 +73,18 @@ function formatAllowRule(rule: { method: string; path: string; prefix: boolean }
 function summariseNote(path: string, content: string): ConnectorSummary | null {
   const fm = parseFrontmatter(content)
   if (!isConnectorNote(fm)) return null
-  const parsed = parseConnectorConfig(fm)
+  const parsed = parseConnectorPerimeter(fm)
   const body = splitFrontmatter(content).body.trim()
   return {
     name: connectorName(path),
     path,
     alias: typeof fm.alias === 'string' ? fm.alias : null,
     description: typeof fm.description === 'string' ? fm.description : null,
-    allow: !parsed.ok
-      ? []
-      : parsed.config.alias === 'http'
-        ? parsed.config.allow.map(formatAllowRule)
-        : parsed.config.alias === 'mcp'
-          ? [...parsed.config.allow]
-          : [],
+    hosts: parsed.ok ? [...parsed.perimeter.hosts] : [],
+    allow: parsed.ok ? parsed.perimeter.allow.map(formatAllowRule) : [],
     invalid: parsed.ok ? null : parsed.error,
-    secrets: parsed.ok ? configSecretRefs(parsed.config) : [],
+    warnings: parsed.ok ? parsed.warnings : [],
+    secrets: parsed.ok ? perimeterSecretRefs(parsed.perimeter) : [],
     docs: body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body,
   }
 }
@@ -90,16 +103,16 @@ export async function listConnectors(p: BrainPrincipal, brain: Brain): Promise<C
 
 /**
  * One connector, in the detail the console's Connector tab renders: the summary
- * every caller gets, plus the parsed config it draws the connection card from.
- * `config` is null exactly when `invalid` is set — a broken note still describes
- * itself so an admin can see what to fix.
+ * every caller gets, plus the parsed perimeter and its env templates. `perimeter`
+ * is null exactly when `invalid` is set — a broken note still describes itself
+ * so an admin can see what to fix.
  *
  * Null (rather than an error) when the note is absent, invisible to this
  * principal, or isn't a connector at all — the same indistinguishable
  * not-found readVisible gives, so a page can 404 uniformly.
  */
 export interface ConnectorDetail extends ConnectorSummary {
-  config: ConnectorConfig | null
+  perimeter: ConnectorPerimeter | null
 }
 
 export async function describeConnector(
@@ -113,13 +126,54 @@ export async function describeConnector(
   if (content === null) return null
   const summary = summariseNote(path, content)
   if (!summary) return null
-  const parsed = parseConnectorConfig(parseFrontmatter(content))
-  return { ...summary, config: parsed.ok ? parsed.config : null }
+  const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+  return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null }
+}
+
+/** One past run of a connector, as the audit trail recorded it. */
+export interface ConnectorCall {
+  at: number
+  /** Who asked — the principal's display name, agent or admin alike. */
+  by: string
+  /** The code that ran, truncated at write time to AUDIT_CODE_CHARS. */
+  code: string
+  /** What came back: `ok`, `timeout`, `error: …`, `missing_secret: …`. */
+  outcome: string
+}
+
+/**
+ * A connector's call history, newest first. Every execution audits itself
+ * (see {@link executeConnectorScript}), so this is a read of that trail
+ * narrowed to one connector rather than a second record to keep in step.
+ *
+ * The stored detail is `run [code] → outcome`; the split is here so the
+ * shape callers see survives a change to that wording.
+ */
+export async function listConnectorCalls(
+  communityId: string,
+  path: string,
+  limit = 25,
+): Promise<ConnectorCall[]> {
+  const entries = await listAudit(communityId)
+  const calls: ConnectorCall[] = []
+  for (const entry of entries) {
+    if (entry.action !== 'connector' || entry.path !== path) continue
+    const match = /^run \[([^]*)\] → ([^]*)$/.exec(entry.detail ?? '')
+    calls.push({
+      at: entry.at,
+      by: entry.name,
+      code: match?.[1] ?? '',
+      outcome: match?.[2] ?? (entry.detail ?? ''),
+    })
+    if (calls.length >= limit) break
+  }
+  return calls
 }
 
 export interface LoadedConnector {
-  config: ConnectorConfig
+  perimeter: ConnectorPerimeter
   path: string
+  warnings: string[]
 }
 
 /**
@@ -140,13 +194,13 @@ export async function loadConnector(
   if (!isConnectorNote(fm)) {
     throw new ConnectorError('config', `The note at ${path} is not a connector (missing \`type: connector\`)`)
   }
-  const parsed = parseConnectorConfig(fm)
+  const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) throw new ConnectorError('config', parsed.error)
-  return { config: parsed.config, path }
+  return { perimeter: parsed.perimeter, path, warnings: parsed.warnings }
 }
 
 /** Decrypt the named secrets for a community; every name must exist. */
-export async function resolveSecretValues(
+async function resolveSecretValues(
   communityId: string,
   names: readonly string[],
 ): Promise<Map<string, string>> {
@@ -181,8 +235,65 @@ export async function resolveSecretValues(
   return values
 }
 
+// JavaScript says the same thing as a shell pipeline in more characters, so
+// the v2 command cap would now bite on ordinary connector code.
+const CODE_MAX_CHARS = 32_768
+const AUDIT_CODE_CHARS = 200
+
+/**
+ * Run one connector script inside its perimeter — the whole execution path,
+ * shared by the agent tool and the console terminal: secrets resolve
+ * server-side into the isolate's `env`, the isolate's only egress is the
+ * capability functions gated on the note's hosts, secret values are redacted
+ * from everything that comes back, and the run is audited win or lose.
+ */
+export async function executeConnectorScript(
+  p: BrainPrincipal,
+  brain: Brain,
+  communityId: string,
+  loaded: LoadedConnector,
+  code: string,
+): Promise<IsolateRunResult> {
+  if (!code.trim()) throw new ConnectorError('config', 'Nothing to run — pass JavaScript to evaluate')
+  if (code.length > CODE_MAX_CHARS) {
+    throw new ConnectorError('config', `Script too long (max ${CODE_MAX_CHARS} characters)`)
+  }
+
+  const summary = code.slice(0, AUDIT_CODE_CHARS).replace(/\s+/g, ' ').trim()
+  try {
+    const secrets = await resolveSecretValues(communityId, perimeterSecretRefs(loaded.perimeter))
+    const env: Record<string, string> = {}
+    for (const [key, template] of Object.entries(loaded.perimeter.env)) {
+      const resolved = interpolateSecrets(template, secrets)
+      if (!resolved.ok) {
+        throw new ConnectorError('missing_secret', `Secret ${resolved.missing.join(', ')} not set`)
+      }
+      env[key] = resolved.value
+    }
+
+    const result = await runInIsolate(
+      { ...loaded.perimeter, env, allowPrivate: allowPrivateHosts() },
+      code,
+      { redact: [...secrets.values()] },
+    )
+    auditConnectorCall(
+      p,
+      loaded.path,
+      `run [${summary}] → ${
+        result.timedOut ? 'timeout' : result.ok ? 'ok' : `error: ${result.error?.message ?? 'unknown'}`
+      }${result.denials.length > 0 ? `, ${result.denials.length} egress denial(s)` : ''}`,
+    )
+    return result
+  } catch (e) {
+    if (e instanceof ConnectorError) {
+      auditConnectorCall(p, loaded.path, `run [${summary}] → ${e.code}: ${e.message}`)
+    }
+    throw e
+  }
+}
+
 /** One audit line per connector execution, success or denial. */
-export function auditConnectorCall(
+function auditConnectorCall(
   p: BrainPrincipal,
   path: string,
   detail: string,

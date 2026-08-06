@@ -18,7 +18,10 @@ export function useCommunityDesign() {
   return useContext(CommunityDesignContext);
 }
 
-const DEFAULT_MAIN_FONT = "'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+// Titles default to the body face, not the Visvine brand font: ABC Ginto
+// Rounded is the wordmark, reserved for marketing surfaces. A community that
+// uploads its own `main` font repaints .font-title and nothing else.
+const DEFAULT_MAIN_FONT = "'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 const DEFAULT_UTILITY_FONT = "'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
 const STYLE_ID = 'community-design-fonts';

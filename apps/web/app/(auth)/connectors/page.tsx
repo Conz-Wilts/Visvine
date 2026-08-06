@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Database, Globe, KeyRound, Plug, Plus } from 'lucide-react';
+import { AlertTriangle, Database, Globe, KeyRound, Plug } from 'lucide-react';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { useCreateModal } from '@/lib/contexts/CreateModalContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
@@ -14,6 +13,10 @@ import { fetchJson } from '@/lib/fetchJson';
  * folder in Context. The note IS the connector, so each card links to the
  * connector's node page — where the Connector tab renders its config, its
  * secrets and a live test — rather than opening an editor of its own.
+ *
+ * Read-only: connectors are created by writing the note (in Context or over
+ * MCP), never from here, so the page has no builder of its own to keep in step
+ * with the note format.
  *
  * Each card answers one question: can an agent use this right now? A connector
  * fails for three different reasons (frontmatter that doesn't parse, a secret
@@ -31,10 +34,12 @@ interface ConnectorRow {
   path: string;
   alias: string | null;
   description: string | null;
+  hosts: string[];
   allow: string[];
   invalid: string | null;
+  warnings: string[];
   secrets: string[];
-  /** Referenced but never stored — the quiet reason a valid connector 500s. */
+  /** Referenced but never stored — the quiet reason a valid connector fails. */
   missingSecrets: string[];
 }
 
@@ -57,20 +62,13 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
       tone: 'warn',
     };
   }
-  if (connector.alias === 'postgres' || connector.alias === 'mysql') {
-    return { label: 'Ready', detail: 'Read-only SQL', tone: 'ok' };
+  if (connector.warnings.length > 0) {
+    return { label: 'Needs migration', detail: connector.warnings[0], tone: 'warn' };
   }
-  if (connector.allow.length === 0) {
-    return { label: 'Docs only', detail: 'No calls permitted yet', tone: 'warn' };
+  if (connector.hosts.length === 0) {
+    return { label: 'No network', detail: 'No hosts declared yet', tone: 'warn' };
   }
-  return {
-    label: 'Ready',
-    detail:
-      connector.alias === 'mcp'
-        ? `${connector.allow.length} allowed tool${connector.allow.length === 1 ? '' : 's'}`
-        : `${connector.allow.length} allowed request${connector.allow.length === 1 ? '' : 's'}`,
-    tone: 'ok',
-  };
+  return { label: 'Ready', detail: connector.hosts.join(', '), tone: 'ok' };
 }
 
 const TONE_CLASSES: Record<Tone, string> = {
@@ -138,7 +136,6 @@ export default function ConnectorsPage() {
   // The community has to resolve before the fetch: its id is half the URL, and
   // a switch mid-flight has to re-run this against the community now on screen.
   const { currentCommunity, loading: communityLoading } = useCommunity();
-  const { open } = useCreateModal();
   const communityId = currentCommunity?.id;
 
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
@@ -194,16 +191,10 @@ export default function ConnectorsPage() {
           <div>
             <p className="text-sm font-semibold text-text-primary">No connectors yet</p>
             <p className="mt-1 text-sm text-text-muted">
-              Add one to let agents call an external API or query a database.
+              Add one by writing a <code className="font-mono text-[13px]">connectors/&lt;name&gt;.md</code> note
+              in Context, or over MCP.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => open('connector')}
-            className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> New connector
-          </button>
         </div>
       );
     }
@@ -223,23 +214,13 @@ export default function ConnectorsPage() {
         subtitle="Gateways to external APIs and databases. Each one is a note whose frontmatter is the config and whose body is the documentation agents read."
       />
 
-      <div className="mt-6 flex items-center justify-between gap-3">
-        <p className="text-xs text-text-muted">
-          {connectors.length > 0 &&
-            `${connectors.length} connector${connectors.length === 1 ? '' : 's'}${
-              needsAttention > 0 ? ` · ${needsAttention} need${needsAttention === 1 ? 's' : ''} attention` : ''
-            }`}
+      {connectors.length > 0 && (
+        <p className="mt-6 text-xs text-text-muted">
+          {`${connectors.length} connector${connectors.length === 1 ? '' : 's'}${
+            needsAttention > 0 ? ` · ${needsAttention} need${needsAttention === 1 ? 's' : ''} attention` : ''
+          }`}
         </p>
-        {connectors.length > 0 && (
-          <button
-            type="button"
-            onClick={() => open('connector')}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-          >
-            <Plus className="h-4 w-4" /> New connector
-          </button>
-        )}
-      </div>
+      )}
 
       <div className="mt-4">{body()}</div>
     </div>

@@ -236,6 +236,6 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       : []),
   ]);
 
-  revalidateTag('context-data-v2');
+  revalidateTag('context-data-v2', { expire: 0 });
   return NextResponse.json({ tags: tags ?? undefined, ok: true });
 }

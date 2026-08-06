@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     },
   });
 
-  revalidateTag(`crm-list-${communityId}`);
+  revalidateTag(`crm-list-${communityId}`, { expire: 0 });
 
   const member = await prisma.userCommunity.findUniqueOrThrow({
     where: { userId_communityId: { userId: user.id, communityId } },

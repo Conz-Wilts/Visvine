@@ -2,9 +2,5 @@
   "$schema": "https://unpkg.com/knip@latest/schema.json",
   "entry": ["scripts/**/*.{ts,mjs}", "tests/**/*.test.ts"],
   "project": ["app/**", "components/**", "features/**", "hooks/**", "lib/**", "scripts/**", "tests/**"],
-  "ignoreDependencies": [
-    "eslint-config-next",
-    "eslint-plugin-react-hooks",
-    "@next/eslint-plugin-next"
-  ]
+  "ignoreDependencies": []
 }

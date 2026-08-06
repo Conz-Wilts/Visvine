@@ -41,7 +41,7 @@ interface EntityMaps {
 
 function bustContextCache(): void {
   try {
-    revalidateTag('context-data-v2')
+    revalidateTag('context-data-v2', { expire: 0 })
   } catch {
     /* outside request scope */
   }

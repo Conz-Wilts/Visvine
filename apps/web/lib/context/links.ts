@@ -13,7 +13,7 @@ import { normalizeRelationship, pairKeyFor } from './relationships';
 // Edges are best-effort cache busts, so swallow that — never let it break a write.
 function bustContextCache(): void {
   try {
-    revalidateTag('context-data-v2');
+    revalidateTag('context-data-v2', { expire: 0 });
   } catch {
     /* outside request scope */
   }

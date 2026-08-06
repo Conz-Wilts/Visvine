@@ -43,12 +43,7 @@ export const TOOL_SCOPES = {
   // Listing rides context:read — search already surfaces connector note bodies
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',
-  call_connector: 'connectors:use',
-  query_connector: 'connectors:use',
-  // tools/list is discovery, but unlike list_connectors it reaches the remote
-  // server with the community's credentials — so it rides the execution scope.
-  list_connector_tools: 'connectors:use',
-  call_mcp_connector: 'connectors:use',
+  run_connector: 'connectors:use',
 } as const satisfies Record<string, McpScope>
 
 export type McpToolName = keyof typeof TOOL_SCOPES

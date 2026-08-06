@@ -51,7 +51,7 @@ export function aliasRadius(count: number): number {
   return Math.min(88, 42 + 9 * Math.sqrt(count));
 }
 
-export const ALIAS_ID_PREFIX = 'alias:';
+const ALIAS_ID_PREFIX = 'alias:';
 
 export const isAliasNodeId = (id: string): boolean => id.startsWith(ALIAS_ID_PREFIX);
 

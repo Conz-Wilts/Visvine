@@ -171,7 +171,7 @@ export async function PUT(request: NextRequest) {
       linkTypes: (updated.linkTypes as unknown) as Community['linkTypes'],
     };
 
-    revalidateTag('context-data');
+    revalidateTag('context-data', { expire: 0 });
     return NextResponse.json({ community: updatedCommunity });
   } catch (err) {
     return handleApiError(err, 'api.data.communities.put.failed');

@@ -92,7 +92,7 @@ export default function MarketingShell({
   const user = session?.user;
 
   return (
-    <main className="font-ginto relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
+    <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
       {!isBlogPost && <Vines />}
       {/* White navbar — sits above the vines so the buttons keep their contrast */}
       <header className="relative z-30 w-full border-b border-neutral-200 bg-white">
