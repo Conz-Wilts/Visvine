@@ -82,6 +82,51 @@ test('buildTree nests folders then notes', () => {
   assert.ok(tree.children!.some((c) => c.kind === 'note' && c.path === 'index.md'))
 })
 
+// A folder's display name is its index note's title: `portfolio/` titled
+// "Companies" reads as Companies wherever the tree is shown. The path never moves.
+const titledVault = (): RawNote[] => [
+  ...vault(),
+  note('portfolio/index.md', '---\ntitle: Companies\n---\n\nThe list.'),
+  note('team/index.md', '---\ntitle: "   "\n---\n\nBlank title.'),
+  note('team/ana.md', '---\ntitle: Ana\n---\n\nHi.'),
+  note('archive/old.md', '---\ntitle: Old\n---\n\nNo index here.'),
+]
+
+const folderNode = (tree: ReturnType<typeof buildTree>, path: string) =>
+  tree.children!.find((c) => c.kind === 'folder' && c.path === path)!
+
+test('buildTree titles a folder from its index note', () => {
+  const tree = buildTree(buildNoteIndex(titledVault()))
+  const portfolio = folderNode(tree, 'portfolio')
+  assert.equal(portfolio.title, 'Companies')
+  assert.equal(portfolio.name, 'portfolio')
+  assert.equal(portfolio.path, 'portfolio')
+})
+
+test('buildTree leaves a folder untitled without an index, or with a blank title', () => {
+  const tree = buildTree(buildNoteIndex(titledVault()))
+  assert.equal(folderNode(tree, 'archive').title, undefined)
+  // Regression guard: meta.title falls back to the filename, so reading it
+  // instead of the frontmatter would label this folder "index".
+  assert.equal(folderNode(tree, 'team').title, undefined)
+})
+
+test("buildTree does not title the root from the brain's home note", () => {
+  const tree = buildTree(buildNoteIndex(titledVault()))
+  assert.equal(tree.title, undefined)
+})
+
+test('buildTree sorts folders by display name, not path segment', () => {
+  const tree = buildTree(
+    buildNoteIndex([
+      note('zebra/index.md', '---\ntitle: Alpha\n---\n\nFirst.'),
+      note('beta/note.md', '---\ntitle: N\n---\n\nSecond.'),
+    ]),
+  )
+  const folders = tree.children!.filter((c) => c.kind === 'folder').map((c) => c.path)
+  assert.deepEqual(folders, ['zebra', 'beta'])
+})
+
 // --- references --------------------------------------------------------------
 
 test('computeReferences finds linked + unlinked mentions', () => {

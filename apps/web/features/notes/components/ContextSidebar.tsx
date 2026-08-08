@@ -1,33 +1,33 @@
 'use client'
 
-// The context tree docked into the global Sidebar while the /context page
-// or a profile's Context tab is open — the same mechanism /channels and /admin
-// use (ContextPanelContext's portal host), so the icon rail + tree read as one
-// connected card rather than a panel floating over the canvas. It shows the
+// The context tree docked into the global Sidebar while a note, a source or a
+// profile's Context tab is open — the same mechanism /channels and /admin use
+// (ContextPanelContext's portal host), so the icon rail + tree read as one
+// connected card rather than a panel floating over the page. It shows the
 // community brain's full organised tree — index files, the people/ and
-// companies/ namespaces, and every entity note. Clicking a note that maps to a
-// directory entity opens that entity's profile Context tab;
+// communities/ namespaces, and every entity note. Clicking a note that maps to
+// a directory entity opens that entity's profile Context tab;
 // index/organisational notes just highlight. `currentPath` (the profile view)
 // pre-highlights the open entity's note.
+//
+// The tree's data and every mutation live in useContextTree — shared with the
+// /context browser's rail. This component is the docking half only.
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/lib/contexts/CommunityContext'
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
-import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
 import type { CommunityFeatureConfig } from '@/lib/types'
-import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
-import { notesApi, type AccessOverviewResponse } from '../lib/notesApi'
-import { contextKeys, invalidateContextCache, prefetchNoteContext, swrFetch } from '../lib/contextPrefetch'
+import { prefetchNoteContext } from '../lib/contextPrefetch'
+import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
 
-const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
-// Below this the docked panel would crowd the context — keep in sync with the
+// Below this the docked panel would crowd the page — keep in sync with the
 // Sidebar's DOCK_MIN_WIDTH so the rail and the request agree on when to dock.
 const DOCK_MIN_WIDTH = 1024
 
@@ -36,8 +36,8 @@ export function ContextSidebar({
   focusPath = null,
 }: {
   currentPath?: string | null
-  /** Note path to highlight + scroll to (the context search's best match). Unlike
-   *  a click it never navigates; null leaves the last selection in place. */
+  /** Note path to highlight + scroll to. Unlike a click it never navigates;
+   *  null leaves the last selection in place. */
   focusPath?: string | null
 }) {
   const router = useRouter()
@@ -48,20 +48,11 @@ export function ContextSidebar({
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes')
 
   const { entityByPath } = useDirectoryEntities()
+  const ctx = useContextTree({ communityId, enabled: notesEnabled, currentPath })
+  const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
 
-  const [tree, setTree] = useState<TreeNode>(EMPTY_TREE)
-  const [notes, setNotes] = useState<NoteMeta[]>([])
-  const [starred, setStarred] = useState<string[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
-  const [overview, setOverview] = useState<AccessOverviewResponse | null>(null)
-  const [contextName, setContextName] = useState<string | null>(null)
-  const [shareTarget, setShareTarget] = useState<{ path: string; kind: 'note' | 'folder' } | null>(null)
-  const [trash, setTrash] = useState<TrashEntry[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [wide, setWide] = useState(false)
-  // Bumped after a tree mutation (delete) to re-run the load effect.
-  const [treeVersion, setTreeVersion] = useState(0)
 
   // Only mark the tree dockable on wide viewports (matches the Sidebar), and only
   // while the notes tool is on. The panel column itself stays closed until the
@@ -81,130 +72,12 @@ export function ContextSidebar({
     return () => setDockRequested(false)
   }, [wide, notesEnabled, communityId, setDockRequested])
 
-  // Load the tree + note index whenever the active community changes, through
-  // the shared context cache: a cached value paints synchronously (re-opening
-  // the Context tab shows the tree instantly, no spinner) and revalidates in
-  // the background; the list fetch is deduped with EntityContextPanel's. A
-  // gated or empty brain simply yields an empty tree (no error surfaced).
-  useEffect(() => {
-    if (!communityId || !notesEnabled) return
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    Promise.all([
-      swrFetch(contextKeys.tree(communityId), () => notesApi.tree(communityId), ({ tree }) => {
-        if (!cancelled) setTree(tree ?? EMPTY_TREE)
-      }),
-      swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), ({ notes, starred }) => {
-        if (cancelled) return
-        setNotes(notes ?? [])
-        setStarred(starred ?? [])
-      }),
-    ])
-      .catch((e: unknown) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : 'Failed to load context')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [communityId, notesEnabled, treeVersion])
-
-  // The brain's trash, for the folder pinned to the bottom of the tree. Re-runs
-  // on treeVersion so a delete lands in the trash row immediately; the GET also
-  // purges anything past its retention window, so the list is what the server
-  // would keep. A failure just leaves the row empty.
-  useEffect(() => {
-    if (!communityId || !notesEnabled) return
-    let cancelled = false
-    notesApi
-      .trash(communityId)
-      .then(({ trash }) => {
-        if (!cancelled) setTrash(trash ?? [])
-      })
-      .catch(() => {
-        if (!cancelled) setTrash([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [communityId, notesEnabled, treeVersion])
-
-  // The context's display name for the panel header (renameable from the
-  // console). Failure just leaves the default label — never blocks the tree.
-  useEffect(() => {
-    setContextName(null)
-    if (!communityId || !notesEnabled) return
-    let cancelled = false
-    swrFetch(
-      contextKeys.settings(communityId),
-      () => notesApi.getBrainSettings(communityId),
-      ({ settings }) => {
-        if (!cancelled) setContextName(settings?.contextName ?? null)
-      },
-    ).catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [communityId, notesEnabled])
-
-  // Access overview: restricted/locked boundaries (folders AND private notes)
-  // for the 🔒 badges. Personal spaces have no boundaries — skip the fetch.
-  // shareOpen is a dep so closing the Share panel repaints badges it changed.
-  const shareOpen = shareTarget !== null
-  useEffect(() => {
-    if (!communityId || !notesEnabled || communityId.startsWith('me:')) {
-      setOverview(null)
-      return
-    }
-    let cancelled = false
-    notesApi
-      .getAccessOverview(communityId)
-      .then((o) => {
-        if (!cancelled) setOverview(o)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [communityId, notesEnabled, shareOpen])
-
-  const folderBadges = useMemo(() => {
-    if (!overview) return undefined
-    const map = new Map<string, { restricted: boolean; locked?: boolean }>()
-    for (const path of overview.restricted) map.set(path, { restricted: true })
-    for (const path of overview.locked) {
-      map.set(path, { ...(map.get(path) ?? { restricted: false }), locked: true })
-    }
-    return map.size ? map : undefined
-  }, [overview])
-
-  // The community as the tree's root folder — everything below it is literally
-  // its children, so it renders as a folder row (chevron + name, no glyph)
-  // rather than a separate header bar above the list. A renamed context wins
-  // the label; the generic default defers to the community name.
-  const rootFolder = useMemo(
-    () => ({
-      label:
-        contextName && contextName !== DEFAULT_CONTEXT_NAME
-          ? contextName
-          : (currentCommunity?.name ?? 'Community'),
-    }),
-    [contextName, currentCommunity?.name],
-  )
-
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the sidebar itself survives via the layout portal).
   useEffect(() => {
     if (currentPath) setSelectedPath(currentPath)
   }, [currentPath])
 
-  // Mirror the context search's focused entity in the tree (highlight + scroll,
-  // via NoteSidebar's scroll effect). Clearing the search keeps the last
-  // selection, matching how the context keeps its last camera.
   useEffect(() => {
     if (focusPath) setSelectedPath(focusPath)
   }, [focusPath])
@@ -232,124 +105,6 @@ export function ContextSidebar({
     [entityByPath, router, currentPath, communityId],
   )
 
-  const handleToggleStar = useCallback(
-    (path: string, next: boolean) => {
-      if (!communityId) return
-      // Optimistic: reflect the toggle immediately, revert on failure.
-      setStarred((prev) => (next ? [...prev, path] : prev.filter((p) => p !== path)))
-      notesApi
-        .star(communityId, path, next)
-        .then(() => {
-          // The cached list carries `starred` — drop it so the next open
-          // doesn't repaint the pre-toggle state.
-          invalidateContextCache(contextKeys.list(communityId))
-        })
-        .catch(() => {
-          setStarred((prev) => (next ? prev.filter((p) => p !== path) : [...prev, path]))
-        })
-    },
-    [communityId],
-  )
-
-  // Delete = move to the brain's trash (restorable from the tree's Trash folder
-  // for 7 days, then purged). Authority
-  // is enforced server-side per note — the menu can't know each viewer's level,
-  // so a rejected delete just surfaces its message. Deleting the note that's
-  // open navigates back to the context canvas.
-  const handleDeleteNote = useCallback(
-    (path: string) => {
-      if (!communityId) return
-      const title = notes.find((n) => n.path === path)?.title ?? path
-      if (!window.confirm(`Delete “${title}”? It moves to Trash and can be restored for 7 days.`)) return
-      notesApi
-        .remove(communityId, path)
-        .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
-          setTreeVersion((v) => v + 1)
-          if (path === currentPath) router.push('/directory?view=context')
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
-        })
-    },
-    [communityId, notes, currentPath, router],
-  )
-
-  // Deleting a folder trashes every note inside it, so the confirm spells that
-  // out with the actual count. Same server-side authority + trash semantics as
-  // a single note; navigates home if the open note lived inside the folder.
-  const handleDeleteFolder = useCallback(
-    (folderPath: string) => {
-      if (!communityId) return
-      const name = folderPath.split('/').pop() ?? folderPath
-      const count = notes.filter((n) => n.path.startsWith(`${folderPath}/`)).length
-      const contents =
-        count === 0
-          ? 'It is empty.'
-          : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to Trash, restorable for 7 days).`
-      if (!window.confirm(`Delete the folder “${name}”? ${contents}`)) return
-      notesApi
-        .deleteFolder(communityId, folderPath)
-        .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
-          setTreeVersion((v) => v + 1)
-          if (currentPath?.startsWith(`${folderPath}/`)) router.push('/directory?view=context')
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the folder')
-        })
-    },
-    [communityId, notes, currentPath, router],
-  )
-
-  // Restoring puts the note back at its original path (suffixed if something
-  // else took it while it sat in the trash) — bumping treeVersion reloads the
-  // tree, the note list and the trash together.
-  const handleRestoreTrash = useCallback(
-    (id: string) => {
-      if (!communityId) return
-      notesApi
-        .restoreTrash(communityId, id)
-        .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
-          setTreeVersion((v) => v + 1)
-        })
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to restore the note')
-        })
-    },
-    [communityId],
-  )
-
-  // Force-delete, ahead of the 7-day retention. Irreversible, hence the confirm
-  // (the server also restricts it to admins in a community brain).
-  const handlePurgeTrash = useCallback(
-    (id: string) => {
-      if (!communityId) return
-      const name = trash.find((t) => t.id === id)?.name ?? 'this note'
-      if (!window.confirm(`Permanently delete “${name}”? This cannot be undone.`)) return
-      notesApi
-        .purgeTrash(communityId, id)
-        .then(() => setTreeVersion((v) => v + 1))
-        .catch((e: unknown) => {
-          window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
-        })
-    },
-    [communityId, trash],
-  )
-
-  const handleEmptyTrash = useCallback(() => {
-    if (!communityId) return
-    const count = trash.length
-    if (!window.confirm(`Permanently delete ${count === 1 ? 'the note' : `all ${count} notes`} in the trash? This cannot be undone.`)) return
-    notesApi
-      .emptyTrash(communityId)
-      .then(() => setTreeVersion((v) => v + 1))
-      .catch((e: unknown) => {
-        window.alert(e instanceof Error ? e.message : 'Failed to empty the trash')
-      })
-  }, [communityId, trash])
-
   // Nothing to render until the Sidebar's portal host is mounted and we're docking.
   if (!host || !wide || !notesEnabled || !communityId) return null
 
@@ -370,34 +125,34 @@ export function ContextSidebar({
         ) : (
           <>
             <NoteSidebar
-              tree={tree}
+              tree={ctx.tree}
               notes={notes}
-              starred={starred}
+              starred={ctx.starred}
               selectedPath={selectedPath}
               canEdit
               onSelect={handleSelect}
-              onToggleStar={handleToggleStar}
-              onDeleteNote={handleDeleteNote}
+              onToggleStar={ctx.handleToggleStar}
+              onDeleteNote={ctx.handleDeleteNote}
               bare
-              root={rootFolder}
+              root={ctx.rootFolder}
               storageKey={communityId}
               // The search focus (and, on a profile, the open note) only PEEKS
               // the tree open — clearing the search restores the user's own
               // expand/collapse state. selectedPath keeps the highlight after
               // that, which is why the peek can't be derived from it.
               revealPath={focusPath ?? currentPath}
-              folderBadges={folderBadges}
+              folderBadges={ctx.folderBadges}
               onFolderAccess={
                 communityId.startsWith('me:')
                   ? undefined
                   : (path) => setShareTarget({ path, kind: 'folder' })
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
-              onDeleteFolder={handleDeleteFolder}
+              onDeleteFolder={ctx.handleDeleteFolder}
               trash={trash}
-              onRestoreTrash={handleRestoreTrash}
-              onPurgeTrash={handlePurgeTrash}
-              onEmptyTrash={handleEmptyTrash}
+              onRestoreTrash={ctx.handleRestoreTrash}
+              onPurgeTrash={ctx.handlePurgeTrash}
+              onEmptyTrash={ctx.handleEmptyTrash}
             />
             {shareTarget !== null && (
               <SharePanel

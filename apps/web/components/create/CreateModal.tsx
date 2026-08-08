@@ -470,7 +470,7 @@ export default function CreateModal() {
 
     invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId));
     const failed = queue.length - uploaded;
-    setCreatedHref(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/context');
+    setCreatedHref(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory?view=context');
     setCreatedDetail(
       `${uploaded} file${uploaded === 1 ? '' : 's'} added to ${fileData.folder || contextName}` +
         (failed ? ` · ${failed} failed` : ''),

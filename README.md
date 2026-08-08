@@ -90,8 +90,19 @@ built in layers. `pnpm db:blackbird:full` runs all of them:
 | `db:blackbird:extras` | events + attendees, the resource library, channels + messages + a DM, feed posts |
 | `db:connectors:demo` | two working connectors in the shared brain |
 | `db:context-links` | directory links derived from the shared-brain entity notes |
+| `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
+| `db:notes:verify` | fails the seed if the brain breaks a structural rule |
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
+
+**An index note IS a folder.** Every folder carries an `index.md` typed `Index`
+whose `title` is the folder's display name and whose body is curated prose plus a
+machine-maintained list of the folder's notes and subfolders (between
+`<!-- index:children -->` markers). Nothing else may claim `type: Index` —
+creating one creates a folder, and retyping a note to `Index` turns it into one.
+`db:notes:verify` is what keeps the seeded data honest about that; run it any
+time you hand-edit a seed layer. The rules live in
+`apps/web/lib/notes/shared/indexNote.ts`.
 
 Anchor users (always present, listed in the dev login pickers). There is no role
 column — what someone can do comes entirely from the aliases they hold:

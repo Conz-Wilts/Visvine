@@ -16,7 +16,7 @@ import {
   SOURCE_EXTENSIONS_LABEL,
   sourceKindOf,
 } from '@/lib/notes/shared/sourceTypes';
-import { EntityNotePreview, FolderPicker, PathPreview } from './ContextDestination';
+import { EntityNotePreview, FolderPicker, PathPreview, type FolderOption } from './ContextDestination';
 
 // ─── Type Config ────────────────────────────────────────────────────────────
 
@@ -120,6 +120,23 @@ export const TYPE_OPTIONS: TypeOption[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12h6M9 16h4M8 4h8a2 2 0 012 2v14l-3-2-3 2-3-2-3 2V6a2 2 0 012-2z" />
+      </svg>
+    ),
+  },
+  {
+    // A folder, written as its index note — the two are the same thing
+    // (lib/notes/shared/indexNote.ts). Note-first like Context, so this entry
+    // exists for label/colour lookups; the form lives on /directory/new.
+    id: 'index',
+    label: 'Index',
+    description: 'The home page for a group of notes',
+    color: '#c026d3',
+    inGrid: false,
+    // A page listing what sits under it, not a folder tab: an index is a note
+    // you read, and the glyph should say that.
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 5h16M4 5v14M8 10h9M8 14h9M8 18h6" />
       </svg>
     ),
   },
@@ -739,7 +756,7 @@ export function ContextForm({
   data: ContextFormData;
   onChange: (d: ContextFormData) => void;
   nameRef: React.RefObject<HTMLInputElement | null>;
-  folders: string[];
+  folders: FolderOption[];
   contextName: string;
   /** The exact path this note will be written to (de-duplicated). */
   destination: string;
@@ -956,7 +973,7 @@ export function FileForm({
 }: {
   data: FileFormData;
   onChange: (d: FileFormData) => void;
-  folders: string[];
+  folders: FolderOption[];
   contextName: string;
   loading: boolean;
 }) {

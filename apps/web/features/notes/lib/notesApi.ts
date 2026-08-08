@@ -153,14 +153,16 @@ export const notesApi = {
 
   read: (c: string, path: string) =>
     getJson<{ content: string }>(`/api/notes/item?${qs(c, { path })}`),
+  // `movedTo` comes back when the write made the note a folder — an index note
+  // IS a folder, so `type: Index` at a/b.md lands at a/b/index.md.
   create: (c: string, path: string, content?: string) =>
-    sendJson<{ note: NoteMeta | null }>('/api/notes/item', 'POST', {
+    sendJson<{ note: NoteMeta | null; movedTo?: string }>('/api/notes/item', 'POST', {
       communityId: c,
       path,
       content,
     }),
   write: (c: string, path: string, content: string, origin?: string) =>
-    sendJson<{ ok: true }>('/api/notes/item', 'PUT', {
+    sendJson<{ ok: true; movedTo?: string }>('/api/notes/item', 'PUT', {
       communityId: c,
       path,
       content,
@@ -198,8 +200,14 @@ export const notesApi = {
       revisionId,
     }),
 
-  createFolder: (c: string, path: string) =>
-    sendJson<{ ok: true }>('/api/notes/folders', 'POST', { communityId: c, path }),
+  // A folder IS its index note: pass `content` to write that note yourself (the
+  // "Index" create tile), or omit it for the auto-generated stub.
+  createFolder: (c: string, path: string, content?: string) =>
+    sendJson<{ ok: true; indexPath: string }>('/api/notes/folders', 'POST', {
+      communityId: c,
+      path,
+      ...(content ? { content } : {}),
+    }),
   renameFolder: (c: string, from: string, to: string) =>
     sendJson<{ path: string }>('/api/notes/folders', 'PATCH', { communityId: c, from, to }),
   deleteFolder: async (c: string, path: string) => {

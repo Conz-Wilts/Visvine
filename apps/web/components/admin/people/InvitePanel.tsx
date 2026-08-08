@@ -198,7 +198,7 @@ export default function InvitePanel() {
 
       <SettingsSection
         title="Invite link"
-        description="Share this with anyone. Following it puts them in the waiting list on People — nobody joins without an admin approving them."
+        description="Share this with anyone. Following it puts them in the waiting list on Members — nobody joins without an admin approving them."
       >
         <InviteLinkRow communityId={communityId} />
       </SettingsSection>

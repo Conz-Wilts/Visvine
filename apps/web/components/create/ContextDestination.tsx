@@ -15,19 +15,26 @@ import type { TreeNode } from '@/lib/notes/shared/types';
 const inputClass =
   'w-full px-3 py-2 rounded-lg border border-border-default bg-surface-2 text-text-primary text-sm placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition-all';
 
+/** A folder as the picker offers it: the path is the value, the label is the
+ *  name the tree shows for it — its index note's title when it declares one. */
+export interface FolderOption {
+  path: string;
+  label: string;
+}
+
 export interface BrainTree {
-  /** Every folder path in the brain, depth-first ('' root excluded). */
-  folders: string[];
+  /** Every folder in the brain, depth-first ('' root excluded). */
+  folders: FolderOption[];
   /** Existing note paths — the modal de-duplicates the destination against these. */
   notePaths: Set<string>;
   loading: boolean;
   error: string | null;
 }
 
-function collect(node: TreeNode, folders: string[], notes: Set<string>): void {
+function collect(node: TreeNode, folders: FolderOption[], notes: Set<string>): void {
   for (const child of node.children ?? []) {
     if (child.kind === 'folder') {
-      folders.push(child.path);
+      folders.push({ path: child.path, label: child.title ?? child.name });
       collect(child, folders, notes);
     } else {
       notes.add(child.path);
@@ -69,10 +76,11 @@ export function useBrainTree(communityId: string | null, enabled: boolean): Brai
   }, [communityId, enabled]);
 
   return useMemo(() => {
-    const folders: string[] = [];
+    const folders: FolderOption[] = [];
     const notePaths = new Set<string>();
     if (tree) collect(tree, folders, notePaths);
-    folders.sort((a, b) => a.localeCompare(b));
+    // By path, so a child always follows its parent and the indentation reads.
+    folders.sort((a, b) => a.path.localeCompare(b.path));
     return { folders, notePaths, loading, error };
   }, [tree, loading, error]);
 }
@@ -88,7 +96,7 @@ export function FolderPicker({
   onChange,
   contextName,
 }: {
-  folders: string[];
+  folders: FolderOption[];
   value: string;
   onChange: (folder: string) => void;
   contextName: string;
@@ -105,7 +113,10 @@ export function FolderPicker({
 
   // A folder chosen earlier that no longer matches the loaded list (freshly
   // typed) still needs an option, or the select would snap back to the root.
-  const options = folders.includes(value) || !value ? folders : [...folders, value];
+  const options =
+    !value || folders.some((f) => f.path === value)
+      ? folders
+      : [...folders, { path: value, label: value.split('/').pop() ?? value }];
 
   if (creating) {
     return (
@@ -146,9 +157,9 @@ export function FolderPicker({
       >
         <option value="">{contextName} (top level)</option>
         {options.map((folder) => (
-          <option key={folder} value={folder}>
-            {' '.repeat((folder.split('/').length - 1) * 2)}
-            {folder.split('/').pop()}
+          <option key={folder.path} value={folder.path}>
+            {' '.repeat((folder.path.split('/').length - 1) * 2)}
+            {folder.label}
           </option>
         ))}
       </select>

@@ -4,16 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { FullProfile } from '@/lib/profileTypes';
 import { useProfileCache } from '@/lib/contexts/ProfileContext';
 
-const prefetchCache = new Map<string, Promise<FullProfile>>();
-
-export function prefetchProfile(personId: string): void {
-  if (prefetchCache.has(personId)) return;
-  const promise = fetch(`/api/profile/${encodeURIComponent(personId)}`)
-    .then(res => { if (!res.ok) throw new Error('Profile not found'); return res.json() as Promise<FullProfile>; })
-    .catch((err) => { prefetchCache.delete(personId); throw err; });
-  prefetchCache.set(personId, promise);
-}
-
 export function useProfile(personId: string | null) {
   const { getCached, setCache, patchCache } = useProfileCache();
 
@@ -41,14 +31,10 @@ export function useProfile(personId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const prefetched = prefetchCache.get(personId);
-      const data: FullProfile = prefetched
-        ? await prefetched
-        : await fetch(`/api/profile/${encodeURIComponent(personId)}`).then(res => {
-            if (!res.ok) throw new Error('Profile not found');
-            return res.json();
-          });
-      prefetchCache.delete(personId);
+      const data: FullProfile = await fetch(`/api/profile/${encodeURIComponent(personId)}`).then(res => {
+        if (!res.ok) throw new Error('Profile not found');
+        return res.json();
+      });
       if (latestIdRef.current !== personId) return; // stale response — drop it
       setProfile(data);
     } catch (e: unknown) {

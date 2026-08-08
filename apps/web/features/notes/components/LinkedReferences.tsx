@@ -14,6 +14,10 @@ interface Props {
   // The open note's title — highlighted within each excerpt.
   title: string
   onOpenNote: (path: string) => void
+  /** Entity Context tabs hide the unlinked group — a profile answers "who links
+   *  here", and speculative name matches are noise beside a person's own note.
+   *  The standalone note view keeps them. */
+  showUnlinked?: boolean
   // When given, each unlinked reference gets a "Link" button that rewrites that
   // mention into a real link to the open note. Omitted when the viewer can't edit.
   onLinkMention?: (ref: UnlinkedReference) => Promise<void>
@@ -116,10 +120,10 @@ function Reference({
   )
 }
 
-export function LinkedReferences({ references, title, onOpenNote, onLinkMention }: Props) {
+export function LinkedReferences({ references, title, onOpenNote, onLinkMention, showUnlinked = true }: Props) {
   // Most recent source note first within each group.
   const linked = [...(references?.linked ?? [])].sort((a, b) => b.date - a.date)
-  const unlinked = [...(references?.unlinked ?? [])].sort((a, b) => b.date - a.date)
+  const unlinked = showUnlinked ? [...(references?.unlinked ?? [])].sort((a, b) => b.date - a.date) : []
   if (linked.length === 0 && unlinked.length === 0) return null
 
   return (

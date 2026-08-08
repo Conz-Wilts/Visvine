@@ -157,6 +157,13 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
   { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
+  // An index note IS a folder (lib/notes/shared/indexNote.ts). Listed here so
+  // the Type chip on one resolves to a real configured type in every community,
+  // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not the
+  // Resource amber it used to share: two different things painting the same
+  // colour defeats the point of colouring anything by type, and fuchsia is the
+  // one hue the seeded vocabulary (prisma/seed.ts NODE_TYPES) leaves free.
+  { name: 'Index',     color: '#c026d3', shape: 'square'    },
 ];
 
 // Aliases are entirely community-configured — there is no built-in list for any
@@ -176,15 +183,16 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  * cost is that a community's own root node shows up in its grid too, which
  * reads as a "this community" card and links to /communities/<id>.
  *
- * `note` and `file` are still listed so any row left over from when those types
- * existed stays filtered out of the grid and the graph rather than surfacing as
- * a grey unknown. Nothing writes them any more.
+ * `note`, `file` and `index` are still listed so any row left over from when
+ * those types existed stays filtered out of the grid and the graph rather than
+ * surfacing as a grey unknown. Nothing writes them any more.
  */
 export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'space',
   'channel',
   'note',
   'file',
+  'index',
   'connector',
 ];
 
@@ -254,29 +262,42 @@ const TYPE_SYNONYMS: Record<string, string> = {
   communities: 'community',
 };
 
+/**
+ * Resolve a type string to a REAL type — one the community configured in its
+ * console, or one of the built-in defaults — or null when it is neither.
+ *
+ * The null arm is the point. `getNodeTypeConfig` below always answers with
+ * something so a node is never grey-on-unknown, which is right for nodes: they
+ * cannot exist without a type. Free text is a different story. A note's
+ * frontmatter can say `type: Note`, `type: Dashboard`, anything at all, and a
+ * surface that renders that as a chip is inventing a type the community never
+ * created — it looks configured, it isn't, and it can never match a filter,
+ * an alias or a colour. Callers showing a type to a user resolve it here first
+ * and show nothing when it comes back null.
+ */
+export function findNodeTypeConfig(
+  type: string | null | undefined,
+  communityNodeTypes?: NodeTypeConfig[]
+): NodeTypeConfig | null {
+  if (!type) return null;
+  const normalized = type.trim().toLowerCase();
+  if (!normalized) return null;
+  const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
+  const matches = (t: NodeTypeConfig) => {
+    const n = t.name.toLowerCase();
+    return n === normalized || n === canonical;
+  };
+  // The community's own types win: the console is where a type is created, and
+  // its name and colour are the ones the rest of the app filters and paints by.
+  return communityNodeTypes?.find(matches) ?? DEFAULT_NODE_TYPES.find(matches) ?? null;
+}
+
 export function getNodeTypeConfig(
   type: string,
   communityNodeTypes?: NodeTypeConfig[]
 ): NodeTypeConfig {
-  const normalized = type.toLowerCase();
-  const canonical = TYPE_SYNONYMS[normalized] ?? normalized;
-
-  // Check community-specific overrides first (case-insensitive), matching either
-  // the raw type or its canonical synonym.
-  if (communityNodeTypes) {
-    const config = communityNodeTypes.find(t => {
-      const n = t.name.toLowerCase();
-      return n === normalized || n === canonical;
-    });
-    if (config) return config;
-  }
-
-  // Always fall back to DEFAULT_NODE_TYPES before giving up
-  const defaultConfig = DEFAULT_NODE_TYPES.find(t => {
-    const n = t.name.toLowerCase();
-    return n === normalized || n === canonical;
-  });
-  if (defaultConfig) return defaultConfig;
+  const config = findNodeTypeConfig(type, communityNodeTypes);
+  if (config) return config;
 
   // Truly unknown type — capitalize for display
   return { name: type.charAt(0).toUpperCase() + type.slice(1), color: '#6b7280', shape: 'rectangle' };

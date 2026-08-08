@@ -1,7 +1,7 @@
 // The single-note CRUD endpoint.
 //   GET    /api/notes/item?communityId=&scope=&path=        → { content }
-//   POST   { communityId, scope, path, content? }            → { note }   (create)
-//   PUT    { communityId, scope, path, content, origin? }    → { ok }     (write + revision)
+//   POST   { communityId, scope, path, content? }            → { note, movedTo? }  (create)
+//   PUT    { communityId, scope, path, content, origin? }    → { ok, movedTo? }    (write + revision)
 //   PATCH  { communityId, scope, from, to }                  → { path }   (rename/move)
 //   DELETE ?communityId=&scope=&path=                        → { ok }     (soft-delete → trash)
 //
@@ -9,6 +9,9 @@
 // inaccessible are indistinguishable) and every write through the folder gate
 // (403 with the denial reason). Rename + delete are ADDITIONALLY gated by
 // brain.canRemove (personal: always; shared: admins or the note's author).
+//
+// `movedTo` appears when a write turned the note into a folder: an index note IS
+// a folder, so writing `type: Index` at `a/b.md` lands it at `a/b/index.md`.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
@@ -56,9 +59,14 @@ export async function POST(req: NextRequest) {
       ? body.content
       : DEFAULT_NOTE(title, brain.actor.name)
   try {
-    await createNote(brain, path, content, brain.actor)
-    const meta = buildNoteIndex(await listRaw(brain)).find((m) => m.path === path) ?? null
-    return NextResponse.json({ note: meta }, { status: 201 })
+    // A `type: Index` note IS a folder, so createNote may land it at
+    // `<path-without-.md>/index.md` — take the path it actually wrote.
+    const created = await createNote(brain, path, content, brain.actor)
+    const meta = buildNoteIndex(await listRaw(brain)).find((m) => m.path === created.path) ?? null
+    return NextResponse.json(
+      { note: meta, ...(created.path === path ? {} : { movedTo: created.path }) },
+      { status: 201 },
+    )
   } catch (err) {
     return failFromError(err)
   }
@@ -80,8 +88,10 @@ export async function PUT(req: NextRequest) {
     body.origin === 'restore' ? 'restore' : body.origin === 'ai-refactor' ? 'ai-refactor' : 'edit'
   const model = origin === 'ai-refactor' ? aiModelName() : undefined
   try {
-    await writeNote(brain, path, content, brain.actor, origin, model)
-    return NextResponse.json({ ok: true })
+    // Retyping a note to `Index` turns it into a folder — writeNote returns the
+    // path it ended up at so the editor can follow instead of 404ing on the old one.
+    const finalPath = await writeNote(brain, path, content, brain.actor, origin, model)
+    return NextResponse.json({ ok: true, ...(finalPath === path ? {} : { movedTo: finalPath }) })
   } catch (err) {
     return failFromError(err)
   }

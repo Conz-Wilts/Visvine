@@ -10,12 +10,14 @@ import { requireBrain } from '@/lib/notes/api'
 import { principalOf } from '@/lib/notes/brain'
 import { visibleVault } from '@/lib/notes/brainService'
 import { listFolders } from '@/lib/notes/store'
-import { buildTree } from '@/lib/notes/shared/context'
+import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
 import type { TreeNode } from '@/lib/notes/shared/types'
 
-// Graft an explicitly-created empty folder onto the note-derived tree (mirrors
-// store.tree, which we bypass so the visibility lens applies to the notes).
+// Graft an explicitly-created empty folder onto the note-derived tree. A folder
+// only lands here when it produced no visible note — so it has no visible index
+// note either, and no display title to take: it shows its path segment. (A title
+// read from a note the caller can't see would leak past the visibility lens.)
 function ensureFolderPath(root: TreeNode, folderPath: string): void {
   const segments = folderPath.split('/').filter(Boolean)
   let cur = root
@@ -32,16 +34,6 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
   }
 }
 
-// Folders first, then notes, each alphabetically (mirrors store.tree).
-function sortChildren(node: TreeNode): void {
-  if (!node.children) return
-  node.children.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1
-    return (a.title ?? a.name).localeCompare(b.title ?? b.name)
-  })
-  for (const child of node.children) sortChildren(child)
-}
-
 export async function GET(req: NextRequest) {
   const brain = await requireBrain(req)
   if (brain instanceof Response) return brain
@@ -54,6 +46,6 @@ export async function GET(req: NextRequest) {
     if (brain.scope === 'shared' && !brain.isPersonalSpace && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
-  sortChildren(root)
+  sortTree(root)
   return NextResponse.json({ tree: root })
 }

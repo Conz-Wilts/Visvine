@@ -18,8 +18,9 @@ import type {
   TrashEntry,
 } from './shared/types'
 import { TRASH_RETENTION_DAYS } from './shared/types'
-import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
+import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
+import { parseEntityHref } from './entities'
 // Import cycles with vaultCache (it reads via listRaw) and publications (it
 // writes replicas via writeNote; we call its hooks) are benign: both sides
 // only call each other inside function bodies, never at module init.
@@ -29,7 +30,19 @@ import {
   syncPublicationsOnRename,
   syncPublicationsOnWrite,
 } from './publications'
-import { ancestorFolders, buildIndexStub, indexPathOf } from './shared/indexNote'
+import {
+  ancestorFolders,
+  applyChildrenBlock,
+  buildIndexStub,
+  hasChildrenBlock,
+  indexFolderPathOf,
+  indexPathOf,
+  isIndexContent,
+  isIndexPath,
+  nextIndexTitle,
+  humanizeFolderName,
+  type IndexChild,
+} from './shared/indexNote'
 
 // The `starred` column is a queryable index of the frontmatter `starred:` flag
 // (the source of truth), re-derived on every write.
@@ -81,6 +94,11 @@ function assertMarkdown(p: string): void {
 
 function baseName(p: string): string {
   return p.split('/').pop() ?? p
+}
+
+// The folder holding a path — '' for the brain root.
+function folderOf(p: string): string {
+  return p.split('/').slice(0, -1).join('/')
 }
 
 function toRaw(row: { path: string; content: string; updatedAt: Date }): RawNote {
@@ -152,9 +170,17 @@ export async function createNote(
   content: string,
   actor: Actor,
 ): Promise<RawNote> {
-  const p = sanitizePath(path)
-  assertMarkdown(p)
-  if (await findLive(brain, p)) throw new Error(`A note already exists at: ${path}`)
+  const requested = sanitizePath(path)
+  assertMarkdown(requested)
+  // An index note IS a folder: creating `a/b.md` with `type: Index` creates the
+  // folder `a/b` and writes its index, never a loose note that claims the type.
+  let p = requested
+  if (isIndexContent(content) && !isIndexPath(requested)) {
+    const denial = await indexConversionDenial(brain, requested)
+    if (denial) throw new Error(denial)
+    p = indexPathOf(indexFolderPathOf(requested))
+  }
+  if (await findLive(brain, p)) throw new Error(`A note already exists at: ${p}`)
   const row = await prisma.communityNote.create({
     data: {
       communityId: brain.communityId,
@@ -166,16 +192,102 @@ export async function createNote(
     },
     select: { path: true, content: true, updatedAt: true },
   })
+  if (isIndexPath(p)) await upsertFolderRow(brain, folderOf(p))
   await syncContextLinks(brain, p, content)
   await ensureAncestorIndexes(brain, p, actor)
+  await refreshIndexesForNote(brain, p)
   invalidateVault(brain)
   return toRaw(row)
 }
 
-// Every folder carries an index.md (the blackbird-brain convention — see
-// lib/notes/shared/indexNote.ts). Ensure each ancestor folder of `path` has one,
-// creating missing indexes as a stub listing the folder's current direct-child
-// notes. NEVER rewrites an existing index (they're often curated documents).
+// --- folder indexes ----------------------------------------------------------
+//
+// An index note IS a folder. Everything below keeps that true: every folder has
+// exactly one index, and every index's managed child block lists what the folder
+// currently holds — its direct notes AND its direct subfolders (which are their
+// own index notes, so a folder listing a subfolder is one index linking another).
+
+/**
+ * What a folder's index should currently list: the folder's direct-child notes
+ * (its own index excluded) plus its direct subfolders, each linked at its index.
+ * Titles come from frontmatter, falling back to the filename / humanized segment.
+ */
+async function directChildrenOf(brain: Brain, folder: string): Promise<IndexChild[]> {
+  const prefix = folder ? `${folder}/` : ''
+  const rows = await prisma.communityNote.findMany({
+    where: {
+      communityId: brain.communityId,
+      ownerKey: brain.ownerKey,
+      deletedAt: null,
+      ...(prefix ? { path: { startsWith: prefix } } : {}),
+    },
+    select: { path: true, content: true },
+  })
+  const own = indexPathOf(folder)
+  const children: IndexChild[] = []
+  for (const row of rows) {
+    if (row.path === own || row.path.startsWith(':trash:')) continue
+    const rel = row.path.slice(prefix.length)
+    const declared = String(parseFrontmatter(row.content).title ?? '').trim()
+    if (!rel.includes('/')) {
+      // A direct note. The brain root's own index.md is a note like any other
+      // here only when `folder` is not the root — handled by the `own` skip.
+      children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, '') })
+    } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
+      // A direct subfolder, addressed by its index — the folder IS that note.
+      const segment = rel.split('/')[0]
+      children.push({ path: row.path, title: declared || humanizeFolderName(segment) })
+    }
+  }
+  return children
+}
+
+/**
+ * Refresh a folder's index so its managed child block matches the folder. Curated
+ * prose and frontmatter are untouched (see applyChildrenBlock); the write is a
+ * direct row update rather than writeNote, because index upkeep is machinery and
+ * should not spawn a revision every time a note is added next door.
+ *
+ * The brain root is only refreshed if its index already opted in by carrying a
+ * block — the root index is a hand-written home page, not a listing.
+ */
+export async function refreshFolderIndex(brain: Brain, folder: string): Promise<void> {
+  const idx = indexPathOf(folder)
+  const row = await findLive(brain, idx)
+  if (!row) return
+  if (!folder && !hasChildrenBlock(row.content)) return
+  const next = applyChildrenBlock(row.content, await directChildrenOf(brain, folder))
+  if (next === row.content) return
+  await prisma.communityNote.update({ where: { id: row.id }, data: { content: next } })
+  invalidateVault(brain)
+}
+
+/**
+ * Refresh the indexes that list `notePath`: the folder it lives in, and — when
+ * the note IS a folder's index — the parent folder that lists that folder.
+ */
+async function refreshIndexesForNote(brain: Brain, notePath: string): Promise<void> {
+  const own = folderOf(notePath)
+  await refreshFolderIndex(brain, own)
+  if (isIndexPath(notePath) && own) await refreshFolderIndex(brain, folderOf(own))
+}
+
+/** The `CommunityNoteFolder` row that makes a folder exist in its own right. */
+async function upsertFolderRow(brain: Brain, folder: string): Promise<void> {
+  if (!folder) return
+  await prisma.communityNoteFolder.upsert({
+    where: {
+      folder_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: folder },
+    },
+    create: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: folder },
+    update: {},
+  })
+}
+
+// Every folder carries an index.md. Ensure each ancestor folder of `path` has
+// one, creating missing indexes as a stub listing the folder's current children.
+// NEVER rewrites an existing index (they're often curated documents) — keeping
+// one current is refreshFolderIndex's job.
 // Rows are inserted directly (not via createNote) — no recursion, no revision.
 // Returns the index paths created.
 export async function ensureAncestorIndexes(
@@ -187,21 +299,7 @@ export async function ensureAncestorIndexes(
   for (const folder of ancestorFolders(sanitizePath(path))) {
     const idx = indexPathOf(folder)
     if (await findLive(brain, idx)) continue
-    const rows = await prisma.communityNote.findMany({
-      where: {
-        communityId: brain.communityId,
-        ownerKey: brain.ownerKey,
-        deletedAt: null,
-        path: { startsWith: `${folder}/` },
-      },
-      select: { path: true, content: true },
-    })
-    const children = rows
-      .filter((r) => r.path !== idx && !r.path.slice(folder.length + 1).includes('/'))
-      .map((r) => {
-        const title = String(parseFrontmatter(r.content).title ?? '').trim()
-        return { path: r.path, title: title || baseName(r.path).replace(/\.md$/i, '') }
-      })
+    const children = await directChildrenOf(brain, folder)
     try {
       await prisma.communityNote.create({
         data: {
@@ -227,6 +325,10 @@ export async function ensureAncestorIndexes(
 // Upsert a note's content and record a revision. Mirrors rpc.ts 'note:write':
 // skip no-op saves, seed a baseline from the pre-edit content on the first edit,
 // then record the new snapshot tagged with how it arose.
+//
+// Returns the note's path after the save. It differs from `path` only when the
+// save retyped the note to `Index` and so turned it into a folder — callers that
+// hold a path (the editor, the API) redirect to the returned one.
 export async function writeNote(
   brain: Brain,
   path: string,
@@ -234,9 +336,17 @@ export async function writeNote(
   actor: Actor,
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
-): Promise<void> {
+): Promise<string> {
   const p = sanitizePath(path)
   assertMarkdown(p)
+  // Retyping a note to `Index` makes it a folder (below). Refuse the whole save
+  // when it can't be one, rather than storing a note whose type contradicts
+  // where it lives. Replica writes never restructure their target brain.
+  const converting = origin !== 'publish' && isIndexContent(content) && !isIndexPath(p)
+  if (converting) {
+    const denial = await indexConversionDenial(brain, p)
+    if (denial) throw new Error(denial)
+  }
   const existing = await findLive(brain, p)
   const prev = existing?.content ?? null
 
@@ -269,11 +379,15 @@ export async function writeNote(
 
   // Upsert-created notes (e.g. an entity note's first save) get folder indexes too.
   if (existing === null) await ensureAncestorIndexes(brain, p, actor)
+  await refreshIndexesForNote(brain, p)
 
   // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
   invalidateVault(brain)
 
-  if (prev === content) return // nothing changed — don't spawn a revision
+  // The type is what makes a note an index, so the path follows it.
+  const finalPath = converting ? await convertNoteToIndex(brain, p, actor) : p
+
+  if (prev === content) return finalPath // nothing changed — don't spawn a revision
 
   // Seed a baseline of the pre-edit content the first time a note is edited, so
   // the oldest revision has a snapshot to diff/restore from.
@@ -295,6 +409,7 @@ export async function writeNote(
     origin,
     model,
   })
+  return finalPath
 }
 
 interface RevisionInput {
@@ -375,6 +490,9 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
         data: { resourcePath: t },
       })
     }
+    // Both ends list the note: the folder it left and the folder it landed in.
+    await refreshIndexesForNote(brain, f)
+    await refreshIndexesForNote(brain, t)
   }
   invalidateVault(brain)
   return t // revisions stay attached by noteId
@@ -392,6 +510,7 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
   await syncContextLinks(brain, row.path, null) // trashed note owns no context links
   // Trashing either end of a publication deactivates it (replica stays a copy).
   await syncPublicationsOnDelete(brain, [row.path])
+  await refreshIndexesForNote(brain, row.path)
   invalidateVault(brain)
 }
 
@@ -442,6 +561,7 @@ export async function restoreTrash(brain: Brain, id: string): Promise<string> {
     data: { deletedAt: null, deletedPath: null, path: dest },
   })
   await syncContextLinks(brain, dest, row.content) // restored entity note re-owns its links
+  await refreshIndexesForNote(brain, dest)
   invalidateVault(brain)
   return dest
 }
@@ -466,17 +586,108 @@ export async function emptyTrash(brain: Brain): Promise<void> {
 
 export async function createFolder(brain: Brain, path: string, actor?: Actor): Promise<void> {
   const p = sanitizePath(path)
-  await prisma.communityNoteFolder.upsert({
-    where: { folder_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: p } },
-    create: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: p },
-    update: {},
-  })
+  await upsertFolderRow(brain, p)
   // The synthetic index path makes ancestorFolders cover this folder AND its parents.
-  if (actor) await ensureAncestorIndexes(brain, indexPathOf(p), actor)
+  if (actor) {
+    await ensureAncestorIndexes(brain, indexPathOf(p), actor)
+    await refreshFolderIndex(brain, folderOf(p))
+  }
+  invalidateVault(brain)
+}
+
+/**
+ * Create a folder from an index note somebody wrote — the "Index" create tile.
+ * The note IS the folder: `content` (its title, tags and starting prose) becomes
+ * `<path>/index.md`, and the parent folder's index picks it up. Returns the
+ * index path so the caller can open it.
+ */
+export async function createIndexFolder(
+  brain: Brain,
+  path: string,
+  content: string,
+  actor: Actor,
+): Promise<string> {
+  const p = sanitizePath(path)
+  if (p.toLowerCase().endsWith('.md')) throw new Error(`A folder path is not a file: ${path}`)
+  const idx = indexPathOf(p)
+  if (await findLive(brain, idx)) throw new Error(`A folder already exists at: ${p}`)
+  await upsertFolderRow(brain, p)
+  // createNote does the rest of the invariant: ancestor indexes, the folder rows
+  // above it, and the parent index that now lists this folder.
+  await createNote(brain, idx, content, actor)
+  return idx
+}
+
+/**
+ * Why this note can't become a folder, or null if it can. Checked BEFORE a save
+ * is applied so a note that can't convert is refused whole, rather than saved
+ * and then stranded at a path that contradicts its own type.
+ */
+async function indexConversionDenial(brain: Brain, path: string): Promise<string | null> {
+  const p = sanitizePath(path)
+  if (isIndexPath(p)) return null
+  // A canonical entity note is a directory record — a person, a company, a
+  // connector. Those aren't containers, and moving one off its
+  // `<namespace>/<slug>.md` path would orphan the node that points at it.
+  if (parseEntityHref(p)) {
+    return `"${p}" is a directory record, not a folder — it can't be an index`
+  }
+  const folder = indexFolderPathOf(p)
+  if (await findLive(brain, indexPathOf(folder))) {
+    return `"${folder}" is already a folder — rename this note before making it an index`
+  }
+  return null
+}
+
+/**
+ * Turn a plain note into the folder it declared itself to be: `a/b.md` retyped
+ * to `Index` becomes `a/b/index.md`, and `a/b` becomes a real folder. The note
+ * keeps its id (so its history survives) and its links, publications and grants
+ * follow the path exactly as a rename moves them.
+ *
+ * Throws if `a/b` already exists as a folder — two folders can't share a path,
+ * and silently merging one into the other would be a surprising way to lose a note.
+ */
+async function convertNoteToIndex(
+  brain: Brain,
+  path: string,
+  actor: Actor,
+): Promise<string> {
+  const f = sanitizePath(path)
+  if (isIndexPath(f)) return f
+  const denial = await indexConversionDenial(brain, f)
+  if (denial) throw new Error(denial)
+  const row = await findLive(brain, f)
+  if (!row) throw new Error(`Note not found: ${path}`)
+  const folder = indexFolderPathOf(f)
+  const dest = indexPathOf(folder)
+
+  await prisma.communityNote.update({ where: { id: row.id }, data: { path: dest } })
+  await syncContextLinksBulk(brain, [f], [[dest, row.content]])
+  await syncPublicationsOnRename(brain, f, dest)
+  if (brain.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.brainGrant.updateMany({
+      where: { communityId: brain.communityId, resourcePath: f },
+      data: { resourcePath: folder },
+    })
+  }
+  await upsertFolderRow(brain, folder)
+  // Notes may already sit under `a/b/` (an index arriving late for a folder that
+  // grew from note paths) — the new index lists them, and the parent lists it.
+  await refreshFolderIndex(brain, folder)
+  await refreshFolderIndex(brain, folderOf(folder))
+  await ensureAncestorIndexes(brain, dest, actor)
+  invalidateVault(brain)
+  return dest
 }
 
 // Rename/move a folder and everything under it (notes + nested folder rows).
-export async function renameFolder(brain: Brain, from: string, to: string): Promise<string> {
+export async function renameFolder(
+  brain: Brain,
+  from: string,
+  to: string,
+  actor?: Actor,
+): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
   const notes = await prisma.communityNote.findMany({
@@ -538,8 +749,34 @@ export async function renameFolder(brain: Brain, from: string, to: string): Prom
       data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
     })
   }
+  // The index note's title is the folder's display name, so a path rename has to
+  // decide what happens to it: follow the new path while nobody has named the
+  // folder themselves, and keep out of the way once somebody has (see
+  // nextIndexTitle). Renaming the display name is editing that title.
+  if (actor) await retitleIndexAfterRename(brain, f, t, actor)
+  // The folder is an entry in its old and new parents' indexes — both move.
+  await refreshFolderIndex(brain, folderOf(f))
+  await refreshFolderIndex(brain, folderOf(t))
   invalidateVault(brain)
   return t
+}
+
+async function retitleIndexAfterRename(
+  brain: Brain,
+  from: string,
+  to: string,
+  actor: Actor,
+): Promise<void> {
+  const indexPath = indexPathOf(to)
+  const row = await findLive(brain, indexPath)
+  if (!row) return
+  const { body } = splitFrontmatter(row.content)
+  const frontmatter = parseFrontmatter(row.content)
+  const current = typeof frontmatter.title === 'string' ? frontmatter.title : null
+  const title = nextIndexTitle(from.split('/').pop() ?? from, to.split('/').pop() ?? to, current)
+  if (!title || title === current) return
+  // Everything else in the frontmatter (type, tags, description) rides through.
+  await writeNote(brain, indexPath, joinFrontmatter({ ...frontmatter, title }, body), actor)
 }
 
 // Soft-delete a folder: trash every note under it and drop the folder rows.
@@ -579,6 +816,8 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
       },
     })
   }
+  // The folder was an entry in its parent's index; it isn't any more.
+  await refreshFolderIndex(brain, folderOf(p))
   invalidateVault(brain)
 }
 

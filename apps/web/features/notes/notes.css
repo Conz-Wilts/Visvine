@@ -84,12 +84,6 @@
   margin: 2rem 0 0.65rem;
 }
 
-/* Freshness line above the title, flush with the note column's left edge. */
-.notes-meta {
-  margin: 0 0 0.5rem;
-  font-size: 11px;
-  color: var(--color-text-muted, #6b7280);
-}
 .notes-author-chip {
   display: inline-flex;
   align-items: center;

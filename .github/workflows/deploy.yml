@@ -33,7 +33,7 @@ jobs:
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
 
-      - name: Sync database schema + seed
+      - name: Sync database schema
         run: |
           curl -sL https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.linux.amd64 -o cloud-sql-proxy
           chmod +x cloud-sql-proxy
@@ -52,10 +52,7 @@ jobs:
           DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
           # 2. Converge the live schema to schema.prisma.
           DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
-          # 3. Ensure the Blackbird Ventures community + connor@visvine.com admin.
-          #    Idempotent + non-destructive: rebuilds the node graph only when the
-          #    community is empty; otherwise just ensures community + admin exist.
-          DATABASE_URL="$DB_URL" CONFIRM_PROD_SEED=blackbird node scripts/seed-blackbird-prod.mjs
+          # No seeding: production data is managed in the app, never by deploys.
 
       - name: Build and push image
         run: |

@@ -79,10 +79,39 @@ export function buildNoteIndex(notes: RawNote[]): NoteMeta[] {
   })
 }
 
+/**
+ * A folder's display name: the title its index note declares.
+ *
+ * A folder IS its index note everywhere else — the folder row opens it, starring
+ * the folder stars it — so the name follows the same rule, and `communities/`
+ * titled "Companies" reads as Companies wherever it is shown. The path never
+ * moves, so links, URLs and grants are unaffected.
+ *
+ * Read from `frontmatter.title`, NOT `meta.title`: the latter falls back to the
+ * filename, which would label every untitled folder "index". Folders without an
+ * index, or whose index declares no title, get no title and fall back to their
+ * path segment at the point of display. The root is skipped — its label is the
+ * community/context name, not its home note's title.
+ */
+function folderTitles(metas: NoteMeta[]): Map<string, string> {
+  const titles = new Map<string, string>()
+  for (const meta of metas) {
+    if (baseName(meta.path).toLowerCase() !== 'index.md') continue
+    const folder = folderOf(meta.path)
+    if (!folder) continue
+    const declared = meta.frontmatter?.title
+    if (typeof declared === 'string' && declared.trim()) titles.set(folder, declared.trim())
+  }
+  return titles
+}
+
 // Build the folder/note tree for the sidebar from the note index.
 export function buildTree(metas: NoteMeta[]): TreeNode {
   const root: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
   const folders = new Map<string, TreeNode>([['', root]])
+  // Resolved up front: sortTree keys on `title ?? name`, so a folder must
+  // know its title before the tree is sorted.
+  const titles = folderTitles(metas)
 
   const ensureFolder = (folderPath: string): TreeNode => {
     const existing = folders.get(folderPath)
@@ -90,10 +119,12 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
       return existing
     }
     const parent = ensureFolder(folderOf(folderPath))
+    const title = titles.get(folderPath)
     const node: TreeNode = {
       name: baseName(folderPath),
       path: folderPath,
       kind: 'folder',
+      ...(title ? { title } : {}),
       children: []
     }
     parent.children!.push(node)
@@ -111,12 +142,14 @@ export function buildTree(metas: NoteMeta[]): TreeNode {
     })
   }
 
-  sortChildren(root)
+  sortTree(root)
   return root
 }
 
-// Folders first, then notes, each alphabetically.
-function sortChildren(node: TreeNode): void {
+// Folders first, then notes, each alphabetically by display name — a folder's
+// index title when it has one, its path segment otherwise. Exported because the
+// tree API sorts again after grafting explicitly-created empty folders.
+export function sortTree(node: TreeNode): void {
   if (!node.children) {
     return
   }
@@ -127,7 +160,7 @@ function sortChildren(node: TreeNode): void {
     return (a.title ?? a.name).localeCompare(b.title ?? b.name)
   })
   for (const child of node.children) {
-    sortChildren(child)
+    sortTree(child)
   }
 }
 

@@ -27,7 +27,7 @@ const CACHE_TTL = 60_000; // 60 seconds
 // Deduplicate in-flight requests
 const inFlightRequests = new Map<string, Promise<NodeProfileData>>();
 
-export function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
+function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
   const existing = inFlightRequests.get(nodeId);
   if (existing) return existing;
 

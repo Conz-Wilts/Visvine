@@ -190,7 +190,28 @@ holds password hashes. Neither is useful to you and both are off limits — the
 read-only transaction does not make them any less sensitive.
 `;
 
+// Every folder carries an index note — the index IS the folder (see
+// lib/notes/shared/indexNote.ts), so the layer that creates `connectors/` is the
+// layer that names it.
+const CONNECTORS_INDEX_NOTE = `---
+type: Index
+title: Connectors
+tags: []
+---
+
+# Connectors
+
+A connector is this community's gateway to an external API or database. The note
+IS the config: its frontmatter picks the executor (\`alias\`), the hosts it may
+reach and the secrets it may resolve, and the body is what the agent reads to
+know how to call it.
+
+- [App Database](/connectors/appdb.md) — the local dev Postgres, read-only
+- [Sandbox API](/connectors/sandbox.md) — a fixture service for the perimeter rules
+`;
+
 const NOTES = [
+  { path: 'connectors/index.md', content: CONNECTORS_INDEX_NOTE },
   { path: 'connectors/sandbox.md', content: SANDBOX_NOTE },
   { path: 'connectors/appdb.md', content: APPDB_NOTE },
 ];

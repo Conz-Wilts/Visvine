@@ -22,6 +22,7 @@ import { notesApi } from '@/features/notes/lib/notesApi';
 import { aliasNameError, MAX_ALIAS_NAME } from '@/lib/notes/shared/aliases';
 import type { AliasInfo } from '@/lib/notes/aliases';
 import { usePeopleSection } from './PeopleDataContext';
+import AccessRequests from './AccessRequests';
 import { GrantEditor, type PeopleData } from './shared';
 
 type Run = (fn: () => Promise<unknown>) => Promise<void>;
@@ -471,6 +472,8 @@ export default function AliasesPanel() {
       {data === null ? (
         <p className="text-sm text-text-muted">Loading…</p>
       ) : (
+        <>
+        <AccessRequests />
         <SettingsSection
           title="Aliases"
           description="A person holds any number of these. Together they are everything that person can do here — the chip beside their name, and what they reach in the context."
@@ -498,6 +501,7 @@ export default function AliasesPanel() {
             />
           </div>
         </SettingsSection>
+        </>
       )}
     </div>
   );

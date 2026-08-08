@@ -46,6 +46,21 @@ export function availableNotePath(folder: string, title: string, taken: Set<stri
 }
 
 /**
+ * The first free folder path inside `parent` for `title` — appends -2, -3… when
+ * taken, exactly like availableNotePath. `taken` is the set of existing folder
+ * paths, so the create surface shows the real destination before it writes.
+ *
+ * A folder IS its index note, so this is where "New index" lands.
+ */
+export function availableFolderPath(parent: string, title: string, taken: Set<string>): string {
+  const base = noteFileSlug(title)
+  let candidate = joinBrainPath(parent, base)
+  let n = 2
+  while (taken.has(candidate)) candidate = joinBrainPath(parent, `${base}-${n++}`)
+  return candidate
+}
+
+/**
  * Seed body for a new note — the same frontmatter shape the notes API writes
  * for a bare create (type/title/author/tags), plus an H1 and any starting text
  * the user typed in the modal.

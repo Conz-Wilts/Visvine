@@ -21,6 +21,9 @@ export type CreateableType =
   // Source. Both land at a path in the current community's context.
   | 'context'
   | 'file'
+  // A folder in the context — written as its index note, because an index note
+  // IS a folder (lib/notes/shared/indexNote.ts). The title names the folder.
+  | 'index'
   // A gateway to an external API or database, written as connectors/<name>.md.
   // Admin-only, and the note IS the config — see lib/connectors/config.ts.
   | 'connector';
@@ -40,6 +43,7 @@ export type CreateableType =
  */
 const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   context: 'note',
+  index: 'index',
   person: 'person',
   community: 'community',
   resource: 'resource',

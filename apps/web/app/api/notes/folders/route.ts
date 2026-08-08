@@ -1,5 +1,5 @@
 // Folder operations within a brain.
-//   POST   { communityId, scope, path }            → { ok }    (create empty folder)
+//   POST   { communityId, scope, path, content? }   → { ok, indexPath? }  (create folder)
 //   PATCH  { communityId, scope, from, to }         → { path }  (rename/move subtree)
 //   DELETE ?communityId=&scope=&path=               → { ok }    (soft-delete subtree)
 //
@@ -12,7 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
 import { principalOf, type ResolvedBrain } from '@/lib/notes/brain'
-import { createFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
+import { createFolder, createIndexFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
+import { indexPathOf } from '@/lib/notes/shared/indexNote'
 import { principalCanManage, principalCanWrite } from '@/lib/notes/shared/permissions'
 import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
 
@@ -37,8 +38,18 @@ export async function POST(req: NextRequest) {
     return fail(`You need edit access at "${path}" to create a folder there`, 403)
   }
   try {
+    // A folder IS its index note. With `content` the caller wrote that note (the
+    // "Index" create tile) and it becomes the folder's home page; without it the
+    // folder gets the auto-generated stub, as an empty folder always has.
+    const content = typeof body.content === 'string' && body.content.length > 0 ? body.content : null
+    if (content) {
+      return NextResponse.json({
+        ok: true,
+        indexPath: await createIndexFolder(brain, path, content, brain.actor),
+      })
+    }
     await createFolder(brain, path, brain.actor)
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, indexPath: indexPathOf(path) })
   } catch (err) {
     return failFromError(err)
   }
@@ -60,7 +71,7 @@ export async function PATCH(req: NextRequest) {
     }
   }
   try {
-    return NextResponse.json({ path: await renameFolder(brain, from, to) })
+    return NextResponse.json({ path: await renameFolder(brain, from, to, brain.actor) })
   } catch (err) {
     return failFromError(err)
   }

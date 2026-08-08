@@ -8,6 +8,9 @@ import { useClickOutside } from '@/hooks/useClickOutside';
 // (multi-select, search, etc.) so trigger/menu/items stay in sync site-wide.
 export const DROPDOWN_TRIGGER_CLASS =
   'flex h-12 lg:h-10 items-center gap-2 rounded-2xl border px-4 text-sm lg:text-[13px] font-semibold shadow-sm transition-colors';
+/** Toolbar-sized trigger — sits on one line beside a 40px search field. */
+export const DROPDOWN_TRIGGER_COMPACT_CLASS =
+  'flex h-10 items-center gap-1.5 rounded-xl border px-3 text-[13px] font-semibold transition-colors';
 export const DROPDOWN_MENU_CLASS =
   'absolute left-0 top-full mt-2 z-50 rounded-2xl border border-border-subtle bg-surface-1 shadow-xl py-1.5 overflow-hidden';
 const DROPDOWN_ITEM_CLASS =
@@ -39,6 +42,8 @@ interface DropdownProps<T extends string> {
   active?: boolean;
   menuWidthClass?: string;
   className?: string;
+  /** Toolbar sizing (h-10, rounded-xl) instead of the standing h-12 pill. */
+  compact?: boolean;
 }
 
 /**
@@ -53,6 +58,7 @@ export default function Dropdown<T extends string>({
   active = false,
   menuWidthClass = 'min-w-[160px]',
   className,
+  compact = false,
 }: DropdownProps<T>) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -66,7 +72,7 @@ export default function Dropdown<T extends string>({
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className={DROPDOWN_TRIGGER_CLASS}
+        className={compact ? DROPDOWN_TRIGGER_COMPACT_CLASS : DROPDOWN_TRIGGER_CLASS}
         style={active ? DROPDOWN_TRIGGER_ACTIVE_STYLE : DROPDOWN_TRIGGER_IDLE_STYLE}
       >
         <ChevronDown

@@ -1,13 +1,18 @@
 /**
- * Rebuild: rewrite EVERY folder's index.md to the folder-name convention —
- * title = humanized folder name, body = a fresh linked list of the folder's
- * current direct-child notes (see lib/notes/shared/indexNote.ts). Missing
- * indexes are created. The brain root's index.md is a curated home note and is
- * left untouched.
+ * Rebuild: refresh EVERY folder's index.md — the managed child block listing the
+ * folder's current direct notes and subfolders (see lib/notes/shared/indexNote.ts).
+ * Missing indexes are created whole, from the folder-name convention.
+ *
+ * An EXISTING index keeps everything somebody wrote: its frontmatter (title
+ * especially — that is the folder's display name, shown in the sidebar and the
+ * tree) and every line of prose. Only the block between the `index:children`
+ * markers is rewritten; an index that has never carried one gets it appended.
+ * The brain root is treated like any other folder here — a root index that has
+ * no block is left alone, which keeps a curated home note curated.
  *
  * Writes go through writeNote, so each rewritten index keeps its previous
- * (possibly curated) content as a baseline revision — restorable from note
- * history. Re-running is a no-op (unchanged saves record nothing).
+ * content as a baseline revision — restorable from note history. Re-running is
+ * a no-op (unchanged saves record nothing).
  * Local-only — guarded exactly like the destructive db:* scripts.
  *
  * Usage:
@@ -18,9 +23,8 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { writeNote, type Actor, type Brain } from '../lib/notes/store';
-import { ancestorFolders, buildIndexStub, indexPathOf } from '../lib/notes/shared/indexNote';
-import { parseFrontmatter } from '../lib/notes/shared/markdown';
+import { createFolder, refreshFolderIndex, type Actor, type Brain } from '../lib/notes/store';
+import { ancestorFolders, indexPathOf } from '../lib/notes/shared/indexNote';
 
 const INDEX_ACTOR: Actor = { id: 'system', name: 'Index maintenance' };
 
@@ -55,23 +59,26 @@ async function main() {
     for (const n of notes) for (const f of ancestorFolders(n.path)) folders.add(f);
     for (const f of explicit) for (const a of ancestorFolders(indexPathOf(f.path))) folders.add(a);
 
-    let rewritten = 0;
-    for (const folder of [...folders].sort()) {
-      const idx = indexPathOf(folder);
-      const children = notes
-        .filter((n) => n.path !== idx && n.path.startsWith(`${folder}/`) && !n.path.slice(folder.length + 1).includes('/'))
-        .map((n) => {
-          const title = String(parseFrontmatter(n.content).title ?? '').trim();
-          return { path: n.path, title: title || (n.path.split('/').pop() ?? n.path).replace(/\.md$/i, '') };
-        });
-      const next = buildIndexStub(folder, children);
-      const prev = notes.find((n) => n.path === idx)?.content ?? null;
-      if (prev === next) continue;
-      await writeNote(brain, idx, next, INDEX_ACTOR);
-      rewritten += 1;
-      console.log(`  ${prev === null ? 'created' : 'rewrote'} ${idx}`);
+    const live = new Set(notes.map((n) => n.path));
+    // Deepest first, so a subfolder's index exists (and carries its title) before
+    // the parent's block is built from it.
+    const ordered = [...folders].sort((a, b) => b.split('/').length - a.split('/').length || a.localeCompare(b));
+    let created = 0;
+    for (const folder of ordered) {
+      if (live.has(indexPathOf(folder))) continue;
+      // createFolder writes the folder row AND the missing index stub.
+      await createFolder(brain, folder, INDEX_ACTOR);
+      created += 1;
+      console.log(`  created ${indexPathOf(folder)}`);
     }
-    if (rewritten > 0) console.log(`${brain.communityId} [${brain.ownerKey}]: ${rewritten} index notes updated`);
+    // Then refresh every managed block — including the ones just created, whose
+    // children may have arrived out of order above.
+    for (const folder of ordered) await refreshFolderIndex(brain, folder);
+    // '' is the brain root: refreshed only if its index opted in with a block.
+    await refreshFolderIndex(brain, '');
+    console.log(
+      `${brain.communityId} [${brain.ownerKey}]: ${folders.size} folders, ${created} indexes created`,
+    );
   }
 }
 

@@ -633,6 +633,7 @@ export function EntityContextPanel({
             mode={mode}
             onModeChange={onModeChange}
             references={shownFresh ? references : null}
+            showUnlinked={false}
             entities={entities}
             entityByPath={entityByPath}
             onEnsureEntityNote={ensureEntityNote}

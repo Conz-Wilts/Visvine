@@ -1,10 +1,10 @@
 'use client';
 
-// Shared types + small controls for the three People console sections (People,
-// Aliases, Invite), which read one snapshot from PeopleDataContext. The
-// permission math is the SAME pure core the server enforces
-// (lib/notes/shared/authz.ts), so the "effective access" shown per member is
-// exactly what the brain will let them do.
+// Shared types + small controls for the three membership console sections
+// (Members, Aliases, Invite), which read one snapshot from PeopleDataContext.
+// The levels offered here are the SAME pure core the server enforces
+// (lib/notes/shared/authz.ts), so a grant made here means exactly what the
+// brain will honour.
 
 import { useMemo, useRef, useState } from 'react';
 import { ChevronDown, Users, FileText, Folder } from 'lucide-react';
@@ -13,12 +13,8 @@ import type { AliasInfo } from '@/lib/notes/aliases';
 import type { AccessOverviewResponse } from '@/features/notes/lib/notesApi';
 import {
   ACCESS_LEVELS,
-  effectiveLevel,
-  levelDisplayLabel,
   levelName,
-  readableRoots,
   type AccessLevelName,
-  type BrainAccess,
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz';
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings';
@@ -101,12 +97,7 @@ export function AliasToggle({ name, owner, system, on, onClick, disabled }: {
   );
 }
 
-/** Display label for a numeric level (30 → 'Editor'). */
-export function levelLabel(level: number): string {
-  return levelDisplayLabel(levelName(level));
-}
-
-export function pathLabel(path: string, rootName = DEFAULT_CONTEXT_NAME): string {
+function pathLabel(path: string, rootName = DEFAULT_CONTEXT_NAME): string {
   return path === '' ? rootName : path;
 }
 
@@ -128,50 +119,6 @@ export function flattenTree(root: TreeNode | null): PathOption[] {
   folders.sort((a, b) => a.path.localeCompare(b.path));
   notes.sort((a, b) => a.path.localeCompare(b.path));
   return [...folders, ...notes];
-}
-
-/**
- * The BrainAccess a specific member holds, assembled from the admin overview:
- * community-wide grants + grants of the aliases they hold + their direct grants.
- * Mirrors lib/notes/access.ts:brainAccessFor.
- */
-export function accessOfMember(
-  userId: string,
-  aliases: AliasInfo[],
-  overview: AccessOverviewResponse | null,
-): BrainAccess {
-  const held = new Set(
-    aliases.filter((a) => a.holders.some((h) => h.userId === userId)).map((a) => a.name),
-  );
-  const grants = (overview?.grants ?? [])
-    .filter(
-      (g) =>
-        g.subjectType === 'community' ||
-        (g.subjectType === 'alias' && held.has(g.subjectId)) ||
-        (g.subjectType === 'user' && g.subjectId === userId),
-    )
-    .map((g) => ({
-      subjectType: g.subjectType,
-      subjectId: g.subjectId,
-      resourcePath: g.resourcePath,
-      level: g.level,
-    }));
-  return {
-    grants,
-    restricted: overview?.restricted ?? [],
-    locked: overview?.locked ?? [],
-  };
-}
-
-/** One-line summary of what a member can effectively reach in the brain. */
-export function summarizeAccess(manages: boolean, access: BrainAccess): string {
-  if (manages) return 'Everything';
-  const roots = readableRoots(access);
-  if (roots.length === 0) return 'No access';
-  const rootLevel = effectiveLevel(access, '');
-  if (rootLevel > 0) return `${levelLabel(rootLevel)} · everywhere`;
-  const top = Math.max(...roots.map((r) => effectiveLevel(access, r)));
-  return `${levelLabel(top)} · ${roots.length} ${roots.length === 1 ? 'area' : 'areas'}`;
 }
 
 /** Compact level select for dense grant rows (upserts on change). */

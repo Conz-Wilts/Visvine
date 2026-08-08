@@ -59,8 +59,8 @@ export default function PeopleDataProvider({
   children,
 }: {
   communityId: string;
-  /** Feeds the console nav badge: members awaiting approval + open access requests. */
-  onPendingCountChange?: (count: number) => void;
+  /** Feeds the console tab badges: members awaiting approval, and open access requests. */
+  onPendingCountChange?: (counts: { members: number; requests: number }) => void;
   children: React.ReactNode;
 }) {
   const [data, setData] = useState<PeopleData | null>(null);
@@ -96,15 +96,13 @@ export default function PeopleDataProvider({
     );
   }, [reload]);
 
-  // One "needs your attention" number for the whole People group: people waiting
-  // to join plus members waiting on context access. Both are resolved on People.
-  const pending = data
-    ? data.members.filter((m) => m.status === 'pending').length +
-      data.requests.filter((r) => r.status === 'pending').length
-    : 0;
+  // Two "needs your attention" numbers, badged on the tab that resolves them:
+  // people waiting to join go on Members, context access requests on Aliases.
+  const pendingMembers = data ? data.members.filter((m) => m.status === 'pending').length : 0;
+  const pendingRequests = data ? data.requests.filter((r) => r.status === 'pending').length : 0;
   useEffect(() => {
-    if (data) onPendingCountChange?.(pending);
-  }, [data, pending, onPendingCountChange]);
+    if (data) onPendingCountChange?.({ members: pendingMembers, requests: pendingRequests });
+  }, [data, pendingMembers, pendingRequests, onPendingCountChange]);
 
   const run = useCallback(
     async (fn: () => Promise<unknown>) => {

@@ -39,7 +39,6 @@ model Community {
   links            Link[]
   nodes            Node[]
   userCommunities  UserCommunity[]
-  contextLayout    ContextLayout?
   notes            CommunityNote[]
   noteFolders      CommunityNoteFolder[]
   brainFiles       CommunityBrainFile[]
@@ -334,21 +333,6 @@ model ContextSourceChunk {
   @@unique([sourceId, seq])
   @@index([communityId, ownerKey, model])
   @@map("context_source_chunks")
-}
-
-/// Persisted force-directed layout for a community's directory Context view.
-/// Stored once per community (a shared canonical layout) so reopening the context
-/// restores saved node positions + camera transform instead of re-running the
-/// expensive simulation from scratch.
-model ContextLayout {
-  communityId String    @id @map("community_id")
-  hash        String // signature of node ids + link count; layout is reused only while this matches
-  transform   Json      @default("{}") // { x, y, k } camera transform
-  positions   Json      @default("{}") // { [nodeId]: { x, y } }
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-
-  @@map("graph_layouts")
 }
 
 model Node {

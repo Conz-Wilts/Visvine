@@ -416,7 +416,7 @@ function fmtExit(d) {
 }
 
 const exits = orgs.filter((o) => o.c.status === 'Exited' || o.c.status === 'IPO').sort(cmpName);
-note(shared, 'communities/exits.md', { type: 'Index', title: 'Exits', tags: ['portfolio', 'exits'] }, `
+note(shared, 'communities/exits.md', { type: 'Note', title: 'Exits', tags: ['portfolio', 'exits'] }, `
 # Exits
 
 Realised outcomes — acquisitions and public listings (${exits.length}).
@@ -427,7 +427,7 @@ Back to ${link('Portfolio', '/communities/index.md')} · ${link('Fund roll-up', 
 `);
 
 const graveyard = orgs.filter((o) => o.c.status === 'Written Off').sort(cmpName);
-note(shared, 'communities/graveyard.md', { type: 'Index', title: 'Graveyard', tags: ['portfolio', 'written-off'] }, `
+note(shared, 'communities/graveyard.md', { type: 'Note', title: 'Graveyard', tags: ['portfolio', 'written-off'] }, `
 # Graveyard
 
 The companies that didn't make it (${graveyard.length}). We keep them visible —
@@ -623,6 +623,20 @@ and sector concentration. All driven off the ${link('fund roll-up', '/data/fund-
 
 const personal = [];
 
+// Every folder carries an index note — the index IS the folder (see
+// lib/notes/shared/indexNote.ts). That includes the brain root.
+note(personal, 'index.md', { type: 'Index', title: 'My Context', tags: ['home'] }, `
+# My Context
+
+My own brain — nothing here is shared with the community.
+
+- ${link('Journal', '/journal/index.md')} — weekly notes and reflections
+- ${link('Meetings', '/meetings/index.md')} — partner syncs, founder calls, IC prep
+- ${link('Diligence', '/diligence/index.md')} — working notes on live deals
+- ${link('Watchlist', '/watchlist.md')} — what I'm tracking
+- ${link('Todos', '/todos.md')} — open actions
+`);
+
 note(personal, 'journal/index.md', { type: 'Index', title: 'Journal', tags: ['journal'] }, `
 # Journal
 
@@ -712,6 +726,14 @@ note(personal, 'todos.md', { type: 'Note', title: 'Todos', tags: ['todos'] }, `
 - [ ] Update reserves model after the ${link('partner sync', '/meetings/partner-sync.md')}
 - [x] Write up the ${link('Azonic diligence', '/diligence/azonic.md')} note
 - [x] File this week's ${link('journal', '/journal/2026-06-26.md')} entry
+`);
+
+note(personal, 'diligence/index.md', { type: 'Index', title: 'Diligence', tags: ['diligence'] }, `
+# Diligence
+
+Working notes on live deals — what I've checked, what's still open.
+
+- ${link('Azonic', '/diligence/azonic.md')} — climate; cohort-retention data outstanding
 `);
 
 note(personal, 'diligence/azonic.md', { type: 'Note', title: 'Azonic — diligence', tags: ['diligence'] }, `

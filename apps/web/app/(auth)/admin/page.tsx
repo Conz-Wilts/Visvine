@@ -15,24 +15,27 @@ import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
 import { Settings2, Puzzle, Users, Tag, UserPlus, Shapes } from 'lucide-react';
 
-// People, Aliases and Invite are three top-level sections rather than tabs
+// Aliases, Members and Invite are three top-level sections rather than tabs
 // inside one, so nothing in the console is ever two clicks deep. They share a
-// single data load (PeopleDataProvider), which is also where the People badge
+// single data load (PeopleDataProvider), which is also where the Members badge
 // count comes from — one definition of "waiting", not one per component.
 function AdminConsole({ community, onSaved }: {
   community: Community;
   onSaved: (updated: Partial<Community>) => void;
 }) {
-  const [pendingPeople, setPendingPeople] = useState(0);
-  const handlePendingCount = useCallback((count: number) => setPendingPeople(count), []);
+  const [pending, setPending] = useState({ members: 0, requests: 0 });
+  const handlePendingCount = useCallback(
+    (counts: { members: number; requests: number }) => setPending(counts),
+    [],
+  );
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
-    { id: 'people', label: 'People', group: 'People', width: 'wide', badge: pendingPeople, icon: <Users size={18} /> },
-    { id: 'aliases', label: 'Aliases', group: 'People', width: 'wide', icon: <Tag size={18} /> },
-    { id: 'invite', label: 'Invite', group: 'People', width: 'form', icon: <UserPlus size={18} /> },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
+    { id: 'aliases', label: 'Aliases', group: 'Members', width: 'wide', badge: pending.requests, icon: <Tag size={18} /> },
+    { id: 'members', label: 'Members', group: 'Members', width: 'wide', badge: pending.members, icon: <Users size={18} /> },
+    { id: 'invite', label: 'Invite', group: 'Members', width: 'form', icon: <UserPlus size={18} /> },
   ];
 
   return (
@@ -49,7 +52,7 @@ function AdminConsole({ community, onSaved }: {
               return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
             case 'tools':
               return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
-            case 'people':
+            case 'members':
               return <PeoplePanel />;
             case 'aliases':
               return <AliasesPanel />;

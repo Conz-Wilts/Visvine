@@ -6,12 +6,14 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  availableFolderPath,
   availableNotePath,
   composeNotePath,
   joinBrainPath,
   newNoteContent,
   noteFileSlug,
 } from '../lib/notes/shared/newContext'
+import { indexPathOf } from '../lib/notes/shared/indexNote'
 import {
   MAX_SOURCE_BYTES,
   SOURCE_ACCEPT,
@@ -46,6 +48,16 @@ test('availableNotePath suffixes past taken paths, per folder', () => {
   // The same title in another folder is not a collision.
   assert.equal(availableNotePath('archive', 'Acme', taken), 'archive/acme.md')
   assert.equal(availableNotePath('deals', 'Beta', taken), 'deals/beta.md')
+})
+
+// An index IS a folder, so "New index" picks a FOLDER path, suffixed the same way.
+test('availableFolderPath suffixes past taken folders, per parent', () => {
+  const taken = new Set(['data/research', 'data/research-2'])
+  assert.equal(availableFolderPath('data', 'Research', taken), 'data/research-3')
+  assert.equal(availableFolderPath('', 'Research', taken), 'research')
+  assert.equal(availableFolderPath('data', 'Marks', taken), 'data/marks')
+  // No .md — the index note lives inside the folder this names.
+  assert.equal(indexPathOf(availableFolderPath('data', 'Marks', taken)), 'data/marks/index.md')
 })
 
 // --- seed note --------------------------------------------------------------------

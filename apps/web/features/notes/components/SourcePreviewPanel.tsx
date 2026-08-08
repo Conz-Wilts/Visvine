@@ -84,7 +84,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
     setError(null)
     try {
       await notesApi.deleteSource(communityId, path)
-      router.push('/context')
+      router.push('/directory?view=context')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
       setBusy(false)

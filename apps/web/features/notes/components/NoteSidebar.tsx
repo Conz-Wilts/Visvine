@@ -20,13 +20,11 @@ import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
+import { TRASH_PATH, useContextTreeState } from '@/hooks/useContextTreeState'
 
-// Expansion state lives here (not per FolderRow) so it survives a folder row
-// unmounting — collapsing a parent, or the panel remounting on navigation —
-// and can be written back to localStorage as one blob. The tree opens fully
-// COLLAPSED: a real brain has hundreds of entity notes, and an all-open tree
-// buries the top-level structure under them. Only the root row (path '') starts
-// open, otherwise the panel would read as empty.
+// Expansion state (openPaths + reveal overlay + persistence) lives in
+// useContextTreeState, shared with the full-screen Context explorer so both
+// surfaces read and write the same per-community blob.
 // VS Code-style row band: the hover/selection background runs the FULL panel
 // width, square-edged, regardless of how deeply the row is nested. Rows sit
 // inside per-level indent containers, so the depth offset isn't knowable here —
@@ -36,14 +34,6 @@ import { entityKindOf } from '@/lib/notes/entities'
 // container clips the overhang with overflow-x-hidden.
 const ROW_BLEED = '-ml-[999px] pl-[999px]'
 
-const ROOT_PATH = ''
-const OPEN_STORE_PREFIX = 'visvine:notes-tree-open:'
-
-// The Trash row's expansion key. Not a real brain path (a note can never live at
-// a `:` prefix — sanitizePath strips it), so it shares openPaths without ever
-// colliding with a folder.
-const TRASH_PATH = ':trash:'
-
 // Where the tree was scrolled to, per scope, kept for the lifetime of the tab.
 // The docked tree re-mounts on every navigation (each page renders its own
 // ContextSidebar), and a fresh scroll container starts at 0 — so clicking a note
@@ -51,38 +41,11 @@ const TRASH_PATH = ':trash:'
 // back. Restoring the offset on mount makes the swap invisible.
 const scrollMemory = new Map<string, number>()
 
-function readOpenPaths(storageKey: string | null): Set<string> {
-  if (!storageKey || typeof window === 'undefined') return new Set([ROOT_PATH])
-  try {
-    const raw = window.localStorage.getItem(OPEN_STORE_PREFIX + storageKey)
-    if (!raw) return new Set([ROOT_PATH])
-    const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? new Set(parsed.map(String)) : new Set([ROOT_PATH])
-  } catch {
-    return new Set([ROOT_PATH])
-  }
-}
-
-/** Every folder path on the way down to `path` (so revealing a note opens its
- *  whole chain), including the root row. 'people/acme/index.md' → '', 'people',
- *  'people/acme'. */
-function ancestorFolders(path: string): string[] {
-  const parts = path.split('/')
-  parts.pop() // the note's own filename
-  const out = [ROOT_PATH]
-  let acc = ''
-  for (const part of parts) {
-    acc = acc ? `${acc}/${part}` : part
-    out.push(acc)
-  }
-  return out
-}
-
 // The glyph for a note's frontmatter type. `entityKindOf` is the wider net —
 // it catches retired organisation spellings getNodeGlyph has no entry for — so
 // those notes still read as the cluster glyph rather than falling back to
 // initials.
-function noteGlyph(type: string | undefined): NodeGlyph | null {
+export function noteGlyph(type: string | undefined): NodeGlyph | null {
   return getNodeGlyph(type) ?? (entityKindOf(type) === 'community' ? 'group' : null)
 }
 
@@ -112,7 +75,7 @@ interface NoteSidebarProps {
   /** ⋯ menu action on note rows: open the note's Share panel. */
   onShareNote?: (path: string) => void
   /** ⋯ menu action on folder rows: delete the folder (and the notes inside). */
-  onDeleteFolder?: (folderPath: string) => void
+  onDeleteFolder?: (folderPath: string, label?: string) => void
   /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -182,66 +145,9 @@ export function NoteSidebar({
     [starred, titleFor],
   )
 
-  // Which folders are expanded, restored from the last visit for this scope.
-  const [openPaths, setOpenPaths] = useState<Set<string>>(() => readOpenPaths(storageKey))
-
-  // Re-read when the scope changes (switching communities swaps the whole tree).
-  const lastKeyRef = useRef(storageKey)
-  useEffect(() => {
-    if (lastKeyRef.current === storageKey) return
-    lastKeyRef.current = storageKey
-    setOpenPaths(readOpenPaths(storageKey))
-  }, [storageKey])
-
-  useEffect(() => {
-    if (!storageKey || typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(OPEN_STORE_PREFIX + storageKey, JSON.stringify([...openPaths]))
-    } catch {
-      // Private mode / quota — expansion just stops persisting.
-    }
-  }, [openPaths, storageKey])
-
-  // A reveal (the context search's focused note, or the note a profile page has
-  // open) expands that note's folder chain WITHOUT touching openPaths: it's a
-  // transient peek layered over the real state, so clearing the search snaps the
-  // tree back to exactly the folders the user opened by hand. Only clicks
-  // change what's persisted.
-  const revealedPaths = useMemo(
-    () => (revealPath ? new Set(ancestorFolders(revealPath)) : null),
-    [revealPath],
-  )
-
-  // A folder the user collapses while it's only open BECAUSE of a reveal:
-  // openPaths has nothing to remove, so the collapse is recorded here instead
-  // and dropped as soon as the reveal moves on.
-  const [suppressedPaths, setSuppressedPaths] = useState<Set<string>>(() => new Set())
-  useEffect(() => {
-    setSuppressedPaths((prev) => (prev.size === 0 ? prev : new Set()))
-  }, [revealPath])
-
-  const effectiveOpenPaths = useMemo(() => {
-    if (!revealedPaths && suppressedPaths.size === 0) return openPaths
-    const next = new Set(openPaths)
-    if (revealedPaths) for (const p of revealedPaths) next.add(p)
-    for (const p of suppressedPaths) next.delete(p)
-    return next
-  }, [openPaths, revealedPaths, suppressedPaths])
-
-  const toggleFolder = useCallback((path: string, isOpen: boolean) => {
-    setOpenPaths((prev) => {
-      const next = new Set(prev)
-      if (isOpen) next.delete(path)
-      else next.add(path)
-      return next
-    })
-    setSuppressedPaths((prev) => {
-      const next = new Set(prev)
-      if (isOpen) next.add(path)
-      else next.delete(path)
-      return next
-    })
-  }, [])
+  // Which folders are expanded — persisted per scope, with the reveal peek
+  // layered on top (see useContextTreeState for the full story).
+  const { effectiveOpenPaths, toggleFolder } = useContextTreeState(storageKey, revealPath)
 
   // Keep the selected row in view when selection changes from outside the tree
   // (context search focus, profile navigation). An off-screen row is centred so it
@@ -394,7 +300,7 @@ export function NoteSidebar({
 // ── Trash ─────────────────────────────────────────────────────────────────────
 
 /** Whole days left before the server purges an entry (0 = purges within the day). */
-function daysLeft(deletedAt: number): number {
+export function daysLeft(deletedAt: number): number {
   const ms = deletedAt + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000 - Date.now()
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
 }
@@ -538,7 +444,7 @@ function Tree({
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
   onShareNote?: (path: string) => void
-  onDeleteFolder?: (folderPath: string) => void
+  onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
   // A folder's own index.md never renders as a child row — the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The brain
@@ -607,7 +513,7 @@ function FolderRow(props: {
   folderBadges?: Map<string, FolderBadge>
   onFolderAccess?: (folderId: string) => void
   onShareNote?: (path: string) => void
-  onDeleteFolder?: (folderPath: string) => void
+  onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
   // Expansion is owned by NoteSidebar (persisted, and revealed by selection) —
   // this row only reads it and reports toggles.
@@ -622,6 +528,9 @@ function FolderRow(props: {
   // selection highlights here. The chevron keeps expand/collapse to itself.
   // (The root row has no index note of its own — root's index.md stays a child
   // row, matching Tree's filter — so it only ever expands/collapses.)
+  // The folder's display name: an explicit label (the brain root's), else the
+  // title its index note declares, else the path segment.
+  const folderLabel = props.label ?? props.node.title ?? props.node.name
   const indexPath = props.node.path ? `${props.node.path}/index.md` : ''
   const hasIndex =
     !!indexPath && (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
@@ -657,7 +566,7 @@ function FolderRow(props: {
             </span>
           )}
           <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>
-            {props.label ?? props.node.name}
+            {folderLabel}
           </span>
           {badge?.restricted && (
             <span className="shrink-0 text-text-muted" title="Restricted folder — access is granted here, not inherited">
@@ -695,7 +604,7 @@ function FolderRow(props: {
                     label: 'Delete',
                     icon: <TrashIcon />,
                     danger: true,
-                    onClick: () => props.onDeleteFolder!(props.node.path),
+                    onClick: () => props.onDeleteFolder!(props.node.path, folderLabel),
                   },
                 ]
               : []),
@@ -729,7 +638,7 @@ function FolderRow(props: {
 
 // ── Row action menu ───────────────────────────────────────────────────────────
 
-interface RowMenuItem {
+export interface RowMenuItem {
   label: string
   icon?: React.ReactNode
   onClick: () => void
@@ -744,7 +653,7 @@ const ROW_MENU_ITEM_H = 34
  *  scroll container clips overflow on both axes, so an absolutely positioned
  *  menu inside the row would be cut off at the panel edge. Fixed positioning
  *  detaches from scrolling, so any scroll just closes the menu. */
-function RowMenu({
+export function RowMenu({
   items,
   selected,
   hoverClass = 'group-hover:opacity-100',
@@ -927,7 +836,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // render hairline-thin and sit off the row's optical centre at this size.
 // Rotating one shape keeps the two states visually identical in weight, and
 // animating the rotation shows which way the fold went.
-function Chevron({ open }: { open: boolean }) {
+export function Chevron({ open }: { open: boolean }) {
   return (
     <svg
       width="16"
@@ -947,7 +856,7 @@ function Chevron({ open }: { open: boolean }) {
   )
 }
 
-function FolderIcon({ open = false }: { open?: boolean }) {
+export function FolderIcon({ open = false }: { open?: boolean }) {
   return open ? (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
@@ -960,7 +869,7 @@ function FolderIcon({ open = false }: { open?: boolean }) {
 }
 
 // Type glyph (person/group/event/resource silhouette) sized to match FileIcon.
-function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
+export function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d={NODE_GLYPH_PATHS[glyph]} />
@@ -968,7 +877,7 @@ function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
   )
 }
 
-function FileIcon() {
+export function FileIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
@@ -977,7 +886,7 @@ function FileIcon() {
   )
 }
 
-function StarIcon({ filled = false }: { filled?: boolean }) {
+export function StarIcon({ filled = false }: { filled?: boolean }) {
   // Same star glyph as the editor toolbar's lucide Star; fills amber when starred.
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -997,7 +906,7 @@ function KebabIcon() {
   )
 }
 
-function LockIcon() {
+export function LockIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -1007,7 +916,7 @@ function LockIcon() {
 }
 
 // Share glyph (same shape as the editor toolbar's lucide Share2).
-function ShareIcon() {
+export function ShareIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="18" cy="5" r="3" />
@@ -1020,7 +929,7 @@ function ShareIcon() {
 }
 
 // Counter-clockwise arrow (lucide RotateCcw) — the trash rows' Restore action.
-function RestoreIcon() {
+export function RestoreIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
@@ -1029,7 +938,7 @@ function RestoreIcon() {
   )
 }
 
-function TrashIcon() {
+export function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18" />

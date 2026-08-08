@@ -37,7 +37,6 @@ import { LinkedReferences } from './LinkedReferences'
 import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { timeAgo } from '@/lib/date'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
@@ -66,6 +65,9 @@ interface NoteEditorProps {
   mode: 'wysiwyg' | 'raw'
   onModeChange?: (mode: NoteMode) => void
   references: References | null
+  /** Show the unlinked-references group under the note. Off on entity Context
+   *  tabs, where speculative name matches crowd out the profile's own links. */
+  showUnlinked?: boolean
   // Directory entities for `[[ ]]` mentions: the picker list + a path→entity map
   // the chip decoration reads, and a hook that ensures the entity's note exists.
   entities?: PickerEntity[]
@@ -143,6 +145,7 @@ export function NoteEditor({
   mode,
   onModeChange,
   references,
+  showUnlinked = true,
   entities,
   entityByPath,
   onEnsureEntityNote,
@@ -616,13 +619,6 @@ export function NoteEditor({
         {/* The note title — rendered as the page heading from frontmatter, so
             every note opens with a styled title and the body carries none.
             (Embedded/profile tab: the profile above IS the identity.) */}
-        {/* Freshness line sits at the top-left of the column, above the title. */}
-        {mode === 'wysiwyg' && meta && (
-          <div className="notes-meta" title={new Date(meta.mtime).toLocaleString()}>
-            {meta.frontmatter.author ? `By ${String(meta.frontmatter.author)} · ` : ''}
-            Edited {timeAgo(meta.mtime, { style: 'long' })}
-          </div>
-        )}
         {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
         {mode === 'wysiwyg' ? (
           <EditorContent editor={editor} />
@@ -644,6 +640,7 @@ export function NoteEditor({
         <LinkedReferences
           references={references}
           title={noteTitle}
+          showUnlinked={showUnlinked}
           onOpenNote={onOpenNote}
           onLinkMention={canEdit ? onLinkMention : undefined}
         />

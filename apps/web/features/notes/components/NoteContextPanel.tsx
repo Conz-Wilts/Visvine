@@ -25,6 +25,7 @@ import {
 } from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
+import { NoteMetaRows } from './NoteMetaRows'
 import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
@@ -206,7 +207,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     async (p: string, body: string, origin?: string) => {
       if (!communityId) return
       try {
-        await notesApi.write(communityId, p, body, origin)
+        const { movedTo } = await notesApi.write(communityId, p, body, origin)
         invalidateContextCache(
           contextKeys.read(communityId, p),
           contextKeys.references(communityId, p),
@@ -214,13 +215,20 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
           contextKeys.tree(communityId), // a save can create the note — the tree gains it
         )
         setError(null)
+        // Retyping to `Index` made this note a folder and moved it there — the
+        // path in the URL no longer exists, so follow it.
+        if (movedTo) {
+          invalidateContextCache(contextKeys.read(communityId, movedTo))
+          router.replace(noteHref(movedTo))
+          return
+        }
         cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
           .then(({ references: refs }) => setReferences(refs)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
     },
-    [communityId],
+    [communityId, router],
   )
 
   // Turn one unlinked reference into a real link. The write lands on the SOURCE
@@ -375,11 +383,20 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   // The note title leads the scrolling content (embedded NoteEditor hides its
   // own .notes-title); width/padding mirror .notes-column so it lines up.
+  // Type and tags come from the note's own frontmatter; the block itself decides
+  // what counts as a type (see NoteMetaRows — console types only).
   const headerCard = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
         {title}
       </h2>
+      <NoteMetaRows
+        className="mt-4"
+        type={openMeta?.frontmatter.type}
+        tags={openMeta?.tags ?? []}
+        nodeTypes={currentCommunity?.nodeTypes}
+        tagColors={currentCommunity?.designConfig?.tagColors ?? null}
+      />
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <Radio className="h-4 w-4 shrink-0 text-brand-green" />

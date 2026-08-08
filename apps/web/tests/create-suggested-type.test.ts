@@ -15,8 +15,9 @@ test('maps each feature route to its create types', () => {
 test('a surface whose tools create several things suggests them all', () => {
   // Channels is where both channels and spaces are made.
   assert.deepEqual(suggestedCreateType('/channels')?.types, ['channel', 'space'])
-  // Context takes notes and uploaded files.
-  assert.deepEqual(suggestedCreateType('/context')?.types, ['context', 'file'])
+  // Context takes notes and uploaded files. (/context itself just redirects to
+  // the Directory's Context tab, so only the note/source viewers map.)
+  assert.deepEqual(suggestedCreateType('/directory/note/people/craig.md')?.types, ['context', 'file'])
 })
 
 test('matches nested routes under a mapped section', () => {

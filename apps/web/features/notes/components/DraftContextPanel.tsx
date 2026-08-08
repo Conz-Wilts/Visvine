@@ -25,7 +25,13 @@ import type { CreateableType } from '@/lib/contexts/CreateModalContext'
 import { aliasesForType, findAlias, type CommunityAlias, type CommunityFeatureConfig, type NodeTypeConfig } from '@/lib/types'
 import { getTypeColor } from '@/components/dashboard/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
-import { noteFileSlug, availableNotePath, newNoteContent } from '@/lib/notes/shared/newContext'
+import {
+  noteFileSlug,
+  availableNotePath,
+  availableFolderPath,
+  newNoteContent,
+} from '@/lib/notes/shared/newContext'
+import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref, sourceHref } from '@/lib/notes/entities'
 import { useBrainTree, FolderPicker, PathPreview } from '@/components/create/ContextDestination'
 import {
@@ -63,6 +69,9 @@ import '../notes.css'
  *  handful of fields that CANNOT be filled in afterwards shown inline. */
 export type DraftType =
   | 'note'
+  // A folder, written as its index note — an index note IS a folder
+  // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
+  | 'index'
   | 'person'
   // The organisation that used to be 'group' — a node and a note recording that
   // one exists. Provisioning a real Community row of your own isn't a draft
@@ -91,6 +100,7 @@ const NOTE_COLOR = '#64748b'
 
 const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
+  { id: 'index', label: 'Index', configName: 'Index', color: '#c026d3', hint: 'The home page for a group of notes', creatable: 'index' },
   { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
   { id: 'community', label: 'Community', configName: 'Community', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'community' },
   { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
@@ -102,8 +112,9 @@ const DRAFT_TYPES: DraftTypeOption[] = [
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
 const ENTITY_TYPES = new Set<DraftType>(['person', 'community', 'resource'])
-/** Types whose only inline field is the destination folder in the context. */
-const FOLDERED_TYPES = new Set<DraftType>(['note', 'file'])
+/** Types whose only inline field is the destination folder in the context.
+ *  For an index the picker chooses its PARENT — the index is a folder itself. */
+const FOLDERED_TYPES = new Set<DraftType>(['note', 'index', 'file'])
 
 interface DraftContextPanelProps {
   mode?: NoteMode
@@ -278,10 +289,20 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     [featureConfig, isAdmin],
   )
 
-  const notePath = useMemo(
-    () => (type === 'note' && titleUsable ? availableNotePath(folder, title, brainTree.notePaths) : ''),
-    [type, titleUsable, folder, title, brainTree.notePaths],
+  // Existing folder paths, for the index destination's collision suffixing.
+  const folderPaths = useMemo(
+    () => new Set(brainTree.folders.map((f) => f.path).filter(Boolean)),
+    [brainTree.folders],
   )
+
+  // The destination shown before anything is written. An index's destination is
+  // the index note inside the folder it creates.
+  const notePath = useMemo(() => {
+    if (!titleUsable) return ''
+    if (type === 'note') return availableNotePath(folder, title, brainTree.notePaths)
+    if (type === 'index') return indexPathOf(availableFolderPath(folder, title, folderPaths))
+    return ''
+  }, [type, titleUsable, folder, title, brainTree.notePaths, folderPaths])
 
   const addTag = useCallback((raw: string) => {
     const tag = raw.trim()
@@ -341,6 +362,19 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
   }, [communityId, folder, title, tags, brainTree.notePaths, router])
+
+  // An index IS a folder: this creates the folder and writes the note that names
+  // it, in one call. The picked `folder` is the parent.
+  const commitIndex = useCallback(async () => {
+    if (!communityId) return
+    const folderPath = availableFolderPath(folder, title, folderPaths)
+    const content = newIndexContent({ title: title.trim(), tags, body: bodyRef.current })
+    const { indexPath } = await notesApi.createFolder(communityId, folderPath, content)
+    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    primeContextCache(contextKeys.read(communityId, indexPath), { status: 'ok', content })
+    sessionStorage.removeItem(STASH_KEY)
+    router.replace(noteHref(indexPath))
+  }, [communityId, folder, title, tags, folderPaths, router])
 
   const commitEntity = useCallback(async () => {
     if (!communityId || !type) return
@@ -498,6 +532,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     setError(null)
     try {
       if (type === 'note') await commitNote()
+      else if (type === 'index') await commitIndex()
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
       else if (type === 'space') await commitSpace()
@@ -513,7 +548,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
   }, [
     ready, committing, communityId, type,
-    commitNote, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
+    commitNote, commitIndex, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
 
   const pickType = useCallback((next: DraftType, nextAlias: string | null = null) => {
@@ -652,9 +687,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         tagsRow={tagsRow}
       />
 
-      {type === 'note' && (
+      {(type === 'note' || type === 'index') && (
         <div className="mt-3 space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">Folder</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+            {/* An index IS a folder, so the picker chooses where it goes, not what it goes in. */}
+            {type === 'index' ? 'Inside' : 'Folder'}
+          </span>
           <FolderPicker
             folders={brainTree.folders}
             value={folder}

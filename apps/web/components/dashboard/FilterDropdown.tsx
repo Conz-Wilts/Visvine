@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import Dropdown, {
   DROPDOWN_TRIGGER_CLASS,
+  DROPDOWN_TRIGGER_COMPACT_CLASS,
   DROPDOWN_MENU_CLASS,
   DROPDOWN_TRIGGER_ACTIVE_STYLE,
   DROPDOWN_TRIGGER_IDLE_STYLE,
@@ -26,9 +27,11 @@ interface FilterDropdownProps {
   onChangeSub?: (selected: Set<string>) => void;
   getColor?: (value: string) => string;
   singleSelect?: boolean;
+  /** Toolbar sizing (h-10, rounded-xl) instead of the standing h-12 pill. */
+  compact?: boolean;
 }
 
-export function FilterDropdown({ label, options, selected, onChange, selectedSub, onChangeSub, getColor, singleSelect }: FilterDropdownProps) {
+export function FilterDropdown({ label, options, selected, onChange, selectedSub, onChangeSub, getColor, singleSelect, compact }: FilterDropdownProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
@@ -102,7 +105,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
-        className={DROPDOWN_TRIGGER_CLASS}
+        className={compact ? DROPDOWN_TRIGGER_COMPACT_CLASS : DROPDOWN_TRIGGER_CLASS}
         style={
           isActive && activeColor
             ? { borderColor: activeColor, backgroundColor: `${activeColor}18`, color: activeColor }
@@ -260,6 +263,7 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
 interface SortDropdownProps {
   value: 'az' | 'za';
   onChange: (value: 'az' | 'za') => void;
+  compact?: boolean;
 }
 
 const SORT_OPTIONS = [
@@ -267,7 +271,7 @@ const SORT_OPTIONS = [
   { value: 'za' as const, label: 'Z → A' },
 ];
 
-export function SortDropdown({ value, onChange }: SortDropdownProps) {
+export function SortDropdown({ value, onChange, compact }: SortDropdownProps) {
   return (
     <Dropdown
       label="Sort"
@@ -275,6 +279,7 @@ export function SortDropdown({ value, onChange }: SortDropdownProps) {
       options={SORT_OPTIONS}
       onChange={onChange}
       menuWidthClass="min-w-[140px]"
+      compact={compact}
     />
   );
 }

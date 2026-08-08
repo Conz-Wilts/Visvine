@@ -45,7 +45,8 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'resource':
       return isFeatureEnabled(featureConfig, 'resources')
 
-    // The remaining note-first types: person, community, context. A community
+    // The remaining note-first types: person, community, context, index. An
+    // index is a folder written as a note, so it follows the note rule. A community
     // here is a directory record — recording that an organisation exists is as
     // ordinary as writing a note about it. (Provisioning a community of your
     // own isn't a create type at all; it lives on the community switcher.)

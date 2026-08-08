@@ -95,12 +95,23 @@ const EDIT = 30;
 /**
  * The node types this community uses. Written explicitly because the schema
  * default omits Resource, and the layers above seed events and resources.
+ *
+ * The second group is the note vocabulary: every `type:` the seeded notes write
+ * into their frontmatter. A type a note claims but the console never created is
+ * a type nothing can filter, colour or alias — so the console declares them all,
+ * and a note's Type chip always names something real. Add a type here whenever
+ * a new one is written into note frontmatter (scripts/add-blackbird-notes.mjs).
  */
 const NODE_TYPES = [
   { icon: "👤", name: "Person", color: "#2563eb", shape: "rectangle" },
   { icon: "🏘️", name: "Community", color: "#78d870", shape: "square" },
   { icon: "📅", name: "Event", color: "#ef4444", shape: "rectangle" },
   { icon: "📚", name: "Resource", color: "#0d9488", shape: "circle" },
+  { icon: "📝", name: "Note", color: "#8b5cf6", shape: "rectangle" },
+  { icon: "🗂️", name: "Index", color: "#c026d3", shape: "square" },
+  { icon: "🧭", name: "Sector", color: "#f97316", shape: "rectangle" },
+  { icon: "📓", name: "Journal", color: "#ec4899", shape: "rectangle" },
+  { icon: "🤝", name: "Meeting", color: "#14b8a6", shape: "rectangle" },
 ];
 
 interface SeedAlias {
