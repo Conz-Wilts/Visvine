@@ -38,6 +38,10 @@ export function useDirectoryEntities(): DirectoryEntities {
         type: n.type,
         image_url: n.image_url ?? null,
         subtitle: n.subtitle ?? null,
+        // The alias rides along because a node's type is shown by its alias
+        // wherever the directory shows it, and an entity note is that node seen
+        // from the notes side — the context browser labels its chips from here.
+        alias: n.alias ?? null,
       }
       list.push(e)
       map.set(path, e)

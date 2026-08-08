@@ -4,7 +4,8 @@
 //
 // The flattening rules mirror NoteSidebar so the two surfaces agree:
 //   - a folder's own index.md never renders as a child row (the folder row IS
-//     the index); the brain root's index.md stays a normal note row.
+//     the index) — the brain root included: its index.md folds into the
+//     synthetic root row, so the community reads as the parent folder.
 //   - recursion only descends into folders present in `openPaths`.
 // On top of that the explorer adds pruning: when `keep` is set (a search or
 // filter is active), a row survives only if its path is in the set — folders
@@ -72,12 +73,15 @@ export function neighborhoodOf(path: string, items: ContextItem[]): Set<string> 
   return out
 }
 
+/** A folder node's own index note path — 'index.md' at the brain root. */
+const indexOf = (node: TreeNode) => (node.path ? `${node.path}/index.md` : 'index.md')
+
 /** Recursive count of kept notes under a folder node (its own index excluded). */
 function countNotes(node: TreeNode, keep: Set<string> | null): number {
   let count = 0
   for (const child of node.children ?? []) {
     if (child.kind === 'note') {
-      if (child.path === `${node.path}/index.md`) continue
+      if (child.path === indexOf(node)) continue
       if (!keep || keep.has(child.path)) count++
     } else {
       count += countNotes(child, keep)
@@ -112,9 +116,9 @@ export function flattenVisibleRows(opts: FlattenOptions): TreeRow[] {
   const walk = (node: TreeNode, depth: number) => {
     for (const child of node.children ?? []) {
       if (child.kind === 'note') {
-        // A folder's own index note folds into the folder row; the root's
-        // index.md has no folder row to fold into, so it stays.
-        if (node.path && child.path === `${node.path}/index.md`) continue
+        // A folder's own index note folds into the folder row — the root's
+        // index.md folds into the synthetic root row below.
+        if (child.path === indexOf(node)) continue
         if (keep && !keep.has(child.path)) continue
         pushNote(child.path, depth)
       } else {
@@ -151,6 +155,11 @@ export function flattenVisibleRows(opts: FlattenOptions): TreeRow[] {
     label: rootLabel,
     childCount: countNotes(tree, keep),
     isOpen: rootOpen,
+    // The brain-root index (the community's hand-written home page) rides the
+    // root row exactly like any folder's index rides its folder row.
+    indexPath: (tree.children ?? []).some((c) => c.kind === 'note' && c.path === 'index.md')
+      ? 'index.md'
+      : undefined,
   })
   if (rootOpen) walk(tree, 1)
 

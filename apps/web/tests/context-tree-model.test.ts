@@ -92,7 +92,7 @@ test('collapsed root renders only the root and trash rows', () => {
   const rows = flatten(new Set())
   assert.deepEqual(keys(rows), [':root:'])
   assert.equal(rows[0].isOpen, false)
-  assert.equal(rows[0].childCount, 4) // craig, deal, welcome, root index
+  assert.equal(rows[0].childCount, 3) // craig, deal, welcome — root index folds away
 })
 
 test('open folders flatten depth-first with correct depths', () => {
@@ -103,7 +103,6 @@ test('open folders flatten depth-first with correct depths', () => {
     'people/craig.md',
     'people/acme',
     'welcome.md',
-    'index.md',
   ])
   const depths = Object.fromEntries(rows.map((r) => [r.key, r.depth]))
   assert.equal(depths['people'], 1)
@@ -120,15 +119,17 @@ test('a folder row shows its index title, falling back to the path segment', () 
   assert.equal(rows.find((r) => r.path === ROOT_PATH)!.label, 'Brain')
 })
 
-test("a folder's index note folds into the folder row; the root's does not", () => {
+test("every folder's index note folds into its folder row, the root's included", () => {
   const rows = flatten(new Set([ROOT_PATH, 'people', 'people/acme']))
   const paths = rows.map((r) => r.path)
   assert.ok(!paths.includes('people/index.md'))
   assert.ok(!paths.includes('people/acme/index.md'))
-  assert.ok(paths.includes('index.md'))
+  assert.ok(!paths.includes('index.md'))
   const acme = rows.find((r) => r.key === 'people/acme')!
   assert.equal(acme.indexPath, 'people/acme/index.md')
   assert.equal(acme.childCount, 1) // deal.md only
+  // The synthetic root row carries the brain-root index, like any folder row.
+  assert.equal(rows.find((r) => r.key === ':root:')!.indexPath, 'index.md')
 })
 
 test('keep set prunes notes and empty folders but keeps the matched chain', () => {

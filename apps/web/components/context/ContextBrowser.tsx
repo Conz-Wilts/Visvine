@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
-import { useContextBrowse, type ContextBrowseInitial, type ContextItem } from '@/hooks/useContextBrowse';
+import { useContextBrowse, titleOfPath, type ContextBrowseInitial } from '@/hooks/useContextBrowse';
 import { useContextTree } from '@/features/notes/lib/useContextTree';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
 import { SharePanel } from '@/features/notes/components/SharePanel';
@@ -34,31 +34,12 @@ import ContextTreeExplorer from './ContextTreeExplorer';
 import ContextLinksPanel from './ContextLinksPanel';
 import ContextNotePanel from './ContextNotePanel';
 import { ancestorClosure } from './contextTreeModel';
-import { humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote';
 import type { ContextTreeRowHandlers } from './ContextTreeRow';
 import { prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
 import { noteHref, parseEntityHref } from '@/lib/notes/entities';
-import type { CommunityFeatureConfig } from '@/lib/types';
+import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
 
 const URL_DEBOUNCE_MS = 300;
-
-/**
- * Display title for a link target, which may be outside the filtered set.
- *
- * Index notes are folded into their folder everywhere else and are filtered out
- * of `items` entirely, so they're looked up in `titleByPath` — every note the
- * brain holds, including the indexes. That title IS the folder's name, so a link
- * to `communities/index.md` reads "Companies", the same as its tree row.
- */
-function titleOfPath(path: string, items: ContextItem[], titleByPath: Map<string, string>): string {
-  const known = items.find((i) => i.path === path)?.title ?? titleByPath.get(path);
-  if (known) return known;
-  if (isIndexPath(path)) {
-    const folder = path.split('/').slice(-2, -1)[0];
-    return folder ? humanizeFolderName(folder) : 'Index';
-  }
-  return humanizeFolderName((path.split('/').pop() ?? path).replace(/\.md$/, ''));
-}
 
 /** The filter state a shared URL restores, read once on mount. */
 function readInitialFromParams(params: URLSearchParams): ContextBrowseInitial {
@@ -82,7 +63,18 @@ export default function ContextBrowser() {
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes');
   const tagColors = currentCommunity?.designConfig?.tagColors ?? null;
 
+  const communityAliases = currentCommunity?.communityAliases as CommunityAlias[] | undefined;
+
   const { entityByPath } = useDirectoryEntities();
+  // An entity note IS a directory node seen from the notes side, and a node's
+  // type is shown by the community's alias for it — "Portfolio Company", not
+  // "Community" — everywhere the directory shows it. The note columns label
+  // their chips and their connection groups from here, so the two surfaces
+  // can't drift. A plain note has no node behind it and so no alias.
+  const aliasOfPath = useCallback(
+    (path: string) => entityByPath.get(path)?.alias ?? null,
+    [entityByPath],
+  );
   const ctx = useContextTree({ communityId, enabled: notesEnabled });
   // Hydrated once from the URL so a copied link restores the exact view;
   // afterwards the state owns itself and the URL trails it (below).
@@ -120,9 +112,11 @@ export default function ContextBrowser() {
     browse.starredOnly, browse.connectedTo, selectedPath,
   ]);
 
+  // Resolved through itemByPath, not items: clicking a folder selects its index
+  // note, and index notes are exactly what `items` folds away.
   const selectedItem = useMemo(
-    () => browse.items.find((i) => i.path === selectedPath) ?? null,
-    [browse.items, selectedPath],
+    () => (selectedPath ? browse.itemByPath.get(selectedPath) ?? null : null),
+    [browse.itemByPath, selectedPath],
   );
 
   // Owned here so the links column and the note body agree on what a path is
@@ -235,7 +229,9 @@ export default function ContextBrowser() {
           <ContextNotePanel
             communityId={communityId}
             item={selectedItem}
-            items={browse.items}
+            items={browse.allItems}
+            alias={selectedPath ? aliasOfPath(selectedPath) : null}
+            communityAliases={communityAliases}
             onSelectPath={setSelectedPath}
             tagColors={tagColors}
           />
@@ -248,9 +244,10 @@ export default function ContextBrowser() {
         <aside className="hidden min-h-0 flex-1 basis-0 border-l border-border-subtle bg-surface-1 xl:block">
           <ContextLinksPanel
             item={selectedItem}
-            items={browse.items}
+            items={browse.allItems}
             titleFor={titleFor}
             keep={keep}
+            aliasOfPath={aliasOfPath}
             onSelectPath={setSelectedPath}
           />
         </aside>

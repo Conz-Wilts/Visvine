@@ -18,11 +18,9 @@ import { fieldsForType, type TypeFieldDef } from '@/lib/create/typeFields'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
 
-// Rows read as one aligned block: a fixed label gutter, values in a single
-// column beside it. Below `sm` the gutter collapses and labels stack above their
-// values, because a 110px gutter on a phone leaves nothing for the value.
-const ROW_CLASS =
-  'grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[110px_minmax(0,1fr)] sm:items-center'
+// Label above its value, matching NoteMetaRows — the one layout every surface
+// that shows a note's type and tags shares.
+const ROW_CLASS = 'flex flex-col gap-1'
 
 const INPUT_CLASS =
   'w-full rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-text-primary ' +
@@ -74,7 +72,7 @@ export function PropertyRows({
   if (!typeRow && !tagsRow && visible.length === 0) return null
 
   return (
-    <div className={`mt-5 space-y-2.5 ${className}`} style={style}>
+    <div className={`mt-5 space-y-3 ${className}`} style={style}>
       {typeRow && (
         <div className={ROW_CLASS}>
           <span className={LABEL_CLASS}>Type</span>
@@ -100,8 +98,8 @@ export function PropertyRows({
       ))}
 
       {tagsRow && (
-        <div className={`${ROW_CLASS} sm:items-start`}>
-          <span className={`${LABEL_CLASS} sm:pt-1.5`}>Tags</span>
+        <div className={ROW_CLASS}>
+          <span className={LABEL_CLASS}>Tags</span>
           <div className="min-w-0">{tagsRow}</div>
         </div>
       )}

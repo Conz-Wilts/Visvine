@@ -40,6 +40,10 @@ const ContextSidebar = dynamic(
   () => import('@/features/notes/components/ContextSidebar').then((m) => m.ContextSidebar),
   { ssr: false, loading: () => null },
 );
+const ConnectionsRail = dynamic(
+  () => import('@/components/context/ConnectionsRail'),
+  { ssr: false, loading: () => null },
+);
 
 /** How long a cross-kind swap may wait on the incoming panel before committing
  *  anyway. */
@@ -71,6 +75,18 @@ export default function PaneSurfaceHost() {
   const { chrome } = usePaneChromeState();
   const target = chrome?.surface ?? null;
   const dockInsetStyle = useDockInsetStyle();
+  const { connectionsOpen } = useContextPanel();
+
+  // The rail slides rather than popping, so closing can't unmount it in the
+  // same commit — it stays mounted (open=false, sliding offscreen) until the
+  // transition has had its 300ms, then leaves the tree.
+  const [railMounted, setRailMounted] = useState(connectionsOpen);
+  if (connectionsOpen && !railMounted) setRailMounted(true);
+  useEffect(() => {
+    if (connectionsOpen) return;
+    const done = setTimeout(() => setRailMounted(false), 350);
+    return () => clearTimeout(done);
+  }, [connectionsOpen]);
 
   // The surface currently on screen. Follows `target` immediately except while
   // it must lag: a cross-kind swap (until the incoming panel is ready), or a
@@ -158,8 +174,16 @@ export default function PaneSurfaceHost() {
     active.kind === 'entity' ? active : crossKind && target?.kind === 'entity' ? target : null;
 
   return (
-    <ContentReveal ready={revealReady} className="w-full pb-10" style={dockInsetStyle}>
+    // The right padding mirrors the left dock inset, but as a class rather than
+    // an inline style: the rail itself only exists at xl and up, so the inset
+    // must collapse with it — a breakpoint the style attribute can't express.
+    <ContentReveal
+      ready={revealReady}
+      className={`w-full pb-10 transition-[padding] duration-300 ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
+      style={dockInsetStyle}
+    >
       <ContextSidebar currentPath={treePath} />
+      {railMounted && <ConnectionsRail path={treePath} open={connectionsOpen} />}
       {noteSurface && (
         <div hidden={active.kind !== 'note'}>
           <TabBarSlotGate suppressed={active.kind !== 'note'}>

@@ -24,8 +24,9 @@ import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { ArrowLeft, ArrowRight, ArrowLeftRight, ChevronDown, ChevronRight, Unlink } from 'lucide-react';
 import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
 import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { getNodeTypeConfig } from '@/lib/types';
+import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor, getOnWhiteTextBg } from '@/components/dashboard/typeStyles';
+import type { CommunityAlias } from '@/lib/types';
 import type { ContextItem } from '@/hooks/useContextBrowse';
 
 type Direction = 'out' | 'in' | 'both' | 'unresolved';
@@ -39,9 +40,10 @@ interface Connection {
 }
 
 interface Group {
-  type: string;
+  /** Stable identity for collapse state: a type, or a type and its alias. */
+  key: string;
   label: string;
-  /** The type's configured colour — what the whole group is painted in. */
+  /** The alias's colour, else the type's — what the whole group is painted in. */
   color: string;
   connections: Connection[];
 }
@@ -77,7 +79,10 @@ const DIRECTION_TITLE: Record<Direction, string> = {
 interface ContextLinksPanelProps {
   /** The selected note, or null for the resting summary. */
   item: ContextItem | null;
-  /** Every note in scope — resolves backlinks and the other end's type. */
+  /** Every note in scope, index notes included — resolves backlinks and the
+   *  other end's type. Indexes have to be in here: they're the notes that link
+   *  down into a folder, so without them a note shows no incoming link from the
+   *  folder it lives in, and the index group below stays permanently empty. */
   items: ContextItem[];
   /** Path → display title, owned by the browser so both panels agree. */
   titleFor: (path: string) => string;
@@ -89,14 +94,22 @@ interface ContextLinksPanelProps {
    * listed rows the tree had just pruned away.
    */
   keep: Set<string> | null;
+  /**
+   * The community alias held by the note's directory node, if any — an entity
+   * note IS a node seen from the notes side, and the community's name for its
+   * type ("Portfolio Company") is what the directory shows everywhere else.
+   * Returns null for a plain note, which has no node behind it.
+   */
+  aliasOfPath: (path: string) => string | null;
   onSelectPath: (path: string) => void;
 }
 
 export default function ContextLinksPanel({
-  item, items, titleFor, keep, onSelectPath,
+  item, items, titleFor, keep, aliasOfPath, onSelectPath,
 }: ContextLinksPanelProps) {
   const { currentCommunity } = useCommunity();
   const nodeTypes = currentCommunity?.nodeTypes;
+  const communityAliases = currentCommunity?.communityAliases as CommunityAlias[] | undefined;
   // Collapsed groups only — a type absent from the set is open, so a note that
   // gains a new kind of connection shows it without a click.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -144,55 +157,66 @@ export default function ContextLinksPanel({
       connections.push({ key: `unresolved:${name}`, path: null, title: name, direction: 'unresolved' });
     }
 
-    const byType = new Map<string, Connection[]>();
-    for (const connection of connections) {
-      // Group by the community's own type names (the console is the registry),
-      // so `company` and `Community` land in one group under one spelling. Only
-      // a note with no type at all falls into the untyped bucket.
-      const rawType = connection.path ? byPath.get(connection.path)?.type?.trim() : null;
-      const type =
-        connection.path === null
-          ? UNRESOLVED
-          : isIndexPath(connection.path)
-            ? INDEX
-            : rawType
-              ? getNodeTypeConfig(rawType, nodeTypes).name
-              : UNTYPED;
-      const list = byType.get(type);
-      if (list) list.push(connection);
-      else byType.set(type, [connection]);
-    }
-
     // The index group's label and colour come from the community's own Index
     // type, so a community that renames or recolours it is obeyed here too.
     const indexConfig = getNodeTypeConfig('Index', nodeTypes);
 
-    return [...byType.entries()]
-      .map(([type, list]) => ({
-        type,
-        label:
-          type === INDEX ? indexConfig.name
-          : type === UNTYPED ? 'Untyped'
-          : type === UNRESOLVED ? 'Unresolved'
-          // Anything else IS a community type name, resolved when it was grouped.
-          : type,
-        color:
-          type === INDEX ? indexConfig.color
-          : type === UNTYPED || type === UNRESOLVED ? NEUTRAL
-          : getTypeColor(type, nodeTypes),
-        connections: list.sort((a, b) => a.title.localeCompare(b.title)),
+    const grouped = new Map<string, Group>();
+    for (const connection of connections) {
+      // Group by the community's own type names (the console is the registry),
+      // so `company` and `Community` land in one group under one spelling — and
+      // then by the alias that names that type here, so a Community aliased
+      // "Portfolio Company" gets its own band beside "Fund" rather than both
+      // hiding under one "Community". An alias the console doesn't configure
+      // for this type isn't one (events reuse the column for their public slug),
+      // so those fall back to the plain type group. Only a note with no type at
+      // all falls into the untyped bucket.
+      const rawType = connection.path ? byPath.get(connection.path)?.type?.trim() || null : null;
+      let key: string;
+      let label: string;
+      let color: string;
+      if (connection.path === null) {
+        key = UNRESOLVED;
+        label = 'Unresolved';
+        color = NEUTRAL;
+      } else if (isIndexPath(connection.path)) {
+        key = INDEX;
+        label = indexConfig.name;
+        color = indexConfig.color;
+      } else if (!rawType) {
+        key = UNTYPED;
+        label = 'Untyped';
+        color = NEUTRAL;
+      } else {
+        const typeName = getNodeTypeConfig(rawType, nodeTypes).name;
+        const alias = findAlias(communityAliases, aliasOfPath(connection.path), rawType);
+        // NUL joins the pair: it can't occur in a type or an alias name, so two
+        // groups collide only when they really are the same type and alias.
+        key = alias ? `${typeName}\u0000${alias.name}` : typeName;
+        label = alias?.name ?? typeName;
+        color = alias?.color ?? getTypeColor(typeName, nodeTypes);
+      }
+      const group = grouped.get(key);
+      if (group) group.connections.push(connection);
+      else grouped.set(key, { key, label, color, connections: [connection] });
+    }
+
+    return [...grouped.values()]
+      .map((group) => ({
+        ...group,
+        connections: group.connections.sort((a, b) => a.title.localeCompare(b.title)),
       }))
       // Indexes first (they're the containers everything else sits in), then
       // the biggest group — the note's dominant relationship — with unresolved
       // always last, since it's a to-do list, not a neighbourhood.
       .sort((a, b) => {
-        if (a.type === INDEX) return -1;
-        if (b.type === INDEX) return 1;
-        if (a.type === UNRESOLVED) return 1;
-        if (b.type === UNRESOLVED) return -1;
+        if (a.key === INDEX) return -1;
+        if (b.key === INDEX) return 1;
+        if (a.key === UNRESOLVED) return 1;
+        if (b.key === UNRESOLVED) return -1;
         return b.connections.length - a.connections.length || a.label.localeCompare(b.label);
       });
-  }, [item, items, titleFor, nodeTypes, survives]);
+  }, [item, items, titleFor, nodeTypes, communityAliases, aliasOfPath, survives]);
 
   if (!item) {
     return (
@@ -217,18 +241,22 @@ export default function ContextLinksPanel({
             : 'Nothing links here yet, and this note links nowhere.'}
         </p>
       ) : (
-        <div className="mt-3 flex flex-col gap-4">
+        // Spacing belongs to the OPEN list below a band, not between the bands:
+        // collapsed groups are a stack of colour bars and any gap between them
+        // reads as missing content. They sit flush, parted by a hairline of the
+        // panel behind them so two same-coloured neighbours stay two bars.
+        <div className="mt-3 flex flex-col gap-px">
           {groups.map((group) => {
-            const isCollapsed = collapsed.has(group.type);
+            const isCollapsed = collapsed.has(group.key);
             const Chevron = isCollapsed ? ChevronRight : ChevronDown;
             return (
-              <section key={group.type}>
+              <section key={group.key}>
                 <button
                   type="button"
                   onClick={() =>
                     setCollapsed((prev) => {
                       const next = new Set(prev);
-                      if (!next.delete(group.type)) next.add(group.type);
+                      if (!next.delete(group.key)) next.add(group.key);
                       return next;
                     })
                   }
@@ -252,7 +280,7 @@ export default function ContextLinksPanel({
                   // Rows hang off a faint rail in the same colour, so a list
                   // scrolled past its bar still says which group it belongs to.
                   <ul
-                    className="mt-1 ml-2 flex flex-col gap-0.5 border-l-2 pl-1.5"
+                    className="mb-3 mt-1 ml-2 flex flex-col gap-0.5 border-l-2 pl-1.5"
                     style={{ borderColor: `${group.color}40` }}
                   >
                     {group.connections.map((connection) => {

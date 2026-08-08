@@ -15,7 +15,7 @@
 // hydratable from `initial` so the page can restore a shared URL.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isIndexPath } from '@/lib/notes/shared/indexNote';
+import { humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote';
 import type { NoteMeta } from '@/lib/notes/shared/types';
 import type { SearchFilters } from '@/lib/notes/shared/retrieval';
 import { notesApi } from '@/features/notes/lib/notesApi';
@@ -54,6 +54,50 @@ export interface ContextBrowseInitial {
 const SEARCH_MIN_CHARS = 3;
 const SEARCH_DEBOUNCE_MS = 250;
 
+/**
+ * Every note as a browse item, index notes included, with backlink counts
+ * resolved across the whole set. Pure so surfaces without the full browse state
+ * (the connections rail on the note pages) derive the same items the browser
+ * sees, from the same cached note list.
+ */
+export function toContextItems(notes: NoteMeta[]): ContextItem[] {
+  const backlinks = new Map<string, number>();
+  for (const note of notes) {
+    for (const target of note.linkTargets ?? []) {
+      backlinks.set(target, (backlinks.get(target) ?? 0) + 1);
+    }
+  }
+  return notes.map((n) => ({
+    path: n.path,
+    title: n.title,
+    folder: n.folder,
+    type: typeof n.frontmatter?.type === 'string' ? n.frontmatter.type : null,
+    tags: n.tags ?? [],
+    mtime: n.mtime,
+    linkTargets: n.linkTargets ?? [],
+    unresolved: n.unresolved ?? [],
+    backlinkCount: backlinks.get(n.path) ?? 0,
+  }));
+}
+
+/**
+ * Display title for a link target, which may be outside the filtered set.
+ *
+ * Index notes are folded into their folder everywhere else and are filtered out
+ * of `items` entirely, so they're looked up in `titleByPath` — every note the
+ * brain holds, including the indexes. That title IS the folder's name, so a link
+ * to `communities/index.md` reads "Companies", the same as its tree row.
+ */
+export function titleOfPath(path: string, items: ContextItem[], titleByPath: Map<string, string>): string {
+  const known = items.find((i) => i.path === path)?.title ?? titleByPath.get(path);
+  if (known) return known;
+  if (isIndexPath(path)) {
+    const folder = path.split('/').slice(-2, -1)[0];
+    return folder ? humanizeFolderName(folder) : 'Index';
+  }
+  return humanizeFolderName((path.split('/').pop() ?? path).replace(/\.md$/, ''));
+}
+
 function matchesText(item: ContextItem, query: string): boolean {
   return (
     item.title.toLowerCase().includes(query) ||
@@ -81,29 +125,18 @@ export function useContextBrowse(
   /** The tree row the detail panel is showing. */
   const [selectedPath, setSelectedPath] = useState<string | null>(initial?.selectedPath ?? null);
 
+  // Every note as a browse item, index notes included. The tree renders `items`
+  // (below) instead, but anything that resolves a path — the selection, a link's
+  // other end — has to see the indexes too, or a folder resolves to nothing.
+  const allItems = useMemo<ContextItem[]>(() => toContextItems(notes), [notes]);
+
   // A folder's index note IS the folder as far as browsing goes (the tree shows
   // it as the folder row), so it never appears as a row of its own.
-  const items = useMemo<ContextItem[]>(() => {
-    const backlinks = new Map<string, number>();
-    for (const note of notes) {
-      for (const target of note.linkTargets ?? []) {
-        backlinks.set(target, (backlinks.get(target) ?? 0) + 1);
-      }
-    }
-    return notes
-      .filter((n) => !isIndexPath(n.path))
-      .map((n) => ({
-        path: n.path,
-        title: n.title,
-        folder: n.folder,
-        type: typeof n.frontmatter?.type === 'string' ? n.frontmatter.type : null,
-        tags: n.tags ?? [],
-        mtime: n.mtime,
-        linkTargets: n.linkTargets ?? [],
-        unresolved: n.unresolved ?? [],
-        backlinkCount: backlinks.get(n.path) ?? 0,
-      }));
-  }, [notes]);
+  const items = useMemo(() => allItems.filter((i) => !isIndexPath(i.path)), [allItems]);
+
+  /** Path → item over ALL notes: selecting a folder selects its index note,
+   *  which is exactly the path `items` drops. Resolve selections through this. */
+  const itemByPath = useMemo(() => new Map(allItems.map((i) => [i.path, i])), [allItems]);
 
   const starredSet = useMemo(() => new Set(starred ?? []), [starred]);
 
@@ -214,6 +247,8 @@ export function useContextBrowse(
 
   return {
     items,
+    allItems,
+    itemByPath,
     filteredItems,
     presentTags,
     presentTypes,

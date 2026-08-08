@@ -448,10 +448,11 @@ function Tree({
 }) {
   // A folder's own index.md never renders as a child row — the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The brain
-  // root's index.md (node.path === '') stays a normal note row: there is no
-  // root folder row to carry it.
+  // root included: its index.md folds into the root folder row, so the
+  // community reads as the parent folder of everything below it.
+  const ownIndex = node.path ? `${node.path}/index.md` : 'index.md'
   const children = (node.children ?? []).filter(
-    (c) => !(node.path && c.kind === 'note' && c.path === `${node.path}/index.md`),
+    (c) => !(c.kind === 'note' && c.path === ownIndex),
   )
   return (
     <>
@@ -526,14 +527,13 @@ function FolderRow(props: {
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note — clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
-  // (The root row has no index note of its own — root's index.md stays a child
-  // row, matching Tree's filter — so it only ever expands/collapses.)
+  // The brain root works the same way over its own index.md, so the community
+  // row opens the community's home note.
   // The folder's display name: an explicit label (the brain root's), else the
   // title its index note declares, else the path segment.
   const folderLabel = props.label ?? props.node.title ?? props.node.name
-  const indexPath = props.node.path ? `${props.node.path}/index.md` : ''
-  const hasIndex =
-    !!indexPath && (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
+  const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
+  const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
   const indexStarred = hasIndex && props.starredSet.has(indexPath)
   return (

@@ -17,9 +17,9 @@
 // Label above value, not beside it — a note's column is narrow and a label
 // gutter would eat a third of it.
 
-import { getNodeTypeConfig } from '@/lib/types'
+import { findAlias, getNodeTypeConfig, nodeTypeLabel } from '@/lib/types'
 import { tagPalette } from '@/lib/tagColors'
-import type { NodeTypeConfig } from '@/lib/types'
+import type { CommunityAlias, NodeTypeConfig } from '@/lib/types'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
 const CHIP_CLASS = 'inline-flex items-center rounded-md px-2 py-1 text-[12px] font-semibold text-white'
@@ -27,16 +27,30 @@ const CHIP_CLASS = 'inline-flex items-center rounded-md px-2 py-1 text-[12px] fo
 interface NoteMetaRowsProps {
   /** The note's frontmatter type, named and coloured by the community console. */
   type?: string | null
+  /**
+   * The alias the note's directory node holds, when it has one. A type is shown
+   * by its alias wherever the community gave it one — "Portfolio Company", not
+   * "Community" — so the chip here matches the node's card in the directory.
+   * Unrecognised values fall back to the type name (nodeTypeLabel), which is
+   * what keeps an event's public slug from surfacing as a type.
+   */
+  alias?: string | null
   tags: string[]
   /** The community's configured node types, from the console. */
   nodeTypes?: NodeTypeConfig[]
+  /** The community's aliases — the registry an alias has to appear in to count. */
+  communityAliases?: CommunityAlias[]
   tagColors?: Record<string, string> | null
   className?: string
 }
 
-export function NoteMetaRows({ type, tags, nodeTypes, tagColors, className = '' }: NoteMetaRowsProps) {
+export function NoteMetaRows({
+  type, alias, tags, nodeTypes, communityAliases, tagColors, className = '',
+}: NoteMetaRowsProps) {
   const trimmedType = type?.trim() || null
   const typeConfig = trimmedType ? getNodeTypeConfig(trimmedType, nodeTypes) : null
+  // An alias carries its own colour, the one the directory card is painted in.
+  const aliasConfig = trimmedType ? findAlias(communityAliases, alias, trimmedType) : undefined
   if (!typeConfig && tags.length === 0) return null
 
   return (
@@ -46,9 +60,10 @@ export function NoteMetaRows({ type, tags, nodeTypes, tagColors, className = '' 
           <span className={LABEL_CLASS}>Type</span>
           <span className="flex">
             {/* The console's own spelling of the type, not the note's — one name
-                for one type, wherever you meet it. */}
-            <span className={CHIP_CLASS} style={{ background: typeConfig.color }}>
-              {typeConfig.name}
+                for one type, wherever you meet it — and its alias in preference
+                to it, since that's the name the community actually uses. */}
+            <span className={CHIP_CLASS} style={{ background: aliasConfig?.color ?? typeConfig.color }}>
+              {nodeTypeLabel(trimmedType, alias, communityAliases, nodeTypes)}
             </span>
           </span>
         </div>

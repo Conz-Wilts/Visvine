@@ -7,11 +7,12 @@
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { Waypoints } from 'lucide-react';
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext';
 import { useContextPanel, useDockVisuallyOpen } from '@/lib/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
-import { TAB_MOTION, TAB_MOTION_EASE, TAB_MOTION_MS } from '@/components/ui/tabMotion';
+import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/tabMotion';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 import PaneTopScrollbarMask from './PaneTopScrollbarMask';
 
@@ -83,9 +84,16 @@ function PaneTabBarInner({
   const { setHost } = useTabBarSlot();
   // The tray centres over the note column, not the pane: while the tree is
   // docked the content insets by its width, so the attached region matches it,
-  // on the same transition.
-  const { dockRequested, contextOpen } = useContextPanel();
+  // on the same transition. The connections rail narrows the column from the
+  // right the same way — but as a class, not a style: the rail only exists at
+  // xl, a breakpoint inline padding can't see.
+  const { dockRequested, contextOpen, connectionsOpen, setConnectionsOpen } = useContextPanel();
   const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
+  // The Connections rail toggle rides the bar's right edge whenever a note or
+  // entity surface is up — bar-level chrome for a bar-level panel, so it never
+  // jumps around with the editor toolbar. Hidden below xl with the rail itself.
+  const surfaceKind = chrome.surface?.kind;
+  const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
@@ -111,12 +119,20 @@ function PaneTabBarInner({
   // without flagging a change.
   const prevTabsKeyRef = useRef(tabsKey);
   const [ghosts, setGhosts] = useState<LabelRect[]>([]);
+  // True while a tab-set change's slower FLIP is playing — the underline reads
+  // the flag so it travels with the sliding word instead of racing ahead of it.
+  const [slowSet, setSlowSet] = useState(false);
+  useEffect(() => {
+    if (!slowSet) return;
+    const id = setTimeout(() => setSlowSet(false), TAB_SET_MOTION_MS + 50);
+    return () => clearTimeout(id);
+  }, [slowSet]);
 
   useLayoutEffect(() => {
     if (!ghosts.length) return;
     // Purge after the exit animation (tabbar-label-exit holds opacity 0 via
     // `forwards`, so a late purge can't blink the word back).
-    const id = setTimeout(() => setGhosts([]), TAB_MOTION_MS + 50);
+    const id = setTimeout(() => setGhosts([]), TAB_SET_MOTION_MS + 50);
     return () => clearTimeout(id);
   }, [ghosts]);
 
@@ -130,6 +146,7 @@ function PaneTabBarInner({
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const tabsChanged = prevTabsKeyRef.current !== tabsKey;
     if (tabsChanged && armed && !reduced) {
+      setSlowSet(true);
       const prevRects = prevRectsRef.current;
       const seen = new Set<string>();
       tabs.forEach((tab, i) => {
@@ -144,11 +161,11 @@ function PaneTabBarInner({
           // text reads as smear, and cross-set width deltas are small.
           b.animate(
             [{ transform: `translateX(${first.left - b.offsetLeft}px)` }, { transform: 'none' }],
-            { duration: TAB_MOTION_MS, easing: TAB_MOTION_EASE },
+            { duration: TAB_SET_MOTION_MS, easing: TAB_MOTION_EASE },
           );
         } else if (!first) {
           // New word: fade in where it lands while its neighbours make room.
-          b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TAB_MOTION_MS, easing: 'ease-out' });
+          b.animate([{ opacity: 0 }, { opacity: 1 }], { duration: TAB_SET_MOTION_MS, easing: 'ease-out' });
         }
       });
       const exiting = [...prevRects.values()].filter((r) => !seen.has(labelMatchKey(r.label)));
@@ -251,18 +268,40 @@ function PaneTabBarInner({
               key={g.label}
               aria-hidden
               className="tabbar-label-exit pointer-events-none absolute top-0 flex h-12 items-center px-4 text-sm font-medium whitespace-nowrap text-brand-grey"
-              style={{ left: g.left }}
+              style={{ left: g.left, animationDuration: `${TAB_SET_MOTION_MS}ms` }}
             >
               {g.label}
             </span>
           ))}
 
-          {/* Animated green underline indicator */}
+          {/* Animated green underline indicator. During a tab-set change it
+              slows to the FLIP's duration so it travels with the sliding word. */}
           <div
             className={`absolute bottom-0 h-0.5 bg-brand-green ${motion}`}
-            style={{ left: indicatorStyle.left, width: indicatorStyle.width }}
+            style={{
+              left: indicatorStyle.left,
+              width: indicatorStyle.width,
+              transitionDuration: slowSet ? `${TAB_SET_MOTION_MS}ms` : undefined,
+            }}
           />
         </div>
+
+        {showConnections && (
+          <button
+            type="button"
+            onClick={() => setConnectionsOpen(!connectionsOpen)}
+            aria-pressed={connectionsOpen}
+            title="What this note connects to"
+            className={`mr-2 hidden shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition xl:flex ${
+              connectionsOpen
+                ? 'border-border-default bg-surface-2 text-text-primary'
+                : 'border-border-default text-text-secondary hover:bg-surface-2'
+            }`}
+          >
+            <Waypoints className="h-3.5 w-3.5" />
+            Connections
+          </button>
+        )}
       </div>
 
       {/* The attached region. Always mounted (a conditional mount would snap
@@ -285,15 +324,15 @@ function PaneTabBarInner({
             ref={setHost}
             className={`flex items-start justify-center motion-reduce:[transition:none!important] ${
               attachedOpen ? 'translate-y-0' : '-translate-y-full'
-            }`}
+            } ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
             style={{
               height: TRAY_ROW_H,
               paddingLeft: trayInset || undefined,
               // `translate`, not `transform`: Tailwind v4's translate-y-*
               // utilities set the standalone CSS translate property.
               transition: armed
-                ? 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                : 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+                ? 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                : 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
             }}
           />
         </div>

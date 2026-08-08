@@ -22,6 +22,7 @@ import { NoteMetaRows } from '@/features/notes/components/NoteMetaRows';
 import { noteHref } from '@/lib/notes/entities';
 import { splitFrontmatter, resolveOkfLink } from '@/lib/notes/shared/markdown';
 import { timeAgo } from '@/lib/date';
+import type { CommunityAlias } from '@/lib/types';
 import type { ContextItem } from '@/hooks/useContextBrowse';
 
 const MD_REMARK_PLUGINS: ReactMarkdownOptions['remarkPlugins'] = [remarkGfm];
@@ -33,15 +34,22 @@ interface ContextNotePanelProps {
   communityId: string;
   /** The selected note, or null for the empty state. */
   item: ContextItem | null;
-  /** Every note in scope — decides which body links are internal. */
+  /** Every note in scope, index notes included — decides which body links are
+   *  internal. An index folder note is mostly links to other indexes, so a set
+   *  without them would render half its body as broken external links. */
   items: ContextItem[];
+  /** The alias the note's directory node holds — the community's own name for
+   *  its type. Null for a plain note, which has no node behind it. */
+  alias?: string | null;
+  /** The community's aliases — the registry an alias must appear in to count. */
+  communityAliases?: CommunityAlias[];
   /** Re-select another note from a link in the body. */
   onSelectPath: (path: string) => void;
   tagColors?: Record<string, string> | null;
 }
 
 export default function ContextNotePanel({
-  communityId, item, items, onSelectPath, tagColors,
+  communityId, item, items, alias, communityAliases, onSelectPath, tagColors,
 }: ContextNotePanelProps) {
   const { currentCommunity } = useCommunity();
   const nodeTypes = currentCommunity?.nodeTypes;
@@ -144,8 +152,10 @@ export default function ContextNotePanel({
         <NoteMetaRows
           className="mt-3"
           type={item.type}
+          alias={alias}
           tags={item.tags}
           nodeTypes={nodeTypes}
+          communityAliases={communityAliases}
           tagColors={tagColors}
         />
       </header>

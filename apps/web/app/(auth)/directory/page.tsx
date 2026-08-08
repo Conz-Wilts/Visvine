@@ -2,12 +2,16 @@
 
 import React, { Suspense, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import NodeGrid from '@/components/dashboard/NodeGrid';
 import DirectoryToolbar from '@/components/dashboard/DirectoryToolbar';
 import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { cachedFetch, contextKeys, prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
+import { notesApi } from '@/features/notes/lib/notesApi';
+import { noteHref } from '@/lib/notes/entities';
 import type { CommunityAlias } from '@/lib/types';
 
 // The knowledge browser pulls in the note tree, the virtualized grid and the
@@ -50,17 +54,42 @@ function DirectoryPane() {
   // first render the tab bar owns the view; it never writes back to the URL.
   const initialView: DirectoryView = useSearchParams().get('view') === 'context' ? 'context' : 'grid';
   const [view, setView] = useState<DirectoryView>(initialView);
+  const router = useRouter();
+  const { currentCommunity } = useCommunity();
+  const communityId = currentCommunity?.id ?? null;
   const { releaseDockNow } = useContextPanel();
   // Switching to Grid closes any docked tree now, skipping the release grace:
   // the grace exists for navigations where another surface re-claims the dock,
   // but Grid is a terminal state — waiting just holds the closing panel over
   // cards that are already animating in.
+  //
+  // Context navigates to the brain's top-level index note (`index.md` — the
+  // hand-written home page, e.g. "Blackbird Ventures") rather than swapping in
+  // the three-column browser; the browser stays reachable at ?view=context.
+  // The dock is NOT released here — the note page re-claims it, and the release
+  // grace bridges the swap. A brain without a root index falls back to the
+  // browser: the note page's missing state is an access-request card, which is
+  // the wrong surface for "this note was never written".
   const handleSelect = useCallback(
     (id: string) => {
-      if (id === 'grid') releaseDockNow();
-      setView(id as DirectoryView);
+      if (id === 'grid') {
+        releaseDockNow();
+        setView('grid');
+        return;
+      }
+      if (!communityId) {
+        setView('context');
+        return;
+      }
+      prefetchNoteContext(communityId, 'index.md');
+      cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId))
+        .then(({ notes }) => {
+          if (notes.some((n) => n.path === 'index.md')) router.push(noteHref('index.md'));
+          else setView('context');
+        })
+        .catch(() => router.push(noteHref('index.md')));
     },
-    [releaseDockNow],
+    [communityId, releaseDockNow, router],
   );
   usePaneChrome({
     tabs: DIRECTORY_TABS,

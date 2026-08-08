@@ -12,9 +12,11 @@
 // shell, so note→note re-points the same panel instead of remounting one.
 
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
+import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { INDEX_BASENAME } from '@/lib/notes/shared/indexNote';
 
 // A non-entity note is still a Context note — same "Context / Raw" top nav an
 // entity profile's Context tab gets. The tabs ARE the editor mode.
@@ -23,11 +25,20 @@ const NOTE_TABS: PaneTabItem[] = [
   { id: 'raw', label: 'Raw' },
 ];
 
+// The brain-root index is where the Directory's Context tab lands, so it keeps
+// the Directory's own Grid tab in the bar — Context still reads as a sibling
+// view of the grid rather than a place you left it for. Any other note drops
+// Grid and shows the plain note bar above.
+const ROOT_INDEX_TABS: PaneTabItem[] = [{ id: 'grid', label: 'Grid' }, ...NOTE_TABS];
+
 function NoteViewerRoute() {
   const params = useParams();
+  const router = useRouter();
+  const { releaseDockNow } = useContextPanel();
   const raw = params.path;
   const segments = Array.isArray(raw) ? raw : raw ? [raw] : [];
   const notePath = segments.map((s) => decodeURIComponent(String(s))).join('/');
+  const isRootIndex = notePath === INDEX_BASENAME;
   const [mode, setMode] = useState<NoteMode>('wysiwyg');
 
   // Switching notes resets to the Context (wysiwyg) tab — the profile Context
@@ -37,12 +48,23 @@ function NoteViewerRoute() {
   }, [notePath]);
 
   const activeTab = mode === 'raw' ? 'raw' : 'context';
-  const handleSelect = useCallback((id: string) => {
-    setMode(id === 'raw' ? 'raw' : 'wysiwyg');
-  }, []);
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (id === 'grid') {
+        // Same immediate dock release the Directory's own Grid tab does: Grid
+        // is a terminal state for the docked tree, so the grace would only hold
+        // the closing panel over cards already animating in.
+        releaseDockNow();
+        router.push('/directory');
+        return;
+      }
+      setMode(id === 'raw' ? 'raw' : 'wysiwyg');
+    },
+    [releaseDockNow, router],
+  );
 
   usePaneChrome({
-    tabs: NOTE_TABS,
+    tabs: isRootIndex ? ROOT_INDEX_TABS : NOTE_TABS,
     activeId: activeTab,
     onSelect: handleSelect,
     // Only the wysiwyg editor portals a toolbar into the bar's attached region —

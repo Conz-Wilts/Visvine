@@ -30,6 +30,7 @@ import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import type { PickerEntity } from './NotePicker'
+import type { CommunityAlias } from '@/lib/types'
 import '../notes.css'
 
 const PERSONAL_ID_PREFIX = 'me:'
@@ -393,8 +394,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       <NoteMetaRows
         className="mt-4"
         type={openMeta?.frontmatter.type}
+        // A note that stands for a directory node is labelled by that node's
+        // alias, the same name its card carries in the directory.
+        alias={entityByPath.get(path)?.alias ?? null}
         tags={openMeta?.tags ?? []}
         nodeTypes={currentCommunity?.nodeTypes}
+        communityAliases={currentCommunity?.communityAliases as CommunityAlias[] | undefined}
         tagColors={currentCommunity?.designConfig?.tagColors ?? null}
       />
       {isReplica && pubs?.asTarget && (

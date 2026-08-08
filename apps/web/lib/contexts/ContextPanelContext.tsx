@@ -29,6 +29,14 @@ interface ContextPanelValue {
   // within a session; a fresh load starts open again.
   contextOpen: boolean;
   setContextOpen: (v: boolean) => void;
+  // The connections rail on the note surfaces (NoteContextPanel /
+  // EntityContextPanel): the same ContextLinksPanel the 3-column browser shows,
+  // as a toggleable right-hand column. Lives here — not in either panel — so it
+  // survives note→note and note↔entity navigation the way `contextOpen` does.
+  // No grace timers: the rail is mounted once by PaneSurfaceHost, so nothing
+  // unmounts/remounts it across those swaps.
+  connectionsOpen: boolean;
+  setConnectionsOpen: (v: boolean) => void;
   // Pixels the docked panel's content should start BELOW the card top. A page
   // that keeps its own bar pinned at the card top (the Directory's Grid/Context
   // tabs) sets this to that bar's height so the notes tree begins under
@@ -45,6 +53,8 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   releaseDockNow: () => {},
   contextOpen: true,
   setContextOpen: () => {},
+  connectionsOpen: false,
+  setConnectionsOpen: () => {},
   dockTopInset: 0,
   setDockTopInset: () => {},
 });
@@ -64,6 +74,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [dockRequestedState, setDockRequestedState] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [dockTopInsetState, setDockTopInsetState] = useState(0);
 
   // One timer per latched value: claiming cancels a pending release.
@@ -129,6 +140,8 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         releaseDockNow,
         contextOpen,
         setContextOpen,
+        connectionsOpen,
+        setConnectionsOpen,
         dockTopInset: dockTopInsetState,
         setDockTopInset,
       }}

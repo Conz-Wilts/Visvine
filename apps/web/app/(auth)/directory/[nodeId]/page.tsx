@@ -385,7 +385,7 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
 // /directory/<id>?tab=context. So note tabs render here, and the first tab jumps
 // out to the real page.
 const EVENT_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Event' };
-const COMMUNITY_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Community' };
+const COMMUNITY_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Page' };
 
 function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
   nodeId: string;
