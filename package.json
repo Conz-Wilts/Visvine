@@ -26,6 +26,7 @@
     "db:psql": "docker exec -it visvine-postgres psql -U postgres -d visvine",
     "db:migrate": "pnpm --filter @visvine/web db:push",
     "db:seed": "pnpm --filter @visvine/web db:seed",
+    "db:embed": "pnpm --filter @visvine/web db:embed",
     "db:nz": "node apps/web/scripts/add-nz-ecosystem.mjs",
     "db:blackbird": "node apps/web/scripts/add-blackbird-ventures.mjs",
     "db:blackbird:notes": "node apps/web/scripts/add-blackbird-notes.mjs",

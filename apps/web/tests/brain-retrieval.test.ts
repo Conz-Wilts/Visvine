@@ -9,6 +9,7 @@ import { bm25Search } from '../lib/notes/shared/bm25'
 import {
   fusedSearch,
   matchesFilters,
+  STAGE_WEIGHTS,
   type RetrievalNote,
   type SourceStage,
   type VectorStage,
@@ -223,6 +224,63 @@ test('fusedSearch skips the source stage under note-frontmatter filters', async 
   const res = await fusedSearch(retrievalVault(), 'kubernetes', { type: 'Playbook' }, { sources })
   assert.equal(ranked, false) // type/tags are note concepts — sources sit out
   assert.ok(res.every((r) => r.kind === 'note'))
+})
+
+// --- weighted fusion ------------------------------------------------------------------
+
+test('a linked neighbor never outranks a note that actually matched the query', async () => {
+  // notes.md matches no term; it is only adjacent to the top hit. beta.md is a
+  // genuine (if weak) text match. Under unweighted RRF the neighbor's rank-0
+  // vote (1/61) edged out beta's rank-1 vote (1/62); the context weight fixes it.
+  const res = await fusedSearch(retrievalVault(), 'kubernetes deployment', {})
+  const paths = res.map((r) => r.path)
+  assert.ok(paths.indexOf('projects/beta.md') < paths.indexOf('projects/notes.md'))
+  assert.ok(STAGE_WEIGHTS.context < STAGE_WEIGHTS.bm25)
+})
+
+test('every hit carries a snippet, including ones only a vector stage found', async () => {
+  const vector: VectorStage = {
+    async rank() {
+      return [{ path: 'projects/notes.md', score: 0.93 }]
+    },
+  }
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { vector, contextExpand: false })
+  const vectorOnly = res.find((r) => r.path === 'projects/notes.md')!
+  // It never went through BM25, so its snippet is built from the body instead of
+  // being left undefined — the caller has something to show either way.
+  assert.ok(vectorOnly.snippet && vectorOnly.snippet.length > 0)
+  assert.ok(res.every((r) => r.snippet && r.snippet.length > 0))
+})
+
+test('the source keyword stage ranks chunks the semantic stage missed', async () => {
+  // The realistic no-key case: rank() is empty (no embeddings), keyword() is not.
+  const sources: SourceStage = {
+    async rank() {
+      return []
+    },
+    async keyword() {
+      return [{ path: 'projects/pricing.csv', seq: 2, snippet: 'kubernetes seats: 40', score: 0.4 }]
+    },
+  }
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, contextExpand: false })
+  const hit = res.find((r) => r.kind === 'source')
+  assert.ok(hit, 'keyword-only source hit fused in')
+  assert.equal(hit.seq, 2)
+})
+
+test('a chunk found by both source stages appears once, with its semantic snippet', async () => {
+  const sources: SourceStage = {
+    async rank() {
+      return [{ path: 'projects/pricing.csv', seq: 1, snippet: 'semantic window', score: 0.9 }]
+    },
+    async keyword() {
+      return [{ path: 'projects/pricing.csv', seq: 1, snippet: 'keyword window', score: 0.5 }]
+    },
+  }
+  const res = await fusedSearch(retrievalVault(), 'kubernetes', {}, { sources, contextExpand: false })
+  const chunks = res.filter((r) => r.kind === 'source')
+  assert.equal(chunks.length, 1)
+  assert.equal(chunks[0].snippet, 'semantic window')
 })
 
 test('two chunks of the same source fuse as distinct results', async () => {

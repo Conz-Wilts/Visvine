@@ -1,6 +1,7 @@
 // POST /api/notes/search
-//   { communityId, scope, query, k?, filters? } → { results: FusedResult[] }
-// Fused retrieval (frontmatter filter → BM25 → pgvector → link context, RRF) over
+//   { communityId, scope, query, k?, filters? } → { results: FusedResult[], semantic }
+// Fused retrieval (frontmatter filter → BM25 → pgvector → chunks → link context,
+// weighted RRF) over
 // everything the caller can read in the brain; the visibility lens and the
 // private-folder read audit are applied inside brainService.searchBrain.
 
@@ -31,8 +32,10 @@ export async function POST(req: NextRequest) {
   const k = typeof body.k === 'number' ? body.k : undefined
   const p = await principalOf(brain)
   try {
-    const results = await searchBrain(p, brain, query, parseFilters(body.filters), k)
-    return NextResponse.json({ results })
+    const { hits, semantic } = await searchBrain(p, brain, query, parseFilters(body.filters), k)
+    // `semantic` says whether the embedding stages actually ran — 'no-key' means
+    // these results are keyword + link context only.
+    return NextResponse.json({ results: hits, semantic })
   } catch (err) {
     return failFromError(err)
   }

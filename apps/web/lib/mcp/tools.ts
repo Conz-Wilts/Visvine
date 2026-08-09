@@ -1,5 +1,10 @@
 /**
- * The MCP tool surface: ten tools over the context layer.
+ * The MCP tool surface: twelve tools over the context layer.
+ *
+ *   read    list_communities, list_context, search_context, get_entity,
+ *           list_sources, read_source
+ *   write   create_entity, write_note, append_note, move_note
+ *   connect list_connectors, run_connector
  *
  * The shape of this surface follows the shape of the model, deliberately:
  *
@@ -26,13 +31,22 @@ import {
   requireCommunityBrain,
   type BrainScope,
 } from '@/lib/mcp/context'
-import { searchBrain, readVisible, visibleVault, writeGated, appendLogGated } from '@/lib/notes/brainService'
+import {
+  searchBrain,
+  readVisible,
+  visibleVault,
+  writeGated,
+  appendLogGated,
+  moveGated,
+  listVisibleSources,
+  readSourceVisible,
+} from '@/lib/notes/brainService'
 import { readableRoots } from '@/lib/notes/shared/authz'
 import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permissions'
 import type { WriteResult } from '@/lib/notes/shared/brainTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
 import { entityNotePath } from '@/lib/notes/entities'
-import { isStructuralNodeType } from '@/lib/types/context'
+import { isStructuralNodeType, canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -211,14 +225,29 @@ export function registerTools(server: McpServer): void {
           })
           // Structural types (community/space/channel/note/file) describe the
           // container, not the directory — the grid hides them and so do we.
+          // Canonicalised both sides: legacy rows still carry retired spellings
+          // ('org', 'group'), so a raw string compare silently returns nothing.
+          const wanted = args.type ? canonicalNodeType(args.type) : null
           const directory = rows
             .filter((r) => !isStructuralNodeType(r.type))
-            .filter((r) => !args.type || r.type.toLowerCase() === args.type.toLowerCase())
+            .filter((r) => !wanted || canonicalNodeType(r.type) === wanted)
           entityTotal = directory.length
           for (const row of directory.slice(0, limit)) {
             ;(entitiesByType[row.type] ??= []).push(describeNode(row))
           }
         }
+
+        // A grant's resource path can be a single NOTE, not a folder
+        // (shared/authz.ts) — reporting those as folders sends an agent off to
+        // write files inside a .md path. Split them, and say so.
+        const writablePaths = (principal.communityAdmin ? [''] : readableRoots(principal.access)).filter(
+          (path) => principalCanWrite(principal, path),
+        )
+        const describeWritable = (path: string) => ({
+          path: path || '(brain root)',
+          your_level: principalLevelName(principal, path),
+        })
+        const isNotePath = (path: string) => path.toLowerCase().endsWith('.md')
 
         return {
           scope,
@@ -226,9 +255,10 @@ export function registerTools(server: McpServer): void {
           entity_count: entityTotal,
           notes: notes.slice(0, limit).map(indexLine),
           note_count: notes.length,
-          writable_folders: (principal.communityAdmin ? [''] : readableRoots(principal.access))
-            .filter((path) => principalCanWrite(principal, path))
-            .map((path) => ({ path: path || '(brain root)', your_level: principalLevelName(principal, path) })),
+          // Write access inside these can still be cut off deeper down by a
+          // restricted subfolder; write_note tells you if so.
+          writable_folders: writablePaths.filter((p) => !isNotePath(p)).map(describeWritable),
+          writable_notes: writablePaths.filter(isNotePath).map(describeWritable),
           truncated: entityTotal > limit || notes.length > limit,
         }
       }),
@@ -238,9 +268,13 @@ export function registerTools(server: McpServer): void {
     'search_context',
     {
       description:
-        "Search one community's context — both halves at once. Notes and uploaded sources are ranked by fused " +
-        'retrieval (keyword + semantic + link context); directory entities are matched by name, alias and tag. ' +
-        'Every hit carries the node_id or note path you need for get_entity. Only what you are allowed to read is searched.',
+        "Search one community's context — both halves at once. Notes and uploaded files are ranked by fused " +
+        'retrieval (keyword BM25 + semantic vectors + link context); directory entities are matched by name, ' +
+        'alias and tag. Every hit carries what you need to open it: node_id for get_entity, path for get_entity, ' +
+        'or path+seq for read_source. Only what you are allowed to read is searched. ' +
+        'The `semantic` field reports whether the meaning-based stages ran — "no-key" means these results are ' +
+        'keyword-only, so prefer literal terms and try more phrasings. Filters beat ranking: narrow with ' +
+        'type/tags/folder/updated_after when you can.',
       inputSchema: {
         community_id: z.string(),
         query: z.string().describe('Natural-language or keyword query'),
@@ -248,6 +282,12 @@ export function registerTools(server: McpServer): void {
         k: z.number().int().min(1).max(50).optional().describe('Max results per kind (default 10)'),
         type: z.string().optional().describe("Filter notes by frontmatter `type`, entities by node type"),
         tags: z.array(z.string()).optional().describe('Require ALL of these tags (notes)'),
+        folder: z
+          .string()
+          .optional()
+          .describe("Only this top-level folder, e.g. 'people' ('' = the brain root)"),
+        updated_after: z.number().optional().describe('Only notes modified at/after this epoch-ms timestamp'),
+        updated_before: z.number().optional().describe('Only notes modified at/before this epoch-ms timestamp'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -257,11 +297,17 @@ export function registerTools(server: McpServer): void {
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         const k = args.k ?? 10
 
-        const hits = await searchBrain(
+        const { hits, semantic } = await searchBrain(
           principal,
           brain,
           args.query,
-          { type: args.type, tags: args.tags },
+          {
+            type: args.type,
+            tags: args.tags,
+            folderId: args.folder,
+            updatedAfter: args.updated_after,
+            updatedBefore: args.updated_before,
+          },
           k,
         )
 
@@ -276,7 +322,9 @@ export function registerTools(server: McpServer): void {
                       { alias: { contains: args.query, mode: 'insensitive' } },
                       { tags: { has: args.query.toLowerCase() } },
                     ],
-                    ...(args.type ? { type: args.type.toLowerCase() } : {}),
+                    // Every spelling of the type, so legacy 'org'/'group' rows
+                    // are found by a search for either name.
+                    ...(args.type ? { type: { in: nodeTypeSpellings(args.type) } } : {}),
                   },
                   select: NODE_SELECT,
                   take: k,
@@ -298,14 +346,19 @@ export function registerTools(server: McpServer): void {
             : []
 
         return {
+          semantic,
           entities,
           // A source hit is a chunk of an uploaded file: it has no note to read,
-          // so it is labelled separately rather than looking like a missing note.
+          // so it says how to open it (read_source) rather than handing back a
+          // path that looks like a note and isn't.
           notes: hits.map((h) => ({
             kind: h.kind,
-            path: h.kind === 'source' ? `${h.path}#${h.seq}` : h.path,
+            path: h.path,
             title: h.title,
             snippet: h.snippet ?? null,
+            ...(h.kind === 'source'
+              ? { seq: h.seq, read_with: { tool: 'read_source', path: h.path } }
+              : { read_with: { tool: 'get_entity', note_path: h.path } }),
           })),
         }
       }),
@@ -348,11 +401,21 @@ export function registerTools(server: McpServer): void {
           row = all.find((n) => entityNotePath({ id: n.id, type: n.type }) === args.note_path) ?? null
         }
 
+        // Structural nodes (the community itself, spaces, channels, connectors)
+        // are not directory entities — list_context and search_context hide
+        // them, so resolving one by id here would be the one way in. Their note
+        // still reads below as a plain note, via its path.
+        let structuralPath: string | null = null
+        if (row && isStructuralNodeType(row.type)) {
+          structuralPath = entityNotePath({ id: row.id, type: row.type })
+          row = null
+        }
+
         // A note path with no node behind it is still readable — a plain note,
         // or an entity note whose node was removed. Return the note alone
         // rather than a bare "not found".
         if (!row) {
-          const path = args.note_path
+          const path = args.note_path ?? structuralPath
           if (!path) throw new McpError(404, `No entity '${args.node_id}' in this community`)
           const content = await readVisible(principal, brain, path)
           if (!content) throw new McpError(404, `No accessible note or entity at '${path}'`)
@@ -407,6 +470,93 @@ export function registerTools(server: McpServer): void {
             }
           }),
           mentioned_by: mentionedBy,
+        }
+      }),
+  )
+
+  server.registerTool(
+    'list_sources',
+    {
+      description:
+        'List the uploaded files in this context — PDFs, spreadsheets, documents and the like, which live ' +
+        'alongside notes at their own paths and are what search_context returns as `kind: "source"` hits. ' +
+        'Each entry reports its extraction status; only `ready` sources are searchable and readable.',
+      inputSchema: {
+        community_id: z.string(),
+        scope: scopeArg,
+        folder: z.string().optional().describe("Only sources in this top-level folder ('' = the brain root)"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'list_sources', async (ctx) => {
+        const scope: BrainScope = args.scope ?? 'shared'
+        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const sources = await listVisibleSources(principal, brain, args.folder)
+        return {
+          scope,
+          sources: sources.map((s) => ({
+            path: s.path,
+            name: s.name,
+            kind: s.kind,
+            size_bytes: s.sizeBytes,
+            status: s.status,
+            error: s.error ?? null,
+            // Extraction caps at 500k chars / 300 chunks — a truncated source is
+            // searchable but its tail is not there.
+            truncated: s.truncated,
+            text_chars: s.textChars ?? null,
+            chunk_count: s.chunkCount,
+          })),
+        }
+      }),
+  )
+
+  server.registerTool(
+    'read_source',
+    {
+      description:
+        "Read the extracted text of an uploaded file — the other half of a search_context `kind: 'source'` hit, " +
+        'whose snippet is one chunk of this. Returns plain text (the original binary is not served here), ' +
+        'paged: pass offset_chars to continue where the last call stopped, guided by total_chars.',
+      inputSchema: {
+        community_id: z.string(),
+        path: z.string().describe("The source's path, exactly as search_context or list_sources reported it"),
+        scope: scopeArg,
+        offset_chars: z.number().int().min(0).optional().describe('Start here in the extracted text (default 0)'),
+        max_chars: z
+          .number()
+          .int()
+          .min(1)
+          .max(100_000)
+          .optional()
+          .describe('How much to return (default 20000)'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'read_source', async (ctx) => {
+        const scope: BrainScope = args.scope ?? 'shared'
+        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        // A '#<seq>' suffix is how search used to report a chunk; accept it.
+        const path = args.path.replace(/#\d+$/, '')
+        const result = await readSourceVisible(principal, brain, path, {
+          offsetChars: args.offset_chars,
+          maxChars: args.max_chars,
+        })
+        // Absent and inaccessible are deliberately indistinguishable.
+        if (!result) throw new McpError(404, `No accessible source at '${path}'`)
+        const offset = args.offset_chars ?? 0
+        return {
+          path: result.meta.path,
+          name: result.meta.name,
+          kind: result.meta.kind,
+          status: result.meta.status,
+          offset_chars: offset,
+          returned_chars: result.text.length,
+          total_chars: result.totalChars,
+          has_more: offset + result.text.length < result.totalChars,
+          text: result.text,
         }
       }),
   )
@@ -540,6 +690,35 @@ export function registerTools(server: McpServer): void {
       }),
   )
 
+  server.registerTool(
+    'move_note',
+    {
+      description:
+        'Move or rename one note. Links pointing AT it are rewritten across the brain, so the mentions that ' +
+        'make up the graph survive the move — which is why this exists instead of write-then-delete. ' +
+        'Needs write access at BOTH the old and the new path. Moving an entity note away from the path its ' +
+        'type implies (people/<slug>.md and so on) detaches it from that entity, so do not.',
+      inputSchema: {
+        community_id: z.string(),
+        from: z.string().describe('Current path of the note'),
+        to: z
+          .string()
+          .describe(
+            'New path, ending in .md. Folders are implicit in the path, so none need creating first; ' +
+              'a note already at that path is an error rather than an overwrite.',
+          ),
+        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the community's context"),
+      },
+    },
+    (args, extra) =>
+      withCtx(extra, 'move_note', async (ctx) => {
+        const scope: BrainScope = args.scope ?? 'personal'
+        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to))
+        return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
+      }),
+  )
+
   // ── Connectors ──────────────────────────────────────────────────────────
   // A connector is a note at connectors/<name>.md: frontmatter declares the
   // perimeter (hosts, env, limits) and the body teaches how to call the
@@ -574,7 +753,8 @@ export function registerTools(server: McpServer): void {
         'make sense). Write the body of an async function and `return` the answer — top-level await works. ' +
         'Available: `fetch(url, init)` which resolves to {status, ok, headers, body, truncated} with body as a ' +
         'STRING (call JSON.parse yourself, there is no .json()); `sql(dsn, query)` for read-only Postgres/MySQL; ' +
-        '`mcp(url).listTools()` / `mcp(url).callTool(name, args)`; `env` holding the connector\'s secrets; and ' +
+        '`mcp(url).listTools()` / `mcp(url).callTool(name, args)`; `sleep(ms)` for backing off a 429 (bounded ' +
+        "by the run deadline); `env` holding the connector's secrets; and " +
         '`console.log`. There is no filesystem, no process, no require/import, and no network beyond the hosts ' +
         "the connector declares — a refused call throws with the reason. Use secrets by name (e.g. " +
         '`{ Authorization: `Bearer ${env.API_KEY}` }`), never ask for or supply credential values; they are ' +

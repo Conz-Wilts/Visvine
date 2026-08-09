@@ -31,6 +31,7 @@
     "db:index-notes:backfill": "tsx scripts/backfill-index-notes.ts",
     "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts",
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts community:blackbird-ventures",
+    "db:embed": "tsx scripts/embed-context.ts",
     "db:connectors:demo": "tsx scripts/add-connector-demo.ts",
     "db:connectors:migrate": "tsx scripts/migrate-connectors-v2.ts",
     "db:connectors:funds": "tsx scripts/add-fund-metrics-demo.ts",

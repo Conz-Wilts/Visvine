@@ -1,31 +1,37 @@
 // The context-source stage of the fused search — the chunk-level sibling of
 // vectorStage.ts. Chunks are embedded at ingest time (no lazy re-embed here;
-// stale-model chunks simply don't rank until reingest), so the stage is one
-// query embed + one cosine ranking in Postgres over the caller's VISIBLE source
-// paths. Any failure (or no configured key) returns [] and fusion proceeds
-// without sources. Note: when both this and the note vector stage run, the
-// query is embedded twice — acceptable in v1, unify later.
+// stale-model chunks simply don't rank until reingest), so the semantic half is
+// one cosine ranking in Postgres against the query vector the caller already
+// embedded, over the caller's VISIBLE source paths.
+//
+// The keyword half exists because BM25 upstream only sees notes: without it an
+// upload that was never embedded (no key at ingest, or an embed failure —
+// sources/ingest.ts stores those chunks with model = null) cannot be found by
+// any means at all. It is index-backed full text, so it costs nothing per query
+// and works with no API key.
 
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import type { Brain } from './store'
-import type { SourceStageHit } from './shared/retrieval'
-import { embedTexts, embeddingsConfig } from './embeddings'
-import { vectorLiteral } from './vectorStage'
+import type { SourceStage, SourceStageHit } from './shared/retrieval'
+import { embeddingsConfig } from './embeddings'
+import { aboveFloors, vectorLiteral, type SemanticReport } from './vectorStage'
 
 const TOP_K = 20
-// Same relative floor as the note vector stage — keeps noise out of RRF.
-const RELATIVE_FLOOR = 0.85
 const SNIPPET_CHARS = 240
 
-export function createSourceStage(brain: Brain, visiblePaths: string[]) {
+export function createSourceStage(
+  brain: Brain,
+  visiblePaths: string[],
+  queryVector: number[] | null,
+  report: SemanticReport = {},
+): SourceStage {
   return {
-    async rank(query: string): Promise<SourceStageHit[]> {
+    async rank(): Promise<SourceStageHit[]> {
       try {
         const config = embeddingsConfig()
-        if (!config || visiblePaths.length === 0) return []
+        if (!config || !queryVector || visiblePaths.length === 0) return []
 
-        const [queryVector] = await embedTexts([query])
         const rows = await prisma.$queryRaw<
           { path: string; seq: number; text: string; score: number }[]
         >`
@@ -39,19 +45,45 @@ export function createSourceStage(brain: Brain, visiblePaths: string[]) {
           ORDER BY score DESC
           LIMIT ${TOP_K}`
 
-        const top = rows[0]?.score ?? 0
-        return rows
-          .filter((r) => r.score >= top * RELATIVE_FLOOR)
-          .map((r) => ({
-            path: r.path,
-            seq: r.seq,
-            snippet: r.text.slice(0, SNIPPET_CHARS),
-            score: r.score,
-          }))
+        return aboveFloors(rows).map(toHit)
       } catch (err) {
-        console.error('[source-stage]', err instanceof Error ? err.message : String(err))
+        const message = err instanceof Error ? err.message : String(err)
+        report.error ??= message
+        console.error('[source-stage]', message)
+        return []
+      }
+    },
+
+    async keyword(query: string): Promise<SourceStageHit[]> {
+      try {
+        if (visiblePaths.length === 0 || !query.trim()) return []
+        // websearch_to_tsquery takes user syntax (quoted phrases, OR, -term)
+        // without ever throwing on malformed input, unlike to_tsquery. The
+        // to_tsvector expression matches the GIN index exactly — change one and
+        // the index stops being used.
+        const rows = await prisma.$queryRaw<
+          { path: string; seq: number; text: string; score: number }[]
+        >`
+          SELECT path, seq, text,
+                 ts_rank(to_tsvector('english', text), websearch_to_tsquery('english', ${query})) AS score
+          FROM context_source_chunks
+          WHERE community_id = ${brain.communityId}
+            AND owner_key = ${brain.ownerKey}
+            AND path IN (${Prisma.join(visiblePaths)})
+            AND to_tsvector('english', text) @@ websearch_to_tsquery('english', ${query})
+          ORDER BY score DESC
+          LIMIT ${TOP_K}`
+
+        return rows.map(toHit)
+      } catch (err) {
+        // Keyword search over chunks is best-effort like every other stage.
+        console.error('[source-stage:keyword]', err instanceof Error ? err.message : String(err))
         return []
       }
     },
   }
+}
+
+function toHit(r: { path: string; seq: number; text: string; score: number }): SourceStageHit {
+  return { path: r.path, seq: r.seq, snippet: r.text.slice(0, SNIPPET_CHARS), score: r.score }
 }

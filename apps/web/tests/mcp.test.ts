@@ -31,6 +31,7 @@ import { authorizationServerMetadata, protectedResourceMetadata } from '@/lib/mc
 import { verifyPkceS256 } from '@/lib/mcp/oauth'
 import { CREATABLE_TYPES, isCreatableType } from '@/lib/directory/createEntity'
 import { mentionFor } from '@/lib/mcp/tools'
+import { canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
 import { entityMentionPaths } from '@/lib/notes/entities'
 
 // Both the signing secret and the token audience are read lazily, inside the
@@ -202,12 +203,17 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 9)
+  assert.equal(tools.length, 12)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
   assert.equal(scopeForTool('write_note'), 'context:write')
   assert.equal(scopeForTool('get_entity'), 'context:read')
+  // Reading an uploaded file is the same capability as reading a note about it.
+  assert.equal(scopeForTool('list_sources'), 'context:read')
+  assert.equal(scopeForTool('read_source'), 'context:read')
+  // A move rewrites other notes' links, so it is unambiguously a write.
+  assert.equal(scopeForTool('move_note'), 'context:write')
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')
@@ -370,4 +376,21 @@ test('only person, community and resource are creatable from the context layer',
   assert.equal(isCreatableType('channel'), false)
   assert.equal(isCreatableType('space'), false)
   assert.equal(isCreatableType('note'), false)
+})
+
+test('type filters canonicalise, so a search for a retired spelling still finds the rows', () => {
+  // list_context compares canonical to canonical…
+  assert.equal(canonicalNodeType('Org'), 'community')
+  assert.equal(canonicalNodeType('GROUP'), 'community')
+  assert.equal(canonicalNodeType('community'), 'community')
+  assert.equal(canonicalNodeType('person'), 'person')
+  assert.equal(canonicalNodeType(undefined), '')
+  // …and search_context queries every spelling, because stored node.type is
+  // whatever was current when the row was written.
+  const spellings = nodeTypeSpellings('org')
+  assert.ok(spellings.includes('community'))
+  assert.ok(spellings.includes('group'))
+  assert.ok(spellings.includes('organization'))
+  assert.deepEqual(nodeTypeSpellings('person'), ['person'])
+  assert.deepEqual(nodeTypeSpellings(''), [])
 })

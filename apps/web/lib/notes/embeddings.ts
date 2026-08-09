@@ -22,6 +22,18 @@ export function embeddingsConfig(): EmbeddingsConfig | null {
   return { apiKey, baseURL: GEMINI_BASE_URL, model: process.env.EMBED_MODEL ?? EMBED_MODEL }
 }
 
+/**
+ * Whether semantic retrieval can run at all. Callers report this alongside
+ * results: with no key the vector stages return [] and search silently degrades
+ * to keyword + link context, which looks identical to "nothing matched".
+ */
+export function semanticConfigured(): boolean {
+  return embeddingsConfig() !== null
+}
+
+/** What the semantic half of a search actually did. */
+export type SemanticStatus = 'on' | 'no-key' | 'error'
+
 /** Embed texts (order-preserving), batched to keep request sizes bounded. */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const config = embeddingsConfig()

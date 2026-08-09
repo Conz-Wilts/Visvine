@@ -263,6 +263,31 @@ const TYPE_SYNONYMS: Record<string, string> = {
 };
 
 /**
+ * The canonical spelling of a type string: lowercased, with retired names
+ * (`org`, `group`, `company`, …) folded onto the type they became. Filtering by
+ * raw string instead of this is how a caller ends up matching nothing against
+ * legacy rows that still carry the old spelling.
+ */
+export function canonicalNodeType(type: string | null | undefined): string {
+  const normalized = (type ?? '').trim().toLowerCase();
+  return TYPE_SYNONYMS[normalized] ?? normalized;
+}
+
+/**
+ * Every spelling that means the same type as `type` — the canonical one plus
+ * any retired synonym for it. For querying stored `node.type` values, which are
+ * whatever spelling was current when the row was written.
+ */
+export function nodeTypeSpellings(type: string | null | undefined): string[] {
+  const canonical = canonicalNodeType(type);
+  if (!canonical) return [];
+  const synonyms = Object.entries(TYPE_SYNONYMS)
+    .filter(([, to]) => to === canonical)
+    .map(([from]) => from);
+  return [...new Set([canonical, ...synonyms])];
+}
+
+/**
  * Resolve a type string to a REAL type — one the community configured in its
  * console, or one of the built-in defaults — or null when it is neither.
  *

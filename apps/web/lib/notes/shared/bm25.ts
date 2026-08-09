@@ -108,6 +108,15 @@ function makeSnippet(body: string, qterms: string[]): string {
 }
 
 /**
+ * An excerpt of `body` around the query's terms — the same window BM25 hits get,
+ * exposed for candidates that reach the results through another stage (vector,
+ * link context) and so never passed through `rank`.
+ */
+export function snippetFor(body: string, query: string): string {
+  return makeSnippet(body, [...new Set(tokenize(query))])
+}
+
+/**
  * Rank notes containing ALL query tokens in some field (AND semantics) by BM25
  * over a field-boosted term frequency (body + 3×title + 2×tags/aliases), with body
  * length normalization. When the strict AND pass matches nothing, the search

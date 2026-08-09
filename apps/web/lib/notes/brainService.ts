@@ -11,8 +11,9 @@ import { SHARED_OWNER_KEY, type Brain, type Actor } from './store'
 import * as sourceStore from './sourceStore'
 import { ingestSource, reingestSource, type IngestInput } from './sources/ingest'
 import { logAudit } from './audit'
-import { createVectorStage } from './vectorStage'
+import { createVectorStage, type SemanticReport } from './vectorStage'
 import { createSourceStage } from './sourceStage'
+import { embedTexts, semanticConfigured, type SemanticStatus } from './embeddings'
 import { getVault, vaultFor } from './vaultCache'
 import { splitFrontmatter } from './shared/markdown'
 import { rewriteLinks } from './shared/linkRewrite'
@@ -91,9 +92,21 @@ export async function readVisible(
   return content
 }
 
+export interface BrainSearchResult {
+  hits: FusedResult[]
+  /**
+   * What the semantic half did: 'on', 'no-key' (GEMINI_API_KEY unset — results
+   * are keyword + link context only), or 'error'. Reported rather than hidden,
+   * because a degraded search is indistinguishable from a thorough one that
+   * found nothing.
+   */
+  semantic: SemanticStatus
+}
+
 /**
- * Fused search (frontmatter filter → BM25 → pgvector → link context, RRF) over
- * everything the principal can read in this brain. Private-folder hits are audited.
+ * Fused search (frontmatter filter → BM25 → pgvector → source chunks → link
+ * context, weighted RRF) over everything the principal can read in this brain.
+ * Private-folder hits are audited.
  */
 export async function searchBrain(
   p: BrainPrincipal,
@@ -101,27 +114,44 @@ export async function searchBrain(
   query: string,
   filters: SearchFilters = {},
   k?: number,
-): Promise<FusedResult[]> {
+): Promise<BrainSearchResult> {
   const { raws, metas } = await visibleVault(p, brain)
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
   const notes = metas.map((meta) => ({ meta, body: bodyByPath.get(meta.path) ?? '' }))
   // Context-source chunks rank alongside notes, over only the VISIBLE (and
   // folder-filtered) source paths — the lens applies before the stage exists.
+  // Keyword ranking covers chunks whose embedding is missing, so 'ready' is the
+  // only requirement.
   const sourcePaths = (await sourceStore.listSources(brain))
     .filter((s) => s.status === 'ready' && canReadPath(p, brain, s.path))
     .filter((s) => filters.folderId === undefined || folderIdOfPath(s.path) === filters.folderId)
     .map((s) => s.path)
+
+  // One query embed shared by both vector stages (they used to embed it twice).
+  const report: SemanticReport = {}
+  const configured = semanticConfigured()
+  let queryVector: number[] | null = null
+  if (configured) {
+    try {
+      ;[queryVector] = await embedTexts([query])
+    } catch (err) {
+      report.error = err instanceof Error ? err.message : String(err)
+      console.error('[search] query embed failed:', report.error)
+    }
+  }
+
   const hits = await fusedSearch(notes, query, filters, {
     k,
-    vector: createVectorStage(brain),
-    sources: createSourceStage(brain, sourcePaths),
+    vector: createVectorStage(brain, queryVector, report),
+    sources: createSourceStage(brain, sourcePaths, queryVector, report),
   })
   for (const h of hits) {
     if (isAuditedRead(p, brain, h.path)) {
       void logAudit(p.communityId, { userId: p.userId, name: p.name, action: 'read', path: h.path })
     }
   }
-  return hits
+  const semantic: SemanticStatus = !configured ? 'no-key' : report.error ? 'error' : 'on'
+  return { hits, semantic }
 }
 
 // --- write gate -----------------------------------------------------------------

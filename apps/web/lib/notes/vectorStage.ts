@@ -2,8 +2,11 @@
 // src/server/vectorStage.ts re-backed by pgvector (CommunityNoteEmbedding)
 // instead of a JSON sidecar. Whole-note vectors are cached per brain path and
 // invalidated by the note's updatedAt (mtime); stale notes are embedded lazily
-// at query time, bounded per call. Cosine ranking runs in Postgres. Any failure
-// (or no configured key) returns [] and fusion degrades to BM25 + context.
+// at query time, bounded per call. Cosine ranking runs in Postgres. The QUERY
+// vector is embedded once by the caller (brainService.searchBrain) and shared
+// with the source-chunk stage. A null query vector (no key) or any failure
+// returns [] and fusion degrades to keyword + context — recorded on the report
+// so the caller can say so instead of returning a silently worse result.
 
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
@@ -19,6 +22,14 @@ const TOP_K = 20
 // Cosine scores cluster for unrelated notes; docs below this relative floor are
 // noise and would otherwise leak into the RRF fusion on sparse queries.
 const RELATIVE_FLOOR = 0.85
+// …and a floor in absolute terms, because "85% of the best" is still noise when
+// the best match is itself unrelated to the query.
+export const ABSOLUTE_FLOOR = 0.55
+
+/** Collects why the semantic stages produced nothing, for the caller to report. */
+export interface SemanticReport {
+  error?: string
+}
 
 // Exported for the context-source chunk stage, which shares the pgvector SQL shape.
 export function vectorLiteral(v: number[]): string {
@@ -26,12 +37,22 @@ export function vectorLiteral(v: number[]): string {
   return `[${v.map((x) => Math.round(x * 1e6) / 1e6).join(',')}]`
 }
 
-export function createVectorStage(brain: Brain): VectorStage {
+/** Keep only rows that clear both the relative and the absolute cosine floor. */
+export function aboveFloors<T extends { score: number }>(rows: T[]): T[] {
+  const top = rows[0]?.score ?? 0
+  return rows.filter((r) => r.score >= top * RELATIVE_FLOOR && r.score >= ABSOLUTE_FLOOR)
+}
+
+export function createVectorStage(
+  brain: Brain,
+  queryVector: number[] | null,
+  report: SemanticReport = {},
+): VectorStage {
   return {
-    async rank(query, docs) {
+    async rank(_query, docs) {
       try {
         const config = embeddingsConfig()
-        if (!config || docs.length === 0) return []
+        if (!config || !queryVector || docs.length === 0) return []
 
         const cached = await prisma.communityNoteEmbedding.findMany({
           where: { communityId: brain.communityId, ownerKey: brain.ownerKey, model: config.model },
@@ -42,20 +63,19 @@ export function createVectorStage(brain: Brain): VectorStage {
           .filter((d) => d.mtime !== undefined && cachedMtime.get(d.path) !== d.mtime)
           .slice(0, MAX_EMBEDS_PER_CALL)
 
-        // One round-trip embeds the query AND any stale notes together.
-        const [queryVector, ...staleVectors] = await embedTexts([
-          query,
-          ...stale.map((d) => `${d.title}\n${d.body}`.slice(0, EMBED_CHARS)),
-        ])
-
-        for (let i = 0; i < stale.length; i++) {
-          const d = stale[i]
-          const literal = vectorLiteral(staleVectors[i])
-          await prisma.$executeRaw`
-            INSERT INTO community_note_embeddings (id, community_id, owner_key, path, model, mtime, embedding, updated_at)
-            VALUES ((gen_random_uuid())::text, ${brain.communityId}, ${brain.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
-            ON CONFLICT (community_id, owner_key, path)
-            DO UPDATE SET model = ${config.model}, mtime = ${BigInt(d.mtime!)}, embedding = ${literal}::vector, updated_at = now()`
+        if (stale.length > 0) {
+          const staleVectors = await embedTexts(
+            stale.map((d) => `${d.title}\n${d.body}`.slice(0, EMBED_CHARS)),
+          )
+          for (let i = 0; i < stale.length; i++) {
+            const d = stale[i]
+            const literal = vectorLiteral(staleVectors[i])
+            await prisma.$executeRaw`
+              INSERT INTO community_note_embeddings (id, community_id, owner_key, path, model, mtime, embedding, updated_at)
+              VALUES ((gen_random_uuid())::text, ${brain.communityId}, ${brain.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
+              ON CONFLICT (community_id, owner_key, path)
+              DO UPDATE SET model = ${config.model}, mtime = ${BigInt(d.mtime!)}, embedding = ${literal}::vector, updated_at = now()`
+          }
         }
 
         const paths = docs.map((d) => d.path)
@@ -70,11 +90,12 @@ export function createVectorStage(brain: Brain): VectorStage {
           ORDER BY score DESC
           LIMIT ${TOP_K}`
 
-        const top = rows[0]?.score ?? 0
-        return rows.filter((r) => r.score >= top * RELATIVE_FLOOR)
+        return aboveFloors(rows)
       } catch (err) {
         // Any failure just removes this stage from fusion for the call.
-        console.error('[vector-stage]', err instanceof Error ? err.message : String(err))
+        const message = err instanceof Error ? err.message : String(err)
+        report.error ??= message
+        console.error('[vector-stage]', message)
         return []
       }
     },

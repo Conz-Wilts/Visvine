@@ -37,9 +37,12 @@ export const TOOL_SCOPES = {
   list_context: 'context:read',
   search_context: 'context:read',
   get_entity: 'context:read',
+  list_sources: 'context:read',
+  read_source: 'context:read',
   create_entity: 'context:write',
   write_note: 'context:write',
   append_note: 'context:write',
+  move_note: 'context:write',
   // Listing rides context:read — search already surfaces connector note bodies
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',

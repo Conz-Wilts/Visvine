@@ -18,14 +18,14 @@ if (!url) {
   process.exit(0);
 }
 
-// Hand-written SQL to apply against the local DB AFTER `prisma db push`.
-// Excludes storage_policies.sql (Supabase RLS, irrelevant locally) and
-// complete_schema.sql (Prisma already creates those tables).
+// Hand-written SQL to apply against the DB AFTER `prisma db push` — paths are
+// relative to apps/web. Everything here MUST be idempotent: db:migrate re-runs
+// the whole list every time.
 //
-// Currently empty: the only entry used to be create_match_nodes_function.sql,
-// removed when semantic search was dropped in favour of fuzzy/keyword search.
-// Kept as the hook for future hand-written SQL functions.
-const files = [];
+// The retrieval indexes (HNSW for the two pgvector cosine rankings, GIN for the
+// chunk keyword stage) live here because `db push` only syncs what
+// schema.prisma can express, and Prisma cannot express either index type.
+const files = ["prisma/migrations/20260810_add_retrieval_indexes/migration.sql"];
 
 if (files.length === 0) {
   console.log("apply-sql-functions: nothing to apply.");
@@ -36,7 +36,7 @@ const client = new pg.Client({ connectionString: url });
 await client.connect();
 try {
   for (const f of files) {
-    const path = join(__dirname, "..", "migrations", f);
+    const path = join(__dirname, "..", f);
     if (!existsSync(path)) {
       console.warn(`skip (not found): ${f}`);
       continue;

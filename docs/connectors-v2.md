@@ -97,7 +97,9 @@ Four tools (`call_connector`, `query_connector`, `list_connector_tools`,
 
 Creation-by-conversation falls out of composition: the agent writes
 `connectors/stripe.md` via the notes MCP tools, admin stores the secret,
-agent probes with `run_connector`, reads the error, edits, retries.
+agent probes with `run_connector`, reads the error, edits, retries. Note the
+`connectors/` folder is admin-only for writes regardless of folder grants
+(`brainService.writeDenial`), so that first step needs an admin's token.
 
 ## Type UI (connector node page)
 
