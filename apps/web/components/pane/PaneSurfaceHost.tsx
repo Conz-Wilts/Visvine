@@ -62,12 +62,15 @@ function identityOf(s: PaneSurface): string {
 }
 
 /** Inset for the note content while the tree is docked and open, so the panel
- *  column never covers it. */
+ *  column never covers it. The transition covers `padding`, not just
+ *  `padding-left`: the connections rail insets the same element from the right
+ *  via a class, and this inline declaration wins over any transition utility —
+ *  naming only the left side left the rail's inset snapping while the rail slid. */
 function useDockInsetStyle(): React.CSSProperties {
   const { dockRequested, contextOpen } = useContextPanel();
   return {
     paddingLeft: dockRequested && contextOpen ? CONTEXT_PANEL_W : undefined,
-    transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+    transition: 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
   };
 }
 
@@ -179,7 +182,7 @@ export default function PaneSurfaceHost() {
     // must collapse with it — a breakpoint the style attribute can't express.
     <ContentReveal
       ready={revealReady}
-      className={`w-full pb-10 transition-[padding] duration-300 ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
+      className={`w-full pb-10 motion-reduce:[transition:none!important] ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
       style={dockInsetStyle}
     >
       <ContextSidebar currentPath={treePath} />

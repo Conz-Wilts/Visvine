@@ -11,6 +11,7 @@
 
 import React from 'react';
 import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types';
+import { isIndexPath } from '@/lib/notes/shared/indexNote';
 import {
   Chevron,
   FileIcon,
@@ -190,17 +191,11 @@ export default function ContextTreeRow({
     // Notion use for folder notes. A folder with no visible index (a grafted
     // empty folder the caller can't read into) falls back to toggling, so the
     // row is never inert.
-    const indexStarred = !!row.indexPath && starredSet.has(row.indexPath);
+    // No Star here: a folder IS its index note, and index notes aren't
+    // starrable — the Starred section lists notes, not a second folder tree.
     const menuItems: RowMenuItem[] = [
       ...(handlers.onFolderAccess && row.path
         ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => handlers.onFolderAccess!(row.path) }]
-        : []),
-      ...(row.indexPath
-        ? [{
-            label: indexStarred ? 'Unstar' : 'Star',
-            icon: <StarIcon filled={indexStarred} />,
-            onClick: () => handlers.onToggleStar(row.indexPath!, !indexStarred),
-          }]
         : []),
       ...(handlers.onDeleteFolder && row.path
         ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => handlers.onDeleteFolder!(row.path, row.label) }]
@@ -294,11 +289,13 @@ export default function ContextTreeRow({
                 ...(handlers.onShareNote
                   ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => handlers.onShareNote!(item.path) }]
                   : []),
-                {
-                  label: starred ? 'Unstar' : 'Star',
-                  icon: <StarIcon filled={starred} />,
-                  onClick: () => handlers.onToggleStar(item.path, !starred),
-                },
+                ...(isIndexPath(item.path)
+                  ? []
+                  : [{
+                      label: starred ? 'Unstar' : 'Star',
+                      icon: <StarIcon filled={starred} />,
+                      onClick: () => handlers.onToggleStar(item.path, !starred),
+                    }]),
                 ...(canEdit
                   ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => handlers.onDeleteNote(item.path) }]
                   : []),

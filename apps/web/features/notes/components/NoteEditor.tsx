@@ -37,6 +37,7 @@ import { LinkedReferences } from './LinkedReferences'
 import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
+import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
@@ -476,7 +477,7 @@ export function NoteEditor({
   // Toggle `starred:` in the frontmatter prefix and save immediately. Only
   // reachable from the wysiwyg toolbar, so the prefix ref is authoritative.
   const toggleStar = useCallback(() => {
-    if (!editor || !canEdit) return
+    if (!editor || !canEdit || isIndexPath(path)) return
     const next = !starred
     const { frontmatter } = splitFrontmatter(prefixRef.current)
     const lines = (frontmatter ?? '')
@@ -487,7 +488,7 @@ export function NoteEditor({
     setStarred(next)
     pendingRef.current = prefixRef.current + getMarkdown(editor)
     flush()
-  }, [editor, canEdit, starred, flush])
+  }, [editor, canEdit, starred, flush, path])
 
   const onRawChange = (value: string) => {
     setRawContent(value)
@@ -569,8 +570,9 @@ export function NoteEditor({
   // to the far right (both matching the reference layout). Same rule as
   // formatControls: no `editor` in the presence test. toggleStar already no-ops
   // without one.
+  // Index notes are folders, and folders aren't starrable — no star for them.
   const starButton =
-    canEdit && trayMode === 'wysiwyg' ? (
+    canEdit && trayMode === 'wysiwyg' && !isIndexPath(path) ? (
       <ToolbarButton label={starred ? 'Unstar note' : 'Star note'} onClick={toggleStar}>
         <StarIcon className={`h-4 w-4 ${starred ? 'fill-amber-400 text-amber-400' : ''}`} />
       </ToolbarButton>

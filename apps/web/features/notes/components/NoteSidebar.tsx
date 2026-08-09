@@ -20,6 +20,7 @@ import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
 import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
+import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { TRASH_PATH, useContextTreeState } from '@/hooks/useContextTreeState'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
@@ -535,7 +536,6 @@ function FolderRow(props: {
   const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
   const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
-  const indexStarred = hasIndex && props.starredSet.has(indexPath)
   return (
     <div>
       <div
@@ -586,17 +586,8 @@ function FolderRow(props: {
             ...(showAccess
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
-            // Starring a folder stars its index note — the same note the folder
-            // row opens on click, so the two always agree. No index, no star.
-            ...(hasIndex
-              ? [
-                  {
-                    label: indexStarred ? 'Unstar' : 'Star',
-                    icon: <StarIcon filled={indexStarred} />,
-                    onClick: () => props.onToggleStar(indexPath, !indexStarred),
-                  },
-                ]
-              : []),
+            // No Star: a folder IS its index note, and index notes aren't
+            // starrable — Starred is a shortcut list of notes, not folders.
             // The root row is the brain itself — not deletable from the tree.
             ...(props.onDeleteFolder && props.node.path !== ''
               ? [
@@ -812,11 +803,14 @@ function NoteRow({
           ...(onShare
             ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => onShare(path) }]
             : []),
-          {
-            label: starred ? 'Unstar' : 'Star',
-            icon: <StarIcon filled={starred} />,
-            onClick: () => onToggleStar(path, !starred),
-          },
+          // Index notes are folders, and folders aren't starrable.
+          ...(isIndexPath(path)
+            ? []
+            : [{
+                label: starred ? 'Unstar' : 'Star',
+                icon: <StarIcon filled={starred} />,
+                onClick: () => onToggleStar(path, !starred),
+              }]),
           ...(canEdit
             ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
             : []),

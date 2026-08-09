@@ -861,13 +861,19 @@ export async function applyRevision(
 // frontmatter `starred:` flag is the source of truth; rewrite it through
 // writeNote so the synced column, revisions and link sync all stay consistent
 // with a toggle made from the editor.
+//
+// Index notes are folders, and folders aren't starrable — the Starred section is
+// a shortcut list of notes, not a second folder tree. Rejected here so every
+// caller (API, MCP, scripts) is covered, not just the UI that hides the control.
 export async function setStarred(
   brain: Brain,
   path: string,
   starred: boolean,
   actor: Actor,
 ): Promise<void> {
-  const row = await findLive(brain, sanitizePath(path))
+  const clean = sanitizePath(path)
+  if (isIndexPath(clean)) throw new Error('Index notes cannot be starred')
+  const row = await findLive(brain, clean)
   if (!row) throw new Error(`Note not found: ${path}`)
   const { frontmatter, body } = splitFrontmatter(row.content)
   const lines = (frontmatter ?? '')
@@ -883,5 +889,7 @@ export async function listStarred(brain: Brain): Promise<string[]> {
     where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null, starred: true },
     select: { path: true },
   })
-  return rows.map((r) => r.path)
+  // Index notes can no longer be starred; filter any that were starred before
+  // that rule existed so they don't linger in the Starred section.
+  return rows.map((r) => r.path).filter((p) => !isIndexPath(p))
 }
