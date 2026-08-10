@@ -453,9 +453,6 @@ model User {
   userCommunities         UserCommunity[]          @relation("MemberOf")
   valueSharesSubmitted    ValueShareRequest[]      @relation("ValueShareRequester")
   valueSharesReviewed     ValueShareRequest[]      @relation("ValueShareReviewer")
-  blogPosts               BlogPost[]               @relation("BlogPostAuthor")
-  blogComments            BlogComment[]            @relation("BlogCommentAuthor")
-  blogCommentReactions    BlogCommentReaction[]    @relation("BlogCommentReactor")
 
   // --- restored: messaging / feed ---
   conversationMemberships ConversationMember[]
@@ -749,83 +746,6 @@ model AuditLog {
   @@index([targetId])
   @@index([createdAt])
   @@map("audit_log")
-}
-
-// ─── Marketing / launch surfaces (global, no communityId) ───
-
-model WaitlistEntry {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  email     String   @unique
-  firstName String   @map("first_name")
-  lastName  String   @map("last_name")
-  linkedin  String?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@index([createdAt])
-  @@map("waitlist_entries")
-}
-
-/// Blog post for the marketing site (renamed from launch-site `Post` to avoid
-/// colliding with the community social-feed `Post` model above). `content` is a
-/// TipTap JSON document.
-model BlogPost {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  slug        String    @unique
-  number      Int       @unique @default(0)
-  title       String
-  excerpt     String?
-  content     Json      @default("{}")
-  coverImage  String?   @map("cover_image")
-  authorId    String?   @map("author_id")
-  published   Boolean   @default(false)
-  publishedAt DateTime? @map("published_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  author   User?         @relation("BlogPostAuthor", fields: [authorId], references: [id])
-  comments BlogComment[]
-
-  @@index([published, publishedAt])
-  @@map("blog_posts")
-}
-
-model BlogComment {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  authorId  String?  @map("author_id")
-  guestName String?  @map("guest_name")
-  parentId  String?  @map("parent_id")
-  content   String
-  isPrivate Boolean  @default(false) @map("is_private")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  post      BlogPost              @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User?                 @relation("BlogCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  parent    BlogComment?          @relation("BlogCommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   BlogComment[]         @relation("BlogCommentThread")
-  reactions BlogCommentReaction[]
-
-  @@index([postId, createdAt])
-  @@index([authorId])
-  @@index([parentId])
-  @@index([postId, isPrivate, createdAt])
-  @@map("blog_comments")
-}
-
-model BlogCommentReaction {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  commentId String   @map("comment_id")
-  userId    String   @map("user_id")
-  emoji     String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  comment BlogComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user    User        @relation("BlogCommentReactor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([commentId, userId, emoji])
-  @@index([commentId])
-  @@map("blog_comment_reactions")
 }
 
 // ─── MCP OAuth 2.1 authorization server (self-hosted) ───

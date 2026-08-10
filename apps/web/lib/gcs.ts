@@ -105,27 +105,6 @@ export async function deleteResourceFile(objectPath: string): Promise<void> {
   await bucket.file(objectPath).delete({ ignoreNotFound: true });
 }
 
-// Upload a blog image — aspect-preserving WebP into MEDIA_BUCKET (served
-// publicly via the /api/media proxy, which is WebP-only). Unlike
-// uploadProfileImage this does NOT square-crop; it keeps the original aspect
-// ratio so wide/tall figures in posts render correctly.
-// Returns the GCS object path (caller wraps it with getMediaUrl()).
-export async function uploadBlogImage(
-  objectPath: string,
-  buffer: Buffer
-): Promise<string> {
-  const storage = getStorage();
-  const bucket = storage.bucket(MEDIA_BUCKET());
-  // Auto-rotate via EXIF then strip metadata (sharp default); convert to WebP.
-  const webp = await sharp(buffer, { animated: true }).rotate().webp({ quality: 82 }).toBuffer();
-  await bucket.file(objectPath).save(webp, {
-    contentType: 'image/webp',
-    resumable: false,
-    metadata: { cacheControl: 'public, max-age=31536000, immutable' },
-  });
-  return objectPath;
-}
-
 // Generate a signed URL (15-minute expiry) for private GCS objects.
 //
 // In-memory TTL cache: signing is a crypto operation per object and the

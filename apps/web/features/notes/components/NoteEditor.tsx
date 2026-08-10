@@ -260,7 +260,7 @@ export function NoteEditor({
       EntityChip.configure({ getEntity: getEntityRef.current }),
     ],
     editorProps: {
-      attributes: { class: 'blog-prose notes-editor focus:outline-none' },
+      attributes: { class: 'note-prose notes-editor focus:outline-none' },
       // Typing the second '[' of '[[' opens the note-link picker.
       handleTextInput: (innerView, from, _to, text) => {
         if (text !== '[' || !canEdit) return false

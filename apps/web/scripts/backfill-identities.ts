@@ -101,7 +101,8 @@ async function main() {
   console.log(`  new identity (no match):   ${stats.created}`);
   console.log(`  failed:                    ${stats.failed}`);
   console.log(`  total identities now:      ${identityCount}`);
-  console.log('Review name-only suggestions at /console?tab=identities');
+  // The review UI is gone; the queue is served by GET /api/identities/review.
+  console.log('Review name-only suggestions via GET /api/identities/review');
   await prisma.$disconnect();
 }
 

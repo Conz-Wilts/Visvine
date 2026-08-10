@@ -480,11 +480,11 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
   background-color: var(--color-brand-green, #78d870);
 }
 
-/* ─── Blog typography (marketing /blog) ───
-   Shared by the live TipTap editor and the read-only static render so both
-   look identical. Left-aligned long-form reading column. Ported from the
-   launch-site. */
-.blog-prose {
+/* ─── Long-form prose typography ───
+   The base reading scale for rendered markdown. The notes TipTap editor layers
+   its own compact overrides on top (.note-prose.notes-editor, features/notes/
+   notes.css). Left-aligned long-form reading column. */
+.note-prose {
   color: #404040;
   font-size: 1.125rem;
   line-height: 1.75;
@@ -492,17 +492,17 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
 }
 
 /* clear floated images so they don't spill past the article */
-.blog-prose::after {
+.note-prose::after {
   content: "";
   display: block;
   clear: both;
 }
 
-.blog-prose p {
+.note-prose p {
   margin: 1.15rem 0;
 }
 
-.blog-prose h2 {
+.note-prose h2 {
   color: #000;
   font-size: 1.875rem;
   font-weight: 500;
@@ -511,7 +511,7 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
   margin: 2.25rem 0 0.75rem;
 }
 
-.blog-prose h3 {
+.note-prose h3 {
   color: #000;
   font-size: 1.4rem;
   font-weight: 500;
@@ -519,31 +519,31 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
   margin: 1.75rem 0 0.6rem;
 }
 
-.blog-prose a {
+.note-prose a {
   color: var(--color-brand-green, #78d870);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.blog-prose ul,
-.blog-prose ol {
+.note-prose ul,
+.note-prose ol {
   margin: 1.15rem 0;
   padding-left: 1.5rem;
 }
 
-.blog-prose ul {
+.note-prose ul {
   list-style: disc;
 }
 
-.blog-prose ol {
+.note-prose ol {
   list-style: decimal;
 }
 
-.blog-prose li {
+.note-prose li {
   margin: 0.35rem 0;
 }
 
-.blog-prose blockquote {
+.note-prose blockquote {
   border-left: 3px solid var(--color-brand-green, #78d870);
   color: #525252;
   font-style: italic;
@@ -551,21 +551,9 @@ input[type="time"]::-webkit-calendar-picker-indicator:active {
   padding-left: 1.1rem;
 }
 
-.blog-prose img.blog-img,
-.blog-prose .blog-img-wrapper img {
+.note-prose img {
   border-radius: 0.5rem;
   height: auto;
   max-width: 100%;
-}
-
-/* default (non-floated) images render as a centered block */
-.blog-prose > img.blog-img {
-  display: block;
-  margin: 1.5rem auto;
-}
-
-.blog-img-wrapper[data-selected="true"] img {
-  outline: 2px solid var(--color-brand-green, #78d870);
-  outline-offset: 2px;
 }
 

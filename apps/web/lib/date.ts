@@ -33,7 +33,7 @@ export type TimeAgoStyle = 'long' | 'short' | 'compact';
  *
  * - `long`    — "just now", "5 minutes ago" … "2 years ago" (notes editor).
  * - `short`   — "just now", "5m ago", "3h ago", "12d ago"; days uncapped.
- * - `compact` — "just now", "5m", "3h", "2d", "3w", then "5 Mar" (blog/feed).
+ * - `compact` — "just now", "5m", "3h", "2d", "3w", then "5 Mar" (feed).
  *
  * Pass `now` (epoch ms) for deterministic output in tests.
  */

@@ -1,4 +1,4 @@
-/* Notes editor + link styling. Body typography is inherited from .blog-prose
+/* Notes editor + link styling. Body typography is inherited from .note-prose
  * (globals.css); this file adds the note-specific bits the ProseMirror editor
  * generates and can't be classed inline: [[ ]] link rendering, broken-link
  * flagging, inline #hashtag pills, task lists, and tables. Scoped under
@@ -10,21 +10,20 @@
 }
 
 /* ---------- Compact type scale ----------
- * Notes read at a working-document size, one step down from the blog's
- * long-form scale (.blog-prose, globals.css). Scoped overrides only — the
- * blog keeps its own sizing. */
-.blog-prose.notes-editor {
+ * Notes read at a working-document size, one step down from the base
+ * long-form scale (.note-prose, globals.css). Scoped overrides only. */
+.note-prose.notes-editor {
   font-size: 1rem;
   line-height: 1.7;
 }
-.blog-prose.notes-editor p {
+.note-prose.notes-editor p {
   margin: 0.9rem 0;
 }
-.blog-prose.notes-editor h2 {
+.note-prose.notes-editor h2 {
   font-size: 1.3rem;
   margin: 1.75rem 0 0.6rem;
 }
-.blog-prose.notes-editor h3 {
+.note-prose.notes-editor h3 {
   font-size: 1.1rem;
   margin: 1.4rem 0 0.5rem;
 }
@@ -73,7 +72,7 @@
 }
 
 /* In-body H1s (the title lives above the body, but a note may still use one as a
- * section heading) need explicit styling: .blog-prose only defines h2/h3, and
+ * section heading) need explicit styling: .note-prose only defines h2/h3, and
  * Tailwind's preflight flattens unstyled headings to body size. */
 .notes-editor h1 {
   color: #000;

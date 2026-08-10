@@ -38,9 +38,6 @@ importers:
       '@tiptap/core':
         specifier: ^3.26.0
         version: 3.26.0(@tiptap/pm@3.26.0)
-      '@tiptap/extension-image':
-        specifier: ^3.26.0
-        version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extension-table':
         specifier: 3.26.0
         version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)
@@ -50,9 +47,6 @@ importers:
       '@tiptap/extension-task-list':
         specifier: 3.26.0
         version: 3.26.0(@tiptap/extension-list@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))
-      '@tiptap/extension-text-style':
-        specifier: 3.26.0
-        version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/pm':
         specifier: ^3.26.0
         version: 3.26.0
@@ -62,9 +56,6 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.26.0
         version: 3.26.0
-      '@tiptap/static-renderer':
-        specifier: ^3.26.0
-        version: 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -1449,11 +1440,6 @@ packages:
       '@tiptap/core': 3.26.0
       '@tiptap/pm': 3.26.0
 
-  '@tiptap/extension-image@3.26.0':
-    resolution: {integrity: sha512-vinrbKa9Awmlb/UPpnes1pezL+ZeUC2v7XczZyNbggvcHKhlVkuXZIKytFQDXEYOTaKYzYE8B/Gz098PiJ9NYQ==}
-    peerDependencies:
-      '@tiptap/core': 3.26.0
-
   '@tiptap/extension-italic@3.26.0':
     resolution: {integrity: sha512-s8oFpH+0xmhvY19f452/2dExO3p1tjxh761g6cg4irwEUNUEAJKF2VLcjiaeOhNJ+pmnQYxb+VSkwkXvO+7vHQ==}
     peerDependencies:
@@ -1512,11 +1498,6 @@ packages:
     peerDependencies:
       '@tiptap/extension-list': 3.26.0
 
-  '@tiptap/extension-text-style@3.26.0':
-    resolution: {integrity: sha512-4IeIdiubF5/Em9AodaLkCKUNwkQaK3KuwnneXS61x4Yoyr0zK21i3kZAFK7ils7jUwSrRdGdM1FglBnB4tK8nA==}
-    peerDependencies:
-      '@tiptap/core': 3.26.0
-
   '@tiptap/extension-text@3.26.0':
     resolution: {integrity: sha512-yZXdevp3/8omGbb40Z52VfvID+tsRNhPQ1GNUToD56XSr2BjdJyAzAb9rWGgDKgVMUPLgJ26yT0O278RFqOKhA==}
     peerDependencies:
@@ -1548,14 +1529,6 @@ packages:
 
   '@tiptap/starter-kit@3.26.0':
     resolution: {integrity: sha512-o34EtMfqtBaljdmeElZsRG/067oGx9Zcq+j2GWo71KlZe22ga/ALexeTf1c+ETsjCxSTKR6eyQ4RZvz/2JpYfg==}
-
-  '@tiptap/static-renderer@3.26.0':
-    resolution: {integrity: sha512-J5R7zKVU9RtwwcAlL2dnhKmMfT/KV691RsaqaLCMwgKFy/IhykoSkApVHAGXlIOtNHy3cPwHDGaTtYF090jmUQ==}
-    peerDependencies:
-      '@tiptap/core': 3.26.0
-      '@tiptap/pm': 3.26.0
-      react: ^17.0.0 || ^18.0.0 || ^19.0.0
-      react-dom: ^17.0.0 || ^18.0.0 || ^19.0.0
 
   '@tootallnate/once@2.0.0':
     resolution: {integrity: sha512-XCuKFP5PS55gnMVu3dty8KPatLqUoy/ZYzDzAGCQ8JNFCkLXzmI7vNHCR+XpbZaMWQK/vQubr7PkYq8g470J/A==}
@@ -5266,10 +5239,6 @@ snapshots:
       '@tiptap/core': 3.26.0(@tiptap/pm@3.26.0)
       '@tiptap/pm': 3.26.0
 
-  '@tiptap/extension-image@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))':
-    dependencies:
-      '@tiptap/core': 3.26.0(@tiptap/pm@3.26.0)
-
   '@tiptap/extension-italic@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))':
     dependencies:
       '@tiptap/core': 3.26.0(@tiptap/pm@3.26.0)
@@ -5317,10 +5286,6 @@ snapshots:
   '@tiptap/extension-task-list@3.26.0(@tiptap/extension-list@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0))':
     dependencies:
       '@tiptap/extension-list': 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)
-
-  '@tiptap/extension-text-style@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))':
-    dependencies:
-      '@tiptap/core': 3.26.0(@tiptap/pm@3.26.0)
 
   '@tiptap/extension-text@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))':
     dependencies:
@@ -5394,13 +5359,6 @@ snapshots:
       '@tiptap/extension-underline': 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))
       '@tiptap/extensions': 3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)
       '@tiptap/pm': 3.26.0
-
-  '@tiptap/static-renderer@3.26.0(@tiptap/core@3.26.0(@tiptap/pm@3.26.0))(@tiptap/pm@3.26.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
-    dependencies:
-      '@tiptap/core': 3.26.0(@tiptap/pm@3.26.0)
-      '@tiptap/pm': 3.26.0
-      react: 19.2.8
-      react-dom: 19.2.8(react@19.2.8)
 
   '@tootallnate/once@2.0.0': {}
 

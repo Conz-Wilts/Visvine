@@ -44,7 +44,6 @@ export default function MarketingShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isBlogPost = pathname.startsWith("/blog/");
   const [signInOpen, setSignInOpen] = useState(false);
   const [signInMode, setSignInMode] = useState<SignInMode>("signin");
   const [signInCallbackUrl, setSignInCallbackUrl] = useState<string | undefined>(
@@ -93,7 +92,7 @@ export default function MarketingShell({
 
   return (
     <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
-      {!isBlogPost && <Vines />}
+      <Vines />
       {/* White navbar — sits above the vines so the buttons keep their contrast */}
       <header className="relative z-30 w-full border-b border-neutral-200 bg-white">
         <div className="mx-auto grid w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-4 px-4 sm:px-6 lg:px-8 h-16">

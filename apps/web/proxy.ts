@@ -8,13 +8,8 @@ const PUBLIC_PATHS = [
   "/claim",
   "/api/media",
   // Marketing / pre-auth surfaces (the bare "/" home is already public below).
-  // NOTE: "/blog" is a startsWith prefix, so it also matches "/blog/admin" —
-  // that page and draft visibility on "/blog/[slug]" self-gate via isSuperAdmin.
   "/manifesto",
   "/contact",
-  "/blog",
-  "/api/waitlist",
-  "/api/blog",
   // Public event share pages + their no-login RSVP API (visvine.com/e/<slug>).
   "/e/",
   "/api/public",
