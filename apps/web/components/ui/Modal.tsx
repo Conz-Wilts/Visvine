@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 
@@ -45,6 +46,12 @@ export interface ModalProps {
  * Generic modal shell: fixed backdrop, centered panel, Escape + backdrop-click
  * dismissal. The body stays bespoke — pass `title` for the standard header or
  * render your own header inside `children`.
+ *
+ * Always rendered into document.body. `position: fixed` resolves against the
+ * nearest transformed ancestor rather than the viewport, and modals get opened
+ * from inside transformed shell chrome (the navbar carries the entrance
+ * transform) — rendering inline there would trap the scrim and the panel inside
+ * a 64px strip.
  */
 export default function Modal({
   onClose,
@@ -62,11 +69,13 @@ export default function Modal({
   panelStyle,
   ariaLabel,
 }: ModalProps) {
+  const [mounted, setMounted] = React.useState(false);
   useEscapeKey(onClose, open && closeOnEscape);
+  React.useEffect(() => setMounted(true), []);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-50 flex ${overlayClassName}`}
       style={overlayStyle}
@@ -89,8 +98,9 @@ export default function Modal({
           </div>
         )}
         {title != null ? <div className="overflow-y-auto flex-1">{children}</div> : children}
-        {footer}
+        {footer && <div className="flex-shrink-0">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

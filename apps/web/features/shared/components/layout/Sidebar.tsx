@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
@@ -373,11 +372,10 @@ export default function Sidebar() {
       </div>
 
       {/* "More" popup — the same centered modal shell as the Create-new modal,
-          with a grid of the tools tucked out of the rail. Portalled to <body>:
-          the aside's entrance transform would otherwise trap the modal's
-          fixed-position overlay inside the rail. */}
-      {moreOpen &&
-        createPortal(
+          with a grid of the tools tucked out of the rail. Modal portals itself
+          to <body>, which is what keeps the aside's entrance transform from
+          trapping the fixed-position overlay inside the rail. */}
+      {moreOpen && (
         <Modal
           onClose={() => setMoreOpen(false)}
           ariaLabel="More tools"
@@ -430,8 +428,7 @@ export default function Sidebar() {
               to   { opacity: 1; transform: scale(1) translateY(0); }
             }
           `}</style>
-        </Modal>,
-        document.body,
+        </Modal>
       )}
     </aside>
   );

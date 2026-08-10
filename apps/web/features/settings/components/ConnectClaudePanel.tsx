@@ -11,8 +11,9 @@
 // on someone else's behalf.
 //
 // There is no deep link or one-click install for a remote connector — Claude
-// takes a URL typed into its own Connectors dialog. So the "button" is a
-// copyable URL plus the exact click-path, and nothing more elaborate.
+// takes a URL typed into its own Connectors dialog. So the whole surface is a
+// copyable address and nothing more: the click-path and the scope list belong
+// to Claude's own add-connector and consent screens, which say it there anyway.
 
 import { useEffect, useState } from 'react';
 import { Alert, Button, SettingsSection } from '@/components/ui';
@@ -74,13 +75,6 @@ export function McpServerUrlRow({ url }: { url: string | null }) {
   );
 }
 
-const STEPS: React.ReactNode[] = [
-  <>Open Claude and go to <strong className="font-semibold text-text-primary">Settings → Connectors</strong>.</>,
-  <>Choose <strong className="font-semibold text-text-primary">Add custom connector</strong>.</>,
-  <>Paste the address above, give it a name like <em>Visvine</em>, and click <strong className="font-semibold text-text-primary">Add</strong>.</>,
-  <>Click <strong className="font-semibold text-text-primary">Connect</strong>. Visvine asks you to sign in and approve what Claude may do — that consent screen is the one below.</>,
-];
-
 export default function ConnectClaudePanel() {
   const { info, error } = useMcpConnectInfo();
 
@@ -93,49 +87,6 @@ export default function ConnectClaudePanel() {
         description="Give Claude access to your Visvine context — the entities, notes and connections in every community you're a member of. Visvine runs the server itself; there is nothing to install."
       >
         <McpServerUrlRow url={info?.url ?? null} />
-      </SettingsSection>
-
-      <SettingsSection
-        title="How to add it"
-        description="Claude takes the address by hand — there's no one-click install for a custom connector."
-      >
-        <ol className="space-y-2.5">
-          {STEPS.map((step, i) => (
-            <li key={i} className="flex gap-3 text-xs leading-relaxed text-text-secondary">
-              <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[10px] font-semibold text-text-muted">
-                {i + 1}
-              </span>
-              <span className="min-w-0">{step}</span>
-            </li>
-          ))}
-        </ol>
-        <p className="mt-4 text-xs text-text-muted">
-          On a Team or Enterprise plan an admin can add it once for everyone under{' '}
-          <strong className="font-semibold text-text-secondary">Organization settings → Connectors</strong>; members
-          then connect their own account from the same Connectors list.
-        </p>
-      </SettingsSection>
-
-      <SettingsSection
-        title="What you'll be granting"
-        description="Claude only ever acts as you. Each request is re-checked against your live membership and note permissions, so a connected client can never reach a community or a note you couldn't open here yourself."
-      >
-        {info === null ? (
-          <p className="text-sm text-text-muted">Loading…</p>
-        ) : (
-          <ul className="space-y-3">
-            {info.scopes.map(({ scope, description }) => (
-              <li key={scope}>
-                <p className="font-mono text-xs font-semibold text-text-primary">{scope}</p>
-                <p className="text-xs text-text-muted">{description}</p>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-4 text-xs text-text-muted">
-          Claude asks for only what it needs, and you approve each one. You can revoke the connection at any time by
-          removing the connector in Claude.
-        </p>
       </SettingsSection>
     </div>
   );
