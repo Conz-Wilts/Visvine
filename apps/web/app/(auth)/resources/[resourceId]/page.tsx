@@ -384,7 +384,7 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
           <div className="flex flex-col items-center gap-2 py-10 text-center">
             <span className="text-3xl">💬</span>
             <p className="text-sm font-semibold text-text-primary">No comments yet</p>
-            <p className="text-xs text-text-muted">Ask a question or leave a note for the community.</p>
+            <p className="text-xs text-text-muted">Ask a question or leave a note for the space.</p>
           </div>
         ) : (
           comments.map((c) => (

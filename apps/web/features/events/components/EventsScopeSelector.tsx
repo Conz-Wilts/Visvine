@@ -13,7 +13,7 @@ export type EventScope = 'discover' | 'community' | 'mine';
 
 const SCOPES: UnderlineTab<EventScope>[] = [
   { id: 'discover', label: 'Discover Events', icon: <Compass className="h-3.5 w-3.5" /> },
-  { id: 'community', label: 'Community Events', icon: <Users className="h-3.5 w-3.5" /> },
+  { id: 'community', label: 'Space Events', icon: <Users className="h-3.5 w-3.5" /> },
   { id: 'mine', label: 'My Events', icon: <CalendarCheck className="h-3.5 w-3.5" /> },
 ];
 

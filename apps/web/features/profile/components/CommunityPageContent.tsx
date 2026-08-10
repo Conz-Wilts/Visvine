@@ -79,7 +79,7 @@ export default function CommunityPageContent({ nodeId, onConnectionsClick }: Com
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
         <div className="text-5xl">🏘️</div>
-        <p className="text-base font-semibold text-text-primary">Community not found</p>
+        <p className="text-base font-semibold text-text-primary">Space not found</p>
         <p className="text-sm text-text-muted">It may have been removed, or the URL is incorrect.</p>
       </div>
     );
@@ -306,7 +306,7 @@ export default function CommunityPageContent({ nodeId, onConnectionsClick }: Com
             <p className="mt-3 text-[13px] text-text-muted">
               {connectionCount === 0
                 ? 'Nothing links to this yet.'
-                : `${connectionCount} ${connectionCount === 1 ? 'connection' : 'connections'} in ${currentCommunity?.name ?? 'this community'}.`}
+                : `${connectionCount} ${connectionCount === 1 ? 'connection' : 'connections'} in ${currentCommunity?.name ?? 'this space'}.`}
             </p>
           </RailCard>
         </div>

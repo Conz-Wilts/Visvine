@@ -104,7 +104,7 @@ const EDIT = 30;
  */
 const NODE_TYPES = [
   { icon: "👤", name: "Person", color: "#2563eb", shape: "rectangle" },
-  { icon: "🏘️", name: "Community", color: "#78d870", shape: "square" },
+  { icon: "🏘️", name: "Space", color: "#78d870", shape: "square" },
   { icon: "📅", name: "Event", color: "#ef4444", shape: "rectangle" },
   { icon: "📚", name: "Resource", color: "#0d9488", shape: "circle" },
   { icon: "📝", name: "Note", color: "#8b5cf6", shape: "rectangle" },
@@ -119,7 +119,7 @@ interface SeedAlias {
   /** Chip colour in the directory — the same alias, seen from the graph. */
   color: string;
   /** The base node type this alias labels. Only Person aliases grant access. */
-  nodeType: "Person" | "Community";
+  nodeType: "Person" | "Space";
   owner: boolean;
   system: boolean;
   /** [resourcePath, level] — '' is the brain root. */
@@ -129,7 +129,7 @@ interface SeedAlias {
 /**
  * The community's aliases, stored in `Community.communityAliases` exactly as
  * the console writes them. The Person ones are the permission vocabulary; the
- * Community ones are directory labels with no access meaning.
+ * Space ones are directory labels with no access meaning.
  */
 const ALIASES: SeedAlias[] = [
   {
@@ -181,8 +181,8 @@ const ALIASES: SeedAlias[] = [
     system: false,
     grants: [["data/fund-roll-up.md", VIEW]],
   },
-  { name: "Portfolio Company", color: "#0891b2", nodeType: "Community", owner: false, system: false, grants: [] },
-  { name: "Fund", color: "#0f766e", nodeType: "Community", owner: false, system: false, grants: [] },
+  { name: "Portfolio Company", color: "#0891b2", nodeType: "Space", owner: false, system: false, grants: [] },
+  { name: "Fund", color: "#0f766e", nodeType: "Space", owner: false, system: false, grants: [] },
 ];
 
 /** What every member reaches without holding anything — the "Everyone" card. */
@@ -229,7 +229,7 @@ async function createCommunity() {
       name: COMMUNITY_NAME,
       description:
         "Blackbird Ventures is a leading Australian & New Zealand venture capital firm. " +
-        "This community maps its portfolio companies and the founders behind them.",
+        "This space maps its portfolio companies and the founders behind them.",
       location: "Sydney, Australia",
       tags: ["VC", "Portfolio", "Australia", "New Zealand"],
       country: "AU",
@@ -364,7 +364,7 @@ async function main() {
   console.log("\nPerson aliases (Console → Aliases):");
   for (const a of ALIASES.filter((x) => x.nodeType === "Person")) {
     const reach = a.system
-      ? "owns the community"
+      ? "owns the space"
       : a.grants.map(([p, l]) => `${p || "everything"} ${l === EDIT ? "edit" : "view"}`).join(", ") || "nothing yet";
     console.log(`  ${a.name.padEnd(14)}  →  ${reach}`);
   }

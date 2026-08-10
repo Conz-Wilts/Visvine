@@ -13,10 +13,10 @@ import { handleApiError, requireApiSession } from '@/lib/api/route';
  */
 const TYPE_ALIASES: Record<string, string[]> = {
   person: ['person', 'people'],
-  // Organisations have worn four retired spellings before settling on
-  // `community`. All of them must match, or the duplicate check that guards the
+  // Organisations have worn several retired spellings before settling on
+  // `space`. All of them must match, or the duplicate check that guards the
   // note-first create surface silently finds nothing on legacy data.
-  community: ['community', 'communities', 'group', 'groups', 'organization', 'organisation', 'org', 'company'],
+  space: ['space', 'spaces', 'community', 'communities', 'group', 'groups', 'organization', 'organisation', 'org', 'company'],
   resource: ['resource', 'resources'],
   event: ['event', 'events'],
 };
@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
     // searchCommunities. Fetched up front so they can lead the results below.
     // The link picker's `type=any` is node-only and skips this.
     const communityMatches =
-      type.toLowerCase() === 'community' ? await searchCommunities(q, session) : [];
+      type.toLowerCase() === 'space' ? await searchCommunities(q, session) : [];
 
     // Email lives in person metadata only; for any other type fall back to name.
     const matchExpr =

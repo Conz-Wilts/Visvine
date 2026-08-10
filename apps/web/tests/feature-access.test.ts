@@ -243,7 +243,8 @@ describe('moreFeatureKeys', () => {
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    for (const type of ['Person', 'Community', 'Event']) {
+    // 'Space' is the org type (formerly Community) — always on, like Person.
+    for (const type of ['Person', 'Space', 'space', 'Event']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);
     }
@@ -258,12 +259,12 @@ describe('isNodeTypeEnabled', () => {
     assert.equal(isNodeTypeEnabled(null, 'Connector'), true);
   });
 
-  it('hides Channel and Space when the channels tool is off', () => {
+  it('hides Channel and Section when the channels tool is off', () => {
     const off = { enabled: { channels: false } };
     assert.equal(isNodeTypeEnabled(off, 'Channel'), false);
-    assert.equal(isNodeTypeEnabled(off, 'Space'), false);
+    assert.equal(isNodeTypeEnabled(off, 'Section'), false);
     // Stored node.type casing drifts — match case-insensitively.
-    assert.equal(isNodeTypeEnabled(off, 'space'), false);
+    assert.equal(isNodeTypeEnabled(off, 'section'), false);
     assert.equal(isNodeTypeEnabled({ enabled: { channels: true } }, 'Channel'), true);
   });
 
@@ -316,7 +317,7 @@ describe('sanitizeFeatureConfig adminOnly', () => {
 
 describe('featureNodeTypeNames', () => {
   it('names the types a tool carries in and out with it', () => {
-    assert.deepEqual(featureNodeTypeNames('channels'), ['Space', 'Channel']);
+    assert.deepEqual(featureNodeTypeNames('channels'), ['Section', 'Channel']);
     assert.deepEqual(featureNodeTypeNames('resources'), ['Resource']);
     assert.deepEqual(featureNodeTypeNames('connectors'), ['Connector']);
   });

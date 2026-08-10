@@ -34,7 +34,7 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
     <div className="px-4 sm:px-6 lg:px-8 py-10">{children}</div>
   );
 
-  if (!currentCommunity) return wrap(<p className="text-center text-brand-grey">Select a community to edit this event.</p>);
+  if (!currentCommunity) return wrap(<p className="text-center text-brand-grey">Select a space to edit this event.</p>);
   if (loading) return wrap(<p className="text-center text-brand-grey">Loading…</p>);
   if (!event) return wrap(<p className="text-center text-brand-grey">Event not found.</p>);
 

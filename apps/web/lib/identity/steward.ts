@@ -163,7 +163,8 @@ export async function splitNodeToNewIdentity(
   // Every organisation spelling — 'organization', 'group', today's 'community' —
   // splits to an org identity; anything else is a person. `Identity.kind` keeps
   // the internal 'organization' name.
-  const kind = entityKindOf(node.type) === 'community' ? 'organization' : 'person';
+  // Identity.kind keeps its internal 'organization' value — it's plumbing.
+  const kind = entityKindOf(node.type) === 'space' ? 'organization' : 'person';
   const meta = (node.metadata as Record<string, unknown>) ?? {};
   const oldIdentityId = node.identityId;
 

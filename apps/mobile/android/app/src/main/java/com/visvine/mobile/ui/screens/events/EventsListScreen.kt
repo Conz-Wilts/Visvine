@@ -66,7 +66,7 @@ fun EventsListScreen(
 
         when {
             state.loading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator(color = colors.accent) }
-            current == null -> EmptyMessage("Select a community to view events")
+            current == null -> EmptyMessage("Select a space to view events")
             else -> PullToRefreshBox(
                 isRefreshing = state.refreshing,
                 onRefresh = { viewModel.refresh() },

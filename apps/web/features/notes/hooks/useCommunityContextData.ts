@@ -29,7 +29,7 @@ export function useCommunityContextData() {
     },
     initialData: EMPTY_CONTEXT,
     errorLabel: 'context data',
-    fallbackError: 'Failed to load community data',
+    fallbackError: 'Failed to load space data',
     // The context payload (all nodes + links) is the heaviest fetch in the app
     // and the context view unmounts on every switch to grid/table. Keep it fresh
     // longer than the default 30s so toggling back doesn't re-download it;

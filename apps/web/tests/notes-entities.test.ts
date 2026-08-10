@@ -16,10 +16,10 @@ import { parseFrontmatter } from '../lib/notes/shared/markdown';
 test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('person'), 'person');
   assert.equal(entityKindOf('Person'), 'person');
-  assert.equal(entityKindOf('organization'), 'community');
-  assert.equal(entityKindOf('org'), 'community');
-  assert.equal(entityKindOf('group'), 'community');
-  assert.equal(entityKindOf('company'), 'community');
+  assert.equal(entityKindOf('organization'), 'space');
+  assert.equal(entityKindOf('org'), 'space');
+  assert.equal(entityKindOf('group'), 'space');
+  assert.equal(entityKindOf('company'), 'space');
   assert.equal(entityKindOf('resource'), 'resource');
   assert.equal(entityKindOf('Resources'), 'resource');
   assert.equal(entityKindOf('event'), 'event');
@@ -30,20 +30,24 @@ test('entityKindOf classifies node types liberally', () => {
 });
 
 test('entityKindOf classifies the container kinds', () => {
-  assert.equal(entityKindOf('community'), 'community');
-  assert.equal(entityKindOf('Communities'), 'community');
+  // 'space' (and the retired 'community' spelling) is the ORG kind now; the
+  // channels container is 'section'.
+  assert.equal(entityKindOf('community'), 'space');
+  assert.equal(entityKindOf('Communities'), 'space');
   assert.equal(entityKindOf('space'), 'space');
+  assert.equal(entityKindOf('section'), 'section');
+  assert.equal(entityKindOf('Sections'), 'section');
   assert.equal(entityKindOf('Channels'), 'channel');
   // Uploaded files are documents, not entities — they never get a note of their own.
   assert.equal(entityKindOf('file'), null);
 });
 
-test('container kinds get their own note namespaces', () => {
-  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'community' }), 'communities/blackbird.md');
-  assert.equal(entityNotePath({ id: 'space:engineering', type: 'space' }), 'spaces/engineering.md');
+test('container kinds get their own note namespaces (dirs kept their old names)', () => {
+  assert.equal(entityNotePath({ id: 'community:blackbird', type: 'space' }), 'communities/blackbird.md');
+  assert.equal(entityNotePath({ id: 'space:engineering', type: 'section' }), 'spaces/engineering.md');
   assert.equal(entityNotePath({ id: 'channel:general', type: 'channel' }), 'channels/general.md');
-  assert.equal(entityKindOfPath('communities/blackbird.md'), 'community');
-  assert.equal(entityKindOfPath('spaces/engineering.md'), 'space');
+  assert.equal(entityKindOfPath('communities/blackbird.md'), 'space');
+  assert.equal(entityKindOfPath('spaces/engineering.md'), 'section');
   assert.equal(entityKindOfPath('channels/general.md'), 'channel');
   assert.equal(parseEntityHref('/channels/general.md'), 'channels/general.md');
   assert.equal(parseEntityHref('/spaces/index.md'), null); // folder index, not an entity
@@ -117,7 +121,7 @@ test('path <-> node id round trips', () => {
   const path = entityNotePath(node)!;
   assert.equal(parseEntityHref(`/${path}`), path);
   assert.equal(entityKindOfPath(path), 'person');
-  assert.equal(entityKindOfPath('communities/halter.md'), 'community');
+  assert.equal(entityKindOfPath('communities/halter.md'), 'space');
   assert.equal(entityKindOfPath('resources/founder-playbook.md'), 'resource');
   assert.equal(entityKindOfPath('notes/welcome.md'), null);
 });
@@ -170,11 +174,12 @@ test('entityStub covers resource nodes', () => {
 });
 
 test('entityStub escapes tricky names so frontmatter still parses', () => {
+  // A legacy 'community'-typed node stubs with the NEW label and tag.
   const md = entityStub({ id: 'community:eucalyptus', type: 'community', name: 'Eucalyptus: telehealth & "more"' });
   const fm = parseFrontmatter(md);
-  assert.equal(fm.type, 'Community');
+  assert.equal(fm.type, 'Space');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
-  assert.deepEqual(fm.tags, ['community']);
+  assert.deepEqual(fm.tags, ['space']);
 });
 
 test('entityDraftContent keeps the body typed before a type was picked', () => {

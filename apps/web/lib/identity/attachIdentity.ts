@@ -25,7 +25,7 @@ import type { IdentityKind } from './match'
 function identityKindFor(node: { id: string; type: string; community_id?: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
-  if (entityKindOf(t) === 'community') {
+  if (entityKindOf(t) === 'space') {
     return isOwnCommunityNode({ id: node.id, communityId: node.community_id }) ? null : 'organization'
   }
   return null

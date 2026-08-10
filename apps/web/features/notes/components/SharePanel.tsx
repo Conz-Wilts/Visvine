@@ -374,7 +374,7 @@ interface SharePanelProps {
 export function SharePanel({ communityId, path, kind, title, onClose }: SharePanelProps) {
   const { joinedCommunities } = useCommunity()
   const isPersonalSpace = communityId.startsWith(PERSONAL_ID_PREFIX)
-  const communityName = joinedCommunities.find((c) => c.id === communityId)?.name ?? 'the community'
+  const communityName = joinedCommunities.find((c) => c.id === communityId)?.name ?? 'the space'
   const displayName =
     title ?? (path === '' ? 'brain root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
 
@@ -504,7 +504,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       },
       confirm: {
         on: { title: 'Restore inherited access?', body: `People with access to the folders above “${displayName}” will be able to see it again.`, cta: 'Restore inheritance' },
-        off: { title: 'Limit access to this note?', body: `Only people added on “${displayName}” and community admins will see it. Access inherited from its folders is cut off.`, cta: 'Limit access' },
+        off: { title: 'Limit access to this note?', body: `Only people added on “${displayName}” and space admins will see it. Access inherited from its folders is cut off.`, cta: 'Limit access' },
       },
     },
     folder: {
@@ -515,7 +515,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       },
       confirm: {
         on: { title: 'Restore inherited access?', body: `People with access to the folders above “${path}/” will be able to see inside it again.`, cta: 'Restore inheritance' },
-        off: { title: 'Limit access to this folder?', body: `Only people and aliases added on “${path}/” and community admins will see inside. Everyone who reached it through a parent folder loses access.`, cta: 'Limit access' },
+        off: { title: 'Limit access to this folder?', body: `Only people and aliases added on “${path}/” and space admins will see inside. Everyone who reached it through a parent folder loses access.`, cta: 'Limit access' },
       },
     },
   }[kind]
@@ -600,7 +600,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
         id: a.name,
         name: a.name,
         sub: a.owner
-          ? 'Alias · owns the community'
+          ? 'Alias · owns the space'
           : `Alias · ${a.holderCount} ${a.holderCount === 1 ? 'person' : 'people'}`,
         image: null as string | null,
       }))
@@ -796,12 +796,12 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
           })}
           {peopleEntries.length === 0 && !communityEntry && (
             <p className="px-2 py-1 text-sm text-text-muted">
-              No one has been added yet — only community admins can see this.
+              No one has been added yet — only space admins can see this.
             </p>
           )}
         </div>
         <p className="mt-1 text-[11px] text-text-muted">
-          Community admins always have full access · You: {levelDisplayLabel(access.myLevel)}
+          Space admins always have full access · You: {levelDisplayLabel(access.myLevel)}
         </p>
       </section>
 
@@ -823,12 +823,12 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                   {
                     value: 'restricted',
                     label: 'Restricted',
-                    hint: 'Only people added above and community admins',
+                    hint: 'Only people added above and space admins',
                   },
                   {
                     value: 'community',
                     label: `Everyone in ${communityName}`,
-                    hint: 'Any member of this community can find and open it',
+                    hint: 'Any member of this space can find and open it',
                   },
                 ]}
                 onPick={(v) => {
@@ -853,7 +853,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                       communityEntry.levelName === 'view' ? 'view' : 'access'
                     } this`
                   : `Inherited from ${communityEntry.via === '' ? 'the brain root' : `${communityEntry.via}/`}`
-                : 'Only people added above and community admins'}
+                : 'Only people added above and space admins'}
             </div>
           </div>
           {communityEntry && (
@@ -989,7 +989,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                 />
               )}
               <p className="text-[11px] text-text-muted">
-                The note stays yours here; a synced copy lives in the chosen community and updates on every
+                The note stays yours here; a synced copy lives in the chosen space and updates on every
                 save. Unlink any time — the copy remains.
               </p>
             </div>
@@ -1051,7 +1051,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
 
             {isPersonalSpace ? (
               <p className="text-sm text-text-muted">
-                This note lives in your personal brain — only you can see it. Publish it into a community
+                This note lives in your personal brain — only you can see it. Publish it into a space
                 below to share a live copy.
               </p>
             ) : adding ? (

@@ -47,7 +47,7 @@ export default function AdminResourcesPage() {
     setChanges(prev => prev.filter(c => c.id !== changeId));
   }
 
-  if (!currentCommunity) return <div className="p-6 text-gray-500">Select a community.</div>;
+  if (!currentCommunity) return <div className="p-6 text-gray-500">Select a space.</div>;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -56,7 +56,7 @@ export default function AdminResourcesPage() {
 
       {!isAdmin ? (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-          <p className="text-yellow-800">You are not an admin for this community.</p>
+          <p className="text-yellow-800">You are not an admin for this space.</p>
         </div>
       ) : (
         <>

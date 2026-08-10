@@ -147,7 +147,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   };
 
   if (!currentCommunity) {
-    return <CenteredNote text="Please select a community to view this event." />;
+    return <CenteredNote text="Please select a space to view this event." />;
   }
 
   // The Context/Raw bar only rides the guest-facing view (the manage view has

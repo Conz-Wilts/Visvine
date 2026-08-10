@@ -65,8 +65,8 @@ export default function Navbar() {
           {canAccessAdmin && (
             <Link
               href="/admin"
-              aria-label="Community management"
-              title="Community management"
+              aria-label="Space management"
+              title="Space management"
               className={`w-12 h-12 rounded-xl flex items-center justify-center transition ${
                 adminActive
                   ? "text-brand-green hover:text-brand-dark-green"

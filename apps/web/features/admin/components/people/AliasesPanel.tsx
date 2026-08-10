@@ -65,7 +65,7 @@ function EveryoneCard({ communityId, data, busy, run }: CardProps) {
         <div>
           <h4 className="text-sm font-semibold text-text-primary">Everyone</h4>
           <p className="text-xs text-text-muted">
-            Every member of this community, always. {data.members.length}{' '}
+            Every member of this space, always. {data.members.length}{' '}
             {data.members.length === 1 ? 'person' : 'people'}.
           </p>
         </div>
@@ -233,7 +233,7 @@ function AliasCard({ communityId, alias, data, busy, run }: CardProps & { alias:
           </div>
           <div className="flex shrink-0 items-center gap-3">
             {alias.system ? (
-              <span className="text-xs font-medium text-brand-gold">Owns the community</span>
+              <span className="text-xs font-medium text-brand-gold">Owns the space</span>
             ) : (
               <>
                 <label className="flex items-center gap-2 text-xs text-text-secondary">
@@ -242,7 +242,7 @@ function AliasCard({ communityId, alias, data, busy, run }: CardProps & { alias:
                     disabled={busy}
                     onChange={(owner) => act({ action: 'setOwner', name: alias.name, owner })}
                   />
-                  Owns the community
+                  Owns the space
                 </label>
                 <button
                   type="button"

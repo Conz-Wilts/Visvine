@@ -28,7 +28,7 @@ export default function CommunitiesPage() {
         {/* Page header — centered title, consistent with other pages */}
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 mb-10">
           <div />
-          <PageTitle title="My Communities" />
+          <PageTitle title="My Spaces" />
           <Link
             href="/discover"
             className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-end"
@@ -37,16 +37,16 @@ export default function CommunitiesPage() {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
             </svg>
-            Discover Communities
+            Discover Spaces
           </Link>
         </div>
 
         {/* Communities */}
         {joinedCommunities.length === 0 ? (
           <EmptyState
-            title="No communities yet"
-            description="You haven't joined any communities yet. Discover and join communities to get started."
-            action={{ label: 'Discover Communities', href: '/discover' }}
+            title="No spaces yet"
+            description="You haven't joined any spaces yet. Discover and join spaces to get started."
+            action={{ label: 'Discover Spaces', href: '/discover' }}
           />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

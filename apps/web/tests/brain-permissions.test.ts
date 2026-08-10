@@ -31,6 +31,7 @@ import {
   type BrainAccess,
   type MigratedRegistry,
 } from '../lib/notes/shared/authz'
+import { audienceSummary } from '../lib/notes/shared/audience'
 import {
   principalCanManage,
   principalCanRead,
@@ -376,4 +377,84 @@ test('parity: public folders stay readable by every member, even gated-out ones'
   // WRITER keep edit level inside a public (non-restricted) folder.
   const grand = principal('u-grand', scopeFor(migrated, 'u-grand'))
   assert.equal(principalCanWrite(grand, 'wiki/handbook.md'), true)
+})
+
+// ── audienceSummary: the one-line "who can see this path" the MCP tools expose ──
+
+test('audience: a community-wide grant reads as everyone', () => {
+  const grants = [grant('', LEVEL_VIEW, { type: 'community', id: '' })]
+  const a = audienceSummary('notes/idea.md', grants, [], { selfUserId: 'u-me', communityName: 'Blackbird' })
+  assert.equal(a.audience, 'everyone')
+  assert.equal(a.line, 'everyone in Blackbird')
+})
+
+test('audience: no reaching grants means admins only', () => {
+  const a = audienceSummary('private/plan.md', [], [], { selfUserId: 'u-me' })
+  assert.equal(a.audience, 'admins-only')
+  assert.equal(a.line, 'admins only')
+})
+
+test('audience: the private-by-default note shape — restricted, you + admins only', () => {
+  // Exactly what makeNotePrivate produces: a community root grant that a
+  // restricted note path cuts, plus the author's own FULL grant on the note.
+  const grants = [
+    grant('', LEVEL_VIEW, { type: 'community', id: '' }),
+    grant('people/x.md', LEVEL_FULL, { id: 'u-me' }),
+  ]
+  const a = audienceSummary('people/x.md', grants, ['people/x.md'], { selfUserId: 'u-me' })
+  assert.equal(a.audience, 'you-only')
+  assert.equal(a.restricted, true)
+  assert.equal(a.line, 'restricted — you + admins only')
+})
+
+test('audience: alias grants are named, deduped, capped, and other users only counted', () => {
+  const grants = [
+    grant('deals', LEVEL_VIEW, { type: 'alias', id: 'Investors' }),
+    grant('deals', LEVEL_EDIT, { type: 'alias', id: 'Investors' }),
+    grant('deals', LEVEL_VIEW, { type: 'alias', id: 'Team' }),
+  ]
+  const aliases = audienceSummary('deals/acme.md', grants, [], { selfUserId: 'u-me' })
+  assert.equal(aliases.audience, 'aliases')
+  assert.equal(aliases.line, 'aliases: Investors, Team + admins')
+
+  const mixed = audienceSummary(
+    'deals/acme.md',
+    [...grants, grant('deals', LEVEL_VIEW, { id: 'u-other' }), grant('deals', LEVEL_VIEW, { id: 'u-third' })],
+    [],
+    { selfUserId: 'u-me' },
+  )
+  assert.equal(mixed.audience, 'mixed')
+  assert.equal(mixed.line, 'aliases: Investors, Team + 2 direct grants + admins')
+
+  const capped = audienceSummary(
+    'deals/acme.md',
+    ['A', 'B', 'C', 'D', 'E', 'F'].map((name) => grant('deals', LEVEL_VIEW, { type: 'alias', id: name })),
+    [],
+    { selfUserId: 'u-me' },
+  )
+  assert.equal(capped.line, 'aliases: A, B, C, D (+2 more) + admins')
+})
+
+test('audience: a restricted folder cuts outside grants, so inside it only admins remain', () => {
+  const grants = [grant('', LEVEL_VIEW, { type: 'community', id: '' })]
+  const outside = audienceSummary('notes/open.md', grants, ['secret'], { selfUserId: 'u-me' })
+  assert.equal(outside.audience, 'everyone')
+  const inside = audienceSummary('secret/plan.md', grants, ['secret'], { selfUserId: 'u-me' })
+  assert.equal(inside.audience, 'admins-only')
+  assert.equal(inside.line, 'restricted — admins only')
+  // …until a grant lands on or inside the boundary.
+  const granted = audienceSummary(
+    'secret/plan.md',
+    [...grants, grant('secret', LEVEL_VIEW, { type: 'alias', id: 'Partners' })],
+    ['secret'],
+    { selfUserId: 'u-me' },
+  )
+  assert.equal(granted.line, 'restricted — aliases: Partners + admins')
+})
+
+test('audience: sub-view grants never count as audience', () => {
+  // Levels below VIEW cannot exist today (view is the floor), but the guard
+  // keeps a future level-0 tombstone from widening the reported audience.
+  const a = audienceSummary('x.md', [grant('', 5, { type: 'community', id: '' })], [], { selfUserId: 'u-me' })
+  assert.equal(a.audience, 'admins-only')
 })

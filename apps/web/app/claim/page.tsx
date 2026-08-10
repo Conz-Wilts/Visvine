@@ -33,7 +33,7 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
             We found a profile for you
           </h1>
           <p className="text-sm text-gray-500">
-            Someone has already added you to a community. Claim your profile to
+            Someone has already added you to a space. Claim your profile to
             take control.
           </p>
         </div>
@@ -73,7 +73,7 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
             <p className="text-sm text-blue-800">
               Already a member of{" "}
               <span className="font-semibold">{profile.communityCount}</span>{" "}
-              {profile.communityCount === 1 ? "community" : "communities"}
+              {profile.communityCount === 1 ? "space" : "spaces"}
               {profile.communityNames.length > 0 && (
                 <>
                   :{" "}
@@ -97,7 +97,7 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
         <div className="px-8 pb-8">
           <p className="text-xs text-gray-400 text-center">
             Claiming this profile will give you full control over your public
-            information. Community admins will retain their private notes about
+            information. Space admins will retain their private notes about
             you.
           </p>
         </div>

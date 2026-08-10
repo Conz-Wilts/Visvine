@@ -214,7 +214,7 @@ async function resolveSecretValues(
   if (missing.length > 0) {
     throw new ConnectorError(
       'missing_secret',
-      `Secret${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not set for this community — an admin must add ${missing.length > 1 ? 'them' : 'it'} on the connector's page`,
+      `Secret${missing.length > 1 ? 's' : ''} ${missing.join(', ')} not set for this space — an admin must add ${missing.length > 1 ? 'them' : 'it'} on the connector's page`,
     )
   }
   const values = new Map<string, string>()

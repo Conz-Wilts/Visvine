@@ -326,7 +326,7 @@ export function EntityContextPanel({
     async (entity: PickerEntity): Promise<string> => {
       const p = entityNotePath({ id: entity.id, type: entity.type })
       if (!p) throw new Error('Not a directory entity')
-      if (!communityId) throw new Error('No community')
+      if (!communityId) throw new Error('No space')
       try {
         await notesApi.create(communityId, p, entityStub(entity))
         // The target entity's note may be cached as "missing" from a prefetch.
@@ -446,7 +446,7 @@ export function EntityContextPanel({
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope={gatedOut ? 'brain' : 'path'}
-          communityName={currentCommunity?.name ?? 'this community'}
+          communityName={currentCommunity?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}

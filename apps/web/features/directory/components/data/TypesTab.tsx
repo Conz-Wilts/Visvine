@@ -38,7 +38,7 @@ function AliasPill({ alias, readOnly, onColorChange, onRemove, disabled }: {
       <span
         title={
           alias.system
-            ? 'Built in — holders own the community. Give it out in Console → Aliases.'
+            ? 'Built in — holders own the space. Give it out in Console → Aliases.'
             : `${alias.name} — edit it in Console → Aliases`
         }
         className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
@@ -352,7 +352,7 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     saveCommunity(types.map(t => t.name === typeName ? { ...t, color } : t), aliases);
 
   if (!currentCommunity) {
-    return <div className="p-6 text-sm text-text-muted">Select a community to manage aliases.</div>;
+    return <div className="p-6 text-sm text-text-muted">Select a space to manage aliases.</div>;
   }
 
   return (

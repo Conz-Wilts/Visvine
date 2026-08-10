@@ -299,7 +299,7 @@ export async function setAliasOwner(
     name: actor.name,
     action: 'folder',
     path: '',
-    detail: `alias "${name}" ${owner ? 'now owns' : 'no longer owns'} the community`,
+    detail: `alias "${name}" ${owner ? 'now owns' : 'no longer owns'} the space`,
   })
 }
 
@@ -316,7 +316,7 @@ export async function addAliasHolder(
     select: { status: true },
   })
   if (!membership || membership.status !== 'active') {
-    throw new Error('That person is not an active member of this community')
+    throw new Error('That person is not an active member of this space')
   }
   await prisma.userAlias.upsert({
     where: { user_alias_identity: { communityId, userId, aliasName: name } },

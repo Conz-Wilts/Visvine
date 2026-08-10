@@ -24,14 +24,14 @@ import type { IdentityKind } from '../lib/identity/match';
 import { entityKindOf } from '../lib/notes/entities';
 import { isOwnCommunityNode } from '../lib/types/context';
 
-// Every organisation spelling — 'organization', 'group', today's 'community' —
-// resolves to an org identity. The community's OWN node is excluded: it is the
-// community itself, not an organisation recorded inside it, and giving it an
+// Every organisation spelling — 'organization', 'group', 'community', today's
+// 'space' — resolves to an org identity. The space's OWN node is excluded: it
+// is the space itself, not an organisation recorded inside it, and giving it an
 // identity would merge unrelated communities that happen to share a name.
 function kindFor(node: { id: string; type: string; communityId: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';
-  if (entityKindOf(t) === 'community') {
+  if (entityKindOf(t) === 'space') {
     return isOwnCommunityNode(node) ? null : 'organization';
   }
   return null;

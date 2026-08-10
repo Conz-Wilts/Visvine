@@ -131,7 +131,7 @@ export async function createChannelConversation(
   });
 
   if (!community) {
-    throw new MessagingError(404, 'Community not found');
+    throw new MessagingError(404, 'Space not found');
   }
 
   if (spaceId) {
@@ -190,7 +190,7 @@ async function parentNodeForChannel(
 ): Promise<string | null> {
   if (!spaceId) return communityNodeId(communityId);
   const node = await prisma.node.findFirst({
-    where: { communityId, type: 'space', metadata: { path: ['spaceId'], equals: spaceId } },
+    where: { communityId, type: 'section', metadata: { path: ['spaceId'], equals: spaceId } },
     select: { id: true },
   });
   return node?.id ?? communityNodeId(communityId);
@@ -252,7 +252,7 @@ async function ensureSpaceInCommunity(spaceId: string, communityId: string) {
     select: { id: true, communityId: true },
   });
   if (!space || space.communityId !== communityId) {
-    throw new MessagingError(404, 'Space not found in this community');
+    throw new MessagingError(404, 'Section not found in this space');
   }
 }
 
@@ -276,7 +276,7 @@ export async function createChannelSpace(
     select: { id: true },
   });
   if (!community) {
-    throw new MessagingError(404, 'Community not found');
+    throw new MessagingError(404, 'Space not found');
   }
   const last = await prisma.channelSpace.findFirst({
     where: { communityId },
@@ -293,7 +293,7 @@ export async function createChannelSpace(
   });
   await syncEntityNodeSafe({
     communityId,
-    type: 'space',
+    type: 'section',
     name: created.name,
     recordId: created.id,
     body: context,
@@ -310,7 +310,7 @@ export async function updateChannelSpace(
 ): Promise<ChannelSpaceEntry> {
   const existing = await prisma.channelSpace.findUnique({ where: { id: spaceId } });
   if (!existing) {
-    throw new MessagingError(404, 'Space not found');
+    throw new MessagingError(404, 'Section not found');
   }
   const updated = await prisma.channelSpace.update({
     where: { id: spaceId },
@@ -321,12 +321,12 @@ export async function updateChannelSpace(
     },
   });
   // Keep the graph label in step with the rename. The node id (and so the note
-  // path) is deliberately NOT re-derived — the note is the space's history, and
+  // path) is deliberately NOT re-derived — the note is the section's history, and
   // moving it on every rename would break links into it.
   if (payload.name !== undefined || payload.emoji !== undefined) {
     await syncEntityNodeSafe({
       communityId: updated.communityId,
-      type: 'space',
+      type: 'section',
       name: updated.name,
       recordId: updated.id,
       metadata: { emoji: updated.emoji },
@@ -335,17 +335,17 @@ export async function updateChannelSpace(
   return serializeSpace(updated);
 }
 
-/** Delete a space — its channels are unfiled (spaceId → null), not deleted. */
+/** Delete a section — its channels are unfiled (spaceId → null), not deleted. */
 export async function deleteChannelSpace(spaceId: string): Promise<void> {
   const existing = await prisma.channelSpace.findUnique({
     where: { id: spaceId },
     select: { id: true, communityId: true },
   });
   if (!existing) {
-    throw new MessagingError(404, 'Space not found');
+    throw new MessagingError(404, 'Section not found');
   }
-  // Channels survive the space, so their containment edge has to move up to the
-  // community before the space's node (and its cascading edges) goes away.
+  // Channels survive the section, so their containment edge has to move up to the
+  // community before the section's node (and its cascading edges) goes away.
   const orphaned = await prisma.conversation.findMany({
     where: { spaceId, type: ConversationType.CHANNEL },
     select: { id: true },
@@ -364,7 +364,7 @@ export async function deleteChannelSpace(spaceId: string): Promise<void> {
     }
   }
   await prisma.channelSpace.delete({ where: { id: spaceId } });
-  await removeEntityNode(existing.communityId, 'space', spaceId);
+  await removeEntityNode(existing.communityId, 'section', spaceId);
 }
 
 /** Join a community channel (any member of the channel's community can join). */
@@ -385,7 +385,7 @@ export async function joinChannel(userId: string, conversationId: string): Promi
     });
 
     if (!membership) {
-      throw new MessagingError(403, 'You must be a member of this community to join its channels');
+      throw new MessagingError(403, 'You must be a member of this space to join its channels');
     }
   }
 
@@ -584,13 +584,13 @@ export async function updateGroupConversation(
   const isChannel = membership.conversation.type === ConversationType.CHANNEL;
 
   if ((payload.icon !== undefined || payload.spaceId !== undefined || payload.viewMode !== undefined) && !isChannel) {
-    throw new MessagingError(400, 'Icons, spaces and view styles only apply to channels');
+    throw new MessagingError(400, 'Icons, sections and view styles only apply to channels');
   }
 
   if (payload.spaceId) {
     const communityId = membership.conversation.communityId;
     if (!communityId) {
-      throw new MessagingError(400, 'Channel has no community');
+      throw new MessagingError(400, 'Channel has no space');
     }
     await ensureSpaceInCommunity(payload.spaceId, communityId);
   }

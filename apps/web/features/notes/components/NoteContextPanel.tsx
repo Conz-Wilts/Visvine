@@ -273,7 +273,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     async (entity: PickerEntity): Promise<string> => {
       const p = entityNotePath({ id: entity.id, type: entity.type })
       if (!p) throw new Error('Not a directory entity')
-      if (!communityId) throw new Error('No community')
+      if (!communityId) throw new Error('No space')
       try {
         await notesApi.create(communityId, p, entityStub(entity))
         invalidateContextCache(
@@ -317,7 +317,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope="brain"
-          communityName={currentCommunity?.name ?? 'this community'}
+          communityName={currentCommunity?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}
@@ -352,7 +352,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope="path"
-          communityName={currentCommunity?.name ?? 'this community'}
+          communityName={currentCommunity?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}

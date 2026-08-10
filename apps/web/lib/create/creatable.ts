@@ -23,9 +23,11 @@ export interface CreatePermissions {
 
 export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: CreatePermissions): boolean {
   switch (type) {
-    // Channels and spaces are community-admin surfaces behind the channels feature.
+    // Channels and sections are admin surfaces behind the channels feature.
+    // NOTE: 'space' (the org type, formerly 'community') must NOT appear here —
+    // it falls through to the default arm, creatable by any member.
     case 'channel':
-    case 'space':
+    case 'section':
       return isFeatureEnabled(featureConfig, 'channels') && isAdmin
 
     // An uploaded file lands in the community brain, so it follows the notes
@@ -45,11 +47,11 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'resource':
       return isFeatureEnabled(featureConfig, 'resources')
 
-    // The remaining note-first types: person, community, context, index. An
-    // index is a folder written as a note, so it follows the note rule. A community
-    // here is a directory record — recording that an organisation exists is as
-    // ordinary as writing a note about it. (Provisioning a community of your
-    // own isn't a create type at all; it lives on the community switcher.)
+    // The remaining note-first types: person, space, context, index. An
+    // index is a folder written as a note, so it follows the note rule. A space
+    // here is a directory record — recording that a group or organisation
+    // exists is as ordinary as writing a note about it. (Provisioning a space
+    // of your own isn't a create type at all; it lives on the switcher.)
     // Writing a context note is the baseline capability of a member, gated
     // per-folder server-side rather than per-type here.
     default:

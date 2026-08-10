@@ -96,7 +96,7 @@ export default function AdminPage() {
   if (!currentCommunity || !isAdmin) {
     return (
       <div className="w-full px-6 py-8">
-        <Alert variant="info">Select a community you administer to access this page.</Alert>
+        <Alert variant="info">Select a space you administer to access this page.</Alert>
       </div>
     );
   }

@@ -18,11 +18,11 @@ export type McpScope = (typeof MCP_SCOPES)[number]
 /** Plain-language consent copy — what the user actually sees when approving. */
 export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
   'context:read':
-    'Read the context of communities you belong to — entities, notes and how they connect',
+    'Read the context of spaces you belong to — entities, notes and how they connect',
   'context:write':
-    'Create entities and write notes in communities where you already have write access',
+    'Create entities and write notes in spaces where you already have write access',
   'connectors:use':
-    'Call external APIs and databases through connectors configured by community admins',
+    'Call external APIs and databases through connectors configured by space admins',
 }
 
 /**
@@ -43,6 +43,10 @@ export const TOOL_SCOPES = {
   edit_context: 'context:write',
   append_context: 'context:write',
   move_context: 'context:write',
+  // The clean pass analyzes read-only by default, but its apply/trash actions
+  // mutate — one scope for the whole tool keeps step-up simple, and analysis
+  // without write intent is what list_context/search_context are for anyway.
+  clean_context: 'context:write',
   // Listing rides context:read — search already surfaces connector note bodies
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',

@@ -188,7 +188,7 @@ export default function PeoplePanel() {
           confirm?.kind === 'deny' ? (
             <>Deny <span className="font-semibold">{confirm?.name}</span>&apos;s request to join?</>
           ) : (
-            <>Are you sure you want to remove <span className="font-semibold">{confirm?.name}</span> from this community? Their aliases and direct grants go with them.</>
+            <>Are you sure you want to remove <span className="font-semibold">{confirm?.name}</span> from this space? Their aliases and direct grants go with them.</>
           )
         }
         confirmLabel={confirm?.kind === 'deny' ? 'Deny' : 'Remove'}
@@ -233,7 +233,7 @@ function MemberRow({ member, held, busy, onRemove }: {
                 key={a.name}
                 name={a.name}
                 color={a.color}
-                title={a.owner ? `${a.name} — owns the community` : a.name}
+                title={a.owner ? `${a.name} — owns the space` : a.name}
               />
             ))}
           </div>

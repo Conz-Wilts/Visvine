@@ -31,15 +31,15 @@ import type { NBNode } from '@/lib/types'
  * lib/create/typeFields.ts), which note namespace the entity lives in
  * (ENTITY_DIRS in lib/notes/entities.ts), and whether it resolves to a
  * cross-community identity. Events are excluded because they're created through
- * /events (their detail route redirects there); space/channel are structural
+ * /events (their detail route redirects there); section/channel are structural
  * and belong to admin surfaces.
  *
- * A `community` is an organisation — a company, group or investor — recorded in
- * the directory. Recording one never provisions a community: real communities
- * are only ever created deliberately, from the switcher. When the name resolves
- * to one that already runs here, `communityRef` links the card to it.
+ * A `space` here is a group, organisation or community — recorded as a card in
+ * the directory. Recording one never provisions a real space: those are only
+ * ever created deliberately, from the switcher. When the name resolves to one
+ * that already runs here, `communityRef` links the card to it.
  */
-export const CREATABLE_TYPES = ['person', 'community', 'resource'] as const
+export const CREATABLE_TYPES = ['person', 'space', 'resource'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
 
 export function isCreatableType(type: string): type is CreatableType {
@@ -55,7 +55,7 @@ export interface CreateEntityInput {
   alias?: string | null
   identityId?: string | null
   /**
-   * For `community` only: the community this card refers to, set when the user
+   * For `space` only: the community row this card refers to, set when the user
    * picked one that already runs here out of the match list. Null for an org
    * that's only a directory record — nothing is provisioned for those.
    */
@@ -154,8 +154,8 @@ export async function createEntity(
   if (denial) return { ok: false, status: 403, error: denial }
 
   // Collision check against the NOTE, not just the node id. `entityNotePath` is
-  // lossy in the organisation namespace — legacy `org:halter`, `group:halter`
-  // and a new `community:halter` all land on communities/halter.md — so an id
+  // lossy in the organisation namespace — legacy `org:halter`, `group:halter`,
+  // `community:halter` and a new `space:halter` all land on communities/halter.md — so an id
   // that looks free can still point at an occupied path. Hand back the existing node so the
   // caller can offer "already exists — open it" instead of silently creating a
   // second Halter that shadows the first one's note.
@@ -171,7 +171,7 @@ export async function createEntity(
     return {
       ok: false,
       status: 409,
-      error: `${name} already exists in this community`,
+      error: `${name} already exists in this space`,
       existingNodeId: existing?.id ?? null,
       existingPath: basePath,
     }
@@ -226,12 +226,12 @@ export async function createEntity(
     await prisma.node.update({ where: { id: row.id }, data: { identityId } })
   }
 
-  // An organisation the user RESOLVED to a community that already runs here
+  // An organisation the user RESOLVED to a space that already runs here
   // keeps a pointer to it, so the card and the real thing are the same thing.
   // Nothing is provisioned when it doesn't resolve: recording that Movac exists
-  // is a note in your directory, and communities are only ever created
+  // is a note in your directory, and real spaces are only ever created
   // deliberately, from the switcher. An unresolved card is just a card.
-  const communityRef = rawType === 'community' ? input.communityRef?.trim() : null
+  const communityRef = rawType === 'space' ? input.communityRef?.trim() : null
   if (communityRef) {
     row = await prisma.node.update({
       where: { id: row.id },

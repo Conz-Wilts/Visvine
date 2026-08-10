@@ -69,7 +69,7 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
 
   const loadAllCommunities = useCallback(async () => {
     const res = await fetch('/api/data/communities');
-    if (!res.ok) throw new Error('Failed to load communities');
+    if (!res.ok) throw new Error('Failed to load spaces');
     const data = await res.json();
     setCommunities(data.communities || []);
   }, []);
@@ -94,7 +94,7 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
       try {
         await Promise.all([loadAllCommunities(), loadUserCommunities()]);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load communities');
+        setError(err instanceof Error ? err.message : 'Failed to load spaces');
       } finally {
         setLoading(false);
       }
@@ -115,14 +115,14 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || data.error || 'Failed to join community');
+      throw new Error(data.detail || data.error || 'Failed to join space');
     }
     setMemberships(prev => new Map(prev).set(communityId, false));
   }, []);
 
   const leaveCommunity = useCallback(async (communityId: string) => {
     const res = await fetch(`/api/communities/${communityId}/join`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to leave community');
+    if (!res.ok) throw new Error('Failed to leave space');
     setMemberships(prev => {
       const next = new Map(prev);
       next.delete(communityId);

@@ -52,7 +52,7 @@ export default function CommunitiesModal({ open, onClose, communities, isOwner, 
       panelClassName="bg-surface-1 border border-border-subtle rounded-2xl shadow-2xl flex flex-col max-h-[85vh]"
     >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
-          <h2 className="text-base font-bold font-open-sauce text-text-primary">Communities</h2>
+          <h2 className="text-base font-bold font-open-sauce text-text-primary">Spaces</h2>
           <button onClick={onClose} aria-label="Close"
                   className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary transition-colors">
             <X className="w-4 h-4" />
@@ -86,7 +86,7 @@ export default function CommunitiesModal({ open, onClose, communities, isOwner, 
               </h3>
               {isOwner && (
                 <p className="text-xs text-text-muted mb-2.5 leading-relaxed">
-                  Choose which of your communities are visible on your public profile. Communities you manage are always shown.
+                  Choose which of your spaces are visible on your public profile. Spaces you manage are always shown.
                 </p>
               )}
               <div className="flex flex-col gap-1.5">
@@ -109,7 +109,7 @@ export default function CommunitiesModal({ open, onClose, communities, isOwner, 
 
           {communities.length === 0 && (
             <p className="text-sm text-text-muted italic py-6 text-center">
-              {personName} isn’t showing any communities yet.
+              {personName} isn’t showing any spaces yet.
             </p>
           )}
         </div>

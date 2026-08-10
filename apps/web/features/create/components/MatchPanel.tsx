@@ -85,7 +85,7 @@ export default function MatchPanel({
                   {isLiveCommunity && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-brand-dark-green bg-brand-green/10 px-1.5 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />
-                      Community · {memberCount} member{memberCount === 1 ? '' : 's'}
+                      Space · {memberCount} member{memberCount === 1 ? '' : 's'}
                     </span>
                   )}
                 </div>

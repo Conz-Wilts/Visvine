@@ -177,7 +177,7 @@ export function NotePicker({
         ) : (
           items.map((item, i) => (
             <div key={item.key}>
-              {i === 0 && entityResults.length > 0 && <PickerGroupLabel>People &amp; communities</PickerGroupLabel>}
+              {i === 0 && entityResults.length > 0 && <PickerGroupLabel>People &amp; spaces</PickerGroupLabel>}
               {i === firstNoteIdx && noteResults.length > 0 && entityResults.length > 0 && (
                 <PickerGroupLabel>Notes</PickerGroupLabel>
               )}

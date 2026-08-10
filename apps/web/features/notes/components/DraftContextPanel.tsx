@@ -63,7 +63,7 @@ import '../notes.css'
  *  always produce something, even where the directory types are gated.
  *
  *  Everything creatable in the app is here: there is no second menu. The five
- *  that used to hide behind the sidebar's caret (file, channel, space,
+ *  that used to hide behind the sidebar's caret (file, channel, section,
  *  connector, community) are ordinary types on this surface — the title is
  *  their name and the editor body is their starting context, with only the
  *  handful of fields that CANNOT be filled in afterwards shown inline. */
@@ -73,14 +73,15 @@ export type DraftType =
   // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
   | 'index'
   | 'person'
-  // The organisation that used to be 'group' — a node and a note recording that
-  // one exists. Provisioning a real Community row of your own isn't a draft
-  // type; it's on the community switcher.
-  | 'community'
+  // The org type (formerly 'community', 'group' before that) — a node and a
+  // note recording that a group/organisation exists. Provisioning a real space
+  // of your own isn't a draft type; it's on the switcher.
+  | 'space'
   | 'resource'
   | 'connector'
   | 'channel'
-  | 'space'
+  // The channels-tool container (formerly 'space').
+  | 'section'
   | 'file'
 
 interface DraftTypeOption {
@@ -102,16 +103,16 @@ const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
   { id: 'index', label: 'Index', configName: 'Index', color: '#c026d3', hint: 'The home page for a group of notes', creatable: 'index' },
   { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
-  { id: 'community', label: 'Community', configName: 'Community', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'community' },
+  { id: 'space', label: 'Space', configName: 'Space', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'space' },
   { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', hint: 'Upload documents into the context', creatable: 'file' },
   { id: 'connector', label: 'Connector', configName: 'Connector', color: '#a855f7', hint: 'A gateway to an external API or database', creatable: 'connector' },
-  { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a space', creatable: 'channel' },
-  { id: 'space', label: 'Space', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'space' },
+  { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a section', creatable: 'channel' },
+  { id: 'section', label: 'Section', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'section' },
 ]
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
-const ENTITY_TYPES = new Set<DraftType>(['person', 'community', 'resource'])
+const ENTITY_TYPES = new Set<DraftType>(['person', 'space', 'resource'])
 /** Types whose only inline field is the destination folder in the context.
  *  For an index the picker chooses its PARENT — the index is a folder itself. */
 const FOLDERED_TYPES = new Set<DraftType>(['note', 'index', 'file'])
@@ -143,7 +144,7 @@ interface Stash {
 /**
  * The inline settings the non-note types need at creation time — the ones that
  * can't sensibly be changed afterwards, or that the create endpoint requires.
- * Everything else about a channel/space/community/connector is edited on the
+ * Everything else about a channel/section/space/connector is edited on the
  * thing itself once it exists. Files are deliberately absent: `File` objects
  * don't survive a JSON round-trip, so a picked upload isn't stashed.
  */
@@ -489,7 +490,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create space')
+    if (!res.ok) throw new Error(data.error || 'Failed to create section')
     invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
     sessionStorage.removeItem(STASH_KEY)
     router.replace('/channels')
@@ -535,7 +536,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       else if (type === 'index') await commitIndex()
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
-      else if (type === 'space') await commitSpace()
+      // 'section' is the channels-tool container; 'space' (the org type) falls
+      // through to commitEntity with the other directory entities.
+      else if (type === 'section') await commitSpace()
       else if (type === 'file') await commitFiles()
       else await commitEntity()
     } catch (err) {
@@ -942,7 +945,7 @@ function TypeMenu({
 // choosing what a thing is and naming it — anything editable on the thing's own
 // page afterwards does NOT belong here. What's left is the irreducible part:
 // a connector's transport and endpoint (its note is its config, and one without
-// them is invalid), and a channel's view style and space.
+// them is invalid), and a channel's view style and section.
 
 function ExtraField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -1061,14 +1064,14 @@ function ChannelExtras({
         />
       </ExtraField>
       {spaces.length > 0 && (
-        <ExtraField label="Space">
+        <ExtraField label="Section">
           <select
             className={extraInput}
             style={{ ['--accent' as string]: accent }}
             value={extras.spaceId}
             onChange={(e) => onChange({ ...extras, spaceId: e.target.value })}
           >
-            <option value="">No space</option>
+            <option value="">No section</option>
             {spaces.map((space) => (
               <option key={space.id} value={space.id}>
                 {space.emoji ? `${space.emoji} ` : ''}{space.name}

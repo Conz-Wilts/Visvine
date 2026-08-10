@@ -195,7 +195,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
     try {
       await fetchJson(`/api/data/communities?id=${community.id}`, { method: 'DELETE' });
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete community');
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete space');
       setConfirmDelete(false);
       return;
     }
@@ -249,7 +249,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
                 className="mt-3"
                 checked={isPrivate}
                 onChange={handleVisibilityToggle}
-                aria-label="Private community"
+                aria-label="Private space"
               />
             </div>
           </div>
@@ -261,7 +261,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
                 value={name}
                 onChange={e => handleNameChange(e.target.value)}
                 onBlur={flush}
-                placeholder="Community name"
+                placeholder="Space name"
               />
             </Field>
             <Field label="Description">
@@ -273,7 +273,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
                   queue({ description: e.target.value }, { debounceMs: 800 });
                 }}
                 onBlur={flush}
-                placeholder="What brings this community together?"
+                placeholder="What brings this space together?"
               />
             </Field>
             <div className="grid gap-5 sm:grid-cols-2">
@@ -315,13 +315,13 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
           onClick={() => { setDeleteError(''); setConfirmDelete(true); }}
         >
           <Trash2 size={18} aria-hidden />
-          Delete this community
+          Delete this space
         </Button>
       </section>
 
       <ConfirmDialog
         open={confirmPublic}
-        title="Make this community public?"
+        title="Make this space public?"
         body={
           <>
             Anyone will be able to find <span className="font-semibold">{community.name}</span> in
@@ -338,14 +338,14 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
 
       <ConfirmDialog
         open={confirmDelete}
-        title="Delete community"
+        title="Delete space"
         body={
           <>
             This permanently deletes <span className="font-semibold">{community.name}</span> and all of
             its memberships. This cannot be undone.
           </>
         }
-        confirmLabel="Delete community"
+        confirmLabel="Delete space"
         destructive
         confirmText={community.name}
         onConfirm={handleDelete}

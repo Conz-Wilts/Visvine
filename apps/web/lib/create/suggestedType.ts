@@ -4,7 +4,7 @@ export interface CreateSuggestion {
   /**
    * Everything the current surface can make, most likely first. A page whose
    * own tools create more than one thing (Channels makes channels *and*
-   * spaces) lists them all, so the panel isn't narrower than the page.
+   * sections) lists them all, so the panel isn't narrower than the page.
    */
   types: CreateableType[];
   /** Short human reason shown next to the suggested option ("You're on Events"). */
@@ -22,7 +22,7 @@ const ROUTE_SUGGESTIONS: Array<{ prefix: string; suggestion: CreateSuggestion }>
   { prefix: '/directory', suggestion: { types: ['person'], reason: "You're in the Directory" } },
   { prefix: '/events', suggestion: { types: ['event'], reason: "You're on Events" } },
   { prefix: '/resources', suggestion: { types: ['resource'], reason: "You're on Resources" } },
-  { prefix: '/channels', suggestion: { types: ['channel', 'space'], reason: "You're on Channels" } },
+  { prefix: '/channels', suggestion: { types: ['channel', 'section'], reason: "You're on Channels" } },
   { prefix: '/connectors', suggestion: { types: ['connector'], reason: "You're on Connectors" } },
 ];
 

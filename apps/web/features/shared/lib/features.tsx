@@ -38,7 +38,7 @@ export const FEATURES: FeatureDef[] = [
     key: 'directory',
     label: 'Directory',
     href: '/directory',
-    description: 'A searchable grid of everyone and everything in the community.',
+    description: 'A searchable grid of everyone and everything in the space.',
     core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -50,7 +50,7 @@ export const FEATURES: FeatureDef[] = [
     key: 'notes',
     label: 'Context',
     href: '/directory?view=context',
-    description: 'A browsable knowledge base of the community — folders, notes and their connections, plus a Context tab on every person and community profile.',
+    description: 'A browsable knowledge base of the space — folders, notes and their connections, plus a Context tab on every person and space profile.',
     // Always on and nav-less: reached from the Directory and from profiles, not
     // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,

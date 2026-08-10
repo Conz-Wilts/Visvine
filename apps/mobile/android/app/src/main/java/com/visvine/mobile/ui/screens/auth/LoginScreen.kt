@@ -69,7 +69,7 @@ fun LoginScreen(
                 Icon(Icons.Filled.Hub, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
             }
             Text("Visvine", color = colors.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-            Text("Connect with your community", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+            Text("Connect with your space", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
 
             error?.let {
                 Text(it, color = colors.error, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 16.dp))

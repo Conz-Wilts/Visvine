@@ -97,7 +97,7 @@ export default function CommunitySelector({
         )}
         {!iconOnly && (
           <>
-            <span className="hidden md:inline font-open-sauce">{currentCommunity?.name || 'Select Community'}</span>
+            <span className="hidden md:inline font-open-sauce">{currentCommunity?.name || 'Select Space'}</span>
             <svg
               className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
               fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -122,7 +122,7 @@ export default function CommunitySelector({
                 </svg>
                 <input
                   type="text"
-                  placeholder="Search communities…"
+                  placeholder="Search spaces…"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
@@ -134,7 +134,7 @@ export default function CommunitySelector({
             {/* Communities List — caps at 5 rows (~56px each) before scrolling */}
             <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
               {filteredCommunities.length === 0 ? (
-                <div className="p-4 text-sm text-text-muted text-center">No communities found</div>
+                <div className="p-4 text-sm text-text-muted text-center">No spaces found</div>
               ) : (
                 filteredCommunities.map((community) => (
                   <button
@@ -166,7 +166,7 @@ export default function CommunitySelector({
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Create community
+                Create space
               </button>
               <Link
                 href="/discover"
@@ -177,7 +177,7 @@ export default function CommunitySelector({
                   <circle cx="12" cy="12" r="9" strokeWidth={2} />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
                 </svg>
-                Discover Communities
+                Discover Spaces
               </Link>
             </div>
           </div>,

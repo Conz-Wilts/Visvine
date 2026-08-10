@@ -157,7 +157,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
       label:
         contextName && contextName !== DEFAULT_CONTEXT_NAME
           ? contextName
-          : (currentCommunity?.name ?? 'Community'),
+          : (currentCommunity?.name ?? 'Space'),
     }),
     [contextName, currentCommunity?.name],
   )

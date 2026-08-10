@@ -238,7 +238,7 @@ export default function ConversationListPanel({
             onChange={(e) => setChannelSpaceId(e.target.value)}
             className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-green/40 focus:outline-none"
           >
-            <option value="">No space</option>
+            <option value="">No section</option>
             {channelSpaces.map((space) => (
               <option key={space.id} value={space.id}>
                 {space.emoji ? `${space.emoji} ` : ''}{space.name}
@@ -292,7 +292,7 @@ export default function ConversationListPanel({
               <p className="mt-1 text-xs text-text-muted">
                 {communityIsAdmin
                   ? 'Create the first channel with the + button in the sidebar.'
-                  : 'Channels created by your community admins will appear here.'}
+                  : 'Channels created by your space admins will appear here.'}
               </p>
             </div>
           )}
@@ -346,7 +346,7 @@ export default function ConversationListPanel({
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
                               type="button"
-                              title="Rename space"
+                              title="Rename section"
                               onClick={() => { setEditingSpaceId(section.key); setEditingSpaceName(`${section.emoji ? `${section.emoji} ` : ''}${section.name}`); }}
                               className="rounded p-0.5 text-text-muted hover:text-text-secondary"
                             >
@@ -354,7 +354,7 @@ export default function ConversationListPanel({
                             </button>
                             <button
                               type="button"
-                              title="Delete space"
+                              title="Delete section"
                               disabled={spaceActionBusy}
                               onClick={() => void deleteSpace(section.key)}
                               className="rounded p-0.5 text-text-muted hover:text-red-500 disabled:opacity-50"
@@ -447,7 +447,7 @@ export default function ConversationListPanel({
                     value={spaceName}
                     onChange={(e) => setSpaceName(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Escape') { setShowSpaceForm(false); setSpaceName(''); } }}
-                    placeholder="Space name"
+                    placeholder="Section name"
                     autoFocus
                     disabled={creatingSpace}
                     maxLength={80}
@@ -457,11 +457,11 @@ export default function ConversationListPanel({
               ) : (
                 <button
                   type="button"
-                  onClick={() => openCreateModal('space')}
+                  onClick={() => openCreateModal('section')}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
                 >
                   <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
-                  New space
+                  New section
                 </button>
               )}
             </div>

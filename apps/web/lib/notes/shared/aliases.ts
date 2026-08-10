@@ -98,10 +98,10 @@ export function ownerSurvives(aliases: AliasSummary[], change: AliasChange): boo
 
 /** The refusal copy, shared by every caller so the wording never drifts. */
 export const LAST_OWNER_MESSAGE =
-  'Someone has to be able to manage this community — give another person an alias that owns it first.'
+  'Someone has to be able to manage this space — give another person an alias that owns it first.'
 
 /** The refusal for any attempt to remove or un-own the built-in alias. */
-export const SYSTEM_ALIAS_MESSAGE = `${OWNER_ALIAS_NAME} is built in — it can't be removed, recoloured, or stop owning the community. You can still choose who holds it and what it reaches.`
+export const SYSTEM_ALIAS_MESSAGE = `${OWNER_ALIAS_NAME} is built in — it can't be removed, recoloured, or stop owning the space. You can still choose who holds it and what it reaches.`
 
 /** The longest an alias name may be — matches the console's input maxLength. */
 export const MAX_ALIAS_NAME = 40
@@ -130,7 +130,7 @@ export function aliasNameError(
   const taken = existingNames.some(
     (n) => n.toLowerCase() === lower && n.toLowerCase() !== except?.toLowerCase(),
   )
-  if (taken) return `This community already has an alias called "${trimmed}".`
+  if (taken) return `This space already has an alias called "${trimmed}".`
   return null
 }
 

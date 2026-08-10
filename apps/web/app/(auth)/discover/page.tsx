@@ -77,7 +77,7 @@ function CommunityCard({
 
         {/* Description — single line */}
         <p className="shrink-0 text-text-muted text-xs leading-snug line-clamp-1 w-full mb-1.5">
-          {community.description || 'An emerging community waiting to be discovered.'}
+          {community.description || 'An emerging space waiting to be discovered.'}
         </p>
 
         {/* Location */}
@@ -172,7 +172,7 @@ export default function DiscoverPage() {
       <div className="w-full px-4 sm:px-6 lg:px-8 pb-10">
 
         {/* Page header — centered title, consistent with other pages */}
-        <PageTitle title="Discover Communities" />
+        <PageTitle title="Discover Spaces" />
 
         {/* Search bar — centered, sized to match Directory/Events/Resources */}
         <div className="flex justify-center pt-6">
@@ -183,7 +183,7 @@ export default function DiscoverPage() {
               </svg>
               <input
                 type="text"
-                placeholder="Search communities by name, description, or tags…"
+                placeholder="Search spaces by name, description, or tags…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
@@ -197,7 +197,7 @@ export default function DiscoverPage() {
             <div className="w-20 h-20 rounded-full bg-surface-2 flex items-center justify-center mb-4">
               <span className="text-4xl">🔍</span>
             </div>
-            <p className="text-lg font-medium text-text-primary mb-1">No communities found</p>
+            <p className="text-lg font-medium text-text-primary mb-1">No spaces found</p>
             <p className="text-sm text-text-muted">Try a different search.</p>
           </div>
         ) : (
@@ -232,7 +232,7 @@ export default function DiscoverPage() {
               </div>
             </div>
             <p className="text-sm text-text-secondary mb-6">
-              Choose your role so others in the community know who you are.
+              Choose your role so others in the space know who you are.
             </p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">

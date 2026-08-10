@@ -86,9 +86,9 @@ struct ProfileView: View {
                     }
                 }
 
-                // Communities
+                // Spaces
                 card {
-                    sectionTitle("Communities")
+                    sectionTitle("Spaces")
                     ForEach(community.communities) { item in
                         let active = community.current?.id == item.id
                         HStack(spacing: 12) {

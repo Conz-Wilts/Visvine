@@ -634,8 +634,8 @@ function CommunityRoute({ nodeId }: { nodeId: string }) {
       <NodePage
         nodeId={nodeId}
         firstTab={COMMUNITY_FIRST_TAB}
-        ariaLabel="Community sections"
-        notFoundTitle="Community not found"
+        ariaLabel="Space sections"
+        notFoundTitle="Space not found"
         renderBody={(id) => <CommunityPageContent nodeId={id} />}
       />
     );
@@ -647,8 +647,8 @@ function CommunityRoute({ nodeId }: { nodeId: string }) {
         nodeId={nodeId}
         firstTab={COMMUNITY_FIRST_TAB}
         href={href ?? '/communities'}
-        ariaLabel="Community sections"
-        notFoundTitle="Community not found"
+        ariaLabel="Space sections"
+        notFoundTitle="Space not found"
       />
     );
   }

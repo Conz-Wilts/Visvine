@@ -129,7 +129,7 @@ private fun EventBody(event: Event, colors: DynamicColors) {
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Icon(if (event.visibility == "private") Icons.Filled.Lock else Icons.Filled.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
-                Text(if (event.visibility == "private") "Private event" else "Community members only", color = colors.textMuted, fontSize = 14.sp)
+                Text(if (event.visibility == "private") "Private event" else "Space members only", color = colors.textMuted, fontSize = 14.sp)
             }
         }
 

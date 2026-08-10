@@ -11,14 +11,15 @@ export type EntityKind =
   | 'person'
   | 'resource'
   | 'event'
-  | 'community'
   | 'space'
+  | 'section'
   | 'channel'
   | 'connector'
 
-// There is no separate `company` kind: an organisation IS a community, so a
-// company, group or org note lives in communities/ beside the note for the
-// community it sits in. Only space/channel are pure structure, hidden by
+// `space` is the org kind (a group, organisation or community recorded in the
+// directory — formerly the Community type); there is no separate `company`
+// kind, so a company, group or org note lives in communities/ beside the note
+// for the space it sits in. Only section/channel are pure structure, hidden by
 // default in the context view and the directory grid (see
 // STRUCTURAL_NODE_TYPES in lib/types/context.ts).
 //
@@ -28,7 +29,7 @@ export type EntityKind =
 // connector gets the entity treatment — its own node id, backlinks, and
 // [[mentions]] resolving to it — see lib/notes/entityLinks.ts. Creating one from
 // the directory is deliberately NOT possible: CREATABLE_TYPES in
-// lib/directory/createEntity.ts stays person/community/resource, so the
+// lib/directory/createEntity.ts stays person/space/resource, so the
 // admin-only write gate on connectors/ in brainService.writeDenial remains the
 // only door.
 
@@ -48,34 +49,50 @@ const SPACES_DIR = 'spaces'
 const CHANNELS_DIR = 'channels'
 const CONNECTORS_DIR = 'connectors'
 
+// The dirs kept their pre-rename names on purpose: a note path is storage AND
+// link identity (every inbound [[mention]] resolves against it), so renaming
+// the folders would mean bulk-moving every entity note and rewriting every
+// link. The kind→dir map absorbs the vocabulary rename instead — org spaces
+// live in communities/, channel sections in spaces/.
 const ENTITY_DIRS: Record<EntityKind, string> = {
   person: PEOPLE_DIR,
   resource: RESOURCES_DIR,
   event: EVENTS_DIR,
-  community: COMMUNITIES_DIR,
-  space: SPACES_DIR,
+  space: COMMUNITIES_DIR,
+  section: SPACES_DIR,
   channel: CHANNELS_DIR,
   connector: CONNECTORS_DIR,
 }
 
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
 // copes with 'person'/'people' and with every spelling organisations have worn:
-// 'organization'/'org'/'group'/'company' all mean 'community' now, and all land
-// in communities/. Mirrors TYPE_SYNONYMS in lib/types/context.ts.
+// 'organization'/'org'/'group'/'company'/'community' all mean 'space' now, and
+// all land in communities/. Mirrors TYPE_SYNONYMS in lib/types/context.ts.
+// NOTE: the string 'space' resolves to the ORG kind — structural rows that
+// carried type 'space' pre-rename are migrated to 'section' by
+// scripts/rename-community-to-space.ts, so no ambiguity remains in data.
 export function entityKindOf(type: string | null | undefined): EntityKind | null {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
   if (
+    t === 'space' || t === 'spaces' ||
     t === 'community' || t === 'communities' ||
     t.startsWith('org') || t === 'group' || t === 'groups' ||
     t === 'company' || t === 'companies'
-  ) return 'community'
-  if (t === 'space' || t === 'spaces') return 'space'
+  ) return 'space'
+  if (t === 'section' || t === 'sections') return 'section'
   if (t === 'channel' || t === 'channels') return 'channel'
   if (t === 'connector' || t === 'connectors') return 'connector'
   if (t === 'resource' || t === 'resources') return 'resource'
   if (t === 'event' || t === 'events') return 'event'
   return null
+}
+
+/** The note directory a node type's entity notes live in ('person' → 'people'),
+ *  or null for a type that has no entity namespace. */
+export function entityDirOf(type: string | null | undefined): string | null {
+  const kind = entityKindOf(type)
+  return kind ? ENTITY_DIRS[kind] : null
 }
 
 // Strip the `<type>:` prefix from a node id to get its slug (`person:craig` → `craig`).
@@ -85,7 +102,7 @@ function idSlug(id: string): string {
 }
 
 // The canonical note path for a directory entity, or null if the node isn't an
-// entity kind. person → people/<slug>.md, community → communities/<slug>.md,
+// entity kind. person → people/<slug>.md, space → communities/<slug>.md,
 // resource → resources/<slug>.md.
 export function entityNotePath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
@@ -123,8 +140,8 @@ export function entityKindOfPath(path: string): EntityKind | null {
   if (path.startsWith(`${PEOPLE_DIR}/`)) return 'person'
   if (path.startsWith(`${RESOURCES_DIR}/`)) return 'resource'
   if (path.startsWith(`${EVENTS_DIR}/`)) return 'event'
-  if (path.startsWith(`${COMMUNITIES_DIR}/`)) return 'community'
-  if (path.startsWith(`${SPACES_DIR}/`)) return 'space'
+  if (path.startsWith(`${COMMUNITIES_DIR}/`)) return 'space'
+  if (path.startsWith(`${SPACES_DIR}/`)) return 'section'
   if (path.startsWith(`${CHANNELS_DIR}/`)) return 'channel'
   if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
   return null
@@ -165,8 +182,8 @@ const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
   person: 'Person',
   resource: 'Resource',
   event: 'Event',
-  community: 'Community',
   space: 'Space',
+  section: 'Section',
   channel: 'Channel',
   // Lower-case, unlike its siblings: `type: connector` is machine config that
   // lib/connectors/service.ts matches on, not just a display label.
@@ -176,8 +193,8 @@ const ENTITY_TAG: Record<EntityKind, string> = {
   person: 'person',
   resource: 'resource',
   event: 'event',
-  community: 'community',
   space: 'space',
+  section: 'section',
   channel: 'channel',
   connector: 'connector',
 }

@@ -54,15 +54,16 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
 /**
  * Node types that only exist because a toggleable feature is on. Keyed by the
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
- * drifts — 'space' vs 'Space'), valued by the feature slug that owns them.
+ * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person and Community belong to the always-on directory and Event to the
- * always-on navbar Events surface — neither appears here, so they're never
- * hidden.
+ * Person and Space (the org type, formerly Community) belong to the always-on
+ * directory and Event to the always-on navbar Events surface — none of them
+ * appears here, so they're never hidden. In particular 'space' must NOT be
+ * added: it would hide every org record whenever the Channels tool is off.
  */
 const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   resource: 'resources',
-  space: 'channels',
+  section: 'channels',
   channel: 'channels',
   connector: 'connectors',
 };
@@ -73,7 +74,7 @@ export function nodeTypeFeatureKey(typeName: string): string | null {
 }
 
 /**
- * The node types a feature brings with it, as display names ('Space', 'Channel').
+ * The node types a feature brings with it, as display names ('Section', 'Channel').
  * Adding or removing a tool in the console adds or removes these types too, so
  * the panel names them on the row rather than letting them vanish silently.
  */
@@ -86,7 +87,7 @@ export function featureNodeTypeNames(featureKey: string): string[] {
 /**
  * Should a node type be offered at all in this community? False only when the
  * type belongs to a feature the community has switched off — turning off
- * Channels should take the Channel and Space types with it, not leave them
+ * Channels should take the Channel and Section types with it, not leave them
  * listed in the console and the directory filters.
  */
 export function isNodeTypeEnabled(

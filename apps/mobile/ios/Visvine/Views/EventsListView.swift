@@ -46,7 +46,7 @@ struct EventsListView: View {
             if model.loading {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if community.current == nil {
-                emptyState("Select a community to view events")
+                emptyState("Select a space to view events")
             } else {
                 ScrollView {
                     if let error = model.error {

@@ -182,7 +182,7 @@ function InviteByEmail({ communityId, aliases, onDone }: {
         <Button type="submit" variant="pill-primary" loading={loading} loadingText="Adding…">
           <span className="inline-flex items-center gap-1.5">
             <UserPlus size={14} />
-            Add to community
+            Add to space
           </span>
         </Button>
       </div>
@@ -245,7 +245,7 @@ export default function InvitePanel() {
 
       <SettingsSection
         title="Connect Claude"
-        description="Members can point Claude at this community's context over MCP. Claude only ever sees what that person can already see here — their communities, their notes, their permissions."
+        description="Members can point Claude at this space's context over MCP. Claude only ever sees what that person can already see here — their spaces, their notes, their permissions."
       >
         <ConnectClaudeRow />
       </SettingsSection>

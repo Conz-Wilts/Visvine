@@ -1,5 +1,5 @@
 // The per-type property schema behind the note-first create surface: which rows
-// a Person / Community / Resource shows under its title, and where each row's value
+// a Person / Space / Resource shows under its title, and where each row's value
 // lands on the node (a real column vs a metadata key).
 //
 // This lives in lib/create/ rather than lib/types/context.ts on purpose. That
@@ -40,13 +40,14 @@ export interface TypeFieldDef {
 // Node types are stored lowercased (both POST and PUT in /api/data/nodes call
 // `type.toLowerCase()`), so every lookup here normalizes first. The synonym map
 // mirrors `entityKindOf` in lib/notes/entities.ts — 'organization'/'org'/
-// 'group'/'company' are all the same thing wearing different legacy prefixes,
-// and that thing is now a community.
+// 'group'/'company'/'community' are all the same thing wearing different legacy
+// prefixes, and that thing is now a space.
 function canonicalType(type: string | null | undefined): string {
   const t = (type ?? '').trim().toLowerCase()
   if (t === 'people') return 'person'
-  if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'community'
-  if (t === 'communities') return 'community'
+  if (t.startsWith('org') || t === 'group' || t === 'groups' || t === 'company' || t === 'companies') return 'space'
+  if (t === 'community' || t === 'communities') return 'space'
+  if (t === 'spaces') return 'space'
   if (t === 'resources') return 'resource'
   if (t === 'events') return 'event'
   if (t === 'notes') return 'note'
@@ -62,7 +63,7 @@ const PERSON_FIELDS: TypeFieldDef[] = [
   { key: 'image_url', label: 'Photo', kind: 'image', target: 'column', column: 'image_url' },
 ]
 
-const COMMUNITY_FIELDS: TypeFieldDef[] = [
+const SPACE_FIELDS: TypeFieldDef[] = [
   { key: 'subtitle', label: 'Tagline', kind: 'text', target: 'column', column: 'subtitle', placeholder: 'What they do' },
   // The column drives the profile link; the metadata mirror is what the
   // organization identity resolver reads (websiteDomain blocking).
@@ -92,7 +93,7 @@ const EVENT_FIELDS: TypeFieldDef[] = [
 
 const FIELDS_BY_TYPE: Record<string, TypeFieldDef[]> = {
   person: PERSON_FIELDS,
-  community: COMMUNITY_FIELDS,
+  space: SPACE_FIELDS,
   resource: RESOURCE_FIELDS,
   event: EVENT_FIELDS,
 }

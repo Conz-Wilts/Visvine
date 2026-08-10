@@ -89,7 +89,7 @@ export function AliasToggle({ name, owner, system, on, onClick, disabled }: {
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      title={owner ? `${name} — owns the community` : name}
+      title={owner ? `${name} — owns the space` : name}
       className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-40 ${tone}`}
     >
       {name}

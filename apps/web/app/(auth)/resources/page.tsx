@@ -470,7 +470,7 @@ export default function ResourcesPage() {
   if (!currentCommunity) {
     return (
       <div className="flex h-[calc(100dvh-56px)] w-full items-center justify-center">
-        <p className="text-text-muted">Select a community to view resources.</p>
+        <p className="text-text-muted">Select a space to view resources.</p>
       </div>
     );
   }

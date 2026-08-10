@@ -36,8 +36,8 @@ export type EntityNodeType =
   | 'person'
   | 'resource'
   | 'event'
-  | 'community'
   | 'space'
+  | 'section'
   | 'channel'
   | 'connector'
 
@@ -56,9 +56,11 @@ const CONTAINS_RELATIONSHIP = 'contains'
  * means the id is NOT the record id — this is how we find the node again for a
  * given ChannelSpace/Conversation/ContextSource without a second table.
  */
+// The metadata KEYS keep their pre-rename names (`communityRef`, `spaceId`) —
+// they're stored data, not display vocabulary.
 const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
-  community: 'communityRef',
-  space: 'spaceId',
+  space: 'communityRef',
+  section: 'spaceId',
   channel: 'conversationId',
   connector: 'notePath',
 }
@@ -133,6 +135,25 @@ function bustContextCache(): void {
  * we stashed in metadata, so a renamed space keeps its node (and its note, and
  * its position on the canvas) instead of sprouting a second one.
  */
+/**
+ * Pre-rename spellings that may still sit on stored rows until
+ * scripts/rename-community-to-space.ts has run against that database. Matching
+ * them here keeps the sync idempotent across the deploy→migrate window instead
+ * of spawning `-2` suffixed duplicates or losing track of a record's node.
+ */
+const LEGACY_TYPE_SPELLINGS: Partial<Record<EntityNodeType, string[]>> = {
+  section: ['space'],
+  space: ['community', 'group', 'organization', 'organisation', 'org', 'company'],
+}
+
+function typeSpellings(type: EntityNodeType): string[] {
+  return [type, ...(LEGACY_TYPE_SPELLINGS[type] ?? [])]
+}
+
+function sameEntityType(stored: string, type: EntityNodeType): boolean {
+  return typeSpellings(type).includes(stored.toLowerCase())
+}
+
 async function findNodeIdByRecord(
   communityId: string,
   type: EntityNodeType,
@@ -143,7 +164,7 @@ async function findNodeIdByRecord(
   const row = await prisma.node.findFirst({
     where: {
       communityId,
-      type,
+      type: { in: typeSpellings(type) },
       metadata: { path: [key], equals: recordId },
     },
     select: { id: true },
@@ -193,7 +214,7 @@ export async function ensureEntityNote(
  *
  * The node id is `<type>:<slug>`, suffixed `-2`, `-3`… on collision — node ids
  * are globally unique, not per-community, so two communities that both have a
- * "General" space land on `space:general` and `space:general-2`. That's the same
+ * "General" section land on `section:general` and `section:general-2`. That's the same
  * rule the note-first entity create already uses (app/api/directory/entities).
  *
  * A note failure is reported, never thrown: the node is real and useful on its
@@ -248,7 +269,8 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
         // community — that's the pre-backfill row for this very record, and
         // updating it in place is exactly right. Anything else just got to the
         // slug first (node ids are global), so move to the next suffix.
-        if (existing.communityId !== communityId || existing.type !== type) continue
+        // Legacy spellings count as the same kind (see LEGACY_TYPE_SPELLINGS).
+        if (existing.communityId !== communityId || !sameEntityType(existing.type, type)) continue
         await prisma.node.update({ where: { id: candidate }, data: nodeData })
         nodeId = candidate
         break

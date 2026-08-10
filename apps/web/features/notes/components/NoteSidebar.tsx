@@ -47,7 +47,7 @@ const scrollMemory = new Map<string, number>()
 // those notes still read as the cluster glyph rather than falling back to
 // initials.
 export function noteGlyph(type: string | undefined): NodeGlyph | null {
-  return getNodeGlyph(type) ?? (entityKindOf(type) === 'community' ? 'group' : null)
+  return getNodeGlyph(type) ?? (entityKindOf(type) === 'space' ? 'group' : null)
 }
 
 /** Access adornments for a folder row at ANY depth (shared brain only):

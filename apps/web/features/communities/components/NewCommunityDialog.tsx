@@ -56,7 +56,7 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
       onClose();
       router.push('/directory');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create community');
+      setError(err instanceof Error ? err.message : 'Failed to create space');
       setSaving(false);
     }
   };
@@ -64,7 +64,7 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
   return (
     <Modal
       onClose={onClose}
-      title="New community"
+      title="New space"
       size="sm"
       footer={
         <div className="flex justify-end gap-2 border-t border-border-subtle px-6 py-4">
@@ -87,8 +87,8 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
         {/* The placeholder is the label — one field needs no heading above it. */}
         <Input
           autoFocus
-          aria-label="Community name"
-          placeholder="Community name"
+          aria-label="Space name"
+          placeholder="Space name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}

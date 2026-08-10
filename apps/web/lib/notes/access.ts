@@ -303,7 +303,7 @@ export async function accessListFor(communityId: string, path: string): Promise<
     if (!win) continue
     const name =
       subjectType === 'community'
-        ? `Everyone in ${community?.name ?? 'this community'}`
+        ? `Everyone in ${community?.name ?? 'this space'}`
         : subjectType === 'alias'
           ? subjectId
           : (userById.get(subjectId)?.name ?? 'Former member')
@@ -364,7 +364,7 @@ export async function grantAccess(
       select: { status: true },
     })
     if (!membership || membership.status !== 'active') {
-      throw new Error('That person is not an active member of this community')
+      throw new Error('That person is not an active member of this space')
     }
   }
   if (input.subjectType === 'alias') {

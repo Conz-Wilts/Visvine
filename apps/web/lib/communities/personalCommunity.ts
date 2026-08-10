@@ -28,15 +28,15 @@ title: Welcome
 tags: [getting-started]
 ---
 
-# Welcome to your space, ${first} 👋
+# Welcome to your personal space, ${first} 👋
 
 This is **${name}** — your own private corner. Only you can see it.
 
 ## Two kinds of notes
-- **Your space** (you're here now) — private context just for you: people you meet, ideas, reminders, anything.
-- **Community brains** — shared notes inside any community you join, on that community's Context page.
+- **Your personal space** (you're here now) — private context just for you: people you meet, ideas, reminders, anything.
+- **Shared spaces** — shared notes inside any space you join, on that space's Context page.
 
-Share upward when something's worth it: promote a note from here into a community brain, or quick-capture from anywhere — captures always land in your space first.
+Share upward when something's worth it: promote a note from here into a shared space, or quick-capture from anywhere — captures always land in your personal space first.
 
 ## Capture context fast
 - Type \`[[\` to link a person or another note — e.g. \`[[Jane Doe]]\`.

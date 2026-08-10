@@ -26,7 +26,7 @@ export interface TypeOption {
   description: string;
   color: string;
   icon: React.ReactNode;
-  inGrid?: boolean; // shown in the "Create new" type grid. Person, Community,
+  inGrid?: boolean; // shown in the "Create new" type grid. Person, Space,
                     // Resource and Context are false: they're context notes, so
                     // they're created on the note-first surface
                     // (/directory/new), not in this panel. Their entries stay
@@ -47,10 +47,10 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
-    // An organisation in the directory — a node and a note, not a community you
-    // run. Starting one of those is on the community switcher.
-    id: 'community',
-    label: 'Community',
+    // An organisation in the directory — a node and a note, not a space you
+    // run. Starting one of those is on the switcher.
+    id: 'space',
+    label: 'Space',
     description: 'A company, organisation or group',
     color: '#78d870',
     inGrid: false,
@@ -90,7 +90,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
   {
     id: 'channel',
     label: 'Channel',
-    description: 'A feed channel in your community',
+    description: 'A feed channel in your space',
     color: '#e0685f',
     inGrid: true,
     icon: (
@@ -100,9 +100,9 @@ export const TYPE_OPTIONS: TypeOption[] = [
     ),
   },
   {
-    id: 'space',
-    label: 'Space',
-    description: 'A group of channels in your community',
+    id: 'section',
+    label: 'Section',
+    description: 'A group of channels in your space',
     color: '#0ea5e9',
     inGrid: true,
     icon: (
@@ -114,7 +114,7 @@ export const TYPE_OPTIONS: TypeOption[] = [
   {
     id: 'context',
     label: 'Context',
-    description: 'A note in your community context',
+    description: 'A note in your space’s context',
     color: '#ec4899',
     inGrid: false,
     icon: (
@@ -659,13 +659,13 @@ export function ChannelForm({
         </div>
       </Field>
       {spaces.length > 0 && (
-        <Field label="Space">
+        <Field label="Section">
           <select
             className={inputClass}
             value={data.spaceId}
             onChange={(e) => onChange({ ...data, spaceId: e.target.value })}
           >
-            <option value="">No space</option>
+            <option value="">No section</option>
             {spaces.map((space) => (
               <option key={space.id} value={space.id}>
                 {space.emoji ? `${space.emoji} ` : ''}{space.name}
@@ -688,11 +688,11 @@ export function ChannelForm({
   );
 }
 
-// ─── Space Form ─────────────────────────────────────────────────────────────
+// ─── Section Form ───────────────────────────────────────────────────────────
 
 export interface SpaceFormData {
   name: string;
-  /** Starting text for the space's context note (spaces/<slug>.md). */
+  /** Starting text for the section's context note (spaces/<slug>.md). */
   context: string;
 }
 
@@ -707,7 +707,7 @@ export function SpaceForm({
 }) {
   return (
     <div className="flex flex-col gap-4">
-      <Field label="Space Name" required>
+      <Field label="Section Name" required>
         <input
           ref={nameRef as React.RefObject<HTMLInputElement>}
           className={inputClass}
@@ -721,14 +721,14 @@ export function SpaceForm({
         <textarea
           className={`${inputClass} resize-none`}
           rows={3}
-          placeholder="Optional — what this space is for. You can keep writing after it's created."
+          placeholder="Optional — what this section is for. You can keep writing after it's created."
           value={data.context}
           onChange={(e) => onChange({ ...data, context: e.target.value })}
         />
       </Field>
       <EntityNotePreview dir="spaces" name={data.name} />
       <p className="text-xs text-text-muted">
-        Spaces group related channels together in the sidebar. You can file channels into this space when you create them.
+        Sections group related channels together in the sidebar. You can file channels into this section when you create them.
       </p>
     </div>
   );
@@ -920,7 +920,7 @@ export function ConnectorForm({
       {slug && <EntityNotePreview dir="connectors" name={slug} />}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-text-muted">
-        Only community admins can create or edit connectors. Refine the note afterwards — its body is
+        Only space admins can create or edit connectors. Refine the note afterwards — its body is
         the documentation agents read.
       </p>
     </div>
@@ -1121,7 +1121,7 @@ export function AliasSelector({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-text-muted">
-        This community uses role aliases. Choose one or skip.
+        This space uses role aliases. Choose one or skip.
       </p>
       <div className="flex flex-wrap gap-2">
         {aliases.map((alias) => {

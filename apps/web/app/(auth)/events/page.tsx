@@ -134,7 +134,7 @@ function EventsPageInner() {
       <div className="min-h-screen w-full py-8">
         <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
           <p className="text-center text-text-muted py-12">
-            Please select a community to view events.
+            Please select a space to view events.
           </p>
         </div>
       </div>

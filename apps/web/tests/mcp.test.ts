@@ -33,6 +33,7 @@ import { CREATABLE_TYPES, isCreatableType } from '@/lib/directory/createEntity'
 import { mentionFor } from '@/lib/mcp/tools'
 import { canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
 import { entityMentionPaths } from '@/lib/notes/entities'
+import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 
 // Both the signing secret and the token audience are read lazily, inside the
 // functions under test, so setting them after the imports is enough.
@@ -203,7 +204,7 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 12)
+  assert.equal(tools.length, 13)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
@@ -214,6 +215,9 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   assert.equal(scopeForTool('read_file'), 'context:read')
   // A move rewrites other notes' links, so it is unambiguously a write.
   assert.equal(scopeForTool('move_context'), 'context:write')
+  // The clean pass mutates in its apply/trash actions, so the whole tool
+  // rides the write scope even though analysis is read-only.
+  assert.equal(scopeForTool('clean_context'), 'context:write')
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')
@@ -362,32 +366,96 @@ test('a mention WITHOUT the leading slash silently resolves to nothing', () => {
   ])
 })
 
-test('only person, community and resource are creatable from the context layer', () => {
-  assert.deepEqual([...CREATABLE_TYPES], ['person', 'community', 'resource'])
+test('only person, space and resource are creatable from the context layer', () => {
+  assert.deepEqual([...CREATABLE_TYPES], ['person', 'space', 'resource'])
   assert.equal(isCreatableType('person'), true)
-  assert.equal(isCreatableType('community'), true)
+  assert.equal(isCreatableType('space'), true)
   // The retired organisation spellings are NOT creatable ids — callers must
   // send the canonical type, which is what the zod enum on add_context takes.
   assert.equal(isCreatableType('group'), false)
   assert.equal(isCreatableType('organization'), false)
+  assert.equal(isCreatableType('community'), false)
   assert.equal(isCreatableType('resource'), true)
   // Events go through the events surface; these are structural/admin types.
   assert.equal(isCreatableType('event'), false)
   assert.equal(isCreatableType('channel'), false)
-  assert.equal(isCreatableType('space'), false)
+  assert.equal(isCreatableType('section'), false)
   assert.equal(isCreatableType('note'), false)
 })
 
+// ── The type catalog list_context exposes ──
+
+const catalog = (over: Partial<Parameters<typeof buildTypeCatalog>[0]> = {}) =>
+  buildTypeCatalog({
+    featureConfig: null,
+    isAdmin: true,
+    usageByType: {},
+    creatableTypes: CREATABLE_TYPES,
+    ...over,
+  })
+
+test('the type catalog covers the whole closed vocabulary with the right creatable set', () => {
+  const entries = catalog({ usageByType: { person: 3, connector: 1 } })
+  assert.deepEqual(
+    entries.map((e) => e.type),
+    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'index'],
+  )
+  const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
+  assert.deepEqual(creatable, ['person', 'space', 'resource'])
+  // Connector is enabled by default but NEVER creatable from add_context —
+  // its only door is an admin-authored note under connectors/.
+  const connector = entries.find((e) => e.type === 'connector')!
+  assert.equal(connector.enabled, true)
+  assert.equal(connector.creatable_via_add_context, false)
+  assert.match(connector.guidance, /run_connector/)
+  assert.equal(connector.usage_count, 1)
+  // Person carries the identity-matching field keys an agent must spell exactly.
+  const person = entries.find((e) => e.type === 'person')!
+  const keys = person.fields.map((f) => f.key)
+  for (const k of ['email', 'companyName', 'linkedinUrl']) assert.ok(keys.includes(k), k)
+  assert.equal(person.note_dir, 'people')
+  assert.equal(person.usage_count, 3)
+})
+
+test('switching a feature off disables its node types, with the feature named', () => {
+  const entries = catalog({ featureConfig: { enabled: { channels: false, connectors: false } } })
+  for (const type of ['section', 'channel']) {
+    const e = entries.find((x) => x.type === type)!
+    assert.equal(e.enabled, false)
+    assert.equal(e.feature, 'channels')
+    assert.match(e.disabled_reason!, /'channels'/)
+    assert.equal(e.creatable_via_add_context, false)
+  }
+  // Always-on types are untouched by any config — 'space' (the org type,
+  // formerly Community) must never be gated behind channels.
+  for (const type of ['person', 'space', 'event', 'index']) {
+    const e = entries.find((x) => x.type === type)!
+    assert.equal(e.enabled, true)
+    assert.equal(e.disabled_reason, null)
+    assert.equal(e.feature, null)
+  }
+})
+
+test('a non-admin is told the connector door is closed to them', () => {
+  const admin = catalog().find((e) => e.type === 'connector')!
+  const member = catalog({ isAdmin: false }).find((e) => e.type === 'connector')!
+  assert.ok(!admin.guidance.includes('not an admin'))
+  assert.match(member.guidance, /not an admin/)
+})
+
 test('type filters canonicalise, so a search for a retired spelling still finds the rows', () => {
-  // list_context compares canonical to canonical…
-  assert.equal(canonicalNodeType('Org'), 'community')
-  assert.equal(canonicalNodeType('GROUP'), 'community')
-  assert.equal(canonicalNodeType('community'), 'community')
+  // list_context compares canonical to canonical — every org spelling,
+  // 'community' included, lands on 'space' now.
+  assert.equal(canonicalNodeType('Org'), 'space')
+  assert.equal(canonicalNodeType('GROUP'), 'space')
+  assert.equal(canonicalNodeType('community'), 'space')
+  assert.equal(canonicalNodeType('space'), 'space')
   assert.equal(canonicalNodeType('person'), 'person')
   assert.equal(canonicalNodeType(undefined), '')
   // …and search_context queries every spelling, because stored node.type is
   // whatever was current when the row was written.
   const spellings = nodeTypeSpellings('org')
+  assert.ok(spellings.includes('space'))
   assert.ok(spellings.includes('community'))
   assert.ok(spellings.includes('group'))
   assert.ok(spellings.includes('organization'))

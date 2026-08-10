@@ -53,13 +53,13 @@ export default async function InvitePage({
           <div className="text-center">
             <h1 className="text-lg font-semibold text-text-primary">Invite unavailable</h1>
             <p className="mt-2 text-sm text-text-muted">
-              This invite link is invalid or has been revoked. Ask the community for a fresh link.
+              This invite link is invalid or has been revoked. Ask the space for a fresh link.
             </p>
             <a
               href="/discover"
               className="mt-6 inline-block rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
             >
-              Explore communities
+              Explore spaces
             </a>
           </div>
         ) : (

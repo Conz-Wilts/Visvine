@@ -6,7 +6,7 @@
  * stale notes per query, and lib/notes/sources/ingest.ts stores chunks with
  * `model = null` when embedding fails or no key was configured at upload time.
  * Those chunks never rank semantically again, because nothing re-ingests them.
- * So after turning GEMINI_API_KEY on (or rotating EMBED_MODEL) run this once:
+ * So after turning OPENAI_API_KEY on (or rotating EMBED_MODEL) run this once:
  * it makes the first real searches fast and makes old uploads findable.
  *
  * Idempotent: a note whose cached mtime already matches is skipped, and chunks
@@ -32,7 +32,7 @@ const BATCH = 32;
 async function main() {
   const config = embeddingsConfig();
   if (!config) {
-    console.error('GEMINI_API_KEY is not set — nothing to embed. Set it and re-run.');
+    console.error('OPENAI_API_KEY is not set — nothing to embed. Set it and re-run.');
     process.exit(1);
   }
   const only = process.argv[2];

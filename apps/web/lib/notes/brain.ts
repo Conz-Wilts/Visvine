@@ -59,7 +59,7 @@ export async function resolveBrain(
     select: { personalOwnerId: true },
   })
   if (!community) {
-    return NextResponse.json({ error: 'Unknown community' }, { status: 404 })
+    return NextResponse.json({ error: 'Unknown space' }, { status: 404 })
   }
   // A personal space's owner administers it by definition — it holds no
   // aliases, and never will (grants don't apply there at all).
@@ -68,7 +68,7 @@ export async function resolveBrain(
     (await isAdmin(session.userId, communityId, session.email))
   const member = admin || (await isMember(session.userId, communityId))
   if (!member) {
-    return NextResponse.json({ error: 'Not a member of this community' }, { status: 403 })
+    return NextResponse.json({ error: 'Not a member of this space' }, { status: 403 })
   }
   return {
     communityId,

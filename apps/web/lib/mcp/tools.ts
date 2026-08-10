@@ -1,10 +1,11 @@
 /**
- * The MCP tool surface: twelve tools over the context layer.
+ * The MCP tool surface: thirteen tools over the context layer.
  *
- *   read    list_communities, list_context, search_context, read_context,
- *           list_files, read_file
- *   write   add_context, edit_context, append_context, move_context
- *   connect list_connectors, run_connector
+ *   read     list_communities, list_context, search_context, read_context,
+ *            list_files, read_file
+ *   write    add_context, edit_context, append_context, move_context
+ *   maintain clean_context
+ *   connect  list_connectors, run_connector
  *
  * The shape of this surface follows the shape of the model, deliberately:
  *
@@ -41,7 +42,10 @@ import {
   listVisibleSources,
   readSourceVisible,
 } from '@/lib/notes/brainService'
-import { readableRoots } from '@/lib/notes/shared/authz'
+import { readableRoots, LEVEL_FULL } from '@/lib/notes/shared/authz'
+import { audienceSummary } from '@/lib/notes/shared/audience'
+import { loadCommunityAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
+import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permissions'
 import type { WriteResult } from '@/lib/notes/shared/brainTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
@@ -52,14 +56,17 @@ import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, listConnectors, loadConnector } from '@/lib/connectors/service'
-import type { Brain } from '@/lib/notes/store'
+import { readNoteOrNull, type Brain } from '@/lib/notes/store'
+import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
+import type { CleanRole } from '@/lib/notes/shared/clean'
 import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { CommunityFeatureConfig } from '@/lib/types'
 
 const scopeArg = z
   .enum(['shared', 'personal'])
   .optional()
   .describe(
-    "Which brain: 'shared' = the community's context (the default for reads), 'personal' = your own private space",
+    "Which brain: 'shared' = the space's context (the default for reads), 'personal' = your own private personal space",
   )
 
 /**
@@ -97,6 +104,45 @@ export function mentionFor(name: string, notePath: string | null): string | null
 function unwrapWrite(result: WriteResult): { status: 'applied'; path: string } {
   if (result.status === 'denied') throw new McpError(403, `Write denied: ${result.reason}`)
   return result
+}
+
+const visibilityArg = z
+  .enum(['private', 'inherit'])
+  .optional()
+  .describe(
+    "For a NEW shared-brain note only: 'private' (the default) restricts it so only space " +
+      "admins and you can see it until someone shares it; 'inherit' leaves it visible to whoever " +
+      'can see its folder. Ignored for personal-space writes and for edits of existing notes.',
+  )
+
+/**
+ * Make a freshly created shared note private-by-default: the author gets an
+ * explicit FULL grant FIRST, then the note path is restricted (a restricted
+ * boundary on a note path is exactly the app's "Make private"). The order
+ * mirrors app/api/notes/access/route.ts — the grant must exist before the cut
+ * so a non-admin author never severs their own access. The grant is written
+ * even for admins: the bypass makes it redundant today, but the explicit row
+ * survives role loss and keeps the access list honest. Failures are returned,
+ * not thrown — the content write already succeeded, so this reports like
+ * add_context's note_error rather than failing the whole call. Both mutations
+ * audit-log themselves.
+ */
+async function makeNotePrivate(
+  communityId: string,
+  path: string,
+  actor: { userId: string; name: string },
+): Promise<string | null> {
+  try {
+    await grantAccess(
+      communityId,
+      { subjectType: 'user', subjectId: actor.userId, resourcePath: path, level: LEVEL_FULL },
+      actor,
+    )
+    await setFolderRestricted(communityId, path, true, actor)
+    return null
+  } catch (e) {
+    return e instanceof Error ? e.message : 'Failed to restrict the note'
+  }
 }
 
 /** Load a connector or throw a 404 that doesn't reveal whether it exists. */
@@ -171,8 +217,8 @@ export function registerTools(server: McpServer): void {
     'list_communities',
     {
       description:
-        'List the communities you can act in, with your role in each and whether it is your own personal space. ' +
-        'Start here: every other tool needs a community_id.',
+        'List the spaces you can act in, with your role in each and whether it is your own personal space. ' +
+        'Start here: every other tool needs a community_id (the wire name for a space id).',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -187,16 +233,20 @@ export function registerTools(server: McpServer): void {
     'list_context',
     {
       description:
-        "Get your bearings in one community: the entities in its directory grouped by type, the index of its " +
+        "Get your bearings in one space: the entities in its directory grouped by type, the index of its " +
         'context notes (path — title — description), and which folders you can write to. Call this before ' +
-        'searching or writing so you know what already exists and where it lives.',
+        'searching or writing so you know what already exists and where it lives. Also returns `you` (who you ' +
+        'are here — name, admin status, aliases), `types` (the node-type catalog: which types are enabled, ' +
+        'their exact field keys, live usage, and how each is created), and an `audience` line per writable ' +
+        'path summarising who can see notes stored there — use these to pick the right type and the right home ' +
+        'for what you write.',
       inputSchema: {
         community_id: z.string(),
         scope: scopeArg,
         type: z
           .string()
           .optional()
-          .describe("Only entities of this type, e.g. 'person', 'community', 'resource', 'event'"),
+          .describe("Only entities of this type, e.g. 'person', 'space', 'resource', 'event'"),
         path_prefix: z.string().optional().describe("Only notes under this path, e.g. 'people/'"),
         limit: z.number().int().min(1).max(500).optional().describe('Max entries per list (default 100)'),
       },
@@ -205,7 +255,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'list_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
         const limit = args.limit ?? 100
 
         // Notes (visibility lens applied inside visibleVault).
@@ -213,17 +263,45 @@ export function registerTools(server: McpServer): void {
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
+        // Grant-derived context — only meaningful for a real community's shared
+        // brain (personal spaces are never gated, and the personal scope has no
+        // directory). One indexed query per piece; the grant table is bounded by
+        // alias/folder rows, not by member count, so this stays cheap however
+        // large the community is.
+        const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
+        const [community, aliasRows, communityAccess] = isGatedShared
+          ? await Promise.all([
+              prisma.community.findUnique({
+                where: { id: args.community_id },
+                select: { name: true, featureConfig: true },
+              }),
+              prisma.userAlias.findMany({
+                where: { communityId: args.community_id, userId: ctx.userId },
+                select: { aliasName: true },
+              }),
+              loadCommunityAccess(args.community_id),
+            ])
+          : [null, [], null]
+
         // Entities live in the community directory, not in the personal space,
         // so a personal-scope call reports notes only.
         const entitiesByType: Record<string, ReturnType<typeof describeNode>[]> = {}
         let entityTotal = 0
+        const usageByType: Record<string, number> = {}
         if (scope === 'shared') {
           const rows = await prisma.node.findMany({
             where: { communityId: args.community_id },
             select: NODE_SELECT,
             orderBy: { name: 'asc' },
           })
-          // Structural types (community/space/channel/note/file) describe the
+          // Usage counts feed the type catalog and run over the FULL row set,
+          // before the structural filter, so Space/Channel/Connector show their
+          // live counts even though the directory listing hides them.
+          for (const row of rows) {
+            const t = canonicalNodeType(row.type)
+            usageByType[t] = (usageByType[t] ?? 0) + 1
+          }
+          // Structural types (section/channel/note/file) describe the
           // container, not the directory — the grid hides them and so do we.
           // Canonicalised both sides: legacy rows still carry retired spellings
           // ('org', 'group'), so a raw string compare silently returns nothing.
@@ -246,13 +324,40 @@ export function registerTools(server: McpServer): void {
         const describeWritable = (path: string) => ({
           path: path || '(brain root)',
           your_level: principalLevelName(principal, path),
+          // One line, computed from grant rows only — it can name aliases but
+          // never individual members, however many grants exist.
+          ...(communityAccess
+            ? {
+                audience: audienceSummary(path, communityAccess.grants, communityAccess.restricted, {
+                  selfUserId: ctx.userId,
+                  communityName: community?.name,
+                }).line,
+              }
+            : {}),
         })
         const isNotePath = (path: string) => path.toLowerCase().endsWith('.md')
 
         return {
           scope,
+          you: {
+            name: ctx.name,
+            admin: principal.communityAdmin === true,
+            aliases: aliasRows.map((r) => r.aliasName),
+          },
           entities: entitiesByType,
           entity_count: entityTotal,
+          // The community's node-type vocabulary — closed: pick the best
+          // existing type; nobody (agents included) creates new ones.
+          ...(isGatedShared
+            ? {
+                types: buildTypeCatalog({
+                  featureConfig: (community?.featureConfig ?? null) as CommunityFeatureConfig | null,
+                  isAdmin: principal.communityAdmin === true,
+                  usageByType,
+                  creatableTypes: CREATABLE_TYPES,
+                }),
+              }
+            : {}),
           notes: notes.slice(0, limit).map(indexLine),
           note_count: notes.length,
           // Write access inside these can still be cut off deeper down by a
@@ -268,7 +373,7 @@ export function registerTools(server: McpServer): void {
     'search_context',
     {
       description:
-        "Search one community's context — both halves at once. Notes and uploaded files are ranked by fused " +
+        "Search one space's context — both halves at once. Notes and uploaded files are ranked by fused " +
         'retrieval (keyword BM25 + semantic vectors + link context); directory entities are matched by name, ' +
         'alias and tag. Every hit carries what you need to open it: node_id for read_context, path for read_context, ' +
         'or path+seq for read_file. Only what you are allowed to read is searched. ' +
@@ -401,7 +506,7 @@ export function registerTools(server: McpServer): void {
           row = all.find((n) => entityNotePath({ id: n.id, type: n.type }) === args.note_path) ?? null
         }
 
-        // Structural nodes (the community itself, spaces, channels, connectors)
+        // Structural nodes (the space itself, sections, channels, connectors)
         // are not directory entities — list_context and search_context hide
         // them, so resolving one by id here would be the one way in. Their note
         // still reads below as a plain note, via its path.
@@ -416,7 +521,7 @@ export function registerTools(server: McpServer): void {
         // rather than a bare "not found".
         if (!row) {
           const path = args.note_path ?? structuralPath
-          if (!path) throw new McpError(404, `No entity '${args.node_id}' in this community`)
+          if (!path) throw new McpError(404, `No entity '${args.node_id}' in this space`)
           const content = await readVisible(principal, brain, path)
           if (!content) throw new McpError(404, `No accessible note or entity at '${path}'`)
           return { entity: null, note_path: path, note: content, links: [], mentioned_by: [] }
@@ -567,17 +672,24 @@ export function registerTools(server: McpServer): void {
     'add_context',
     {
       description:
-        'Create a directory entity — a typed node plus its context note, in one step. The TYPE decides which ' +
-        'fields apply and where the note lives:\n' +
-        '  • person    → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
-        '  • community → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
-        '  • resource  → resources/<slug>.md   fields: subtitle (description), url\n' +
-        'A "community" here is an organisation — a company, group or investor — recorded in the directory. It shares ' +
-        'the type with the community you are in, which is NOT creatable from here.\n' +
+        'Create a directory entity — a typed node plus its context note, in one step. Call list_context first: ' +
+        'its `types` catalog shows which types this space has enabled, their exact field keys, and live ' +
+        'usage — pick the best EXISTING type. You cannot create new types; if none fits, use the closest and ' +
+        'suggest a new type in prose. The TYPE decides which fields apply and where the note lives:\n' +
+        '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
+        '  • space    → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
+        '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
+        'A "space" here is a group, organisation or community — a company, collective or investor — recorded as a ' +
+        'card in the directory of the space you are working in. It NEVER provisions a new workspace: the card ' +
+        'points at a real (possibly unclaimed) space via its identity, and the space you are in is not creatable ' +
+        'from here.\n' +
         'Use exactly these field keys — email, companyName, linkedinUrl and url/website are what match a person or ' +
-        'organization to their identity across communities, and an unrecognised key is silently dropped. ' +
-        'Only these three types are creatable; events are made in the events surface, and channels/spaces are admin-only. ' +
+        'organisation to their identity across spaces, and an unrecognised key is silently dropped. ' +
+        'Only these three types are creatable; events are made in the events surface, and channels/sections are admin-only. ' +
         'If the entity already exists you get an error naming it, so open that one instead of creating a duplicate. ' +
+        'The new context note is PRIVATE by default — the directory card (name, fields, mention) stays visible ' +
+        "to everyone, but the note's content is readable only by space admins and you until someone shares " +
+        "it; pass visibility:'inherit' to let it follow its folder's visibility instead. " +
         `To connect it to others, write mentions: ${MENTION_RULE}`,
       inputSchema: {
         community_id: z.string(),
@@ -593,6 +705,7 @@ export function registerTools(server: McpServer): void {
           .optional()
           .describe("Markdown for the context note body (frontmatter is generated for you). Mentions here create links."),
         alias: z.string().optional().describe('Alternative name this entity is also known by'),
+        visibility: visibilityArg,
       },
     },
     (args, extra) =>
@@ -614,6 +727,15 @@ export function registerTools(server: McpServer): void {
               : result.error,
           )
         }
+        // Private-by-default for the entity's context note. The node row stays
+        // in the directory — the card is meant to be findable; only the note
+        // BODY is restricted. Skipped in personal spaces (private already) and
+        // when the note itself failed to write.
+        const wantPrivate =
+          !brain.isPersonalSpace && args.visibility !== 'inherit' && result.notePath !== null && !result.noteError
+        const visibilityError = wantPrivate
+          ? await makeNotePrivate(args.community_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
+          : null
         return {
           node_id: result.node.id,
           type: result.node.type,
@@ -623,6 +745,12 @@ export function registerTools(server: McpServer): void {
           mention: mentionFor(result.node.name, result.notePath),
           identity_resolution: result.resolution,
           note_error: result.noteError,
+          ...(brain.isPersonalSpace
+            ? {}
+            : {
+                visibility: wantPrivate && !visibilityError ? 'private' : 'inherit',
+                ...(visibilityError ? { visibility_error: visibilityError } : {}),
+              }),
         }
       }),
   )
@@ -632,27 +760,40 @@ export function registerTools(server: McpServer): void {
     {
       description:
         'Create or overwrite one context note (full-content write; the previous version is kept in history). ' +
-        "Writes go to your PERSONAL space by default — pass scope:'shared' to write the community's context, " +
-        'which is gated on your write access to that folder. Read the note first when editing, or you will clobber it; ' +
-        `use append_context when you only want to add. ${MENTION_RULE}`,
+        "Writes go to your PERSONAL space by default — pass scope:'shared' to write the space's shared context, " +
+        'which is gated on your write access to that folder. A NEW shared note is PRIVATE by default — only ' +
+        "space admins and you can see it — pass visibility:'inherit' to make it visible to whoever can see " +
+        'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
+        'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
+        `clobber it; use append_context when you only want to add. ${MENTION_RULE}`,
       inputSchema: {
         community_id: z.string(),
         path: z.string().describe("Brain-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
         scope: scopeArg.describe(
-          "Target brain — defaults to 'personal'; pass 'shared' explicitly to write the community's context",
+          "Target brain — defaults to 'personal'; pass 'shared' explicitly to write the space's shared context",
         ),
+        visibility: visibilityArg,
       },
     },
     (args, extra) =>
       withCtx(extra, 'edit_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
+        // Private-by-default applies only to a note this call CREATES in a real
+        // community's shared brain — checked before the write, since afterwards
+        // the note always exists. Personal spaces are private already.
+        const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
+        const existed = isGatedShared ? (await readNoteOrNull(brain, args.path)) !== null : true
         // Stamped as an agent revision so human and agent edits stay
         // distinguishable in the note's history.
         const result = unwrapWrite(
           await writeGated(principal, brain, args.path, args.content, 'agent', 'mcp'),
         )
+        const wantPrivate = !existed && args.visibility !== 'inherit'
+        const visibilityError = wantPrivate
+          ? await makeNotePrivate(args.community_id, result.path, { userId: ctx.userId, name: ctx.name })
+          : null
         return {
           status: 'applied',
           scope,
@@ -660,6 +801,13 @@ export function registerTools(server: McpServer): void {
           // Every shared-brain write re-syncs that note's mention set, so the
           // edges it draws are already up to date by the time this returns.
           links_synced: scope === 'shared',
+          ...(isGatedShared
+            ? {
+                visibility: existed ? 'unchanged' : wantPrivate && !visibilityError ? 'private' : 'inherit',
+                ...(wantPrivate && !visibilityError ? { audience: 'you + admins only' } : {}),
+                ...(visibilityError ? { visibility_error: visibilityError } : {}),
+              }
+            : {}),
         }
       }),
   )
@@ -669,14 +817,15 @@ export function registerTools(server: McpServer): void {
     {
       description:
         "Append a dated, attributed entry to a note's '## Log' section, creating the section if it is absent. " +
-        'The safe way to add one fact to an existing note — nothing else in the note can be lost. ' +
-        "Defaults to your personal space; pass scope:'shared' for the community's context. " +
+        'The safe way to add one fact to an existing note — nothing else in the note can be lost. The entry is ' +
+        "attributed to the authenticated caller (list_context's `you`). " +
+        "Defaults to your personal space; pass scope:'shared' for the space's shared context. " +
         `Mentions in the entry create links the same way: ${MENTION_RULE}`,
       inputSchema: {
         community_id: z.string(),
         path: z.string().describe('Path of the existing note to append to'),
         entry: z.string().describe('The entry text — one update. The date and your name are added for you.'),
-        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the community's context"),
+        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
     },
     (args, extra) =>
@@ -697,7 +846,9 @@ export function registerTools(server: McpServer): void {
         'Move or rename one note. Links pointing AT it are rewritten across the brain, so the mentions that ' +
         'make up the graph survive the move — which is why this exists instead of write-then-delete. ' +
         'Needs write access at BOTH the old and the new path. Moving an entity note away from the path its ' +
-        'type implies (people/<slug>.md and so on) detaches it from that entity, so do not.',
+        'type implies (people/<slug>.md and so on) detaches it from that entity, so do not. Moving a note ' +
+        'does NOT carry note-level sharing or restriction with it — a private note becomes governed by its ' +
+        'new folder; re-apply sharing after moving if it matters.',
       inputSchema: {
         community_id: z.string(),
         from: z.string().describe('Current path of the note'),
@@ -707,15 +858,87 @@ export function registerTools(server: McpServer): void {
             'New path, ending in .md. Folders are implicit in the path, so none need creating first; ' +
               'a note already at that path is an error rather than an overwrite.',
           ),
-        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the community's context"),
+        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
     },
     (args, extra) =>
       withCtx(extra, 'move_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
-        const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to))
+        const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to, 'agent'))
         return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
+      }),
+  )
+
+  // ── Maintain ────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'clean_context',
+    {
+      description:
+        'Analyze and clean up context, scoped to your role. The default action (analyze) is READ-ONLY: it ' +
+        'returns (a) safe mechanical fixes this tool can apply itself — missing frontmatter, uniquely ' +
+        'resolvable broken links, unambiguous mention linking, staling of long-untouched notes — and (b) a ' +
+        'prioritized worklist of judgment calls for YOU to execute with the ordinary write tools (each item ' +
+        'says how). Recommended loop: analyze → apply_fixes → work the worklist with read/edit/append/' +
+        "move_context → re-analyze to confirm the counts dropped. Members clean the notes THEY authored; " +
+        'space admins clean the whole space (and get a `structure` block — folder sizes, empties, outliers, ' +
+        'tag/type mixes — to reason about better organisation); pass `path` to target one folder. ' +
+        "mode:'full' adds duplicate detection and oversized-note flags. Folders frozen for AI are reported " +
+        "but never touched. action:'trash' soft-deletes notes you are allowed to remove (author, admin, or " +
+        'full access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
+        `reading them. When fixing orphans, remember: ${MENTION_RULE}`,
+      inputSchema: {
+        community_id: z.string(),
+        scope: scopeArg.describe(
+          "Which brain to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
+        ),
+        action: z
+          .enum(['analyze', 'apply_fixes', 'trash'])
+          .optional()
+          .describe(
+            "'analyze' (default, read-only) | 'apply_fixes' (apply the safe allow-list) | 'trash' (soft-delete `paths`)",
+          ),
+        path: z.string().optional().describe("Target one folder, e.g. 'deals' — omit for your whole scope"),
+        mode: z
+          .enum(['light', 'full'])
+          .optional()
+          .describe("'light' (default) | 'full' adds duplicate + oversized-note detection (slower)"),
+        paths: z
+          .array(z.string())
+          .max(50)
+          .optional()
+          .describe("For action:'trash': the note paths to soft-delete (max 50)"),
+        limit: z.number().int().min(1).max(100).optional().describe('Max items per worklist category (default 20)'),
+      },
+    },
+    (args, extra) =>
+      withCtx(extra, 'clean_context', async (ctx) => {
+        const scope: BrainScope = args.scope ?? 'shared'
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
+        const role: CleanRole =
+          scope === 'personal' || resolved?.isPersonalSpace
+            ? 'owner'
+            : principal.communityAdmin
+              ? 'admin'
+              : 'member'
+        const opts = {
+          role,
+          targetPath: args.path?.replace(/^\/+|\/+$/g, '') || undefined,
+          mode: args.mode ?? ('light' as const),
+          limit: args.limit ?? 20,
+        }
+        const action = args.action ?? 'analyze'
+        if (action === 'trash') {
+          if (!args.paths?.length) throw new McpError(400, "action:'trash' needs `paths`")
+          const results = await trashNotes(principal, brain, resolved, args.paths)
+          return { action, results, restorable_days: 7 }
+        }
+        if (action === 'apply_fixes') {
+          const result = await applyCleanFixes(principal, brain, opts)
+          return { action, ...result }
+        }
+        return { action, scope, ...(await runClean(principal, brain, opts)) }
       }),
   )
 
@@ -731,7 +954,7 @@ export function registerTools(server: McpServer): void {
     'list_connectors',
     {
       description:
-        "List the community's connectors — admin-configured gateways to external APIs, databases and services. " +
+        "List the space's connectors — admin-configured gateways to external APIs, databases and services. " +
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
         'and the env var names its code can read. Run one with run_connector; a connector with no hosts is ' +
         "documentation-only. Executing needs the 'connectors:use' scope.",

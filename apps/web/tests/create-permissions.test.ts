@@ -1,7 +1,7 @@
 // The one gate behind both create entry points (the sidebar's "+" caret menu
 // and the docked panel's type grid). The regression it exists to prevent: the
 // caret menu used to be an unfiltered hardcoded list, so a member — or anyone
-// in a community with channels switched off — was offered Channel and Space and
+// in a community with channels switched off — was offered Channel and Section and
 // only found out on submit.
 // Run: pnpm --filter @visvine/web exec node --import tsx --test tests/create-permissions.test.ts
 
@@ -23,15 +23,19 @@ const off = (...keys: string[]): { featureConfig: CommunityFeatureConfig; isAdmi
   isAdmin: true,
 })
 
-test('channels and spaces need the channels feature AND admin', () => {
+test('channels and sections need the channels feature AND admin', () => {
   assert.equal(canCreateType('channel', ADMIN), true)
-  assert.equal(canCreateType('space', ADMIN), true)
+  assert.equal(canCreateType('section', ADMIN), true)
   // A member is never offered them, however the community is configured.
   assert.equal(canCreateType('channel', MEMBER), false)
-  assert.equal(canCreateType('space', MEMBER), false)
+  assert.equal(canCreateType('section', MEMBER), false)
   // Nor is an admin once the feature is off.
   assert.equal(canCreateType('channel', off('channels')), false)
-  assert.equal(canCreateType('space', off('channels')), false)
+  assert.equal(canCreateType('section', off('channels')), false)
+  // The org type 'space' (formerly 'community') is NOT the container — it stays
+  // open to everyone whatever the channels toggle says.
+  assert.equal(canCreateType('space', MEMBER), true)
+  assert.equal(canCreateType('space', off('channels')), true)
 })
 
 test('an uploaded file follows the notes feature', () => {
@@ -53,7 +57,7 @@ test('connectors need the connectors tool AND admin', () => {
 })
 
 test('the note-first types stay open to everyone', () => {
-  for (const type of ['person', 'community', 'resource', 'context'] as const) {
+  for (const type of ['person', 'space', 'resource', 'context'] as const) {
     assert.equal(canCreateType(type, MEMBER), true, type)
     assert.equal(canCreateType(type, off('channels', 'notes')), true, type)
   }

@@ -280,7 +280,7 @@ export default function CreateModal() {
       if (selectedType === 'resource') return resourceData.name.trim().length > 0;
       if (selectedType === 'event') return eventData.name.trim().length > 0;
       if (selectedType === 'channel') return channelData.name.trim().length > 0;
-      if (selectedType === 'space') return spaceData.name.trim().length > 0;
+      if (selectedType === 'section') return spaceData.name.trim().length > 0;
       if (selectedType === 'context') return contextTitle.length > 0;
       // Mirrors the server's perimeter validation, so Create can't write a note
       // the connectors layer would immediately call invalid.
@@ -311,7 +311,7 @@ export default function CreateModal() {
         const id = await createChannel();
         handleClose();
         router.push(`/channels/${encodeURIComponent(id)}`);
-      } else if (selectedType === 'space') {
+      } else if (selectedType === 'section') {
         await createSpace();
         handleClose();
         router.push('/channels');
@@ -336,7 +336,7 @@ export default function CreateModal() {
   };
 
   const createChannel = async (): Promise<string> => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
     const res = await fetch('/api/messages/conversations/channel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -359,7 +359,7 @@ export default function CreateModal() {
   };
 
   const createSpace = async () => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
     const res = await fetch('/api/messages/spaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -371,7 +371,7 @@ export default function CreateModal() {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to create space');
+      throw new Error(body.error ?? 'Failed to create section');
     }
   };
 
@@ -380,7 +380,7 @@ export default function CreateModal() {
   // (403 with its reason), and intermediate folders come into being with the
   // note, so a brand-new folder name needs no separate create call.
   const createContextNote = async () => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
     const path = contextDestination;
     const tags = contextData.tags.split(',').map((t) => t.trim()).filter(Boolean);
     await notesApi.create(
@@ -405,7 +405,7 @@ export default function CreateModal() {
   // take. The secret's VALUE is deliberately not collected here: it's set on
   // the connector's own page, which is where the success screen points.
   const createConnectorNote = async () => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
     const name = connectorSlug(connectorData.name);
     const path = `connectors/${name}.md`;
     await notesApi.create(
@@ -436,7 +436,7 @@ export default function CreateModal() {
   // pipeline synchronously, so a parallel burst would just contend. Per-file
   // status lands on the row; a file that fails leaves the others alone.
   const uploadFiles = async () => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
     const communityId = currentCommunity.id;
     const queue = fileData.files
       .map((entry, index) => ({ entry, index }))
@@ -478,7 +478,7 @@ export default function CreateModal() {
   };
 
   const createNode = async () => {
-    if (!currentCommunity) throw new Error('Select a community first');
+    if (!currentCommunity) throw new Error('Select a space first');
 
     let name = '';
     let subtitle = '';
@@ -749,7 +749,7 @@ export default function CreateModal() {
             {step === 1 && selectedType === 'channel' && (
               <ChannelForm data={channelData} onChange={setChannelData} nameRef={nameRef} spaces={spaces} />
             )}
-            {step === 1 && selectedType === 'space' && (
+            {step === 1 && selectedType === 'section' && (
               <SpaceForm data={spaceData} onChange={setSpaceData} nameRef={nameRef} />
             )}
             {step === 1 && selectedType === 'context' && (

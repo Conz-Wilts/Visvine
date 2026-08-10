@@ -25,7 +25,7 @@ import {
   principalIsSuperAdmin,
   principalLevelName,
 } from './shared/permissions'
-import { isRestrictedPath } from './shared/authz'
+import { isRestrictedPath, isLockedPath } from './shared/authz'
 import { replicaDenial } from './publications'
 import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
@@ -95,7 +95,7 @@ export async function readVisible(
 export interface BrainSearchResult {
   hits: FusedResult[]
   /**
-   * What the semantic half did: 'on', 'no-key' (GEMINI_API_KEY unset — results
+   * What the semantic half did: 'on', 'no-key' (OPENAI_API_KEY unset — results
    * are keyword + link context only), or 'error'. Reported rather than hidden,
    * because a degraded search is indistinguishable from a thorough one that
    * found nothing.
@@ -171,7 +171,7 @@ export function writeDenial(p: BrainPrincipal, brain: Brain, path: string): stri
     !p.system &&
     !principalIsSuperAdmin(p)
   ) {
-    return 'Only community admins can create or edit connectors.'
+    return 'Only space admins can create or edit connectors.'
   }
   if (principalCanWrite(p, path)) return null
   const level = principalLevelName(p, path)
@@ -179,6 +179,33 @@ export function writeDenial(p: BrainPrincipal, brain: Brain, path: string): stri
   return level
     ? `You have ${level} access in "${where}" — edit access is required.`
     : `You don't have access to write in "${where}".`
+}
+
+/**
+ * Origins that mean "an AI/agent wrote this without a human approving the
+ * exact change": autonomous MCP writes, enrichment passes, maintenance/clean
+ * passes. These are what a folder's "Freeze for AI" lock keeps out.
+ * `ai-refactor` is deliberately absent — a refactor is applied by a human in
+ * the editor, so the lock does not bind it. `edit`/`restore` are human acts.
+ */
+const AI_ORIGINS: ReadonlySet<NoteRevisionOrigin> = new Set(['agent', 'ai-enrich', 'maintenance'])
+
+/**
+ * The "Freeze for AI" gate: a locked shared-brain folder refuses autonomous
+ * AI writes while leaving humans (and human-approved refactors) alone.
+ * Until now only the review pass honoured locks — the SharePanel copy promises
+ * "maintenance passes leave this folder alone", so the write gate must too.
+ */
+export function lockedDenial(
+  p: BrainPrincipal,
+  brain: Brain,
+  path: string,
+  origin: NoteRevisionOrigin,
+): string | null {
+  if (!isShared(brain)) return null
+  if (!AI_ORIGINS.has(origin)) return null
+  if (!isLockedPath(p.access.locked, path)) return null
+  return 'This folder is frozen for AI ("Freeze for AI") — a human must make this change.'
 }
 
 /**
@@ -206,7 +233,7 @@ export async function writeGated(
   origin: Parameters<typeof store.writeNote>[4] = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = await writeDenialFull(p, brain, path)
+  const denial = (await writeDenialFull(p, brain, path)) ?? lockedDenial(p, brain, path, origin)
   if (denial) return { status: 'denied', reason: denial }
   await store.writeNote(brain, path, content, actorOf(p), origin, model)
   return { status: 'applied', path }
@@ -225,7 +252,7 @@ export async function appendLogGated(
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
 ): Promise<WriteResult> {
-  const denial = await writeDenialFull(p, brain, path)
+  const denial = (await writeDenialFull(p, brain, path)) ?? lockedDenial(p, brain, path, origin)
   if (denial) return { status: 'denied', reason: denial }
   const current = await store.readNote(brain, path)
   const role =
@@ -264,9 +291,10 @@ export async function moveGated(
   brain: Brain,
   from: string,
   to: string,
+  origin: NoteRevisionOrigin = 'edit',
 ): Promise<WriteResult> {
   for (const end of [from, to]) {
-    const denial = writeDenial(p, brain, end)
+    const denial = writeDenial(p, brain, end) ?? lockedDenial(p, brain, end, origin)
     if (denial) return { status: 'denied', reason: denial }
   }
   const moved = await store.renameNote(brain, from, to)

@@ -28,7 +28,7 @@ export default function InviteActions({
         onClick={() => router.push('/home')}
         className="mt-6 w-full rounded-lg bg-brand-green px-4 py-2 text-sm font-medium text-white"
       >
-        Open community
+        Open space
       </button>
     );
   }

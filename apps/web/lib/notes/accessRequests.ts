@@ -177,7 +177,7 @@ export async function resolveAccessRequest(
   if (!row) throw new Error('Access request not found')
   const request = toRequest(row)
   if (!canResolveRequest(p, request)) {
-    throw new Error('Only someone with full access here (or a community admin) can resolve this request')
+    throw new Error('Only someone with full access here (or a space admin) can resolve this request')
   }
   if (request.status !== 'pending') return request
   const grantLevel = level ?? request.level

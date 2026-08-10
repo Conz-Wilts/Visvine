@@ -71,7 +71,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
   if (!dryRun) {
     await syncEntityNode({
       communityId: community.id,
-      type: 'community',
+      type: 'space',
       nodeId: communityNode,
       name: community.name,
       subtitle: community.description,
@@ -91,7 +91,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
     if (!dryRun) {
       await syncEntityNode({
         communityId: community.id,
-        type: 'space',
+        type: 'section',
         name: space.name,
         recordId: space.id,
         metadata: { emoji: space.emoji },
@@ -114,7 +114,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
             await prisma.node.findFirst({
               where: {
                 communityId: community.id,
-                type: 'space',
+                type: 'section',
                 metadata: { path: ['spaceId'], equals: channel.spaceId },
               },
               select: { id: true },
@@ -141,7 +141,9 @@ async function backfillCommunity(community: { id: string; name: string; descript
     select: { id: true, type: true, name: true, subtitle: true, tags: true },
   });
   for (const node of nodes) {
-    if (node.type === 'community' || node.type === 'space' || node.type === 'channel') continue;
+    // 'space' here is the space's own root node (formerly type 'community');
+    // 'section' is the channel container (formerly type 'space').
+    if (node.type === 'space' || node.type === 'section' || node.type === 'channel') continue;
     // A connector's note came first, and any leftover note:/file: row from when
     // those types existed has no note to write either (scripts/prune-note-file-nodes.ts).
     if (node.type === 'connector' || node.type === 'note' || node.type === 'file') continue;

@@ -68,7 +68,8 @@ function buildDecorations(doc: PMNode, getEntity: EntityChipOptions['getEntity']
     // entityKindOf, not a prefix test: an organisation's stored type has been
     // 'organization', then 'group', and is now 'community', and only the first
     // of those starts with "org".
-    const kindClass = entityKindOf(entity.type) === 'community' ? 'entity-community' : 'entity-person'
+    // CSS class name is styling plumbing — it keeps its old spelling.
+    const kindClass = entityKindOf(entity.type) === 'space' ? 'entity-community' : 'entity-person'
     if (entity.image_url) {
       decorations.push(
         Decoration.widget(start, () => buildWidget(entity, path, kindClass), {

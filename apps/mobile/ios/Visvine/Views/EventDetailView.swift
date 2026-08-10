@@ -99,7 +99,7 @@ struct EventDetailView: View {
                 if (event.visibility ?? "community") != "public" {
                     HStack(spacing: 8) {
                         Image(systemName: event.visibility == "private" ? "lock.fill" : "person.2.fill").font(.system(size: 14))
-                        Text(event.visibility == "private" ? "Private event" : "Community members only").font(.system(size: 14))
+                        Text(event.visibility == "private" ? "Private event" : "Space members only").font(.system(size: 14))
                     }
                     .foregroundStyle(c.textMuted).padding(.horizontal, 16).padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading).background(c.bgTertiary, in: RoundedRectangle(cornerRadius: 12)).padding(16)

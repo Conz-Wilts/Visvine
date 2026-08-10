@@ -33,7 +33,7 @@ export async function requireCommunityMember(
     where: { userId_communityId: { userId: session.userId, communityId } },
     select: { userId: true },
   });
-  if (!membership) return deny(403, 'You are not a member of this community');
+  if (!membership) return deny(403, 'You are not a member of this space');
   return session;
 }
 
@@ -48,5 +48,5 @@ export async function requireEventManager(
 
   const hosts = event?.hosts ?? [];
   if (session.personId && hosts.includes(session.personId)) return session;
-  return deny(403, 'Only the event hosts or a community admin can manage this event');
+  return deny(403, 'Only the event hosts or a space admin can manage this event');
 }

@@ -113,7 +113,7 @@ export default function SignInCard({
       </h1>
       <p className="mt-2 text-gray-500 text-sm">
         {isSignup
-          ? "Join Visvine to explore communities"
+          ? "Join Visvine to explore spaces"
           : "Sign in to continue to Visvine"}
       </p>
 

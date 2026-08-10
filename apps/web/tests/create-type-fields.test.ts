@@ -14,10 +14,11 @@ test('fieldsForType is case-insensitive and follows the stored lowercase type', 
   assert.ok(fieldsForType('person').length > 0)
 })
 
-test('fieldsForType folds every retired organisation spelling onto the community schema', () => {
-  const community = fieldsForType('community')
-  for (const synonym of ['organization', 'organisation', 'org', 'group', 'groups', 'company', 'companies', 'communities']) {
-    assert.deepEqual(fieldsForType(synonym), community, `${synonym} should resolve to the community schema`)
+test('fieldsForType folds every retired organisation spelling onto the space schema', () => {
+  const space = fieldsForType('space')
+  assert.ok(space.length > 0)
+  for (const synonym of ['organization', 'organisation', 'org', 'group', 'groups', 'company', 'companies', 'community', 'communities']) {
+    assert.deepEqual(fieldsForType(synonym), space, `${synonym} should resolve to the space schema`)
   }
 })
 
@@ -30,7 +31,7 @@ test('fieldsForType returns an empty array for unknown and empty types', () => {
 })
 
 test('every column-targeted field names its column', () => {
-  for (const type of ['person', 'community', 'resource', 'event']) {
+  for (const type of ['person', 'space', 'resource', 'event']) {
     for (const field of fieldsForType(type)) {
       if (field.target === 'column') {
         assert.ok(field.column, `${type}.${field.key} targets a column but names none`)

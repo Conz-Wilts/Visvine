@@ -94,7 +94,7 @@ test("isSystemRelationship is false for ordinary manual relationships", () => {
 //    directory only show the structure kinds when asked ─────────────────────────
 
 test("isStructuralNodeType covers the container kinds", () => {
-  for (const type of ["space", "channel", "connector"]) {
+  for (const type of ["section", "channel", "connector"]) {
     assert.equal(isStructuralNodeType(type), true, type);
   }
   assert.equal(isStructuralNodeType("Channel"), true);
@@ -104,10 +104,11 @@ test("isStructuralNodeType covers the container kinds", () => {
   assert.equal(isStructuralNodeType("file"), true);
 });
 
-// `community` belongs here, not above: it carries the organisations that used
-// to be the Group type, which are directory records people expect to see.
+// `space` (the org type, formerly `community`) belongs here, not above: it
+// carries the organisations that used to be the Group type, which are
+// directory records people expect to see.
 test("isStructuralNodeType leaves the directory kinds alone", () => {
-  for (const type of ["person", "community", "group", "organization", "event", "resource"]) {
+  for (const type of ["person", "space", "community", "group", "organization", "event", "resource"]) {
     assert.equal(isStructuralNodeType(type), false, type);
   }
   assert.equal(isStructuralNodeType(null), false);

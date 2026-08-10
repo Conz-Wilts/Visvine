@@ -17,7 +17,7 @@ struct LoginView: View {
                         .font(.system(size: 56)).foregroundStyle(c.accent)
                 }
                 Text("Visvine").font(.system(size: 34, weight: .bold)).foregroundStyle(c.textPrimary).padding(.top, 16)
-                Text("Connect with your community").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
+                Text("Connect with your space").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
 
                 if let error = auth.authErrorMessage {
                     Text(error).font(.system(size: 14)).foregroundStyle(c.error)

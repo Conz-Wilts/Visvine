@@ -81,15 +81,15 @@ export async function POST(request: NextRequest) {
     // to every member and swamp the alias grants (lib/notes/access.ts).
     await markAccessSeeded(id);
 
-    // Give the new community its place in its own context graph: a node for the
-    // community, a node for its default space, and the containment edge between
-    // them. Best-effort — a community that exists without context is recoverable
-    // (the backfill script fixes it); a failed create is not.
+    // Give the new space its place in its own context graph: a node for the
+    // space itself, a node for its default channel section, and the containment
+    // edge between them. Best-effort — a space that exists without context is
+    // recoverable (the backfill script fixes it); a failed create is not.
     const actor = { id: session.userId, name: session.name, email: session.email };
     const communityNode = communityNodeId(id);
     await syncEntityNodeSafe({
       communityId: id,
-      type: 'community',
+      type: 'space',
       nodeId: communityNode,
       name,
       subtitle: description || null,
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     });
     await syncEntityNodeSafe({
       communityId: id,
-      type: 'space',
+      type: 'section',
       name: defaultSpace.name,
       recordId: defaultSpace.id,
       parentNodeId: communityNode,

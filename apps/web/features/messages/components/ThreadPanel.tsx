@@ -166,7 +166,7 @@ export default function ThreadPanel({
                 ? 'Pick a channel from the list to open its feed.'
                 : communityIsAdmin
                   ? 'Create your first channel to start a feed.'
-                  : 'Channels created by your community admins will appear here.'}
+                  : 'Channels created by your space admins will appear here.'}
             </p>
           </div>
           {communityIsAdmin && (

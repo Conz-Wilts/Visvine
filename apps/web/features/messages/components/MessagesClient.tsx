@@ -550,7 +550,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       setShowSpaceForm(false);
       await fetchChannels();
     } catch (createError) {
-      setError((createError as Error).message || 'Unable to create the space.');
+      setError((createError as Error).message || 'Unable to create the section.');
     } finally {
       setCreatingSpace(false);
     }
@@ -563,20 +563,20 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       await fetchJsonBody(`/api/messages/spaces/${spaceId}`, 'PATCH', { name, emoji: null });
       await fetchChannels();
     } catch (e) {
-      setError((e as Error).message || 'Unable to rename the space.');
+      setError((e as Error).message || 'Unable to rename the section.');
       throw e;
     }
   }, [fetchChannels]);
 
   const handleDeleteSpace = useCallback(async (spaceId: string) => {
-    if (!window.confirm('Delete this space? Its channels will move to the Channels list.')) return;
+    if (!window.confirm('Delete this section? Its channels will move to the Channels list.')) return;
     try {
       await fetchJson(`/api/messages/spaces/${spaceId}`, { method: 'DELETE' });
       // Deleting a space unfiles its channels (spaceId → null), so refresh both lists.
       await fetchChannels();
       await fetchConversations(conversationSearch);
     } catch (e) {
-      setError((e as Error).message || 'Unable to delete the space.');
+      setError((e as Error).message || 'Unable to delete the section.');
     }
   }, [fetchChannels, fetchConversations, conversationSearch]);
 

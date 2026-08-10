@@ -84,7 +84,7 @@ export default function ConnectClaudePanel() {
 
       <SettingsSection
         title="Connect Claude"
-        description="Give Claude access to your Visvine context — the entities, notes and connections in every community you're a member of. Visvine runs the server itself; there is nothing to install."
+        description="Give Claude access to your Visvine context — the entities, notes and connections in every space you're a member of. Visvine runs the server itself; there is nothing to install."
       >
         <McpServerUrlRow url={info?.url ?? null} />
       </SettingsSection>

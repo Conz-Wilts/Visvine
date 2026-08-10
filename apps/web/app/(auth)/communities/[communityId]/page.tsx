@@ -186,9 +186,9 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
         <div className="text-5xl">🏘️</div>
-        <p className="text-base font-semibold text-text-primary">Community not found</p>
+        <p className="text-base font-semibold text-text-primary">Space not found</p>
         <p className="text-sm text-text-muted">It may have been removed, or the URL is incorrect.</p>
-        <Link href="/communities" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to communities</Link>
+        <Link href="/communities" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to spaces</Link>
       </div>
     );
   }
@@ -200,7 +200,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
 
   // Admin setup checklist (only shown while the community is still sparse)
   const checklist = [
-    { label: 'Add a community image', done: !!community.imageUrl },
+    { label: 'Add a space image', done: !!community.imageUrl },
     { label: 'Write a description', done: !!community.description },
     { label: 'Reach 3 members', done: counts.members >= 3 },
     { label: 'Host your first event', done: counts.totalEvents > 0 },
@@ -244,7 +244,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
             <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
                   style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
-              Community
+              Space
             </span>
             {community.location && (
               <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11.5px] font-semibold bg-surface-2 text-text-muted border border-border-default">
@@ -280,7 +280,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
                 <button onClick={openCommunity}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition hover:opacity-95 active:scale-[0.99]"
                   style={{ background: theme.base }}>
-                  <NetworkIcon className="w-4 h-4" /> Open community
+                  <NetworkIcon className="w-4 h-4" /> Open space
                 </button>
                 <button onClick={share}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
@@ -305,7 +305,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
                 className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition hover:opacity-95 active:scale-[0.99] disabled:opacity-60"
                 style={{ background: theme.base }}>
                 {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Join community
+                Join space
               </button>
             )}
           </div>
@@ -322,7 +322,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
 
       {/* ── STICKY SUB-NAV ── */}
       <nav className="sticky top-0 z-20 flex gap-1 px-4 sm:px-6 border-b border-border-subtle bg-surface-1/85 backdrop-blur overflow-x-auto"
-           aria-label="Community sections">
+           aria-label="Space sections">
         {visibleSections.map((s) => (
           <button key={s} onClick={() => jump(s)}
                   aria-current={active === s ? 'true' : undefined}
@@ -339,14 +339,14 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
           {showChecklist && (
-            <SectionCard id="checklist" icon={<Sparkles className="w-[18px] h-[18px]" />} title="Set up your community" theme={theme}>
+            <SectionCard id="checklist" icon={<Sparkles className="w-[18px] h-[18px]" />} title="Set up your space" theme={theme}>
               <div className="flex items-center gap-4 mb-3">
                 <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
                      style={{ background: `conic-gradient(${theme.base} ${(checklistDone / checklist.length) * 100}%, var(--surface-3,#f3f4f6) 0)` }}>
                   <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
                   <b className="relative text-[13px] font-bold font-title">{checklistDone}/{checklist.length}</b>
                 </div>
-                <p className="text-[13px] text-text-secondary">A complete page helps new members understand what this community is about.</p>
+                <p className="text-[13px] text-text-secondary">A complete page helps new members understand what this space is about.</p>
               </div>
               <ul className="flex flex-col gap-1.5">
                 {checklist.map((c) => (
@@ -367,7 +367,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
             {community.description ? (
               <AboutText text={community.description} theme={theme} />
             ) : isAdminViewer ? (
-              <p className="text-sm text-text-muted italic">Add a description so people know what this community is about.</p>
+              <p className="text-sm text-text-muted italic">Add a description so people know what this space is about.</p>
             ) : (
               <p className="text-sm text-text-muted italic">No description yet.</p>
             )}

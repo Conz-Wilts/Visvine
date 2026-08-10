@@ -11,12 +11,13 @@ const link = (source: string, target: string): NBLink =>
 
 const ALL: NBNode[] = [
   node('person:a', 'person'),
-  node('community:b', 'Community'),
+  // Legacy id prefixes survive the renames — only the type column migrates.
+  node('community:b', 'Space'),
   node('event:c', 'event'),
   node('resource:d', 'resource'),
   node('connector:e', 'connector'),
   node('channel:f', 'channel'),
-  node('space:g', 'space'),
+  node('space:g', 'section'),
 ];
 
 const names = (nodes: NBNode[]) => nodes.map((n) => n.id).sort();
@@ -35,7 +36,7 @@ describe('visibleNodes', () => {
     );
   });
 
-  it('takes both Channel and Space out with the channels tool', () => {
+  it('takes both Channel and Section out with the channels tool', () => {
     const config: CommunityFeatureConfig = { enabled: { channels: false } };
     const kept = names(visibleNodes(ALL, config));
     assert.equal(kept.includes('channel:f'), false);
@@ -44,7 +45,7 @@ describe('visibleNodes', () => {
   });
 
   it('never hides the types core surfaces own', () => {
-    // Every toggleable tool off at once — person, Community and event stay.
+    // Every toggleable tool off at once — person, Space and event stay.
     const config: CommunityFeatureConfig = {
       enabled: { connectors: false, resources: false, channels: false },
     };

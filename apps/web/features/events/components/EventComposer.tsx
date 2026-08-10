@@ -57,7 +57,7 @@ interface EventComposerProps {
 const THEME_COLORS = ['#78d870', '#2563eb', '#9333ea', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#111827'];
 
 const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'community', label: 'Community', icon: <Users className="w-4 h-4" />, description: 'Members of this community' },
+  { value: 'community', label: 'Space', icon: <Users className="w-4 h-4" />, description: 'Members of this space' },
   { value: 'public', label: 'Public link', icon: <Globe className="w-4 h-4" />, description: 'Anyone with the link can RSVP' },
   { value: 'private', label: 'Unlisted', icon: <Lock className="w-4 h-4" />, description: 'Only people you invite' },
 ];

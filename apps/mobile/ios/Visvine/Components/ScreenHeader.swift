@@ -78,7 +78,7 @@ struct ScreenHeader: View {
                 }
                 .listRowBackground(active ? c.accentLight : c.bgPrimary)
             }
-            .navigationTitle("Community")
+            .navigationTitle("Space")
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium])

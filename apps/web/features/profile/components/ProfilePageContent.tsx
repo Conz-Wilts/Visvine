@@ -244,7 +244,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
           {/* stat strip — pinned to the card's bottom edge */}
           <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
-            <StatItem value={communityCount} label={communityCount === 1 ? 'Community' : 'Communities'}
+            <StatItem value={communityCount} label={communityCount === 1 ? 'Space' : 'Spaces'}
                       onClick={communitiesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
             {experience.length > 0 && (
               <StatItem value={experience.length} label={experience.length === 1 ? 'Role' : 'Roles'}
@@ -315,7 +315,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
                   <b className="relative text-[13px] font-bold font-open-sauce text-text-primary">{score}%</b>
                 </div>
-                <p className="text-[13px] text-text-secondary leading-snug">Complete profiles rank higher in your community’s directory.</p>
+                <p className="text-[13px] text-text-secondary leading-snug">Complete profiles rank higher in your space’s directory.</p>
               </div>
               {missing.length > 0 && (
                 <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-border-subtle">

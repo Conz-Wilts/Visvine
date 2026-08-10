@@ -35,7 +35,7 @@ export default function HomePage() {
 
   return (
     <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-text-muted">
-      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Opening your community…
+      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Opening your space…
     </div>
   );
 }

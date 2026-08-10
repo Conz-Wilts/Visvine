@@ -103,7 +103,7 @@ fun ScreenHeader(
             containerColor = colors.bgPrimary,
         ) {
             Text(
-                "Community",
+                "Space",
                 color = colors.textMuted,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,

@@ -113,7 +113,7 @@ export async function publishNote(
   if (existing?.active) {
     return {
       status: 'denied',
-      reason: `Already published to this community (at ${existing.targetPath}) — unlink it first`,
+      reason: `Already published to this space (at ${existing.targetPath}) — unlink it first`,
     }
   }
 

@@ -116,7 +116,7 @@ fun ProfileScreen(
 
             // Communities
             Card(colors.bgPrimary) {
-                SectionTitle("Communities")
+                SectionTitle("Spaces")
                 communities.forEach { community ->
                     val active = current?.id == community.id
                     Row(
