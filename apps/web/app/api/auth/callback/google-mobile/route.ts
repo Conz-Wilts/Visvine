@@ -12,7 +12,6 @@ type SessionableUser = {
 };
 
 async function buildSessionData(user: SessionableUser) {
-  // Fetch associated Person record if it exists
   let person = await prisma.person.findUnique({
     where: { userId: user.id },
   });
@@ -69,7 +68,7 @@ async function buildSessionData(user: SessionableUser) {
     personId: person.id,
   });
 
-  return { token, person };
+  return { token };
 }
 
 export async function GET(req: NextRequest) {
@@ -161,12 +160,11 @@ export async function GET(req: NextRequest) {
         where: { id: user.id },
         data: { name: googleName, image: googlePicture || user.image },
       });
-      const { token, person } = await buildSessionData(user);
+      const { token } = await buildSessionData(user);
 
       // Redirect back to mobile app with token
       const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
       successUrl.searchParams.set('token', token);
-      successUrl.searchParams.set('hasOnboarded', person.hasOnboarded ? 'true' : 'false');
       successUrl.searchParams.set('callbackUrl', callbackUrl);
       return NextResponse.redirect(successUrl.toString());
     }
@@ -201,11 +199,10 @@ export async function GET(req: NextRequest) {
         throw e;
       }
     }
-    const { token, person } = await buildSessionData(newUser);
+    const { token } = await buildSessionData(newUser);
 
     const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
     successUrl.searchParams.set('token', token);
-    successUrl.searchParams.set('hasOnboarded', person.hasOnboarded ? 'true' : 'false');
     successUrl.searchParams.set('callbackUrl', callbackUrl);
     return NextResponse.redirect(successUrl.toString());
   }
@@ -232,11 +229,10 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const { token, person } = await buildSessionData(userByEmail);
+  const { token } = await buildSessionData(userByEmail);
 
   const successUrl = new URL(mobileRedirectUri || 'visvine://auth/callback');
   successUrl.searchParams.set('token', token);
-  successUrl.searchParams.set('hasOnboarded', person.hasOnboarded ? 'true' : 'false');
   successUrl.searchParams.set('callbackUrl', callbackUrl);
   return NextResponse.redirect(successUrl.toString());
 }

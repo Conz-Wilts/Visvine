@@ -71,9 +71,6 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.4.1
-      driver.js:
-        specifier: ^1.6.0
-        version: 1.6.0
       emoji-picker-react:
         specifier: ^4.18.0
         version: 4.19.1(react@19.2.8)
@@ -2193,9 +2190,6 @@ packages:
   dotenv@17.4.1:
     resolution: {integrity: sha512-k8DaKGP6r1G30Lx8V4+pCsLzKr8vLmV2paqEj1Y55GdAgJuIqpRp5FfajGF8KtwMxCz9qJc6wUIJnm053d/WCw==}
     engines: {node: '>=12'}
-
-  driver.js@1.6.0:
-    resolution: {integrity: sha512-gryo9QS7AZhz8J0bmdf42dwaTzcd1BgSJLnaSM7cPJbu8bTW8wIEuiGDy4MoCvB4Sr8wA9g5o2G9EFNVYZGeVQ==}
 
   duck@0.1.12:
     resolution: {integrity: sha512-wkctla1O6VfP89gQ+J/yDesM0S7B7XLXjKGzXxMDVFg7uEn706niAtyYovKbyq1oT9YwDcly721/iUWoc8MVRg==}
@@ -6025,8 +6019,6 @@ snapshots:
   dotenv@16.6.1: {}
 
   dotenv@17.4.1: {}
-
-  driver.js@1.6.0: {}
 
   duck@0.1.12:
     dependencies:

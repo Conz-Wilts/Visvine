@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const destination = "/onboarding";
+  const destination = "/home";
 
   const sessionToken = await createSession({
     userId: claimed.userId,

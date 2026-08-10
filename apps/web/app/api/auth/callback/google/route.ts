@@ -5,7 +5,6 @@ import { safeRelativePath } from "@/lib/redirects";
 import {
   ensurePerson,
   setSessionCookie,
-  postAuthTarget,
   type SessionableUser,
 } from "@/lib/auth/bootstrap";
 import prisma from "@/lib/prisma";
@@ -26,9 +25,7 @@ async function buildSessionResponse(
     personId: person.id,
   });
 
-  // New users go through onboarding first.
-  const redirectUrl = postAuthTarget(person.hasOnboarded, callbackUrl);
-  const response = NextResponse.redirect(new URL(redirectUrl, appUrl));
+  const response = NextResponse.redirect(new URL(callbackUrl, appUrl));
   return setSessionCookie(response, token);
 }
 

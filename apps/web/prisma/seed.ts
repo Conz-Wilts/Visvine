@@ -339,7 +339,6 @@ async function createAnchorUsers() {
         id: a.personNodeId,
         userId: a.id,
         name: a.name,
-        hasOnboarded: true,
       },
     });
   }

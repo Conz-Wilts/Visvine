@@ -6,8 +6,7 @@ import { COOKIE_NAME, MAX_AGE } from "@/lib/session";
 /**
  * Shared post-authentication plumbing for every sign-in entry point
  * (Google OAuth callback, email/password signup + login). Keeps Person
- * creation, the session cookie, and the onboarding redirect identical
- * across all of them.
+ * creation and the session cookie identical across all of them.
  */
 
 export type SessionableUser = {
@@ -69,9 +68,4 @@ export function setSessionCookie(res: NextResponse, token: string): NextResponse
     path: "/",
   });
   return res;
-}
-
-/** Where to send a user after auth: onboarding first, otherwise their destination. */
-export function postAuthTarget(hasOnboarded: boolean, callbackUrl: string): string {
-  return hasOnboarded ? callbackUrl : "/onboarding";
 }

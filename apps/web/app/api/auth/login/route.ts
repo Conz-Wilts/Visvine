@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSession } from "@/lib/session";
 import { safeRelativePath } from "@/lib/redirects";
 import { verifyPassword, validateEmail } from "@/lib/auth/password";
-import { ensurePerson, setSessionCookie, postAuthTarget } from "@/lib/auth/bootstrap";
+import { ensurePerson, setSessionCookie } from "@/lib/auth/bootstrap";
 import prisma from "@/lib/prisma";
 
 const GENERIC_ERROR = "Invalid email or password.";
@@ -30,7 +30,7 @@ function json(body: unknown, status: number) {
  * Email/password sign-in. Returns a generic 401 for unknown email, wrong
  * password, or Google-only accounts (no password set) to avoid account
  * enumeration. On success, mints the session cookie and returns the redirect
- * target (onboarding if not yet onboarded, otherwise the callbackUrl).
+ * target (the callbackUrl).
  */
 export async function POST(req: NextRequest) {
   let body: { email?: unknown; password?: unknown; callbackUrl?: unknown };
@@ -78,7 +78,6 @@ export async function POST(req: NextRequest) {
     personId: person.id,
   });
 
-  const dest = callbackUrl === "/" ? "/home" : callbackUrl;
-  const redirectTo = postAuthTarget(person.hasOnboarded, dest);
+  const redirectTo = callbackUrl === "/" ? "/home" : callbackUrl;
   return setSessionCookie(json({ redirectTo }, 200), token);
 }

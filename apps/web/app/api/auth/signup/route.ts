@@ -14,7 +14,7 @@ function json(body: unknown, status: number) {
 
 /**
  * Email/password account creation. Creates a brand-new active user, bootstraps
- * their Person, mints the session cookie, and points the client at onboarding.
+ * their Person, mints the session cookie, and points the client at the app.
  *
  * Existing emails (active OR pre-seeded "shadow" CRM profiles) are rejected with
  * a 409 — claiming a shadow profile stays a Google-only flow, since we have no
@@ -72,6 +72,5 @@ export async function POST(req: NextRequest) {
     personId: person.id,
   });
 
-  // Brand-new users have never onboarded, so always start there.
-  return setSessionCookie(json({ redirectTo: "/onboarding" }, 200), token);
+  return setSessionCookie(json({ redirectTo: "/home" }, 200), token);
 }

@@ -17,7 +17,7 @@ import { requireSession } from '@/lib/session'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
 import { principalOf, resolveBrain, resolvePersonalBrain } from '@/lib/notes/brain'
 import { personalPrincipal } from '@/lib/notes/principal'
-import { personalCommunityId } from '@/lib/onboarding/personalCommunity'
+import { personalCommunityId } from '@/lib/communities/personalCommunity'
 import { writeDenial } from '@/lib/notes/brainService'
 import { readNoteOrNull } from '@/lib/notes/store'
 import {
@@ -77,7 +77,7 @@ async function resolveSourcePrincipal(
 ): Promise<BrainPrincipal | Response> {
   if (fromCommunityId === personalCommunityId(session.userId)) {
     const identity = { userId: session.userId, name: session.name, email: session.email }
-    await resolvePersonalBrain(identity) // provisions if onboarding never did
+    await resolvePersonalBrain(identity) // provisions on first use
     return personalPrincipal(identity)
   }
   const resolved = await resolveBrain(session, fromCommunityId)

@@ -3,24 +3,23 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
-import { HeaderProvider } from "@/lib/contexts/HeaderContext";
-import Navbar from "@/components/layout/Navbar";
-import { CommunityProvider, useCommunity } from "@/lib/contexts/CommunityContext";
-import { FEATURES, canAccessFeature, defaultLandingHref } from "@/lib/features";
+import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
+import Navbar from "@/features/shared/components/layout/Navbar";
+import { CommunityProvider, useCommunity } from "@/features/shared/contexts/CommunityContext";
+import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
 import type { CommunityFeatureConfig } from "@/lib/types";
-import { CommunityDesignProvider, useCommunityDesign } from "@/lib/contexts/CommunityDesignContext";
-import { ProfileProvider } from "@/lib/contexts/ProfileContext";
-import { ThemeProvider } from "@/lib/contexts/ThemeContext";
-import { CreateModalProvider } from "@/lib/contexts/CreateModalContext";
-import { SidebarProvider, useSidebar } from "@/lib/contexts/SidebarContext";
-import { ContextPanelProvider } from "@/lib/contexts/ContextPanelContext";
-import { FullProfileProvider } from "@/lib/contexts/FullProfileContext";
+import { CommunityDesignProvider, useCommunityDesign } from "@/features/shared/contexts/CommunityDesignContext";
+import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
+import { ThemeProvider } from "@/features/shared/contexts/ThemeContext";
+import { CreateModalProvider } from "@/features/shared/contexts/CreateModalContext";
+import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
+import { ContextPanelProvider } from "@/features/shared/contexts/ContextPanelContext";
+import { FullProfileProvider } from "@/features/shared/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
-import TourLauncher from "@/features/onboarding/TourLauncher";
 import type { Community } from "@/lib/types";
-import type { Session } from "@/lib/auth-client";
-import type { InitialMembership } from "@/lib/contexts/CommunityContext";
+import type { Session } from "@/features/auth/lib/auth-client";
+import type { InitialMembership } from "@/features/shared/contexts/CommunityContext";
 
 // If this user can't open the feature whose page is currently on screen —
 // either the community removed it, or the tool is admins-only and they're a
@@ -97,9 +96,6 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
 
       {/* The Create panel is NOT here — it lives inside the Sidebar's docked
           column (it takes that column over while open), see Sidebar.tsx. */}
-
-      {/* One-time post-onboarding feature tour (no-op unless the flag is set) */}
-      <TourLauncher />
     </div>
   );
 }

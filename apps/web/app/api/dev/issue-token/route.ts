@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
       email: user.email,
       image: user.image,
       personId: user.person?.id ?? null,
-      hasOnboarded: user.person?.hasOnboarded ?? false,
     },
   });
 }

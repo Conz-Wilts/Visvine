@@ -1,7 +1,7 @@
 // Brain resolution + authorization for the notes feature. Every community has
 // exactly ONE brain — its shared brain (ownerKey 'shared'). A user's personal
 // context lives in the shared brain of their personal-space community
-// (`me:<userId>`, created at onboarding) — there are no per-community personal
+// (`me:<userId>`, provisioned on first use) — there are no per-community personal
 // brains anymore. Access to a normal community's brain is grant-gated
 // (lib/notes/access.ts): joining the community does not by itself grant brain
 // access until a grant reaches you. Routes call resolveBrain() right after
@@ -12,7 +12,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { isAdmin } from '@/lib/auth'
 import type { SessionPayload } from '@/lib/session'
-import { provisionPersonalCommunity, personalCommunityId } from '@/lib/onboarding/personalCommunity'
+import { provisionPersonalCommunity, personalCommunityId } from '@/lib/communities/personalCommunity'
 import { SHARED_OWNER_KEY, type Brain, type Actor } from './store'
 import type { BrainPrincipal } from './shared/brainTypes'
 import { OPEN_ACCESS } from './shared/authz'
@@ -82,7 +82,8 @@ export async function resolveBrain(
 
 /**
  * The caller's personal brain: the shared brain of their personal-space
- * community, provisioning it if onboarding never did (idempotent).
+ * community, provisioning it on first use (idempotent). This is the only
+ * place personal spaces get created.
  */
 export async function resolvePersonalBrain(identity: {
   userId: string

@@ -1,7 +1,8 @@
 // Provision a brand-new user's "personal space": a private, single-member
-// Community (named after them) that hosts their personal context notes. Created
-// at the end of onboarding. Everything here is idempotent — keyed by the user's
-// id — so re-running on retry, skip, or re-login never duplicates rows.
+// Community (named after them) that hosts their personal context notes. Called
+// lazily from resolvePersonalBrain() the first time they touch their own notes.
+// Everything here is idempotent — keyed by the user's id — so re-running on
+// retry or re-login never duplicates rows.
 //
 // Why a whole Community per user: the notes engine scopes a private "personal
 // brain" by (communityId, ownerKey=userId). Giving each user their own community
@@ -62,8 +63,8 @@ export async function provisionPersonalCommunity(user: {
 }): Promise<ProvisionResult> {
   const communityId = personalCommunityId(user.userId)
 
-  // The Person row is created at the OAuth callback and edited during onboarding;
-  // it's the source of truth for the directory node's profile fields.
+  // The Person row is created at the OAuth callback and edited from the profile
+  // editor; it's the source of truth for the directory node's profile fields.
   const person = await prisma.person.findUnique({
     where: { userId: user.userId },
     select: { id: true, name: true, subtitle: true, location: true, imageUrl: true, tags: true },
@@ -98,8 +99,8 @@ export async function provisionPersonalCommunity(user: {
   })
 
   // 3. Put the user's person node in their own directory. Node.communityId is a
-  //    single scalar (a node lives in one community), and the onboarding PATCH
-  //    creates this node with communityId=null — so point it at this space here.
+  //    single scalar (a node lives in one community), and a person node may exist
+  //    with communityId=null — so point it at this space here.
   if (person) {
     await prisma.node.upsert({
       where: { id: person.id },
@@ -119,7 +120,7 @@ export async function provisionPersonalCommunity(user: {
 
   // 4. Seed a welcome note in the personal community's brain (its shared brain —
   //    the user is the only member). Best-effort: a failed note write must never
-  //    block the user from finishing onboarding.
+  //    block the user from reaching their notes.
   try {
     const brain = { communityId, ownerKey: 'shared' }
     if ((await noteCount(brain)) === 0) {
@@ -130,7 +131,7 @@ export async function provisionPersonalCommunity(user: {
       })
     }
   } catch (err) {
-    logger.warn('onboarding.personalCommunity.seed_failed', { communityId, err })
+    logger.warn('personalCommunity.seed_failed', { communityId, err })
   }
 
   return { communityId }

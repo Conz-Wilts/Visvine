@@ -1,6 +1,6 @@
 // Pure predicate for personal-space privacy, kept dependency-free so it can be
 // unit-tested without loading Prisma. A "personal space" is a Community whose
-// `personalOwnerId` is set (created per-user at onboarding, id `me:<userId>`);
+// `personalOwnerId` is set (created per-user on first use, id `me:<userId>`);
 // it is private to that one owner. See `communityReadForbidden` in lib/auth.ts
 // for the DB-backed guard that wraps this.
 

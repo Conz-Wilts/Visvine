@@ -43,9 +43,7 @@ export default async function DevLoginPage({
       <h1 style={styles.h1}>Dev login</h1>
       <p style={styles.note}>
         Local-only. Available because <code>ENABLE_DEV_AUTH=true</code> and{" "}
-        <code>NODE_ENV=development</code>. Click a user to log straight in, or{" "}
-        <strong>Create account</strong> to reset their onboarding and run the
-        sign-up wizard.
+        <code>NODE_ENV=development</code>. Click a user to log straight in.
       </p>
       {users.length === 0 ? (
         <p style={styles.empty}>
@@ -68,19 +66,6 @@ export default async function DevLoginPage({
                       <span style={styles.meta}>
                         {u.email} · {aliases.length ? aliases.join(", ") : "no aliases"}
                       </span>
-                    </button>
-                  </form>
-                  <form
-                    action={`/api/dev/login-as/${u.id}?onboard=1`}
-                    method="POST"
-                    style={styles.onboardForm}
-                  >
-                    <button
-                      type="submit"
-                      style={styles.onboardButton}
-                      title="Log in and run the onboarding wizard"
-                    >
-                      Create account
                     </button>
                   </form>
                 </div>
@@ -107,7 +92,6 @@ const styles = {
   item: { marginBottom: 8 },
   row: { display: "flex", gap: 8, alignItems: "stretch" },
   loginForm: { flex: 1 },
-  onboardForm: { display: "flex" },
   button: {
     width: "100%",
     height: "100%",
@@ -120,18 +104,6 @@ const styles = {
     display: "flex",
     flexDirection: "column" as const,
     gap: 2,
-  },
-  onboardButton: {
-    height: "100%",
-    padding: "12px 16px",
-    border: "1px solid #2563eb",
-    borderRadius: 6,
-    background: "#2563eb",
-    color: "#fff",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 14,
-    whiteSpace: "nowrap" as const,
   },
   name: { fontWeight: 600, fontSize: 15 },
   meta: { fontSize: 13, color: "#666" },

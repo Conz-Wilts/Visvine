@@ -26,8 +26,8 @@ model Community {
   crmSettings      Json                     @default("{}") @map("crm_settings")
   designConfig     Json                     @default("{}") @map("design_config")
   featureConfig    Json                     @default("{}") @map("feature_config")
-  // Set = a private, single-member "personal space" owned by this user (created at
-  // onboarding to host their personal context notes). Null = a normal community.
+  // Set = a private, single-member "personal space" owned by this user (created on
+  // first use to host their personal context notes). Null = a normal community.
   // Filtered out of Discover / other users' community lists.
   personalOwnerId  String?                  @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
@@ -627,7 +627,6 @@ model Person {
   metadata     Json     @default("{}")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
-  hasOnboarded Boolean  @default(false) @map("has_onboarded")
   user         User?    @relation(fields: [userId], references: [id])
 
   @@map("persons")
