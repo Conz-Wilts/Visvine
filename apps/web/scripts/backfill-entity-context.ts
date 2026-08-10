@@ -39,7 +39,7 @@ import {
   communityNodeId,
   ensureEntityNote,
   syncEntityNode,
-} from '../lib/context/entityNodes';
+} from '../lib/notes/context/entityNodes';
 import { backfillContextLinks } from '../lib/notes/entityLinks';
 import { SHARED_OWNER_KEY } from '../lib/notes/store';
 

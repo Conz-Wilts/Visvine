@@ -8,7 +8,6 @@ export async function GET() {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  // Fetch all tables in the public schema
   const tables = await prisma.$queryRaw<{ table_name: string }[]>`
     SELECT table_name
     FROM information_schema.tables
@@ -17,7 +16,6 @@ export async function GET() {
     ORDER BY table_name
   `;
 
-  // Fetch all columns
   const columns = await prisma.$queryRaw<{
     table_name: string;
     column_name: string;
@@ -31,7 +29,6 @@ export async function GET() {
     ORDER BY table_name, ordinal_position
   `;
 
-  // Fetch all foreign key relationships
   const foreignKeys = await prisma.$queryRaw<{
     constraint_name: string;
     source_table: string;
@@ -57,7 +54,6 @@ export async function GET() {
     ORDER BY tc.table_name
   `;
 
-  // Fetch row counts per table
   const tableNames = tables.map((t) => t.table_name);
   const rowCounts: Record<string, number> = {};
   for (const tableName of tableNames) {

@@ -2,15 +2,15 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import PeopleDataProvider from '@/components/admin/people/PeopleDataContext';
-import PeoplePanel from '@/components/admin/people/PeoplePanel';
-import AliasesPanel from '@/components/admin/people/AliasesPanel';
-import InvitePanel from '@/components/admin/people/InvitePanel';
-import CommunitySettingsPanel from '@/components/admin/CommunitySettingsPanel';
-import TypesTab from '@/components/data/TypesTab';
-import CommunityToolsPanel from '@/components/admin/CommunityToolsPanel';
-import ConsoleShell, { type ConsoleSection } from '@/components/console/ConsoleShell';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
+import PeoplePanel from '@/features/admin/components/people/PeoplePanel';
+import AliasesPanel from '@/features/admin/components/people/AliasesPanel';
+import InvitePanel from '@/features/admin/components/people/InvitePanel';
+import CommunitySettingsPanel from '@/features/admin/components/CommunitySettingsPanel';
+import TypesTab from '@/features/directory/components/data/TypesTab';
+import CommunityToolsPanel from '@/features/admin/components/CommunityToolsPanel';
+import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
 import { Settings2, Puzzle, Users, Tag, UserPlus, Shapes } from 'lucide-react';

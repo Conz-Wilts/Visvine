@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import CommunityAvatar from '@/components/community/CommunityAvatar';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import CommunityAvatar from '@/features/communities/components/CommunityAvatar';
 import { Community, aliasesForType } from '@/lib/types';
 import { PageTitle } from '@/components/ui';
 

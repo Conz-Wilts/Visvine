@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Share2, Radio } from 'lucide-react'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'

@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { useAdminRole } from '@/hooks/useAdminRole';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useAdminRole } from '@/features/shared/hooks/useAdminRole';
 import type { ResourceChange } from '@/lib/types';
 
 export default function AdminResourcesPage() {

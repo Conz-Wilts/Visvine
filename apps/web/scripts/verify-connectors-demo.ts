@@ -46,7 +46,7 @@ async function main() {
   const principal = await principalOf(resolved);
   const brain = resolved; // ResolvedBrain extends Brain
 
-  // --- discovery -------------------------------------------------------------
+  // discovery
   const connectors = await listConnectors(principal, brain);
   check(
     'list_connectors sees both seeded connectors, parsed as v2',
@@ -62,7 +62,7 @@ async function main() {
   const run = (code: string) => executeConnectorScript(principal, brain, COMMUNITY, sandbox, code);
   const shown = (r: { value?: unknown }) => JSON.stringify(r.value ?? null);
 
-  // --- a real call, secret resolved server-side ------------------------------
+  // a real call, secret resolved server-side
   const widgets = await run(`
     const res = await fetch(\`\${env.SANDBOX_API}/widgets\`, {
       headers: { 'x-sandbox-key': env.SANDBOX_KEY },
@@ -75,7 +75,7 @@ async function main() {
     `${shown(widgets).slice(0, 80)}… ${widgets.error?.message ?? ''}`,
   );
 
-  // --- redaction: the reflected key must not survive -------------------------
+  // redaction: the reflected key must not survive
   const whoami = await run(`
     const res = await fetch(\`\${env.SANDBOX_API}/whoami\`, {
       headers: { 'x-sandbox-key': env.SANDBOX_KEY },
@@ -88,7 +88,7 @@ async function main() {
     shown(whoami).slice(0, 120),
   );
 
-  // --- the perimeter: an unlisted host is refused ----------------------------
+  // the perimeter: an unlisted host is refused
   const outside = await run(
     `try { await fetch('http://example.com/') } catch (e) { return e.message }`,
   );
@@ -98,7 +98,7 @@ async function main() {
     outside.denials[0] ?? shown(outside).slice(0, 80),
   );
 
-  // --- allow rules: DELETE is real upstream but not permitted ----------------
+  // allow rules: DELETE is real upstream but not permitted
   const del = await run(`
     try {
       await fetch(\`\${env.SANDBOX_API}/widgets/wid_001\`, {
@@ -113,7 +113,7 @@ async function main() {
     `denial: ${del.denials.at(-1) ?? 'none'}`,
   );
 
-  // --- appdb: sql() through the isolate, read-only ---------------------------
+  // appdb: sql() through the isolate, read-only
   const appdb = await loadConnector(principal, brain, 'appdb');
   if (!appdb) throw new Error('appdb connector did not load');
   const query = await executeConnectorScript(

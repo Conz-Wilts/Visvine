@@ -365,9 +365,7 @@ test('isPrivateAddress knows the non-routable space', () => {
   }
 })
 
-// ---------------------------------------------------------------------------
 // Connectors v2 — perimeter parsing and the legacy shim
-// ---------------------------------------------------------------------------
 
 test('v2 frontmatter parses into a perimeter', () => {
   const fm = parseFrontmatter(`---

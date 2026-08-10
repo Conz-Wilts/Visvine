@@ -21,7 +21,7 @@ import {
 } from '../lib/notes/shared/sourceTypes'
 import { extractText } from '../lib/notes/sources/extract'
 
-// --- title → path -----------------------------------------------------------------
+// title → path
 
 test('noteFileSlug kebab-cases titles and drops punctuation', () => {
   assert.equal(noteFileSlug('Fundraising Playbook'), 'fundraising-playbook')
@@ -60,7 +60,7 @@ test('availableFolderPath suffixes past taken folders, per parent', () => {
   assert.equal(indexPathOf(availableFolderPath('data', 'Marks', taken)), 'data/marks/index.md')
 })
 
-// --- seed note --------------------------------------------------------------------
+// seed note
 
 test('newNoteContent writes the standard frontmatter, an H1 and the body', () => {
   const content = newNoteContent({
@@ -82,7 +82,7 @@ test('newNoteContent omits the author line and empty tags when unset', () => {
   assert.equal(content.trimEnd().endsWith('# Bare'), true)
 })
 
-// --- widened source kinds ---------------------------------------------------------
+// widened source kinds
 
 test('sourceKindOf covers the documents the File tile accepts', () => {
   assert.equal(sourceKindOf('deals.CSV'), 'csv')

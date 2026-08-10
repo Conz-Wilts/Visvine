@@ -3,12 +3,12 @@
 import React, { Suspense, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
-import NodeGrid from '@/components/dashboard/NodeGrid';
-import DirectoryToolbar from '@/components/dashboard/DirectoryToolbar';
-import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
-import { useDirectoryBrowse } from '@/hooks/useDirectoryBrowse';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
+import NodeGrid from '@/features/directory/components/NodeGrid';
+import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
+import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
+import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { cachedFetch, contextKeys, prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { noteHref } from '@/lib/notes/entities';
@@ -17,7 +17,7 @@ import type { CommunityAlias } from '@/lib/types';
 // The knowledge browser pulls in the note tree, the virtualized grid and the
 // reference panels. Defer it so the Grid view never downloads it — it only
 // loads when the Context tab is opened.
-const ContextBrowser = dynamic(() => import('@/components/context/ContextBrowser'), {
+const ContextBrowser = dynamic(() => import('@/features/notes/components/ContextBrowser'), {
   ssr: false,
   loading: () => (
     <div className="flex h-full w-full items-center justify-center text-sm text-text-muted">Loading context…</div>

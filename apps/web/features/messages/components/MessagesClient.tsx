@@ -1,0 +1,1018 @@
+'use client';
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { VirtuosoHandle } from 'react-virtuoso';
+import { Search, X } from 'lucide-react';
+import { useHeader } from '@/features/shared/contexts/HeaderContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
+import { useMessageHeights } from '@/features/messages/hooks/useMessageHeights';
+import type {
+  ChannelDirectoryEntry,
+  ChannelSpaceEntry,
+  ChannelViewMode,
+  ConversationSummary,
+  SavedMessageEntry,
+  SerializedMessage,
+  SerializedReplyTo,
+} from '@/lib/messages/types';
+import AddMembersModal from './AddMembersModal';
+import { mergeMessages } from './MessageRow';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import ProfilePanel from './ProfilePanel';
+import PageTitle from '@/components/ui/PageTitle';
+import ConversationListPanel, { type ChannelSection } from './ConversationListPanel';
+import ThreadPanel from './ThreadPanel';
+import { useConversations } from './useConversations';
+import { useMessagesRealtime } from './useMessagesRealtime';
+import { useMessageActions } from './useMessageActions';
+
+interface MessagesClientProps {
+  currentUser: {
+    id: string;
+    name: string;
+    image: string | null;
+  };
+  initialConversationId?: string;
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export default function MessagesClient({ currentUser, initialConversationId }: MessagesClientProps) {
+  const { setHeaderContent } = useHeader();
+  const communityCtx = useCommunity();
+  // On wide viewports the Channels page docks its channel list INTO the global
+  // Sidebar (the same portal host the /context notes tree uses), so the rail +
+  // channel list read as one connected card instead of a separate floating box.
+  const { host, setDockRequested, contextOpen, setContextOpen } = useContextPanel();
+  // Channel + space creation lives in the global "Create new" (+) modal, opened
+  // from anywhere via this context.
+  const { open: openCreateModal } = useCreateModal();
+
+  const basePath = '/channels';
+
+  const [activeConversation, setActiveConversation] = useState<ConversationSummary | null>(null);
+  const [messages, setMessages] = useState<SerializedMessage[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(initialConversationId ?? null);
+  const [messageSearch, setMessageSearch] = useState('');
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [messageCursor, setMessageCursor] = useState<string | null>(null);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string>>({});
+  const [isMobile, setIsMobile] = useState(false);
+  // ≥1024px: dock the conversation/channel list into the Sidebar (must match
+  // DOCK_MIN_WIDTH in Sidebar.tsx). Below it, keep the page's own inline list
+  // so a 300px panel doesn't crowd the thread.
+  const [isWide, setIsWide] = useState(true);
+  const [showAddMembersModal, setShowAddMembersModal] = useState(false);
+  // Channels: the docked right-hand Details pane is toggleable (Slack-style) —
+  // closed by default, opened via the channel header, remembered for the session.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const stored = window.sessionStorage.getItem('channels:detailsOpen');
+    if (stored !== null) setDetailsOpen(stored === 'true');
+  }, []);
+  const toggleDetails = useCallback((next?: boolean) => {
+    setDetailsOpen((prev) => {
+      const value = next ?? !prev;
+      try { window.sessionStorage.setItem('channels:detailsOpen', String(value)); } catch { /* private mode */ }
+      return value;
+    });
+  }, []);
+  const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
+  const [channelSpaces, setChannelSpaces] = useState<ChannelSpaceEntry[]>([]);
+  // Collapsed rail sections, persisted per browser (keyed by space id, '__none__' = unfiled).
+  const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
+  const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
+  const [showChannelForm, setShowChannelForm] = useState(false);
+  // Legacy ?new=channel deep link (older "Create new → Channel" tile routed here):
+  // channel creation now lives in the global Create modal, so open that instead of
+  // the retired on-page form, and clear the param.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    if (searchParams.get('new') === 'channel') {
+      openCreateModal('channel');
+      router.replace(basePath);
+    }
+  }, [searchParams, router, basePath, openCreateModal]);
+  const [channelName, setChannelName] = useState('');
+  const [channelDescription, setChannelDescription] = useState('');
+  const [channelIcon, setChannelIcon] = useState<string | null>(null);
+  const [channelViewMode, setChannelViewMode] = useState<ChannelViewMode>('CHAT');
+  const [channelSpaceId, setChannelSpaceId] = useState('');
+  const [showIconPicker, setShowIconPicker] = useState(false);
+  const [creatingChannel, setCreatingChannel] = useState(false);
+  // Inline "new space" form in the channel rail (community admins only).
+  const [showSpaceForm, setShowSpaceForm] = useState(false);
+  const [spaceName, setSpaceName] = useState('');
+  const [creatingSpace, setCreatingSpace] = useState(false);
+  // Channel-header extras: emoji-icon picker + saved-messages dropdown panel.
+  const [showHeaderIconPicker, setShowHeaderIconPicker] = useState(false);
+  const [headerPanel, setHeaderPanel] = useState<'saved' | null>(null);
+  const [panelItems, setPanelItems] = useState<SavedMessageEntry[]>([]);
+  const [panelLoading, setPanelLoading] = useState(false);
+  const [replyTo, setReplyTo] = useState<SerializedReplyTo | null>(null);
+  const [unreadMarker, setUnreadMarker] = useState<string | null>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true);
+  const [newMessagesPending, setNewMessagesPending] = useState(0);
+  const [announce, setAnnounce] = useState('');
+
+  const sidebarSearchRef = useRef<HTMLInputElement>(null);
+  const selectedConversationRef = useRef<string | null>(selectedConversationId);
+  const stopTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasTypingSignalRef = useRef(false);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // Per-conversation message cache: revisiting a chat renders instantly from
+  // here while a silent refresh runs in the background (no skeleton flash).
+  const messageCacheRef = useRef(new Map<string, {
+    messages: SerializedMessage[];
+    cursor: string | null;
+    hasMore: boolean;
+  }>());
+  // Which conversation the current `messages` state belongs to — guards the
+  // cache against being written with another conversation's rows mid-switch.
+  const messagesConvoRef = useRef<string | null>(null);
+  const lastAppliedSearchRef = useRef('');
+  // Whether the current `messages` state came from a search-filtered fetch.
+  // State alone can't tell: after clearing the search box the filtered rows
+  // linger until the debounced unfiltered reload lands, and caching them as
+  // the conversation's history would truncate the thread on the next visit.
+  const messagesFilteredRef = useRef(false);
+
+  // Virtuoso: first item index for prepending older messages without scroll jump
+  const INITIAL_FIRST_INDEX = 100000;
+  const [firstItemIndex, setFirstItemIndex] = useState(INITIAL_FIRST_INDEX);
+
+  // Pretext-powered height calculation for virtualized message list
+  const { getItemHeight } = useMessageHeights(messages, messagesContainerRef, isMobile);
+
+  // A conversation-list refetch showed the selected conversation is gone —
+  // clear the selection and return to the bare list URL.
+  const handleSelectionLost = useCallback(() => {
+    setSelectedConversationId(null);
+    selectedConversationRef.current = null;
+    setActiveConversation(null);
+    setMessages([]);
+    window.history.replaceState(null, '', basePath);
+  }, [basePath]);
+
+  const {
+    conversations,
+    setConversations,
+    conversationsRef,
+    conversationsLoading,
+    conversationSearch,
+    setConversationSearch,
+    fetchConversations,
+  } = useConversations({ selectedConversationRef, onSelectionLost: handleSelectionLost, setError });
+
+  const selectedConversation = useMemo(() => {
+    if (!selectedConversationId) return null;
+    return activeConversation ?? conversations.find((c) => c.id === selectedConversationId) ?? null;
+  }, [activeConversation, conversations, selectedConversationId]);
+
+  const typingLabel = useMemo(() => {
+    const names = Object.values(typingUsers);
+    if (names.length === 0) return null;
+    if (names.length === 1) return `${names[0]} is typing…`;
+    return `${names.length} people are typing…`;
+  }, [typingUsers]);
+
+  const sendTypingState = useCallback(async (conversationId: string, isTyping: boolean) => {
+    try {
+      await fetch(`/api/messages/conversations/${conversationId}/typing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isTyping }),
+      });
+      hasTypingSignalRef.current = isTyping;
+    } catch { /* best-effort */ }
+  }, []);
+
+  const clearTypingSignal = useCallback((conversationId: string | null) => {
+    if (hasTypingSignalRef.current && conversationId) {
+      void sendTypingState(conversationId, false);
+    }
+    if (stopTypingTimeoutRef.current) {
+      clearTimeout(stopTypingTimeoutRef.current);
+      stopTypingTimeoutRef.current = null;
+    }
+  }, [sendTypingState]);
+
+  const markConversationRead = useCallback(async (conversationId: string) => {
+    try {
+      await fetch(`/api/messages/conversations/${conversationId}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+    } catch { /* best-effort */ }
+  }, []);
+
+  const communityId = communityCtx?.currentCommunity?.id;
+
+  const fetchChannels = useCallback(async () => {
+    if (!communityId) return;
+    try {
+      const res = await fetch(`/api/messages/channels?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const payload = await res.json();
+      setChannelDirectory(payload.channels ?? []);
+      setChannelSpaces(payload.spaces ?? []);
+    } catch { /* best-effort */ }
+  }, [communityId]);
+
+  // Collapsed rail sections survive reloads (client-only read to avoid SSR mismatch).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('visvine.channels.collapsed');
+      if (raw) setCollapsedSpaces(JSON.parse(raw));
+    } catch { /* best-effort */ }
+  }, []);
+
+  const toggleSpaceCollapsed = useCallback((key: string) => {
+    setCollapsedSpaces((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try { localStorage.setItem('visvine.channels.collapsed', JSON.stringify(next)); } catch { /* best-effort */ }
+      return next;
+    });
+  }, []);
+
+  const loadMessages = useCallback(async (
+    conversationId: string,
+    options?: { cursor?: string | null; prepend?: boolean; query?: string; silent?: boolean },
+  ) => {
+    const isPrepend = Boolean(options?.prepend);
+    try {
+      setError(null);
+      if (isPrepend) setLoadingOlderMessages(true);
+      else if (!options?.silent) setMessagesLoading(true);
+      const params = new URLSearchParams();
+      params.set('limit', '30');
+      if (options?.cursor) params.set('cursor', options.cursor);
+      if (options?.query?.trim()) params.set('query', options.query.trim());
+      const response = await fetch(`/api/messages/conversations/${conversationId}/messages?${params.toString()}`, { cache: 'no-store' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? 'Failed to load messages');
+      }
+      const payload = await response.json();
+      // The user switched conversations while this request was in flight —
+      // applying it now would flash another thread's messages.
+      if (selectedConversationRef.current !== conversationId) return;
+      const nextMessages: SerializedMessage[] = (payload.messages ?? []).map((m: SerializedMessage) => ({
+        ...m,
+        isOwn: m.sender.id === currentUser.id,
+      }));
+      let keepCursor = false;
+      if (isPrepend) {
+        setMessages((prev) => {
+          const merged = mergeMessages([...nextMessages, ...prev]);
+          return merged;
+        });
+        // Adjust firstItemIndex to prevent scroll jump
+        setFirstItemIndex((prev) => prev - nextMessages.length);
+      } else {
+        const isFilteredFetch = Boolean(options?.query?.trim());
+        if (options?.silent && !isFilteredFetch && !messagesFilteredRef.current) {
+          // Background refresh of an already-rendered thread: merge the newest
+          // page into what's shown so older pages loaded via "Load earlier"
+          // survive (replacing would truncate the thread and jump the scroll).
+          const shownCount = messageCacheRef.current.get(conversationId)?.messages.length ?? 0;
+          keepCursor = shownCount > nextMessages.length;
+          setMessages((prev) => (prev.length > 0 ? mergeMessages([...prev, ...nextMessages]) : nextMessages));
+        } else {
+          // Replacing the list (initial load, applying or clearing a search) —
+          // re-anchor virtuoso to match.
+          setMessages(nextMessages);
+          setFirstItemIndex(INITIAL_FIRST_INDEX);
+        }
+        messagesFilteredRef.current = isFilteredFetch;
+        messagesConvoRef.current = conversationId;
+      }
+      setActiveConversation(payload.conversation ?? null);
+      if (!keepCursor) {
+        setMessageCursor(payload.nextCursor ?? null);
+        setHasMoreMessages(Boolean(payload.hasMore));
+      }
+    } catch (loadError) {
+      if (selectedConversationRef.current === conversationId) {
+        setError((loadError as Error).message || 'Failed to load messages.');
+      }
+    } finally {
+      if (selectedConversationRef.current === conversationId) {
+        setMessagesLoading(false);
+        setLoadingOlderMessages(false);
+      }
+    }
+  }, [currentUser.id]);
+
+  // Header: inject nothing for the channels page — the page is self-contained
+  useEffect(() => {
+    setHeaderContent(null);
+    return () => setHeaderContent(null);
+  }, [setHeaderContent]);
+
+  useEffect(() => { selectedConversationRef.current = selectedConversationId; }, [selectedConversationId]);
+  useEffect(() => { setSelectedConversationId(initialConversationId ?? null); }, [initialConversationId]);
+
+  useEffect(() => {
+    void fetchChannels();
+  }, [fetchChannels]);
+
+  useEffect(() => {
+    const update = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsWide(window.innerWidth >= 1024);
+    };
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+
+  // Presence heartbeat every 30s while the tab is visible; a hidden tab stays
+  // quiet and beats once immediately when it becomes visible again.
+  useEffect(() => {
+    const beat = () => { void fetch('/api/presence/heartbeat', { method: 'POST' }).catch(() => {}); };
+    beat();
+    const iv = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      beat();
+    }, 30_000);
+    const onVis = () => { if (document.visibilityState === 'visible') beat(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        sidebarSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Layout effect so the cached messages / loading skeleton are applied
+  // before the browser paints — otherwise the previous thread's messages
+  // flash for one frame under the new conversation's header.
+  useLayoutEffect(() => {
+    if (!selectedConversationId) {
+      setMessages([]);
+      setMessageCursor(null);
+      setHasMoreMessages(false);
+      setMessageSearch('');
+      setTypingUsers({});
+      setReplyTo(null);
+      messagesConvoRef.current = null;
+      return;
+    }
+    // Search is per-conversation — reset it on switch.
+    setMessageSearch('');
+    setShowMessageSearch(false);
+    setHeaderPanel(null);
+    setShowHeaderIconPicker(false);
+    lastAppliedSearchRef.current = '';
+    messagesFilteredRef.current = false;
+    setTypingUsers({});
+    // Serve cached messages instantly and refresh silently in the background;
+    // the skeleton only shows for conversations we've never opened.
+    const cached = messageCacheRef.current.get(selectedConversationId);
+    if (cached) {
+      messagesConvoRef.current = selectedConversationId;
+      setMessages(cached.messages);
+      setMessageCursor(cached.cursor);
+      setHasMoreMessages(cached.hasMore);
+      setFirstItemIndex(INITIAL_FIRST_INDEX);
+    }
+    void loadMessages(selectedConversationId, { silent: Boolean(cached) });
+    void markConversationRead(selectedConversationId);
+  }, [selectedConversationId, loadMessages, markConversationRead]);
+
+  // Keep the cache in sync with whatever the open thread currently shows.
+  useEffect(() => {
+    const convoId = selectedConversationRef.current;
+    if (!convoId || messagesConvoRef.current !== convoId || messages.length === 0) return;
+    // Never cache a filtered view — checking the ref as well as the input
+    // covers the window after the search box is cleared but before the
+    // unfiltered reload lands (the rows shown are still the filtered subset).
+    if (messageSearch.trim() || messagesFilteredRef.current) return;
+    messageCacheRef.current.set(convoId, {
+      messages,
+      cursor: messageCursor,
+      hasMore: hasMoreMessages,
+    });
+  }, [messages, messageCursor, hasMoreMessages, messageSearch]);
+
+  // Set unread divider anchor on first message load for a conversation
+  useEffect(() => {
+    if (!selectedConversationId || messages.length === 0) return;
+    setUnreadMarker((prev) => {
+      if (prev !== null) return prev; // already set for this convo
+      const conv = conversations.find((c) => c.id === selectedConversationId);
+      const unread = conv?.unreadCount ?? 0;
+      if (unread > 0 && messages.length >= unread) {
+        return messages[messages.length - unread].id;
+      }
+      return null;
+    });
+  }, [selectedConversationId, messages, conversations]);
+
+  useEffect(() => { setUnreadMarker(null); }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId) return;
+    // Only refetch when the search term actually changed — the conversation
+    // switch itself already loads messages (this used to double-fetch).
+    if (messageSearch === lastAppliedSearchRef.current) return;
+    const t = setTimeout(() => {
+      lastAppliedSearchRef.current = messageSearch;
+      void loadMessages(selectedConversationId, { query: messageSearch, silent: true });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [messageSearch, selectedConversationId, loadMessages]);
+
+  // Realtime SSE: message/reaction/typing events patched into local state,
+  // with a debounced full refetch reserved for unpatchable events.
+  useMessagesRealtime({
+    currentUserId: currentUser.id,
+    conversationSearch,
+    fetchConversations,
+    markConversationRead,
+    selectedConversationRef,
+    conversationsRef,
+    atBottomRef,
+    virtuosoRef,
+    setMessages,
+    setConversations,
+    setTypingUsers,
+    setNewMessagesPending,
+    setAnnounce,
+  });
+
+  // Typing composer side-effect
+  const handleComposerTyping = useCallback(() => {
+    if (!selectedConversationId) return;
+    if (!hasTypingSignalRef.current) void sendTypingState(selectedConversationId, true);
+    if (stopTypingTimeoutRef.current) clearTimeout(stopTypingTimeoutRef.current);
+    stopTypingTimeoutRef.current = setTimeout(() => void sendTypingState(selectedConversationId, false), 1400);
+  }, [selectedConversationId, sendTypingState]);
+
+  // ─── Action handlers ────────────────────────────────────────────────────────
+
+  const handleSelectConversation = (id: string) => {
+    if (id === selectedConversationRef.current) return;
+    clearTypingSignal(selectedConversationRef.current);
+    setSelectedConversationId(id);
+    selectedConversationRef.current = id;
+    setActiveConversation(conversations.find((c) => c.id === id) ?? null);
+    setReplyTo(null);
+    // Shallow URL update — a router.push here remounts the whole page
+    // (different route segment + force-dynamic), which is what caused the
+    // flash on every chat click. pushState keeps the component alive and
+    // Next syncs usePathname automatically.
+    window.history.pushState(null, '', `${basePath}/${id}`);
+  };
+
+  const handleBackToList = () => {
+    clearTypingSignal(selectedConversationRef.current);
+    setSelectedConversationId(null);
+    selectedConversationRef.current = null;
+    setMessages([]);
+    setActiveConversation(null);
+    setTypingUsers({});
+    setReplyTo(null);
+    window.history.pushState(null, '', basePath);
+  };
+
+  const handleJoinChannel = async (channelId: string) => {
+    try {
+      setJoiningChannelId(channelId);
+      await fetchJson(`/api/messages/conversations/${channelId}/join`, { method: 'POST' });
+      await fetchConversations(conversationSearch);
+      await fetchChannels();
+      handleSelectConversation(channelId);
+    } catch (e) {
+      setError((e as Error).message || 'Unable to join the channel.');
+    } finally {
+      setJoiningChannelId(null);
+    }
+  };
+
+  const handleCreateChannel = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!communityId || !channelName.trim() || creatingChannel) return;
+    try {
+      setCreatingChannel(true);
+      const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/channel', 'POST', {
+        communityId,
+        name: channelName.trim(),
+        description: channelDescription.trim() || undefined,
+        icon: channelIcon ?? undefined,
+        spaceId: channelSpaceId || undefined,
+        viewMode: channelViewMode,
+      });
+      setChannelName('');
+      setChannelDescription('');
+      setChannelIcon(null);
+      setChannelViewMode('CHAT');
+      setChannelSpaceId('');
+      setShowChannelForm(false);
+      await fetchConversations(conversationSearch);
+      await fetchChannels();
+      handleSelectConversation(payload.conversation.id);
+    } catch (createError) {
+      setError((createError as Error).message || 'Unable to create the channel.');
+    } finally {
+      setCreatingChannel(false);
+    }
+  };
+
+  const handleCreateSpace = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!communityId || !spaceName.trim() || creatingSpace) return;
+    try {
+      setCreatingSpace(true);
+      await fetchJsonBody('/api/messages/spaces', 'POST', { communityId, name: spaceName.trim() });
+      setSpaceName('');
+      setShowSpaceForm(false);
+      await fetchChannels();
+    } catch (createError) {
+      setError((createError as Error).message || 'Unable to create the space.');
+    } finally {
+      setCreatingSpace(false);
+    }
+  };
+
+  const handleRenameSpace = useCallback(async (spaceId: string, name: string) => {
+    try {
+      // The whole text (emoji included) lives in `name` — the rename form
+      // prefills any legacy emoji into it, so clear the separate column.
+      await fetchJsonBody(`/api/messages/spaces/${spaceId}`, 'PATCH', { name, emoji: null });
+      await fetchChannels();
+    } catch (e) {
+      setError((e as Error).message || 'Unable to rename the space.');
+      throw e;
+    }
+  }, [fetchChannels]);
+
+  const handleDeleteSpace = useCallback(async (spaceId: string) => {
+    if (!window.confirm('Delete this space? Its channels will move to the Channels list.')) return;
+    try {
+      await fetchJson(`/api/messages/spaces/${spaceId}`, { method: 'DELETE' });
+      // Deleting a space unfiles its channels (spaceId → null), so refresh both lists.
+      await fetchChannels();
+      await fetchConversations(conversationSearch);
+    } catch (e) {
+      setError((e as Error).message || 'Unable to delete the space.');
+    }
+  }, [fetchChannels, fetchConversations, conversationSearch]);
+
+  /** PATCH the open channel (icon / space / view style) and refresh everything that shows it. */
+  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; spaceId?: string | null; viewMode?: ChannelViewMode }) => {
+    const conversationId = selectedConversationRef.current;
+    if (!conversationId) return;
+    try {
+      const payload = await fetchJsonBody<{ conversation: ConversationSummary }>(`/api/messages/conversations/${conversationId}`, 'PATCH', patch);
+      setActiveConversation(payload.conversation);
+      await fetchConversations(conversationSearch);
+      await fetchChannels();
+    } catch (e) {
+      setError((e as Error).message || 'Unable to update the channel.');
+    }
+  }, [conversationSearch, fetchChannels, fetchConversations]);
+
+  const openHeaderPanel = useCallback(async (panel: 'saved') => {
+    if (headerPanel === panel) {
+      setHeaderPanel(null);
+      return;
+    }
+    setHeaderPanel(panel);
+    setPanelItems([]);
+    setPanelLoading(true);
+    try {
+      const res = await fetch('/api/messages/starred', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const payload = await res.json();
+      setPanelItems(payload.messages ?? []);
+    } catch {
+      setPanelItems([]);
+    } finally {
+      setPanelLoading(false);
+    }
+  }, [headerPanel]);
+
+  const handlePanelItemClick = (item: SavedMessageEntry) => {
+    setHeaderPanel(null);
+    if (item.conversationId === selectedConversationRef.current) {
+      handleScrollToMessage(item.id);
+    } else {
+      handleSelectConversation(item.conversationId);
+    }
+  };
+
+  const handleLoadOlder = useCallback(async () => {
+    if (!selectedConversationId || !hasMoreMessages || !messageCursor || loadingOlderMessages) return;
+    await loadMessages(selectedConversationId, { cursor: messageCursor, prepend: true, query: messageSearch });
+  }, [selectedConversationId, hasMoreMessages, messageCursor, loadingOlderMessages, loadMessages, messageSearch]);
+
+  const handleSendMessage = async (payload: {
+    text: string;
+    imageUrls?: string[];
+    mentions?: Array<{ mentionedUserId?: string; mentionedNodeId?: string; mentionType: string }>;
+    replyToId?: string;
+  }) => {
+    if (!selectedConversationId) return;
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimistic: SerializedMessage = {
+      id: tempId,
+      text: payload.text,
+      attachmentUrl: null,
+      createdAt: new Date().toISOString(),
+      sender: { id: currentUser.id, name: currentUser.name, image: currentUser.image },
+      isOwn: true,
+      readByCount: 0,
+      recipientCount: Math.max((selectedConversation?.participants.length ?? 1) - 1, 0),
+      isFullyReadByRecipients: false,
+      images: payload.imageUrls?.map((url, i) => ({ id: `temp-img-${i}`, imageUrl: url, position: i })),
+      reactions: [],
+      replyTo: replyTo,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setReplyTo(null);
+    clearTypingSignal(selectedConversationId);
+
+    requestAnimationFrame(() => {
+      virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
+    });
+
+    try {
+      const respPayload = await fetchJsonBody<{ message: SerializedMessage }>(`/api/messages/conversations/${selectedConversationId}/messages`, 'POST', payload);
+      const sent: SerializedMessage = { ...respPayload.message, isOwn: respPayload.message.sender.id === currentUser.id };
+      // The SSE stream may have already delivered this message — drop the
+      // optimistic copy instead of replacing it, or the id appears twice.
+      setMessages((prev) => prev.some((m) => m.id === sent.id)
+        ? prev.filter((m) => m.id !== tempId)
+        : prev.map((m) => m.id === tempId ? sent : m));
+      await fetchConversations(conversationSearch);
+    } catch (sendError) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setError((sendError as Error).message || 'Unable to send message.');
+    }
+  };
+
+  // Per-message actions passed to every (memoized) MessageRow — stable
+  // callbacks so the memo holds (see useMessageActions).
+  const {
+    handleReaction,
+    handleToggleStar,
+    handleEdit,
+    handleDelete,
+    handleScrollToMessage,
+  } = useMessageActions({ selectedConversationRef, virtuosoRef, messages, setMessages });
+
+  const handleLeaveChannel = async () => {
+    if (!selectedConversationId) return;
+    if (!window.confirm('Leave this channel?')) return;
+    try {
+      await fetchJson(`/api/messages/conversations/${selectedConversationId}/leave`, { method: 'POST' });
+      handleBackToList();
+      await fetchConversations(conversationSearch, false);
+    } catch (e) { setError((e as Error).message || 'Unable to leave the channel.'); }
+  };
+
+  const handleRenameChannel = async () => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const nextName = window.prompt('Enter a new channel name', selectedConversation.name);
+    if (!nextName?.trim()) return;
+    try {
+      const payload = await fetchJsonBody<{ conversation: ConversationSummary }>(`/api/messages/conversations/${selectedConversationId}`, 'PATCH', { name: nextName.trim() });
+      await fetchConversations(conversationSearch);
+      setActiveConversation(payload.conversation);
+    } catch (e) { setError((e as Error).message || 'Unable to rename the channel.'); }
+  };
+
+  const handleRemoveMember = async (memberUserId: string) => {
+    if (!selectedConversationId || !selectedConversation) return;
+    const target = selectedConversation.participants.find((p) => p.id === memberUserId);
+    if (!target || !window.confirm(`Remove ${target.name} from the channel?`)) return;
+    try {
+      await fetchJson(`/api/messages/conversations/${selectedConversationId}/members/${memberUserId}`, { method: 'DELETE' });
+      await fetchConversations(conversationSearch);
+      await loadMessages(selectedConversationId, { query: messageSearch });
+    } catch (e) { setError((e as Error).message || 'Unable to remove member.'); }
+  };
+
+  // ─── Derived data ───────────────────────────────────────────────────────────
+
+  const filteredConversations = useMemo(
+    () => conversations.filter((c) => c.type === 'CHANNEL'),
+    [conversations],
+  );
+
+  // Channels in the community directory the user hasn't joined yet.
+  const browsableChannels = useMemo(() => {
+    const joined = new Set(conversations.map((c) => c.id));
+    const q = conversationSearch.trim().toLowerCase();
+    return channelDirectory
+      .filter((ch) => !ch.isMember && !joined.has(ch.id))
+      .filter((ch) => !q || ch.name.toLowerCase().includes(q) || (ch.description?.toLowerCase().includes(q) ?? false));
+  }, [channelDirectory, conversations, conversationSearch]);
+
+  // Circle-style rail sections: one per space (joined + browsable channels filed
+  // there, empty spaces still shown so they can be filled/renamed/deleted), then
+  // an unfiled bucket.
+  const channelSections = useMemo(() => {
+    const joined = filteredConversations.filter((c) => c.type === 'CHANNEL');
+    const spaceIds = new Set(channelSpaces.map((s) => s.id));
+    const sections: ChannelSection[] = [];
+    for (const space of channelSpaces) {
+      const joinedHere = joined.filter((c) => c.spaceId === space.id);
+      const browsableHere = browsableChannels.filter((ch) => ch.spaceId === space.id);
+      // While searching, hide spaces with no matches so results stay scannable.
+      if (joinedHere.length || browsableHere.length || !conversationSearch.trim()) {
+        sections.push({ key: space.id, name: space.name, emoji: space.emoji, joined: joinedHere, browsable: browsableHere });
+      }
+    }
+    const joinedUnfiled = joined.filter((c) => !c.spaceId || !spaceIds.has(c.spaceId));
+    const browsableUnfiled = browsableChannels.filter((ch) => !ch.spaceId || !spaceIds.has(ch.spaceId));
+    if (joinedUnfiled.length || browsableUnfiled.length) {
+      sections.push({ key: '__none__', name: 'Channels', emoji: null, joined: joinedUnfiled, browsable: browsableUnfiled });
+    }
+    return sections;
+  }, [filteredConversations, browsableChannels, channelSpaces, conversationSearch]);
+
+  // Slack-style default: on desktop /channels, land in the first joined channel
+  // instead of an empty "No channel selected" pane. replaceState (not push) so
+  // Back doesn't step through the auto-selection. Skipped on mobile, where
+  // selecting would immediately hide the channel list.
+  useEffect(() => {
+    if (isMobile || conversationsLoading) return;
+    if (selectedConversationRef.current) return;
+    const first = channelSections.find((s) => s.joined.length > 0)?.joined[0];
+    if (!first) return;
+    setSelectedConversationId(first.id);
+    selectedConversationRef.current = first.id;
+    setActiveConversation(first);
+    window.history.replaceState(null, '', `${basePath}/${first.id}`);
+  }, [isMobile, conversationsLoading, channelSections, basePath]);
+
+  const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
+
+  // Feed-style channels have no bottom scroll anchor (newest renders at the
+  // top), so treat the viewer as permanently "at bottom": incoming realtime
+  // messages patch straight into the feed and reads keep being marked instead
+  // of accumulating in the new-messages pill (which only exists in chat mode).
+  const feedActive = selectedConversation?.type === 'CHANNEL' && selectedConversation.viewMode === 'FEED';
+  useEffect(() => {
+    if (feedActive) {
+      atBottomRef.current = true;
+      setNewMessagesPending(0);
+    }
+  }, [feedActive]);
+  // Whether the centre column has an open thread. Desktop always shows the centre
+  // beside the rail; mobile shows it only once the user opens a channel/chat.
+  const hasOpenThread = Boolean(selectedConversationId);
+  const showInbox = !isMobile || !hasOpenThread;
+  const showThread = !isMobile || hasOpenThread;
+  const showProfile = !isMobile && Boolean(selectedConversation) && detailsOpen;
+  // On mobile, give the open thread the full viewport — hide the centered controls.
+  const showCenterControls = !isMobile || !hasOpenThread;
+
+  // Whether to dock the channel rail into the Sidebar (wide viewport, host
+  // mounted). When docked we hide the page's title/search chrome (it moves into
+  // the docked panel) and pad the thread to clear the docked card.
+  const docked = isWide && Boolean(host);
+
+  // Channels surfaces the navbar's panel toggle (dockRequested) so the docked
+  // list can be closed; closed = the list is hidden entirely (thread gets the
+  // full width), NOT the un-docked inline layout.
+  useEffect(() => {
+    setDockRequested(isWide);
+    return () => setDockRequested(false);
+  }, [isWide, setDockRequested]);
+  // Channels always opens with the channel-list sidebar showing. contextOpen is
+  // shared session state (the notes/admin docks close it too), so landing on
+  // /channels re-opens it by default; the navbar toggle can still close it after.
+  useEffect(() => {
+    setContextOpen(true);
+  }, [setContextOpen]);
+  const channelsCollapsed = isWide && !contextOpen;
+
+  // The inbox / channel list. When docked it portals into the Sidebar host;
+  // un-docked it renders inline beside the thread.
+  const listPanel = (
+    <ConversationListPanel
+      docked={docked}
+      host={host}
+      sidebarSearchRef={sidebarSearchRef}
+      conversationSearch={conversationSearch}
+      setConversationSearch={setConversationSearch}
+      conversationsLoading={conversationsLoading}
+      channelSections={channelSections}
+      channelSpaces={channelSpaces}
+      collapsedSpaces={collapsedSpaces}
+      toggleSpaceCollapsed={toggleSpaceCollapsed}
+      selectedConversationId={selectedConversationId}
+      onSelectConversation={handleSelectConversation}
+      onJoinChannel={handleJoinChannel}
+      joiningChannelId={joiningChannelId}
+      communityIsAdmin={communityCtx?.isAdmin}
+      showChannelForm={showChannelForm}
+      setShowChannelForm={setShowChannelForm}
+      onCreateChannel={handleCreateChannel}
+      channelName={channelName}
+      setChannelName={setChannelName}
+      channelDescription={channelDescription}
+      setChannelDescription={setChannelDescription}
+      channelIcon={channelIcon}
+      setChannelIcon={setChannelIcon}
+      channelViewMode={channelViewMode}
+      setChannelViewMode={setChannelViewMode}
+      channelSpaceId={channelSpaceId}
+      setChannelSpaceId={setChannelSpaceId}
+      showIconPicker={showIconPicker}
+      setShowIconPicker={setShowIconPicker}
+      creatingChannel={creatingChannel}
+      showSpaceForm={showSpaceForm}
+      setShowSpaceForm={setShowSpaceForm}
+      spaceName={spaceName}
+      setSpaceName={setSpaceName}
+      creatingSpace={creatingSpace}
+      onCreateSpace={handleCreateSpace}
+      onRenameSpace={handleRenameSpace}
+      onDeleteSpace={handleDeleteSpace}
+    />
+  );
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  // Channels is full-bleed Slack-style: the shell gives us the whole area below
+  // the navbar (h-full, no gutters) and we pad left by exactly CHANNELS_PANEL_W
+  // (Sidebar.tsx) so the thread's border lands on the docked card's right edge —
+  // only while the panel is actually open (channelsCollapsed animates it away).
+  return (
+    <div
+      className={`flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''} ${!docked && !channelsCollapsed ? 'px-6 pt-4 pb-6' : ''}`}
+      style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
+    >
+
+      {/* ── Page header — centered title (un-docked layouts only). Channel
+             creation lives in the global sidebar "+" (Create new → Channel). ── */}
+      {!docked && !channelsCollapsed && (
+        <div className="flex items-center justify-center pt-0 pb-0">
+          <PageTitle title="Channels" />
+        </div>
+      )}
+
+      {/* ── Centered search (un-docked layouts) ─────────────────────────── */}
+      {showCenterControls && !docked && !channelsCollapsed && (
+        <div className="flex flex-col items-center gap-3 pt-6 pb-5">
+          <div className="w-full max-w-2xl">
+            <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm transition-colors focus-within:border-brand-green/40">
+              <Search className="h-4 w-4 shrink-0 text-text-muted" />
+              <input
+                ref={sidebarSearchRef}
+                value={conversationSearch}
+                onChange={(e) => setConversationSearch(e.target.value)}
+                placeholder="Search channels…"
+                className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
+              />
+              {conversationSearch && (
+                <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ╭── List box — docked: portals into the Sidebar ──╮ */}
+      {docked && listPanel}
+
+      {/* ── List · open channel · details box ───────────────────────────── */}
+      <div className={docked || channelsCollapsed
+        ? "flex min-h-0 w-full flex-1 items-stretch"
+        : "flex min-h-0 w-full flex-1 items-stretch gap-6 pb-2 md:gap-12 md:px-6"}>
+
+      {/* Un-docked: the list renders inline beside the thread (unless the user
+          closed the channels panel from the navbar toggle) */}
+      {!docked && !channelsCollapsed && showInbox && listPanel}
+
+      {/* ╭── Thread — the open channel, chat thread or feed ───────────────╮ */}
+      {showThread && (
+        <ThreadPanel
+          selectedConversation={selectedConversation}
+          selectedConversationId={selectedConversationId}
+          currentUser={currentUser}
+          isMobile={isMobile}
+          isAdmin={isAdmin}
+          communityIsAdmin={communityCtx?.isAdmin}
+          communityId={communityCtx?.currentCommunity?.id}
+          hasChannelsInList={filteredConversations.length > 0}
+          onShowChannelForm={() => openCreateModal('channel')}
+          onShowAddMembers={() => setShowAddMembersModal(true)}
+          onBackToList={handleBackToList}
+          showHeaderIconPicker={showHeaderIconPicker}
+          setShowHeaderIconPicker={setShowHeaderIconPicker}
+          updateSelectedChannel={updateSelectedChannel}
+          headerPanel={headerPanel}
+          setHeaderPanel={setHeaderPanel}
+          openHeaderPanel={openHeaderPanel}
+          panelItems={panelItems}
+          panelLoading={panelLoading}
+          onPanelItemClick={handlePanelItemClick}
+          showMessageSearch={showMessageSearch}
+          setShowMessageSearch={setShowMessageSearch}
+          messageSearch={messageSearch}
+          setMessageSearch={setMessageSearch}
+          messagesContainerRef={messagesContainerRef}
+          messagesLoading={messagesLoading}
+          messages={messages}
+          virtuosoRef={virtuosoRef}
+          firstItemIndex={firstItemIndex}
+          hasMoreMessages={hasMoreMessages}
+          loadingOlderMessages={loadingOlderMessages}
+          onLoadOlder={handleLoadOlder}
+          unreadMarker={unreadMarker}
+          getItemHeight={getItemHeight}
+          atBottom={atBottom}
+          atBottomRef={atBottomRef}
+          setAtBottom={setAtBottom}
+          newMessagesPending={newMessagesPending}
+          setNewMessagesPending={setNewMessagesPending}
+          announce={announce}
+          replyTo={replyTo}
+          setReplyTo={setReplyTo}
+          onReaction={handleReaction}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onScrollToMessage={handleScrollToMessage}
+          onToggleStar={handleToggleStar}
+          onSendMessage={handleSendMessage}
+          typingLabel={typingLabel}
+          onComposerTyping={handleComposerTyping}
+          onLeaveChannel={handleLeaveChannel}
+          onRenameChannel={handleRenameChannel}
+          detailsShown={showProfile}
+          onToggleDetails={() => toggleDetails()}
+        />
+      )}
+
+      {/* ╭── Details box — the open channel's members and settings ────────╮ */}
+      {showProfile && selectedConversation && (
+        <aside className={docked || channelsCollapsed
+          ? "hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-surface-1 xl:flex"
+          : "hidden w-72 shrink-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float xl:flex"}>
+          <ProfilePanel
+            conversation={selectedConversation}
+            currentUserId={currentUser.id}
+            isAdmin={isAdmin}
+            onAddMembers={() => setShowAddMembersModal(true)}
+            onRename={handleRenameChannel}
+            onLeave={handleLeaveChannel}
+            onRemoveMember={handleRemoveMember}
+            onChangeViewMode={(mode) => void updateSelectedChannel({ viewMode: mode })}
+            onClose={() => toggleDetails(false)}
+          />
+        </aside>
+      )}
+
+      </div>
+
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      <AddMembersModal
+        isOpen={showAddMembersModal}
+        existingMemberIds={selectedConversation?.participants.map((p) => p.id) ?? []}
+        conversationId={selectedConversationId ?? undefined}
+        onClose={() => setShowAddMembersModal(false)}
+        onMembersUpdated={() => {
+          if (selectedConversationId) {
+            void fetchConversations(conversationSearch);
+            void loadMessages(selectedConversationId, { query: messageSearch });
+          }
+        }}
+      />
+
+      {/* Toast error */}
+      {error && (
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg">
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}

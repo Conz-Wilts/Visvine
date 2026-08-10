@@ -94,7 +94,7 @@ export interface CommunityAlias {
   name: string;    // e.g. "Founder"
   color: string;   // Hex color e.g. "#16a34a"
   nodeType: string; // e.g. "Person", "Community"
-  // --- Person aliases only ---------------------------------------------------
+  // Person aliases only
   /** Holders manage the community (lib/auth.ts#isAdmin). */
   owner?: boolean;
   /** The built-in Owner alias — like the system link types, it can't be removed
@@ -125,7 +125,7 @@ export function personAliases(aliases: CommunityAlias[] | undefined): CommunityA
 
 // A community-configurable relationship (edge) type — mirrors NodeTypeConfig.
 // Managed in the console alongside node types; the stored Link.relationship is the
-// slug of `name` (see lib/context/relationships.ts normalizeRelationship).
+// slug of `name` (see lib/notes/context/relationships.ts normalizeRelationship).
 export interface LinkTypeConfig {
   name: string;       // human label, e.g. "Works at"
   color: string;      // hex, tints the edge stroke
@@ -206,7 +206,7 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
  * here keeps the id and the note path (`communities/blackbird.md`) clean whether
  * or not the caller's id carries the prefix.
  *
- * Lives here rather than in lib/context/entityNodes.ts (which re-exports it)
+ * Lives here rather than in lib/notes/context/entityNodes.ts (which re-exports it)
  * because client components need it and that module imports prisma.
  */
 export function communityNodeId(communityId: string): string {

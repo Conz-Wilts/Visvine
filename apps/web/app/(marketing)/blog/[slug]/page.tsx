@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
 import prisma from "@/lib/prisma";
 import { getSession, isSuperAdmin } from "@/lib/session";
-import PostContent from "@/features/blog/PostContent";
-import BlogCommentSection from "@/features/blog/comments/BlogCommentSection";
+import PostContent from "@/features/blog/components/PostContent";
+import BlogCommentSection from "@/features/blog/components/comments/BlogCommentSection";
 import { BRAND } from "@/lib/brand";
 import { formatBlogDate } from "@/lib/blog/dates";
 

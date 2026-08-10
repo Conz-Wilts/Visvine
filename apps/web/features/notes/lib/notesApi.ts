@@ -25,7 +25,7 @@ import type { PublicationInfo } from '@/lib/notes/publications'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 
-// --- brain access types (grant model — lib/notes/shared/authz.ts) ---------------
+// brain access types (grant model — lib/notes/shared/authz.ts)
 
 /** GET /api/notes/access?path= — the caller's standing at one path, plus the
  *  merged who-has-access list (readable) and grantable subjects (managers). */
@@ -241,7 +241,7 @@ export const notesApi = {
   exportAllUrl: (c: string) => `/api/notes/export/all?${qs(c)}`,
 
   // --- brain capabilities: fused search, folder registry, promote, capture,
-  // --- review/enrich maintenance, audit ---------------------------------------
+  // review/enrich maintenance, audit
 
   searchNotes: (c: string, query: string, opts?: { k?: number; filters?: SearchFilters }) =>
     sendJson<{ results: FusedResult[] }>('/api/notes/search', 'POST', {
@@ -351,7 +351,7 @@ export const notesApi = {
   getAudit: (c: string) =>
     getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?communityId=${encodeURIComponent(c)}`),
 
-  // --- context sources (non-note files/tables attached to the brain) -----------
+  // context sources (non-note files/tables attached to the brain)
 
   listSources: (c: string, folderId?: string) =>
     getJson<{ sources: ContextSourceMeta[] }>(

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
-import { useClickOutside } from '@/hooks/useClickOutside';
+import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 
 // Shared dropdown sizing — import these when building a custom dropdown
 // (multi-select, search, etc.) so trigger/menu/items stay in sync site-wide.

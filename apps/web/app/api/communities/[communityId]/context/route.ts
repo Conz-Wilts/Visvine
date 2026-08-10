@@ -4,8 +4,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCommunityContextData } from '@/lib/eventRepo';
-import { normalizeNode, normalizeLink } from '@/lib/context/normalize';
-import { visibleGraph } from '@/lib/context/featureVisibility';
+import { normalizeNode, normalizeLink } from '@/lib/notes/context/normalize';
+import { visibleGraph } from '@/lib/notes/context/featureVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { communityReadForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
 
@@ -33,7 +33,7 @@ export async function GET(
 
     const contextData = await getCommunityContextData(communityId);
     // Types belonging to a switched-off tool leave the graph with their edges —
-    // see lib/context/featureVisibility.ts.
+    // see lib/notes/context/featureVisibility.ts.
     const featureConfig = await getFeatureConfig(communityId);
     const graph = visibleGraph(
       contextData.nodes.map(normalizeNode),

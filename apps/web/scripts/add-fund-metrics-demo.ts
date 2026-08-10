@@ -42,7 +42,7 @@ const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').r
 const apiHost = new URL(appOrigin).host; // e.g. localhost:3000 — what `hosts:` gates on
 const apiBase = `${appOrigin}/api/dev/fund-metrics`;
 
-// ---- the connector note (perimeter + prose) ---------------------------------
+// the connector note (perimeter + prose)
 
 const CONNECTOR_NOTE = `---
 type: connector
@@ -121,7 +121,7 @@ Fund ids are \`fund_bb3\`, \`fund_bb4\`, \`fund_bbg1\`.
   \`[redacted]\` — resolved secret values are scrubbed from everything returned.
 `;
 
-// ---- the context note that hangs off it -------------------------------------
+// the context note that hangs off it
 
 const CONTEXT_NOTE = `---
 type: note
@@ -173,7 +173,7 @@ const NOTES = [
 
 const SECRETS = [{ name: 'FUND_METRICS_KEY', value: FUND_KEY }];
 
-// ---- write ------------------------------------------------------------------
+// write
 
 async function main() {
   const community = await prisma.community.findUnique({

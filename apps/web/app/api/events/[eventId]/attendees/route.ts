@@ -23,7 +23,6 @@ function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const attempts = rsvpRateLimit.get(ip) || [];
 
-  // Remove old attempts outside the window
   const recentAttempts = attempts.filter((time) => now - time < RATE_LIMIT_WINDOW_MS);
 
   if (recentAttempts.length >= MAX_RSVPS_PER_IP) {
@@ -95,7 +94,6 @@ export async function POST(
 
     const submission = parsed.data;
 
-    // Check domain allowlist
     if (submission.email && !isEmailDomainAllowed(submission.email, event.form.domainAllowlist)) {
       return NextResponse.json(
         { error: 'Email domain not allowed for this event' },

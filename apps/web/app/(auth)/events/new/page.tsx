@@ -4,8 +4,8 @@
  * Create new event page
  */
 
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { EventComposer } from '@/components/events/EventComposer';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { EventComposer } from '@/features/events/components/EventComposer';
 
 export default function NewEventPage() {
   const { currentCommunity } = useCommunity();

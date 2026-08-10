@@ -33,7 +33,7 @@ const soleOwner = (): AliasSummary[] => [
   alias('eng', false, ['u-1', 'u-2']),
 ]
 
-// --- who owns ------------------------------------------------------------------
+// who owns
 
 test('holdsOwner is true only for holders of an alias marked owner', () => {
   const aliases = soleOwner()
@@ -62,7 +62,7 @@ test('an owner alias nobody holds confers nothing', () => {
   assert.equal(holdsOwner(aliases, 'u-1'), false)
 })
 
-// --- the lockout invariant --------------------------------------------------------
+// the lockout invariant
 
 test('removing the last holder of the only owner alias is refused', () => {
   assert.equal(
@@ -141,7 +141,7 @@ test('an unknown alias name leaves the community exactly as it was', () => {
   )
 })
 
-// --- the built-in Owner alias ------------------------------------------------------
+// the built-in Owner alias
 
 test('the built-in Owner alias is the one marked system', () => {
   const aliases = soleOwner()
@@ -154,7 +154,7 @@ test('SYSTEM_ALIAS_MESSAGE names Owner, so the refusal copy cannot drift', () =>
   assert.ok(SYSTEM_ALIAS_MESSAGE.includes(OWNER_ALIAS_NAME))
 })
 
-// --- naming (create / rename) -----------------------------------------------------
+// naming (create / rename)
 
 test('aliasNameError accepts a fresh name and rejects an empty one', () => {
   assert.equal(aliasNameError('Partner', ['Founder', 'LP']), null)
@@ -198,7 +198,7 @@ test('normalizeAliasColor accepts #rrggbb and nothing else', () => {
   assert.equal(normalizeAliasColor(undefined), null)
 })
 
-// --- presentation -----------------------------------------------------------------
+// presentation
 
 test('describeAliases lists up to max names, then counts the rest', () => {
   assert.equal(describeAliases([]), 'None')

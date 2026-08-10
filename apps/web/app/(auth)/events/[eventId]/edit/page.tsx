@@ -6,8 +6,8 @@
 
 import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { EventComposer } from '@/components/events/EventComposer';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { EventComposer } from '@/features/events/components/EventComposer';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import type { NBEvent } from '@/lib/types';
 

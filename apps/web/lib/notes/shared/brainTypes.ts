@@ -30,7 +30,7 @@ export type WriteResult =
   | { status: 'applied'; path: string }
   | { status: 'denied'; reason: string }
 
-// --- legacy folder registry (migration input only) ------------------------------
+// legacy folder registry (migration input only)
 
 /** Legacy cumulative folder levels: admin ⊃ write ⊃ read (now view/edit/full). */
 export type FolderLevel = 'read' | 'write' | 'admin'
@@ -72,7 +72,7 @@ export interface FoldersConfig {
 
 export const EMPTY_REGISTRY: FoldersConfig = { version: 1, folders: [] }
 
-// --- access requests ----------------------------------------------------------
+// access requests
 
 /**
  * A member's request for access to part of the SHARED brain (table
@@ -101,7 +101,7 @@ export interface AccessRequest {
   resolvedByName?: string
 }
 
-// --- sidecar record shapes ----------------------------------------------------
+// sidecar record shapes
 
 /** A queued promotion/publication the requester couldn't apply directly (sidecar "move-proposals.jsonl"). */
 export interface MoveProposalEntry {

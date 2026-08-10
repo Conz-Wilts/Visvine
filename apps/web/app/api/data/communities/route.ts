@@ -201,7 +201,6 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Check if community has nodes or links
     const [nodeCount, linkCount] = await Promise.all([
       prisma.node.count({ where: { communityId: id } }),
       prisma.link.count({ where: { communityId: id } }),

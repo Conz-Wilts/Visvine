@@ -12,13 +12,13 @@ import { useState, useEffect, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { useSession } from '@/lib/auth-client';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import PDFViewer from '@/components/resources/PDFViewer';
-import ChangeProposalDialog from '@/components/resources/ChangeProposalDialog';
+import { useSession } from '@/features/auth/lib/auth-client';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import PDFViewer from '@/features/resources/components/PDFViewer';
+import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
   FileTypeIcon, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
-} from '@/components/resources/resourceUi';
+} from '@/features/resources/components/resourceUi';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
 import {
@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 
 // xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
-const SpreadsheetViewer = dynamic(() => import('@/components/resources/SpreadsheetViewer'), { ssr: false });
+const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/SpreadsheetViewer'), { ssr: false });
 
 type PanelTab = 'comments' | 'changes' | 'details';
 

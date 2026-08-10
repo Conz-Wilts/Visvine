@@ -5,7 +5,7 @@ import {
   normalizeRelationship,
   getLinkTypeConfig,
   isSystemRelationship,
-} from "../lib/context/relationships";
+} from "../lib/notes/context/relationships";
 import {
   STRUCTURAL_NODE_TYPES,
   getNodeTypeConfig,

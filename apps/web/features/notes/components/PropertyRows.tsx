@@ -13,7 +13,7 @@
 // rollback and the tag-colour registry where they already live and work.
 
 import React, { useRef } from 'react'
-import { LocationAutocomplete } from '@/components/create/CreateModalForms'
+import { LocationAutocomplete } from '@/features/create/components/CreateModalForms'
 import { fieldsForType, type TypeFieldDef } from '@/lib/create/typeFields'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'

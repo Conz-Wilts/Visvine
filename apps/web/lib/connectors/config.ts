@@ -484,7 +484,6 @@ export function allowPrivateHosts(): boolean {
   return true
 }
 
-// ---------------------------------------------------------------------------
 // Connectors v2 — the perimeter (docs/connectors-v2.md)
 //
 // A v2 connector's frontmatter no longer picks an executor; it declares a
@@ -497,7 +496,6 @@ export function allowPrivateHosts(): boolean {
 // parse: parseConnectorPerimeter maps them onto perimeters until the migration
 // script rewrites them. Detection is by shape, not alias — `hosts:` or `env:`
 // present means v2.
-// ---------------------------------------------------------------------------
 
 export interface ConnectorPerimeter {
   /** `host` or `host:port` entries the run may reach. Empty = no network. */

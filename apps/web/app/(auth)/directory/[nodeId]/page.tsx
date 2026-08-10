@@ -16,21 +16,21 @@
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { useNodeProfile } from '@/hooks/useNodeProfile';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnCommunityNode } from '@/lib/types/context';
 import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
-import ProfileSkeletonLoader from '@/components/profile/ProfileSkeletonLoader';
+import ProfileSkeletonLoader from '@/features/profile/components/ProfileSkeletonLoader';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
-import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
-import ProfilePageContent from '@/components/profile/ProfilePageContent';
-import OrgPageContent from '@/components/profile/OrgPageContent';
-import CommunityPageContent from '@/components/profile/CommunityPageContent';
-import ResourcePreviewContent from '@/components/profile/ResourcePreviewContent';
-import ConnectorPageContent from '@/components/profile/ConnectorPageContent';
+import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
+import ProfilePageContent from '@/features/profile/components/ProfilePageContent';
+import OrgPageContent from '@/features/profile/components/OrgPageContent';
+import CommunityPageContent from '@/features/profile/components/CommunityPageContent';
+import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
+import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
  *  takes plain string ids via the shell registration. */

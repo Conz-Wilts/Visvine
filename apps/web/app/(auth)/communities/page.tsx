@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import CommunityAvatar from '@/components/community/CommunityAvatar';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import CommunityAvatar from '@/features/communities/components/CommunityAvatar';
 import { EmptyState, PageTitle } from '@/components/ui';
 
 export default function CommunitiesPage() {

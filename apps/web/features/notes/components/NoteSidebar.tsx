@@ -21,7 +21,7 @@ import { getNodeGlyph } from '@/lib/types'
 import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
-import { TRASH_PATH, useContextTreeState } from '@/hooks/useContextTreeState'
+import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useContextTreeState'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both

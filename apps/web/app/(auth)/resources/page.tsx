@@ -2,20 +2,20 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { useResources } from '@/hooks/useResources';
-import ResourceUploadDialog from '@/components/resources/ResourceUploadDialog';
-import PDFViewer from '@/components/resources/PDFViewer';
-import CommentsPanel from '@/components/resources/CommentsPanel';
-import ChangeProposalDialog from '@/components/resources/ChangeProposalDialog';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useResources } from '@/features/resources/hooks/useResources';
+import ResourceUploadDialog from '@/features/resources/components/ResourceUploadDialog';
+import PDFViewer from '@/features/resources/components/PDFViewer';
+import CommentsPanel from '@/features/resources/components/CommentsPanel';
+import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
   FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
-} from '@/components/resources/resourceUi';
+} from '@/features/resources/components/resourceUi';
 import type { Resource } from '@/lib/types';
 import { PageTitle } from '@/components/ui';
 
 // xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
-const SpreadsheetViewer = dynamic(() => import('@/components/resources/SpreadsheetViewer'), { ssr: false });
+const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/SpreadsheetViewer'), { ssr: false });
 
 type ResourceTab = 'all' | 'pinned' | 'new';
 

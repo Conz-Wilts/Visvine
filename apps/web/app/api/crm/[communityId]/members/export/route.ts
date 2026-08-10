@@ -37,7 +37,6 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
   const settings = (community?.crmSettings as { fields?: FieldDefinition[] }) ?? {};
   const privateFields: FieldDefinition[] = settings.fields ?? [];
 
-  // Fetch all pages
   const allMembers: MemberRow[] = [];
   let page = 1;
   while (true) {

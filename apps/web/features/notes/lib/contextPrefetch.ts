@@ -15,7 +15,7 @@
 // the next mount.
 
 import { useEffect } from 'react'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { entityNotePath } from '@/lib/notes/entities'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from './notesApi'

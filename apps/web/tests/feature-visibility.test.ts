@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { visibleNodes, visibleGraph } from '../lib/context/featureVisibility';
+import { visibleNodes, visibleGraph } from '../lib/notes/context/featureVisibility';
 import type { CommunityFeatureConfig, NBLink, NBNode } from '../lib/types';
 
 const node = (id: string, type: string): NBNode =>

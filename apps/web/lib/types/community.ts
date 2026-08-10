@@ -25,7 +25,7 @@ export interface CommunityDesignConfig {
 
 // Which optional community surfaces (directory, channels, events, …) are
 // switched on. A feature is enabled unless its key is explicitly `false`, so an
-// empty config means "everything on" — see lib/features.tsx#isFeatureEnabled.
+// empty config means "everything on" — see features/shared/lib/features.tsx#isFeatureEnabled.
 export interface CommunityFeatureConfig {
   enabled?: Record<string, boolean>;
   // Legacy directory-only form of `adminOnly`, kept in sync by

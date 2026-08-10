@@ -1,4 +1,4 @@
-import MarketingShell from "@/components/marketing/MarketingShell";
+import MarketingShell from "@/features/marketing/components/MarketingShell";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
 
 export default function MarketingLayout({

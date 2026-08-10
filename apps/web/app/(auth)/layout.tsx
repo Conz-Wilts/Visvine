@@ -8,7 +8,7 @@ export const dynamicParams = true;
 import AuthLayoutClient from './AuthLayoutClient';
 import { getSession, isSuperAdmin } from '@/lib/session';
 import { listVisibleCommunities, listUserCommunities } from '@/lib/communities/queries';
-import type { Session } from '@/lib/auth-client';
+import type { Session } from '@/features/auth/lib/auth-client';
 
 export default async function AuthLayout({ children }: { children: React.ReactNode }) {
   // Resolve the session and community data server-side so the client shell

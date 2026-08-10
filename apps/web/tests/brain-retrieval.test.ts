@@ -27,7 +27,7 @@ const toRetrieval = (raws: RawNote[]): RetrievalNote[] => {
   return metas.map((meta) => ({ meta, body: bodyByPath.get(meta.path)! }))
 }
 
-// --- bm25 ------------------------------------------------------------------------
+// bm25
 
 test('bm25Search boosts title hits above body-only hits', () => {
   const docs = [
@@ -73,7 +73,7 @@ test('bm25Search returns [] for empty or token-less queries', () => {
   assert.deepEqual(bm25Search(docs, '  !? .'), [])
 })
 
-// --- matchesFilters ----------------------------------------------------------------
+// matchesFilters
 
 const filterVault = (): RawNote[] => [
   note('deals/canva.md', '---\ntitle: Canva\ntype: deal\ntags: [Sales, q3]\n---\n\nBody.', 1_000),
@@ -110,7 +110,7 @@ test('matchesFilters checks type, folderId, tags (case-insensitive AND), and mti
   assert.equal(matchesFilters(canva, { updatedBefore: 999 }), false)
 })
 
-// --- fusedSearch --------------------------------------------------------------------
+// fusedSearch
 
 // alpha links to notes.md (its neighbor); beta is a weaker text hit; notes.md
 // itself never matches the kubernetes queries by text.
@@ -180,7 +180,7 @@ test('fusedSearch applies filters before ranking and honors k', async () => {
   assert.equal(capped.length, 1)
 })
 
-// --- context-source stage -----------------------------------------------------------
+// context-source stage
 
 const fakeSources = (hits: { path: string; seq: number; snippet: string; score: number }[]): SourceStage => ({
   async rank() {
@@ -226,7 +226,7 @@ test('fusedSearch skips the source stage under note-frontmatter filters', async 
   assert.ok(res.every((r) => r.kind === 'note'))
 })
 
-// --- weighted fusion ------------------------------------------------------------------
+// weighted fusion
 
 test('a linked neighbor never outranks a note that actually matched the query', async () => {
   // notes.md matches no term; it is only adjacent to the top hit. beta.md is a

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { X } from 'lucide-react';
-import { useEscapeKey } from '@/hooks/useEscapeKey';
+import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 
 // Viewport-scaled width presets: never narrower than the old fixed caps, grow
 // as a share of screen width on large monitors, with a sane upper bound.

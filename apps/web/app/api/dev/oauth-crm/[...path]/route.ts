@@ -151,7 +151,7 @@ async function handle(req: Request, segments: string[]): Promise<Response> {
   const path = '/' + segments.join('/')
   const method = req.method.toUpperCase()
 
-  // --- the token endpoint: form-encoded, like every real OAuth2 server -------
+  // the token endpoint: form-encoded, like every real OAuth2 server
   if (method === 'POST' && path === '/oauth/token') {
     const form = new URLSearchParams(await req.text())
     const grant = form.get('grant_type')
@@ -187,7 +187,7 @@ async function handle(req: Request, segments: string[]): Promise<Response> {
     )
   }
 
-  // --- everything below needs a live bearer and spends rate budget ----------
+  // everything below needs a live bearer and spends rate budget
   const denied = gate(req)
   if (denied) return denied
   const clientId = clientIdOf(req)

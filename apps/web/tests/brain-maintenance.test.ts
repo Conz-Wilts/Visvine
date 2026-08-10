@@ -35,7 +35,7 @@ import type { RawNote } from '../lib/notes/shared/types'
 
 const note = (path: string, content: string, mtime = 0): RawNote => ({ path, content, mtime })
 
-// --- noteLog: ## Log entries -----------------------------------------------------
+// noteLog: ## Log entries
 
 test('appendNoteLogEntry creates the ## Log section and preserves frontmatter', () => {
   const md = '---\ntitle: Canva Deal\ntype: deal\n---\n\nBody paragraph.'
@@ -66,7 +66,7 @@ test('appendNoteLogEntry inserts newest-first into an existing ## Log', () => {
   assert.ok(second < first) // newest on top
 })
 
-// --- noteLog: capture lines --------------------------------------------------------
+// noteLog: capture lines
 
 test('formatCaptureEntry/parseCaptureEntries round-trip including refs and tags', () => {
   const at = new Date(2026, 6, 8, 9, 5).getTime()
@@ -91,7 +91,7 @@ test('formatCaptureEntry/parseCaptureEntries round-trip including refs and tags'
   assert.deepEqual(parsed[1].tags, [])
 })
 
-// --- noteLog: provenance ------------------------------------------------------------
+// noteLog: provenance
 
 test('provenanceRef strips .md and stampProvenance merges sources deduped', () => {
   assert.equal(provenanceRef('deals/canva.md'), 'brain:deals/canva')
@@ -104,7 +104,7 @@ test('provenanceRef strips .md and stampProvenance merges sources deduped', () =
   assert.equal(fm.title, 'X') // rest of frontmatter untouched
 })
 
-// --- linkRewrite ---------------------------------------------------------------------
+// linkRewrite
 
 test('rewriteLinks rewrites matching relative + root-absolute links to root-absolute hrefs', () => {
   const body =
@@ -124,7 +124,7 @@ test('rewriteLinks rewrites matching relative + root-absolute links to root-abso
   assert.ok(out.includes('[Keep](keep.md)')) // map returned null → unchanged
 })
 
-// --- review: individual checks --------------------------------------------------------
+// review: individual checks
 
 test('checkBrokenLinks auto-fixes a unique basename match, flags ambiguous ones', () => {
   const metas = buildNoteIndex([
@@ -182,7 +182,7 @@ test('checkSchema fills derivable type/title/timestamp and flags missing descrip
   assert.deepEqual(issues, [{ path: 'bare.md', kind: 'schema', detail: 'missing description' }])
 })
 
-// --- review: applyAutoFix ---------------------------------------------------------------
+// review: applyAutoFix
 
 test('applyAutoFix setStale adds status without disturbing the body', () => {
   const out = applyAutoFix('---\ntitle: T\n---\n\nBody here.', { kind: 'setStale', path: 't.md' })
@@ -226,7 +226,7 @@ test('applyAutoFix linkMention links the first plain mention', () => {
   assert.ok(out.includes('Canva again.')) // only the first mention is linked
 })
 
-// --- review: buildReviewReport ------------------------------------------------------------
+// review: buildReviewReport
 
 test('buildReviewReport frozen() excludes fixes on locked paths (issues remain)', () => {
   const DAY = 24 * 60 * 60 * 1000
@@ -273,7 +273,7 @@ test('buildReviewReport full mode adds duplicates and oversized findings', () =>
   assert.ok(full.issues.some((i) => i.kind === 'oversized' && i.path === 'big.md'))
 })
 
-// --- enrichment: candidate selection ---------------------------------------------------------
+// enrichment: candidate selection
 
 const sources: EnrichmentSource[] = [
   { path: 'p/a.md', type: 'note', title: 'A', text: 'fresh insight', sha256: 'h-a', mtime: 100 },
@@ -300,7 +300,7 @@ test('selectEnrichmentCandidates honors only and since (inclusive) filters', () 
   assert.deepEqual(since.map((c) => c.sourcePath), ['p/d.md']) // mtime 300 >= 300 kept, 100 dropped
 })
 
-// --- enrichment: output coercion --------------------------------------------------------------
+// enrichment: output coercion
 
 const ctx = { validTargetIds: new Set(['deals/canva']) }
 

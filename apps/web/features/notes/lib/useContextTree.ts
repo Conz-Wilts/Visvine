@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'

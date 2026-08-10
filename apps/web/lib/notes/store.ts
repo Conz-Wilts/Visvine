@@ -69,7 +69,7 @@ const MAX_REVISIONS = 50
 // single revision (latest snapshot wins), so autosave doesn't spam an entry per save.
 const COALESCE_WINDOW_MS = 5 * 60 * 1000
 
-// --- path safety -------------------------------------------------------------
+// path safety
 
 // Normalize an untrusted, client-supplied path to a safe brain-relative POSIX
 // path. Rejects traversal and NUL (Postgres text can't store NUL anyway).
@@ -112,7 +112,7 @@ function findLive(brain: Brain, path: string) {
   })
 }
 
-// --- reads -------------------------------------------------------------------
+// reads
 
 export async function listRaw(brain: Brain): Promise<RawNote[]> {
   const rows = await prisma.communityNote.findMany({
@@ -159,7 +159,7 @@ export async function getNoteCreatedBy(brain: Brain, path: string): Promise<stri
   return row?.createdBy ?? null
 }
 
-// --- writes ------------------------------------------------------------------
+// writes
 
 // Create a note, refusing to overwrite an existing one. Records no revision —
 // the first revision (baseline + edit) is seeded on the first save, matching the
@@ -200,7 +200,7 @@ export async function createNote(
   return toRaw(row)
 }
 
-// --- folder indexes ----------------------------------------------------------
+// folder indexes
 //
 // An index note IS a folder. Everything below keeps that true: every folder has
 // exactly one index, and every index's managed child block lists what the folder
@@ -498,7 +498,7 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
   return t // revisions stay attached by noteId
 }
 
-// --- trash (soft-delete) -----------------------------------------------------
+// trash (soft-delete)
 
 export async function deleteNote(brain: Brain, path: string): Promise<void> {
   const row = await findLive(brain, sanitizePath(path))
@@ -582,7 +582,7 @@ export async function emptyTrash(brain: Brain): Promise<void> {
   invalidateVault(brain)
 }
 
-// --- folders -----------------------------------------------------------------
+// folders
 
 export async function createFolder(brain: Brain, path: string, actor?: Actor): Promise<void> {
   const p = sanitizePath(path)
@@ -821,7 +821,7 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
   invalidateVault(brain)
 }
 
-// --- revision history --------------------------------------------------------
+// revision history
 
 export async function listRevisions(brain: Brain, path: string): Promise<NoteRevision[]> {
   const row = await findLive(brain, sanitizePath(path))

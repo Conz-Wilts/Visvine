@@ -2,6 +2,11 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
 
+const COMPONENTS_BOUNDARY = {
+  group: ["@/components/*", "!@/components/ui", "!@/components/ui/*"],
+  message: "Only @/components/ui is shared. Domain UI belongs in @/features/<domain>/components.",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTypescript,
@@ -41,6 +46,33 @@ const eslintConfig = defineConfig([
           varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
           destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
+  {
+    // components/ now holds only domain-agnostic primitives. Domain UI lives in
+    // features/<domain>/components/.
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [COMPONENTS_BOUNDARY] }],
+    },
+  },
+  {
+    // lib/ is server + pure domain logic. React providers and hooks belong in
+    // features/shared/, so a React import here means something landed in the
+    // wrong layer. Repeats the boundary pattern above because a same-named rule
+    // in a later block replaces the earlier options rather than merging them.
+    files: ["lib/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [COMPONENTS_BOUNDARY],
+          paths: ["react", "react-dom"].map((name) => ({
+            name,
+            message: "lib/ must stay React-free — put this in features/<domain>/ instead.",
+          })),
         },
       ],
     },

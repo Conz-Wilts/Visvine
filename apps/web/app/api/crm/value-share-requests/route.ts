@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'community_id, node_id, column_key, column_name, column_type required' }, { status: 400 });
   }
 
-  // Check membership
   const membership = await prisma.userCommunity.findUnique({
     where: { userId_communityId: { userId: session.userId, communityId: community_id } },
   });

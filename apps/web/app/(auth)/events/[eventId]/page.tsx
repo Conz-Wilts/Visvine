@@ -4,7 +4,7 @@
  * /events/[eventId]/manage. See EventDetailClient.
  */
 
-import EventDetailClient from '@/components/events/EventDetailClient';
+import EventDetailClient from '@/features/events/components/EventDetailClient';
 
 export default async function EventDetailPage({ params }: { params: Promise<{ eventId: string }> }) {
   const { eventId } = await params;

@@ -2,8 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import type { JSONContent } from "@tiptap/core";
 import prisma from "@/lib/prisma";
 import { getSession, isSuperAdmin } from "@/lib/session";
-import PostEditor from "@/features/blog/PostEditor";
-import BlogCommentSection from "@/features/blog/comments/BlogCommentSection";
+import PostEditor from "@/features/blog/components/PostEditor";
+import BlogCommentSection from "@/features/blog/components/comments/BlogCommentSection";
 
 export const dynamic = "force-dynamic";
 

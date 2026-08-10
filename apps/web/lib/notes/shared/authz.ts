@@ -12,7 +12,7 @@
 // The DB side (loading the caller's grant rows, seeding legacy registries)
 // lives in lib/notes/access.ts.
 
-// --- levels ---------------------------------------------------------------------
+// levels
 
 /** Strictly ordered access levels — "does edit imply view?" is a comparison. */
 export const LEVEL_VIEW = 10
@@ -54,7 +54,7 @@ export function parseLevel(name: unknown): number | null {
   return hit ? hit.level : null
 }
 
-// --- grants ---------------------------------------------------------------------
+// grants
 
 export type GrantSubjectType = 'community' | 'alias' | 'user'
 
@@ -90,7 +90,7 @@ export const OPEN_ACCESS: BrainAccess = {
   locked: [],
 }
 
-// --- the tree walk --------------------------------------------------------------
+// the tree walk
 
 /** Whether `path` sits at or under `ancestor` ('' contains everything). */
 export function containsPath(ancestor: string, path: string): boolean {
@@ -214,7 +214,7 @@ export function winningGrant(
   return win
 }
 
-// --- legacy registry migration ----------------------------------------------------
+// legacy registry migration
 
 /** A grant row produced by migrating the pre-grant folder registry. */
 interface MigratedGrant extends AccessGrant {

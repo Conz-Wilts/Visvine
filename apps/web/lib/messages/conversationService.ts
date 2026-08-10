@@ -13,7 +13,7 @@ import {
   removeEntityNode,
   reparentEntityNode,
   syncEntityNodeSafe,
-} from '@/lib/context/entityNodes';
+} from '@/lib/notes/context/entityNodes';
 
 export async function listConversationsForUser(userId: string, searchQuery?: string): Promise<ConversationSummary[]> {
   const query = searchQuery?.trim();

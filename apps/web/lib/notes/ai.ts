@@ -173,7 +173,7 @@ function stripFence(text: string): string {
   return fenced ? fenced[1] : text
 }
 
-// --- refactor ----------------------------------------------------------------
+// refactor
 
 const REFACTOR_SYSTEM =
   'You are an editor that refactors a markdown note to make it clearer and better ' +
@@ -216,7 +216,7 @@ export async function refactorText(text: string, instruction?: string): Promise<
   return stripFence(content).trim()
 }
 
-// --- reorganize --------------------------------------------------------------
+// reorganize
 
 const EXCERPT_CHARS = 600
 

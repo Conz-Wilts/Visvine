@@ -63,7 +63,7 @@ const appdbHost = (() => {
   return url.port ? `${url.hostname}:${url.port}` : url.hostname;
 })();
 
-// ---- the connector notes ----------------------------------------------------
+// the connector notes
 
 const SANDBOX_NOTE = `---
 type: connector
@@ -221,7 +221,7 @@ const SECRETS = [
   { name: 'APPDB_DSN', value: resolveDsn() },
 ];
 
-// ---- write ------------------------------------------------------------------
+// write
 
 async function main() {
   const community = await prisma.community.findUnique({

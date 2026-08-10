@@ -50,9 +50,7 @@ export async function deleteImage(entityType: ImageEntityType, entityId: string)
   }
 }
 
-// ---------------------------------------------------------------------------
 // Legacy shims — callers that haven't been updated yet pass nodeId for cards
-// ---------------------------------------------------------------------------
 export async function uploadCroppedNodeImage(
   nodeId: string,
   blob: Blob,

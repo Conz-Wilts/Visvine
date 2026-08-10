@@ -1,4 +1,4 @@
-import type { CreateableType } from '@/lib/contexts/CreateModalContext';
+import type { CreateableType } from '@/features/shared/contexts/CreateModalContext';
 
 export interface CreateSuggestion {
   /**

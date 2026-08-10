@@ -1,10 +1,10 @@
 "use client";
 
 import React, { ReactNode, useCallback, useMemo } from "react";
-import { createSafeContext } from "@/lib/contexts/createSafeContext";
-import { useSession, signOut as signOutClient } from "@/lib/auth-client";
+import { createSafeContext } from "@/features/shared/contexts/createSafeContext";
+import { useSession, signOut as signOutClient } from "@/features/auth/lib/auth-client";
 import { useRouter } from "next/navigation";
-import type { Session, SessionUser } from "@/lib/auth-client";
+import type { Session, SessionUser } from "@/features/auth/lib/auth-client";
 
 interface AuthContextValue {
   user: SessionUser | null;

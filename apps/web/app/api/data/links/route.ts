@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
-import { upsertLink, removeLink } from '@/lib/context/links';
+import { upsertLink, removeLink } from '@/lib/notes/context/links';
 import type { NBLink } from '@/lib/types';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 

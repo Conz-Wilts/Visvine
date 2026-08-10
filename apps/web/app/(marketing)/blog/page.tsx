@@ -1,6 +1,6 @@
 ﻿import type { Metadata } from "next";
 import prisma from "@/lib/prisma";
-import BlogSearchList from "@/features/blog/BlogSearchList";
+import BlogSearchList from "@/features/blog/components/BlogSearchList";
 
 export const dynamic = "force-dynamic";
 

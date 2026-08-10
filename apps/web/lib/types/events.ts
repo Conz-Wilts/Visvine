@@ -35,7 +35,7 @@ export interface NBEvent {
   organizerEmail?: string;
   capacity?: number;
   visibility: EventVisibility;
-  // --- rebuild additions (all stored in Node.metadata; coverImageUrl mirrors Node.imageUrl) ---
+  // rebuild additions (all stored in Node.metadata; coverImageUrl mirrors Node.imageUrl)
   coverImageUrl?: string;
   theme?: { color?: string };
   status?: 'draft' | 'published'; // undefined = legacy/published
@@ -44,7 +44,6 @@ export interface NBEvent {
   guestListVisible?: boolean; // show the guest list on the public page
   allowPlusOnes?: number; // max additional guests per RSVP (0 = none)
   allowedResponses?: RSVPResponse[]; // which RSVP buttons the host enables
-  // -------------------------------------------------------------------------------------------
   form: {
     enabled: boolean;
     slug: string;

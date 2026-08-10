@@ -41,7 +41,7 @@ import {
 import { filterVisible, pathVisibleTo } from '../lib/notes/shared/visibility'
 import type { BrainPrincipal, Folder, FolderLevel, FoldersConfig } from '../lib/notes/shared/brainTypes'
 
-// --- fixtures ------------------------------------------------------------------
+// fixtures
 
 const grant = (
   resourcePath: string,
@@ -70,7 +70,7 @@ const principal = (userId: string, acc: BrainAccess, over: Partial<BrainPrincipa
   ...over,
 })
 
-// --- levels ----------------------------------------------------------------------
+// levels
 
 test('levels are strictly ordered integers with stable names', () => {
   assert.ok(LEVEL_VIEW < LEVEL_COMMENT && LEVEL_COMMENT < LEVEL_EDIT && LEVEL_EDIT < LEVEL_FULL)
@@ -85,7 +85,7 @@ test('levels are strictly ordered integers with stable names', () => {
   assert.equal(parseLevel(undefined), null)
 })
 
-// --- the tree walk ---------------------------------------------------------------
+// the tree walk
 
 test('containsPath: root contains everything; folders contain their subtrees only', () => {
   assert.equal(containsPath('', 'anything/deep/note.md'), true)
@@ -153,7 +153,7 @@ test('the model has no deny rules: adding a grant can never remove access', () =
   }
 })
 
-// --- alias and community subjects (pre-scoped, so reach is subject-agnostic) -------
+// alias and community subjects (pre-scoped, so reach is subject-agnostic)
 
 test('community, alias, and user grants compose additively for one principal', () => {
   const acc = access([
@@ -167,7 +167,7 @@ test('community, alias, and user grants compose additively for one principal', (
   assert.equal(effectiveLevel(acc, 'strategy/other.md'), LEVEL_VIEW) // note grant does not spread
 })
 
-// --- folder visibility, restriction, locks ----------------------------------------
+// folder visibility, restriction, locks
 
 test('folderVisible surfaces ancestors of deep grants; restricted stays dark otherwise', () => {
   const acc = access([grant('teams/engineering', LEVEL_EDIT)], ['teams/engineering'])
@@ -187,7 +187,7 @@ test('isRestrictedPath and isLockedPath cover boundaries and their subtrees', ()
   assert.equal(isLockedPath(['frozen'], 'thawed/note.md'), false)
 })
 
-// --- provenance and signatures ----------------------------------------------------
+// provenance and signatures
 
 test('winningGrant picks highest level, then deepest resource, then user > alias > community', () => {
   const cuts: string[] = []
@@ -214,7 +214,7 @@ test('readableRoots and accessSignature: equal access ⇒ equal signature', () =
   assert.notEqual(accessSignature(a), accessSignature(d))
 })
 
-// --- principal predicates + the visibility lens ------------------------------------
+// principal predicates + the visibility lens
 
 const TREE = [
   { path: 'wiki/handbook.md' },
@@ -269,7 +269,7 @@ test('source paths (non-.md) go through the same predicates', () => {
   assert.equal(pathVisibleTo('deals/pricing.csv', insider), true)
 })
 
-// --- legacy registry migration: behavior parity ------------------------------------
+// legacy registry migration: behavior parity
 
 const legacyMember = (userId: string, level: FolderLevel) => ({
   userId,

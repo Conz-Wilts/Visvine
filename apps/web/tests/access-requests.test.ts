@@ -18,7 +18,7 @@ import {
 import { LEVEL_EDIT, LEVEL_FULL, LEVEL_VIEW, type AccessGrant, type BrainAccess } from '../lib/notes/shared/authz'
 import type { AccessRequest, BrainPrincipal } from '../lib/notes/shared/brainTypes'
 
-// --- fixtures ------------------------------------------------------------------
+// fixtures
 
 const grant = (resourcePath: string, level: number, userId = 'u-me'): AccessGrant => ({
   subjectType: 'user',
@@ -53,7 +53,7 @@ const request = (over: Partial<AccessRequest> = {}): AccessRequest => ({
   ...over,
 })
 
-// --- filing ---------------------------------------------------------------------
+// filing
 
 test('canRequest: only refused when the caller can already read the path', () => {
   const gated = principal('u-me', access([]))
@@ -86,7 +86,7 @@ test('canRequest: a path that does not exist is still requestable', () => {
   assert.equal(canRequest(gated, 'nothing/here.md'), true)
 })
 
-// --- seeing and resolving --------------------------------------------------------
+// seeing and resolving
 
 test('requestVisibleTo: your own request, plus anything you manage', () => {
   const mine = request({ userId: 'u-me', resourcePath: 'deals' })
@@ -125,7 +125,7 @@ test('canResolveRequest: a restricted boundary cuts manage standing too', () => 
   assert.equal(canResolveRequest(onBoundary, deep), true)
 })
 
-// --- presentation ---------------------------------------------------------------
+// presentation
 
 test('requestTargetLabel: the root reads as the context name; notes drop .md', () => {
   assert.equal(requestTargetLabel('', 'Blackbird context'), 'Blackbird context')

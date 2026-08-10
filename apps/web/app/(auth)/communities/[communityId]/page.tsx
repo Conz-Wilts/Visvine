@@ -16,13 +16,13 @@ import {
   Plus, Check, ChevronRight, LogOut, Globe2, UserPlus,
   CalendarPlus, Loader2,
 } from 'lucide-react';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
-import { FileTypeIcon, FILE_LABEL, formatBytes } from '@/components/resources/resourceUi';
+import { FileTypeIcon, FILE_LABEL, formatBytes } from '@/features/resources/components/resourceUi';
 
 /* ── API payload types ────────────────────────────────────────────────────── */
 

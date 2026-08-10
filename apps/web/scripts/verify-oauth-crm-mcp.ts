@@ -114,7 +114,7 @@ async function main() {
   /** The run's returned value as compact JSON, for substring assertions. */
   const shown = (r: { value?: unknown }) => JSON.stringify(r.value ?? null);
 
-  // --- 1. the token dance ----------------------------------------------------
+  // 1. the token dance
   const auth = await runConnector(`
     const res = await fetch(\`\${env.CRM_API}/oauth/token\`, {
       method: 'POST',
@@ -151,7 +151,7 @@ async function main() {
     shown(badCreds),
   );
 
-  // --- 3. expiry → refresh ---------------------------------------------------
+  // 3. expiry → refresh
   await settle();
   const refresh = await runConnector(`${PREAMBLE}
     const first = (await get('/v1/me')).scopes[0]
@@ -167,7 +167,7 @@ async function main() {
     shown(refresh) || refresh.error?.message,
   );
 
-  // --- 4. rate limit: 429 + retry_after, honoured ----------------------------
+  // 4. rate limit: 429 + retry_after, honoured
   await settle();
   const limited = await runConnector(`
     const res = await fetch(\`\${env.CRM_API}/oauth/token\`, {
@@ -205,7 +205,7 @@ async function main() {
     `${shown(backoff)} (in ${backoff.duration_ms}ms)`,
   );
 
-  // --- 5. pagination ---------------------------------------------------------
+  // 5. pagination
   await settle();
   const paginated = await runConnector(`${PREAMBLE}
     const all = []
@@ -233,7 +233,7 @@ async function main() {
     `${shown(paginated)} (in ${paginated.duration_ms}ms)`,
   );
 
-  // --- 6. secrets never come back --------------------------------------------
+  // 6. secrets never come back
   const leak = await runConnector(
     'return `id=${env.CRM_CLIENT_ID} secret=${env.CRM_CLIENT_SECRET}`',
   );
@@ -245,7 +245,7 @@ async function main() {
     shown(leak),
   );
 
-  // --- 7. the perimeter still holds under all this ---------------------------
+  // 7. the perimeter still holds under all this
   const offPath = await runConnector(
     `try { await fetch(\`\${env.CRM_API}/v1/contacts\`, { method: 'POST', body: 'x=1' }) } catch (e) { return e.message }`,
   );

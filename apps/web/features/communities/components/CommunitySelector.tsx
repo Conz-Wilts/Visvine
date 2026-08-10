@@ -3,8 +3,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import CommunityAvatar from '@/components/community/CommunityAvatar';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import CommunityAvatar from '@/features/communities/components/CommunityAvatar';
 import NewCommunityDialog from './NewCommunityDialog';
 
 // Predictable, ranked matching for the community switcher. Name-only (like the main

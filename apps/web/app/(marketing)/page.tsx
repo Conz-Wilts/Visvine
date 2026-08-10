@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import HomeCtas from "@/components/marketing/HomeCtas";
+import HomeCtas from "@/features/marketing/components/HomeCtas";
 
 export default async function Home() {
   const session = await getSession();

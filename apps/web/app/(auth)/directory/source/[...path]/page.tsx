@@ -8,9 +8,9 @@
 import React, { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
-import { usePaneChrome } from '@/lib/contexts/PaneShellContext';
+import { usePaneChrome } from '@/features/shared/contexts/PaneShellContext';
 
 const noop = () => {};
 

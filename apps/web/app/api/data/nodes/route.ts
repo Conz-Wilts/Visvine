@@ -6,7 +6,7 @@ import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { attachIdentity } from '@/lib/identity/attachIdentity';
-import { ensureEntityNote } from '@/lib/context/entityNodes';
+import { ensureEntityNote } from '@/lib/notes/context/entityNodes';
 
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;

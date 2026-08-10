@@ -6,7 +6,7 @@ import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
 import { OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { markAccessSeeded } from '@/lib/notes/access';
-import { communityNodeId, syncEntityNodeSafe } from '@/lib/context/entityNodes';
+import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
 
 /**
  * POST /api/communities — user-facing community creation.

@@ -14,8 +14,8 @@
 import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { INDEX_BASENAME } from '@/lib/notes/shared/indexNote';
 
 // A non-entity note is still a Context note — same "Context / Raw" top nav an

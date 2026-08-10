@@ -1,0 +1,158 @@
+'use client';
+
+/**
+ * The "Preview" view for a resource node — replaces the generic profile page.
+ * A slim identity header (type pill, name, description, tags, link), then an
+ * OpenGraph card + embedded iframe of the resource URL. Sites that block
+ * framing (X-Frame-Options / CSP frame-ancestors) fall back to the card and an
+ * Open-site button; resources with no external link get an empty state.
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { ExternalLink, Globe2, Link2Off } from 'lucide-react';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { hexToPalette } from '@/lib/profileTheme';
+import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
+import { getTypeColor } from '@/features/directory/components/typeStyles';
+import { fetchJson } from '@/lib/fetchJson';
+import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
+import type { SerializedLinkPreview } from '@/lib/messages/types';
+
+// A resource created via the modal carries an internal `/slug` url — only an
+// absolute http(s) url is a previewable external link.
+function externalUrlOf(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+const hostname = (url: string) => {
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
+};
+
+interface PreviewResponse {
+  preview: SerializedLinkPreview | null;
+  embeddable?: boolean;
+}
+
+export default function ResourcePreviewContent({ node }: { node: NBNode }) {
+  const { currentCommunity } = useCommunity();
+  const externalUrl = externalUrlOf(node.url);
+  const [unfurl, setUnfurl] = useState<PreviewResponse | null>(null);
+  const [unfurlLoading, setUnfurlLoading] = useState(!!externalUrl);
+
+  // Same theme derivation as OrgPageContent: alias colour wins over type colour.
+  const theme = useMemo(() => {
+    const aliasConfig = findAlias(currentCommunity?.communityAliases, node.alias, node.type);
+    const color = aliasConfig?.color ?? getTypeColor(node.type, currentCommunity?.nodeTypes);
+    return hexToPalette(color);
+  }, [currentCommunity?.communityAliases, currentCommunity?.nodeTypes, node.alias, node.type]);
+
+  useEffect(() => {
+    if (!externalUrl) return;
+    let cancelled = false;
+    setUnfurlLoading(true);
+    fetchJson<PreviewResponse>(`/api/link-preview?url=${encodeURIComponent(externalUrl)}`)
+      .then((res) => { if (!cancelled) setUnfurl(res); })
+      .catch(() => { if (!cancelled) setUnfurl({ preview: null }); })
+      .finally(() => { if (!cancelled) setUnfurlLoading(false); });
+    return () => { cancelled = true; };
+  }, [externalUrl]);
+
+  const bio = node.metadata?.bio as string | undefined;
+  const description = bio ?? node.subtitle ?? null;
+  const tags = node.tags ?? [];
+  // Only a live unfurl knows the framing headers; unknown (cache hit / no
+  // preview) attempts the iframe and relies on the caption fallback.
+  const embeddable = unfurl?.embeddable !== false;
+
+  return (
+    <div className="profile-content-fade flex flex-col gap-5">
+      {/* ══ HEADER — resource identity + link actions ══ */}
+      <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+          <div className="min-w-0 flex-1">
+            <span className="inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border"
+                  style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
+              {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
+            </span>
+
+            <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>
+
+            {description && <p className="mt-1.5 text-[15px] text-text-secondary max-w-[72ch] whitespace-pre-line">{description}</p>}
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
+              {externalUrl && (
+                <a href={externalUrl} target="_blank" rel="noopener noreferrer"
+                   className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
+                  <Globe2 className="w-3.5 h-3.5" />{hostname(externalUrl)}
+                </a>
+              )}
+            </div>
+
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {tags.map((tag, i) => (
+                  <span key={tag}
+                        className="chip-pop px-3 py-1.5 rounded-full text-[13px] font-medium border transition-transform duration-150 hover:-translate-y-0.5"
+                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}33`, animationDelay: `${Math.min(i, 20) * 35}ms` }}>
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {externalUrl && (
+            <a href={externalUrl} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 flex-none"
+               style={{ background: theme.dark }}>
+              <ExternalLink className="w-4 h-4" /> Open site
+            </a>
+          )}
+        </div>
+      </section>
+
+      {/* ══ PREVIEW — OG card + embed ══ */}
+      {externalUrl ? (
+        <>
+          {unfurlLoading ? (
+            <div className="h-28 rounded-xl border border-border-subtle bg-surface-2/60 animate-pulse" />
+          ) : unfurl?.preview ? (
+            <LinkPreviewCard preview={unfurl.preview} className="max-w-xl" />
+          ) : null}
+
+          {!unfurlLoading && (
+            embeddable ? (
+              <div className="flex flex-col gap-2">
+                <iframe
+                  src={externalUrl}
+                  title={node.name}
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-[70vh] rounded-2xl border border-border-subtle bg-surface-1 shadow-soft"
+                />
+                <p className="text-xs text-text-muted">
+                  If the preview doesn&apos;t load, the site blocks embedding — use Open site.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-text-muted">
+                This site doesn&apos;t allow embedding — use Open site to view it.
+              </p>
+            )
+          )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-2 py-16 rounded-2xl border border-border-subtle bg-surface-1 text-center">
+          <Link2Off className="w-6 h-6 text-text-muted" />
+          <p className="text-sm text-text-muted">No link attached to this resource.</p>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -15,7 +15,7 @@ import {
 } from '../lib/notes/shared/chunking'
 import { normalizeSourcePath, sourceKindOf } from '../lib/notes/shared/sourceTypes'
 
-// --- kind detection / path normalization -----------------------------------------
+// kind detection / path normalization
 
 test('sourceKindOf maps supported extensions and rejects the rest', () => {
   assert.equal(sourceKindOf('deals.CSV'), 'csv')
@@ -31,7 +31,7 @@ test('normalizeSourcePath keeps source paths out of the .md note namespace', () 
   assert.equal(normalizeSourcePath('deals/pricing.csv'), 'deals/pricing.csv')
 })
 
-// --- prose chunking ---------------------------------------------------------------
+// prose chunking
 
 test('short prose yields a single chunk, empty text none', () => {
   assert.equal(chunkSourceText('one small paragraph', 'text').chunks.length, 1)
@@ -58,7 +58,7 @@ test('a paragraph larger than the chunk size is hard-split, not dropped', () => 
   assert.equal(chunks.join('').replace(/\n/g, '').length >= CHUNK_CHARS * 3, true)
 })
 
-// --- csv chunking -----------------------------------------------------------------
+// csv chunking
 
 test('csv chunks repeat the header context and pack rows per chunk', () => {
   const rows = Array.from({ length: CSV_ROWS_PER_CHUNK * 2 + 5 }, (_, i) => `Acme ${i},${i * 10},NZ`)
@@ -75,7 +75,7 @@ test('headerless/degenerate csv falls back to prose chunking', () => {
   assert.equal(chunks.length, 1)
 })
 
-// --- caps -------------------------------------------------------------------------
+// caps
 
 test('text beyond MAX_TEXT_CHARS is dropped and flagged truncated', () => {
   const { truncated, textChars } = chunkSourceText('y'.repeat(MAX_TEXT_CHARS + 100), 'text')

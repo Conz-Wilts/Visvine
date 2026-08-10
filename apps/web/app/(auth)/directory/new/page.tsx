@@ -12,10 +12,10 @@
 import React, { Suspense, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
-import { usePaneChrome, type PaneTabItem } from '@/lib/contexts/PaneShellContext';
+import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import type { DraftType } from '@/features/notes/components/DraftContextPanel';
 
 const DraftContextPanel = dynamic(

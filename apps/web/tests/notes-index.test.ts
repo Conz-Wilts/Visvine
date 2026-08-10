@@ -83,7 +83,7 @@ test('indexFolderPathOf / folderOfIndexPath name the folder a note becomes', () 
   assert.equal(indexPathOf(''), 'index.md')
 })
 
-// --- the managed child block -------------------------------------------------
+// the managed child block
 
 const CHILDREN = [
   { path: 'people/zoe.md', title: 'Zoe' },

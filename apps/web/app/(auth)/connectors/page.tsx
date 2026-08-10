@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Database, Globe, KeyRound, Plug } from 'lucide-react';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 

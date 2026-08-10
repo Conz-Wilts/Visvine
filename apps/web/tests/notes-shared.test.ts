@@ -23,7 +23,7 @@ import type { RawNote } from '../lib/notes/shared/types'
 
 const note = (path: string, content: string, mtime = 0): RawNote => ({ path, content, mtime })
 
-// --- markdown ----------------------------------------------------------------
+// markdown
 
 test('splitFrontmatter separates YAML from body', () => {
   const { frontmatter, body } = splitFrontmatter('---\ntitle: A\n---\n\nHello')
@@ -55,7 +55,7 @@ test('extractHashtags dedupes and skips headings / #123', () => {
   assert.deepEqual(extractHashtags('#alpha and #beta and #alpha\n# Heading\n#123'), ['alpha', 'beta'])
 })
 
-// --- context -------------------------------------------------------------------
+// context
 
 const vault = (): RawNote[] => [
   note('index.md', '---\ntitle: Index\ntags: [home]\n---\n\nSee [Canva](portfolio/canva.md) and [Gone](portfolio/missing.md)'),
@@ -127,7 +127,7 @@ test('buildTree sorts folders by display name, not path segment', () => {
   assert.deepEqual(folders, ['zebra', 'beta'])
 })
 
-// --- references --------------------------------------------------------------
+// references
 
 test('computeReferences finds linked + unlinked mentions', () => {
   const notes = [
@@ -200,7 +200,7 @@ test('linkMentionAt links the mention at the given offset, not the first one', (
   assert.equal(linkMentionAt(linked, 'Canva', 'canva.md', linked.indexOf('Canva')), null)
 })
 
-// --- related -----------------------------------------------------------------
+// related
 
 test('relatedNotes ranks similar notes and respects exclude', () => {
   const docs = [
@@ -215,7 +215,7 @@ test('relatedNotes ranks similar notes and respects exclude', () => {
   assert.ok(!excluded.some((r) => r.path === 'b.md'))
 })
 
-// --- search ------------------------------------------------------------------
+// search
 
 test('searchNotes uses AND semantics and returns snippets', () => {
   const docs = [
@@ -229,7 +229,7 @@ test('searchNotes uses AND semantics and returns snippets', () => {
   assert.equal(searchNotes(docs, '').length, 0)
 })
 
-// --- merge -------------------------------------------------------------------
+// merge
 
 test('decideMerge resolves the four cases', () => {
   assert.equal(decideMerge('base', 'same', 'same').status, 'in-sync')
@@ -238,7 +238,7 @@ test('decideMerge resolves the four cases', () => {
   assert.equal(decideMerge('base', 'mine', 'theirs').status, 'conflict')
 })
 
-// --- reorganize --------------------------------------------------------------
+// reorganize
 
 test('coerceMoves rejects unsafe / hallucinated moves', () => {
   const existing = new Set(['a.md', 'b.md'])

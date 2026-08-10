@@ -61,7 +61,7 @@ export interface TrashEntry {
   deletedAt: number // epoch ms
 }
 
-// --- Revision history --------------------------------------------------------
+// Revision history
 
 // How a note revision came to be. 'baseline' is the pre-edit snapshot seeded on
 // the first edit; 'ai-refactor' is an LLM rewrite; 'ai-enrich' is an insight
@@ -92,7 +92,7 @@ export interface NoteRevision {
   content: string // full note snapshot (frontmatter + body) at this save
 }
 
-// --- Reorganize (agentic notes folder cleanup) -------------------------------
+// Reorganize (agentic notes folder cleanup)
 
 // One proposed file move in a reorganization plan.
 export interface MoveProposal {

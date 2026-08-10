@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 
 import { applyFields, fieldDef, fieldsForType, readFields } from '../lib/create/typeFields'
 
-// --- type lookup ------------------------------------------------------------------
+// type lookup
 
 test('fieldsForType is case-insensitive and follows the stored lowercase type', () => {
   assert.deepEqual(fieldsForType('Person'), fieldsForType('person'))
@@ -64,7 +64,7 @@ test('event date keys stay snake_case to match eventRepo', () => {
   assert.equal(fieldDef('event', 'startAt'), null)
 })
 
-// --- applyFields ------------------------------------------------------------------
+// applyFields
 
 test('applyFields splits values into node columns and metadata', () => {
   const { node, metadata } = applyFields('person', {
@@ -117,7 +117,7 @@ test('applyFields on a type with no schema yields nothing', () => {
   assert.deepEqual(metadata, {})
 })
 
-// --- readFields -------------------------------------------------------------------
+// readFields
 
 test('readFields round-trips applyFields', () => {
   const values = { subtitle: 'Founder', email: 'craig@halter.io', location: 'Auckland' }

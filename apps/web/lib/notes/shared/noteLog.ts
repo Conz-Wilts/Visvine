@@ -6,7 +6,7 @@
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './markdown'
 import type { NoteFrontmatter } from './types'
 
-// --- ## Log entries ------------------------------------------------------------
+// ## Log entries
 
 export interface NoteLogEntry {
   /** YYYY-MM-DD. */
@@ -47,7 +47,7 @@ export function appendNoteLogEntry(md: string, e: NoteLogEntry): string {
   return joinFrontmatter(fm, insertUnderLog(body, entry))
 }
 
-// --- capture lines (personal monthly log) ---------------------------------------
+// capture lines (personal monthly log)
 
 export interface CaptureEntry {
   /** Epoch ms. */
@@ -106,7 +106,7 @@ export function parseCaptureEntries(md: string): ParsedCapture[] {
   return out
 }
 
-// --- provenance ------------------------------------------------------------------
+// provenance
 
 /** A reference back to the originating brain note (access-gated at resolve time). */
 export function provenanceRef(sourcePath: string): string {

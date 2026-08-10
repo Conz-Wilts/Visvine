@@ -39,7 +39,7 @@ import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { notesApi } from '../lib/notesApi'
-import { useTabBarSlot } from '@/lib/contexts/TabBarSlotContext'
+import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 

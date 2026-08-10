@@ -7,20 +7,20 @@
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
-import { useSession } from '@/lib/auth-client';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useSession } from '@/features/auth/lib/auth-client';
 import { isEventUpcoming } from '@/lib/eventUtils';
 import type { NBEvent } from '@/lib/types';
-import EventsToolbar from '@/components/events/EventsToolbar';
-import EventsCalendarView from '@/components/events/EventsCalendarView';
-import EventsFeedView from '@/components/events/EventsFeedView';
-import EventsViewSelector from '@/components/events/EventsViewSelector';
-import type { EventView } from '@/components/events/EventsViewSelector';
-import EventsScopeSelector from '@/components/events/EventsScopeSelector';
-import type { EventScope } from '@/components/events/EventsScopeSelector';
+import EventsToolbar from '@/features/events/components/EventsToolbar';
+import EventsCalendarView from '@/features/events/components/EventsCalendarView';
+import EventsFeedView from '@/features/events/components/EventsFeedView';
+import EventsViewSelector from '@/features/events/components/EventsViewSelector';
+import type { EventView } from '@/features/events/components/EventsViewSelector';
+import EventsScopeSelector from '@/features/events/components/EventsScopeSelector';
+import type { EventScope } from '@/features/events/components/EventsScopeSelector';
 import { PageTitle } from '@/components/ui';
-import PaneTopScrollbarMask from '@/components/pane/PaneTopScrollbarMask';
+import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 
 interface EventWithStats extends NBEvent {
   _stats?: {

@@ -51,7 +51,7 @@ function payload(result: { content?: unknown }): Json {
 }
 
 async function main() {
-  // --- an access token for a real admin of the community ---------------------
+  // an access token for a real admin of the community
   const holder = await prisma.userAlias.findFirst({
     where: { communityId: COMMUNITY, aliasName: OWNER_ALIAS_NAME },
     select: { userId: true },
@@ -79,7 +79,7 @@ async function main() {
   const call = async (name: string, args: Record<string, unknown>) =>
     payload(await client.callTool({ name, arguments: args }));
 
-  // --- discovery -------------------------------------------------------------
+  // discovery
   const tools = await client.listTools();
   check(
     'the MCP server advertises list_connectors + run_connector',
@@ -103,7 +103,7 @@ async function main() {
     (fundConnector?.docs ?? '').split('\n').find((l: string) => l.includes('fetch(')) ?? '(no fetch example)',
   );
 
-  // --- the actual data pull --------------------------------------------------
+  // the actual data pull
   const runConnector = (code: string) =>
     call('run_connector', { community_id: COMMUNITY, connector: 'fund-metrics', code });
   const shown = (r: Json) => JSON.stringify(r.value ?? null);
@@ -151,7 +151,7 @@ async function main() {
     shown(positions) || positions.error?.message,
   );
 
-  // --- the secret was resolved server-side, never handed to the caller -------
+  // the secret was resolved server-side, never handed to the caller
   const unauth = await runConnector(`
     const res = await fetch(\`\${env.FUND_API}/funds\`)
     return res.status
@@ -174,7 +174,7 @@ async function main() {
     shown(whoami).slice(0, 160),
   );
 
-  // --- the perimeter ---------------------------------------------------------
+  // the perimeter
   const offPerimeter = await runConnector(
     `try { await fetch('https://example.com/') } catch (e) { return e.message }`,
   );
@@ -184,7 +184,7 @@ async function main() {
     `denials: ${JSON.stringify(offPerimeter.denials ?? [])}`,
   );
 
-  // --- the context note that hangs off the connector -------------------------
+  // the context note that hangs off the connector
   const context = await call('search_context', { community_id: COMMUNITY, query: 'TVPI' });
   const hit = JSON.stringify(context);
   check(

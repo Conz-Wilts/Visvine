@@ -1,20 +1,20 @@
 import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
- * Pure feature-access logic, kept out of lib/features.tsx (which carries JSX
+ * Pure feature-access logic, kept out of features/shared/lib/features.tsx (which carries JSX
  * icons) so server routes and node:test suites can import it directly.
- * lib/features.tsx re-exports everything here alongside the FEATURES registry.
+ * features/shared/lib/features.tsx re-exports everything here alongside the FEATURES registry.
  */
 
 /**
  * Feature keys that are always on and can never be persisted off. Must stay in
- * sync with the `core: true` entries in lib/features.tsx#FEATURES.
+ * sync with the `core: true` entries in features/shared/lib/features.tsx#FEATURES.
  */
 export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
 
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
- * with lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
+ * with features/shared/lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
  * reject unknown keys from a client-submitted `order`.
  */
 export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors'];

@@ -17,7 +17,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal, Field, Input, Textarea, Button } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
 interface CreateResponse {

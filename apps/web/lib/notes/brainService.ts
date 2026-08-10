@@ -47,7 +47,7 @@ function isAuditedRead(p: BrainPrincipal, brain: Brain, path: string): boolean {
   return isRestrictedPath(p.access.restricted, path)
 }
 
-// --- read surface ---------------------------------------------------------------
+// read surface
 
 export interface VisibleVault {
   raws: RawNote[]
@@ -154,7 +154,7 @@ export async function searchBrain(
   return { hits, semantic }
 }
 
-// --- write gate -----------------------------------------------------------------
+// write gate
 
 /**
  * The write gate. Personal brains are always writable by their owner (scoping
@@ -252,7 +252,7 @@ function roleLabel(p: BrainPrincipal, brain: Brain, path: string): string {
   return principalLevelName(p, path) ?? 'member'
 }
 
-// --- move (gated on BOTH ends, inbound links rewritten) ---------------------------
+// move (gated on BOTH ends, inbound links rewritten)
 
 /**
  * Move/rename a note within a brain: gated on write access to the source and the
@@ -283,7 +283,7 @@ export async function moveGated(
   return { status: 'applied', path: moved }
 }
 
-// --- context sources (non-note files/tables; same gate + lens as notes) ----------
+// context sources (non-note files/tables; same gate + lens as notes)
 
 /** The sources the principal may see, optionally restricted to one top-level folder. */
 export async function listVisibleSources(

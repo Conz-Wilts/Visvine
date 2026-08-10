@@ -5,9 +5,9 @@
  */
 
 import { useState, useEffect, use } from 'react';
-import { useCommunity } from '@/lib/contexts/CommunityContext';
-import { RSVPForm } from '@/components/events/RSVPForm';
-import { EventHeader } from '@/components/events/EventHeader';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { RSVPForm } from '@/features/events/components/RSVPForm';
+import { EventHeader } from '@/features/events/components/EventHeader';
 import type { NBEvent } from '@/lib/types';
 
 export default function RSVPPage({

@@ -3,10 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/prisma";
 import { getSession, isSuperAdmin } from "@/lib/session";
-import NewPostButton from "@/features/blog/NewPostButton";
-import BlogPostList from "@/features/admin/BlogPostList";
-import WaitlistTable from "@/features/admin/WaitlistTable";
-import IdentityReviewTable from "@/features/admin/IdentityReviewTable";
+import NewPostButton from "@/features/blog/components/NewPostButton";
+import BlogPostList from "@/features/admin/components/BlogPostList";
+import WaitlistTable from "@/features/admin/components/WaitlistTable";
+import IdentityReviewTable from "@/features/admin/components/IdentityReviewTable";
 import { listSuggestions } from "@/lib/identity/steward";
 
 export const dynamic = "force-dynamic";

@@ -79,7 +79,7 @@ function sourceRef(sourceCommunityId: string, sourcePath: string): string {
   return provenanceRef(`${sourceCommunityId}/${sourcePath}`)
 }
 
-// --- publish / unpublish ---------------------------------------------------------
+// publish / unpublish
 
 export type PublishResult =
   | { status: 'applied'; publication: PublicationInfo }
@@ -167,7 +167,7 @@ export async function getPublication(id: string): Promise<PublicationInfo | null
   return row ? toInfo(row) : null
 }
 
-// --- read model -------------------------------------------------------------------
+// read model
 
 export interface PublicationState {
   /** Publications OF this note (it is the source). */
@@ -210,7 +210,7 @@ export async function replicaDenial(communityId: string, path: string): Promise<
   return 'This note is a published copy and stays in sync with its source — unlink it to edit here.'
 }
 
-// --- store hooks (called from lib/notes/store.ts, always best-effort) -------------
+// store hooks (called from lib/notes/store.ts, always best-effort)
 
 async function writeReplica(
   publicationId: string,

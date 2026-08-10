@@ -9,10 +9,10 @@ import {
   ancestorClosure,
   neighborhoodOf,
   type TreeRow,
-} from '../components/context/contextTreeModel'
-import { ROOT_PATH, TRASH_PATH, ancestorChain } from '../hooks/useContextTreeState'
+} from '../features/notes/components/contextTreeModel'
+import { ROOT_PATH, TRASH_PATH, ancestorChain } from '../features/notes/hooks/useContextTreeState'
 import type { TreeNode } from '../lib/notes/shared/types'
-import type { ContextItem } from '../hooks/useContextBrowse'
+import type { ContextItem } from '../features/notes/hooks/useContextBrowse'
 
 const item = (path: string, over: Partial<ContextItem> = {}): ContextItem => ({
   path,
@@ -74,7 +74,7 @@ const flatten = (openPaths: Set<string>, over: Record<string, unknown> = {}) =>
 
 const keys = (rows: TreeRow[]) => rows.map((r) => r.key)
 
-// --- ancestorChain / ancestorClosure ----------------------------------------
+// ancestorChain / ancestorClosure
 
 test('ancestorChain includes the root row and every folder down to the note', () => {
   assert.deepEqual(ancestorChain('people/acme/index.md'), [ROOT_PATH, 'people', 'people/acme'])
@@ -86,7 +86,7 @@ test('ancestorClosure unions chains across paths', () => {
   assert.deepEqual([...closure].sort(), ['', 'people', 'people/acme'])
 })
 
-// --- flattening --------------------------------------------------------------
+// flattening
 
 test('collapsed root renders only the root and trash rows', () => {
   const rows = flatten(new Set())
@@ -158,7 +158,7 @@ test('trash renders as a pinned folder whose entries expand', () => {
   assert.equal(open.at(-1)!.trashEntry!.id, 't1')
 })
 
-// --- neighborhoodOf ----------------------------------------------------------
+// neighborhoodOf
 
 test('neighborhoodOf is self + outgoing + incoming, one hop', () => {
   const all = [

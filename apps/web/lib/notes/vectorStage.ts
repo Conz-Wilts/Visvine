@@ -24,7 +24,7 @@ const TOP_K = 20
 const RELATIVE_FLOOR = 0.85
 // …and a floor in absolute terms, because "85% of the best" is still noise when
 // the best match is itself unrelated to the query.
-export const ABSOLUTE_FLOOR = 0.55
+const ABSOLUTE_FLOOR = 0.55
 
 /** Collects why the semantic stages produced nothing, for the caller to report. */
 export interface SemanticReport {

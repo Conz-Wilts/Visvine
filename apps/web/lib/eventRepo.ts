@@ -9,8 +9,8 @@ import type { EventsData, NBEvent, NBAttendee, ContextData, NBNode, NBLink, RSVP
 import { normalizeImageUrl } from './mediaUrl';
 import { findMatchingPerson } from './personDedupe';
 import { generateAttendeeId, normalizeStatus, occupiedSpots, decideRsvpStatus } from './eventUtils';
-import { upsertLink, removeAutoLink } from './context/links';
-import { ensureEntityNote } from './context/entityNodes';
+import { upsertLink, removeAutoLink } from './notes/context/links';
+import { ensureEntityNote } from './notes/context/entityNodes';
 import { logger } from './logger';
 
 /** Thrown by submitRsvp when an event is full and its waitlist is disabled. */

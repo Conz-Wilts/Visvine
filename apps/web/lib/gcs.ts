@@ -1,9 +1,7 @@
 import { Storage } from '@google-cloud/storage';
 import sharp from 'sharp';
 
-// ---------------------------------------------------------------------------
 // GCS client singleton
-// ---------------------------------------------------------------------------
 let _storage: Storage | null = null;
 
 export function getStorage(): Storage {
@@ -33,9 +31,7 @@ function requireEnv(name: string): string {
 export const MEDIA_BUCKET = () => requireEnv('GCS_MEDIA_BUCKET');
 export const RESOURCES_BUCKET = () => requireEnv('GCS_RESOURCES_BUCKET');
 
-// ---------------------------------------------------------------------------
 // Image variants generated on every profile/community image upload
-// ---------------------------------------------------------------------------
 type AvatarSize = 'original' | 'avatar-lg' | 'avatar-md' | 'avatar-sm';
 
 const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }> = [
@@ -45,10 +41,8 @@ const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }
   { name: 'avatar-sm',  size: 64,   quality: 75 },
 ];
 
-// ---------------------------------------------------------------------------
 // Upload a profile/community image — generates 4 WebP variants in parallel
 // Returns the GCS object path for the original (caller stores this in DB)
-// ---------------------------------------------------------------------------
 export async function uploadProfileImage(
   prefix: string, // e.g. "media/nodeId" or "media/community-communityId"
   buffer: Buffer
@@ -80,9 +74,6 @@ export async function uploadProfileImage(
   return `${prefix}/original.webp`;
 }
 
-// ---------------------------------------------------------------------------
-// Delete all avatar variants for a given prefix
-// ---------------------------------------------------------------------------
 export async function deleteProfileImage(prefix: string): Promise<void> {
   const storage = getStorage();
   const bucket = storage.bucket(MEDIA_BUCKET());
@@ -94,10 +85,8 @@ export async function deleteProfileImage(prefix: string): Promise<void> {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Upload a resource file (PDF, XLSX, CSV, DOCX, or image)
 // Returns the GCS object path (caller stores this in DB)
-// ---------------------------------------------------------------------------
 export async function uploadResourceFile(
   objectPath: string,
   buffer: Buffer,
@@ -110,22 +99,17 @@ export async function uploadResourceFile(
   return objectPath;
 }
 
-// ---------------------------------------------------------------------------
-// Delete a resource file
-// ---------------------------------------------------------------------------
 export async function deleteResourceFile(objectPath: string): Promise<void> {
   const storage = getStorage();
   const bucket = storage.bucket(RESOURCES_BUCKET());
   await bucket.file(objectPath).delete({ ignoreNotFound: true });
 }
 
-// ---------------------------------------------------------------------------
 // Upload a blog image — aspect-preserving WebP into MEDIA_BUCKET (served
 // publicly via the /api/media proxy, which is WebP-only). Unlike
 // uploadProfileImage this does NOT square-crop; it keeps the original aspect
 // ratio so wide/tall figures in posts render correctly.
 // Returns the GCS object path (caller wraps it with getMediaUrl()).
-// ---------------------------------------------------------------------------
 export async function uploadBlogImage(
   objectPath: string,
   buffer: Buffer
@@ -142,7 +126,6 @@ export async function uploadBlogImage(
   return objectPath;
 }
 
-// ---------------------------------------------------------------------------
 // Generate a signed URL (15-minute expiry) for private GCS objects.
 //
 // In-memory TTL cache: signing is a crypto operation per object and the
@@ -151,7 +134,6 @@ export async function uploadBlogImage(
 // ~10 min. Bounded FIFO eviction keeps the map from growing unbounded.
 // Per-process only (each serverless instance has its own map) — that's fine,
 // it's purely an optimization and misses just re-sign.
-// ---------------------------------------------------------------------------
 const SIGNED_URL_CACHE_MAX_ENTRIES = 500;
 const SIGNED_URL_MIN_REMAINING_MS = 5 * 60 * 1000;
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
@@ -188,11 +170,9 @@ export async function getSignedUrl(
   return url;
 }
 
-// ---------------------------------------------------------------------------
 // Build a URL for media images.
 // Routes through /api/media proxy so the GCS bucket stays private (or the CDN,
 // if GCS_CDN_BASE_URL is set). The actual rule lives in the client-safe
 // mediaUrl module so server and client stay in lockstep — this is a thin
 // server-side alias kept for the existing `@/lib/gcs` import sites.
-// ---------------------------------------------------------------------------
 export { getMediaProxyUrl as getMediaUrl } from './mediaUrl';

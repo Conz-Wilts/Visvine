@@ -19,11 +19,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, ChevronDown, X } from 'lucide-react'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { canCreateType } from '@/lib/create/creatable'
-import type { CreateableType } from '@/lib/contexts/CreateModalContext'
+import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
 import { aliasesForType, findAlias, type CommunityAlias, type CommunityFeatureConfig, type NodeTypeConfig } from '@/lib/types'
-import { getTypeColor } from '@/components/dashboard/typeStyles'
+import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import {
   noteFileSlug,
@@ -33,7 +33,7 @@ import {
 } from '@/lib/notes/shared/newContext'
 import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref, sourceHref } from '@/lib/notes/entities'
-import { useBrainTree, FolderPicker, PathPreview } from '@/components/create/ContextDestination'
+import { useBrainTree, FolderPicker, PathPreview } from '@/features/create/components/ContextDestination'
 import {
   FileForm,
   connectorSlug,
@@ -41,14 +41,14 @@ import {
   type ConnectorFormData,
   type FileEntry,
   type FileFormData,
-} from '@/components/create/CreateModalForms'
+} from '@/features/create/components/CreateModalForms'
 import { newConnectorNote } from '@/lib/connectors/config'
 import type { ChannelSpaceEntry } from '@/lib/messages/types'
-import { useNodeSearch, type NodeSearchResult } from '@/hooks/useNodeSearch'
-import MatchPanel from '@/components/create/MatchPanel'
+import { useNodeSearch, type NodeSearchResult } from '@/features/shared/hooks/useNodeSearch'
+import MatchPanel from '@/features/create/components/MatchPanel'
 import { tagKey, tagPalette } from '@/lib/tagColors'
-import { primeNodeProfile } from '@/hooks/useNodeProfile'
-import { clearContextCache } from '@/hooks/useCommunityContextData'
+import { primeNodeProfile } from '@/features/shared/hooks/useNodeProfile'
+import { clearContextCache } from '@/features/notes/hooks/useCommunityContextData'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, primeContextCache } from '../lib/contextPrefetch'

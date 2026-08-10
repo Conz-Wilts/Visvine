@@ -10,7 +10,7 @@
 // it" — the note-first types are creatable everywhere but shown only on
 // /directory/new, which is what `inGrid` is for.
 
-import type { CreateableType } from '@/lib/contexts/CreateModalContext'
+import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
 import type { CommunityFeatureConfig } from '@/lib/types'
 // From featureAccess, not features.tsx: the latter carries JSX, which drags a
 // React runtime into anything that imports this (including the unit tests).

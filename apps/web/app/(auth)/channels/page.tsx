@@ -1,4 +1,4 @@
-import MessagesClient from '@/components/messages/MessagesClient';
+import MessagesClient from '@/features/messages/components/MessagesClient';
 import { getServerMessagingUser } from '@/lib/messages/auth';
 
 export const dynamic = 'force-dynamic';

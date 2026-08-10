@@ -55,7 +55,7 @@ export function normalizeResourcePath(input: string): string {
   return norm
 }
 
-// --- seeding (legacy migration / grandfathering) --------------------------------
+// seeding (legacy migration / grandfathering)
 
 /**
  * Mark a community's access as already established, so ensureAccessSeeded never
@@ -144,7 +144,7 @@ export async function ensureAccessSeeded(communityId: string): Promise<void> {
   seeded.add(communityId)
 }
 
-// --- loading --------------------------------------------------------------------
+// loading
 
 interface FolderFlags {
   restricted: string[]
@@ -245,7 +245,7 @@ export async function loadCommunityAccess(communityId: string): Promise<Communit
   }
 }
 
-// --- who-has-access (the Share panel's merged list) ------------------------------
+// who-has-access (the Share panel's merged list)
 
 export interface AccessListEntry {
   subjectType: GrantSubjectType
@@ -325,7 +325,7 @@ export async function accessListFor(communityId: string, path: string): Promise<
   )
 }
 
-// --- mutations (validated + audited) ---------------------------------------------
+// mutations (validated + audited)
 
 export interface GrantInput {
   subjectType: GrantSubjectType

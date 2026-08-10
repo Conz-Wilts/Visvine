@@ -101,7 +101,6 @@ export async function processImport(
       const existing = await prisma.user.findUnique({ where: { email } });
 
       if (!existing) {
-        // Create shadow user
         const newUser = await prisma.user.create({
           data: {
             email,

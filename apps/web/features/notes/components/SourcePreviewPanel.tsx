@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
 

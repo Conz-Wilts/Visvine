@@ -102,10 +102,8 @@ export function normalizeLinkedIn(url: string): string {
 
   let normalized = url.trim().toLowerCase();
 
-  // Remove protocol
   normalized = normalized.replace(/^https?:\/\//i, '');
 
-  // Remove www
   normalized = normalized.replace(/^www\./i, '');
 
   // Ensure it starts with linkedin.com
@@ -117,10 +115,8 @@ export function normalizeLinkedIn(url: string): string {
     }
   }
 
-  // Remove trailing slashes and query params
   normalized = normalized.split('?')[0].replace(/\/$/, '');
 
-  // Add https protocol back
   return `https://${normalized}`;
 }
 

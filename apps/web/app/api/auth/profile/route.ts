@@ -85,7 +85,6 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    // Update the profile
     const updated = await prisma.person.update({
       where: { id: personId },
       data: {

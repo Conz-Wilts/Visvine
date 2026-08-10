@@ -8,7 +8,7 @@
 import { notFound } from 'next/navigation';
 import { getEventBySlug, getAttendees } from '@/lib/eventRepo';
 import { formatEventDateRange, normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
-import { PublicRsvpForm } from '@/components/events/PublicRsvpForm';
+import { PublicRsvpForm } from '@/features/events/components/PublicRsvpForm';
 import { Calendar, MapPin, Users, Video } from 'lucide-react';
 import type { Metadata } from 'next';
 

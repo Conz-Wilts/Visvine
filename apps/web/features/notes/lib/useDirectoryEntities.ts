@@ -6,7 +6,7 @@
 // Context tab (EntityContextPanel).
 
 import { useMemo } from 'react'
-import { useCommunityContextData } from '@/hooks/useCommunityContextData'
+import { useCommunityContextData } from '@/features/notes/hooks/useCommunityContextData'
 import { entityNotePath } from '@/lib/notes/entities'
 import type { PickerEntity } from '../components/NotePicker'
 

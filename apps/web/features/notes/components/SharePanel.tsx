@@ -33,8 +33,8 @@ import {
   Check,
   ChevronDown,
 } from 'lucide-react'
-import { useCommunity } from '@/lib/contexts/CommunityContext'
-import { useEscapeKey } from '@/hooks/useEscapeKey'
+import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey'
 import Avatar from '@/components/ui/Avatar'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Toggle from '@/components/ui/Toggle'
@@ -62,7 +62,7 @@ interface PendingSubject {
   image: string | null
 }
 
-// --- role menu -------------------------------------------------------------------
+// role menu
 
 /**
  * How many PickerMenus are open. Escape is layered: it must close the topmost
@@ -301,7 +301,7 @@ function RoleMenu({
   )
 }
 
-// --- small shared bits -----------------------------------------------------------
+// small shared bits
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h4 className="mb-1 text-sm font-semibold text-text-primary">{children}</h4>
@@ -359,7 +359,7 @@ const ROW_CLASS = 'flex items-center gap-2.5 rounded-xl px-2 py-1.5 transition h
 
 const ALL_LEVELS = ACCESS_LEVELS.map((l) => l.name)
 
-// --- the dialog ------------------------------------------------------------------
+// the dialog
 
 interface SharePanelProps {
   communityId: string
@@ -644,7 +644,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
 
   const canManage = access?.canManage ?? false
 
-  // --- rendering ----------------------------------------------------------------
+  // rendering
 
   const addStep = (
     <>

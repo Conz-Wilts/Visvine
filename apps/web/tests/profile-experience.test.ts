@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   getExperience, sortExperience, formatYearMonth, formatDuration,
   computeProfileCompletion, type FullProfile, type ExperienceEntry,
-} from '../lib/profileTypes';
+} from '../lib/types/profile';
 import { matchCountryInLocation, locationFlag } from '../lib/countries';
 
 const baseProfile = (metadata: Record<string, unknown> | null = null): FullProfile => ({

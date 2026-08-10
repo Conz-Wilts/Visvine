@@ -117,7 +117,7 @@ export async function directoryAccessForbidden(
 /**
  * A community's feature config, or null when it has none (or doesn't exist).
  * The directory and context routes read it to hide the node types belonging to
- * a switched-off tool — see lib/context/featureVisibility.ts.
+ * a switched-off tool — see lib/notes/context/featureVisibility.ts.
  */
 export async function getFeatureConfig(
   communityId: string,

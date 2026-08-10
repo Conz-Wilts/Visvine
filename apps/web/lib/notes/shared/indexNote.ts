@@ -78,7 +78,7 @@ export function nextIndexTitle(
   return untouched ? humanizeFolderName(newSegment) : null
 }
 
-// --- the managed child list --------------------------------------------------
+// the managed child list
 //
 // An index body is curated prose PLUS a machine-maintained list of the folder's
 // children. The two are kept apart by HTML comment markers (invisible in

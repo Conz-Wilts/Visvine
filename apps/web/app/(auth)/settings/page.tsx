@@ -1,49 +1,27 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { useTheme, COLOR_THEMES, ColorTheme } from '@/lib/contexts/ThemeContext';
-import { useContextPanel } from '@/lib/contexts/ContextPanelContext';
-import { DOCK_MIN_WIDTH } from '@/features/shared/components/layout/Sidebar';
-import {
-  User,
-  Bell,
-  Palette,
-  Shield,
-  Globe,
-  Eye,
-  Smartphone,
-} from 'lucide-react';
+import React, { Suspense } from 'react';
+import { useTheme, COLOR_THEMES, ColorTheme } from '@/features/shared/contexts/ThemeContext';
+import { User, Bell, Globe, Eye, Smartphone } from 'lucide-react';
+import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
+import LoadingText from '@/components/ui/LoadingText';
+import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
 
-// ─── Section types ────────────────────────────────────────────────────────────
+/**
+ * Personal settings. Same shell as the Community Console — a pane-top tab bar
+ * with `?section=` in the URL — so the two settings-shaped pages navigate
+ * identically instead of one docking a column into the Sidebar and the other
+ * not. See ConsoleShell for the bar itself.
+ */
 
-type SettingsSection = 'appearance' | 'account' | 'notifications' | 'privacy';
+// ─── Sections ─────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS: { id: SettingsSection; label: string; icon: React.ReactNode; description: string }[] = [
-  {
-    id: 'appearance',
-    label: 'Appearance',
-    icon: <Palette size={18} />,
-    description: 'Theme, colors, and display',
-  },
-  {
-    id: 'account',
-    label: 'Account',
-    icon: <User size={18} />,
-    description: 'Profile and credentials',
-  },
-  {
-    id: 'notifications',
-    label: 'Notifications',
-    icon: <Bell size={18} />,
-    description: 'Alerts and digests',
-  },
-  {
-    id: 'privacy',
-    label: 'Privacy',
-    icon: <Shield size={18} />,
-    description: 'Visibility and data',
-  },
+const SECTIONS: ConsoleSection[] = [
+  { id: 'appearance', label: 'Appearance', width: 'form' },
+  { id: 'connections', label: 'Connections', width: 'form' },
+  { id: 'account', label: 'Account', width: 'form' },
+  { id: 'notifications', label: 'Notifications', width: 'form' },
+  { id: 'privacy', label: 'Privacy', width: 'form' },
 ];
 
 // ─── Color swatch ─────────────────────────────────────────────────────────────
@@ -147,133 +125,35 @@ function PlaceholderSection({ label, icon }: { label: string; icon: React.ReactN
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+function renderSection(id: string) {
+  switch (id) {
+    case 'appearance':
+      return <AppearanceSection />;
+    case 'connections':
+      return <ConnectClaudePanel />;
+    case 'account':
+      return <PlaceholderSection label="Account" icon={<User size={22} />} />;
+    case 'notifications':
+      return <PlaceholderSection label="Notification" icon={<Bell size={22} />} />;
+    case 'privacy':
+      return <PlaceholderSection label="Privacy" icon={<Eye size={22} />} />;
+    default:
+      return null;
+  }
+}
+
 export default function SettingsPage() {
-  const [active, setActive] = useState<SettingsSection>('appearance');
-  const { theme } = useTheme();
-  const { host } = useContextPanel();
-
-  // Track the Sidebar's dock breakpoint so both sides flip together.
-  const [wide, setWide] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`);
-    const sync = () => setWide(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
-
-  const dockNav = wide && Boolean(host);
-
-  // The section list, rendered into the Sidebar's docked panel — same host the
-  // /channels list and the notes tree share.
-  const dockedNav = dockNav && host
-    ? createPortal(
-        <div
-          className="flex h-full min-h-0 flex-col overflow-y-auto bg-surface-1 px-3 py-4"
-          style={{ animation: 'fadeIn 0.3s ease-out' }}
-        >
-          <nav aria-label="Settings sections">
-            <div className="mb-1.5 px-4 text-xs font-semibold uppercase tracking-wider text-text-muted">
-              Settings
-            </div>
-            <ul className="space-y-1">
-              {NAV_ITEMS.map(item => {
-                const isActive = active === item.id;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => setActive(item.id)}
-                      aria-current={isActive ? 'page' : undefined}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 w-full group"
-                      style={{
-                        background: isActive ? theme.accentLight : 'transparent',
-                        color: isActive ? theme.accentDark : undefined,
-                      }}
-                    >
-                      <span
-                        className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors"
-                        style={{
-                          background: isActive ? theme.accent : undefined,
-                          color: isActive ? 'white' : undefined,
-                        }}
-                      >
-                        <span className={isActive ? '' : 'text-text-muted'}>
-                          {item.icon}
-                        </span>
-                      </span>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium truncate ${isActive ? '' : 'text-text-secondary'}`}>{item.label}</p>
-                        <p className={`text-[10px] truncate opacity-70 ${isActive ? '' : 'text-text-muted'}`}>{item.description}</p>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-        </div>,
-        host,
-      )
-    : null;
-
+  // ConsoleShell reads `?section=` via useSearchParams, so it needs a Suspense
+  // boundary above it — same shape as the console at app/(auth)/admin/page.tsx.
   return (
-    <>
-      {dockedNav}
-      {/* When the section list is docked into the Sidebar, pad left so the content
-          clears the docked card (260px panel + 12px gutter — keep in sync with
-          SETTINGS_PANEL_W in Sidebar.tsx). */}
-      <div
-        className={`w-full ${dockNav ? 'pl-[272px]' : ''}`}
-        style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
-      >
-      <div className="min-w-0 pt-4 pb-10 px-6 sm:px-8 max-w-2xl">
-        {/* Narrow fallback: horizontally scrollable pill row above the content */}
-        {!dockNav && (
-          <div className="flex gap-1 mb-6 overflow-x-auto pb-1 -mx-1 px-1">
-            {NAV_ITEMS.map(item => {
-              const isActive = active === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActive(item.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold flex-shrink-0 transition-all"
-                  style={{
-                    background: isActive ? theme.accentLight : undefined,
-                    color: isActive ? theme.accentDark : undefined,
-                  }}
-                >
-                  <span className={isActive ? '' : 'text-text-muted'}>{item.icon}</span>
-                  <span className={isActive ? '' : 'text-text-secondary'}>{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Section heading */}
-        <div className="mb-6">
-          <h1 className="text-lg font-bold text-text-primary">
-            {NAV_ITEMS.find(n => n.id === active)?.label}
-          </h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            {NAV_ITEMS.find(n => n.id === active)?.description}
-          </p>
+    <Suspense
+      fallback={
+        <div className="w-full px-6 py-8">
+          <LoadingText text="Loading…" />
         </div>
-
-        {/* Content */}
-        {active === 'appearance' && <AppearanceSection />}
-        {active === 'account' && (
-          <PlaceholderSection label="Account" icon={<User size={22} />} />
-        )}
-        {active === 'notifications' && (
-          <PlaceholderSection label="Notification" icon={<Bell size={22} />} />
-        )}
-        {active === 'privacy' && (
-          <PlaceholderSection label="Privacy" icon={<Eye size={22} />} />
-        )}
-      </div>
-      </div>
-    </>
+      }
+    >
+      <ConsoleShell sections={SECTIONS} renderSection={renderSection} ariaLabel="Settings sections" />
+    </Suspense>
   );
 }
