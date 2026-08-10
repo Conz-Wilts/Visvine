@@ -7,6 +7,8 @@ import { handleApiError } from '@/lib/api/route';
 import { OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
+import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
+import { logger } from '@/lib/logger';
 
 /**
  * POST /api/communities — user-facing community creation.
@@ -103,6 +105,16 @@ export async function POST(request: NextRequest) {
       parentNodeId: communityNode,
       actor,
     });
+
+    // Seed the brain's root index — the community's home page. The Directory's
+    // Context tab routes to it, and falls back to the three-column browser for a
+    // brain without one, so a community that never gets one never lands on its
+    // own home page. Best-effort for the same reason as the context nodes above.
+    try {
+      await ensureRootIndex({ communityId: id, ownerKey: SHARED_OWNER_KEY }, name, actor);
+    } catch (err) {
+      logger.warn('communities.root_index_failed', { communityId: id, err });
+    }
 
     return NextResponse.json(
       {

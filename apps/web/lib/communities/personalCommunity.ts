@@ -11,7 +11,7 @@
 // `personalOwnerId` so it's hidden from Discover and other users' lists.
 
 import prisma from '@/lib/prisma'
-import { createNote, noteCount } from '@/lib/notes/store'
+import { createNote, ensureRootIndex, noteCount } from '@/lib/notes/store'
 import { logger } from '@/lib/logger'
 
 const WELCOME_PATH = 'welcome.md'
@@ -123,13 +123,18 @@ export async function provisionPersonalCommunity(user: {
   //    block the user from reaching their notes.
   try {
     const brain = { communityId, ownerKey: 'shared' }
-    if ((await noteCount(brain)) === 0) {
-      await createNote(brain, WELCOME_PATH, welcomeNote(displayName), {
-        id: user.userId,
-        name: displayName,
-        email: user.email ?? null,
-      })
+    const actor = {
+      id: user.userId,
+      name: displayName,
+      email: user.email ?? null,
     }
+    if ((await noteCount(brain)) === 0) {
+      await createNote(brain, WELCOME_PATH, welcomeNote(displayName), actor)
+    }
+    // The root index is the space's home page — the Context tab routes to it.
+    // Seeded outside the noteCount check so spaces provisioned before this
+    // existed (which already hold a welcome note) still get one.
+    await ensureRootIndex(brain, displayName, actor)
   } catch (err) {
     logger.warn('personalCommunity.seed_failed', { communityId, err })
   }

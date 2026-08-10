@@ -151,6 +151,32 @@ test('newIndexContent is an Index note with an empty block ready to fill', () =>
   assert.equal(hasChildrenBlock(content), true)
 })
 
+// The BRAIN ROOT's index — the community home page the Directory's Context tab
+// routes to. Seeded by ensureRootIndex (lib/notes/store.ts) at community
+// creation; these pin the contract that helper leans on.
+test('the root index path is the bare basename, and declares itself an Index', () => {
+  assert.equal(indexPathOf(''), INDEX_BASENAME)
+  assert.equal(isIndexPath(INDEX_BASENAME), true)
+
+  // What ensureRootIndex writes must satisfy the repo's own note invariant
+  // (scripts/verify-notes-rules.ts: an index.md must declare `type: Index`),
+  // and carry a children block so the root opts in to auto-listing — a root
+  // WITHOUT one is deliberately left alone by refreshFolderIndex.
+  const content = newIndexContent({ title: "Connor's Community" })
+  assert.equal(parseFrontmatter(content).type, 'Index')
+  assert.equal(parseFrontmatter(content).title, "Connor's Community")
+  assert.equal(hasChildrenBlock(content), true)
+})
+
+test('no ancestor walk can create the root index — hence ensureRootIndex', () => {
+  // ancestorFolders excludes the brain root, so ensureAncestorIndexes (which
+  // iterates exactly this list) can never seed 'index.md'. That gap is the
+  // whole reason ensureRootIndex exists; if this ever returns [''], the root
+  // would be created twice by two different paths.
+  assert.deepEqual(ancestorFolders(INDEX_BASENAME), [])
+  assert.deepEqual(ancestorFolders('welcome.md'), [])
+})
+
 // A folder's display name IS its index title, so a path rename may not walk
 // over a name somebody chose.
 test('nextIndexTitle follows a rename only while the title is untouched', () => {

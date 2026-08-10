@@ -7,6 +7,8 @@ import type { Community, CommunityAlias } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleCommunities } from '@/lib/communities/queries';
 import { reconcilePersonAliases } from '@/lib/notes/aliases';
+import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
+import { logger } from '@/lib/logger';
 
 /**
  * GET: Fetch all communities
@@ -72,6 +74,19 @@ export async function POST(request: NextRequest) {
     await prisma.channelSpace.create({
       data: { communityId: created.id, name: 'General', position: 0 },
     });
+
+    // Seed the brain's root index — the community's home page, which the
+    // Directory's Context tab routes to (without one it falls back to the
+    // three-column browser). Best-effort: never fail the create over it.
+    try {
+      await ensureRootIndex(
+        { communityId: created.id, ownerKey: SHARED_OWNER_KEY },
+        created.name,
+        { id: session.userId, name: session.name, email: session.email }
+      );
+    } catch (err) {
+      logger.warn('data.communities.root_index_failed', { communityId: created.id, err });
+    }
 
     const createdCommunity: Community = {
       id: created.id,

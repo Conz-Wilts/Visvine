@@ -31,6 +31,7 @@ import {
   syncPublicationsOnWrite,
 } from './publications'
 import {
+  INDEX_BASENAME,
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
@@ -39,6 +40,7 @@ import {
   indexPathOf,
   isIndexContent,
   isIndexPath,
+  newIndexContent,
   nextIndexTitle,
   humanizeFolderName,
   type IndexChild,
@@ -320,6 +322,38 @@ export async function ensureAncestorIndexes(
   }
   if (created.length) invalidateVault(brain)
   return created
+}
+
+// The brain root's own index.md — the one index nothing else creates.
+// ensureAncestorIndexes can't: ancestorFolders('index.md') is [] by design (the
+// root isn't a folder anyone can nest under), and refreshFolderIndex leaves a
+// blockless root alone. So a brain gets a root index only if something seeds it.
+//
+// It matters beyond tidiness: the Directory's Context tab routes to the root
+// index when there is one and falls back to the three-column browser when there
+// isn't (see app/(auth)/directory/page.tsx), so a brain without one never lands
+// on its own home page.
+//
+// Seeded via newIndexContent, whose empty managed child block is what makes the
+// root opt in to auto-listing its folders from here on. Returns true when it
+// created the index, false when one already existed.
+export async function ensureRootIndex(
+  brain: Brain,
+  title: string,
+  actor: Actor,
+): Promise<boolean> {
+  // createNote throws on an existing path, and a curated home page must never be
+  // clobbered — so check first.
+  if (await readNoteOrNull(brain, INDEX_BASENAME)) return false
+  try {
+    await createNote(brain, INDEX_BASENAME, newIndexContent({ title }), actor)
+    return true
+  } catch (e) {
+    // Same race as ensureAncestorIndexes: the loser of a concurrent seed finds
+    // the index already there, which is the outcome it wanted anyway.
+    if ((e as { code?: string }).code !== 'P2002') throw e
+    return false
+  }
 }
 
 // Upsert a note's content and record a revision. Mirrors rpc.ts 'note:write':

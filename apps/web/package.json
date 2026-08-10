@@ -30,6 +30,7 @@
     "db:entity-context:backfill": "tsx scripts/backfill-entity-context.ts",
     "db:index-notes:backfill": "tsx scripts/backfill-index-notes.ts",
     "db:index-notes:rebuild": "tsx scripts/rebuild-index-notes.ts",
+    "db:root-index:backfill": "tsx scripts/backfill-root-index.ts",
     "db:notes:verify": "tsx scripts/verify-notes-rules.ts community:blackbird-ventures",
     "db:embed": "tsx scripts/embed-context.ts",
     "db:connectors:demo": "tsx scripts/add-connector-demo.ts",
