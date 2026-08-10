@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
-import { useSidebar } from "@/features/shared/contexts/SidebarContext";
-import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { useCommunity } from "@/features/shared/contexts/CommunityContext";
-import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
-import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
+import { useCreateModal, useCreateSurface } from "@/lib/contexts/CreateModalContext";
+import { useSidebar } from "@/lib/contexts/SidebarContext";
+import { useContextPanel } from "@/lib/contexts/ContextPanelContext";
+import { useCommunity } from "@/lib/contexts/CommunityContext";
+import { railFeatures, moreFeatures } from "@/lib/features";
+import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/lib/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
-import CreateModal from "@/features/create/components/CreateModal";
+import CreateModal from "@/components/create/CreateModal";
 import type { CommunityFeatureConfig } from "@/lib/types";
 
 /*
@@ -44,8 +44,9 @@ const LABEL_ML = COLLAPSED_W - ICON_LEFT - ICON_SIZE;
 const ITEM_GAP = 4;
 const ITEM_STEP = ICON_SIZE + ITEM_GAP;
 const CHANNELS_PANEL_W = 300; // /channels list panel width — keep in sync with MessagesClient
+const SETTINGS_PANEL_W = 260; // /settings sections panel width
 export const CONTEXT_PANEL_W = 300; // /context notes tree panel — keep in sync with the context page inset
-const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
+export const DOCK_MIN_WIDTH = 1024; // below this the docked panel would crowd the content — keep the page's inline layout instead
 const RAIL_H = "calc(100dvh - 64px)"; // rail card always runs from the navbar bottom to the viewport bottom
 const RAIL_PAD_Y = 16; // paddingTop/paddingBottom on the rail column
 const RAIL_GAP = 8; // gap between the Create block and the nav list
@@ -65,7 +66,7 @@ export default function Sidebar() {
   // Nav items come from the feature registry, filtered to the community's
   // enabled surfaces (empty config → everything on) and to what this user may
   // see (an admins-only directory is hidden from members), then split between
-  // the rail and the "More" popup per featureConfig.more. See features/shared/lib/features.tsx.
+  // the rail and the "More" popup per featureConfig.more. See lib/features.tsx.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
   const allNav = railFeatures(featureConfig, isAdmin);
   const moreNav = moreFeatures(featureConfig, isAdmin);
@@ -80,12 +81,12 @@ export default function Sidebar() {
   // Close on navigation (a tool card was clicked, or back/forward).
   useEffect(() => setMoreOpen(false), [pathname]);
 
-  // On /channels (wide viewports only) the rail docks into a full-height card
-  // hosting a side panel — the channel list, or the notes tree on Context
-  // surfaces. The page then portals its content via ContextPanelContext.
-  // Channels stays un-docked below DOCK_MIN_WIDTH so a 300px panel doesn't
-  // crowd the thread on narrow screens (the page keeps its own inline list
-  // there instead).
+  // On /channels and /settings (wide viewports only) the rail docks into a
+  // full-height card hosting a side panel — the channel list or the settings
+  // sections. The page then portals its content via
+  // ContextPanelContext. Channels stays un-docked below DOCK_MIN_WIDTH so a
+  // 300px panel doesn't crowd the thread on narrow screens (the page keeps its
+  // own inline list there instead).
   const [wide, setWide] = useState(true);
   useEffect(() => {
     const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`);
@@ -97,15 +98,16 @@ export default function Sidebar() {
   // Channels honours the navbar's panel toggle (open by default) — the page
   // raises dockRequested so the toggle shows, and closing hides the list.
   const dockedChannels = pathname.startsWith("/channels") && wide && contextOpen;
-  // The Community Console and personal Settings both used to dock their section
-  // lists here; they now carry a pane-top tab bar instead (see ConsoleShell),
-  // so /admin and /settings get the plain rail.
+  // The Community Console used to dock its section list here; it now carries a
+  // pane-top tab bar instead (see ConsoleShell), so /admin gets the plain rail.
+  // Settings still docks its section list.
+  const dockedSettings = pathname.startsWith("/settings") && wide;
   // The /context page and profile Context tabs raise dockRequested (already
   // wide-gated by the requesting page) when the tree is available; the panel
   // only opens once the user asks for it (contextOpen).
   const dockedContext = dockRequested && contextOpen && wide;
-  const docked = dockedChannels || dockedContext;
-  const panelW = dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
+  const docked = dockedChannels || dockedSettings || dockedContext;
+  const panelW = dockedSettings ? SETTINGS_PANEL_W : dockedContext ? CONTEXT_PANEL_W : CHANNELS_PANEL_W;
 
   // "Create new" takes over this same column: it replaces whatever panel is
   // docked (so the width never changes on open), and off-dock it pushes the

@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { defaultLandingHref } from '@/features/shared/lib/features';
+import { useCommunity } from '@/lib/contexts/CommunityContext';
+import { defaultLandingHref } from '@/lib/features';
 import type { CommunityFeatureConfig } from '@/lib/types';
 
 /**
@@ -13,7 +13,7 @@ import type { CommunityFeatureConfig } from '@/lib/types';
  * admin dragged to the top of the console's Features list.
  *
  * This has to be a client route: the current community lives in localStorage
- * (features/shared/contexts/CommunityContext.tsx), so the server-side redirects that send
+ * (lib/contexts/CommunityContext.tsx), so the server-side redirects that send
  * users here (login, OAuth callbacks, invite accept) have no way to
  * know the community — let alone its feature config — at redirect time.
  */
