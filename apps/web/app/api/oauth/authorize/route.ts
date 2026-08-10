@@ -49,7 +49,9 @@ function redirectError(redirectUri: string, error: string, state: string | null,
   if (description) url.searchParams.set('error_description', description)
   if (state) url.searchParams.set('state', state)
   url.searchParams.set('iss', oauthIssuer())
-  return NextResponse.redirect(url)
+  // 303, not the 307 default: the consent form POSTs here, and a
+  // method-preserving redirect would POST to the client's callback (405).
+  return NextResponse.redirect(url, 303)
 }
 
 /**
@@ -202,5 +204,6 @@ export async function POST(req: NextRequest) {
   url.searchParams.set('code', code)
   if (state) url.searchParams.set('state', state)
   url.searchParams.set('iss', oauthIssuer())
-  return NextResponse.redirect(url)
+  // See redirectError: 303 so the client's callback is fetched with GET.
+  return NextResponse.redirect(url, 303)
 }
