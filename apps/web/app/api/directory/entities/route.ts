@@ -7,7 +7,7 @@
 //     → 403 { error }
 //
 // The work itself lives in lib/directory/createEntity.ts — the MCP
-// `create_entity` tool calls the same function directly, so this handler is only
+// `add_context` tool calls the same function directly, so this handler is only
 // the HTTP adapter: parse, resolve the brain (membership check), delegate, map
 // the result union onto status codes.
 //

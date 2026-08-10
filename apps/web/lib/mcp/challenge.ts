@@ -3,7 +3,7 @@
  * "Scope Challenge Handling").
  *
  * The point is the step-up flow. A token minted with only `context:read` that
- * hits `write_note` used to get a text error inside a successful HTTP 200 —
+ * hits `edit_context` used to get a text error inside a successful HTTP 200 —
  * invisible to the OAuth layer, so the client had no way to know it should ask
  * for more and would fail identically forever. Now the same call gets a real
  * `403 insufficient_scope` naming the scope it needs, which is the signal a

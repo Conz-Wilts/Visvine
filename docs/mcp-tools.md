@@ -26,13 +26,13 @@ read goes through the visibility lens and every write through the folder gate.
 | `list_communities` | `context:read` | Your communities, your role in each, which is your personal space. Entry point: everything else needs a `community_id`. |
 | `list_context` | `context:read` | One community's bearings: entities by type, the note index, and where you can write (`writable_folders` + `writable_notes`). |
 | `search_context` | `context:read` | Fused search over notes, uploaded files and directory entities. See below. |
-| `get_entity` | `context:read` | One entity in full: fields, note markdown, links (with origin), notes that mention it. By `node_id` or `note_path`. |
-| `list_sources` | `context:read` | The uploaded files in this context, with extraction status. |
-| `read_source` | `context:read` | The extracted text of one uploaded file, paged. |
-| `create_entity` | `context:write` | A typed node + its context note. `person` / `community` (= organisation) / `resource` only. |
-| `write_note` | `context:write` | Create or overwrite one note (history keeps the prior version). Defaults to your **personal** brain. |
-| `append_note` | `context:write` | Append a dated, attributed entry to a note's `## Log`. The lossless way to add one fact. |
-| `move_note` | `context:write` | Move/rename a note, rewriting every inbound link so the graph survives. |
+| `read_context` | `context:read` | One entity in full: fields, note markdown, links (with origin), notes that mention it. By `node_id` or `note_path`. |
+| `list_files` | `context:read` | The uploaded files in this context, with extraction status. |
+| `read_file` | `context:read` | The extracted text of one uploaded file, paged. |
+| `add_context` | `context:write` | A typed node + its context note. `person` / `community` (= organisation) / `resource` only. |
+| `edit_context` | `context:write` | Create or overwrite one note (history keeps the prior version). Defaults to your **personal** brain. |
+| `append_context` | `context:write` | Append a dated, attributed entry to a note's `## Log`. The lossless way to add one fact. |
+| `move_context` | `context:write` | Move/rename a note, rewriting every inbound link so the graph survives. |
 | `list_connectors` | `context:read` | Admin-configured gateways to external systems: docs, allowed hosts, env var names. |
 | `run_connector` | `connectors:use` | JavaScript in that connector's QuickJS isolate (`fetch`, `sql`, `mcp`, `sleep`, `env`, `console`). |
 

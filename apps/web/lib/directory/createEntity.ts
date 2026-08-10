@@ -1,7 +1,7 @@
 // Creating a directory entity: a typed Node plus its canonical context note, in
 // one gated operation. This is THE creation path for the context layer — the
 // note-first web surface (POST /api/directory/entities) and the MCP
-// `create_entity` tool both call it, so the id race, the write gate, the
+// `add_context` tool both call it, so the id race, the write gate, the
 // collision rule and identity resolution can only be implemented once.
 //
 // Why it's a domain function rather than just a route: the MCP server calls the

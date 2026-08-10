@@ -207,13 +207,13 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
-  assert.equal(scopeForTool('write_note'), 'context:write')
-  assert.equal(scopeForTool('get_entity'), 'context:read')
+  assert.equal(scopeForTool('edit_context'), 'context:write')
+  assert.equal(scopeForTool('read_context'), 'context:read')
   // Reading an uploaded file is the same capability as reading a note about it.
-  assert.equal(scopeForTool('list_sources'), 'context:read')
-  assert.equal(scopeForTool('read_source'), 'context:read')
+  assert.equal(scopeForTool('list_files'), 'context:read')
+  assert.equal(scopeForTool('read_file'), 'context:read')
   // A move rewrites other notes' links, so it is unambiguously a write.
-  assert.equal(scopeForTool('move_note'), 'context:write')
+  assert.equal(scopeForTool('move_context'), 'context:write')
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')
@@ -225,7 +225,7 @@ test('a read-only token calling a write tool is challenged for the missing scope
     jsonrpc: '2.0',
     id: 1,
     method: 'tools/call',
-    params: { name: 'write_note', arguments: {} },
+    params: { name: 'edit_context', arguments: {} },
   })
   assert.deepEqual(missingScopesForBody(body, ['context:read']), ['context:write'])
   assert.deepEqual(missingScopesForBody(body, ['context:read', 'context:write']), [])
@@ -233,9 +233,9 @@ test('a read-only token calling a write tool is challenged for the missing scope
 
 test('a batch is challenged once, for the union of what it needs', () => {
   const body = JSON.stringify([
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'write_note' } },
-    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'append_note' } },
-    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_entity' } },
+    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'edit_context' } },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'append_context' } },
+    { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'read_context' } },
   ])
   // Deduped: one challenge, not one per call — the spec is explicit that
   // trickling out scopes forces needless authorization round-trips.
@@ -367,7 +367,7 @@ test('only person, community and resource are creatable from the context layer',
   assert.equal(isCreatableType('person'), true)
   assert.equal(isCreatableType('community'), true)
   // The retired organisation spellings are NOT creatable ids — callers must
-  // send the canonical type, which is what the zod enum on create_entity takes.
+  // send the canonical type, which is what the zod enum on add_context takes.
   assert.equal(isCreatableType('group'), false)
   assert.equal(isCreatableType('organization'), false)
   assert.equal(isCreatableType('resource'), true)

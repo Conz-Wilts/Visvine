@@ -1,9 +1,9 @@
 /**
  * The MCP tool surface: twelve tools over the context layer.
  *
- *   read    list_communities, list_context, search_context, get_entity,
- *           list_sources, read_source
- *   write   create_entity, write_note, append_note, move_note
+ *   read    list_communities, list_context, search_context, read_context,
+ *           list_files, read_file
+ *   write   add_context, edit_context, append_context, move_context
  *   connect list_connectors, run_connector
  *
  * The shape of this surface follows the shape of the model, deliberately:
@@ -150,7 +150,7 @@ function describeNode(row: NodeRow) {
     image_url: normalizeImageUrl(row.imageUrl),
     tags: row.tags,
     // Read back through the type's field schema so the keys an agent sees are
-    // the same keys create_entity accepts.
+    // the same keys add_context accepts.
     fields: readFields({
       type: row.type,
       subtitle: row.subtitle,
@@ -256,7 +256,7 @@ export function registerTools(server: McpServer): void {
           notes: notes.slice(0, limit).map(indexLine),
           note_count: notes.length,
           // Write access inside these can still be cut off deeper down by a
-          // restricted subfolder; write_note tells you if so.
+          // restricted subfolder; edit_context tells you if so.
           writable_folders: writablePaths.filter((p) => !isNotePath(p)).map(describeWritable),
           writable_notes: writablePaths.filter(isNotePath).map(describeWritable),
           truncated: entityTotal > limit || notes.length > limit,
@@ -270,8 +270,8 @@ export function registerTools(server: McpServer): void {
       description:
         "Search one community's context — both halves at once. Notes and uploaded files are ranked by fused " +
         'retrieval (keyword BM25 + semantic vectors + link context); directory entities are matched by name, ' +
-        'alias and tag. Every hit carries what you need to open it: node_id for get_entity, path for get_entity, ' +
-        'or path+seq for read_source. Only what you are allowed to read is searched. ' +
+        'alias and tag. Every hit carries what you need to open it: node_id for read_context, path for read_context, ' +
+        'or path+seq for read_file. Only what you are allowed to read is searched. ' +
         'The `semantic` field reports whether the meaning-based stages ran — "no-key" means these results are ' +
         'keyword-only, so prefer literal terms and try more phrasings. Filters beat ranking: narrow with ' +
         'type/tags/folder/updated_after when you can.',
@@ -349,7 +349,7 @@ export function registerTools(server: McpServer): void {
           semantic,
           entities,
           // A source hit is a chunk of an uploaded file: it has no note to read,
-          // so it says how to open it (read_source) rather than handing back a
+          // so it says how to open it (read_file) rather than handing back a
           // path that looks like a note and isn't.
           notes: hits.map((h) => ({
             kind: h.kind,
@@ -357,15 +357,15 @@ export function registerTools(server: McpServer): void {
             title: h.title,
             snippet: h.snippet ?? null,
             ...(h.kind === 'source'
-              ? { seq: h.seq, read_with: { tool: 'read_source', path: h.path } }
-              : { read_with: { tool: 'get_entity', note_path: h.path } }),
+              ? { seq: h.seq, read_with: { tool: 'read_file', path: h.path } }
+              : { read_with: { tool: 'read_context', note_path: h.path } }),
           })),
         }
       }),
   )
 
   server.registerTool(
-    'get_entity',
+    'read_context',
     {
       description:
         'Everything about one entity in one call: its type-driven fields, the full markdown of its context note, ' +
@@ -379,7 +379,7 @@ export function registerTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
-      withCtx(extra, 'get_entity', async (ctx) => {
+      withCtx(extra, 'read_context', async (ctx) => {
         if (!args.node_id && !args.note_path) {
           throw new McpError(400, 'Pass either node_id or note_path')
         }
@@ -453,7 +453,7 @@ export function registerTools(server: McpServer): void {
         return {
           entity: describeNode(row),
           note_path: notePath,
-          note: note ?? '(no context note yet — write_note at note_path creates one)',
+          note: note ?? '(no context note yet — edit_context at note_path creates one)',
           links: linkRows.map((l) => {
             const otherId = l.sourceId === row!.id ? l.targetId : l.sourceId
             const other = others.get(otherId)
@@ -475,7 +475,7 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
-    'list_sources',
+    'list_files',
     {
       description:
         'List the uploaded files in this context — PDFs, spreadsheets, documents and the like, which live ' +
@@ -489,7 +489,7 @@ export function registerTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
-      withCtx(extra, 'list_sources', async (ctx) => {
+      withCtx(extra, 'list_files', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         const sources = await listVisibleSources(principal, brain, args.folder)
@@ -513,7 +513,7 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
-    'read_source',
+    'read_file',
     {
       description:
         "Read the extracted text of an uploaded file — the other half of a search_context `kind: 'source'` hit, " +
@@ -521,7 +521,7 @@ export function registerTools(server: McpServer): void {
         'paged: pass offset_chars to continue where the last call stopped, guided by total_chars.',
       inputSchema: {
         community_id: z.string(),
-        path: z.string().describe("The source's path, exactly as search_context or list_sources reported it"),
+        path: z.string().describe("The source's path, exactly as search_context or list_files reported it"),
         scope: scopeArg,
         offset_chars: z.number().int().min(0).optional().describe('Start here in the extracted text (default 0)'),
         max_chars: z
@@ -535,7 +535,7 @@ export function registerTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
-      withCtx(extra, 'read_source', async (ctx) => {
+      withCtx(extra, 'read_file', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         // A '#<seq>' suffix is how search used to report a chunk; accept it.
@@ -564,7 +564,7 @@ export function registerTools(server: McpServer): void {
   // ── Write ───────────────────────────────────────────────────────────────
 
   server.registerTool(
-    'create_entity',
+    'add_context',
     {
       description:
         'Create a directory entity — a typed node plus its context note, in one step. The TYPE decides which ' +
@@ -596,7 +596,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     (args, extra) =>
-      withCtx(extra, 'create_entity', async (ctx) => {
+      withCtx(extra, 'add_context', async (ctx) => {
         const brain = await requireCommunityBrain(ctx, args.community_id)
         const result = await createEntity(brain, {
           type: args.type,
@@ -610,7 +610,7 @@ export function registerTools(server: McpServer): void {
           throw new McpError(
             result.status,
             result.status === 409 && result.existingNodeId
-              ? `${result.error} (node_id: ${result.existingNodeId}, note: ${result.existingPath}) — read it with get_entity instead of creating a duplicate`
+              ? `${result.error} (node_id: ${result.existingNodeId}, note: ${result.existingPath}) — read it with read_context instead of creating a duplicate`
               : result.error,
           )
         }
@@ -628,13 +628,13 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
-    'write_note',
+    'edit_context',
     {
       description:
         'Create or overwrite one context note (full-content write; the previous version is kept in history). ' +
         "Writes go to your PERSONAL space by default — pass scope:'shared' to write the community's context, " +
         'which is gated on your write access to that folder. Read the note first when editing, or you will clobber it; ' +
-        `use append_note when you only want to add. ${MENTION_RULE}`,
+        `use append_context when you only want to add. ${MENTION_RULE}`,
       inputSchema: {
         community_id: z.string(),
         path: z.string().describe("Brain-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
@@ -645,7 +645,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     (args, extra) =>
-      withCtx(extra, 'write_note', async (ctx) => {
+      withCtx(extra, 'edit_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         // Stamped as an agent revision so human and agent edits stay
@@ -665,7 +665,7 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
-    'append_note',
+    'append_context',
     {
       description:
         "Append a dated, attributed entry to a note's '## Log' section, creating the section if it is absent. " +
@@ -680,7 +680,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     (args, extra) =>
-      withCtx(extra, 'append_note', async (ctx) => {
+      withCtx(extra, 'append_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         const result = unwrapWrite(
@@ -691,7 +691,7 @@ export function registerTools(server: McpServer): void {
   )
 
   server.registerTool(
-    'move_note',
+    'move_context',
     {
       description:
         'Move or rename one note. Links pointing AT it are rewritten across the brain, so the mentions that ' +
@@ -711,7 +711,7 @@ export function registerTools(server: McpServer): void {
       },
     },
     (args, extra) =>
-      withCtx(extra, 'move_note', async (ctx) => {
+      withCtx(extra, 'move_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
         const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
         const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to))
