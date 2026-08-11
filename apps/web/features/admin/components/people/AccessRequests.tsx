@@ -2,9 +2,10 @@
 
 // The context access-request queue: "X wants access to Y".
 //
-// It lives on Aliases, not Members, because it is a permission decision — the
-// Members page is about who is in the community, nothing more. Approving one
-// writes a grant exactly the way the alias cards below it do.
+// It sits at the top of Members, beside the join requests: from where the member
+// stands both are the same act — asking an admin to be let in to something — so
+// the one screen that answers people answers both. Approving one writes a grant
+// exactly the way an alias's "Can access" list on Types does.
 
 import { useState } from 'react';
 import { FileText, Folder, Users } from 'lucide-react';

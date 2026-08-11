@@ -20,6 +20,7 @@ import {
   FileTypeIcon, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
 } from '@/features/resources/components/resourceUi';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import Chip from '@/components/ui/Chip';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
 import {
   Download, Share2, Trash2, Bookmark, MessageSquare, GitPullRequest, Info,
@@ -518,9 +519,7 @@ function DetailsTab({ resource, uploader }: { resource: Resource; uploader: Uplo
           <div className="text-xs text-text-muted mb-1.5">Sheets</div>
           <div className="flex flex-wrap gap-1.5">
             {meta.sheetNames.map((s) => (
-              <span key={s} className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold bg-surface-2 text-text-secondary border border-border-default">
-                {s}
-              </span>
+              <Chip key={s} tone="muted" size="md">{s}</Chip>
             ))}
           </div>
         </div>

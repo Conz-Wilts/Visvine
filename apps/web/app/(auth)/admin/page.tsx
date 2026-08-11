@@ -5,20 +5,20 @@ import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
 import PeoplePanel from '@/features/admin/components/people/PeoplePanel';
-import AliasesPanel from '@/features/admin/components/people/AliasesPanel';
 import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import CommunitySettingsPanel from '@/features/admin/components/CommunitySettingsPanel';
-import TypesTab from '@/features/directory/components/data/TypesTab';
+import TypesPanel from '@/features/admin/components/TypesPanel';
 import CommunityToolsPanel from '@/features/admin/components/CommunityToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
-import { Settings2, Puzzle, Users, Tag, UserPlus, Shapes } from 'lucide-react';
+import { Settings2, Puzzle, Users, UserPlus, Shapes } from 'lucide-react';
 
-// Aliases, Members and Invite are three top-level sections rather than tabs
-// inside one, so nothing in the console is ever two clicks deep. They share a
-// single data load (PeopleDataProvider), which is also where the Members badge
-// count comes from — one definition of "waiting", not one per component.
+// Every section is top-level rather than a tab inside one, so nothing in the
+// console is ever two clicks deep. Types, Members and Invite share a single data
+// load (PeopleDataProvider) — Types needs it because Person aliases are the
+// permission model — which is also where the Members badge count comes from: one
+// definition of "waiting", not one per component.
 function AdminConsole({ community, onSaved }: {
   community: Community;
   onSaved: (updated: Partial<Community>) => void;
@@ -33,8 +33,9 @@ function AdminConsole({ community, onSaved }: {
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
-    { id: 'aliases', label: 'Aliases', group: 'Members', width: 'wide', badge: pending.requests, icon: <Tag size={18} /> },
-    { id: 'members', label: 'Members', group: 'Members', width: 'wide', badge: pending.members, icon: <Users size={18} /> },
+    // Both queues a person can be waiting in — to join, and for context access —
+    // are resolved on Members, so one badge counts them both.
+    { id: 'members', label: 'Members', group: 'Members', width: 'wide', badge: pending.members + pending.requests, icon: <Users size={18} /> },
     { id: 'invite', label: 'Invite', group: 'Members', width: 'form', icon: <UserPlus size={18} /> },
   ];
 
@@ -54,12 +55,10 @@ function AdminConsole({ community, onSaved }: {
               return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
             case 'members':
               return <PeoplePanel />;
-            case 'aliases':
-              return <AliasesPanel />;
             case 'invite':
               return <InvitePanel />;
             case 'types':
-              return <TypesTab key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} communityId={community.id} />;
+              return <TypesPanel key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} />;
             default:
               return null;
           }

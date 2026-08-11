@@ -4,7 +4,7 @@ import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
 import { getNodeTypeConfig, getNodeGlyph, findAlias, nodeTypeLabel } from '@/lib/types'
 import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
-import Badge from '@/components/ui/Badge'
+import Chip from '@/components/ui/Chip'
 import PersonSilhouette from '@/components/ui/PersonSilhouette'
 import TypeSilhouette from '@/components/ui/TypeSilhouette'
 import { useProfileCache } from '@/features/shared/contexts/ProfileContext'
@@ -85,9 +85,9 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
         </p>
 
         {/* Type badge — pinned to bottom center */}
-        <Badge variant="type-chip" color={typeColor} className="mt-auto mb-2">
+        <Chip color={typeColor} size="md" className="mt-auto mb-2">
           {nodeTypeLabel(item.type, item.alias, communityAliases, nodeTypes)}
-        </Badge>
+        </Chip>
       </div>
     </div>
   )

@@ -163,8 +163,8 @@ function InviteByEmail({ communityId, aliases, onDone }: {
               <AliasToggle
                 key={alias.name}
                 name={alias.name}
+                color={alias.color}
                 owner={alias.owner}
-                system={alias.system}
                 on={chosen.includes(alias.name)}
                 onClick={() => toggle(alias.name)}
               />

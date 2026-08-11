@@ -17,12 +17,12 @@
 // Label above value, not beside it — a note's column is narrow and a label
 // gutter would eat a third of it.
 
+import Chip from '@/components/ui/Chip'
 import { findAlias, getNodeTypeConfig, nodeTypeLabel } from '@/lib/types'
 import { tagPalette } from '@/lib/tagColors'
 import type { CommunityAlias, NodeTypeConfig } from '@/lib/types'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
-const CHIP_CLASS = 'inline-flex items-center rounded-md px-2 py-1 text-[12px] font-semibold text-white'
 
 interface NoteMetaRowsProps {
   /** The note's frontmatter type, named and coloured by the community console. */
@@ -62,9 +62,9 @@ export function NoteMetaRows({
             {/* The console's own spelling of the type, not the note's — one name
                 for one type, wherever you meet it — and its alias in preference
                 to it, since that's the name the community actually uses. */}
-            <span className={CHIP_CLASS} style={{ background: aliasConfig?.color ?? typeConfig.color }}>
+            <Chip size="lg" color={aliasConfig?.color ?? typeConfig.color}>
               {nodeTypeLabel(trimmedType, alias, communityAliases, nodeTypes)}
-            </span>
+            </Chip>
           </span>
         </div>
       )}
@@ -74,9 +74,9 @@ export function NoteMetaRows({
           <span className={LABEL_CLASS}>Tags</span>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
-              <span key={tag} className={CHIP_CLASS} style={{ background: tagPalette(tag, tagColors).base }}>
+              <Chip key={tag} size="lg" color={tagPalette(tag, tagColors).base}>
                 {tag}
-              </span>
+              </Chip>
             ))}
           </div>
         </div>

@@ -1,30 +1,24 @@
 'use client';
 
-// Console → Members. Who is in this community, and who is asking to be.
+// Console → Members. Who is in this community, who is asking to be, and who is
+// asking for more of it.
 //
-// Deliberately not a permission screen: an alias is shown as the member's type,
-// but it is handed out, coloured and pointed at content on Aliases, and access
-// requests are resolved there too. Here you can see people, see what they are,
-// see when they arrived, and let them in or out. Nothing else.
+// Both queues a person waits in land here — a join request and a context access
+// request are the same act from the member's side, so an admin resolves them in
+// one place. Editing what an alias MEANS is still elsewhere: it is handed out,
+// coloured and pointed at content on Types, under the Person type it belongs to.
 
 import { useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Alert, Avatar, Button, ConfirmDialog, SearchInput } from '@/components/ui';
+import { Alert, Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import AccessRequests from './AccessRequests';
 import { usePeopleSection } from './PeopleDataContext';
 import type { CommunityMember, PeopleData } from './shared';
 
 /** A member's alias, worn as the coloured chip it is everywhere else. */
 function AliasChip({ name, color, title }: { name: string; color: string; title?: string }) {
-  return (
-    <span
-      title={title ?? name}
-      className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold text-white"
-      style={{ background: color }}
-    >
-      {name}
-    </span>
-  );
+  return <Chip color={color} title={title ?? name}>{name}</Chip>;
 }
 
 /** "7 Feb 2026" — the day someone joined is all this column needs. */
@@ -84,6 +78,10 @@ export default function PeoplePanel() {
         <p className="text-sm text-text-muted">Loading…</p>
       ) : (
         <>
+          {/* Renders nothing when nobody is waiting, so a quiet space is just
+              the member list. */}
+          <AccessRequests />
+
           {showTabs && (
             <div className="flex gap-1 border-b border-border-subtle">
               {([

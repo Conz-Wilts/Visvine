@@ -14,6 +14,7 @@ import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
+import Chip from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import {
   computeProfileCompletion, getExperience, sortExperience,
@@ -187,14 +188,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
               <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
-              {aliasName && (
-                <span
-                  className={`inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border ${aliasColor ? '' : 'bg-surface-2 text-text-muted border-border-subtle'}`}
-                  style={aliasColor ? { background: `${aliasColor}1a`, color: aliasColor, borderColor: `${aliasColor}55` } : undefined}
-                >
-                  {aliasName}
-                </span>
-              )}
+              {aliasName && <Chip tone="soft" color={aliasColor}>{aliasName}</Chip>}
             </div>
 
             {profile.subtitle ? (
@@ -290,11 +284,11 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             {profile.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {profile.tags.map((tag, i) => (
-                  <span key={tag}
-                        className="chip-pop px-3 py-1.5 rounded-full text-[13px] font-medium border transition-transform duration-150 hover:-translate-y-0.5"
-                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}33`, animationDelay: `${Math.min(i, 20) * 35}ms` }}>
+                  <Chip key={tag} tone="soft" size="lg" color={theme.base}
+                        className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
+                        style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}
-                  </span>
+                  </Chip>
                 ))}
               </div>
             ) : isOwner

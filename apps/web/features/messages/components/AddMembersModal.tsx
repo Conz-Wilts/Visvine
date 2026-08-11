@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Alert, SearchInput, Badge, Modal } from '@/components/ui';
+import { Avatar, Alert, SearchInput, Chip, Modal } from '@/components/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export default function AddMembersModal({
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
                   From directory
                 </p>
-                <Badge variant="label">Not yet on platform</Badge>
+                <Chip tone="muted" size="xs">Not yet on platform</Chip>
               </div>
               {directoryPeople.map((person) => {
                 const isCopied = copiedId === person.id;

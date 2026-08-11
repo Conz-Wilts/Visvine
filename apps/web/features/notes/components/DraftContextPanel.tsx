@@ -18,7 +18,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Check, ChevronDown, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown } from 'lucide-react'
+import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { canCreateType } from '@/lib/create/creatable'
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
@@ -610,26 +611,17 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
   const tagsRow = (
     <div className="flex flex-wrap items-center gap-1.5">
-      {tags.map((tag) => {
-        const pal = tagPalette(tag, tagColors)
-        return (
-          <span
-            key={tag}
-            className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
-            style={{ background: pal.base }}
-          >
-            <span className="truncate">{tag}</span>
-            <button
-              type="button"
-              onClick={() => removeTag(tag)}
-              aria-label={`Remove ${tag}`}
-              className="rounded-full p-0.5 opacity-60 transition hover:opacity-100"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        )
-      })}
+      {tags.map((tag) => (
+        <Chip
+          key={tag}
+          size="lg"
+          color={tagPalette(tag, tagColors).base}
+          onRemove={() => removeTag(tag)}
+          removeLabel={`Remove ${tag}`}
+        >
+          {tag}
+        </Chip>
+      ))}
       {addingTag ? (
         <TagCombobox
           suggestions={allTags.filter((t) => !tagsLower.has(t.toLowerCase()))}
@@ -644,7 +636,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         <button
           type="button"
           onClick={() => setAddingTag(true)}
-          className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]"
+          className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
           style={{ ['--accent' as string]: theme.dark }}
         >
           + Add tag
@@ -857,8 +849,8 @@ function TypeMenu({
         onClick={() => onOpenChange(!open)}
         className={
           label
-            ? 'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-semibold text-white transition hover:opacity-90'
-            : 'inline-flex h-7 items-center gap-1.5 rounded-md border border-dashed border-border-default px-2.5 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]'
+            ? chipClass({ tone: 'solid', size: 'lg', color: theme.base, interactive: true })
+            : chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })
         }
         style={label ? { background: theme.base } : { ['--accent' as string]: theme.dark }}
       >

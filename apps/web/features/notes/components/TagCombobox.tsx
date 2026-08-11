@@ -7,6 +7,7 @@
 // blur / Escape / empty-selection calls onClose.
 
 import { useMemo, useRef, useState } from 'react'
+import Chip from '@/components/ui/Chip'
 import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 
 interface TagComboboxProps {
@@ -123,10 +124,7 @@ export function TagCombobox({
                         <span className="ml-1 truncate font-medium text-text-primary">“{row.value}”</span>
                       </>
                     ) : (
-                      <span className="max-w-full truncate rounded-full px-2 py-0.5 text-[12px] font-medium text-white"
-                            style={{ background: pal!.base }}>
-                        {row.value}
-                      </span>
+                      <Chip size="md" color={pal!.base} className="truncate">{row.value}</Chip>
                     )}
                   </button>
                 </li>

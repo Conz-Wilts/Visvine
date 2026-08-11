@@ -21,6 +21,7 @@ import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import { Chip, chipClass, chipStyle } from '@/components/ui';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
 import { FileTypeIcon, FILE_LABEL, formatBytes } from '@/features/resources/components/resourceUi';
 
@@ -242,18 +243,15 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
         <div className="pt-20 sm:pt-24 flex flex-col">
           {/* badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
-                  style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
-              Space
-            </span>
+            <Chip tone="soft" size="md" color={theme.base}>Space</Chip>
             {community.location && (
-              <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11.5px] font-semibold bg-surface-2 text-text-muted border border-border-default">
+              <Chip tone="muted" size="md">
                 <MapPin className="w-3 h-3" /> {community.location}
-              </span>
+              </Chip>
             )}
             {isActive && (
-              <span className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
-                    style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}80` }}>
+              <span className={chipClass({ tone: 'soft', size: 'md', color: theme.base, className: 'gap-1.5' })}
+                    style={{ ...chipStyle(theme.base, 'soft'), borderColor: `${theme.base}80` }}>
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
@@ -440,10 +438,7 @@ export default function CommunityDetailPage({ params }: { params: Promise<{ comm
                     <div className="text-xs text-text-muted mb-1.5">Network of</div>
                     <div className="flex flex-wrap gap-1.5">
                       {community.nodeTypes!.slice(0, 6).map((nt) => (
-                        <span key={nt.name} className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[11px] font-semibold border"
-                              style={{ background: `${nt.color}14`, color: nt.color, borderColor: `${nt.color}40` }}>
-                          {nt.name}
-                        </span>
+                        <Chip key={nt.name} tone="soft" size="md" color={nt.color}>{nt.name}</Chip>
                       ))}
                     </div>
                   </div>
@@ -613,10 +608,7 @@ function MemberRow({ member, theme, badge }: { member: OverviewMember; theme: Th
         {member.subtitle && <span className="block text-xs text-text-muted truncate">{member.subtitle}</span>}
       </span>
       {badge && (
-        <span className="flex-none inline-flex items-center h-5 px-2 rounded-full text-[10.5px] font-semibold border"
-              style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }}>
-          {badge}
-        </span>
+        <Chip tone="soft" size="xs" color={theme.base} className="flex-none">{badge}</Chip>
       )}
     </>
   );

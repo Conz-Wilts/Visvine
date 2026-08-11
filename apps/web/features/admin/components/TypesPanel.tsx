@@ -1,26 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+// Console → Types: every kind of thing this space records, and the aliases each
+// kind can wear.
+//
+// Person is the one type whose aliases mean something beyond a label: they are
+// the permission model (holders, ownership, context grants). Rather than send
+// that somewhere else — it used to live on its own Aliases tab, listing the same
+// aliases a second time in a different shape — each Person alias carries a cog
+// that opens exactly those settings underneath it. One list, one place.
+
+import { useState, useEffect, useMemo } from 'react';
+import { Settings2 } from 'lucide-react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { DEFAULT_NODE_TYPES, aliasesForType, personAliases } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
-import { Alert, ColorPicker } from '@/components/ui';
+import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
+import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
+import { AliasSettings, EveryoneSettings, NewAliasRow } from '@/features/admin/components/people/AliasSettings';
 
-// The Person type is the one exception on this page: its aliases are the
-// permission model (holders, ownership, context grants), so they are created and
-// edited on Console → Aliases and only shown here, read-only, so the vocabulary
-// still reads as one list. Every other type's aliases are plain directory labels
-// and are edited in place.
+// The type whose aliases are the permission model. Everything else's aliases are
+// plain directory labels, stored on the community and edited in place.
 const PERMISSION_TYPE = 'person';
 
-// ─── Alias Pill ───────────────────────────────────────────────────────────────
+/** The subject whose settings are open in the Person list; '' = Everyone. */
+type OpenSubject = string | null;
 
-function AliasPill({ alias, readOnly, onColorChange, onRemove, disabled }: {
+// ─── Alias Chip ───────────────────────────────────────────────────────────────
+// The same rounded square the alias wears on a directory card, a note header and
+// a member row — this is where you pick its colour, so it has to be the shape
+// you'll meet it in (components/ui/Chip.tsx).
+
+function AliasChip({ alias, onColorChange, onRemove, disabled }: {
   alias: CommunityAlias;
-  /** Person aliases are shown but not edited here — see PERMISSION_TYPE. */
-  readOnly?: boolean;
   onColorChange: (c: string) => void;
   onRemove: () => void;
   disabled: boolean;
@@ -30,46 +43,19 @@ function AliasPill({ alias, readOnly, onColorChange, onRemove, disabled }: {
 
   const commit = (c: string) => { setLocalColor(c); setShowPicker(false); onColorChange(c); };
 
-  // The built-in Owner alias is fixed the way the system link types are: it
-  // decides who manages the community (lib/auth.ts#isAdmin), so it keeps its
-  // gold and cannot be recoloured or removed here.
-  if (alias.system || readOnly) {
-    return (
-      <span
-        title={
-          alias.system
-            ? 'Built in — holders own the space. Give it out in Console → Aliases.'
-            : `${alias.name} — edit it in Console → Aliases`
-        }
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
-        style={{ background: alias.color }}
-      >
-        {alias.name}
-      </span>
-    );
-  }
-
   return (
-    <div className="relative inline-flex items-center gap-1 group">
-      <button
-        type="button"
-        onClick={() => setShowPicker(p => !p)}
+    <div className="relative inline-flex items-center gap-1">
+      <Chip
+        size="md"
+        color={localColor}
+        disabled={disabled}
         title="Click to change colour"
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-white hover:opacity-80 transition-opacity"
-        style={{ background: localColor }}
+        onClick={() => setShowPicker(p => !p)}
+        onRemove={onRemove}
+        removeLabel={`Remove "${alias.name}"`}
       >
         {alias.name}
-      </button>
-      <button
-        onClick={onRemove}
-        disabled={disabled}
-        className="w-4 h-4 rounded-full flex items-center justify-center text-text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition-all -ml-0.5"
-        title={`Remove "${alias.name}"`}
-      >
-        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      </Chip>
       {showPicker && (
         <div className="absolute left-0 top-8 z-40">
           <ColorPicker color={localColor} onChange={c => setLocalColor(c)} onClose={() => commit(localColor)} />
@@ -142,15 +128,127 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
   );
 }
 
+// ─── Person aliases: the permission list ──────────────────────────────────────
+
+/**
+ * One row in the Person list: the chip as it appears everywhere else, how many
+ * people wear it, and the cog that opens what it means.
+ */
+function PermissionRow({ name, color, tone, detail, open, onToggle, children }: {
+  name: string;
+  color?: string;
+  tone: 'solid' | 'muted';
+  detail: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2.5 py-2">
+        <Chip size="md" tone={tone} color={color}>{name}</Chip>
+        <span className="min-w-0 flex-1 truncate text-xs text-text-muted">{detail}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          title={`${open ? 'Close' : 'Open'} ${name} settings`}
+          className={`shrink-0 rounded-lg p-1.5 transition-colors ${
+            open ? 'bg-surface-3 text-text-primary' : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'
+          }`}
+        >
+          <Settings2 className="h-4 w-4" />
+        </button>
+      </div>
+      {open && <div className="pb-4 pl-1 pr-1">{children}</div>}
+    </div>
+  );
+}
+
+/**
+ * The Person type's aliases: Everyone first (the one nobody can leave), then
+ * Owner in gold, then the rest. Their whole life happens here — the shared
+ * People snapshot is the source, so a rename or a new holder shows up in Members
+ * and Invite at the same moment.
+ */
+function PersonAliases() {
+  const { communityId, data, busy, run } = usePeopleSection();
+  const [open, setOpen] = useState<OpenSubject>(null);
+
+  const aliases = useMemo(
+    () =>
+      [...(data?.aliases ?? [])].sort(
+        (a, b) =>
+          Number(b.system) - Number(a.system) ||
+          Number(b.owner) - Number(a.owner) ||
+          a.name.localeCompare(b.name),
+      ),
+    [data],
+  );
+
+  if (data === null) return <p className="py-2 text-xs text-text-muted">Loading…</p>;
+
+  const toggle = (key: string) => setOpen((current) => (current === key ? null : key));
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-text-muted">
+        A person holds any number of these. Together they are everything that person can do here —
+        the chip beside their name, and what they reach in the context.
+      </p>
+
+      <div className="divide-y divide-border-subtle">
+        <PermissionRow
+          name="Everyone"
+          tone="muted"
+          detail={`Every member of this space, always. ${data.members.length} ${data.members.length === 1 ? 'person' : 'people'}.`}
+          open={open === ''}
+          onToggle={() => toggle('')}
+        >
+          <EveryoneSettings communityId={communityId} data={data} busy={busy} run={run} />
+        </PermissionRow>
+
+        {aliases.map((alias) => (
+          <PermissionRow
+            key={alias.name}
+            name={alias.name}
+            color={alias.color}
+            tone="solid"
+            detail={`${alias.holders.length} ${alias.holders.length === 1 ? 'person' : 'people'}${alias.owner ? ' · owns the space' : ''}`}
+            open={open === alias.name}
+            onToggle={() => toggle(alias.name)}
+          >
+            <AliasSettings
+              communityId={communityId}
+              alias={alias}
+              data={data}
+              busy={busy}
+              run={run}
+            />
+          </PermissionRow>
+        ))}
+      </div>
+
+      <NewAliasRow
+        communityId={communityId}
+        taken={aliases.map((a) => a.name)}
+        busy={busy}
+        run={run}
+      />
+    </div>
+  );
+}
+
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, aliases, allAliases, aliasesReadOnly, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
+function TypeSection({ typeName, typeColor, aliases, allAliases, isPerson, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
   typeName: string;
   typeColor: string;
   aliases: CommunityAlias[];
   allAliases: CommunityAlias[];
-  /** True for Person: its aliases are the permission model, edited on Aliases. */
-  aliasesReadOnly?: boolean;
+  /** Person's aliases are the permission model, so it renders its own list. */
+  isPerson?: boolean;
+  previewChips: { name: string; color: string }[];
   onAddAlias: (a: CommunityAlias) => void;
   onRemoveAlias: (name: string, nodeType: string) => void;
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
@@ -221,23 +319,17 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, aliasesReadOnly
         </button>
 
         {/* Alias preview */}
-        {aliases.length > 0 && (
+        {previewChips.length > 0 && (
           <button
             type="button"
             onClick={toggleExpanded}
             className="flex items-center gap-1.5 shrink-0"
           >
-            {aliases.slice(0, 3).map(a => (
-              <span
-                key={a.name}
-                className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-white"
-                style={{ background: a.color }}
-              >
-                {a.name}
-              </span>
+            {previewChips.slice(0, 3).map(a => (
+              <Chip key={a.name} size="xs" color={a.color}>{a.name}</Chip>
             ))}
-            {aliases.length > 3 && (
-              <span className="text-xs text-text-muted">+{aliases.length - 3}</span>
+            {previewChips.length > 3 && (
+              <span className="text-xs text-text-muted">+{previewChips.length - 3}</span>
             )}
           </button>
         )}
@@ -246,49 +338,46 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, aliasesReadOnly
       {/* Expanded panel */}
       {expanded && (
         <div className="space-y-3 pb-4 pl-8">
-          {/* Existing aliases */}
-          {aliases.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {aliases.map(alias => (
-                <AliasPill
-                  key={`${alias.nodeType}:${alias.name}`}
-                  alias={alias}
-                  readOnly={aliasesReadOnly}
-                  onColorChange={c => onUpdateAliasColor(alias.name, alias.nodeType, c)}
-                  onRemove={() => onRemoveAlias(alias.name, alias.nodeType)}
+          {isPerson ? (
+            <PersonAliases />
+          ) : (
+            <>
+              {aliases.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {aliases.map(alias => (
+                    <AliasChip
+                      key={`${alias.nodeType}:${alias.name}`}
+                      alias={alias}
+                      onColorChange={c => onUpdateAliasColor(alias.name, alias.nodeType, c)}
+                      onRemove={() => onRemoveAlias(alias.name, alias.nodeType)}
+                      disabled={saving}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {adding ? (
+                <AddAliasRow
+                  nodeType={typeName}
+                  defaultColor={typeColor}
+                  existing={allAliases}
+                  onAdd={handleAdd}
+                  onCancel={() => setAdding(false)}
                   disabled={saving}
                 />
-              ))}
-            </div>
-          )}
-
-          {/* Add alias toggle / form — Person's list is owned by Console → Aliases */}
-          {aliasesReadOnly ? (
-            <p className="text-xs text-text-muted">
-              These decide what a person can do here, so they live in{' '}
-              <span className="font-medium text-text-secondary">Console → Aliases</span>, alongside
-              who holds each one and what it reaches.
-            </p>
-          ) : adding ? (
-            <AddAliasRow
-              nodeType={typeName}
-              defaultColor={typeColor}
-              existing={allAliases}
-              onAdd={handleAdd}
-              onCancel={() => setAdding(false)}
-              disabled={saving}
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border-default text-xs font-medium text-text-muted hover:text-text-primary hover:border-border-default hover:bg-surface-3 transition-colors"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              Add alias
-            </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  className={chipClass({ tone: 'dashed', size: 'md', className: 'gap-1.5 hover:bg-surface-3 hover:text-text-primary' })}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add alias
+                </button>
+              )}
+            </>
           )}
         </div>
       )}
@@ -301,8 +390,9 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, aliasesReadOnly
 // context-note mentions now, so relationship vocabulary isn't admin-curated —
 // rendering falls back to DEFAULT_LINK_TYPES / getLinkTypeConfig.)
 
-export default function TypesTab({ communityId: _ }: { communityId: string }) {
+export default function TypesPanel() {
   const { currentCommunity, refreshCommunity } = useCommunity();
+  const { data, error: accessError, setError: setAccessError } = usePeopleSection();
 
   const [types, setTypes] = useState<NodeTypeConfig[]>(
     currentCommunity?.nodeTypes ?? DEFAULT_NODE_TYPES
@@ -319,6 +409,9 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     if (currentCommunity?.communityAliases) setAliases(currentCommunity.communityAliases as CommunityAlias[]);
   }, [currentCommunity]);
 
+  // Types and non-Person aliases ride on the community record. Person aliases do
+  // NOT go through here: a rename has to carry UserAlias, BrainGrant and Node
+  // rows with it, which only /api/aliases does (lib/notes/aliases.ts).
   const saveCommunity = async (nextTypes: NodeTypeConfig[], nextAliases: CommunityAlias[]) => {
     if (!currentCommunity) return;
     setSaving(true);
@@ -352,12 +445,13 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
     saveCommunity(types.map(t => t.name === typeName ? { ...t, color } : t), aliases);
 
   if (!currentCommunity) {
-    return <div className="p-6 text-sm text-text-muted">Select a space to manage aliases.</div>;
+    return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;
   }
 
   return (
     <div className="space-y-4">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
+      {accessError && <Alert variant="error" onDismiss={() => setAccessError(null)}>{accessError}</Alert>}
 
       {/* The tab bar above already says "Types", so the list starts straight
           away. A type whose tool is switched off isn't offered at all — no point
@@ -368,14 +462,19 @@ export default function TypesTab({ communityId: _ }: { communityId: string }) {
           .map(defaultType => {
           const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
           const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
+          const typeAliases = aliasesForType(aliases, liveType.name);
           return (
             <TypeSection
               key={liveType.name}
               typeName={liveType.name}
               typeColor={liveType.color}
-              aliases={isPerson ? personAliases(aliases) : aliasesForType(aliases, liveType.name)}
+              aliases={typeAliases}
               allAliases={aliases}
-              aliasesReadOnly={isPerson}
+              isPerson={isPerson}
+              // Person's preview comes from the live permission snapshot, which
+              // already grafts in the built-in Owner; every other type's from
+              // the community record it saves to.
+              previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
               onAddAlias={handleAddAlias}
               onRemoveAlias={handleRemoveAlias}
               onUpdateAliasColor={handleUpdateAliasColor}

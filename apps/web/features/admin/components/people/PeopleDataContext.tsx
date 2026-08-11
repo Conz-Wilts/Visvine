@@ -20,7 +20,8 @@ import {
 import { useConsoleAction } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { notesApi } from '@/features/notes/lib/notesApi';
-import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings';
+import { contextDisplayName } from '@/lib/notes/shared/contextSettings';
+import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { flattenTree, type CommunityMember, type PeopleData } from './shared';
 
 interface PeopleDataValue {
@@ -67,6 +68,10 @@ export default function PeopleDataProvider({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const runAction = useConsoleAction();
+  // Only for the root's label: a context nobody has renamed goes by the space's
+  // own name, the same way the sidebar's root folder does.
+  const { currentCommunity } = useCommunity();
+  const communityName = currentCommunity?.name ?? null;
 
   const reload = useCallback(async () => {
     const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
@@ -83,10 +88,10 @@ export default function PeopleDataProvider({
       overview,
       paths: flattenTree(treeRes?.tree ?? null),
       tree: treeRes?.tree ?? null,
-      contextName: settingsRes?.settings.contextName ?? DEFAULT_CONTEXT_NAME,
+      contextName: contextDisplayName(settingsRes?.settings.contextName, communityName),
       requests: requestsRes?.requests ?? [],
     });
-  }, [communityId]);
+  }, [communityId, communityName]);
 
   useEffect(() => {
     setData(null);

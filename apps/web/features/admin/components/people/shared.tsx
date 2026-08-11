@@ -18,10 +18,11 @@ import {
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz';
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings';
+import { humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote';
 import type { AccessRequest } from '@/lib/notes/shared/brainTypes';
 import type { TreeNode } from '@/lib/notes/shared/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
-import { Button } from '@/components/ui';
+import { Button, chipClass, chipStyle } from '@/components/ui';
 
 export interface CommunityMember {
   id: string;
@@ -44,6 +45,7 @@ export type OverviewGrant = NonNullable<AccessOverviewResponse['grants']>[number
 export interface PathOption {
   path: string;
   kind: 'folder' | 'note';
+  /** The folder's index title, or the note's title — what a reader calls it. */
   title?: string;
 }
 
@@ -68,21 +70,16 @@ export interface PeopleData {
  * The built-in Owner alias wears gold whichever way it is flipped, so the one
  * thing that grants the community is never mistaken for an ordinary label.
  */
-export function AliasToggle({ name, owner, system, on, onClick, disabled }: {
+export function AliasToggle({ name, color, owner, on, onClick, disabled }: {
   name: string;
+  /** The alias's own colour — gold for the built-in Owner, which can't be
+   *  recoloured, so it stays gold whichever way this is flipped. */
+  color: string;
   owner: boolean;
-  system: boolean;
   on: boolean;
   onClick: () => void;
   disabled?: boolean;
 }) {
-  const tone = system
-    ? on
-      ? 'bg-brand-gold text-white'
-      : 'bg-brand-gold-soft text-brand-gold hover:brightness-95'
-    : on
-      ? 'bg-text-primary text-surface-1'
-      : 'bg-surface-2 text-text-muted hover:text-text-primary';
   return (
     <button
       type="button"
@@ -90,27 +87,65 @@ export function AliasToggle({ name, owner, system, on, onClick, disabled }: {
       disabled={disabled}
       aria-pressed={on}
       title={owner ? `${name} — owns the space` : name}
-      className={`rounded-full px-2.5 py-1 text-xs font-medium transition disabled:opacity-40 ${tone}`}
+      // Held is the chip as it appears everywhere else; not held is the same
+      // chip tinted, so the row reads as one alias in two states rather than
+      // two different controls.
+      className={chipClass({
+        tone: on ? 'solid' : 'soft',
+        size: 'md',
+        color,
+        interactive: true,
+      })}
+      style={chipStyle(color, on ? 'solid' : 'soft')}
     >
       {name}
     </button>
   );
 }
 
-function pathLabel(path: string, rootName = DEFAULT_CONTEXT_NAME): string {
-  return path === '' ? rootName : path;
+/**
+ * What a grantable resource is called, and where it sits.
+ *
+ * Access is given to things people can name — "Everything in Blackbird", the
+ * Handbook, the Research folder — so this resolves a stored path back to the
+ * title the tree carries for it, with the containing folder as a muted hint. A
+ * path the tree doesn't hold (a grant on something since renamed, or a note the
+ * viewer can't see) still reads as itself rather than blank.
+ */
+function describePath(
+  path: string,
+  contextName: string,
+  paths: PathOption[] = [],
+): { label: string; hint: string } {
+  if (path === '') return { label: `Everything in ${contextName || DEFAULT_CONTEXT_NAME}`, hint: '' };
+  const known = paths.find((p) => p.path === path);
+  const segments = path.split('/');
+  const parent = segments.slice(0, -1).join('/');
+  const own = segments[segments.length - 1].replace(/\.md$/i, '');
+  return {
+    label: known?.title ?? (known?.kind === 'folder' ? humanizeFolderName(own) : own),
+    hint: parent,
+  };
 }
 
-/** Flatten the notes tree into a picker-friendly list (folders first, sorted). */
+/**
+ * Flatten the notes tree into a picker-friendly list (folders first, sorted).
+ *
+ * Index notes are left out on purpose: an index note and its folder are the same
+ * thing (lib/notes/shared/indexNote.ts), so listing both would offer "Research"
+ * and "Research/index.md" as two different places to grant — and at the root,
+ * "index.md" beside the context itself, which reads as two competing roots.
+ * The folder row (and the root row the picker adds) already stands for it.
+ */
 export function flattenTree(root: TreeNode | null): PathOption[] {
   const folders: PathOption[] = [];
   const notes: PathOption[] = [];
   const walk = (node: TreeNode) => {
     for (const child of node.children ?? []) {
       if (child.kind === 'folder') {
-        folders.push({ path: child.path, kind: 'folder' });
+        folders.push({ path: child.path, kind: 'folder', title: child.title });
         walk(child);
-      } else {
+      } else if (!isIndexPath(child.path)) {
         notes.push({ path: child.path, kind: 'note', title: child.title });
       }
     }
@@ -156,8 +191,23 @@ export function LevelSelect({
   );
 }
 
+/** A resource by the name it goes by, with its folder trailing in muted text. */
+function PathLabel({ path, contextName, paths }: {
+  path: string;
+  contextName: string;
+  paths: PathOption[];
+}) {
+  const { label, hint } = describePath(path, contextName, paths);
+  return (
+    <span className="min-w-0 flex-1 truncate">
+      {label}
+      {hint && <span className="ml-1.5 text-xs text-text-muted">{hint}</span>}
+    </span>
+  );
+}
+
 /**
- * Searchable path picker over the brain tree — 'Entire context' + every folder
+ * Searchable path picker over the brain tree — the whole context + every folder
  * and note. Type to filter; folders list before notes.
  */
 function PathPicker({
@@ -180,18 +230,25 @@ function PathPicker({
   const ref = useRef<HTMLDivElement>(null);
   useClickOutside(ref, () => setOpen(false));
 
+  const contextName = rootName ?? DEFAULT_CONTEXT_NAME;
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const all: PathOption[] = [{ path: '', kind: 'folder' }, ...paths];
     if (!q) return all.slice(0, 40);
+    // Match what's on screen AND the raw path: somebody who knows the file can
+    // still type it, and everyone else searches the words they can see.
     return all
-      .filter(
-        (p) =>
-          pathLabel(p.path, rootName).toLowerCase().includes(q) ||
-          (p.title ?? '').toLowerCase().includes(q),
-      )
+      .filter((p) => {
+        const { label, hint } = describePath(p.path, contextName, paths);
+        return (
+          label.toLowerCase().includes(q) ||
+          hint.toLowerCase().includes(q) ||
+          p.path.toLowerCase().includes(q)
+        );
+      })
       .slice(0, 40);
-  }, [paths, query, rootName]);
+  }, [paths, query, contextName]);
 
   const pick = (path: string) => {
     onChange(path);
@@ -206,9 +263,11 @@ function PathPicker({
         onClick={() => setOpen((o) => !o)}
         className="flex h-9 w-full items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 text-left text-sm text-text-secondary"
       >
-        <span className="min-w-0 flex-1 truncate">
-          {value === null ? <span className="text-text-muted">{placeholder}</span> : pathLabel(value, rootName)}
-        </span>
+        {value === null ? (
+          <span className="min-w-0 flex-1 truncate text-text-muted">{placeholder}</span>
+        ) : (
+          <PathLabel path={value} contextName={contextName} paths={paths} />
+        )}
         <ChevronDown className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
@@ -235,7 +294,7 @@ function PathPicker({
                 ) : (
                   <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
                 )}
-                <span className="min-w-0 flex-1 truncate">{pathLabel(p.path, rootName)}</span>
+                <PathLabel path={p.path} contextName={contextName} paths={paths} />
               </button>
             ))}
             {filtered.length === 0 && (
@@ -293,10 +352,8 @@ export function GrantEditor({
   return (
     <div className="space-y-1">
       {grants.map((grant) => (
-        <div key={grant.id} className="flex items-center gap-2.5 rounded-lg px-1 py-1">
-          <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
-            {pathLabel(grant.resourcePath, contextName)}
-          </span>
+        <div key={grant.id} className="flex items-center gap-2.5 rounded-lg px-1 py-1 text-sm text-text-primary">
+          <PathLabel path={grant.resourcePath} contextName={contextName} paths={paths} />
           <LevelSelect
             value={levelName(grant.level) ?? 'view'}
             disabled={busy}

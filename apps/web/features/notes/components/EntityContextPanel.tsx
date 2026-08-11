@@ -12,8 +12,9 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X, Share2, Radio } from 'lucide-react'
+import { Share2, Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { findAlias, nodeTypeLabel } from '@/lib/types'
@@ -542,30 +543,20 @@ export function EntityContextPanel({
         values={{}}
         accent={theme.dark}
         typeRow={
-          <span className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-semibold text-white"
-                style={{ background: theme.base }}>
+          <Chip size="lg" color={theme.base}>
             {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
-          </span>
+          </Chip>
         }
         tagsRow={(tags.length > 0 || canEditTags) ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            {tags.map((tag) => {
-              const pal = tagPalette(tag, tagColors)
-              return (
-                <span key={tag}
-                      className="inline-flex h-7 items-center gap-1 rounded-full pl-3 pr-1.5 text-[13px] font-medium text-white"
-                      style={{ background: pal.base }}>
-                  <span className="truncate">{tag}</span>
-                  {canEditTags && (
-                    <button type="button" onClick={() => removeTag(tag)} disabled={tagSaving}
-                            aria-label={`Remove ${tag}`}
-                            className="rounded-full p-0.5 opacity-60 transition hover:opacity-100 disabled:opacity-30">
-                      <X className="h-3 w-3" />
-                    </button>
-                  )}
-                </span>
-              )
-            })}
+            {tags.map((tag) => (
+              <Chip key={tag} size="lg" color={tagPalette(tag, tagColors).base}
+                    removeDisabled={tagSaving}
+                    onRemove={canEditTags ? () => removeTag(tag) : undefined}
+                    removeLabel={`Remove ${tag}`}>
+                {tag}
+              </Chip>
+            ))}
 
             {canEditTags && (addingTag ? (
               <TagCombobox
@@ -579,7 +570,7 @@ export function EntityContextPanel({
               />
             ) : (
               <button type="button" onClick={() => setAddingTag(true)} disabled={tagSaving}
-                      className="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-border-default px-3 text-[13px] font-medium text-text-muted transition hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] disabled:opacity-40"
+                      className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
                       style={{ ['--accent' as string]: theme.dark }}>
               + Add tag
             </button>

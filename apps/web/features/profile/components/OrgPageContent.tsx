@@ -31,6 +31,7 @@ import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, getNodeGlyph, nodeTypeLabel } from '@/lib/types';
 import { fieldsForType, readFields } from '@/lib/create/typeFields';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
+import Chip from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import TypeSilhouette from '@/components/ui/TypeSilhouette';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
@@ -125,10 +126,9 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
         <section className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
             <div className="min-w-0 flex-1">
-              <span className="inline-flex items-center h-[22px] px-2 rounded-md text-[11.5px] font-semibold border"
-                    style={{ background: `${theme.base}1a`, color: theme.dark, borderColor: `${theme.base}55` }}>
+              <Chip tone="soft" color={theme.base}>
                 {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
-              </span>
+              </Chip>
 
               <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>
 
@@ -215,11 +215,11 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
             <SectionCard id="tags" title="Tags">
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, i) => (
-                  <span key={tag}
-                        className="chip-pop px-3 py-1.5 rounded-full text-[13px] font-medium border transition-transform duration-150 hover:-translate-y-0.5"
-                        style={{ background: theme.light, color: theme.dark, borderColor: `${theme.base}33`, animationDelay: `${Math.min(i, 20) * 35}ms` }}>
+                  <Chip key={tag} tone="soft" size="lg" color={theme.base}
+                        className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
+                        style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}
-                  </span>
+                  </Chip>
                 ))}
               </div>
             </SectionCard>

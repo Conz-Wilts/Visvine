@@ -13,8 +13,8 @@
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
 import { useEffect, useRef, useState } from 'react';
-import { X } from 'lucide-react';
 import { FilterDropdown, SortDropdown } from '@/features/directory/components/FilterDropdown';
+import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
 import { getNodeTypeConfig } from '@/lib/types';
@@ -32,20 +32,9 @@ function FilterChip({ label, color, onRemove }: {
   onRemove: () => void;
 }) {
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-md py-0.5 pl-2 pr-1 text-[11px] font-semibold text-white"
-      style={{ background: color }}
-    >
+    <Chip color={color} onRemove={onRemove} removeLabel={`Remove ${label} filter`}>
       {label}
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label={`Remove ${label} filter`}
-        className="rounded p-0.5 opacity-70 transition-opacity hover:opacity-100"
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
+    </Chip>
   );
 }
 

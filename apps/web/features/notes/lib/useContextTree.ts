@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
-import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings'
+import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
 import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch'
@@ -152,12 +152,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
   // rather than a separate header bar above the list. A renamed context wins
   // the label; the generic default defers to the community name.
   const rootFolder = useMemo(
-    () => ({
-      label:
-        contextName && contextName !== DEFAULT_CONTEXT_NAME
-          ? contextName
-          : (currentCommunity?.name ?? 'Space'),
-    }),
+    () => ({ label: contextDisplayName(contextName, currentCommunity?.name) }),
     [contextName, currentCommunity?.name],
   )
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, Newspaper } from 'lucide-react';
+import { Chip, chipClass, chipStyle } from '@/components/ui';
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext';
 import type { CreateSuggestion } from '@/lib/create/suggestedType';
 import type { CommunityAlias } from '@/lib/types';
@@ -248,12 +249,7 @@ function TypeRow({
         <span className="block text-xs text-text-muted truncate">{opt.description}</span>
       </span>
       {suggested && (
-        <span
-          className="flex-shrink-0 text-[11px] font-medium rounded-full px-2 py-0.5"
-          style={{ background: `${opt.color}20`, color: opt.color }}
-        >
-          {reason}
-        </span>
+        <Chip tone="soft" color={opt.color} className="flex-shrink-0">{reason}</Chip>
       )}
     </button>
   );
@@ -1127,14 +1123,21 @@ export function AliasSelector({
         {aliases.map((alias) => {
           const active = selected === alias.name;
           return (
+            // Picked is the chip as the directory will show it; unpicked is the
+            // same chip tinted — one alias in two states, same shape as every
+            // other alias in the app.
             <button
               key={alias.name}
               onClick={() => onSelect(active ? null : alias.name)}
-              className="px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-all duration-150"
+              className={chipClass({
+                tone: active ? 'solid' : 'soft',
+                size: 'lg',
+                color: alias.color,
+                interactive: true,
+                className: 'transition-all duration-150',
+              })}
               style={{
-                borderColor: active ? alias.color : 'var(--color-border-default, #e5e7eb)',
-                background: active ? alias.color : 'var(--color-surface-2)',
-                color: active ? '#fff' : 'var(--text-secondary)',
+                ...chipStyle(alias.color, active ? 'solid' : 'soft'),
                 boxShadow: active ? `0 0 0 3px ${alias.color}40` : 'none',
               }}
             >
