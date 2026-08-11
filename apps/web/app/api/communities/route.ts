@@ -7,6 +7,7 @@ import { handleApiError } from '@/lib/api/route';
 import { OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
+import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/communities/publicName';
 import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
@@ -35,6 +36,18 @@ export async function POST(request: NextRequest) {
 
     if (!name) {
       return NextResponse.json({ error: 'Community name is required' }, { status: 400 });
+    }
+
+    // Only public names have to be unique — the default private create can be
+    // called anything (lib/communities/publicName.ts).
+    if (visibility === 'public') {
+      const clash = await findPublicNameConflict(name);
+      if (clash) {
+        return NextResponse.json(
+          { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
+          { status: 409 }
+        );
+      }
     }
 
     // Derive a unique id from the name. slugify never yields "me:"-prefixed ids,

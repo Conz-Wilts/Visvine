@@ -25,7 +25,12 @@ if (!url) {
 // The retrieval indexes (HNSW for the two pgvector cosine rankings, GIN for the
 // chunk keyword stage) live here because `db push` only syncs what
 // schema.prisma can express, and Prisma cannot express either index type.
-const files = ["prisma/migrations/20260810_add_retrieval_indexes/migration.sql"];
+// The public-space-name index is partial + expression-based, which Prisma also
+// cannot express; it backs the uniqueness rule in lib/communities/publicName.ts.
+const files = [
+  "prisma/migrations/20260810_add_retrieval_indexes/migration.sql",
+  "prisma/migrations/20260811_add_public_space_name_unique/migration.sql",
+];
 
 if (files.length === 0) {
   console.log("apply-sql-functions: nothing to apply.");

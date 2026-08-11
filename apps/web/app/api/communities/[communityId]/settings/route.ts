@@ -3,6 +3,11 @@ import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { sanitizeFeatureConfig } from '@/lib/featureAccess';
+import {
+  effectiveNameAndVisibility,
+  findPublicNameConflict,
+  publicNameTakenMessage,
+} from '@/lib/communities/publicName';
 
 /**
  * PUT: Update community settings (admin only)
@@ -40,6 +45,31 @@ export async function PUT(
 
   if (visibility !== undefined && visibility !== 'public' && visibility !== 'private') {
     return NextResponse.json({ error: 'visibility must be public or private' }, { status: 400 });
+  }
+
+  // Public space names must be unique (lib/communities/publicName.ts). Both the
+  // rename and the private→public toggle come through here, and each arrives as
+  // its own single-field patch, so the check is against the pair the space will
+  // END UP with — a name-only patch conflicts when the space is already public,
+  // a visibility-only patch conflicts when its existing name is taken.
+  if (name !== undefined || visibility !== undefined) {
+    const current = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { name: true, visibility: true, personalOwnerId: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: 'Space not found' }, { status: 404 });
+    }
+    const effective = effectiveNameAndVisibility({ name, visibility }, current);
+    if (effective.isPublic && !current.personalOwnerId) {
+      const clash = await findPublicNameConflict(effective.name, communityId);
+      if (clash) {
+        return NextResponse.json(
+          { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
+          { status: 409 }
+        );
+      }
+    }
   }
 
   // Validate designConfig if provided

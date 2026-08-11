@@ -52,6 +52,10 @@ jobs:
           DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
           # 2. Converge the live schema to schema.prisma.
           DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
+          # 3. Apply the hand-written SQL `db push` can't express (partial and
+          #    expression indexes). Must run AFTER the push, which owns every
+          #    index schema.prisma does describe.
+          DATABASE_URL="$DB_URL" node scripts/apply-sql-functions.mjs
           # No seeding: production data is managed in the app, never by deploys.
 
       - name: Build and push image

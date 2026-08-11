@@ -6,6 +6,11 @@ import { isAdmin } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleCommunities } from '@/lib/communities/queries';
+import {
+  effectiveNameAndVisibility,
+  findPublicNameConflict,
+  publicNameTakenMessage,
+} from '@/lib/communities/publicName';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { reconcilePersonAliases } from '@/lib/notes/aliases';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -54,6 +59,18 @@ export async function POST(request: NextRequest) {
         { error: 'Community must have id and name' },
         { status: 400 }
       );
+    }
+
+    // Same rule as the user-facing create: a public name must be free
+    // (lib/communities/publicName.ts). Private bulk creates are unconstrained.
+    if (community.visibility === 'public') {
+      const clash = await findPublicNameConflict(community.name);
+      if (clash) {
+        return NextResponse.json(
+          { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
+          { status: 409 }
+        );
+      }
     }
 
     const created = await prisma.community.create({
@@ -139,6 +156,27 @@ export async function PUT(request: NextRequest) {
         { error: 'Community must have name' },
         { status: 400 }
       );
+    }
+
+    // This path renames but never changes visibility, so the space stays as
+    // public/private as it already was — a rename of a public space still has
+    // to land on a free name (lib/communities/publicName.ts).
+    const current = await prisma.community.findUnique({
+      where: { id: community.id },
+      select: { name: true, visibility: true, personalOwnerId: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: 'Community not found' }, { status: 404 });
+    }
+    const effective = effectiveNameAndVisibility({ name: community.name }, current);
+    if (effective.isPublic && !current.personalOwnerId) {
+      const clash = await findPublicNameConflict(effective.name, community.id);
+      if (clash) {
+        return NextResponse.json(
+          { error: publicNameTakenMessage(clash.name), code: 'name_taken' },
+          { status: 409 }
+        );
+      }
     }
 
     // Person aliases ARE the permission model, so a save here can strip one

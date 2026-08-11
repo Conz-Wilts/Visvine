@@ -8,8 +8,8 @@ import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { Alert, Button, ConfirmDialog, CountryFlagIcon, Field, Input, Textarea, inputBaseClass } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
-import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
-import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { useConsoleAction, useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
+import { FetchJsonError, fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import CommunityImageUpload from '@/features/communities/components/CommunityImageUpload';
 
 interface Props {
@@ -173,11 +173,28 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
   const [confirmPublic, setConfirmPublic] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [visibilityError, setVisibilityError] = useState('');
+
+  const runAction = useConsoleAction();
+
+  const saveSettings = async (patch: Record<string, unknown>) => {
+    const data = await fetchJsonBody<{ community: Partial<Community> }>(`/api/communities/${community.id}/settings`, 'PUT', patch);
+    onSaved(data.community);
+  };
 
   // Every edit saves itself: text fields debounce, pickers persist instantly.
   const { queue, flush } = useConsoleAutosave(async (patch) => {
-    const data = await fetchJsonBody<{ community: Partial<Community> }>(`/api/communities/${community.id}/settings`, 'PUT', patch);
-    onSaved(data.community);
+    try {
+      await saveSettings(patch);
+    } catch (err) {
+      // The queue only reports "Couldn't save" — a rejected name needs to say
+      // WHY, on the field the admin has to change. Re-thrown so the console
+      // pill still shows the failure and offers its retry.
+      if (err instanceof FetchJsonError && err.code === 'name_taken' && patch.name !== undefined) {
+        setNameError(err.message);
+      }
+      throw err;
+    }
   });
 
   const handleNameChange = (value: string) => {
@@ -206,15 +223,26 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
 
   const isPrivate = visibility === 'private';
 
-  const applyVisibility = (next: 'public' | 'private') => {
+  // Not the autosave queue like the other fields: going public can be REFUSED
+  // (a public space's name must be free — lib/communities/publicName.ts), and
+  // the queue swallows the server's message. useConsoleAction reports into the
+  // same console pill but re-throws, so the toggle can undo itself and say why.
+  const applyVisibility = async (next: 'public' | 'private') => {
+    const previous = visibility;
+    setVisibilityError('');
     setVisibility(next);
-    queue({ visibility: next });
+    try {
+      await runAction(() => saveSettings({ visibility: next }));
+    } catch (err) {
+      setVisibility(previous);
+      setVisibilityError(err instanceof Error ? err.message : 'Failed to change visibility');
+    }
   };
 
   // Going public exposes everything in here to anyone, so it asks first.
   // Going private is the safe direction and applies straight away.
   const handleVisibilityToggle = (nextIsPrivate: boolean) => {
-    if (nextIsPrivate) applyVisibility('private');
+    if (nextIsPrivate) void applyVisibility('private');
     else setConfirmPublic(true);
   };
 
@@ -253,6 +281,10 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
               />
             </div>
           </div>
+          {/* A refused publish (name already taken by another public space)
+              leaves the toggle back where it was — this says why, and the fix
+              is the Name field right below. */}
+          {visibilityError && <Alert variant="error">{visibilityError}</Alert>}
           <div className="space-y-5">
             <Field label="Name" error={nameError}>
               <Input
@@ -330,7 +362,7 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
         }
         confirmLabel="Make public"
         onConfirm={() => {
-          applyVisibility('public');
+          void applyVisibility('public');
           setConfirmPublic(false);
         }}
         onClose={() => setConfirmPublic(false)}

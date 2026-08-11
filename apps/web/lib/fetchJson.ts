@@ -2,12 +2,16 @@
 // server's `{ error }` message when present. Replaces the hand-rolled
 // `if (!res.ok) throw new Error(data.error)` pattern in components.
 
-class FetchJsonError extends Error {
+export class FetchJsonError extends Error {
   status: number;
 
-  constructor(status: number, message: string) {
+  /** The server's machine-readable `{ code }`, when it sent one (e.g. 'name_taken'). */
+  code?: string;
+
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -36,7 +40,11 @@ export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: Re
       data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
         ? (data as { error: string }).error
         : `Request failed (${res.status})`;
-    throw new FetchJsonError(res.status, message);
+    const code =
+      data && typeof data === 'object' && typeof (data as { code?: unknown }).code === 'string'
+        ? (data as { code: string }).code
+        : undefined;
+    throw new FetchJsonError(res.status, message, code);
   }
   return data as T;
 }
