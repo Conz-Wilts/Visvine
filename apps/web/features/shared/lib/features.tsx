@@ -49,7 +49,7 @@ export const FEATURES: FeatureDef[] = [
   {
     key: 'notes',
     label: 'Context',
-    href: '/directory?view=context',
+    href: '/directory/note/index.md',
     description: 'A browsable knowledge base of the space — folders, notes and their connections, plus a Context tab on every person and space profile.',
     // Always on and nav-less: reached from the Directory and from profiles, not
     // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.

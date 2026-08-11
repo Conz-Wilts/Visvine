@@ -27,7 +27,7 @@ import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor, getOnWhiteTextBg } from '@/features/directory/components/typeStyles';
 import type { CommunityAlias } from '@/lib/types';
-import type { ContextItem } from '@/features/notes/hooks/useContextBrowse';
+import type { ContextItem } from '@/features/notes/lib/contextItems';
 
 type Direction = 'out' | 'in' | 'both' | 'unresolved';
 

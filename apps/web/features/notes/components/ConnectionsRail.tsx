@@ -23,7 +23,7 @@ import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { toContextItems, titleOfPath } from '@/features/notes/hooks/useContextBrowse';
+import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
 import { contextKeys, prefetchNoteContext, swrFetch } from '@/features/notes/lib/contextPrefetch';
 import { notesApi } from '@/features/notes/lib/notesApi';

@@ -5,6 +5,7 @@ import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
 import { OWNER_ALIAS_NAME } from '@/lib/types/context';
+import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
@@ -28,7 +29,9 @@ export async function POST(request: NextRequest) {
     const name = typeof body.name === 'string' ? body.name.trim() : '';
     const description = typeof body.description === 'string' ? body.description.trim() : '';
     const location = typeof body.location === 'string' ? body.location.trim() : '';
-    const visibility = body.visibility === 'private' ? 'private' : 'public';
+    // Private unless the caller explicitly opts into public — a fresh space
+    // shouldn't be discoverable before its creator has put anything in it.
+    const visibility = body.visibility === 'public' ? 'public' : 'private';
 
     if (!name) {
       return NextResponse.json({ error: 'Community name is required' }, { status: 400 });
@@ -42,7 +45,7 @@ export async function POST(request: NextRequest) {
       id = `${base}-${n}`;
     }
 
-    const { community: created, space: defaultSpace } = await prisma.$transaction(async (tx) => {
+    const created = await prisma.$transaction(async (tx) => {
       const community = await tx.community.create({
         data: {
           id,
@@ -53,6 +56,14 @@ export async function POST(request: NextRequest) {
           memberCount: 1,
           dataFile: `${id}.json`,
           inviteToken: randomUUID(),
+          // Only the Directory tool to begin with — every toggleable tool starts
+          // off and the admin opts in from the console. (Core keys — directory,
+          // notes, events — are always on and never persisted here.)
+          featureConfig: {
+            enabled: Object.fromEntries(
+              ALL_FEATURE_KEYS.filter((key) => !CORE_FEATURE_KEYS.includes(key)).map((key) => [key, false])
+            ),
+          },
         },
       });
       await tx.userCommunity.create({
@@ -69,11 +80,7 @@ export async function POST(request: NextRequest) {
           addedBy: session.userId,
         },
       });
-      // Every community starts with a default space; admins can rename or delete it.
-      const space = await tx.channelSpace.create({
-        data: { communityId: id, name: 'General', position: 0 },
-      });
-      return { community, space };
+      return community;
     });
 
     // Access here is decided by aliases from the start, so there is nothing to
@@ -82,34 +89,26 @@ export async function POST(request: NextRequest) {
     await markAccessSeeded(id);
 
     // Give the new space its place in its own context graph: a node for the
-    // space itself, a node for its default channel section, and the containment
-    // edge between them. Best-effort — a space that exists without context is
-    // recoverable (the backfill script fixes it); a failed create is not.
+    // space itself. Node only — seeding its canonical note here would plant a
+    // communities/ folder in an otherwise-empty brain; the Context tab stubs
+    // the note locally and the first real save creates it. Best-effort — a
+    // space that exists without context is recoverable (the backfill script
+    // fixes it); a failed create is not.
     const actor = { id: session.userId, name: session.name, email: session.email };
-    const communityNode = communityNodeId(id);
     await syncEntityNodeSafe({
       communityId: id,
       type: 'space',
-      nodeId: communityNode,
+      nodeId: communityNodeId(id),
       name,
       subtitle: description || null,
       location: location || null,
-      body: description,
-      actor,
-    });
-    await syncEntityNodeSafe({
-      communityId: id,
-      type: 'section',
-      name: defaultSpace.name,
-      recordId: defaultSpace.id,
-      parentNodeId: communityNode,
+      skipNote: true,
       actor,
     });
 
-    // Seed the brain's root index — the community's home page. The Directory's
-    // Context tab routes to it, and falls back to the three-column browser for a
-    // brain without one, so a community that never gets one never lands on its
-    // own home page. Best-effort for the same reason as the context nodes above.
+    // Seed the brain's root index — the community's home page, which the
+    // Directory's Context tab routes to. Best-effort for the same reason as
+    // the context node above.
     try {
       await ensureRootIndex({ communityId: id, ownerKey: SHARED_OWNER_KEY }, name, actor);
     } catch (err) {

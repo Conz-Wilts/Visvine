@@ -6,6 +6,7 @@ import { isAdmin } from '@/lib/auth';
 import type { Community, CommunityAlias } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleCommunities } from '@/lib/communities/queries';
+import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { reconcilePersonAliases } from '@/lib/notes/aliases';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
@@ -67,17 +68,19 @@ export async function POST(request: NextRequest) {
         imageUrl: community.imageUrl ?? null,
         nodeTypes: community.nodeTypes as object ?? null,
         communityAliases: community.communityAliases as object ?? [],
+        // Same defaults as the user-facing create: private, Directory only.
+        visibility: community.visibility === 'public' ? 'public' : 'private',
+        featureConfig: {
+          enabled: Object.fromEntries(
+            ALL_FEATURE_KEYS.filter((key) => !CORE_FEATURE_KEYS.includes(key)).map((key) => [key, false])
+          ),
+        },
       },
     });
 
-    // Every community starts with a default space; admins can rename or delete it.
-    await prisma.channelSpace.create({
-      data: { communityId: created.id, name: 'General', position: 0 },
-    });
-
     // Seed the brain's root index — the community's home page, which the
-    // Directory's Context tab routes to (without one it falls back to the
-    // three-column browser). Best-effort: never fail the create over it.
+    // Directory's Context tab routes to. Best-effort: never fail the create
+    // over it.
     try {
       await ensureRootIndex(
         { communityId: created.id, ownerKey: SHARED_OWNER_KEY },
@@ -216,19 +219,27 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const [nodeCount, linkCount] = await Promise.all([
-      prisma.node.count({ where: { communityId: id } }),
-      prisma.link.count({ where: { communityId: id } }),
-    ]);
-
-    if (nodeCount + linkCount > 0) {
-      return NextResponse.json(
-        { error: 'Cannot delete community with existing nodes or connections. Delete them first.' },
-        { status: 400 }
-      );
+    const exists = await prisma.community.findUnique({ where: { id }, select: { id: true } });
+    if (!exists) {
+      return NextResponse.json({ error: 'Community not found' }, { status: 404 });
     }
 
-    await prisma.community.delete({ where: { id } });
+    // Deleting the community cascades through every FK-backed relation (nodes,
+    // links, notes, members, channels, grants…). These tables carry a
+    // communityId without a foreign key, so they must be swept by hand or
+    // they'd survive as orphans.
+    await prisma.$transaction([
+      prisma.post.deleteMany({ where: { communityId: id } }),
+      prisma.resource.deleteMany({ where: { communityId: id } }),
+      prisma.privateColumn.deleteMany({ where: { communityId: id } }),
+      prisma.communityColumn.deleteMany({ where: { communityId: id } }),
+      prisma.communityColumnRequest.deleteMany({ where: { communityId: id } }),
+      prisma.valueShareRequest.deleteMany({ where: { communityId: id } }),
+      prisma.auditLog.deleteMany({ where: { communityId: id } }),
+      prisma.community.delete({ where: { id } }),
+    ]);
+
+    revalidateTag('context-data', { expire: 0 });
 
     return NextResponse.json({ success: true });
   } catch (err) {

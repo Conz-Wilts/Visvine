@@ -1,9 +1,9 @@
-'use client'
+﻿'use client'
 
 // The notes sidebar: starred notes and a folder/note tree. Folders expand/collapse
 // and carry a folder icon; notes carry their frontmatter type's glyph (person,
 // group, event, resource) or a document icon when untyped. Row actions (star,
-// delete, share) live behind a single ⋯ menu revealed on hover — starred state
+// delete, share) live behind a single â‹¯ menu revealed on hover â€” starred state
 // shows only there and in the Starred section above the tree, never as a glyph
 // on the row. Starring is the same `starred:` frontmatter flag the editor
 // toolbar's star toggles, so both surfaces always agree. Nesting is shown
@@ -28,7 +28,7 @@ import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useConte
 // surfaces read and write the same per-community blob.
 // VS Code-style row band: the hover/selection background runs the FULL panel
 // width, square-edged, regardless of how deeply the row is nested. Rows sit
-// inside per-level indent containers, so the depth offset isn't knowable here —
+// inside per-level indent containers, so the depth offset isn't knowable here â€”
 // instead the row box is pulled far to the left and given matching padding
 // back, which leaves its content exactly where it was and lets the background
 // (and the guide lines it covers) bleed out to the panel edge. The scroll
@@ -37,25 +37,25 @@ const ROW_BLEED = '-ml-[999px] pl-[999px]'
 
 // Where the tree was scrolled to, per scope, kept for the lifetime of the tab.
 // The docked tree re-mounts on every navigation (each page renders its own
-// ContextSidebar), and a fresh scroll container starts at 0 — so clicking a note
+// ContextSidebar), and a fresh scroll container starts at 0 â€” so clicking a note
 // half-way down the tree would snap the list to the top and then smooth-scroll
 // back. Restoring the offset on mount makes the swap invisible.
 const scrollMemory = new Map<string, number>()
 
-// The glyph for a note's frontmatter type. `entityKindOf` is the wider net —
-// it catches retired organisation spellings getNodeGlyph has no entry for — so
+// The glyph for a note's frontmatter type. `entityKindOf` is the wider net â€”
+// it catches retired organisation spellings getNodeGlyph has no entry for â€” so
 // those notes still read as the cluster glyph rather than falling back to
 // initials.
-export function noteGlyph(type: string | undefined): NodeGlyph | null {
+function noteGlyph(type: string | undefined): NodeGlyph | null {
   return getNodeGlyph(type) ?? (entityKindOf(type) === 'space' ? 'group' : null)
 }
 
 /** Access adornments for a folder row at ANY depth (shared brain only):
- *  restricted = a grant boundary (🔒), plus the viewer's own level chip. */
+ *  restricted = a grant boundary (ðŸ”’), plus the viewer's own level chip. */
 interface FolderBadge {
   restricted: boolean
   locked?: boolean
-  /** The viewer's own effective level at the folder ('view'…'full'). */
+  /** The viewer's own effective level at the folder ('view'â€¦'full'). */
   level?: string
 }
 
@@ -68,16 +68,16 @@ interface NoteSidebarProps {
   onSelect: (path: string) => void
   onToggleStar: (path: string, starred: boolean) => void
   onDeleteNote: (path: string) => void
-  /** Access badges keyed by FULL path — folders AND privately-restricted notes
+  /** Access badges keyed by FULL path â€” folders AND privately-restricted notes
    *  (shared scope only). */
   folderBadges?: Map<string, FolderBadge>
   /** Hover action on folder rows: open the folder's Share panel. */
   onFolderAccess?: (folderPath: string) => void
-  /** ⋯ menu action on note rows: open the note's Share panel. */
+  /** â‹¯ menu action on note rows: open the note's Share panel. */
   onShareNote?: (path: string) => void
-  /** ⋯ menu action on folder rows: delete the folder (and the notes inside). */
+  /** â‹¯ menu action on folder rows: delete the folder (and the notes inside). */
   onDeleteFolder?: (folderPath: string, label?: string) => void
-  /** Render without card chrome (bg/border/shadow) — used when the sidebar sits on
+  /** Render without card chrome (bg/border/shadow) â€” used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
   /** Show the brain root as a real (collapsible) folder row at the top of the
@@ -98,7 +98,7 @@ interface NoteSidebarProps {
   onEmptyTrash?: () => void
   /** Note to temporarily expand the tree down to (the context search's focused
    *  match, or the note a profile page has open). Unlike a click this never
-   *  changes the saved expansion — clearing it collapses the peek back to
+   *  changes the saved expansion â€” clearing it collapses the peek back to
    *  whatever the user had open. */
   revealPath?: string | null
 }
@@ -146,7 +146,7 @@ export function NoteSidebar({
     [starred, titleFor],
   )
 
-  // Which folders are expanded — persisted per scope, with the reveal peek
+  // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
   const { effectiveOpenPaths, toggleFolder } = useContextTreeState(storageKey, revealPath)
 
@@ -195,7 +195,7 @@ export function NoteSidebar({
   return (
     <div
       className={`flex h-full flex-col overflow-hidden ${
-        /* bare = docked into the square-cornered Sidebar card — rounding here
+        /* bare = docked into the square-cornered Sidebar card â€” rounding here
            would carve a curved clip into the card's top edge by the scrollbar */
         bare ? '' : 'rounded-l-none rounded-r-2xl border border-border-default bg-surface-1 shadow-float'
       }`}
@@ -205,14 +205,14 @@ export function NoteSidebar({
           graph jumping while you scroll the tree). */}
       {/* overflow-x-hidden clips ROW_BLEED's overhang (overflow-y-auto alone
           would resolve x to auto and show a horizontal scrollbar). No px here:
-          the row bands must reach both panel edges — rows carry their own
+          the row bands must reach both panel edges â€” rows carry their own
           inner padding. */}
       <div
         ref={scrollRef}
         onScroll={rememberScroll}
         className="scrollbar-on-hover flex-1 overflow-y-auto overflow-x-hidden overscroll-contain py-3"
       >
-        {/* pl only — it insets the row CONTENT off the panel edge while the
+        {/* pl only â€” it insets the row CONTENT off the panel edge while the
             bands still bleed past it; a matching pr would pull the bands'
             right edge in and break the full-width look. */}
         <div className="pl-2">
@@ -239,7 +239,7 @@ export function NoteSidebar({
           )}
 
           {root ? (
-            // The brain root as the tree's own top-level folder — same row
+            // The brain root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
             // community down.
             <FolderRow
@@ -280,7 +280,7 @@ export function NoteSidebar({
           )}
 
           {/* Trash sits at the very bottom of every brain, below the whole tree
-              — a folder-shaped row rather than a modal, so restoring reads as
+              â€” a folder-shaped row rather than a modal, so restoring reads as
               moving a note back rather than a separate admin surface. */}
           {trash && (
             <TrashFolder
@@ -298,10 +298,10 @@ export function NoteSidebar({
   )
 }
 
-// ── Trash ─────────────────────────────────────────────────────────────────────
+// â”€â”€ Trash â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Whole days left before the server purges an entry (0 = purges within the day). */
-export function daysLeft(deletedAt: number): number {
+function daysLeft(deletedAt: number): number {
   const ms = deletedAt + TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000 - Date.now()
   return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)))
 }
@@ -392,7 +392,7 @@ function TrashRow({
   const left = daysLeft(entry.deletedAt)
   return (
     <div className={`group flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
-      {/* A trashed note has nothing to open — the row is a label, and the ⋯ menu
+      {/* A trashed note has nothing to open â€” the row is a label, and the â‹¯ menu
           carries the only two things you can do with it. */}
       <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-[15px]" title={entry.path}>
         <span className="shrink-0 text-text-muted">
@@ -447,7 +447,7 @@ function Tree({
   onShareNote?: (path: string) => void
   onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
-  // A folder's own index.md never renders as a child row — the folder row IS
+  // A folder's own index.md never renders as a child row â€” the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The brain
   // root included: its index.md folds into the root folder row, so the
   // community reads as the parent folder of everything below it.
@@ -517,7 +517,7 @@ function FolderRow(props: {
   onShareNote?: (path: string) => void
   onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
-  // Expansion is owned by NoteSidebar (persisted, and revealed by selection) —
+  // Expansion is owned by NoteSidebar (persisted, and revealed by selection) â€”
   // this row only reads it and reports toggles.
   const open = props.openPaths.has(props.node.path)
   const setOpen = () => props.onToggleFolder(props.node.path, open)
@@ -526,7 +526,7 @@ function FolderRow(props: {
   const badge = props.folderBadges?.get(props.node.path)
   const showAccess = !!props.onFolderAccess
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
-  // row by Tree), the folder row IS that note — clicking the name opens it and
+  // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
   // The brain root works the same way over its own index.md, so the community
   // row opens the community's home note.
@@ -569,7 +569,7 @@ function FolderRow(props: {
             {folderLabel}
           </span>
           {badge?.restricted && (
-            <span className="shrink-0 text-text-muted" title="Restricted folder — access is granted here, not inherited">
+            <span className="shrink-0 text-text-muted" title="Restricted folder â€” access is granted here, not inherited">
               <LockIcon />
             </span>
           )}
@@ -587,8 +587,8 @@ function FolderRow(props: {
               ? [{ label: 'Share', icon: <ShareIcon />, onClick: () => props.onFolderAccess!(props.node.path) }]
               : []),
             // No Star: a folder IS its index note, and index notes aren't
-            // starrable — Starred is a shortcut list of notes, not folders.
-            // The root row is the brain itself — not deletable from the tree.
+            // starrable â€” Starred is a shortcut list of notes, not folders.
+            // The root row is the brain itself â€” not deletable from the tree.
             ...(props.onDeleteFolder && props.node.path !== ''
               ? [
                   {
@@ -627,9 +627,9 @@ function FolderRow(props: {
   )
 }
 
-// ── Row action menu ───────────────────────────────────────────────────────────
+// â”€â”€ Row action menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-export interface RowMenuItem {
+interface RowMenuItem {
   label: string
   icon?: React.ReactNode
   onClick: () => void
@@ -639,12 +639,12 @@ export interface RowMenuItem {
 const ROW_MENU_W = 160
 const ROW_MENU_ITEM_H = 34
 
-/** The ⋯ button every row shows on hover, opening its actions (star, delete,
- *  share…) in a small popup. The popup is a fixed-position portal: the tree's
+/** The â‹¯ button every row shows on hover, opening its actions (star, delete,
+ *  shareâ€¦) in a small popup. The popup is a fixed-position portal: the tree's
  *  scroll container clips overflow on both axes, so an absolutely positioned
  *  menu inside the row would be cut off at the panel edge. Fixed positioning
  *  detaches from scrolling, so any scroll just closes the menu. */
-export function RowMenu({
+function RowMenu({
   items,
   selected,
   hoverClass = 'group-hover:opacity-100',
@@ -762,7 +762,7 @@ function NoteRow({
   glyph: NodeGlyph | null
   selected: boolean
   starred: boolean
-  /** The note is privately restricted — inherited access is cut at the note. */
+  /** The note is privately restricted â€” inherited access is cut at the note. */
   restrictedBadge?: boolean
   canEdit: boolean
   onSelect: (path: string) => void
@@ -791,7 +791,7 @@ function NoteRow({
         {restrictedBadge && (
           <span
             className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}
-            title="Private note — access from its folders is cut off"
+            title="Private note â€” access from its folders is cut off"
           >
             <LockIcon />
           </span>
@@ -826,11 +826,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Expand/collapse chevron. A stroked SVG rather than the ▸/▾ text glyphs those
+// Expand/collapse chevron. A stroked SVG rather than the â–¸/â–¾ text glyphs those
 // render hairline-thin and sit off the row's optical centre at this size.
 // Rotating one shape keeps the two states visually identical in weight, and
 // animating the rotation shows which way the fold went.
-export function Chevron({ open }: { open: boolean }) {
+function Chevron({ open }: { open: boolean }) {
   return (
     <svg
       width="16"
@@ -850,7 +850,7 @@ export function Chevron({ open }: { open: boolean }) {
   )
 }
 
-export function FolderIcon({ open = false }: { open?: boolean }) {
+function FolderIcon({ open = false }: { open?: boolean }) {
   return open ? (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
@@ -863,7 +863,7 @@ export function FolderIcon({ open = false }: { open?: boolean }) {
 }
 
 // Type glyph (person/group/event/resource silhouette) sized to match FileIcon.
-export function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
+function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d={NODE_GLYPH_PATHS[glyph]} />
@@ -871,7 +871,7 @@ export function GlyphIcon({ glyph }: { glyph: NodeGlyph }) {
   )
 }
 
-export function FileIcon() {
+function FileIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
@@ -880,7 +880,7 @@ export function FileIcon() {
   )
 }
 
-export function StarIcon({ filled = false }: { filled?: boolean }) {
+function StarIcon({ filled = false }: { filled?: boolean }) {
   // Same star glyph as the editor toolbar's lucide Star; fills amber when starred.
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -889,7 +889,7 @@ export function StarIcon({ filled = false }: { filled?: boolean }) {
   )
 }
 
-// Horizontal ⋯ — the rows' single actions trigger.
+// Horizontal â‹¯ â€” the rows' single actions trigger.
 function KebabIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -900,7 +900,7 @@ function KebabIcon() {
   )
 }
 
-export function LockIcon() {
+function LockIcon() {
   return (
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -910,7 +910,7 @@ export function LockIcon() {
 }
 
 // Share glyph (same shape as the editor toolbar's lucide Share2).
-export function ShareIcon() {
+function ShareIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="18" cy="5" r="3" />
@@ -922,8 +922,8 @@ export function ShareIcon() {
   )
 }
 
-// Counter-clockwise arrow (lucide RotateCcw) — the trash rows' Restore action.
-export function RestoreIcon() {
+// Counter-clockwise arrow (lucide RotateCcw) â€” the trash rows' Restore action.
+function RestoreIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
@@ -932,7 +932,7 @@ export function RestoreIcon() {
   )
 }
 
-export function TrashIcon() {
+function TrashIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M3 6h18" />

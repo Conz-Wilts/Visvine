@@ -2,11 +2,9 @@
 
 // The community context tree, loaded once and owned in one place.
 //
-// Two surfaces render the same tree: the docked ContextSidebar (portalled into
-// the global Sidebar from a note, a source or a profile) and the /context
-// knowledge browser's left rail. They differ only in where they put it and what
-// a click means — the loading, the trash, the access badges and every mutation
-// are identical, so they live here rather than being copied into both.
+// Rendered by the docked ContextSidebar (portalled into the global Sidebar
+// from a note, a source or a profile) — the loading, the trash, the access
+// badges and every mutation live here rather than in the component.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -18,8 +16,9 @@ import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch
 
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
 
-/** Where a surface sends the user when the note it was showing is deleted. */
-const CONTEXT_HOME = '/directory?view=context'
+/** Where a surface sends the user when the note it was showing is deleted:
+ *  the brain's root index note, the community's home page. */
+const CONTEXT_HOME = '/directory/note/index.md'
 
 export interface ContextTreeOptions {
   communityId: string | null

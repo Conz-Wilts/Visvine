@@ -8,11 +8,11 @@
  * under), and rebuild-index-notes.ts deliberately leaves a blockless root alone.
  * So the root is the one index nothing creates retroactively.
  *
- * It matters because the Directory's Context tab routes to the root index when
- * there is one and falls back to the three-column browser when there isn't (see
- * app/(auth)/directory/page.tsx) — a brain without one never reaches its own
- * home page. New communities now get theirs at creation via ensureRootIndex;
- * this catches the ones made before that.
+ * It matters because the Directory's Context tab routes to the root index —
+ * the community's home page (see app/(auth)/directory/page.tsx, which also
+ * writes one on first open for brains that lack it). New communities get
+ * theirs at creation via ensureRootIndex; this catches the ones made before
+ * that, in bulk.
  *
  * Covers every Community row, personal `me:<userId>` spaces included, and reads
  * the title from the community's name. Idempotent: a brain that already has a

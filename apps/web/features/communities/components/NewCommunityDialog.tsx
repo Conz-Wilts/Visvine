@@ -1,7 +1,7 @@
 'use client';
 
 // Starting a community of your own — provisioning a real Community row, its
-// membership, a default space and a brain.
+// membership and a brain.
 //
 // Name and nothing else. Description, location and visibility are all optional
 // server-side and all editable straight afterwards in Console → Settings, so
@@ -45,8 +45,8 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
       // Any signed-in user may do this; the server derives a unique id from the
       // name and makes the creator an admin. (POST /api/data/communities is the
       // separate super-admin bulk path.)
-      // Name only — the server defaults the description to '', location to null
-      // and visibility to public for anything that isn't explicitly 'private'.
+      // Name only — the server defaults the description to '', location to
+      // null, visibility to private and the tools to Directory only.
       const { community } = await fetchJsonBody<CreateResponse>('/api/communities', 'POST', {
         name: name.trim(),
       });

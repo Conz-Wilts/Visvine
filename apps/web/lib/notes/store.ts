@@ -330,9 +330,8 @@ export async function ensureAncestorIndexes(
 // blockless root alone. So a brain gets a root index only if something seeds it.
 //
 // It matters beyond tidiness: the Directory's Context tab routes to the root
-// index when there is one and falls back to the three-column browser when there
-// isn't (see app/(auth)/directory/page.tsx), so a brain without one never lands
-// on its own home page.
+// index — the community's home page (see app/(auth)/directory/page.tsx, which
+// also writes one on first open for brains that predate this seeding).
 //
 // Seeded via newIndexContent, whose empty managed child block is what makes the
 // root opt in to auto-listing its folders from here on. Returns true when it

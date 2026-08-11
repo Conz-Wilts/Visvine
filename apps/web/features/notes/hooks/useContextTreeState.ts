@@ -1,8 +1,7 @@
 'use client'
 
-// Expansion state for a notes tree, extracted from NoteSidebar so the docked
-// sidebar and the full-screen Context explorer share one model — and one
-// persisted blob, so a folder opened in either surface is open in both.
+// Expansion state for the docked notes tree (NoteSidebar), persisted per scope
+// so a folder stays open across visits.
 //
 // Three layers compose into what's actually open:
 //   openPaths       — what the user opened by hand, persisted per scope.
@@ -19,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ancestorFolders } from '@/lib/notes/shared/indexNote'
 
-export const ROOT_PATH = ''
+const ROOT_PATH = ''
 const OPEN_STORE_PREFIX = 'visvine:notes-tree-open:'
 
 /** The Trash row's expansion key. Not a real brain path (a note can never live
@@ -29,7 +28,7 @@ export const TRASH_PATH = ':trash:'
 
 /** Every folder on the way down to `path`, root row included:
  *  'people/acme/index.md' → ['', 'people', 'people/acme']. */
-export function ancestorChain(path: string): string[] {
+function ancestorChain(path: string): string[] {
   return [ROOT_PATH, ...ancestorFolders(path)]
 }
 

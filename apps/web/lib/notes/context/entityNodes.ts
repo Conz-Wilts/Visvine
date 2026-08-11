@@ -100,6 +100,12 @@ export interface SyncEntityNodeInput {
   metadata?: Record<string, unknown>
   /** Starting text for the canonical note. Ignored for document types. */
   body?: string
+  /**
+   * Skip writing the canonical note. For creates that shouldn't plant the
+   * entity's namespace folder in an otherwise-empty brain — the Context tab
+   * stubs a missing note locally and the first real save creates it.
+   */
+  skipNote?: boolean
   /** Who to attribute the note to. Defaults to {@link SYSTEM_ACTOR}. */
   actor?: Actor | null
   /** Parent to draw a `contains` edge from (usually `community:<id>`). */
@@ -294,7 +300,7 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
   const id = nodeId
 
   // The canonical note. Documents are their own note, so they skip this.
-  const { notePath, noteError } = DOCUMENT_TYPES.has(type)
+  const { notePath, noteError } = DOCUMENT_TYPES.has(type) || input.skipNote
     ? { notePath: null as string | null, noteError: null as string | null }
     : await ensureEntityNote(
         communityId,

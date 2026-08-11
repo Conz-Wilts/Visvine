@@ -341,8 +341,8 @@ export default function CommunitySettingsPanel({ community, onSaved }: Props) {
         title="Delete space"
         body={
           <>
-            This permanently deletes <span className="font-semibold">{community.name}</span> and all of
-            its memberships. This cannot be undone.
+            This permanently deletes <span className="font-semibold">{community.name}</span> — every
+            record, connection, note, post and membership in it. This cannot be undone.
           </>
         }
         confirmLabel="Delete space"
