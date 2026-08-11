@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
+import { featureAccessForbidden } from '@/lib/auth';
 
 // Caps on nested fan-out per post. No web UI renders comments inline yet (the
 // MCP `list_feed` tool that used to consume this was removed with the rest of
@@ -19,6 +20,11 @@ export async function GET(req: NextRequest) {
   const communityId = searchParams.get('communityId');
   if (!communityId) {
     return NextResponse.json({ error: 'communityId required' }, { status: 400 });
+  }
+
+  // The posts feed is part of the Channels tool, so it answers to the same gate.
+  if (await featureAccessForbidden(session.userId, communityId, 'channels', session.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 50);
@@ -98,6 +104,10 @@ export async function POST(req: NextRequest) {
 
   if (!communityId || !content?.trim()) {
     return NextResponse.json({ error: 'communityId and content required' }, { status: 400 });
+  }
+
+  if (await featureAccessForbidden(session.userId, communityId, 'channels', session.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const post = await prisma.post.create({

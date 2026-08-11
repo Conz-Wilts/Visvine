@@ -16,6 +16,7 @@ import {
   moreFeatureKeys,
   sortFeatureKeys,
   sanitizeFeatureConfig,
+  mergeFeatureConfig,
 } from '../lib/featureAccess';
 
 // The registry keys from lib/features.tsx — mirrored in featureAccess.ts so the
@@ -312,6 +313,51 @@ describe('sanitizeFeatureConfig adminOnly', () => {
     assert.equal('adminOnly' in sanitizeFeatureConfig({}), false);
     // The always-admins-only keys are implicit — never written back to the row.
     assert.deepEqual(sanitizeFeatureConfig({ adminOnly: ['connectors'] }).adminOnly, []);
+  });
+});
+
+// The Tools panel and Members → Tools write different keys of the same
+// column, so a save must inherit the keys it didn't send. These are the exact
+// crossings that used to wipe each other when the PUT replaced the column.
+describe('mergeFeatureConfig', () => {
+  const stored = {
+    enabled: { channels: false },
+    adminOnly: ['resources'],
+    directoryPrivate: false,
+    order: ['resources', 'channels', 'directory'],
+    more: ['resources'],
+  };
+
+  it('keeps the sidebar layout when only adminOnly is sent', () => {
+    const merged = mergeFeatureConfig(stored, { adminOnly: ['resources', 'directory'] });
+    assert.deepEqual(merged.enabled, { channels: false });
+    assert.deepEqual(merged.order, ['resources', 'channels', 'directory']);
+    assert.deepEqual(merged.more, ['resources']);
+    assert.deepEqual(merged.adminOnly, ['resources', 'directory']);
+    // The legacy flag is re-derived whenever the patch carries adminOnly.
+    assert.equal(merged.directoryPrivate, true);
+  });
+
+  it('keeps the locks when only the layout is sent', () => {
+    const merged = mergeFeatureConfig(
+      { ...stored, adminOnly: ['directory'], directoryPrivate: true },
+      { enabled: { channels: true }, order: ['directory', 'channels'], more: [] },
+    );
+    assert.deepEqual(merged.adminOnly, ['directory']);
+    assert.equal(merged.directoryPrivate, true);
+    assert.deepEqual(merged.enabled, { channels: true });
+    assert.deepEqual(merged.order, ['directory', 'channels']);
+  });
+
+  it('treats a missing stored config as empty', () => {
+    assert.deepEqual(mergeFeatureConfig(null, { adminOnly: ['resources'] }).adminOnly, ['resources']);
+    assert.deepEqual(mergeFeatureConfig(undefined, {}), {});
+  });
+
+  it('still overwrites the keys a patch does send', () => {
+    const merged = mergeFeatureConfig(stored, { adminOnly: [] });
+    assert.deepEqual(merged.adminOnly, []);
+    assert.equal(merged.directoryPrivate, false);
   });
 });
 

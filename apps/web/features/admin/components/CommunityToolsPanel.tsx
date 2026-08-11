@@ -3,8 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Community, CommunityFeatureConfig } from '@/lib/types';
-import { ADMIN_ONLY_FEATURE_KEYS, FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, moreFeatureKeys, sortFeatureKeys } from '@/features/shared/lib/features';
-import Toggle from '@/components/ui/Toggle';
+import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, moreFeatureKeys, sortFeatureKeys } from '@/features/shared/lib/features';
 import { Modal, SearchInput, SettingsSection } from '@/components/ui';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
@@ -22,11 +21,6 @@ const iconProps = {
   viewBox: '0 0 24 24',
 } as const;
 
-const LockIcon = () => (
-  <svg {...iconProps} className="h-3.5 w-3.5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 0h10.5a1.5 1.5 0 011.5 1.5v6a1.5 1.5 0 01-1.5 1.5H6.75a1.5 1.5 0 01-1.5-1.5v-6a1.5 1.5 0 011.5-1.5z" />
-  </svg>
-);
 const GripIcon = () => (
   <svg {...iconProps} className="h-4 w-4" strokeWidth={1.5}>
     <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" />
@@ -96,7 +90,10 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
       FEATURES.filter(f => !f.core).map(f => [f.key, isFeatureEnabled(savedConfig, f.key)])
     )
   );
-  // Tools only admins can see. Per-tool now, not just the directory.
+  // Tools only admins can see. Edited on Members → Tools, not here;
+  // this panel carries it only so removing a tool can drop the lock that was
+  // placed on a row that no longer exists. The console keys this panel on the
+  // stored config, so the copy is re-seeded whenever a lock changes next door.
   const [adminOnly, setAdminOnly] = useState<string[]>(() => adminOnlyFeatureKeys(savedConfig));
   // Nav-hidden features (Messages and Events in the top bar, Context under the
   // Directory) are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
@@ -292,8 +289,8 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
     onSaved(data.community);
   });
 
-  // The PUT replaces featureConfig wholesale, so every save must carry the
-  // complete config — never just the field that changed.
+  // The PUT merges these keys over the stored config, so a save must carry a
+  // COMPLETE array for each key it sends — but needn't carry keys it doesn't own.
   const commit = (
     nextEnabled: Record<string, boolean>,
     nextAdminOnly: string[],
@@ -347,10 +344,6 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
       more.filter(k => k !== key),
     );
   };
-
-  /** Flip a tool between "everyone" and "admins only". */
-  const setToolAdminOnly = (key: string, on: boolean) =>
-    commit(enabled, on ? [...adminOnly, key] : adminOnly.filter(k => k !== key), order, more);
 
   const availableFeatures = removedKeys.map(key => FEATURES.find(f => f.key === key)!);
   // Search matches the label, the blurb and the node type names, so "space"
@@ -414,29 +407,9 @@ export default function CommunityToolsPanel({ community, onSaved }: Props) {
               {feature.label}
             </span>
           </div>
-          {/* Admins only — members get neither the sidebar row nor the
-              page. Visibility, not enablement, so core tools have it too. A
-              tool whose pages refuse a member outright is locked on: there's
-              nothing for the switch to decide. */}
-          <span
-            data-no-drag
-            className={`flex shrink-0 items-center gap-1.5 ${
-              adminOnly.includes(feature.key) ? 'text-text-secondary' : 'text-text-muted'
-            }`}
-            title={
-              ADMIN_ONLY_FEATURE_KEYS.includes(feature.key)
-                ? `${feature.label} is always admins-only`
-                : `Only admins can open ${feature.label}`
-            }
-          >
-            <LockIcon />
-            <Toggle
-              checked={adminOnly.includes(feature.key)}
-              disabled={ADMIN_ONLY_FEATURE_KEYS.includes(feature.key)}
-              onChange={on => setToolAdminOnly(feature.key, on)}
-              aria-label={`Restrict ${feature.label} to admins`}
-            />
-          </span>
+          {/* Who can open a tool is a permission, not a layout choice, so the
+              admins-only lock lives on Members → Tools. This page is
+              only about which tools the space has and where they sit. */}
           {/* Remove — takes the tool's pages and its node types with it, so it
               asks first. Core tools can't be removed, but they still hold the
               slot so every row's toggle lines up. */}

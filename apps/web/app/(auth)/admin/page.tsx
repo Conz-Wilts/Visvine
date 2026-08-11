@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
-import PeoplePanel from '@/features/admin/components/people/PeoplePanel';
+import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import CommunitySettingsPanel from '@/features/admin/components/CommunitySettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
@@ -14,11 +14,13 @@ import { LoadingText, Alert } from '@/components/ui';
 import { Community } from '@/lib/types';
 import { Settings2, Puzzle, Users, UserPlus, Shapes } from 'lucide-react';
 
-// Every section is top-level rather than a tab inside one, so nothing in the
-// console is ever two clicks deep. Types, Members and Invite share a single data
-// load (PeopleDataProvider) — Types needs it because Person aliases are the
-// permission model — which is also where the Members badge count comes from: one
-// definition of "waiting", not one per component.
+// Each section owns one job: General is the space's own record, Tools decides
+// which surfaces exist and how the sidebar is ordered, Types describes what kinds
+// of thing the space records, and Members owns every permission — people, aliases
+// and their grants, which tools members can open, and both request queues. Types,
+// Members and Invite share a single data load (PeopleDataProvider; Types still
+// reads it for the read-only Person chips), which is also where the Members badge
+// count comes from: one definition of "waiting", not one per component.
 function AdminConsole({ community, onSaved }: {
   community: Community;
   onSaved: (updated: Partial<Community>) => void;
@@ -29,12 +31,14 @@ function AdminConsole({ community, onSaved }: {
     [],
   );
 
+  const configKey = `${community.id}-${JSON.stringify(community.featureConfig ?? {})}`;
+
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
     { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
     { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
     // Both queues a person can be waiting in — to join, and for context access —
-    // are resolved on Members, so one badge counts them both.
+    // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', group: 'Members', width: 'wide', badge: pending.members + pending.requests, icon: <Users size={18} /> },
     { id: 'invite', label: 'Invite', group: 'Members', width: 'form', icon: <UserPlus size={18} /> },
   ];
@@ -51,10 +55,16 @@ function AdminConsole({ community, onSaved }: {
           switch (id) {
             case 'general':
               return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
+            // Tools seeds `adminOnly` into local state but no longer edits it —
+            // Members does — so it is keyed on the config it read: once a lock
+            // changes there, onSaved bubbles the new record up and this panel
+            // re-seeds instead of re-sending a stale array on its next save.
+            // Members isn't keyed that way on purpose: remounting it on every
+            // toggle would throw you back to its first sub-tab.
             case 'tools':
-              return <CommunityToolsPanel key={community.id} community={community} onSaved={onSaved} />;
+              return <CommunityToolsPanel key={configKey} community={community} onSaved={onSaved} />;
             case 'members':
-              return <PeoplePanel />;
+              return <MembersPanel key={community.id} community={community} onSaved={onSaved} />;
             case 'invite':
               return <InvitePanel />;
             case 'types':

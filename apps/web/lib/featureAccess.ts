@@ -176,6 +176,23 @@ export function moreFeatureKeys(config: CommunityFeatureConfig | null | undefine
 }
 
 /**
+ * Fold a client-submitted patch over the stored config and normalize the result.
+ *
+ * featureConfig is written by more than one console panel — Tools owns which
+ * tools the space has (`enabled`) and how the sidebar reads (`order`, `more`),
+ * Members owns which of them members may open (`adminOnly`) — so a save
+ * carries only the keys its panel owns and inherits the rest. Merging at
+ * top-level key granularity is enough because each panel always sends a COMPLETE
+ * array for the keys it does own; a partial array would still overwrite.
+ */
+export function mergeFeatureConfig(
+  stored: CommunityFeatureConfig | null | undefined,
+  patch: Parameters<typeof sanitizeFeatureConfig>[0],
+): CommunityFeatureConfig {
+  return sanitizeFeatureConfig({ ...(stored ?? {}), ...patch });
+}
+
+/**
  * Normalize a client-submitted featureConfig into the persisted shape: only the
  * known keys, core features stripped from `enabled` (they can never be off),
  * `directoryPrivate` kept only when it's a boolean (and re-derived from

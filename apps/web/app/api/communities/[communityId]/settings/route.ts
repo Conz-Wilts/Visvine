@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
-import { sanitizeFeatureConfig } from '@/lib/featureAccess';
+import { mergeFeatureConfig } from '@/lib/featureAccess';
+import type { CommunityFeatureConfig } from '@/lib/types';
 import {
   effectiveNameAndVisibility,
   findPublicNameConflict,
@@ -137,6 +138,22 @@ export async function PUT(
     }
   }
 
+  // A featureConfig save carries only the keys its console panel owns and is
+  // merged over what's stored rather than replacing the column — see
+  // mergeFeatureConfig. `directoryPrivate` is re-derived when the patch carries
+  // `adminOnly` and inherited untouched when it doesn't.
+  let featureConfigToWrite: CommunityFeatureConfig | undefined;
+  if (featureConfig !== undefined) {
+    const existing = await prisma.community.findUnique({
+      where: { id: communityId },
+      select: { featureConfig: true },
+    });
+    featureConfigToWrite = mergeFeatureConfig(
+      (existing?.featureConfig ?? {}) as CommunityFeatureConfig,
+      featureConfig,
+    );
+  }
+
   const updated = await prisma.community.update({
     where: { id: communityId },
     data: {
@@ -146,7 +163,7 @@ export async function PUT(
       ...(location !== undefined && { location: location || null }),
       ...(tags !== undefined && { tags }),
       ...(designConfig !== undefined && { designConfig: designConfigToWrite as object }),
-      ...(featureConfig !== undefined && { featureConfig: sanitizeFeatureConfig(featureConfig) as object }),
+      ...(featureConfigToWrite !== undefined && { featureConfig: featureConfigToWrite as object }),
       ...(visibility !== undefined && { visibility }),
     },
   });

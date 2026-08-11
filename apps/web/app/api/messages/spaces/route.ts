@@ -3,7 +3,7 @@ import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/
 import { handleMessagingError } from '@/lib/messages/http';
 import { createSpaceSchema } from '@/lib/messages/schemas';
 import { createChannelSpace, listChannelSpaces } from '@/lib/messages';
-import { isAdmin } from '@/lib/auth';
+import { featureAccessForbidden, isAdmin } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     const communityId = searchParams.get('communityId');
     if (!communityId) {
       return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    }
+
+    if (await featureAccessForbidden(user.id, communityId, 'channels', user.email)) {
+      return forbiddenResponse();
     }
 
     const spaces = await listChannelSpaces(communityId);

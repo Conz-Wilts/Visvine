@@ -1,7 +1,7 @@
 import prisma from '@/lib/prisma';
 import { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { isForeignPersonalSpace } from '@/lib/communities/personalSpace';
-import { isDirectoryPrivate } from '@/lib/featureAccess';
+import { canAccessFeature } from '@/lib/featureAccess';
 import { personAliases, type CommunityAlias } from '@/lib/types/context';
 import type { CommunityFeatureConfig } from '@/lib/types';
 
@@ -94,14 +94,20 @@ export async function communityReadForbidden(
 }
 
 /**
- * DB-backed guard for directory/context reads: returns true when the community's
- * directory is marked admins-only (`featureConfig.directoryPrivate`) and the
- * caller is not an admin of it. Unknown communities return false — the caller's
- * own not-found/empty handling takes over.
+ * DB-backed guard for a tool's API routes: returns true when the community has
+ * put `featureKey` out of this caller's reach — either the tool is removed
+ * outright or it's marked admins-only and they aren't an admin. Unknown
+ * communities return false — the caller's own not-found/empty handling takes
+ * over.
+ *
+ * The sidebar and the client route guard already apply `canAccessFeature`; this
+ * is the same predicate on the server, so a member who knows the URL is stopped
+ * by the API and not only by the UI that hid the link.
  */
-export async function directoryAccessForbidden(
+export async function featureAccessForbidden(
   userId: string,
   communityId: string,
+  featureKey: string,
   email?: string | null,
 ): Promise<boolean> {
   const community = await prisma.community.findUnique({
@@ -110,8 +116,24 @@ export async function directoryAccessForbidden(
   });
   if (!community) return false;
   const config = (community.featureConfig ?? {}) as CommunityFeatureConfig;
-  if (!isDirectoryPrivate(config)) return false;
+  // Cheap path first: when the feature is open to members there's nothing to
+  // check, so the common case never costs an admin lookup.
+  if (canAccessFeature(config, featureKey, false)) return false;
   return !(await isAdmin(userId, communityId, email));
+}
+
+/**
+ * The directory's form of the above. `adminOnlyFeatureKeys` folds the legacy
+ * `featureConfig.directoryPrivate` flag in under the `directory` key, so old
+ * configs keep working — including the raw-SQL guard in the node-search route,
+ * which still reads that flag directly.
+ */
+export async function directoryAccessForbidden(
+  userId: string,
+  communityId: string,
+  email?: string | null,
+): Promise<boolean> {
+  return featureAccessForbidden(userId, communityId, 'directory', email);
 }
 
 /**
