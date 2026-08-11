@@ -145,8 +145,8 @@ try {
   // 1. Community
   console.log('--- Upserting NZ community ---');
   await client.query(`
-    INSERT INTO communities (id, name, description, location, tags, node_types, country, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'NZ', NOW())
+    INSERT INTO communities (id, name, description, location, tags, node_types, country, visibility, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'NZ', 'public', NOW())
     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
       location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types, country = 'NZ'
   `, [COMM, COMM_NAME, 'New Zealand startup ecosystem — events, resources, accelerators, funders, and the orgs that connect them.', 'Aotearoa New Zealand', ['NZ', 'Startup', 'Ecosystem'], JSON.stringify(NODE_TYPES)]);

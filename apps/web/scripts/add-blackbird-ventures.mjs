@@ -282,8 +282,8 @@ try {
   // 1. Community
   console.log('--- Upserting Blackbird Ventures community ---');
   await client.query(
-    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, image_url, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, NOW())
+    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, image_url, visibility, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, 'public', NOW())
      -- node_types and community_aliases are NOT updated on conflict: the alias
      -- list is the permission model (who owns the community, what each alias
      -- reaches), so a data re-import must never overwrite it.

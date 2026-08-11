@@ -68,8 +68,8 @@ try {
   // 1. Community
   console.log('--- Upserting community ---');
   await client.query(
-    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, NOW())
+    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, visibility, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, 'public', NOW())
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
        community_aliases = EXCLUDED.community_aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,

@@ -32,7 +32,9 @@ model Community {
   personalOwnerId  String?                  @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
   // Discover / non-members' lists, joinable only via invite link or admin add.
-  visibility       String                   @default("public")
+  // Private by default: a space someone forgot to set visibility on must err
+  // toward hidden, never toward discoverable (demo seeds opt into public).
+  visibility       String                   @default("private")
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
   inviteToken      String?                  @unique @map("invite_token")

@@ -47,8 +47,8 @@ try {
   for (const c of COMMUNITIES) {
     await client.query(
       `
-      INSERT INTO communities (id, name, description, location, tags, member_count, country, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      INSERT INTO communities (id, name, description, location, tags, member_count, country, visibility, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'public', NOW())
       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
         location = EXCLUDED.location, tags = EXCLUDED.tags, member_count = EXCLUDED.member_count, country = EXCLUDED.country
       `,
