@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Database, Globe, KeyRound, Plug } from 'lucide-react';
+import { AlertTriangle, KeyRound, Plug } from 'lucide-react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
@@ -79,12 +79,6 @@ const TONE_CLASSES: Record<Tone, string> = {
 
 function ConnectorCard({ connector }: { connector: ConnectorRow }) {
   const status = statusOf(connector);
-  const Icon =
-    connector.alias === 'postgres' || connector.alias === 'mysql'
-      ? Database
-      : connector.alias === 'http'
-        ? Globe
-        : Plug;
 
   return (
     <Link
@@ -93,9 +87,6 @@ function ConnectorCard({ connector }: { connector: ConnectorRow }) {
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-light-bg text-brand-dark-green">
-            <Icon className="h-4 w-4" />
-          </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-text-primary">{connector.name}</p>
             <p className="truncate font-mono text-[11px] text-text-muted">
@@ -103,9 +94,13 @@ function ConnectorCard({ connector }: { connector: ConnectorRow }) {
             </p>
           </div>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
-          {status.label}
-        </span>
+        {/* A healthy connector says nothing: the badge is there to flag the
+            three ways one fails, not to congratulate the working ones. */}
+        {status.tone !== 'ok' && (
+          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+            {status.label}
+          </span>
+        )}
       </div>
 
       {connector.description && (
@@ -165,8 +160,6 @@ export default function ConnectorsPage() {
     return () => { cancelled = true; };
   }, [communityId, communityLoading]);
 
-  const needsAttention = connectors.filter(c => statusOf(c).tone !== 'ok').length;
-
   const body = () => {
     if (communityLoading || loading) {
       return (
@@ -209,18 +202,7 @@ export default function ConnectorsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl pb-16">
-      <PageTitle
-        title="Connectors"
-        subtitle="Gateways to external APIs and databases. Each one is a note whose frontmatter is the config and whose body is the documentation agents read."
-      />
-
-      {connectors.length > 0 && (
-        <p className="mt-6 text-xs text-text-muted">
-          {`${connectors.length} connector${connectors.length === 1 ? '' : 's'}${
-            needsAttention > 0 ? ` · ${needsAttention} need${needsAttention === 1 ? 's' : ''} attention` : ''
-          }`}
-        </p>
-      )}
+      <PageTitle title="Connectors" />
 
       <div className="mt-4">{body()}</div>
     </div>

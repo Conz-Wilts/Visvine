@@ -125,9 +125,12 @@
 .notes-ref-item {
   margin-bottom: 4px;
 }
+.notes-ref-row {
+  position: relative;
+  margin: 0 -14px;
+}
 .notes-ref-block {
   padding: 10px 14px;
-  margin: 0 -14px;
   border: 1px solid transparent;
   border-radius: 12px;
   cursor: pointer;
@@ -159,35 +162,40 @@
 .notes-ref-from:hover {
   text-decoration: underline;
 }
-/* "Link" action on an unlinked reference — turns that mention into a real link.
- * Quiet until the reference is hovered/focused so the references stay
+/* "Link it" action on an unlinked reference — turns that mention into a real
+ * link. Hangs off the block's right edge (absolute, so the block keeps its full
+ * width). Quiet until the row is hovered/focused so the references stay
  * typographic, but always reachable by keyboard (:focus-visible re-shows it). */
 .notes-ref-link-btn {
-  margin-left: auto;
-  flex: none;
-  padding: 2px 10px;
-  border: 1px solid var(--color-border-subtle, #e5e7eb);
-  border-radius: 999px;
-  background: var(--color-surface, #fff);
-  font-size: 12px;
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--theme-accent-color, #78d870);
+  font-size: 13px;
   font-weight: 600;
-  color: var(--color-brand-dark-green, #2f7a3e);
+  white-space: nowrap;
+  color: #fff;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s ease, background-color 0.12s ease;
 }
-.notes-ref-block:hover .notes-ref-link-btn,
-.notes-ref-block:focus-within .notes-ref-link-btn,
+.notes-ref-row:hover .notes-ref-link-btn,
+.notes-ref-row:focus-within .notes-ref-link-btn,
 .notes-ref-link-btn:focus-visible {
   opacity: 1;
 }
 .notes-ref-link-btn:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--color-brand-dark-green, #2f7a3e) 10%, transparent);
+  background: color-mix(in srgb, var(--theme-accent-color, #78d870) 85%, #000);
 }
 .notes-ref-link-btn:disabled {
   opacity: 1;
   cursor: default;
-  color: var(--color-text-muted, #6b7280);
+  background: var(--color-text-muted, #6b7280);
 }
 .notes-ref-link-error {
   font-size: 12px;

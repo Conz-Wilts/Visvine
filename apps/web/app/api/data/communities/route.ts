@@ -3,7 +3,7 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
-import type { Community, CommunityAlias } from '@/lib/types';
+import { mergeNodeTypeList, type Community, type CommunityAlias, type NodeTypeConfig } from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleCommunities } from '@/lib/communities/queries';
 import {
@@ -163,7 +163,7 @@ export async function PUT(request: NextRequest) {
     // to land on a free name (lib/communities/publicName.ts).
     const current = await prisma.community.findUnique({
       where: { id: community.id },
-      select: { name: true, visibility: true, personalOwnerId: true },
+      select: { name: true, visibility: true, personalOwnerId: true, nodeTypes: true },
     });
     if (!current) {
       return NextResponse.json({ error: 'Community not found' }, { status: 404 });
@@ -206,7 +206,14 @@ export async function PUT(request: NextRequest) {
         memberCount: community.memberCount,
         dataFile: community.dataFile,
         imageUrl: community.imageUrl ?? null,
-        nodeTypes: community.nodeTypes as object ?? null,
+        // Additive: this is a whole-record save from a client snapshot that can
+        // be minutes old, and any member may add a type in the meantime
+        // (api/communities/[communityId]/node-types). Overwriting verbatim is
+        // how an admin recolouring Person silently deletes somebody's type.
+        nodeTypes: mergeNodeTypeList(
+          current.nodeTypes as NodeTypeConfig[] | null,
+          community.nodeTypes as NodeTypeConfig[] | null,
+        ) as unknown as object,
         communityAliases: [...otherAliases, ...personAliasesToStore] as unknown as object,
         linkTypes: community.linkTypes as object ?? null,
       },

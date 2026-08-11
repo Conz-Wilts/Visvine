@@ -12,6 +12,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Avatar from '@/components/ui/Avatar'
+import { scoreText } from '@/lib/fuzzy'
 
 interface NoteRef {
   path: string
@@ -41,17 +42,6 @@ interface NotePickerProps {
   // `[[` autocomplete) instead of a centered modal (the Ctrl-P quick switcher).
   // Coords are viewport-relative — typically from EditorView.coordsAtPos().
   anchor?: { left: number; top: number; bottom: number } | null
-}
-
-function scoreText(text: string, query: string): number {
-  if (!query) return 1
-  const q = query.toLowerCase()
-  const t = text.toLowerCase()
-  if (t.startsWith(q)) return 100
-  if (t.includes(q)) return 60
-  let i = 0
-  for (const ch of t) if (ch === q[i]) i++
-  return i === q.length ? 10 : 0
 }
 
 function score(note: NoteRef, query: string): number {

@@ -58,6 +58,11 @@ export function useDirectoryBrowse() {
   // directory route filters them server-side), so a filter for them would sit
   // there matching nothing.
   //
+  // A note-scoped type — one a member named on the draft surface — is skipped
+  // for the same reason: nothing syncs a graph node for a note, so its filter
+  // could never match anything. It comes back below if a real node ever wears
+  // it, which is exactly the legacy-type rule.
+  //
   // Stored node.type casing ('person') can differ from the configured name
   // ('Person'); canonicalize by lowercase so the two collapse into a single
   // entry (preferring the configured casing) instead of showing duplicates.
@@ -66,6 +71,7 @@ export function useDirectoryBrowse() {
     const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
     const byLower = new Map<string, string>();
     for (const t of configuredTypes) {
+      if (t.scope === 'note') continue;
       if (!isNodeTypeEnabled(featureConfig, t.name)) continue;
       byLower.set(t.name.toLowerCase(), t.name);
     }

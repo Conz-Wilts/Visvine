@@ -18,7 +18,7 @@ interface Props {
    *  here", and speculative name matches are noise beside a person's own note.
    *  The standalone note view keeps them. */
   showUnlinked?: boolean
-  // When given, each unlinked reference gets a "Link" button that rewrites that
+  // When given, each unlinked reference gets a "Link it" button that rewrites that
   // mention into a real link to the open note. Omitted when the viewer can't edit.
   onLinkMention?: (ref: UnlinkedReference) => Promise<void>
 }
@@ -62,10 +62,7 @@ function Reference({
   // click anywhere opens the source note. The date divider sits above, outside
   // the hover box, so highlighting doesn't swallow the date rule.
   const open = () => onOpenNote(refItem.fromPath)
-  // The button sits inside that click target, so every handler stops propagation
-  // — otherwise linking would also navigate away from the note.
-  const link = async (e: React.MouseEvent) => {
-    e.stopPropagation()
+  const link = async () => {
     if (!onLink || linking) return
     setLinking(true)
     setError(null)
@@ -84,37 +81,38 @@ function Reference({
       <div className="notes-ref-date-divider">
         <span>{formatDate(refItem.date)}</span>
       </div>
-      <div
-        className="notes-ref-block"
-        role="link"
-        tabIndex={0}
-        onClick={open}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            open()
-          }
-        }}
-      >
-        <div className="notes-ref-head-row">
-          <button type="button" className="notes-ref-from" onClick={() => onOpenNote(refItem.fromPath)}>
-            {refItem.fromTitle}
-          </button>
-          {error && <span className="notes-ref-link-error">{error}</span>}
-          {onLink && (
-            <button
-              type="button"
-              className="notes-ref-link-btn"
-              onClick={link}
-              onKeyDown={(e) => e.stopPropagation()}
-              disabled={linking}
-              title={`Link this mention to ${title}`}
-            >
-              {linking ? 'Linking…' : 'Link'}
+      <div className="notes-ref-row">
+        <div
+          className="notes-ref-block"
+          role="link"
+          tabIndex={0}
+          onClick={open}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              open()
+            }
+          }}
+        >
+          <div className="notes-ref-head-row">
+            <button type="button" className="notes-ref-from" onClick={() => onOpenNote(refItem.fromPath)}>
+              {refItem.fromTitle}
             </button>
-          )}
+            {error && <span className="notes-ref-link-error">{error}</span>}
+          </div>
+          <p className="notes-ref-excerpt">{highlight(refItem.excerpt, title)}</p>
         </div>
-        <p className="notes-ref-excerpt">{highlight(refItem.excerpt, title)}</p>
+        {onLink && (
+          <button
+            type="button"
+            className="notes-ref-link-btn"
+            onClick={link}
+            disabled={linking}
+            title={`Link this mention to ${title}`}
+          >
+            {linking ? 'Linking…' : 'Link it'}
+          </button>
+        )}
       </div>
     </div>
   )

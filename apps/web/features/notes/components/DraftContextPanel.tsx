@@ -18,12 +18,24 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Check, ChevronDown } from 'lucide-react'
+import { ArrowRight, Check, ChevronRight } from 'lucide-react'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { canCreateType } from '@/lib/create/creatable'
+import { isNodeTypeEnabled } from '@/lib/featureAccess'
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
-import { aliasesForType, findAlias, type CommunityAlias, type CommunityFeatureConfig, type NodeTypeConfig } from '@/lib/types'
+import {
+  DEFAULT_NODE_TYPES,
+  aliasesForType,
+  defaultNodeTypeColor,
+  findAlias,
+  findNodeTypeConfig,
+  isReservedTypeName,
+  mergeNodeType,
+  type CommunityAlias,
+  type CommunityFeatureConfig,
+  type NodeTypeConfig,
+} from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import {
@@ -47,7 +59,8 @@ import { newConnectorNote } from '@/lib/connectors/config'
 import type { ChannelSpaceEntry } from '@/lib/messages/types'
 import { useNodeSearch, type NodeSearchResult } from '@/features/shared/hooks/useNodeSearch'
 import MatchPanel from '@/features/create/components/MatchPanel'
-import { tagKey, tagPalette } from '@/lib/tagColors'
+import { TAG_SWATCHES, tagKey, tagPalette } from '@/lib/tagColors'
+import { scoreText } from '@/lib/fuzzy'
 import { primeNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { clearContextCache } from '@/features/notes/hooks/useCommunityContextData'
 import type { NBNode } from '@/lib/types'
@@ -78,6 +91,9 @@ export type DraftType =
   // note recording that a group/organisation exists. Provisioning a real space
   // of your own isn't a draft type; it's on the switcher.
   | 'space'
+  // Listed so the menu matches the console's Types tab, but not draftable —
+  // picking it goes to /events/new, where the date/RSVP fields live.
+  | 'event'
   | 'resource'
   | 'connector'
   | 'channel'
@@ -100,16 +116,21 @@ interface DraftTypeOption {
 
 const NOTE_COLOR = '#64748b'
 
+/** Note and File aren't node types — they're content in the brain, so the
+ *  console's Types tab doesn't list them. They bookend the menu; everything
+ *  between comes from DEFAULT_NODE_TYPES in the console's own order, so the
+ *  menu and the Types tab always say the same thing (colours included). */
 const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
-  { id: 'index', label: 'Index', configName: 'Index', color: '#c026d3', hint: 'The home page for a group of notes', creatable: 'index' },
   { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
   { id: 'space', label: 'Space', configName: 'Space', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'space' },
+  { id: 'event', label: 'Event', configName: 'Event', color: NOTE_COLOR, hint: 'A gathering, planned on the Events page', creatable: 'event' },
   { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
+  { id: 'section', label: 'Section', configName: 'Section', color: NOTE_COLOR, hint: 'A group of related channels', creatable: 'section' },
+  { id: 'channel', label: 'Channel', configName: 'Channel', color: NOTE_COLOR, hint: 'A place to talk, in a section', creatable: 'channel' },
+  { id: 'connector', label: 'Connector', configName: 'Connector', color: NOTE_COLOR, hint: 'A gateway to an external API or database', creatable: 'connector' },
+  { id: 'index', label: 'Index', configName: 'Index', color: NOTE_COLOR, hint: 'The home page for a group of notes', creatable: 'index' },
   { id: 'file', label: 'File', configName: null, color: '#0ea5e9', hint: 'Upload documents into the context', creatable: 'file' },
-  { id: 'connector', label: 'Connector', configName: 'Connector', color: '#a855f7', hint: 'A gateway to an external API or database', creatable: 'connector' },
-  { id: 'channel', label: 'Channel', configName: null, color: '#f59e0b', hint: 'A place to talk, in a section', creatable: 'channel' },
-  { id: 'section', label: 'Section', configName: null, color: '#f97316', hint: 'A group of related channels', creatable: 'section' },
 ]
 
 /** Types that commit to a real directory node (and so get a dedupe check). */
@@ -135,6 +156,7 @@ interface Stash {
   title: string
   type: DraftType | null
   alias: string | null
+  customType: string | null
   body: string
   folder: string
   fields: Record<string, string>
@@ -185,6 +207,13 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [title, setTitle] = useState(stash.title ?? '')
   const [type, setType] = useState<DraftType | null>(stash.type ?? initialType)
   const [alias, setAlias] = useState<string | null>(stash.alias ?? null)
+  // A type this community invented rather than one of the built-ins. It is a
+  // NARROWING of 'note', never a type of its own: what it creates is a context
+  // note wearing that name in its frontmatter, so every rule about notes —
+  // the folder picker, the path preview, the commit path — still applies.
+  // Invariant: customType !== null ⇒ type === 'note'. `pickType` is the only
+  // place that sets either, which is what keeps that true.
+  const [customType, setCustomType] = useState<string | null>(stash.customType ?? null)
   const [folder, setFolder] = useState(stash.folder ?? initialFolder)
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
@@ -194,6 +223,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [addingTag, setAddingTag] = useState(false)
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
+  // A type created in this session, held locally until refreshCommunity lands —
+  // the same bargain createTag makes, so the menu doesn't blink the type away
+  // the moment you pick it.
+  const [addedTypes, setAddedTypes] = useState<NodeTypeConfig[]>([])
   const [committing, setCommitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<{ message: string; nodeId: string | null; path: string } | null>(null)
@@ -244,9 +277,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // successful commit (the real note/entity is the record from then on).
   useEffect(() => {
     if (typeof sessionStorage === 'undefined') return
-    const payload: Stash = { title, type, alias, body: bodyRef.current, folder, fields, tags, extras }
+    const payload: Stash = { title, type, alias, customType, body: bodyRef.current, folder, fields, tags, extras }
     sessionStorage.setItem(STASH_KEY, JSON.stringify(payload))
-  }, [title, type, alias, folder, fields, tags, extras])
+  }, [title, type, alias, customType, folder, fields, tags, extras])
 
   const slug = noteFileSlug(title)
   // A punctuation-only title is a non-empty string that slugs to nothing — it
@@ -274,22 +307,66 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           ? connectorFormReady(connectorDraft)
           : titleUsable
 
+  // The types this community invented — anything in its nodeTypes that isn't a
+  // built-in (or a synonym of one), plus whatever was created in this session.
+  // These are the note vocabulary: they label a context note and nothing more,
+  // so they're offered as narrowings of Note rather than as types of their own.
+  const customTypes = useMemo(() => {
+    const stored = (currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined) ?? []
+    const byLower = new Map<string, NodeTypeConfig>()
+    for (const t of [...stored, ...addedTypes]) {
+      const name = t.name?.trim()
+      // A reserved name can be STORED (prisma/seed.ts seeds Note and Index), but
+      // it must never reach a picker that writes it into frontmatter: `Index`
+      // would relocate the note into a folder of its own.
+      if (!name || isReservedTypeName(name)) continue
+      if (findNodeTypeConfig(name)) continue
+      byLower.set(name.toLowerCase(), t)
+    }
+    return Array.from(byLower.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [currentCommunity?.nodeTypes, addedTypes])
+
+  const customConfig = customType
+    ? customTypes.find((t) => t.name.toLowerCase() === customType.toLowerCase()) ?? null
+    : null
+
+  // A stashed custom type that no longer exists — its create request failed, or
+  // an admin removed it — must not come back as a live selection.
+  useEffect(() => {
+    if (!customType || !currentCommunity || customConfig) return
+    setCustomType(null)
+  }, [customType, customConfig, currentCommunity])
+
   const typeOption = type ? DRAFT_TYPES.find((t) => t.id === type) ?? null : null
   const aliasColor = alias ? findAlias(currentCommunity?.communityAliases, alias, typeOption?.configName ?? '')?.color : null
-  const baseColor = !typeOption
-    ? NOTE_COLOR
-    : typeOption.configName
-      ? getTypeColor(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)
-      : typeOption.color
+  const baseColor = customType
+    ? customConfig?.color ?? defaultNodeTypeColor(customType)
+    : !typeOption
+      ? NOTE_COLOR
+      : typeOption.configName
+        ? getTypeColor(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)
+        : typeOption.color
   const theme = hexToPalette(aliasColor ?? baseColor)
 
-  // Only the types the community actually offers this person — same gate the
-  // docked panel's grid asks (lib/create/creatable.ts).
+  // Only the types the community actually offers this person. The node types
+  // are EXACTLY the console's Types tab — same source (DEFAULT_NODE_TYPES),
+  // same feature filter (isNodeTypeEnabled), same order — then narrowed to
+  // what this person may create (lib/create/creatable.ts). Note and File
+  // bookend the list: they're brain content, not node types, so the console
+  // doesn't list them but this surface can't do without them.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null
-  const availableTypes = useMemo(
-    () => DRAFT_TYPES.filter((o) => canCreateType(o.creatable, { featureConfig, isAdmin })),
-    [featureConfig, isAdmin],
-  )
+  const availableTypes = useMemo(() => {
+    const byConfigName = new Map(DRAFT_TYPES.filter((o) => o.configName).map((o) => [o.configName, o]))
+    const nodeTypeOptions = DEFAULT_NODE_TYPES
+      .filter((t) => isNodeTypeEnabled(featureConfig, t.name))
+      .map((t) => byConfigName.get(t.name))
+      .filter((o): o is DraftTypeOption => o !== undefined)
+    const note = DRAFT_TYPES.find((o) => o.id === 'note') as DraftTypeOption
+    const file = DRAFT_TYPES.find((o) => o.id === 'file') as DraftTypeOption
+    return [note, ...nodeTypeOptions, file].filter((o) =>
+      canCreateType(o.creatable, { featureConfig, isAdmin }),
+    )
+  }, [featureConfig, isAdmin])
 
   // Existing folder paths, for the index destination's collision suffixing.
   const folderPaths = useMemo(
@@ -355,7 +432,14 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const commitNote = useCallback(async () => {
     if (!communityId) return
     const path = availableNotePath(folder, title, brainTree.notePaths)
-    const content = newNoteContent({ title: title.trim(), tags, body: bodyRef.current })
+    const content = newNoteContent({
+      title: title.trim(),
+      tags,
+      body: bodyRef.current,
+      // The REGISTERED spelling, not what was typed — retrieval filters this
+      // field with an exact, case-sensitive compare.
+      type: customConfig?.name ?? customType ?? undefined,
+    })
     await notesApi.create(communityId, path, content)
     invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
     // The note we just wrote IS the freshest read — priming it means the note
@@ -363,7 +447,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     primeContextCache(contextKeys.read(communityId, path), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
-  }, [communityId, folder, title, tags, brainTree.notePaths, router])
+  }, [communityId, folder, title, tags, brainTree.notePaths, router, customType, customConfig])
 
   // An index IS a folder: this creates the folder and writes the note that names
   // it, in one call. The picked `folder` is the parent.
@@ -541,7 +625,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       // through to commitEntity with the other directory entities.
       else if (type === 'section') await commitSpace()
       else if (type === 'file') await commitFiles()
-      else await commitEntity()
+      // Explicit rather than a fallthrough: an unrecognised type reaching
+      // /api/directory/entities is a 400 at best and a mistyped node at worst.
+      else if (type && ENTITY_TYPES.has(type)) await commitEntity()
+      else throw new Error(`Cannot create a ${type}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create')
       // Failed commits must be retryable — nothing was created, and the draft is
@@ -555,22 +642,61 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     commitNote, commitIndex, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
 
-  const pickType = useCallback((next: DraftType, nextAlias: string | null = null) => {
+  // The one place type, alias and customType are set — together, so the
+  // "a custom type is always a note" invariant can't drift apart.
+  const pickType = useCallback((next: DraftType, nextAlias: string | null = null, nextCustom: string | null = null) => {
+    // An event isn't draftable here — its date/time/RSVP fields live on the
+    // Events composer, so the menu row is a doorway rather than a state.
+    if (next === 'event') {
+      router.push('/events/new')
+      return
+    }
     setType(next)
     setAlias(nextAlias)
+    setCustomType(nextCustom)
     setTypeMenuOpen(false)
     setConflict(null)
-  }, [])
+  }, [router])
+
+  // A type nobody has named here before. It registers on the community straight
+  // away — it is community-level vocabulary, not draft state — but the draft
+  // takes it either way: a failed write costs a grey chip, not a note. Exactly
+  // the bargain `createTag` above makes.
+  const createType = useCallback((raw: string, color: string) => {
+    const merged = mergeNodeType([...((currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined) ?? []), ...addedTypes], { name: raw, color })
+    if (!merged.ok) {
+      setError(merged.error)
+      return
+    }
+    // The name turned out to be a built-in, or a synonym of one ("Company" is
+    // Space). That's a pick, not a create — and it isn't note vocabulary.
+    const builtIn = DRAFT_TYPES.find((o) => o.configName === merged.type.name)
+    if (builtIn) {
+      pickType(builtIn.id)
+      return
+    }
+    if (merged.created) setAddedTypes((prev) => [...prev, merged.type])
+    pickType('note', null, merged.type.name)
+    if (!communityId || !merged.created) return
+    void fetch(`/api/communities/${encodeURIComponent(communityId)}/node-types`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: merged.type.name, color: merged.type.color }),
+    }).catch(() => {})
+  }, [communityId, currentCommunity?.nodeTypes, addedTypes, pickType])
 
   const typeRow = (
     <TypeMenu
       open={typeMenuOpen}
       onOpenChange={setTypeMenuOpen}
       options={availableTypes}
+      customTypes={customTypes}
       type={type}
       alias={alias}
+      customType={customType}
       theme={theme}
       onPick={pickType}
+      onCreate={canCreateType('context', { featureConfig, isAdmin }) ? createType : null}
       communityAliases={currentCommunity?.communityAliases}
       communityNodeTypes={currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined}
     />
@@ -801,34 +927,63 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
 // ─── Type menu ───────────────────────────────────────────────────────────────
 
+/** One keyboard-selectable line in the menu. */
+type TypeRow =
+  | { kind: 'type'; key: string; option: DraftTypeOption; color: string; aliases: CommunityAlias[] }
+  | { kind: 'alias'; key: string; option: DraftTypeOption; alias: CommunityAlias }
+  | { kind: 'custom'; key: string; config: NodeTypeConfig }
+  | { kind: 'create'; key: string; name: string }
+
+/** The text a row is matched on. */
+function rowLabel(row: TypeRow): string {
+  if (row.kind === 'type') return row.option.label
+  if (row.kind === 'alias') return row.alias.name
+  if (row.kind === 'custom') return row.config.name
+  return row.name
+}
+
 function TypeMenu({
   open,
   onOpenChange,
   options: typeOptions,
+  customTypes,
   type,
   alias,
+  customType,
   theme,
   onPick,
+  onCreate,
   communityAliases,
   communityNodeTypes,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   options: DraftTypeOption[]
+  /** The community's own note vocabulary — types nobody wrote code for. */
+  customTypes: NodeTypeConfig[]
   type: DraftType | null
   alias: string | null
+  customType: string | null
   theme: { base: string; dark: string }
-  onPick: (type: DraftType, alias?: string | null) => void
+  onPick: (type: DraftType, alias?: string | null, customType?: string | null) => void
+  /** Null when this person may not write notes here, which is the same gate. */
+  onCreate: ((name: string, color: string) => void) | null
   communityAliases: CommunityAlias[] | undefined
   communityNodeTypes: NodeTypeConfig[] | undefined
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   // Which type's aliases are unfolded. Only one at a time — the menu is a
   // choice, and two open branches read as two competing lists.
   const [expanded, setExpanded] = useState<DraftType | null>(null)
+  const [draft, setDraft] = useState('')
+  const [highlight, setHighlight] = useState(0)
+  // Ignore the blur that immediately follows a mousedown-driven selection.
+  const selecting = useRef(false)
 
   useEffect(() => {
-    if (!open) setExpanded(null)
+    if (open) inputRef.current?.focus()
+    else { setExpanded(null); setDraft(''); setHighlight(0) }
   }, [open])
 
   useEffect(() => {
@@ -840,7 +995,71 @@ function TypeMenu({
     return () => document.removeEventListener('mousedown', handler)
   }, [open, onOpenChange])
 
-  const label = alias ?? (type ? DRAFT_TYPES.find((t) => t.id === type)?.label ?? type : null)
+  const trimmed = draft.trim()
+  const query = trimmed.toLowerCase()
+
+  const rows = useMemo<TypeRow[]>(() => {
+    const aliasesOf = (o: DraftTypeOption) =>
+      o.configName ? aliasesForType(communityAliases, o.configName) : []
+    const colorOf = (o: DraftTypeOption) =>
+      o.configName ? getTypeColor(o.configName, communityNodeTypes) : o.color
+
+    // Unfiltered: the built-ins in the console's order, their aliases folded
+    // away behind a caret, then the community's own note vocabulary.
+    if (!query) {
+      const out: TypeRow[] = []
+      for (const option of typeOptions) {
+        const aliases = aliasesOf(option)
+        out.push({ kind: 'type', key: option.id, option, color: colorOf(option), aliases })
+        if (expanded === option.id) {
+          for (const a of aliases) out.push({ kind: 'alias', key: `${option.id}:${a.name}`, option, alias: a })
+        }
+      }
+      for (const config of customTypes) out.push({ kind: 'custom', key: `custom:${config.name}`, config })
+      return out
+    }
+
+    // Filtered: one flat, scored list. Aliases come out from behind their caret
+    // — the whole point of typing "investor" is not to have to know it lives
+    // under Person first.
+    const scored: Array<{ row: TypeRow; score: number }> = []
+    for (const option of typeOptions) {
+      const score = scoreText(option.label, query)
+      if (score > 0) scored.push({ row: { kind: 'type', key: option.id, option, color: colorOf(option), aliases: [] }, score })
+      for (const a of aliasesOf(option)) {
+        const aliasScore = scoreText(a.name, query)
+        if (aliasScore > 0) scored.push({ row: { kind: 'alias', key: `${option.id}:${a.name}`, option, alias: a }, score: aliasScore })
+      }
+    }
+    for (const config of customTypes) {
+      const score = scoreText(config.name, query)
+      if (score > 0) scored.push({ row: { kind: 'custom', key: `custom:${config.name}`, config }, score })
+    }
+    scored.sort((a, b) => b.score - a.score)
+    const out = scored.map((s) => s.row)
+
+    // Nothing already means this, and it's a name a community may have: offer
+    // to make it. Only notes can wear a type nobody wrote code for, so this is
+    // gated on the note permission and commits down the note path.
+    const exact = out.some((row) => rowLabel(row).toLowerCase() === query)
+    if (onCreate && !exact && !isReservedTypeName(trimmed)) {
+      out.push({ kind: 'create', key: `create:${trimmed}`, name: trimmed })
+    }
+    return out
+  }, [query, trimmed, typeOptions, customTypes, expanded, communityAliases, communityNodeTypes, onCreate])
+
+  const active = Math.min(highlight, rows.length - 1)
+  const createRow = rows.find((r) => r.kind === 'create')
+
+  const commit = (row: TypeRow | undefined) => {
+    if (!row) return
+    if (row.kind === 'type') onPick(row.option.id, null, null)
+    else if (row.kind === 'alias') onPick(row.option.id, row.alias.name, null)
+    else if (row.kind === 'custom') onPick('note', null, row.config.name)
+    else onCreate?.(row.name, defaultNodeTypeColor(row.name))
+  }
+
+  const label = alias ?? customType ?? (type ? typeOptions.find((t) => t.id === type)?.label ?? type : null)
 
   return (
     <div ref={wrapperRef} className="relative inline-block">
@@ -855,77 +1074,186 @@ function TypeMenu({
         style={label ? { background: theme.base } : { ['--accent' as string]: theme.dark }}
       >
         {label ?? 'Pick a type'}
-        <ChevronDown className="h-3 w-3 opacity-70" />
+        <ChevronRight className={`h-3 w-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
       </button>
 
       {open && (
-        /* One list of types. A type that has community aliases (Founder,
-           Investor…) carries a disclosure caret: press the row to take the
-           plain type, press the caret to unfold its aliases and take one of
-           those instead. The old flat "More specific" section could only ever
-           show the ALREADY-picked type's aliases — you had to choose twice to
-           find out what was on offer. */
-        <div className="absolute left-0 top-full z-50 mt-1.5 max-h-[70vh] w-64 overflow-y-auto rounded-lg border border-border-default bg-surface-1 py-1 shadow-lg">
-          {typeOptions.map((option) => {
-            const color = option.configName
-              ? getTypeColor(option.configName, communityNodeTypes)
-              : option.color
-            const options = option.configName ? aliasesForType(communityAliases, option.configName) : []
-            const isOpen = expanded === option.id
-            return (
-              <div key={option.id}>
-                <div className="flex items-stretch transition hover:bg-surface-2">
+        /* One list of types. Unfiltered, a type that has community aliases
+           (Founder, Investor…) carries a disclosure caret: press the row to
+           take the plain type, press the caret to unfold its aliases and take
+           one of those instead. Type anything and the whole vocabulary —
+           aliases included — flattens into one ranked list, because the old
+           flat "More specific" section could only ever show the ALREADY-picked
+           type's aliases: you had to choose twice to find out what was on
+           offer. */
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 shadow-lg">
+          <div className="border-b border-border-subtle p-1.5">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); setHighlight(0) }}
+              onMouseDown={() => { selecting.current = false }}
+              onBlur={() => { if (!selecting.current) onOpenChange(false) }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((h) => Math.min(h + 1, rows.length - 1)) }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)) }
+                else if (e.key === 'Enter') { e.preventDefault(); commit(rows[active]) }
+                else if (e.key === 'Escape') { e.preventDefault(); onOpenChange(false) }
+              }}
+              placeholder={onCreate ? 'Search or create a type…' : 'Search types…'}
+              maxLength={32}
+              className="h-[30px] w-full rounded-md border border-border-default bg-surface-1 px-2.5 text-[13px] text-text-primary outline-none focus:border-[color:var(--accent)]"
+              style={{ ['--accent' as string]: theme.dark }}
+            />
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto py-1" role="listbox">
+            {rows.length === 0 && (
+              <p className="px-3 py-2 text-[12px] text-text-muted">No type by that name.</p>
+            )}
+
+            {rows.map((row, i) => {
+              const isActive = i === active
+              const hover = isActive ? 'bg-surface-2' : ''
+
+              if (row.kind === 'create') {
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseDown={() => { selecting.current = true }}
+                    onMouseEnter={() => setHighlight(i)}
+                    onClick={() => commit(row)}
+                    className={`flex w-full items-center gap-2 py-2 pl-8 pr-3 text-left transition hover:bg-surface-2 ${hover}`}
+                  >
+                    <span className="text-text-muted">+</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-text-secondary">
+                      Create type <span className="font-medium text-text-primary">“{row.name}”</span>
+                    </span>
+                    <span
+                      className="h-3.5 w-3.5 shrink-0 rounded shadow-sm"
+                      style={{ background: defaultNodeTypeColor(row.name) }}
+                    />
+                  </button>
+                )
+              }
+
+              if (row.kind === 'custom') {
+                const picked = customType?.toLowerCase() === row.config.name.toLowerCase()
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseDown={() => { selecting.current = true }}
+                    onMouseEnter={() => setHighlight(i)}
+                    onClick={() => commit(row)}
+                    className={`flex w-full items-center gap-2.5 py-2 pl-8 pr-3 text-left transition hover:bg-surface-2 ${hover}`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-text-primary">{row.config.name}</span>
+                      {/* No hint of its own: a community's own type is a note
+                          with a name on it, and saying so once is enough. */}
+                      <span className="block truncate text-[11px] text-text-muted">A context note of this type</span>
+                    </span>
+                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.config.color }} />
+                  </button>
+                )
+              }
+
+              if (row.kind === 'alias') {
+                const picked = type === row.option.id && alias === row.alias.name
+                return (
+                  <button
+                    key={row.key}
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseDown={() => { selecting.current = true }}
+                    onMouseEnter={() => setHighlight(i)}
+                    onClick={() => commit(row)}
+                    className={`flex w-full items-center gap-2.5 py-1.5 pl-8 pr-3 text-left transition hover:bg-surface-2 ${hover}`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-text-primary">
+                      {row.alias.name}
+                      {/* Which type it narrows only matters once the list is
+                          flat — unfolded under its own caret it's obvious. */}
+                      {query && <span className="text-text-muted"> · {row.option.label}</span>}
+                    </span>
+                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    <span className="h-3 w-3 shrink-0 rounded shadow-sm" style={{ background: row.alias.color }} />
+                  </button>
+                )
+              }
+
+              const picked = type === row.option.id && !alias && !customType
+              const isOpen = expanded === row.option.id
+              return (
+                <div key={row.key} className={`flex items-stretch transition hover:bg-surface-2 ${hover}`}>
                   {/* Disclosure leads the row; the colour dot closes it. The
                       w-7 spacer keeps the labels of alias-less types (Note) on
                       the same left edge as the ones with a caret. */}
-                  {options.length > 0 ? (
+                  {row.aliases.length > 0 ? (
                     <button
                       type="button"
-                      onClick={() => setExpanded(isOpen ? null : option.id)}
+                      onMouseDown={() => { selecting.current = true }}
+                      onClick={() => { setExpanded(isOpen ? null : row.option.id); inputRef.current?.focus() }}
                       aria-expanded={isOpen}
-                      aria-label={`More specific than ${option.label}`}
+                      aria-label={`More specific than ${row.option.label}`}
                       className="flex w-7 shrink-0 items-center justify-center text-text-muted transition hover:text-text-primary"
                     >
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
                     </button>
                   ) : (
                     <span className="w-7 shrink-0" aria-hidden />
                   )}
                   <button
                     type="button"
-                    onClick={() => onPick(option.id, null)}
+                    role="option"
+                    aria-selected={isActive}
+                    onMouseDown={() => { selecting.current = true }}
+                    onMouseEnter={() => setHighlight(i)}
+                    onClick={() => commit(row)}
                     className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-1 pr-3 text-left"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium text-text-primary">{option.label}</span>
-                      <span className="block truncate text-[11px] text-text-muted">{option.hint}</span>
+                      <span className="block text-[13px] font-medium text-text-primary">{row.option.label}</span>
+                      <span className="block truncate text-[11px] text-text-muted">{row.option.hint}</span>
                     </span>
-                    {type === option.id && !alias && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: color }} />
+                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    {/* The same rounded square the console's Types tab paints —
+                        a type looks the same wherever you meet it. */}
+                    <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.color }} />
                   </button>
                 </div>
+              )
+            })}
+          </div>
 
-                {isOpen && (
-                  <div className="pb-1">
-                    {options.map((a) => (
-                      <button
-                        key={a.name}
-                        type="button"
-                        onClick={() => onPick(option.id, a.name)}
-                        className="flex w-full items-center gap-2.5 py-1.5 pl-8 pr-3 text-left transition hover:bg-surface-2"
-                      >
-                        <span className="min-w-0 flex-1 truncate text-[13px] text-text-primary">{a.name}</span>
-                        {type === option.id && alias === a.name && (
-                          <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-                        )}
-                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: a.color }} />
-                      </button>
-                    ))}
-                  </div>
-                )}
+          {/* A colour for the type being invented. Enter takes the deterministic
+              default, so the strip is an option rather than a step. */}
+          {createRow && createRow.kind === 'create' && (
+            <div className="border-t border-border-subtle px-3 py-2">
+              <div className="mb-1.5 text-[11px] font-medium text-text-muted">Pick a colour</div>
+              <div className="flex flex-wrap gap-1.5">
+                {TAG_SWATCHES.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-label={`Create “${createRow.name}” in this colour`}
+                    onMouseDown={() => { selecting.current = true }}
+                    onClick={() => onCreate?.(createRow.name, color)}
+                    className="h-5 w-5 rounded-full border border-black/10 transition hover:scale-110"
+                    style={{ background: color }}
+                  />
+                ))}
               </div>
-            )
-          })}
+            </div>
+          )}
         </div>
       )}
     </div>

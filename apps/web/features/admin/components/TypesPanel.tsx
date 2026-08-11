@@ -11,9 +11,10 @@
 
 import { useState, useEffect } from 'react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { DEFAULT_NODE_TYPES, aliasesForType } from '@/lib/types';
+import { DEFAULT_NODE_TYPES, aliasesForType, mergeNodeTypeList } from '@/lib/types';
 import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
-import { isNodeTypeEnabled } from '@/lib/featureAccess';
+import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
+import { FEATURES } from '@/features/shared/lib/features';
 import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
@@ -161,13 +162,18 @@ function PersonAliases() {
 
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, aliases, allAliases, isPerson, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
+function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
   typeName: string;
   typeColor: string;
+  /** The tool this type came in with — named on the row so switching a tool off
+      never silently takes a type with it. Absent on member-made types. */
+  toolLabel?: string;
   aliases: CommunityAlias[];
   allAliases: CommunityAlias[];
   /** Person's aliases are the permission model, so it renders its own list. */
   isPerson?: boolean;
+  /** A type a member invented: it labels context notes, so it has no aliases. */
+  noteScoped?: boolean;
   previewChips: { name: string; color: string }[];
   onAddAlias: (a: CommunityAlias) => void;
   onRemoveAlias: (name: string, nodeType: string) => void;
@@ -255,6 +261,18 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, isPerson, previ
             )}
           </button>
         )}
+
+        {/* Which tool this type belongs to. Always last, so the tool names line
+            up down the right edge however many aliases a row carries — it's
+            provenance, not vocabulary, and must not read as an alias chip. */}
+        {toolLabel && (
+          <span
+            className="w-24 shrink-0 text-right text-xs text-text-muted"
+            title={`Comes with the ${toolLabel} tool`}
+          >
+            {toolLabel}
+          </span>
+        )}
       </div>
 
       {/* Expanded panel */}
@@ -262,6 +280,16 @@ function TypeSection({ typeName, typeColor, aliases, allAliases, isPerson, previ
         <div className="space-y-3 pb-5 pl-[3.25rem]">
           {isPerson ? (
             <PersonAliases />
+          ) : noteScoped ? (
+            /* A type somebody named on the draft surface. Things made under it
+               are context notes — Context and Raw, a coloured chip, no profile
+               page — so there is nothing here to alias: an alias narrows a
+               directory record, and a note isn't one. The colour square above
+               is the whole of what this type has to configure. */
+            <p className="text-sm text-text-muted">
+              Added from a note. Things of this type are context notes, so it carries no aliases —
+              only its colour.
+            </p>
           ) : (
             <>
               {aliases.length > 0 && (
@@ -363,49 +391,104 @@ export default function TypesPanel() {
     saveCommunity(types, aliases.filter(a => !(a.name === name && a.nodeType === nodeType)));
   const handleUpdateAliasColor = (name: string, nodeType: string, color: string) =>
     saveCommunity(types, aliases.map(a => a.name === name && a.nodeType === nodeType ? { ...a, color } : a));
-  const handleUpdateTypeColor = (typeName: string, color: string) =>
-    saveCommunity(types.map(t => t.name === typeName ? { ...t, color } : t), aliases);
+  // A built-in the community never stored has nothing to map over, so recolour
+  // by merging the edited entry in — mapping alone would silently no-op.
+  const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
+    saveCommunity(mergeNodeTypeList(types, [{ ...type, color }]), aliases);
 
   if (!currentCommunity) {
     return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;
   }
 
+  // Every type this space has: the built-ins plus the ones members named on the
+  // draft-context surface. The stored entry wins where both exist — that's the
+  // colour this page saved. Without the union a member's type would be
+  // invisible here, which is the one place its colour can be changed.
+  const byLower = new Map<string, NodeTypeConfig>();
+  for (const t of DEFAULT_NODE_TYPES) byLower.set(t.name.toLowerCase(), t);
+  for (const t of types) byLower.set(t.name.toLowerCase(), t);
+  const listedTypes = Array.from(byLower.values())
+    .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Two different things share this page. A tool type arrived with a tool and
+  // disappears with it; a custom type is one a member named on a draft and
+  // belongs to nobody but the space. Telling them apart is the difference
+  // between "why can't I delete Channel" and "why is Playbook in this list".
+  const toolLabels = new Map(FEATURES.map(f => [f.key, f.label]));
+  const toolTypes: { type: NodeTypeConfig; toolLabel: string }[] = [];
+  const customTypes: NodeTypeConfig[] = [];
+  for (const type of listedTypes) {
+    const key = nodeTypeToolKey(type.name);
+    const label = key ? toolLabels.get(key) : undefined;
+    if (label) toolTypes.push({ type, toolLabel: label });
+    else customTypes.push(type);
+  }
+
+  const renderType = (liveType: NodeTypeConfig, toolLabel?: string) => {
+    const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
+    const typeAliases = aliasesForType(aliases, liveType.name);
+    return (
+      <TypeSection
+        key={liveType.name}
+        typeName={liveType.name}
+        typeColor={liveType.color}
+        toolLabel={toolLabel}
+        noteScoped={liveType.scope === 'note'}
+        aliases={typeAliases}
+        allAliases={aliases}
+        isPerson={isPerson}
+        // Person's preview comes from the live permission snapshot, which
+        // already grafts in the built-in Owner; every other type's from the
+        // community record it saves to.
+        previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
+        onAddAlias={handleAddAlias}
+        onRemoveAlias={handleRemoveAlias}
+        onUpdateAliasColor={handleUpdateAliasColor}
+        onUpdateTypeColor={color => handleUpdateTypeColor(liveType, color)}
+        saving={saving}
+      />
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {error && <Alert variant="error" onDismiss={() => setError(null)}>{error}</Alert>}
       {accessError && <Alert variant="error" onDismiss={() => setAccessError(null)}>{accessError}</Alert>}
 
-      {/* The tab bar above already says "Types", so the list starts straight
-          away. A type whose tool is switched off isn't offered at all — no point
-          curating aliases for something the community can't create. */}
-      <div className="divide-y divide-border-subtle">
-        {DEFAULT_NODE_TYPES
-          .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
-          .map(defaultType => {
-          const liveType = types.find(t => t.name === defaultType.name) ?? defaultType;
-          const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
-          const typeAliases = aliasesForType(aliases, liveType.name);
-          return (
-            <TypeSection
-              key={liveType.name}
-              typeName={liveType.name}
-              typeColor={liveType.color}
-              aliases={typeAliases}
-              allAliases={aliases}
-              isPerson={isPerson}
-              // Person's preview comes from the live permission snapshot, which
-              // already grafts in the built-in Owner; every other type's from
-              // the community record it saves to.
-              previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
-              onAddAlias={handleAddAlias}
-              onRemoveAlias={handleRemoveAlias}
-              onUpdateAliasColor={handleUpdateAliasColor}
-              onUpdateTypeColor={color => handleUpdateTypeColor(liveType.name, color)}
-              saving={saving}
-            />
-          );
-        })}
-      </div>
+      {/* The tab bar above already says "Types", so each list starts straight
+          away under its own heading. A type whose tool is switched off isn't
+          offered at all — no point curating aliases for something the community
+          can't create.
+
+          Alphabetical within each group: the registry order in
+          DEFAULT_NODE_TYPES groups types by what they are (people, then places,
+          then containers) and the directory and graph still read it that way. A
+          list you scan to find one type wants names in the order you'd look
+          them up. */}
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          Tool types
+        </h3>
+        <div className="mt-1 divide-y divide-border-subtle">
+          {toolTypes.map(({ type, toolLabel }) => renderType(type, toolLabel))}
+        </div>
+      </section>
+
+      {/* Member-made types. Rendered even when empty — an empty list is the
+          answer to "where do the types I name on a draft show up?". */}
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-text-muted">
+          Custom types
+        </h3>
+        {customTypes.length > 0 ? (
+          <div className="mt-1 divide-y divide-border-subtle">
+            {customTypes.map(type => renderType(type))}
+          </div>
+        ) : (
+          <p className="py-4 text-sm text-text-muted">None yet.</p>
+        )}
+      </section>
     </div>
   );
 }

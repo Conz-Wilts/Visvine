@@ -103,9 +103,10 @@ export async function POST(request: NextRequest) {
 
     // Give the new space its place in its own context graph: a node for the
     // space itself, and a person node for the creator — the first member
-    // belongs in the directory they just made. Nodes only — seeding canonical
-    // notes here would plant communities/ and people/ folders in an
-    // otherwise-empty brain; the Context tab stubs a missing note locally and
+    // belongs in the directory they just made. The space node also gets its
+    // canonical note (communities/<slug>.md) so a fresh community opens with
+    // its own context page, not just the root index. The person node stays
+    // node-only — the Context tab stubs a missing profile note locally and
     // the first real save creates it. Best-effort — a space that exists
     // without context is recoverable (the backfill script fixes it); a failed
     // create is not.
@@ -117,7 +118,6 @@ export async function POST(request: NextRequest) {
       name,
       subtitle: description || null,
       location: location || null,
-      skipNote: true,
       actor,
     });
     // The Person row (created at the auth callback, edited from the profile

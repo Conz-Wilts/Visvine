@@ -25,13 +25,13 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { findNodeTypeConfig, type NodeTypeConfig } from '../lib/types';
+import { mergeNodeType, type NodeTypeConfig } from '../lib/types';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
 
-/** Presentation for the note vocabulary, matching prisma/seed.ts NODE_TYPES. */
+/** Presentation for the note vocabulary, matching prisma/seed.ts NODE_TYPES.
+ *  `note`, `file` and `index` are deliberately absent: they are reserved names
+ *  (lib/types/nodeTypeRegistry.ts) that no community may create a type for. */
 const KNOWN: Record<string, { icon: string; color: string; shape: NodeTypeConfig['shape'] }> = {
-  note: { icon: '📝', color: '#8b5cf6', shape: 'rectangle' },
-  index: { icon: '🗂️', color: '#c026d3', shape: 'square' },
   sector: { icon: '🧭', color: '#f97316', shape: 'rectangle' },
   journal: { icon: '📓', color: '#ec4899', shape: 'rectangle' },
   meeting: { icon: '🤝', color: '#14b8a6', shape: 'rectangle' },
@@ -44,10 +44,6 @@ function fallbackColor(name: string): string {
   let hash = 0;
   for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
-}
-
-function titleCase(name: string): string {
-  return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
 async function main() {
@@ -66,7 +62,7 @@ async function main() {
     });
     if (notes.length === 0) continue;
 
-    const existing = (community.nodeTypes as NodeTypeConfig[] | null) ?? [];
+    let working = (community.nodeTypes as NodeTypeConfig[] | null) ?? [];
     const additions: NodeTypeConfig[] = [];
     const seen = new Set<string>();
 
@@ -76,15 +72,20 @@ async function main() {
       const key = raw.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      // Already served by the console (or by a synonym of one of its types).
-      if (findNodeTypeConfig(raw, [...existing, ...additions])) continue;
       const style = KNOWN[key];
-      additions.push({
-        name: titleCase(key),
-        color: style?.color ?? fallbackColor(key),
-        shape: style?.shape ?? 'rectangle',
+      // One shared rule for "is this name already served, and may it exist at
+      // all" — synonyms, reserved names and the built-ins all fall out here.
+      const merged = mergeNodeType(working, { name: raw, color: style?.color ?? fallbackColor(key) });
+      if (!merged.ok || !merged.created) continue;
+      const type: NodeTypeConfig = {
+        ...merged.type,
+        ...(style?.shape ? { shape: style.shape } : {}),
         ...(style?.icon ? { icon: style.icon } : {}),
-      });
+      };
+      // mergeNodeType seeds the defaults into an empty column; only the entries
+      // this script decided on are reported and written.
+      working = [...merged.types.slice(0, -1), type];
+      additions.push(type);
     }
 
     if (additions.length === 0) {
@@ -101,7 +102,7 @@ async function main() {
       await prisma.community.update({
         where: { id: community.id },
         // Prisma types JSON columns structurally; the array is plain JSON data.
-        data: { nodeTypes: [...existing, ...additions] as unknown as object[] },
+        data: { nodeTypes: working as unknown as object[] },
       });
     }
   }

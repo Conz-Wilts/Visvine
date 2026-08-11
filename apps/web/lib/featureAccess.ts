@@ -85,6 +85,32 @@ export function featureNodeTypeNames(featureKey: string): string[] {
 }
 
 /**
+ * The tool each BUILT-IN node type belongs to, for display.
+ *
+ * Deliberately separate from NODE_TYPE_FEATURE_KEYS above: that map decides what
+ * gets HIDDEN when a tool is off, so it may only ever hold types a community can
+ * afford to lose. This one names the owning tool for every built-in, including
+ * the always-on ones (Person and Space are the directory's, Index the context
+ * surface's, Event the navbar calendar's) — naming a type's tool is safe where
+ * gating on it would not be.
+ *
+ * A type absent from here is one a member invented: it has no tool, and the
+ * console lists it under Custom types.
+ */
+const NODE_TYPE_TOOL_KEYS: Record<string, string> = {
+  ...NODE_TYPE_FEATURE_KEYS,
+  person: 'directory',
+  space: 'directory',
+  index: 'notes',
+  event: 'events',
+};
+
+/** The tool a built-in node type comes from, or null if no tool owns it. */
+export function nodeTypeToolKey(typeName: string): string | null {
+  return NODE_TYPE_TOOL_KEYS[typeName.trim().toLowerCase()] ?? null;
+}
+
+/**
  * Should a node type be offered at all in this community? False only when the
  * type belongs to a feature the community has switched off — turning off
  * Channels should take the Channel and Section types with it, not leave them

@@ -54,6 +54,11 @@ export async function listVisibleCommunities(session: SessionPayload): Promise<C
       memberCount: true,
       createdAt: true,
       imageUrl: true,
+      // The type vocabulary has to ride along: this list is what
+      // CommunityContext resolves `currentCommunity` from, so without it every
+      // client reads nodeTypes as undefined and falls back to the built-in
+      // defaults — a community's own types and colours never reach the UI.
+      nodeTypes: true,
       communityAliases: true,
       linkTypes: true,
       designConfig: true,
@@ -75,7 +80,7 @@ export async function listVisibleCommunities(session: SessionPayload): Promise<C
     dataFile: '',
     createdAt: c.createdAt.toISOString(),
     imageUrl: c.imageUrl ?? undefined,
-    nodeTypes: undefined as unknown as Community['nodeTypes'],
+    nodeTypes: (c.nodeTypes as unknown) as Community['nodeTypes'],
     communityAliases: (c.communityAliases as unknown as CommunityAlias[]) ?? [],
     linkTypes: (c.linkTypes as unknown) as Community['linkTypes'],
     designConfig: (c.designConfig as unknown as Community['designConfig']) ?? undefined,

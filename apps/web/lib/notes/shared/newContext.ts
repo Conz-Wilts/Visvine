@@ -70,13 +70,21 @@ export function newNoteContent(input: {
   author?: string
   tags?: string[]
   body?: string
+  /**
+   * The frontmatter type. Defaults to `Note`; a community type a member picked
+   * (or invented) on the draft surface goes here instead. Pass the REGISTERED
+   * spelling from `Community.nodeTypes` — retrieval filters this field with an
+   * exact, case-sensitive compare (lib/notes/shared/retrieval.ts), so a note
+   * written as `playbook` would be invisible to a `Playbook` filter.
+   */
+  type?: string
 }): string {
   const tags = (input.tags ?? []).map((t) => t.trim()).filter(Boolean)
   const authorLine = input.author ? `author: ${input.author}\n` : ''
   const body = (input.body ?? '').trim()
   return (
     `---\n` +
-    `type: Note\n` +
+    `type: ${input.type?.trim() || 'Note'}\n` +
     `title: ${input.title}\n` +
     authorLine +
     `tags: [${tags.join(', ')}]\n` +

@@ -13,6 +13,15 @@ export interface NodeTypeConfig {
   color: string; // Hex color e.g., "#2563eb"
   shape: NodeShape; // Shape to render
   icon?: string; // Optional emoji or icon
+  /**
+   * `note` marks a type a member invented from the draft surface. Things made
+   * under it are plain context notes — Context and Raw, a coloured type chip,
+   * no profile page — because nothing syncs a graph node for a note. Surfaces
+   * that list types in order to FILTER NODES skip these; surfaces that label or
+   * colour a type show them like any other. Absent on the built-ins, which a
+   * tool claims and turns into real directory entities.
+   */
+  scope?: 'note';
 }
 
 export interface NBNode {
