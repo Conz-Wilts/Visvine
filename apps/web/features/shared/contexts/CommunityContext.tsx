@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, ReactNode } from 'react';
 import { Community } from '@/lib/types';
+import { fetchJson } from '@/lib/fetchJson';
 import { createSafeContext } from './createSafeContext';
 
 interface CommunityContextValue {
@@ -68,16 +69,19 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
   }, []);
 
   const loadAllCommunities = useCallback(async () => {
-    const res = await fetch('/api/data/communities');
-    if (!res.ok) throw new Error('Failed to load spaces');
-    const data = await res.json();
+    // fetchJson sends the whole page to /signin on a 401, so a signed-out
+    // session can't keep rendering a stale community list.
+    const data = await fetchJson<{ communities?: Community[] }>('/api/data/communities');
     setCommunities(data.communities || []);
   }, []);
 
   const loadUserCommunities = useCallback(async () => {
-    const res = await fetch('/api/user/communities');
-    if (!res.ok) return; // unauthenticated — leave empty
-    const data = await res.json();
+    let data: { communities?: Array<{ id: string; isAdmin?: boolean }> };
+    try {
+      data = await fetchJson('/api/user/communities');
+    } catch {
+      return; // failed — leave memberships as they are (401 already kicked to /signin)
+    }
     const next = new Map<string, boolean>();
     for (const c of (data.communities || [])) {
       next.set(c.id, c.isAdmin === true);

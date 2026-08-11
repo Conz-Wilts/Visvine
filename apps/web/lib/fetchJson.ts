@@ -20,6 +20,18 @@ export async function fetchJson<T = unknown>(input: RequestInfo | URL, init?: Re
     // Non-JSON body (e.g. empty 204) — fall through with null.
   }
   if (!res.ok) {
+    // 401 means the session is gone (expired, cleared by the server after a
+    // stale-user check, or never existed). Without this the app keeps rendering
+    // its cached shell and every click surfaces a cryptic fetch error — kick
+    // the whole page to sign-in instead so the signed-out state is visible.
+    if (res.status === 401 && typeof window !== 'undefined') {
+      const callbackUrl = window.location.pathname + window.location.search;
+      // A full navigation on purpose — router state may be stale and this file
+      // is not a component, so useRouter() is unavailable.
+      window.location.assign(
+        new URL(`/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`, window.location.origin),
+      );
+    }
     const message =
       data && typeof data === 'object' && typeof (data as { error?: unknown }).error === 'string'
         ? (data as { error: string }).error
