@@ -56,7 +56,7 @@ export default function Sidebar() {
   // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
   // navbar + rail shell plays one coordinated entrance on load.
   const { expanded, setExpanded, entered, reduced } = useSidebar();
-  const { currentCommunity, isAdmin } = useCommunity();
+  const { currentCommunity, isAdmin, loading: communityLoading } = useCommunity();
   const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
   const ease = DOCK_EASE;
@@ -66,8 +66,14 @@ export default function Sidebar() {
   // see (an admins-only directory is hidden from members), then split between
   // the rail and the "More" popup per featureConfig.more. See features/shared/lib/features.tsx.
   const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
-  const allNav = railFeatures(featureConfig, isAdmin);
-  const moreNav = moreFeatures(featureConfig, isAdmin);
+  // No space selected (and not merely still loading one): the tools and the
+  // Create button all act on the current space, so none of them belong on the
+  // rail. The empty rail card stays — the L-shell and the content inset are
+  // sized around it. During the initial load the tools render as usual so the
+  // rail doesn't flash empty on every page load.
+  const noSpace = !communityLoading && !currentCommunity;
+  const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin);
+  const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin);
   const moreActive = moreNav.some(({ href }) => pathname === href);
   const railActiveIndex = allNav.findIndex(({ href }) => pathname === href);
   // A More tool being active parks the pill on the More row — the last nav slot.
@@ -126,8 +132,10 @@ export default function Sidebar() {
   // The icon rail's inner content — reused by both the floating and docked cards.
   const railInner = (
     <>
-      {/* Create button */}
-      <div className="relative group">
+      {/* Create button — creates things INSIDE the current space, so it goes
+          with the tools when no space is selected (creating a space itself
+          lives on the switcher, not here). */}
+      {!noSpace && <div className="relative group">
         <button
           onClick={() => createSurface()}
           className="flex items-center h-10 text-white"
@@ -163,7 +171,7 @@ export default function Sidebar() {
             Create new
           </span>
         )}
-      </div>
+      </div>}
 
       {/* Nav items */}
       <nav className="relative flex flex-col gap-1">
