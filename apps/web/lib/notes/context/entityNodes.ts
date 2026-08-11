@@ -59,6 +59,7 @@ const CONTAINS_RELATIONSHIP = 'contains'
 // The metadata KEYS keep their pre-rename names (`communityRef`, `spaceId`) —
 // they're stored data, not display vocabulary.
 const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
+  person: 'userId',
   space: 'communityRef',
   section: 'spaceId',
   channel: 'conversationId',
@@ -90,6 +91,7 @@ export interface SyncEntityNodeInput {
   subtitle?: string | null
   location?: string | null
   url?: string | null
+  imageUrl?: string | null
   /**
    * The node's alias — the type-scoped label (see CommunityAlias). Omit to
    * leave the column alone: events reuse `alias` for their public /e/<slug>
@@ -242,6 +244,9 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
     subtitle: input.subtitle ?? null,
     location: input.location ?? null,
     url: input.url ?? null,
+    // Only written when the caller actually passed one, like `alias` below —
+    // a structural re-sync must not wipe an image set from another surface.
+    ...(input.imageUrl === undefined ? {} : { imageUrl: input.imageUrl }),
     // Only written when the caller actually passed one — see SyncEntityNodeInput.alias.
     ...(input.alias === undefined ? {} : { alias: input.alias }),
     tags: input.tags ?? [],

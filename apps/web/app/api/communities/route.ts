@@ -89,11 +89,13 @@ export async function POST(request: NextRequest) {
     await markAccessSeeded(id);
 
     // Give the new space its place in its own context graph: a node for the
-    // space itself. Node only — seeding its canonical note here would plant a
-    // communities/ folder in an otherwise-empty brain; the Context tab stubs
-    // the note locally and the first real save creates it. Best-effort — a
-    // space that exists without context is recoverable (the backfill script
-    // fixes it); a failed create is not.
+    // space itself, and a person node for the creator — the first member
+    // belongs in the directory they just made. Nodes only — seeding canonical
+    // notes here would plant communities/ and people/ folders in an
+    // otherwise-empty brain; the Context tab stubs a missing note locally and
+    // the first real save creates it. Best-effort — a space that exists
+    // without context is recoverable (the backfill script fixes it); a failed
+    // create is not.
     const actor = { id: session.userId, name: session.name, email: session.email };
     await syncEntityNodeSafe({
       communityId: id,
@@ -102,6 +104,26 @@ export async function POST(request: NextRequest) {
       name,
       subtitle: description || null,
       location: location || null,
+      skipNote: true,
+      actor,
+    });
+    // The Person row (created at the auth callback, edited from the profile
+    // editor) is the source of truth for the creator's profile fields. Its own
+    // node (id = Person.id) lives in their personal space, so this community
+    // gets a per-community person node, keyed to the user via metadata.userId.
+    const person = await prisma.person.findUnique({
+      where: { userId: session.userId },
+      select: { name: true, subtitle: true, location: true, imageUrl: true, tags: true },
+    });
+    await syncEntityNodeSafe({
+      communityId: id,
+      type: 'person',
+      name: person?.name?.trim() || session.name,
+      recordId: session.userId,
+      subtitle: person?.subtitle ?? null,
+      location: person?.location ?? null,
+      imageUrl: person?.imageUrl ?? null,
+      tags: person?.tags ?? [],
       skipNote: true,
       actor,
     });
