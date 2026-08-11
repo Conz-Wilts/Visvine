@@ -152,12 +152,18 @@ export function CommunityProvider({ children, initialCommunities, initialMembers
     [communities, memberships]
   );
 
-  // Use the stored selection when it still resolves; otherwise fall back to the
-  // first joined community. This lands a brand-new user in their personal space
-  // even when localStorage was never written (e.g. their first ever session).
+  // Use the stored selection when it still resolves to a community the user is
+  // a MEMBER of; otherwise fall back to the first joined community. Resolving
+  // against memberships (not the full visible list, which includes public
+  // spaces anyone can discover) matters because the stored id may belong to a
+  // different account that used this browser — without the membership check a
+  // signed-in user could land "inside" a public space they never joined. The
+  // fallback also lands a brand-new user in their personal space even when
+  // localStorage was never written (e.g. their first ever session).
   const currentCommunity = useMemo(
-    () => communities.find(c => c.id === currentCommunityId) ?? joinedCommunities[0] ?? null,
-    [communities, currentCommunityId, joinedCommunities]
+    () =>
+      joinedCommunities.find(c => c.id === currentCommunityId) ?? joinedCommunities[0] ?? null,
+    [currentCommunityId, joinedCommunities]
   );
 
   // Derive isAdmin from the resolved current community. Managing a community
