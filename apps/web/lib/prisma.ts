@@ -6,6 +6,7 @@
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { setSessionUserCheck } from '@/lib/session';
 
 // Build connection string from individual parts or use DATABASE_URL directly
 const connectionString =
@@ -45,6 +46,20 @@ declare global {
 }
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
+
+// Let requireSession() reject JWTs whose user row no longer exists (a session
+// minted before a DB rebuild, or a deleted account). Registered here rather
+// than imported there because lib/session.ts is in the edge bundle via
+// proxy.ts and must never pull in the DB client. Positive results are cached
+// for the life of the process — one PK lookup per unseen userId, not per
+// request.
+const knownUserIds = new Set<string>();
+setSessionUserCheck(async (userId) => {
+  if (knownUserIds.has(userId)) return true;
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (row) knownUserIds.add(userId);
+  return row !== null;
+});
 
 export default prisma;
 

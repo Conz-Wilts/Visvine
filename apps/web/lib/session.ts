@@ -46,6 +46,19 @@ export function isSuperAdmin(email: string | null | undefined): boolean {
   return admins.includes(email.toLowerCase());
 }
 
+// Sessions are 30-day JWTs, so a token can outlive its user row (a rebuilt
+// database, a deleted account). Without this check such a session passes
+// verification and then fails deeper down as Forbidden responses and
+// foreign-key violations instead of a clean sign-out. The checker is injected
+// by lib/prisma.ts because proxy.ts (edge) imports this module, which
+// therefore can never import the DB client itself; when no checker is
+// registered the gate is skipped, which matches the old behavior.
+let userExistsCheck: ((userId: string) => Promise<boolean>) | null = null;
+
+export function setSessionUserCheck(fn: (userId: string) => Promise<boolean>): void {
+  userExistsCheck = fn;
+}
+
 export async function getSession(): Promise<SessionPayload | null> {
   const headerStore = await headers();
   const authHeader = headerStore.get('authorization');
@@ -71,6 +84,20 @@ export async function requireSession(): Promise<SessionPayload | Response> {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (userExistsCheck && !(await userExistsCheck(session.userId))) {
+    // Stale token: clear the cookie so the next page navigation lands on
+    // /signin instead of replaying the dead session forever. Harmless for
+    // Bearer (mobile) callers, which just see the 401.
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${
+          process.env.NODE_ENV === 'production' ? '; Secure' : ''
+        }`,
+      },
     });
   }
   return session;

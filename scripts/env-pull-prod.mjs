@@ -78,7 +78,13 @@ function readSecret(name) {
       `--secret=${name}`,
       `--project=${PROJECT}`,
     ],
-    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      // gcloud is a .cmd shim on Windows, which Node refuses to spawn
+      // without a shell.
+      shell: process.platform === "win32",
+    }
   ).replace(/\r?\n$/, "");
 }
 
