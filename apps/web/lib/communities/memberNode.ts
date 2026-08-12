@@ -20,6 +20,15 @@ export async function ensureMemberNode(
   communityId: string,
   userId: string,
   actor?: Actor | null,
+  /**
+   * Person alias to stamp on a newly minted node — the chip the directory card
+   * shows (`Node.alias`, see lib/notes/aliases.ts). Pass the alias the member
+   * actually holds; space creation passes `Owner`, because the creator holds the
+   * Owner UserAlias from the same transaction. Left alone for a node that is
+   * already there: a member's chip is community-local and editable, and a
+   * re-join must not overwrite it.
+   */
+  alias?: string | null,
 ): Promise<string | null> {
   // Already connected somewhere in this community — done, whatever the node is
   // named locally (renames are community-local and must survive re-joins).
@@ -47,6 +56,9 @@ export async function ensureMemberNode(
     location: person?.location ?? null,
     imageUrl: person?.imageUrl ?? null,
     tags: person?.tags ?? [],
+    // undefined (not null) when no alias was asked for — syncEntityNode only
+    // writes the column when the caller actually passed one.
+    ...(alias ? { alias } : {}),
     skipNote: true,
     actor: actor ?? null,
   })

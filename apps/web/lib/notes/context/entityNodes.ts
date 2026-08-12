@@ -397,6 +397,14 @@ export async function reparentEntityNode(
   await prisma.link.deleteMany({
     where: { communityId, origin: 'structure', originRef: nodeId },
   })
+  // Same foreign-key guard syncEntityNode applies: unfiling points a channel at
+  // `community:<id>`, and a space created after we stopped making a node for
+  // itself simply has no such row. Dropping the old edge and leaving the channel
+  // top-level is the right outcome there — a throw would fail the space delete.
+  if ((await prisma.node.count({ where: { id: parentNodeId } })) === 0) {
+    bustContextCache()
+    return
+  }
   await upsertLink({
     communityId,
     sourceId: parentNodeId,

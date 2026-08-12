@@ -8,6 +8,7 @@ import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { useDashboardSearch } from '@/features/directory/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/features/directory/components/types';
 import { DEFAULT_NODE_TYPES } from '@/lib/types';
+import { isOwnCommunityNode } from '@/lib/types/context';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
 import type { NBNode } from '@/lib/types';
 
@@ -45,8 +46,18 @@ export function useDirectoryBrowse() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('az');
   const router = useRouter();
 
-  const { nodes, loading, error, community, refresh } = useDirectoryNodes();
+  const { nodes: allNodes, loading, error, community, refresh } = useDirectoryNodes();
   const { isAdmin } = useCommunity();
+
+  // The space you are IN is never a card in its own directory — it's the
+  // container, not an entry. New spaces no longer mint that node at all
+  // (app/api/communities/route.ts), but every space made before that still has
+  // one, so it is filtered here rather than only at the source. Dropped up front
+  // so it also stays out of the type filters, the search and the count.
+  const nodes = useMemo(
+    () => allNodes.filter(n => !isOwnCommunityNode({ id: n.id, communityId: n.community_id })),
+    [allNodes],
+  );
 
   // Always show all configured types (even those with zero nodes) — except the
   // ones belonging to a switched-off feature, which shouldn't advertise a filter

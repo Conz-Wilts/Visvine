@@ -93,10 +93,10 @@ function DirectoryPane() {
   // No space selected (zero memberships): the sidebar rail is already empty,
   // so the directory chrome — tab bar, toolbar, grid — hides too. The centre
   // stays blank on purpose; Discover is reachable from the navbar and the
-  // space switcher, so no prompt sits in the middle of the app.
-  if (noSpace) {
-    return <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }} />;
-  }
+  // space switcher, so no prompt sits in the middle of the app. Nothing is
+  // rendered at all — a min-height filler here would overflow <main>'s own
+  // padded height and leave a scrollbar on an empty page.
+  if (noSpace) return null;
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>

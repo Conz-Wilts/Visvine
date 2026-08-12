@@ -68,19 +68,28 @@ async function backfillCommunity(community: { id: string; name: string; descript
   const communityNode = communityNodeId(community.id);
 
   // ── 1. The community itself ────────────────────────────────────────────────
-  if (!dryRun) {
-    await syncEntityNode({
-      communityId: community.id,
-      type: 'space',
-      nodeId: communityNode,
-      name: community.name,
-      subtitle: community.description,
-      location: community.location,
-      body: community.description ?? '',
-      revalidate: false,
-    });
+  // Refreshed only when the node is already there. Spaces are no longer given a
+  // node for themselves at create time (app/api/communities/route.ts) — it would
+  // put the space in its own directory and write a `communities/<slug>.md` page
+  // about it — so this backfill must not reintroduce one. Communities that
+  // predate that keep theirs, and everything below still parents to it; the rest
+  // skip the parent edge the same way a freshly created space does.
+  const hasCommunityNode = (await prisma.node.count({ where: { id: communityNode } })) > 0;
+  if (hasCommunityNode) {
+    if (!dryRun) {
+      await syncEntityNode({
+        communityId: community.id,
+        type: 'space',
+        nodeId: communityNode,
+        name: community.name,
+        subtitle: community.description,
+        location: community.location,
+        body: community.description ?? '',
+        revalidate: false,
+      });
+    }
+    counts.community = 1;
   }
-  counts.community = 1;
 
   // ── 2. Spaces ──────────────────────────────────────────────────────────────
   const spaces = await prisma.channelSpace.findMany({

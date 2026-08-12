@@ -9,7 +9,6 @@ import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/communities/publicName';
 import { ensureMemberNode } from '@/lib/communities/memberNode';
-import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
 
@@ -102,28 +101,25 @@ export async function POST(request: NextRequest) {
     // to every member and swamp the alias grants (lib/notes/access.ts).
     await markAccessSeeded(id);
 
-    // Give the new space its place in its own context graph: a node for the
-    // space itself, and a person node for the creator — the first member
-    // belongs in the directory they just made. The space node also gets its
-    // canonical note (communities/<slug>.md) so a fresh community opens with
-    // its own context page, not just the root index. The person node stays
-    // node-only — the Context tab stubs a missing profile note locally and
-    // the first real save creates it. Best-effort — a space that exists
-    // without context is recoverable (the backfill script fixes it); a failed
-    // create is not.
+    // A new space deliberately gets NO node for itself: it would put a card for
+    // the space in its own directory and a `communities/<slug>.md` page in its
+    // own context, neither of which anyone asked for — the space IS the
+    // container, not an entity inside it. Structural code already copes with the
+    // missing `community:<id>` node: syncEntityNode skips a parent edge whose
+    // node doesn't exist, and reparentEntityNode does the same. A space created
+    // by hand from the Directory (lib/directory/createEntity.ts) still gets one.
+    //
+    // So the creator's person node is the ONLY node a fresh space starts with —
+    // the first member belongs in the directory they just made. It carries the
+    // Owner alias, matching the UserAlias row written above, so the card reads
+    // "Owner" rather than a bare "Person"; and it is connected to their account
+    // through the identity bridge (ensureMemberNode), which is what makes it
+    // their profile rather than a loose card with their name on it. It stays
+    // node-only: the Context tab stubs a missing profile note locally and the
+    // first real save creates it. Best-effort — a member without a node is
+    // recoverable (the backfill script fixes it); a failed create is not.
     const actor = { id: session.userId, name: session.name, email: session.email };
-    await syncEntityNodeSafe({
-      communityId: id,
-      type: 'space',
-      nodeId: communityNodeId(id),
-      name,
-      subtitle: description || null,
-      location: location || null,
-      actor,
-    });
-    // The creator's person node, connected to their account through the
-    // identity bridge — the same path every other member-add flow uses.
-    await ensureMemberNode(id, session.userId, actor);
+    await ensureMemberNode(id, session.userId, actor, OWNER_ALIAS_NAME);
 
     // Seed the brain's root index — the community's home page, which the
     // Directory's Context tab routes to. Best-effort for the same reason as
