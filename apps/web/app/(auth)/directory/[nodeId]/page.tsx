@@ -159,35 +159,16 @@ const PERSON_TABS: PaneTabItem[] = [
   RAW_TAB,
 ];
 
-// A Profile tab exists only for a node CONNECTED to a member
-// (connected_user_id from /api/nodes — Node.identityId → Identity.userId, with
-// a legacy Person-id fallback). A disconnected person context is nothing but
-// its note, so it renders exactly like a channel or space: Context/Raw only.
+// Every person node has a Profile tab, connected to a member or not. A node
+// with no member behind it has no profile to show, so the tab becomes the place
+// you connect one (ProfileConnectPrompt, inside ProfilePageContent) — the link
+// is the most consequential thing about a person context, and it used to hide
+// in a row under the note header.
 function PersonRoute({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
-  const node = data?.node ?? null;
 
-  if (!node) {
-    if (!loading && error) return <NotFoundState title="Profile not found" />;
-    return <ChromelessSkeleton />;
-  }
-  return node.connected_user_id ? (
-    <PersonProfilePage nodeId={nodeId} />
-  ) : (
-    <ContextOnlyPage
-      nodeId={nodeId}
-      ariaLabel="Context sections"
-      notFoundTitle="Profile not found"
-    />
-  );
-}
-
-// Holds a bare skeleton while the node resolves, clearing any chrome the
-// previous page registered — we can't predict which tab set this node earns
-// until connected_user_id is known.
-function ChromelessSkeleton() {
-  usePaneChrome({ tabs: null, activeId: null, onSelect: noop, attachedOpen: false, surface: null });
-  return <ProfileSkeletonLoader mode="fullpage" />;
+  if (!data?.node && !loading && error) return <NotFoundState title="Profile not found" />;
+  return <PersonProfilePage nodeId={nodeId} />;
 }
 
 function PersonProfilePage({ nodeId }: { nodeId: string }) {

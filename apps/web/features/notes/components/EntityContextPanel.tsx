@@ -21,7 +21,7 @@ import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
-import { entityKindOf, entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
+import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -39,7 +39,6 @@ import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
 import { PropertyRows } from './PropertyRows'
-import { MemberConnectionRow } from './MemberConnectionRow'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
 
@@ -645,14 +644,8 @@ export function EntityContextPanel({
         ) : null}
       />
 
-      {/* Person contexts carry the member link: connected = Profile tab +
-          userId ownership; disconnected = a plain renameable context. Not a
-          PropertyRows field — it's a relation, not node metadata. */}
-      {entityKindOf(node.type) === 'person' && !isPersonalSpace && (
-        <div className="mt-3">
-          <MemberConnectionRow nodeId={nodeId} communityId={communityId} accent={theme.dark} />
-        </div>
-      )}
+      {/* The member link a person context can carry lives on its Profile tab,
+          not here — it's a relation, not node metadata. */}
     </div>
   )
 

@@ -1,47 +1,49 @@
 'use client'
 
-// The "Member" row under a person context's Type/Tags: shows which registered
-// member this context is connected to, and manages the link. Connected = the
-// node carries the member's Profile tab and userId-based ownership; nothing
-// here touches the node's own name/fields — the connection is a separate,
-// detachable link (see /api/data/nodes/[nodeId]/connection).
+// Which registered member a person node is connected to, and the actions that
+// manage the link. Connected = the node carries that member's profile and
+// userId-based ownership; nothing here touches the node's own name/fields — the
+// connection is a separate, detachable link (/api/data/nodes/[nodeId]/connection).
 //
-// Permissions mirror the API: admins connect anyone and disconnect; a member
-// can claim ("This is me") or disconnect themself. Everyone else just reads.
+// Permissions mirror the API: admins connect anyone and disconnect; a member can
+// claim ("This is me") or disconnect themself. Everyone else just reads.
+//
+// The caller owns cache coherence: `onChange` fires after a successful
+// connect/disconnect so the profile page can patch the cached node
+// (connected_user_id — the gate that decides profile vs connect prompt) and
+// refetch /api/profile. Without it the page would keep the stale view for the
+// length of useNodeProfile's 60s TTL.
 
 import { useCallback, useEffect, useState } from 'react'
-import { Chip, chipClass } from '@/components/ui'
 import { useSession } from '@/features/auth/lib/auth-client'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 
-interface ConnectionInfo {
+export interface MemberConnectionInfo {
   userId: string
   name: string
   email: string
   isActive: boolean
 }
 
-interface MemberOption {
+export interface MemberOption {
   userId: string
   name: string
   email: string
 }
 
-const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
-
-export function MemberConnectionRow({
+export function useMemberConnection({
   nodeId,
   communityId,
-  accent,
+  onChange,
 }: {
   nodeId: string
-  communityId: string
-  accent?: string
+  communityId: string | null
+  onChange?: (userId: string | null) => void
 }) {
   const { data: session } = useSession()
   const { isAdmin } = useCommunity()
   // undefined = still loading; null = definitely unconnected.
-  const [connection, setConnection] = useState<ConnectionInfo | null | undefined>(undefined)
+  const [connection, setConnection] = useState<MemberConnectionInfo | null | undefined>(undefined)
   const [members, setMembers] = useState<MemberOption[] | null>(null)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -74,13 +76,14 @@ export function MemberConnectionRow({
         if (!res.ok) throw new Error(data.error || 'Failed to connect')
         setConnection(data.connected ?? null)
         setPicking(false)
+        onChange?.(data.connected?.userId ?? userId)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to connect')
       } finally {
         setBusy(false)
       }
     },
-    [endpoint],
+    [endpoint, onChange],
   )
 
   const disconnect = useCallback(async () => {
@@ -90,16 +93,17 @@ export function MemberConnectionRow({
       const res = await fetch(endpoint, { method: 'DELETE' })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to disconnect')
       setConnection(null)
+      onChange?.(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect')
     } finally {
       setBusy(false)
     }
-  }, [endpoint])
+  }, [endpoint, onChange])
 
   const openPicker = useCallback(() => {
     setPicking(true)
-    if (members !== null) return
+    if (members !== null || !communityId) return
     fetch(`/api/communities/${encodeURIComponent(communityId)}/members`)
       .then((res) => (res.ok ? res.json() : { members: [] }))
       .then((data: { members?: Array<{ userId: string; status: string; user: { name: string; email: string } }> }) => {
@@ -112,60 +116,14 @@ export function MemberConnectionRow({
       .catch(() => setMembers([]))
   }, [communityId, members])
 
+  const cancelPicking = useCallback(() => setPicking(false), [])
+
   const viewerId = session?.user?.id ?? null
   const canManage = isAdmin || (!!connection && connection.userId === viewerId)
 
-  const actionButton = (label: string, onClick: () => void) => (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      className={chipClass({ tone: 'dashed', size: 'lg' })}
-      style={accent ? ({ ['--accent' as string]: accent } as React.CSSProperties) : undefined}
-    >
-      {label}
-    </button>
-  )
-
-  // Nothing actionable and nothing to show: viewers who can't manage an
-  // unconnected context don't need an empty "Member" label.
-  if (connection === undefined) return null
-  if (!connection && !isAdmin && !viewerId) return null
-
-  return (
-    <div className="flex flex-col gap-1">
-      <span className={LABEL_CLASS}>Member</span>
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        {connection ? (
-          <>
-            <Chip size="lg">{connection.name}</Chip>
-            {canManage && actionButton('Disconnect', () => void disconnect())}
-          </>
-        ) : picking ? (
-          <select
-            autoFocus
-            disabled={busy || members === null}
-            defaultValue=""
-            onChange={(e) => { if (e.target.value) void connect(e.target.value) }}
-            onBlur={() => setPicking(false)}
-            className="rounded-md border border-border-default bg-surface-1 px-2 py-1 text-sm text-text-primary"
-          >
-            <option value="" disabled>
-              {members === null ? 'Loading members…' : 'Connect to member…'}
-            </option>
-            {(members ?? []).map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name} ({m.email})
-              </option>
-            ))}
-          </select>
-        ) : isAdmin ? (
-          actionButton('+ Connect to member', openPicker)
-        ) : viewerId ? (
-          actionButton('This is me', () => void connect(viewerId))
-        ) : null}
-        {error && <span className="text-xs text-red-600">{error}</span>}
-      </div>
-    </div>
-  )
+  return {
+    connection, members, picking, busy, error,
+    connect, disconnect, openPicker, cancelPicking,
+    viewerId, isAdmin, canManage,
+  }
 }

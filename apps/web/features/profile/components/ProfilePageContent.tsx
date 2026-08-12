@@ -8,14 +8,16 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
-import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
+import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
+import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
-import Chip from '@/components/ui/Chip';
+import Chip, { chipClass } from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
+import ProfileConnectPrompt from './ProfileConnectPrompt';
 import {
   computeProfileCompletion, getExperience, sortExperience,
   formatYearMonth, formatDuration, type ExperienceEntry,
@@ -39,6 +41,9 @@ const COMPLETION_MODAL: Record<string, Exclude<ModalState, null>> = {
   location: 'basicInfo', experience: 'experience', skills: 'skills', contact: 'contact',
 };
 
+/** Your own space: no member list to connect to, so the link isn't offered. */
+const PERSONAL_ID_PREFIX = 'me:';
+
 const hostname = (url?: string | null) => {
   if (!url) return '';
   try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
@@ -53,7 +58,7 @@ interface ProfilePageContentProps {
 export default function ProfilePageContent({ nodeId, overlay = false }: ProfilePageContentProps) {
   const { data: session } = useSession();
   const { currentCommunity } = useCommunity();
-  const { profile, loading, error, updateBasicInfo } = useProfile(nodeId);
+  const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
   const [modal, setModal] = useState<ModalState>(null);
   const [copied, setCopied] = useState(false);
@@ -85,6 +90,19 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
       c.id === communityId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
     ));
   }, [nodeId]);
+
+  // The member link. A person node with no member behind it has no profile to
+  // show, so this tab becomes the connect surface instead (ProfileConnectPrompt).
+  // Connecting has to move two caches on its way out: the cached node carries
+  // `connected_user_id` (what the route and a later mount read), and the profile
+  // itself flips from a node-synthesized stand-in to the member's real record.
+  const communityId = currentCommunity?.id ?? null;
+  const isPersonalSpace = communityId?.startsWith(PERSONAL_ID_PREFIX) ?? false;
+  const onConnectionChange = useCallback((userId: string | null) => {
+    patchCachedNodeProfile(nodeId, { connected_user_id: userId });
+    void reload();
+  }, [nodeId, reload]);
+  const memberConnection = useMemberConnection({ nodeId, communityId, onChange: onConnectionChange });
 
   // Ownership follows the member connection (profile.userId resolves through
   // Node.identityId → Identity.userId), not node-id equality — a member's node
@@ -143,6 +161,24 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         <p className="text-base font-semibold text-text-primary">Profile not found</p>
         <p className="text-sm text-text-muted">This person may have been removed or the URL is incorrect.</p>
       </div>
+    );
+  }
+
+  // Live connection state wins once it resolves; until then the cached node's
+  // `connected_user_id` stands in, so a connected profile doesn't flash the
+  // prompt on arrival.
+  const connected = memberConnection.connection === undefined
+    ? !!nodeData?.node?.connected_user_id
+    : !!memberConnection.connection;
+
+  if (!connected) {
+    return (
+      <ProfileConnectPrompt
+        name={nodeData?.node?.name ?? profile.name}
+        theme={theme}
+        readOnly={isPersonalSpace}
+        connection={memberConnection}
+      />
     );
   }
 
@@ -255,6 +291,23 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             {profile.tags.length > 0 && (
               <StatItem value={profile.tags.length} label={profile.tags.length === 1 ? 'Skill' : 'Skills'}
                         onClick={() => jump('skills')} accent={theme.dark} />
+            )}
+
+            {/* The member behind this profile. Only the people who can undo the
+                link see it — for everyone else the connection is just what the
+                page is. */}
+            {memberConnection.connection && memberConnection.canManage && !isPersonalSpace && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-[13px] text-text-muted">Member</span>
+                <Chip size="lg">{memberConnection.connection.name}</Chip>
+                <button type="button" onClick={() => void memberConnection.disconnect()}
+                        disabled={memberConnection.busy}
+                        className={chipClass({ tone: 'dashed', size: 'lg' })}
+                        style={cssVars({ '--accent': theme.dark })}>
+                  Disconnect
+                </button>
+                {memberConnection.error && <span className="text-xs text-red-600">{memberConnection.error}</span>}
+              </div>
             )}
           </div>
         </section>
