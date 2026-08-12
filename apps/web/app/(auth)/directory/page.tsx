@@ -4,7 +4,6 @@ import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
-import { EmptyState } from '@/components/ui';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -92,18 +91,11 @@ function DirectoryPane() {
   const { community, loading, error, filteredItems, handleItemClick } = browse;
 
   // No space selected (zero memberships): the sidebar rail is already empty,
-  // so the directory chrome — tab bar, toolbar, grid — hides too, leaving only
-  // the shell navbar and a pointer to Discover.
+  // so the directory chrome — tab bar, toolbar, grid — hides too. The centre
+  // stays blank on purpose; Discover is reachable from the navbar and the
+  // space switcher, so no prompt sits in the middle of the app.
   if (noSpace) {
-    return (
-      <div className="relative w-full flex items-center justify-center" style={{ minHeight: 'calc(100dvh - 56px)' }}>
-        <EmptyState
-          title="No spaces yet"
-          description="You haven't joined any spaces yet. Discover and join spaces to get started."
-          action={{ label: 'Discover Spaces', href: '/discover' }}
-        />
-      </div>
-    );
+    return <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }} />;
   }
 
   return (
