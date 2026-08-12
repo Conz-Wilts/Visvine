@@ -81,7 +81,7 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
             Cancel
           </Button>
           <Button
-            variant="pill-primary"
+            variant="brand"
             onClick={submit}
             disabled={!ready}
             loading={saving}
