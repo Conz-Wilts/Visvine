@@ -87,7 +87,8 @@ function PaneTabBarInner({
   // on the same transition. The connections rail narrows the column from the
   // right the same way — but as a class, not a style: the rail only exists at
   // xl, a breakpoint inline padding can't see.
-  const { dockRequested, contextOpen, connectionsOpen, setConnectionsOpen } = useContextPanel();
+  const { dockRequested, contextOpen, connectionsOpen, setConnectionsOpen, setTabTrailHost } =
+    useContextPanel();
   const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
   // The Connections rail toggle rides the bar's right edge whenever a note or
   // entity surface is up — bar-level chrome for a bar-level panel, so it never
@@ -224,7 +225,14 @@ function PaneTabBarInner({
   }
 
   return (
-    <div className={`sticky -top-4 -mt-4 ${edgeClass}`}>
+    // pointer-events-none here, auto on the pieces that are actually solid (the
+    // tab row below, and whatever the tray hosts). The wrapper is full-width and
+    // as tall as the tab row PLUS the transparent tray region, and it sits at
+    // z-45 — above the note body and above the connections rail (z-30), whose
+    // header starts at exactly the tray's height. Left clickable it swallowed
+    // every click along that strip, which is why the rail's close button did
+    // nothing.
+    <div className={`pointer-events-none sticky -top-4 -mt-4 ${edgeClass}`}>
       {/* Keeps the page scrollbar from running up beside the pinned bar. */}
       <PaneTopScrollbarMask />
       {/* The negative left margin bleeds the bar into <main>'s gutter so its
@@ -233,7 +241,7 @@ function PaneTabBarInner({
           hanging off the nav line rather than a second bar. "-top-4 -mt-4"
           rather than top-0: <main> has pt-4 and sticky offsets resolve below
           it, so top-0 would pin the bar 16px short of the navbar. */}
-      <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
+      <div className="pointer-events-auto flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
         <div
           role="tablist"
           aria-label={chrome.ariaLabel ?? 'Sections'}
@@ -286,29 +294,43 @@ function PaneTabBarInner({
           />
         </div>
 
+        {/* Trailing chrome, read as part of the tab row rather than as buttons
+            floating beside it: same type, colour and height as a tab, and
+            Connections carries the tabs' green underline while its rail is open
+            so "on" reads the same way "selected" does. It isn't wired to the
+            sliding indicator — that belongs to the tab set, and this is a
+            toggle, not a fourth tab. */}
         {showConnections && (
           <button
             type="button"
             onClick={() => setConnectionsOpen(!connectionsOpen)}
             aria-pressed={connectionsOpen}
             title="What this note connects to"
-            className={`mr-2 hidden shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition xl:flex ${
-              connectionsOpen
-                ? 'border-border-default bg-surface-2 text-text-primary'
-                : 'border-border-default text-text-secondary hover:bg-surface-2'
+            className={`relative hidden h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none xl:flex ${
+              connectionsOpen ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
             }`}
           >
-            <Waypoints className="h-3.5 w-3.5" />
+            <Waypoints className="h-4 w-4" />
             Connections
+            {connectionsOpen && (
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-green" />
+            )}
           </button>
         )}
+        {/* Share and anything else the open surface owns, portalled in by the
+            panel (see ContextPanelContext.tabTrailHost). Zero-width when
+            empty, so the row is unchanged on surfaces that fill nothing. */}
+        <div ref={setTabTrailHost} className="flex shrink-0 items-center" />
       </div>
 
       {/* The attached region. Always mounted (a conditional mount would snap
           open with no transition) and animated 0fr↔1fr off the same tab state
           and timing as the indicator, so the pair moves as one gesture. The
           host reserves its full height from the first frame, so a tray that
-          arrives late doesn't shift the content below. */}
+          arrives late doesn't shift the content below. Only what the tray
+          actually hosts takes clicks (see the wrapper's pointer-events note) —
+          the transparent gutters either side of the centred toolbar must let
+          them through to the rail and the note body underneath. */}
       <div
         className={`grid ${
           armed ? `transition-[grid-template-rows] ${TAB_MOTION}` : ''
@@ -322,7 +344,7 @@ function PaneTabBarInner({
               the tab row and drops back down from under it. */}
           <div
             ref={setHost}
-            className={`flex items-start justify-center motion-reduce:[transition:none!important] ${
+            className={`flex items-start justify-center [&>*]:pointer-events-auto motion-reduce:[transition:none!important] ${
               attachedOpen ? 'translate-y-0' : '-translate-y-full'
             } ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
             style={{

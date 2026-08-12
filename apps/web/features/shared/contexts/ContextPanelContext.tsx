@@ -37,6 +37,14 @@ interface ContextPanelValue {
   // unmounts/remounts it across those swaps.
   connectionsOpen: boolean;
   setConnectionsOpen: (v: boolean) => void;
+  // Portal host at the RIGHT end of the pane tab row, beside the Connections
+  // toggle. Surface-level actions that belong to the whole note rather than to
+  // the text being edited (Share) render here instead of in the editor's
+  // toolbar tray, so they sit with the other bar chrome and stay put while the
+  // tray comes and goes. Null when no tab bar is up — the panels fall back to
+  // the editor toolbar then, so the action is never simply missing.
+  tabTrailHost: HTMLElement | null;
+  setTabTrailHost: (el: HTMLElement | null) => void;
   // Pixels the docked panel's content should start BELOW the card top. A page
   // that keeps its own bar pinned at the card top (the Directory's Grid/Context
   // tabs) sets this to that bar's height so the notes tree begins under
@@ -55,6 +63,8 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setContextOpen: () => {},
   connectionsOpen: false,
   setConnectionsOpen: () => {},
+  tabTrailHost: null,
+  setTabTrailHost: () => {},
   dockTopInset: 0,
   setDockTopInset: () => {},
 });
@@ -75,6 +85,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [dockRequestedState, setDockRequestedState] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [tabTrailHost, setTabTrailHost] = useState<HTMLElement | null>(null);
   const [dockTopInsetState, setDockTopInsetState] = useState(0);
 
   // One timer per latched value: claiming cancels a pending release.
@@ -142,6 +153,8 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         setContextOpen,
         connectionsOpen,
         setConnectionsOpen,
+        tabTrailHost,
+        setTabTrailHost,
         dockTopInset: dockTopInsetState,
         setDockTopInset,
       }}

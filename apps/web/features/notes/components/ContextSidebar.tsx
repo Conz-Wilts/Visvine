@@ -149,6 +149,10 @@ export function ContextSidebar({
               }
               onShareNote={(path) => setShareTarget({ path, kind: 'note' })}
               onDeleteFolder={ctx.handleDeleteFolder}
+              // Drag a note (or a whole folder) onto another folder to file it
+              // there; the same move is in each row's menu as "Move to...".
+              onMoveNote={ctx.handleMoveNote}
+              onMoveFolder={ctx.handleMoveFolder}
               trash={trash}
               onRestoreTrash={ctx.handleRestoreTrash}
               onPurgeTrash={ctx.handlePurgeTrash}

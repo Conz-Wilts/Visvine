@@ -24,9 +24,7 @@ import { X } from 'lucide-react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
-import { useCommunityContextData } from '@/features/notes/hooks/useCommunityContextData';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
-import { firstExcerpt, readLinkContextMeta } from '@/lib/notes/context/linkReason';
 import { contextKeys, prefetchNoteContext, swrFetch } from '@/features/notes/lib/contextPrefetch';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { noteHref, resolveEntityNode } from '@/lib/notes/entities';
@@ -138,30 +136,6 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     [entityByPath],
   );
 
-  // Why this note links to each entity on the other end — read off the graph
-  // links' metadata.context (written by the note-save sync and the AI reason
-  // pass). Costs no request: useDirectoryEntities already forced the same
-  // cached context payload this hook reads.
-  const { contextData } = useCommunityContextData();
-  const reasonFor = useCallback(
-    (otherPath: string) => {
-      const selfId = path ? resolveEntityNode(path, entityByPath) : null;
-      const otherId = entityByPath.get(otherPath)?.id ?? null;
-      if (!selfId || !otherId) return null;
-      for (const link of contextData.links) {
-        const a = typeof link.source === 'object' ? link.source.id : link.source;
-        const b = typeof link.target === 'object' ? link.target.id : link.target;
-        if (!((a === selfId && b === otherId) || (a === otherId && b === selfId))) continue;
-        const meta = readLinkContextMeta(link.metadata);
-        if (!meta) continue;
-        const excerpt = firstExcerpt(meta, path ?? undefined);
-        if (meta.reason || excerpt) return { reason: meta.reason ?? null, excerpt };
-      }
-      return null;
-    },
-    [contextData.links, entityByPath, path],
-  );
-
   const openPath = useCallback(
     (p: string) => {
       if (p === path) return;
@@ -249,7 +223,6 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
           titleFor={titleFor}
           keep={keep}
           aliasOfPath={aliasOfPath}
-          reasonFor={reasonFor}
           onSelectPath={openPath}
         />
       </div>

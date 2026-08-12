@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Share2, Radio } from 'lucide-react'
+import { Radio } from 'lucide-react'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
@@ -28,6 +28,7 @@ import { NoteEditor } from './NoteEditor'
 import { NoteMetaRows } from './NoteMetaRows'
 import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
+import { useShareAction } from './useShareAction'
 import { SharePanel } from './SharePanel'
 import type { PickerEntity } from './NotePicker'
 import type { CommunityAlias } from '@/lib/types'
@@ -81,6 +82,10 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  // Share rides the tab row beside Connections — every note answers "who sees
+  // this" from the same spot the entity Context tab does. Called up here with
+  // the other hooks: the render below returns early on several states.
+  const share = useShareAction({ onOpen: () => setShareOpen(true), title: 'Who can see this?' })
   const loadSeq = useRef(0)
 
   const gatedOut = !isPersonalSpace && access !== null && access.gated
@@ -367,20 +372,6 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     String(parseFrontmatter(shownRead.content).title ?? '').trim() ||
     (shown.path.split('/').pop() ?? shown.path).replace(/\.md$/i, '')
 
-  // Share lives in the editor's toolbar tray (toolbarTrailSlot) with the other
-  // controls — every note can answer "who sees this" from the same spot the
-  // entity Context tab does.
-  const shareButton = (
-    <button
-      type="button"
-      onClick={() => setShareOpen(true)}
-      title="Who can see this?"
-      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
-    >
-      <Share2 className="h-3.5 w-3.5" />
-      Share
-    </button>
-  )
 
   // The note title leads the scrolling content (embedded NoteEditor hides its
   // own .notes-title); width/padding mirror .notes-column so it lines up.
@@ -431,7 +422,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         key={shown.path}
         variant="embedded"
         headerSlot={headerCard}
-        toolbarTrailSlot={shareButton}
+        toolbarTrailSlot={share.fallback}
         path={shown.path}
         meta={openMeta}
         notes={noteRefs}
@@ -448,6 +439,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         onOpenNote={handleOpenNote}
         onLinkMention={handleLinkMention}
       />
+      {share.slot}
       {shareOpen && (
         <SharePanel
           communityId={communityId}

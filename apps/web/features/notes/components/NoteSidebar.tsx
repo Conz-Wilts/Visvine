@@ -13,8 +13,9 @@
 // notes live there for a week (restore or delete-forever from the row menu)
 // before the server purges them.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Modal, inputBaseClass } from '@/components/ui'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { TRASH_RETENTION_DAYS } from '@/lib/notes/shared/types'
 import { getNodeGlyph } from '@/lib/types'
@@ -22,6 +23,7 @@ import { NODE_GLYPH_PATHS, type NodeGlyph } from '@/lib/avatarUtils'
 import { entityKindOf } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { TRASH_PATH, useContextTreeState } from '@/features/notes/hooks/useContextTreeState'
+import { canMoveInto, moveDenial, parentFolderOf } from '../lib/useContextTree'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
@@ -59,6 +61,37 @@ interface FolderBadge {
   level?: string
 }
 
+/** A row the tree can move: a note, or a folder (with everything under it). */
+interface MovableItem {
+  path: string
+  kind: 'note' | 'folder'
+  label: string
+}
+
+/** Drag-to-move state, shared with every row rather than threaded through the
+ *  recursive Tree/FolderRow props (they already carry a dozen). Null when the
+ *  host surface passed no move handlers — rows then aren't draggable at all. */
+interface TreeDragValue {
+  dragging: MovableItem | null
+  /** Folder currently under the pointer ('' = the brain root, null = none). */
+  dropFolder: string | null
+  begin: (item: MovableItem) => void
+  end: () => void
+  hover: (folderPath: string | null) => void
+  move: (item: MovableItem, destFolder: string) => void
+  /** Opens the "Move to…" dialog — the keyboard/menu path to the same move. */
+  requestMove: (item: MovableItem) => void
+}
+
+const TreeDrag = createContext<TreeDragValue | null>(null)
+
+/** Whether a row can be dragged at all: moving it to the folder it already sits
+ *  in is a no-op, so a denial there is purely about the item itself (entity
+ *  note, folder index, managed namespace). */
+function isMovable(path: string, kind: 'note' | 'folder'): boolean {
+  return moveDenial(path, kind, parentFolderOf(path)) === null
+}
+
 interface NoteSidebarProps {
   tree: TreeNode
   notes: NoteMeta[]
@@ -77,6 +110,13 @@ interface NoteSidebarProps {
   onShareNote?: (path: string) => void
   /** â‹¯ menu action on folder rows: delete the folder (and the notes inside). */
   onDeleteFolder?: (folderPath: string, label?: string) => void
+  /** File a note into another folder ('' = the brain root). Passing both move
+   *  handlers turns on dragging and the rows' "Move to..." action; omit them for
+   *  a read-only tree. Authority stays server-side - a rejected move surfaces
+   *  its message. */
+  onMoveNote?: (from: string, destFolder: string) => void
+  /** Move a folder and everything under it. */
+  onMoveFolder?: (from: string, destFolder: string) => void
   /** Render without card chrome (bg/border/shadow) â€” used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
@@ -116,6 +156,8 @@ export function NoteSidebar({
   onFolderAccess,
   onShareNote,
   onDeleteFolder,
+  onMoveNote,
+  onMoveFolder,
   trash = null,
   onRestoreTrash,
   onPurgeTrash,
@@ -145,6 +187,34 @@ export function NoteSidebar({
     () => starred.map((p) => ({ path: p, title: titleFor.get(p) ?? p })).filter((n) => titleFor.has(n.path)),
     [starred, titleFor],
   )
+
+  // Moving: dragging a row onto a folder, or the same move from the row menu
+  // via the "Move to..." dialog. Both go through one `move` so the rules and the
+  // handlers stay in one place.
+  const [dragging, setDragging] = useState<MovableItem | null>(null)
+  const [dropFolder, setDropFolder] = useState<string | null>(null)
+  const [moveTarget, setMoveTarget] = useState<MovableItem | null>(null)
+  const movingEnabled = canEdit && !!onMoveNote && !!onMoveFolder
+
+  const drag = useMemo<TreeDragValue | null>(() => {
+    if (!movingEnabled) return null
+    const move = (item: MovableItem, destFolder: string) => {
+      if (item.kind === 'folder') onMoveFolder!(item.path, destFolder)
+      else onMoveNote!(item.path, destFolder)
+    }
+    return {
+      dragging,
+      dropFolder,
+      begin: (item) => setDragging(item),
+      end: () => {
+        setDragging(null)
+        setDropFolder(null)
+      },
+      hover: setDropFolder,
+      move,
+      requestMove: setMoveTarget,
+    }
+  }, [movingEnabled, dragging, dropFolder, onMoveNote, onMoveFolder])
 
   // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
@@ -193,6 +263,7 @@ export function NoteSidebar({
   }, [selectedPath])
 
   return (
+    <TreeDrag.Provider value={drag}>
     <div
       className={`flex h-full flex-col overflow-hidden ${
         /* bare = docked into the square-cornered Sidebar card â€” rounding here
@@ -295,6 +366,19 @@ export function NoteSidebar({
         </div>
       </div>
     </div>
+    {moveTarget && drag && (
+      <MoveDialog
+        item={moveTarget}
+        tree={tree}
+        rootLabel={root?.label ?? 'Context root'}
+        onClose={() => setMoveTarget(null)}
+        onPick={(destFolder) => {
+          setMoveTarget(null)
+          drag.move(moveTarget, destFolder)
+        }}
+      />
+    )}
+    </TreeDrag.Provider>
   )
 }
 
@@ -328,7 +412,7 @@ function TrashFolder({
           type="button"
           aria-label={open ? 'Collapse trash' : 'Expand trash'}
           onClick={onToggle}
-          className="shrink-0 py-1.5 pl-1 pr-0.5 text-text-secondary hover:text-text-primary"
+          className="flex shrink-0 items-center self-stretch pl-1.5 pr-1 text-text-secondary hover:text-text-primary"
         >
           <Chevron open={open} />
         </button>
@@ -536,18 +620,85 @@ function FolderRow(props: {
   const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
   const hasIndex = (props.node.children ?? []).some((c) => c.kind === 'note' && c.path === indexPath)
   const selected = hasIndex && props.selectedPath === indexPath
+
+  // Moving: a folder row is both a drag source (its whole subtree travels with
+  // it) and the tree's only drop target - notes and folders are filed INTO
+  // folders, never next to a note. The brain root row is the target for "top
+  // level"; it is never a source.
+  const drag = useContext(TreeDrag)
+  const item: MovableItem = { path: props.node.path, kind: 'folder', label: folderLabel }
+  const draggable = !!drag && !!props.node.path && isMovable(props.node.path, 'folder')
+  const isDragged = drag?.dragging?.path === props.node.path
+  const accepts = !!drag?.dragging && canMoveInto(drag.dragging.path, drag.dragging.kind, props.node.path)
+  const isDropTarget = accepts && drag?.dropFolder === props.node.path
+  // Hovering a shut folder mid-drag springs it open, so a note can be dropped
+  // into a nested folder without letting go first.
+  const springRef = useRef<number | null>(null)
+  const cancelSpring = () => {
+    if (springRef.current !== null) {
+      window.clearTimeout(springRef.current)
+      springRef.current = null
+    }
+  }
+  useEffect(() => cancelSpring, [])
+
   return (
     <div>
       <div
+        draggable={draggable}
+        onDragStart={(e) => {
+          if (!draggable) return
+          e.dataTransfer.setData('text/plain', props.node.path)
+          e.dataTransfer.effectAllowed = 'move'
+          drag!.begin(item)
+        }}
+        onDragEnd={() => {
+          cancelSpring()
+          drag?.end()
+        }}
+        onDragOver={(e) => {
+          if (!accepts) return
+          e.preventDefault()
+          e.stopPropagation()
+          e.dataTransfer.dropEffect = 'move'
+          if (drag!.dropFolder !== props.node.path) drag!.hover(props.node.path)
+          if (!open && springRef.current === null) {
+            springRef.current = window.setTimeout(() => {
+              springRef.current = null
+              props.onToggleFolder(props.node.path, false)
+            }, 600)
+          }
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+          cancelSpring()
+          if (drag?.dropFolder === props.node.path) drag.hover(null)
+        }}
+        onDrop={(e) => {
+          if (!accepts) return
+          e.preventDefault()
+          e.stopPropagation()
+          cancelSpring()
+          const dragged = drag!.dragging!
+          drag!.end()
+          drag!.move(dragged, props.node.path)
+        }}
         className={`group/folder flex items-center pr-1.5 transition ${ROW_BLEED} ${
           selected ? 'bg-brand-green' : 'hover:bg-surface-2'
+        } ${isDragged ? 'opacity-50' : ''} ${
+          isDropTarget ? 'bg-brand-green/15 ring-1 ring-inset ring-brand-green' : ''
         }`}
       >
+        {/* self-stretch, not py-*: the row is as tall as the label button's
+            15px line-box (~35px) while the chevron's own content is 16px, so
+            items-center used to leave a ~3px dead strip above and below it —
+            clicks landed on the row div and nothing expanded. Stretching makes
+            the target the full row height. */}
         <button
           type="button"
           aria-label={open ? 'Collapse folder' : 'Expand folder'}
           onClick={() => setOpen()}
-          className={`shrink-0 py-1.5 pl-1 pr-0.5 ${
+          className={`flex shrink-0 items-center self-stretch pl-1.5 pr-1 ${
             selected ? 'text-white' : 'text-text-secondary hover:text-text-primary'
           }`}
         >
@@ -588,6 +739,9 @@ function FolderRow(props: {
               : []),
             // No Star: a folder IS its index note, and index notes aren't
             // starrable â€” Starred is a shortcut list of notes, not folders.
+            ...(draggable
+              ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
+              : []),
             // The root row is the brain itself â€” not deletable from the tree.
             ...(props.onDeleteFolder && props.node.path !== ''
               ? [
@@ -770,12 +924,26 @@ function NoteRow({
   onDelete: (path: string) => void
   onShare?: (path: string) => void
 }) {
+  const drag = useContext(TreeDrag)
+  const item: MovableItem = { path, kind: 'note', label: title }
+  const draggable = !!drag && isMovable(path, 'note')
+  const isDragged = drag?.dragging?.path === path
   return (
     <div
       data-note-path={path}
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return
+        // text/plain keeps the drag valid for the browser's own machinery (and
+        // shows the path if it ever lands outside the tree).
+        e.dataTransfer.setData('text/plain', path)
+        e.dataTransfer.effectAllowed = 'move'
+        drag!.begin(item)
+      }}
+      onDragEnd={() => drag?.end()}
       className={`group flex items-center pr-1.5 transition ${ROW_BLEED} ${
         selected ? 'bg-brand-green' : 'hover:bg-surface-2'
-      }`}
+      } ${isDragged ? 'opacity-50' : ''}`}
     >
       <button
         type="button"
@@ -811,12 +979,117 @@ function NoteRow({
                 icon: <StarIcon filled={starred} />,
                 onClick: () => onToggleStar(path, !starred),
               }]),
+          ...(draggable
+            ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
+            : []),
           ...(canEdit
             ? [{ label: 'Delete', icon: <TrashIcon />, danger: true, onClick: () => onDelete(path) }]
             : []),
         ]}
       />
     </div>
+  )
+}
+
+// -- Move to... dialog --------------------------------------------------------
+
+interface FolderChoice {
+  path: string
+  label: string
+  depth: number
+}
+
+/** Every folder in the tree, depth-first, so the list reads in tree order. */
+function collectFolders(node: TreeNode, out: FolderChoice[], depth = 0): void {
+  for (const child of node.children ?? []) {
+    if (child.kind !== 'folder') continue
+    out.push({ path: child.path, label: child.title ?? child.name, depth })
+    collectFolders(child, out, depth + 1)
+  }
+}
+
+/**
+ * The pointer-free half of moving: pick the destination folder from a filtered
+ * list. Folders the item can't go into stay visible but disabled, with the
+ * reason on hover - a managed entity namespace should read as "not here",
+ * not vanish from the tree the user is looking at.
+ */
+function MoveDialog({
+  item,
+  tree,
+  rootLabel,
+  onClose,
+  onPick,
+}: {
+  item: MovableItem
+  tree: TreeNode
+  rootLabel: string
+  onClose: () => void
+  onPick: (destFolder: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const folders = useMemo(() => {
+    const out: FolderChoice[] = [{ path: '', label: rootLabel, depth: 0 }]
+    collectFolders(tree, out)
+    return out
+  }, [tree, rootLabel])
+
+  const q = query.trim().toLowerCase()
+  const shown = q
+    ? folders.filter((f) => f.label.toLowerCase().includes(q) || f.path.toLowerCase().includes(q))
+    : folders
+
+  return (
+    <Modal onClose={onClose} size="sm" title={`Move “${item.label}”`}>
+      <div className="flex flex-col gap-3">
+        <input
+          autoFocus
+          className={inputBaseClass}
+          placeholder="Filter folders"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="max-h-[50vh] overflow-y-auto rounded-xl border border-border-default">
+          {shown.length === 0 ? (
+            <p className="px-3 py-4 text-sm text-text-muted">No folder matches “{query}”.</p>
+          ) : (
+            shown.map((folder) => {
+              const allowed = canMoveInto(item.path, item.kind, folder.path)
+              const reason =
+                moveDenial(item.path, item.kind, folder.path) ??
+                (allowed ? undefined : 'It is already here.')
+              return (
+                <button
+                  key={folder.path || '<root>'}
+                  type="button"
+                  disabled={!allowed}
+                  title={reason}
+                  onClick={() => onPick(folder.path)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                    allowed
+                      ? 'text-text-primary hover:bg-surface-2'
+                      : 'cursor-not-allowed text-text-muted'
+                  }`}
+                  // Search flattens the tree, so indentation only means depth
+                  // while the full list is showing.
+                  style={{ paddingLeft: q ? undefined : 12 + folder.depth * 14 }}
+                >
+                  <span className="shrink-0 text-text-muted">
+                    <FolderIcon />
+                  </span>
+                  <span className="truncate">{folder.label}</span>
+                  {folder.path && (
+                    <span className="ml-auto shrink-0 truncate font-mono text-[11px] text-text-muted">
+                      {folder.path}
+                    </span>
+                  )}
+                </button>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
@@ -896,6 +1169,17 @@ function KebabIcon() {
       <circle cx="5" cy="12" r="1.9" />
       <circle cx="12" cy="12" r="1.9" />
       <circle cx="19" cy="12" r="1.9" />
+    </svg>
+  )
+}
+
+// Folder-with-arrow (lucide FolderInput) - the rows' "Move to..." action.
+function MoveIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-2" />
+      <path d="M2 13h10" />
+      <path d="m9 16 3-3-3-3" />
     </svg>
   )
 }

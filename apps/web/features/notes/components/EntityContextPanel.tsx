@@ -12,7 +12,7 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Share2, Radio } from 'lucide-react'
+import { Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
@@ -36,6 +36,7 @@ import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteEditor } from './NoteEditor'
 import { type NoteMode } from './NoteModeToggle'
 import { AccessRequestCard } from './AccessRequestCard'
+import { useShareAction } from './useShareAction'
 import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
 import { PropertyRows } from './PropertyRows'
@@ -111,6 +112,9 @@ export function EntityContextPanel({
   const [requestPending, setRequestPending] = useState(false)
   const [requesting, setRequesting] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
+  // Share rides the tab row beside Connections. Called up here with the other
+  // hooks: the render below returns early on several states.
+  const share = useShareAction({ onOpen: () => setShareOpen(true), title: 'Who can see this context?' })
   // Entity tags shown in the header — seeded from the node, edited in place.
   const [tags, setTags] = useState<string[]>([])
   // Rename: the saved local title override (survives the hook's stale cache),
@@ -520,21 +524,6 @@ export function EntityContextPanel({
   // Tag colour registry: community-saved colours + those registered this session.
   const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
 
-  // Share lives on the editor toolbar's far-right slot; when there's no editor
-  // (read-only viewer, no note yet / read failure) it falls back to the header
-  // row so the panel is still reachable.
-  const shareButton = (
-    <button
-      type="button"
-      onClick={() => setShareOpen(true)}
-      title="Who can see this context?"
-      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
-    >
-      <Share2 className="h-3.5 w-3.5" />
-      Share
-    </button>
-  )
-
   // The entity header (avatar, name, type + tag rows). No card chrome — it
   // renders directly on the page so it reads as one surface with the note, and
   // its width/padding mirror .notes-column (760px / 28px) so it lines up with
@@ -583,7 +572,7 @@ export function EntityContextPanel({
             {displayName}
           </h2>
         )}
-        {!showEditor && shareButton}
+        {!showEditor && share.fallback}
       </div>
 
       {isReplica && pubs?.asTarget && (
@@ -682,7 +671,7 @@ export function EntityContextPanel({
             key={shown?.path ?? path}
             variant="embedded"
             headerSlot={headerCard}
-            toolbarTrailSlot={shareButton}
+            toolbarTrailSlot={share.fallback}
             path={shown?.path ?? path}
             meta={openMeta}
             notes={noteRefs}
@@ -707,6 +696,7 @@ export function EntityContextPanel({
           <p className="text-sm text-text-muted">Members with write access can start this entity&apos;s context note.</p>
         </div>
       )}
+      {share.slot}
       {shareOpen && path && communityId && (
         <SharePanel
           communityId={communityId}

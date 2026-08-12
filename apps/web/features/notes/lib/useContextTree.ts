@@ -10,6 +10,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
+import { entityKindOfPath, isEntityNamespaceDir, noteHref } from '@/lib/notes/entities'
+import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
 import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch'
@@ -19,6 +21,58 @@ const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] 
 /** Where a surface sends the user when the note it was showing is deleted:
  *  the brain's root index note, the community's home page. */
 const CONTEXT_HOME = '/directory/note/index.md'
+
+/** What a move produces: the item keeps its own name under `destFolder`
+ *  ('' = the brain root). */
+export function movedPath(from: string, destFolder: string): string {
+  const name = from.split('/').pop() ?? from
+  return destFolder ? `${destFolder}/${name}` : name
+}
+
+/** The folder a path currently sits in ('' for a root-level item). */
+export function parentFolderOf(path: string): string {
+  const slash = path.lastIndexOf('/')
+  return slash === -1 ? '' : path.slice(0, slash)
+}
+
+/**
+ * Why this move is impossible, or null when it's allowed. These are the
+ * STRUCTURAL rules — an entity note IS its path (every [[mention]] and every
+ * profile's Context tab resolves against people/<slug>.md, see
+ * lib/notes/entities), so entity namespaces can neither be moved nor take in
+ * anything else. Permission is a separate question the server answers; the tree
+ * can't know each viewer's level per folder, so a rejected move surfaces the
+ * server's message instead of being predicted here.
+ */
+export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: string): string | null {
+  if (destFolder && (isEntityNamespaceDir(destFolder) || entityKindOfPath(`${destFolder}/x.md`))) {
+    const ns = destFolder.split('/')[0]
+    return `“${ns}” holds the notes for directory entities — those paths are managed, so nothing else can be filed there.`
+  }
+  if (kind === 'note') {
+    const ns = entityKindOfPath(from)
+    if (ns) {
+      return 'This is a directory entity’s note. It stays in its own folder so mentions of it, and its profile’s Context tab, keep resolving.'
+    }
+    if (isIndexPath(from)) {
+      return 'This note is its folder’s home page — move the folder itself and the note goes with it.'
+    }
+    return null
+  }
+  if (!from) return 'The context root can’t be moved.'
+  if (isEntityNamespaceDir(from)) {
+    return `“${from}” is a managed folder of entity notes — it can’t be moved.`
+  }
+  if (destFolder === from || destFolder.startsWith(`${from}/`)) {
+    return 'A folder can’t be moved inside itself.'
+  }
+  return null
+}
+
+/** Whether a drop on `destFolder` would do anything (legal AND a real change). */
+export function canMoveInto(from: string, kind: 'note' | 'folder', destFolder: string): boolean {
+  return moveDenial(from, kind, destFolder) === null && destFolder !== parentFolderOf(from)
+}
 
 export interface ContextTreeOptions {
   communityId: string | null
@@ -228,6 +282,57 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     [communityId, notes, currentPath, router],
   )
 
+  // Moving a note = a rename to the same filename under another folder. The
+  // server rewrites every inbound link to the new path, so the only client-side
+  // work is the optimistic-free reload + following the note if it was open.
+  const handleMoveNote = useCallback(
+    (from: string, destFolder: string) => {
+      if (!communityId) return
+      const to = movedPath(from, destFolder)
+      const denial = moveDenial(from, 'note', destFolder)
+      if (denial) return window.alert(denial)
+      if (to === from) return
+      notesApi
+        .rename(communityId, from, to)
+        .then(({ path }) => {
+          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          setTreeVersion((v) => v + 1)
+          // The server may suffix the name if the destination was taken — follow
+          // the path it actually wrote, not the one we asked for.
+          if (from === currentPath) router.replace(noteHref(path))
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to move the note')
+        })
+    },
+    [communityId, currentPath, router],
+  )
+
+  // Moving a folder takes its whole subtree with it (renameFolder server-side),
+  // so an open note inside it follows to the equivalent path.
+  const handleMoveFolder = useCallback(
+    (from: string, destFolder: string) => {
+      if (!communityId) return
+      const to = movedPath(from, destFolder)
+      const denial = moveDenial(from, 'folder', destFolder)
+      if (denial) return window.alert(denial)
+      if (to === from) return
+      notesApi
+        .renameFolder(communityId, from, to)
+        .then(({ path }) => {
+          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          setTreeVersion((v) => v + 1)
+          if (currentPath?.startsWith(`${from}/`)) {
+            router.replace(noteHref(`${path}${currentPath.slice(from.length)}`))
+          }
+        })
+        .catch((e: unknown) => {
+          window.alert(e instanceof Error ? e.message : 'Failed to move the folder')
+        })
+    },
+    [communityId, currentPath, router],
+  )
+
   // Restoring puts the note back at its original path (suffixed if something
   // else took it while it sat in the trash) — bumping treeVersion reloads the
   // tree, the note list and the trash together.
@@ -290,6 +395,8 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     handleToggleStar,
     handleDeleteNote,
     handleDeleteFolder,
+    handleMoveNote,
+    handleMoveFolder,
     handleRestoreTrash,
     handlePurgeTrash,
     handleEmptyTrash,

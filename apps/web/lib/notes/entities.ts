@@ -147,6 +147,15 @@ export function entityKindOfPath(path: string): EntityKind | null {
   return null
 }
 
+// True when `path` IS one of the entity namespaces itself ('people',
+// 'communities', …). Those folders are identity rather than organisation: every
+// entity note's path is derived from its node (entityNotePath) and every
+// inbound [[mention]] resolves against it, so the namespace can't be moved,
+// nested, or given subfolders — see the ENTITY_DIRS note above.
+export function isEntityNamespaceDir(path: string): boolean {
+  return Object.values(ENTITY_DIRS).includes(path)
+}
+
 // Resolve an entity-note path back to its directory node id via the loaded node
 // map. Node ids are NOT reconstructible from paths by string surgery — legacy
 // data still carries retired prefixes ('org:halter', 'group:halter') alongside
