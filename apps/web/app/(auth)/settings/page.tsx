@@ -19,7 +19,7 @@ import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePane
 // coming-soon placeholders and are gone until there's something behind them.
 const SECTIONS: ConsoleSection[] = [
   { id: 'appearance', label: 'Appearance', width: 'form' },
-  { id: 'connections', label: 'Connections', width: 'form' },
+  { id: 'mcp', label: 'MCP', width: 'form' },
 ];
 
 // ─── Color swatch ─────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ function renderSection(id: string) {
   switch (id) {
     case 'appearance':
       return <AppearanceSection />;
-    case 'connections':
+    case 'mcp':
       return <ConnectClaudePanel />;
     default:
       return null;
