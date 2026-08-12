@@ -18,6 +18,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSession } from '@/features/auth/lib/auth-client';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnCommunityNode } from '@/lib/types/context';
@@ -164,11 +165,68 @@ const PERSON_TABS: PaneTabItem[] = [
 // you connect one (ProfileConnectPrompt, inside ProfilePageContent) — the link
 // is the most consequential thing about a person context, and it used to hide
 // in a row under the note header.
+//
+// A `person:` id that has no Node row is not necessarily a dead link: it may be
+// a Person-row id (what a session carries as `personId`, and what the avatar
+// menu's Profile item links to), whose node lives under a name-derived id
+// instead. Resolve it once and rewrite the URL to the canonical node rather than
+// showing "Profile not found" — see /api/nodes/resolve.
 function PersonRoute({ nodeId }: { nodeId: string }) {
   const { data, loading, error } = useNodeProfile(nodeId);
+  const { data: session } = useSession();
+  const missing = !data?.node && !loading && !!error;
+  const resolved = useResolvedNodeId(missing ? nodeId : null);
 
-  if (!data?.node && !loading && error) return <NotFoundState title="Profile not found" />;
-  return <PersonProfilePage nodeId={nodeId} />;
+  if (!missing) return <PersonProfilePage nodeId={nodeId} />;
+  if (resolved.loading) return <ProfileSkeletonLoader mode="fullpage" />;
+  // Resolved elsewhere: the replace is in flight, so hold the skeleton rather
+  // than flashing not-found on the way out.
+  if (resolved.nodeId) return <ProfileSkeletonLoader mode="fullpage" />;
+  // Your own id with no node behind it anywhere — a member of no space yet.
+  // The Person row is still a profile, and it is the one page you must always
+  // be able to reach; ProfilePageContent renders it without node data.
+  if (session?.user?.nodeId === nodeId) return <PersonProfilePage nodeId={nodeId} />;
+  return <NotFoundState title="Profile not found" />;
+}
+
+/**
+ * Maps a Person-row id to the node that actually carries that person's context,
+ * and navigates there. Null `personId` disables the hook (the node exists, so
+ * there is nothing to resolve).
+ */
+function useResolvedNodeId(personId: string | null) {
+  const router = useRouter();
+  const { currentCommunity } = useCommunity();
+  const communityId = currentCommunity?.id ?? null;
+  const [state, setState] = useState<{ loading: boolean; nodeId: string | null }>({
+    loading: !!personId,
+    nodeId: null,
+  });
+
+  useEffect(() => {
+    if (!personId) {
+      setState({ loading: false, nodeId: null });
+      return;
+    }
+    let cancelled = false;
+    setState({ loading: true, nodeId: null });
+    const query = new URLSearchParams({ id: personId });
+    if (communityId) query.set('communityId', communityId);
+    fetch(`/api/nodes/resolve?${query}`)
+      .then((res) => (res.ok ? res.json() : { nodeId: null }))
+      .then((json: { nodeId?: string | null }) => {
+        if (cancelled) return;
+        const next = json.nodeId && json.nodeId !== personId ? json.nodeId : null;
+        setState({ loading: false, nodeId: next });
+        // replace, not push: the unresolvable id must not sit in history behind
+        // the profile and reappear on Back.
+        if (next) router.replace(`/directory/${encodeURIComponent(next)}`);
+      })
+      .catch(() => { if (!cancelled) setState({ loading: false, nodeId: null }); });
+    return () => { cancelled = true; };
+  }, [personId, communityId, router]);
+
+  return state;
 }
 
 function PersonProfilePage({ nodeId }: { nodeId: string }) {

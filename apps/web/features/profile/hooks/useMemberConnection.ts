@@ -44,6 +44,11 @@ export function useMemberConnection({
   const { isAdmin } = useCommunity()
   // undefined = still loading; null = definitely unconnected.
   const [connection, setConnection] = useState<MemberConnectionInfo | null | undefined>(undefined)
+  // The endpoint could not answer at all — no Node row for this id (a Person-row
+  // id reached directly), a community the viewer can't read, or a transient
+  // failure. Distinct from a clean "no member behind this node": callers must
+  // not read a failed request as an invitation to connect one.
+  const [unavailable, setUnavailable] = useState(false)
   const [members, setMembers] = useState<MemberOption[] | null>(null)
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -54,11 +59,16 @@ export function useMemberConnection({
   useEffect(() => {
     let cancelled = false
     setConnection(undefined)
+    setUnavailable(false)
     setPicking(false)
     fetch(endpoint)
-      .then((res) => (res.ok ? res.json() : { connected: null }))
-      .then((data) => { if (!cancelled) setConnection(data.connected ?? null) })
-      .catch(() => { if (!cancelled) setConnection(null) })
+      .then((res) => (res.ok ? res.json() : { connected: null, unavailable: true }))
+      .then((data) => {
+        if (cancelled) return
+        setConnection(data.connected ?? null)
+        setUnavailable(!!data.unavailable)
+      })
+      .catch(() => { if (!cancelled) { setConnection(null); setUnavailable(true) } })
     return () => { cancelled = true }
   }, [endpoint])
 
@@ -75,6 +85,7 @@ export function useMemberConnection({
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error || 'Failed to connect')
         setConnection(data.connected ?? null)
+        setUnavailable(false)
         setPicking(false)
         onChange?.(data.connected?.userId ?? userId)
       } catch (err) {
@@ -93,6 +104,7 @@ export function useMemberConnection({
       const res = await fetch(endpoint, { method: 'DELETE' })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to disconnect')
       setConnection(null)
+      setUnavailable(false)
       onChange?.(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to disconnect')
@@ -122,7 +134,7 @@ export function useMemberConnection({
   const canManage = isAdmin || (!!connection && connection.userId === viewerId)
 
   return {
-    connection, members, picking, busy, error,
+    connection, unavailable, members, picking, busy, error,
     connect, disconnect, openPicker, cancelPicking,
     viewerId, isAdmin, canManage,
   }

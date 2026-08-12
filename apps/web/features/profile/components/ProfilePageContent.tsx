@@ -166,10 +166,15 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   // Live connection state wins once it resolves; until then the cached node's
   // `connected_user_id` stands in, so a connected profile doesn't flash the
-  // prompt on arrival.
-  const connected = memberConnection.connection === undefined
-    ? !!nodeData?.node?.connected_user_id
-    : !!memberConnection.connection;
+  // prompt on arrival. When the connection endpoint could not answer at all —
+  // no Node row behind this id, a community it won't read for us, a network
+  // blip — fall back to the profile's own `connected`, which resolves through
+  // the Person row as well. Only a definite "no member" shows the prompt: the
+  // prompt is a dead end (its own PUT hits the same endpoint), so guessing it
+  // from a failed request locks the owner out of their profile.
+  const connected = memberConnection.connection !== undefined
+    ? (memberConnection.unavailable ? !!profile.connected : !!memberConnection.connection)
+    : !!(nodeData?.node?.connected_user_id ?? profile.connected);
 
   if (!connected) {
     return (
