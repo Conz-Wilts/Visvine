@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'pill-primary' | 'pill-secondary' | 'pill-danger' | 'danger' | 'danger-text';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'pill-primary' | 'pill-secondary' | 'pill-danger' | 'brand' | 'danger' | 'danger-text';
 type ButtonSize = 'sm' | 'md';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -18,6 +18,9 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   'pill-primary': 'bg-brand-green text-white rounded-full hover:opacity-90 active:translate-y-[1px] shadow-soft disabled:cursor-not-allowed disabled:opacity-60',
   'pill-secondary': 'bg-brand-light-bg text-brand-green rounded-full',
   'pill-danger': 'bg-red-600 text-white rounded-full hover:bg-red-700 active:translate-y-[1px] shadow-soft disabled:cursor-not-allowed disabled:opacity-60',
+  // Squared-off sibling of pill-primary, for primary actions that should read as
+  // a rounded square rather than a pill (e.g. creating a space).
+  brand: 'bg-brand-green text-white rounded-lg hover:opacity-90 active:translate-y-[1px] shadow-soft disabled:cursor-not-allowed disabled:opacity-60',
   // Squared-off sibling of pill-danger, for destructive actions that shouldn't
   // read as a soft pill (e.g. the console's danger zone).
   danger: 'bg-red-600 text-white rounded-lg hover:bg-red-700 active:translate-y-[1px] disabled:cursor-not-allowed disabled:opacity-60',
@@ -39,7 +42,8 @@ export default function Button({
   className,
   ...props
 }: ButtonProps) {
-  const isPill = variant === 'pill-primary' || variant === 'pill-secondary' || variant === 'pill-danger';
+  // `brand` shares the pill's padding/weight — only its corners differ.
+  const isPill = variant === 'pill-primary' || variant === 'pill-secondary' || variant === 'pill-danger' || variant === 'brand';
   const isDangerText = variant === 'danger-text';
 
   const sizeClass = isPill
