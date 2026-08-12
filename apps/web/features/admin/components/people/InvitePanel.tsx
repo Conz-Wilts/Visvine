@@ -205,8 +205,8 @@ function ConnectClaudeRow() {
       <McpServerUrlRow url={info?.url ?? null} />
       <p className="mt-2 text-xs text-text-muted">
         Each member connects their own Claude from{' '}
-        <a href="/settings" className="font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary">
-          Settings → Connections
+        <a href="/settings?section=mcp" className="font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary">
+          Settings → MCP
         </a>
         , where the full instructions live.
       </p>

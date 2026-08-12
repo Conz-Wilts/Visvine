@@ -1,6 +1,6 @@
 'use client';
 
-// Settings → Connections. How someone points Claude at their own Visvine
+// Settings → MCP. How someone points Claude at their own Visvine
 // context.
 //
 // This lives in personal settings rather than the community console on purpose:
