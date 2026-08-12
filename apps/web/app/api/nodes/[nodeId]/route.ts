@@ -8,6 +8,40 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { communityReadForbidden } from '@/lib/auth';
 import { requireApiSession } from '@/lib/api/route';
+import { logger } from '@/lib/logger';
+import { entityNotePath } from '@/lib/notes/entities';
+import { readNoteOrNull, writeNote, SHARED_OWNER_KEY } from '@/lib/notes/store';
+import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from '@/lib/notes/shared/markdown';
+
+const MAX_NAME_LEN = 120;
+
+/** Metadata keys clients may not write through the generic property-row patch.
+ *  `userId` is the person-node record key the entity sync finds nodes by —
+ *  forging it would let any member re-point a person context at another record. */
+const RESERVED_METADATA_KEYS = ['userId'];
+
+/** Best-effort: keep the entity note's frontmatter `title:` in step with a node
+ *  rename. The note path is id-derived and never moves; a missing note is fine
+ *  (the Context tab stubs it from node.name anyway). */
+async function syncNoteTitle(
+  node: { id: string; type: string; communityId: string },
+  name: string,
+  actor: { id: string; name: string; email: string | null },
+): Promise<void> {
+  const notePath = entityNotePath(node);
+  if (!notePath) return;
+  const brain = { communityId: node.communityId, ownerKey: SHARED_OWNER_KEY };
+  try {
+    const content = await readNoteOrNull(brain, notePath);
+    if (content === null) return;
+    const frontmatter = parseFrontmatter(content);
+    if (frontmatter.title === name) return;
+    const { body } = splitFrontmatter(content);
+    await writeNote(brain, notePath, joinFrontmatter({ ...frontmatter, title: name }, body), actor);
+  } catch (err) {
+    logger.error('nodes.rename.noteTitle.failed', { err, nodeId: node.id, notePath });
+  }
+}
 
 type RouteContext = {
   params: Promise<{ nodeId: string }>;
@@ -46,7 +80,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const [node, linksWithNodes] = await Promise.all([
     prisma.node.findUnique({
       where: { id: nodeId },
-      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, communityId: true, createdAt: true },
+      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, communityId: true, createdAt: true, identity: { select: { userId: true } } },
     }),
     prisma.$queryRaw<Array<{
       source_id: string;
@@ -82,13 +116,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
+  // The member this node is connected to: the identity link is canonical;
+  // the Person-id lookup below covers legacy rows the backfill hasn't touched.
+  let connectedUserId: string | null = node.identity?.userId ?? null;
+
   // Real shared-community count: communities where both the viewer and the
   // profile's linked user are active members. Nodes without a linked user
   // exist in exactly their own community.
   let communityCount = 1;
   if (nodeId.startsWith('person:')) {
-    const person = await prisma.person.findUnique({ where: { id: nodeId }, select: { userId: true } });
+    const person = connectedUserId
+      ? { userId: connectedUserId }
+      : await prisma.person.findUnique({ where: { id: nodeId }, select: { userId: true } });
     if (person?.userId) {
+      connectedUserId = person.userId;
       communityCount = Math.max(1, await prisma.userCommunity.count({
         where: {
           userId: person.userId,
@@ -126,6 +167,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         metadata: node.metadata as Record<string, unknown>,
         alias: node.alias ?? undefined,
         community_id: node.communityId ?? undefined,
+        connected_user_id: connectedUserId ?? undefined,
         createdAt: node.createdAt.toISOString(),
       },
       connectionCount: linksWithNodes.length,
@@ -141,9 +183,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
 }
 
 /** Node columns the property rows may write. Everything else is metadata, and
- *  identity/type/name stay off-limits here — retyping an entity is a four-sided
+ *  identity/type stay off-limits here — retyping an entity is a four-sided
  *  migration (link FKs, the Person mirror, identity attachment, note frontmatter)
- *  and belongs to a dedicated endpoint, not an incidental field edit. */
+ *  and belongs to a dedicated endpoint, not an incidental field edit. `name` IS
+ *  patchable: node ids and note paths are minted once and never re-derived, so
+ *  a rename is pure display metadata. */
 const PATCHABLE_COLUMNS = {
   subtitle: 'subtitle',
   location: 'location',
@@ -152,9 +196,10 @@ const PATCHABLE_COLUMNS = {
 } as const;
 
 /**
- * PATCH /api/nodes/[nodeId] — update an entity's tags and property rows from its
- * context note. Body: { communityId, tags?, metadata?, subtitle?, location?,
- * url?, image_url? }. Gated on active membership of the node's own community
+ * PATCH /api/nodes/[nodeId] — update an entity's tags, property rows, and
+ * display name from its context note. Body: { communityId, name?, tags?,
+ * metadata?, subtitle?, location?, url?, image_url? }. Gated on active
+ * membership of the node's own community
  * (the same audience that can read/write the community brain); these are shared
  * collaborative metadata, so any member with write access may edit them.
  *
@@ -176,9 +221,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   const columnKeys = Object.keys(PATCHABLE_COLUMNS).filter((k) => k in body);
   const hasTags = 'tags' in body;
   const hasMetadata = 'metadata' in body && body.metadata !== null && typeof body.metadata === 'object';
-  if (!hasTags && !hasMetadata && columnKeys.length === 0) {
+  const hasName = 'name' in body;
+  const name = hasName && typeof body.name === 'string' ? body.name.trim().slice(0, MAX_NAME_LEN) : null;
+  if (hasName && !name) {
+    return NextResponse.json({ error: 'name must be a non-empty string' }, { status: 400 });
+  }
+  if (!hasTags && !hasMetadata && !hasName && columnKeys.length === 0) {
     return NextResponse.json(
-      { error: 'One of tags, metadata, or a property column is required' },
+      { error: 'One of name, tags, metadata, or a property column is required' },
       { status: 400 },
     );
   }
@@ -186,7 +236,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { communityId: true, metadata: true },
+    select: { communityId: true, metadata: true, type: true },
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
@@ -207,6 +257,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const data: Record<string, unknown> = {};
+  if (name !== null) data.name = name;
   if (tags !== null) data.tags = tags;
   for (const key of columnKeys) {
     const column = PATCHABLE_COLUMNS[key as keyof typeof PATCHABLE_COLUMNS];
@@ -216,15 +267,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     data[column] = typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
   }
   if (hasMetadata) {
+    const patch = { ...(body.metadata as Record<string, unknown>) };
+    for (const key of RESERVED_METADATA_KEYS) delete patch[key];
     data.metadata = {
       ...((node.metadata as Record<string, unknown>) ?? {}),
-      ...(body.metadata as Record<string, unknown>),
+      ...patch,
     };
   }
 
   // Update the context node; keep the Person mirror in sync so the person
   // profile's Skills section and avatar stay consistent with the same
-  // underlying values.
+  // underlying values. `name` deliberately stays OUT of the mirror — the node
+  // name is a community-local display label, the Person name is the member's own.
   const personMirror: Record<string, unknown> = {};
   if (tags !== null) personMirror.tags = tags;
   if ('image_url' in body) personMirror.imageUrl = data.imageUrl;
@@ -236,6 +290,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       : []),
   ]);
 
+  if (name !== null && node.communityId) {
+    await syncNoteTitle(
+      { id: nodeId, type: node.type, communityId: node.communityId },
+      name,
+      { id: session.userId, name: session.name, email: session.email ?? null },
+    );
+  }
+
   revalidateTag('context-data-v2', { expire: 0 });
-  return NextResponse.json({ tags: tags ?? undefined, ok: true });
+  return NextResponse.json({ name: name ?? undefined, tags: tags ?? undefined, ok: true });
 }

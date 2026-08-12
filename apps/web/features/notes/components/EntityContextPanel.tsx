@@ -16,12 +16,12 @@ import { Share2, Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
-import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile'
+import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
-import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
+import { entityKindOf, entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -39,6 +39,7 @@ import { AccessRequestCard } from './AccessRequestCard'
 import { SharePanel } from './SharePanel'
 import { TagCombobox } from './TagCombobox'
 import { PropertyRows } from './PropertyRows'
+import { MemberConnectionRow } from './MemberConnectionRow'
 import type { PickerEntity } from './NotePicker'
 import '../notes.css'
 
@@ -113,6 +114,11 @@ export function EntityContextPanel({
   const [shareOpen, setShareOpen] = useState(false)
   // Entity tags shown in the header — seeded from the node, edited in place.
   const [tags, setTags] = useState<string[]>([])
+  // Rename: the saved local title override (survives the hook's stale cache),
+  // the in-progress edit buffer (null = not editing), and the save flag.
+  const [nameOverride, setNameOverride] = useState<string | null>(null)
+  const [nameDraft, setNameDraft] = useState<string | null>(null)
+  const [nameSaving, setNameSaving] = useState(false)
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
   // Colours registered this session (before the community config refetches).
@@ -350,6 +356,40 @@ export function EntityContextPanel({
     setAddingTag(false)
   }, [node?.id, node?.tags])
 
+  // A different node means a different title: drop any rename state.
+  useEffect(() => {
+    setNameOverride(null)
+    setNameDraft(null)
+  }, [node?.id])
+
+  // Persist a rename. The header updates immediately (override), the profile
+  // cache is patched so other surfaces pick it up, and a rejected write rolls
+  // the title back.
+  const saveName = useCallback(
+    async (raw: string, prevName: string) => {
+      const next = raw.trim()
+      setNameDraft(null)
+      if (!next || next === prevName || !communityId) return
+      setNameOverride(next)
+      setNameSaving(true)
+      try {
+        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ communityId, name: next }),
+        })
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to rename')
+        patchCachedNodeProfile(nodeId, { name: next })
+      } catch (err) {
+        setNameOverride(null)
+        setError(err instanceof Error ? err.message : 'Failed to rename')
+      } finally {
+        setNameSaving(false)
+      }
+    },
+    [communityId, nodeId],
+  )
+
   // Persist a tag change to the entity's context node (shared metadata). Optimistic:
   // the header updates immediately and rolls back if the write is rejected.
   const saveTags = useCallback(
@@ -472,6 +512,9 @@ export function EntityContextPanel({
   // They stay editable during a save (an in-flight PATCH must not yank the row
   // out from under the cursor).
   const canEditTags = showEditor && canWrite
+  // The title actually on screen: a just-saved rename wins over the hook's
+  // cached node until the next real fetch.
+  const displayName = nameOverride ?? node.name
   // Community tags not already on this entity power the picker's suggestions.
   const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
   const tagSuggestions = allTags.filter((t) => !tagsLower.has(t.toLowerCase()))
@@ -516,8 +559,31 @@ export function EntityContextPanel({
             .notes-title), so it matches that scale: 2.5rem / 600 / tight.
             `truncate` clips overflow, and leading-[1.1] makes the line box
             shorter than the font's ascent+descent — without the pb the p/g/y
-            descenders get shaved off. */}
-        <h2 className="min-w-0 flex-1 truncate pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">{node.name}</h2>
+            descenders get shaved off. Anyone who can write the note can rename
+            the entity — the id and note path are minted once, so the title is
+            pure display metadata (server: PATCH /api/nodes name). */}
+        {nameDraft !== null ? (
+          <input
+            autoFocus
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
+            onBlur={() => void saveName(nameDraft, displayName)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void saveName(nameDraft, displayName)
+              if (e.key === 'Escape') setNameDraft(null)
+            }}
+            aria-label="Entity name"
+            className="min-w-0 flex-1 rounded-md bg-transparent pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary outline-none ring-1 ring-border-default font-open-sauce"
+          />
+        ) : (
+          <h2
+            onClick={canEditTags && !nameSaving ? () => setNameDraft(displayName) : undefined}
+            title={canEditTags ? 'Click to rename' : undefined}
+            className={`min-w-0 flex-1 truncate pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce${canEditTags ? ' cursor-text rounded-md transition hover:bg-surface-2' : ''}`}
+          >
+            {displayName}
+          </h2>
+        )}
         {!showEditor && shareButton}
       </div>
 
@@ -578,6 +644,15 @@ export function EntityContextPanel({
           </div>
         ) : null}
       />
+
+      {/* Person contexts carry the member link: connected = Profile tab +
+          userId ownership; disconnected = a plain renameable context. Not a
+          PropertyRows field — it's a relation, not node metadata. */}
+      {entityKindOf(node.type) === 'person' && !isPersonalSpace && (
+        <div className="mt-3">
+          <MemberConnectionRow nodeId={nodeId} communityId={communityId} accent={theme.dark} />
+        </div>
+      )}
     </div>
   )
 
@@ -603,7 +678,7 @@ export function EntityContextPanel({
         <>
           {!noteExists && (
             <p className="mx-auto mb-4 max-w-3xl text-center text-sm text-text-muted">
-              No shared context for {node.name} yet — start typing below to create it.
+              No shared context for {displayName} yet — start typing below to create it.
             </p>
           )}
           {/* Keyed and fed from `shown`, never from the in-flight `path`: the editor

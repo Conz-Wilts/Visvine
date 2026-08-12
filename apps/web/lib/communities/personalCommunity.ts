@@ -12,6 +12,7 @@
 
 import prisma from '@/lib/prisma'
 import { createNote, ensureRootIndex, noteCount } from '@/lib/notes/store'
+import { connectNodeToUserSafe } from '@/lib/identity/connection'
 import { logger } from '@/lib/logger'
 
 const WELCOME_PATH = 'welcome.md'
@@ -116,6 +117,9 @@ export async function provisionPersonalCommunity(user: {
         communityId,
       },
     })
+    // Connect the node to its owner through the identity bridge — the link the
+    // Profile tab and userId-based ownership resolve through everywhere.
+    await connectNodeToUserSafe(person.id, user.userId, { reason: 'personal space owner' })
   }
 
   // 4. Seed a welcome note in the personal community's brain (its shared brain —

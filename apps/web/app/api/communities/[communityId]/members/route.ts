@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { loadPersonAliases } from '@/lib/notes/aliases';
+import { ensureMemberNode } from '@/lib/communities/memberNode';
 
 /**
  * GET: List all members of a community, each with the aliases they hold
@@ -101,6 +102,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
   await prisma.community.update({
     where: { id: communityId },
     data: { memberCount: { increment: 1 } },
+  });
+
+  // The new member's connected person node in this directory (best-effort).
+  await ensureMemberNode(communityId, user.id, {
+    id: session.userId,
+    name: session.name,
+    email: session.email ?? null,
   });
 
   return NextResponse.json({

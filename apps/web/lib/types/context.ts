@@ -36,6 +36,9 @@ export interface NBNode {
   metadata?: Record<string, unknown>;
   alias?: string | null;
   community_id?: string | null;
+  /** The member this node is connected to (Node.identityId → Identity.userId).
+   *  Absent = a plain context: no Profile tab, freely renameable. */
+  connected_user_id?: string | null;
   createdAt?: string;
   // Force context will add these during simulation
   x?: number;

@@ -86,7 +86,15 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     ));
   }, [nodeId]);
 
-  const isOwner = !!(session?.user?.nodeId && session.user.nodeId === nodeId);
+  // Ownership follows the member connection (profile.userId resolves through
+  // Node.identityId → Identity.userId), not node-id equality — a member's node
+  // in a space they created has a name-derived id that never matches their
+  // session nodeId. The nodeId check stays as a fallback for profiles cached
+  // before `userId` was returned here.
+  const isOwner = !!(
+    (session?.user?.id && profile?.userId && profile.userId === session.user.id) ||
+    (session?.user?.nodeId && session.user.nodeId === nodeId)
+  );
 
   const shareProfile = () => {
     navigator.clipboard?.writeText(window.location.href)

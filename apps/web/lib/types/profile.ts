@@ -15,6 +15,9 @@ export interface FullProfile {
   tags: string[];
   metadata?: Record<string, unknown> | null;
   userId?: string | null;
+  /** True when this profile id resolves to a registered member (see
+   *  /api/profile — connection first, legacy Person-id second). */
+  connected?: boolean;
   createdAt: string;
   updatedAt: string;
 }

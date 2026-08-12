@@ -4,6 +4,7 @@ import React, { Suspense, useCallback, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import NodeGrid from '@/features/directory/components/NodeGrid';
 import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
+import { EmptyState } from '@/components/ui';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -37,7 +38,8 @@ export default function DashboardPage() {
 
 function DirectoryPane() {
   const router = useRouter();
-  const { currentCommunity } = useCommunity();
+  const { currentCommunity, loading: communityLoading } = useCommunity();
+  const noSpace = !communityLoading && !currentCommunity;
   const communityId = currentCommunity?.id ?? null;
   const communityName = currentCommunity?.name ?? '';
   const { releaseDockNow } = useContextPanel();
@@ -95,7 +97,7 @@ function DirectoryPane() {
     [releaseDockNow, openContext],
   );
   usePaneChrome({
-    tabs: DIRECTORY_TABS,
+    tabs: noSpace ? null : DIRECTORY_TABS,
     activeId: 'grid',
     onSelect: handleSelect,
     attachedOpen: false,
@@ -105,6 +107,21 @@ function DirectoryPane() {
 
   const browse = useDirectoryBrowse();
   const { community, loading, error, filteredItems, handleItemClick } = browse;
+
+  // No space selected (zero memberships): the sidebar rail is already empty,
+  // so the directory chrome — tab bar, toolbar, grid — hides too, leaving only
+  // the shell navbar and a pointer to Discover.
+  if (noSpace) {
+    return (
+      <div className="relative w-full flex items-center justify-center" style={{ minHeight: 'calc(100dvh - 56px)' }}>
+        <EmptyState
+          title="No spaces yet"
+          description="You haven't joined any spaces yet. Discover and join spaces to get started."
+          action={{ label: 'Discover Spaces', href: '/discover' }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>

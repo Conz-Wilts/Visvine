@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { removeMemberAccess } from '@/lib/notes/access';
+import { ensureMemberNode } from '@/lib/communities/memberNode';
 import { assertMembersCanLeave } from '@/lib/notes/aliases';
 
 /**
@@ -47,6 +48,12 @@ export async function PUT(
     await prisma.community.update({
       where: { id: communityId },
       data: { memberCount: { increment: 1 } },
+    });
+    // An approved member belongs in the directory: connected person node.
+    await ensureMemberNode(communityId, userId, {
+      id: session.userId,
+      name: session.name,
+      email: session.email ?? null,
     });
   }
 

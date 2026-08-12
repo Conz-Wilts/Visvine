@@ -101,11 +101,19 @@ interface ContextLinksPanelProps {
    * Returns null for a plain note, which has no node behind it.
    */
   aliasOfPath: (path: string) => string | null;
+  /**
+   * Why this note and the other end are linked, per the link-reason feature
+   * (metadata.context on the Link row): an AI phrase and/or the prose excerpt
+   * around the mention. Optional — only the hosts with the graph payload in
+   * hand (ConnectionsRail) wire it; absent, rows render as before. Only an
+   * entity↔entity pair has a Link row, so plain-note rows return null.
+   */
+  reasonFor?: (otherPath: string) => { reason?: string | null; excerpt?: string | null } | null;
   onSelectPath: (path: string) => void;
 }
 
 export default function ContextLinksPanel({
-  item, items, titleFor, keep, aliasOfPath, onSelectPath,
+  item, items, titleFor, keep, aliasOfPath, reasonFor, onSelectPath,
 }: ContextLinksPanelProps) {
   const { currentCommunity } = useCommunity();
   const nodeTypes = currentCommunity?.nodeTypes;
@@ -285,12 +293,25 @@ export default function ContextLinksPanel({
                   >
                     {group.connections.map((connection) => {
                       const Icon = DIRECTION_ICON[connection.direction];
+                      // The "why" of the link — the AI phrase when one exists,
+                      // else the prose block the mention sits in. One truncated
+                      // muted line under the name; the full excerpt rides the
+                      // row's title so hover shows the source sentence.
+                      const why = connection.path && reasonFor ? reasonFor(connection.path) : null;
+                      const detail = why?.reason || why?.excerpt || null;
                       // Name first, direction last: the arrow is a qualifier on
                       // the row, and leading with it turned the column into a
                       // wall of arrows you had to read past to reach a name.
                       const body = (
                         <>
-                          <span className="min-w-0 flex-1 truncate">{connection.title}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{connection.title}</span>
+                            {detail && (
+                              <span className="block truncate text-xs text-text-muted">
+                                {detail}
+                              </span>
+                            )}
+                          </span>
                           <Icon
                             className="h-3 w-3 shrink-0 text-text-muted opacity-50 transition-opacity group-hover/row:opacity-100"
                             aria-label={DIRECTION_TITLE[connection.direction]}
@@ -303,7 +324,7 @@ export default function ContextLinksPanel({
                             <button
                               type="button"
                               onClick={() => onSelectPath(connection.path!)}
-                              title={DIRECTION_TITLE[connection.direction]}
+                              title={why?.excerpt || DIRECTION_TITLE[connection.direction]}
                               // Hover tints in the group's own colour rather than
                               // the brand green, so the row never claims to be a
                               // type it isn't. Colours are runtime config, so the

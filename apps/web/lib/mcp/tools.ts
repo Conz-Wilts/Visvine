@@ -50,6 +50,7 @@ import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permis
 import type { WriteResult } from '@/lib/notes/shared/brainTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
 import { entityNotePath } from '@/lib/notes/entities'
+import { firstExcerpt, readLinkContextMeta } from '@/lib/notes/context/linkReason'
 import { isStructuralNodeType, canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
@@ -535,7 +536,7 @@ export function registerTools(server: McpServer): void {
             communityId: args.community_id,
             OR: [{ sourceId: row.id }, { targetId: row.id }],
           },
-          select: { sourceId: true, targetId: true, relationship: true, origin: true, originRef: true },
+          select: { sourceId: true, targetId: true, relationship: true, origin: true, originRef: true, metadata: true },
         })
         const otherIds = [...new Set(linkRows.map((l) => (l.sourceId === row!.id ? l.targetId : l.sourceId)))]
         const others = new Map(
@@ -562,6 +563,9 @@ export function registerTools(server: McpServer): void {
           links: linkRows.map((l) => {
             const otherId = l.sourceId === row!.id ? l.targetId : l.sourceId
             const other = others.get(otherId)
+            // The link-reason payload written by the note-save sync: the prose
+            // around the mention, plus the AI phrase when one has been generated.
+            const context = readLinkContextMeta(l.metadata)
             return {
               relationship: l.relationship,
               other_node_id: otherId,
@@ -572,6 +576,8 @@ export function registerTools(server: McpServer): void {
               // owned by the app. 'manual' came from the admin API.
               origin: l.origin,
               origin_ref: l.originRef,
+              reason: context?.reason ?? null,
+              excerpt: firstExcerpt(context),
             }
           }),
           mentioned_by: mentionedBy,

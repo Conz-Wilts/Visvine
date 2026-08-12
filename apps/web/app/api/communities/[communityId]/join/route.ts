@@ -6,6 +6,7 @@ import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { removeMemberAccess } from '@/lib/notes/access';
 import { aliasesForType, type CommunityAlias } from '@/lib/types';
+import { ensureMemberNode } from '@/lib/communities/memberNode';
 
 /**
  * POST: Current user joins a community (self-service)
@@ -67,28 +68,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
       select: { id: true, status: true },
     });
 
-    // Sync the user's public profile to their person node in this community
-    const person = await prisma.person.findUnique({
-      where: { userId: session.userId },
-      select: {
-        id: true,
-        user: { select: { publicMeta: true } },
-      },
+    // The joiner's connected person node in this community's directory. This
+    // replaces the old `node.updateMany({ id: person.id, communityId })`, which
+    // silently matched nothing — a member's personal-space node never lives in
+    // the community being joined.
+    const nodeId = await ensureMemberNode(communityId, session.userId, {
+      id: session.userId,
+      name: session.name,
+      email: session.email ?? null,
     });
-    if (person) {
-      const pub = (person.user?.publicMeta ?? {}) as Record<string, unknown>;
-      const nodeUpdate: Record<string, unknown> = {};
-      if (typeof pub.name === 'string' && pub.name) nodeUpdate.name = pub.name;
-      if (typeof pub.headline === 'string') nodeUpdate.subtitle = pub.headline;
-      if (typeof pub.location === 'string') nodeUpdate.location = pub.location;
-      if (typeof pub.avatar_url === 'string') nodeUpdate.imageUrl = pub.avatar_url;
-      if (resolvedAlias) nodeUpdate.alias = resolvedAlias;
-      if (Object.keys(nodeUpdate).length > 0) {
-        await prisma.node.updateMany({
-          where: { id: person.id, communityId },
-          data: nodeUpdate,
-        });
-      }
+    if (nodeId && resolvedAlias) {
+      await prisma.node.update({ where: { id: nodeId }, data: { alias: resolvedAlias } });
     }
 
     // Bust the context cache so the node appears immediately

@@ -61,6 +61,20 @@ export function primeNodeProfile(nodeId: string, node: NBNode): void {
   });
 }
 
+/**
+ * Fold an already-persisted field change (e.g. a rename saved from the context
+ * header) into the cached profile, so the next mount paints the new value
+ * instead of the 60s-stale one. No-op when the node was never fetched.
+ */
+export function patchCachedNodeProfile(nodeId: string, patch: Partial<NBNode>): void {
+  const cached = nodeProfileCache.get(nodeId);
+  if (!cached) return;
+  nodeProfileCache.set(nodeId, {
+    data: { ...cached.data, node: { ...cached.data.node, ...patch } },
+    timestamp: Date.now(),
+  });
+}
+
 export function useNodeProfile(nodeId: string | null) {
   const [data, setData] = useState<NodeProfileData | null>(() => {
     if (!nodeId) return null;

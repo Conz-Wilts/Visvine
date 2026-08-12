@@ -12,13 +12,21 @@
 // Called best-effort from the note store (lib/notes/store.ts) — a sync failure
 // must never fail the save itself.
 
+import { createHash } from 'crypto'
 import { revalidateTag } from 'next/cache'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { upsertLink } from '@/lib/notes/context/links'
 import { pairKeyFor } from '@/lib/notes/context/relationships'
 import { communityNodeId, removeEntityNode, syncEntityNode } from '@/lib/notes/context/entityNodes'
-import { parseFrontmatter } from './shared/markdown'
+import {
+  mergeContextMeta,
+  nextContextMeta,
+  readLinkContextMeta,
+} from '@/lib/notes/context/linkReason'
+import { scheduleLinkReasons } from '@/lib/notes/linkReasons'
+import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
+import { excerptsForTargets } from './shared/references'
 import { isIndexPath } from './shared/indexNote'
 import { entityKindOfPath, entityMentionPaths, entityNotePath } from './entities'
 
@@ -142,6 +150,15 @@ function readSharedNote(communityId: string, path: string) {
   })
 }
 
+function sha256(s: string): string {
+  return createHash('sha256').update(s).digest('hex')
+}
+
+/** An excerpt entry with its hash stamped, or null for empty text. */
+function excerptEntry(text: string | null | undefined) {
+  return text ? { text, hash: sha256(text) } : null
+}
+
 // Sync one entity note's context links to its current mention set. `content`
 // null means the note is gone (trashed / renamed away) — desired set is empty.
 // Returns true when any link row changed.
@@ -152,13 +169,19 @@ async function syncOne(
   maps: EntityMaps,
 ): Promise<boolean> {
   const selfId = maps.idByPath.get(path) ?? null
-  const desiredIds =
+  const desired =
     content !== null && selfId
       ? entityMentionPaths(path, content)
-          .map((p) => maps.idByPath.get(p))
-          .filter((id): id is string => Boolean(id) && id !== selfId)
+          .map((p) => ({ targetPath: p, id: maps.idByPath.get(p) }))
+          .filter(
+            (d): d is { targetPath: string; id: string } => Boolean(d.id) && d.id !== selfId,
+          )
       : []
-  const desiredPairs = new Set(selfId ? desiredIds.map((id) => pairKeyFor(selfId, id)) : [])
+  const desiredPairs = new Set(selfId ? desired.map((d) => pairKeyFor(selfId, d.id)) : [])
+  // The prose block around each mention — the deterministic "why linked" tier,
+  // stored on the row under metadata.context (see lib/notes/context/linkReason.ts).
+  const excerptByTarget =
+    content !== null ? excerptsForTargets(path, splitFrontmatter(content).body) : new Map<string, string>()
 
   let changed = false
 
@@ -175,16 +198,57 @@ async function syncOne(
     const other = otherPath ? await readSharedNote(communityId, otherPath) : null
     const mentionedBack =
       other !== null && otherPath !== null && entityMentionPaths(otherPath, other.content).includes(path)
-    if (mentionedBack && otherPath) {
-      await prisma.link.update({ where: { id: row.id }, data: { originRef: otherPath } })
+    if (mentionedBack && otherPath && other) {
+      // Ownership moves to the counterpart, so the edge's excerpt does too:
+      // this note's key is dropped and the counterpart's block around its
+      // mention of `path` takes over as the "why".
+      const keepKey = (key: string) => maps.idByPath.has(key)
+      const otherExcerpt = excerptEntry(
+        excerptsForTargets(otherPath, splitFrontmatter(other.content).body).get(path),
+      )
+      const prior = readLinkContextMeta(row.metadata)
+      const dropped = nextContextMeta(prior, path, null, keepKey) ?? prior
+      const repointed = nextContextMeta(dropped, otherPath, otherExcerpt, keepKey) ?? dropped
+      await prisma.link.update({
+        where: { id: row.id },
+        data: {
+          originRef: otherPath,
+          ...(repointed ? { metadata: mergeContextMeta(row.metadata, repointed) as object } : {}),
+        },
+      })
     } else {
       await prisma.link.delete({ where: { id: row.id } })
     }
     changed = true
   }
 
-  for (const id of desiredIds) {
+  // Existing rows for the desired pairs, so each upsert can merge its excerpt
+  // into the row's metadata instead of blindly replacing it (mutual mentions
+  // share one row — each side owns only its own excerpt key).
+  const existingByPair = selfId
+    ? new Map(
+        (
+          await prisma.link.findMany({
+            where: {
+              communityId,
+              relationship: CONTEXT_RELATIONSHIP,
+              pairKey: { in: [...desiredPairs] },
+            },
+            select: { pairKey: true, metadata: true },
+          })
+        ).map((row) => [row.pairKey, row.metadata]),
+      )
+    : new Map<string, unknown>()
+
+  for (const { targetPath, id } of desired) {
     if (!selfId) break
+    const rowMetadata = existingByPair.get(pairKeyFor(selfId, id))
+    const context = nextContextMeta(
+      readLinkContextMeta(rowMetadata),
+      path,
+      excerptEntry(excerptByTarget.get(targetPath)),
+      (key) => maps.idByPath.has(key),
+    )
     await upsertLink({
       communityId,
       sourceId: selfId,
@@ -192,6 +256,7 @@ async function syncOne(
       relationship: CONTEXT_RELATIONSHIP,
       origin: CONTEXT_ORIGIN,
       originRef: path,
+      ...(context ? { metadata: mergeContextMeta(rowMetadata, context) } : {}),
       revalidate: false,
     })
     changed = true
@@ -223,6 +288,8 @@ export async function syncContextLinks(
     const maps = await loadEntityMaps(brain.communityId)
     const changed = await syncOne(brain.communityId, path, content, maps)
     if (changed || nodeChanged) bustContextCache()
+    // AI tier: turn fresh excerpts into reason phrases, off the request path.
+    if (changed) scheduleLinkReasons(brain.communityId)
   } catch (err) {
     logger.error('notes.contextLinks.sync.failed', { err, path, communityId: brain.communityId })
   }
@@ -259,7 +326,10 @@ export async function syncContextLinksBulk(
     for (const [path, content] of added) {
       changed = (await syncOne(brain.communityId, path, content, maps)) || changed
     }
-    if (changed) bustContextCache()
+    if (changed) {
+      bustContextCache()
+      scheduleLinkReasons(brain.communityId)
+    }
   } catch (err) {
     logger.error('notes.contextLinks.bulkSync.failed', { err, communityId: brain.communityId })
   }

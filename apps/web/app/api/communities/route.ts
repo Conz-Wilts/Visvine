@@ -8,6 +8,7 @@ import { OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/communities/publicName';
+import { ensureMemberNode } from '@/lib/communities/memberNode';
 import { communityNodeId, syncEntityNodeSafe } from '@/lib/notes/context/entityNodes';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
@@ -120,26 +121,9 @@ export async function POST(request: NextRequest) {
       location: location || null,
       actor,
     });
-    // The Person row (created at the auth callback, edited from the profile
-    // editor) is the source of truth for the creator's profile fields. Its own
-    // node (id = Person.id) lives in their personal space, so this community
-    // gets a per-community person node, keyed to the user via metadata.userId.
-    const person = await prisma.person.findUnique({
-      where: { userId: session.userId },
-      select: { name: true, subtitle: true, location: true, imageUrl: true, tags: true },
-    });
-    await syncEntityNodeSafe({
-      communityId: id,
-      type: 'person',
-      name: person?.name?.trim() || session.name,
-      recordId: session.userId,
-      subtitle: person?.subtitle ?? null,
-      location: person?.location ?? null,
-      imageUrl: person?.imageUrl ?? null,
-      tags: person?.tags ?? [],
-      skipNote: true,
-      actor,
-    });
+    // The creator's person node, connected to their account through the
+    // identity bridge — the same path every other member-add flow uses.
+    await ensureMemberNode(id, session.userId, actor);
 
     // Seed the brain's root index — the community's home page, which the
     // Directory's Context tab routes to. Best-effort for the same reason as

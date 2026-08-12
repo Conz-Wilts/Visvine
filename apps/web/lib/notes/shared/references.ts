@@ -85,6 +85,27 @@ function makeExcerpt(block: string): string {
   )
 }
 
+// Excerpts longer than this stop carrying signal for "why linked" and bloat the
+// Link row, so excerptsForTargets truncates (computeReferences keeps full blocks).
+const MAX_TARGET_EXCERPT = 500
+
+/**
+ * The excerpt around the FIRST link to each target this note's body contains:
+ * resolved target path -> stripped prose block. Feeds the context-link sync
+ * (lib/notes/entityLinks.ts), which stores the block on the Link row as the
+ * deterministic "why linked" tier. Pure, like everything else in this module.
+ */
+export function excerptsForTargets(notePath: string, body: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const match of body.matchAll(LINK_RE)) {
+    const resolved = resolveOkfLink(match[2], notePath)
+    if (!resolved || out.has(resolved)) continue
+    const excerpt = makeExcerpt(blockAround(body, match.index ?? 0))
+    if (excerpt) out.set(resolved, excerpt.slice(0, MAX_TARGET_EXCERPT))
+  }
+  return out
+}
+
 // Replace every markdown-link span with same-length spaces, so a title search
 // won't match inside a link's text/href and block offsets stay aligned.
 function maskLinks(body: string): string {
