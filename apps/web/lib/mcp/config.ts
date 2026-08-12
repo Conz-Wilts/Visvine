@@ -5,10 +5,42 @@
  * NEXT_PUBLIC_APP_URL (the public origin); MCP_RESOURCE_URL is only needed when
  * the MCP endpoint is reached at some other origin than the app's own.
  */
+import type { Implementation } from '@modelcontextprotocol/server'
 
 /** Public origin == OAuth 2.0 Authorization Server issuer (RFC 8414). */
 export function oauthIssuer(): string {
   return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
+}
+
+/**
+ * The identity clients show for this server: name, title, site, and logo.
+ *
+ * The logo is the same PNG the web app uses as its favicon, served from
+ * `public/` rather than from Next's file-based `app/icon.png` so the URL stays
+ * literal and unhashed — an MCP client fetches it cross-origin, unauthenticated,
+ * long after the build that produced it.
+ *
+ * `icons` reached the SDK's `Implementation` before `mcp-handler` widened its
+ * own `serverInfo` option type, which still says `{ name, version }`. Returning
+ * a typed value (rather than an object literal at the call site) is what lets
+ * the extra fields through TypeScript's excess-property check; at runtime
+ * `createMcpHandler` passes the whole object to `new McpServer(...)` untouched.
+ */
+export function mcpServerInfo(): Implementation {
+  const origin = oauthIssuer()
+  return {
+    name: 'visvine',
+    title: 'Visvine',
+    version: '1.0.0',
+    websiteUrl: origin,
+    icons: [
+      {
+        src: `${origin}/images/brand-icon.png`,
+        mimeType: 'image/png',
+        sizes: ['2000x2000'],
+      },
+    ],
+  }
 }
 
 /**

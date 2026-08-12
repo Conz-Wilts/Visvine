@@ -7,6 +7,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { SignJWT } from 'jose'
 import {
   MCP_SCOPES,
@@ -18,7 +19,12 @@ import {
   serializeScopes,
 } from '@/lib/mcp/scopes'
 import { mintAccessToken, verifyAccessToken } from '@/lib/mcp/tokens'
-import { mcpResourceUrl, canonicalizeResource, isCanonicalResource } from '@/lib/mcp/config'
+import {
+  mcpResourceUrl,
+  mcpServerInfo,
+  canonicalizeResource,
+  isCanonicalResource,
+} from '@/lib/mcp/config'
 import {
   isClientIdUrl,
   validateRedirectUri,
@@ -278,6 +284,21 @@ test('the discovery documents advertise the 2026-07-28 capabilities', () => {
   assert.equal(pr.resource, mcpResourceUrl())
   assert.deepEqual(pr.authorization_servers, [as.issuer])
   assert.deepEqual(pr.scopes_supported, [...MCP_SCOPES])
+})
+
+test('the server identity carries an absolute logo URL, not a build-hashed one', () => {
+  const info = mcpServerInfo()
+  assert.equal(info.name, 'visvine')
+  assert.equal(info.websiteUrl, 'http://localhost:3000')
+
+  const [icon, ...rest] = info.icons ?? []
+  assert.deepEqual(rest, [])
+  // A client fetches this cross-origin and unauthenticated, so it must be an
+  // absolute URL to a literal file under public/ — never Next's hashed
+  // app/icon.png route, whose name changes with the build.
+  assert.equal(icon?.src, 'http://localhost:3000/images/brand-icon.png')
+  assert.equal(icon?.mimeType, 'image/png')
+  assert.ok(existsSync(new URL('../public/images/brand-icon.png', import.meta.url)))
 })
 
 test('an access token round-trips with its identity and scopes', async () => {
