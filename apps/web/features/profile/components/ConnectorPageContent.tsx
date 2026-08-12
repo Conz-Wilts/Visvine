@@ -9,7 +9,7 @@
  * the body and any key this page doesn't know about alone. The server re-parses
  * the merged frontmatter and rejects a save the runtime would refuse.
  *
- * One flat page (docs/connectors-v2.md), not a grid of cards: a status header,
+ * One flat page (AGENTS.md#connectors), not a grid of cards: a status header,
  * the perimeter (hosts and allow rules — what the sandbox enforces), the
  * environment, the console — the exact path an agent's run_connector takes, so
  * a green run here is a green run for the agent by construction — and the call

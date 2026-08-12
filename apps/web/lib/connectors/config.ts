@@ -2,7 +2,7 @@
  * Connector configuration — the pure half of the connectors feature.
  *
  * A connector is a note at `connectors/<name>.md` whose frontmatter declares a
- * perimeter (docs/connectors-v2.md) and whose body is agent-facing docs. This
+ * perimeter (AGENTS.md#connectors) and whose body is agent-facing docs. This
  * module hosts the security-critical string logic — the allowlist grammar,
  * `{{secret:NAME}}` reference handling, output redaction, perimeter parsing —
  * plus the legacy v1 parser the back-compat shim and migration script feed on.
@@ -484,7 +484,7 @@ export function allowPrivateHosts(): boolean {
   return true
 }
 
-// Connectors v2 — the perimeter (docs/connectors-v2.md)
+// Connectors v2 — the perimeter (AGENTS.md#connectors)
 //
 // A v2 connector's frontmatter no longer picks an executor; it declares a
 // perimeter the isolate runtime enforces: hosts the run may reach, env vars it
