@@ -5,6 +5,7 @@ import { useTheme, COLOR_THEMES, ColorTheme } from '@/features/shared/contexts/T
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import LoadingText from '@/components/ui/LoadingText';
 import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePanel';
+import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 
 /**
  * Personal settings. Same shell as the Community Console — a pane-top tab bar
@@ -15,11 +16,13 @@ import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePane
 
 // ─── Sections ─────────────────────────────────────────────────────────────────
 
-// Only the tabs that do something. Account / Notifications / Privacy were
-// coming-soon placeholders and are gone until there's something behind them.
+// Only the tabs that do something. Notifications / Privacy were coming-soon
+// placeholders and are gone until there's something behind them; Account is back
+// because deleting your account is something.
 const SECTIONS: ConsoleSection[] = [
   { id: 'appearance', label: 'Appearance', width: 'form' },
   { id: 'mcp', label: 'MCP', width: 'form' },
+  { id: 'account', label: 'Account', width: 'form' },
 ];
 
 // ─── Color swatch ─────────────────────────────────────────────────────────────
@@ -82,6 +85,12 @@ function renderSection(id: string) {
       return <AppearanceSection />;
     case 'mcp':
       return <ConnectClaudePanel />;
+    case 'account':
+      return (
+        <div className="space-y-8">
+          <DeleteAccountPanel />
+        </div>
+      );
     default:
       return null;
   }

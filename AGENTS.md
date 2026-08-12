@@ -62,6 +62,12 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - Brain access is grant-based (`lib/notes/access.ts` for DB,
   `lib/notes/shared/authz.ts` for the pure checks). Grants apply to **shared**
   brains only; personal spaces bypass the model (`lib/notes/principal.ts`).
+- Account deletion (`lib/account/deleteAccount.ts`, `DELETE /api/account`) is the
+  one place a person erases themselves. Cascades cover only half of it — the
+  personal-brain tables key `owner_key`, aliases/grants/OAuth tokens key a bare
+  `user_id`, and `Person.userId` is SET NULL — so anything new keyed that way must
+  be added there. `tests/delete-account.test.ts` reads the schema and fails if it
+  isn't.
 - Dev auth bypass (`/dev/login`, `/api/dev/*`) 404s unless `NODE_ENV=development`
   **and** `ENABLE_DEV_AUTH=true`. Production builds cannot open it via env alone.
 
