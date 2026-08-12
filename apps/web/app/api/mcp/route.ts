@@ -11,7 +11,7 @@ import { createMcpHandler, withMcpAuth } from 'mcp-handler'
 import { registerTools } from '@/lib/mcp/tools'
 import { verifyMcpBearer } from '@/lib/mcp/auth'
 import { withScopeGate, withScopeHint } from '@/lib/mcp/challenge'
-import { mcpResourceUrl } from '@/lib/mcp/config'
+import { mcpResourceUrl, mcpServerInfo } from '@/lib/mcp/config'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -23,7 +23,7 @@ const handler = createMcpHandler(
     registerTools(server)
   },
   {
-    serverInfo: { name: 'visvine', version: '1.0.0' },
+    serverInfo: mcpServerInfo(),
     verboseLogs: process.env.NODE_ENV !== 'production',
   },
 )

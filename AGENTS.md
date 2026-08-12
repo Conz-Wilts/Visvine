@@ -105,6 +105,12 @@ Thirteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
 `lib/mcp/tools.ts`), on `mcp-handler` 2 + the official TS SDK v2. FastMCP was
 evaluated and rejected.
 
+The identity clients render — name, title, website, logo — is
+`lib/mcp/config.ts#mcpServerInfo`. The logo is the favicon PNG, but served from
+`public/images/brand-icon.png` rather than Next's hashed `app/icon.png` route,
+because a client fetches it cross-origin and unauthenticated long after that
+build. Keep the two files identical.
+
 Reads default to the **shared** brain, writes to your **personal** one. Notes
 created in a real space's shared brain are private by default (author gets FULL,
 then the path is restricted); pass `visibility: 'inherit'` to follow the folder.
