@@ -37,7 +37,12 @@ import { LinkedReferences } from './LinkedReferences'
 import { NoteModeToggle, type NoteMode } from './NoteModeToggle'
 import { parseEntityHref } from '@/lib/notes/entities'
 import { splitFrontmatter, resolveOkfLink, parseFrontmatter } from '@/lib/notes/shared/markdown'
-import { isIndexPath } from '@/lib/notes/shared/indexNote'
+import {
+  isIndexPath,
+  parseChildrenBlock,
+  reattachChildrenBlock,
+  splitChildrenBlock,
+} from '@/lib/notes/shared/indexNote'
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
@@ -102,6 +107,13 @@ interface NoteEditorProps {
 type MarkdownStorage = { markdown: { getMarkdown: () => string } }
 function getMarkdown(ed: Editor): string {
   return (ed.storage as unknown as MarkdownStorage).markdown.getMarkdown()
+}
+
+// The note as it goes back to the store: the two machine-owned parts the editor
+// never shows (frontmatter, an index's child block) wrapped back around the body
+// somebody actually edited.
+function composeContent(prefix: string, body: string, childrenBlock: string | null): string {
+  return prefix + reattachChildrenBlock(body, childrenBlock)
 }
 
 // The document range of the link covering `pos`, or null when `pos` isn't inside
@@ -202,6 +214,11 @@ export function NoteEditor({
   }
 
   const prefixRef = useRef('')
+  // An index note's machine-maintained child block, held out of the editor the
+  // same way the frontmatter prefix is (see splitChildrenBlock) and put back on
+  // every save. Null for the notes that aren't folders — almost all of them.
+  const childrenBlockRef = useRef<string | null>(null)
+  const [children, setChildren] = useState<{ path: string; title: string }[]>([])
   const rawRef = useRef<HTMLTextAreaElement>(null)
   const pathRef = useRef(path)
   const originRef = useRef<string>('edit')
@@ -337,7 +354,7 @@ export function NoteEditor({
     },
     onUpdate: ({ editor: ed }) => {
       if (!canEdit || loadingRef.current) return
-      queueSave(prefixRef.current + getMarkdown(ed))
+      queueSave(composeContent(prefixRef.current, getMarkdown(ed), childrenBlockRef.current))
     },
   })
 
@@ -350,8 +367,10 @@ export function NoteEditor({
     pathRef.current = path
     const { frontmatter, body } = splitFrontmatter(initialContent)
     prefixRef.current = buildPrefix(frontmatter)
-    const loadedBody = stripLeadingTitleHeading(body, titleFromContent(initialContent, path))
-    editor.commands.setContent(loadedBody, { emitUpdate: false })
+    const split = splitChildrenBlock(stripLeadingTitleHeading(body, titleFromContent(initialContent, path)))
+    childrenBlockRef.current = split.block
+    setChildren(parseChildrenBlock(split.block))
+    editor.commands.setContent(split.body, { emitUpdate: false })
     setRawContent(initialContent)
     setStarred(Boolean(parseFrontmatter(initialContent).starred))
     pendingRef.current = null
@@ -373,13 +392,18 @@ export function NoteEditor({
   useEffect(() => {
     if (!editor || mode === prevModeRef.current) return
     if (mode === 'raw') {
-      setRawContent(prefixRef.current + getMarkdown(editor))
+      // Raw IS the source, child block and all — it's the one surface that shows
+      // the markers, and the one place they can be hand-edited.
+      setRawContent(composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current))
     } else {
       loadingRef.current = true
       const { frontmatter, body } = splitFrontmatter(rawContent)
       prefixRef.current = buildPrefix(frontmatter)
       setStarred(Boolean(parseFrontmatter(rawContent).starred))
-      editor.commands.setContent(body, { emitUpdate: false })
+      const split = splitChildrenBlock(body)
+      childrenBlockRef.current = split.block
+      setChildren(parseChildrenBlock(split.block))
+      editor.commands.setContent(split.body, { emitUpdate: false })
       if (canEdit) queueSave(rawContent)
       setTimeout(() => {
         loadingRef.current = false
@@ -444,7 +468,9 @@ export function NoteEditor({
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
-        if (mode === 'wysiwyg') pendingRef.current = prefixRef.current + getMarkdown(editor)
+        if (mode === 'wysiwyg') {
+          pendingRef.current = composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current)
+        }
         flush()
       }
     }
@@ -486,7 +512,7 @@ export function NoteEditor({
     if (next) lines.push('starred: true')
     prefixRef.current = lines.length ? buildPrefix(lines.join('\n')) : ''
     setStarred(next)
-    pendingRef.current = prefixRef.current + getMarkdown(editor)
+    pendingRef.current = composeContent(prefixRef.current, getMarkdown(editor), childrenBlockRef.current)
     flush()
   }, [editor, canEdit, starred, flush, path])
 
@@ -500,9 +526,11 @@ export function NoteEditor({
     setError(null)
     setRefactoring(true)
     try {
-      const result = await notesApi.refactor('note', getMarkdown(editor))
+      // `{ result }`, not a bare string — concatenating the envelope used to put
+      // "[object Object]" through the editor and into the save.
+      const { result } = await notesApi.refactor('note', getMarkdown(editor))
       editor.commands.setContent(result)
-      pendingRef.current = prefixRef.current + result
+      pendingRef.current = composeContent(prefixRef.current, result, childrenBlockRef.current)
       originRef.current = 'ai-refactor'
       flush()
     } catch (err) {
@@ -623,7 +651,27 @@ export function NoteEditor({
             (Embedded/profile tab: the profile above IS the identity.) */}
         {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
         {mode === 'wysiwyg' ? (
-          <EditorContent editor={editor} />
+          <>
+            <EditorContent editor={editor} />
+            {/* An index note IS a folder, and its child list is maintained by the
+                store — so it renders below the body as a read-only list rather
+                than as editable text carrying its own marker comments. Empty
+                folders (a just-created space) show nothing at all. */}
+            {children.length > 0 && (
+              <section className="notes-ref-group mt-8">
+                <h3 className="notes-ref-head">In this folder</h3>
+                <ul className="flex flex-col gap-1">
+                  {children.map((child) => (
+                    <li key={child.path}>
+                      <button type="button" className="notes-ref-from" onClick={() => onOpenNote(child.path)}>
+                        {child.title}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </>
         ) : (
           <textarea
             ref={rawRef}

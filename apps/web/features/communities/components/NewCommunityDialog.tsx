@@ -22,6 +22,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Modal, Input, Button } from '@/components/ui';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { ensureRootIndexNote } from '@/features/notes/lib/rootIndex';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
 interface CreateResponse {
@@ -52,6 +53,14 @@ export default function NewCommunityDialog({ onClose }: { onClose: () => void })
       });
       // The switcher has to see it before we switch into it.
       await refreshCommunity();
+      // …and the space's context has to exist before you can be standing in it.
+      // The server seeds the root index best-effort, so the space can land
+      // without one; opening Context then wrote it on the spot, which is why a
+      // brand-new space could show a "request access" card or an empty note for
+      // a beat. Waiting here — inside "Creating…", where a wait reads as the
+      // space being built — means the Context tab has somewhere to go from the
+      // first click.
+      await ensureRootIndexNote(community.id, community.name);
       setCurrentCommunity(community.id);
       onClose();
       router.push('/directory');

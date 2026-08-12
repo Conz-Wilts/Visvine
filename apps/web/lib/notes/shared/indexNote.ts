@@ -141,6 +141,52 @@ export function applyChildrenBlock(content: string, children: IndexChild[]): str
   return `${content.trimEnd()}\n\n${block}\n`
 }
 
+/**
+ * Take the managed block out of a body so an editor never shows it.
+ *
+ * The markers are HTML comments — invisible in *rendered* markdown, but the note
+ * editor is a WYSIWYG surface with html turned off, so they arrive as literal
+ * text: a fresh index note opens on `<!-- index:children -->` staring back at
+ * the reader. Worse, round-tripping that text through the editor escapes the
+ * markers and the store loses the block for good.
+ *
+ * So the editor splits the block off on load and re-attaches it on save, exactly
+ * as it already does with the frontmatter prefix, and renders the children as a
+ * read-only list instead (see parseChildrenBlock).
+ *
+ * `block` is null when the body has none. Re-attachment is append-at-end
+ * (see reattachChildrenBlock): where the block sits in a body somebody has since
+ * rewritten is not knowable, and the end is where every writer of one puts it.
+ */
+export function splitChildrenBlock(body: string): { body: string; block: string | null } {
+  const match = body.match(CHILDREN_BLOCK_RE)
+  if (!match) return { body, block: null }
+  return { body: body.replace(CHILDREN_BLOCK_RE, '').trimEnd(), block: match[0] }
+}
+
+/** Put a block taken by splitChildrenBlock back on the end of an edited body. */
+export function reattachChildrenBlock(body: string, block: string | null): string {
+  if (!block) return body
+  const curated = body.trimEnd()
+  return curated ? `${curated}\n\n${block}\n` : `${block}\n`
+}
+
+/**
+ * The children a managed block lists, for surfaces that render the list rather
+ * than the markdown. Parses the exact shape renderChildrenBlock writes and
+ * ignores anything else, so a hand-mangled block degrades to fewer rows instead
+ * of garbage ones.
+ */
+export function parseChildrenBlock(block: string | null): IndexChild[] {
+  if (!block) return []
+  const children: IndexChild[] = []
+  for (const line of block.split('\n')) {
+    const m = line.match(/^-\s+\[([^\]]+)\]\(\/([^)]+)\)\s*$/)
+    if (m) children.push({ title: m[1], path: m[2] })
+  }
+  return children
+}
+
 // The auto-created index stub: folder title + the managed child list. Only ever
 // used for MISSING indexes — an existing (curated) index keeps its body, and
 // only its managed block is refreshed.

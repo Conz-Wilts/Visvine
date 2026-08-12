@@ -9,10 +9,9 @@ import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/Pane
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { cachedFetch, contextKeys, invalidateContextCache, prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
-import { notesApi } from '@/features/notes/lib/notesApi';
+import { prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
+import { ensureRootIndexNote, ROOT_INDEX_PATH } from '@/features/notes/lib/rootIndex';
 import { noteHref } from '@/lib/notes/entities';
-import { newIndexContent } from '@/lib/notes/shared/indexNote';
 import type { CommunityAlias } from '@/lib/types';
 
 const DIRECTORY_TABS: PaneTabItem[] = [
@@ -44,31 +43,15 @@ function DirectoryPane() {
   const communityName = currentCommunity?.name ?? '';
   const { releaseDockNow } = useContextPanel();
 
-  // Context navigates to the brain's root index note. New brains are seeded
-  // with one at create time; an older brain that never got one has it written
-  // here on first open — the note page's missing state is an access-request
-  // card, which is the wrong surface for "this note was never written".
+  // Context navigates to the brain's root index note. New brains are seeded with
+  // one at create time and the create dialog waits for it; an older brain that
+  // never got one has it written here on first open — the note page's missing
+  // state is an access-request card, which is the wrong surface for "this note
+  // was never written". ensureRootIndexNote is the shared version of that.
   const openContext = useCallback(() => {
     if (!communityId) return;
-    prefetchNoteContext(communityId, 'index.md');
-    cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId))
-      .then(async ({ notes }) => {
-        if (!notes.some((n) => n.path === 'index.md')) {
-          try {
-            await notesApi.create(communityId, 'index.md', newIndexContent({ title: communityName || 'Home' }));
-            invalidateContextCache(
-              contextKeys.read(communityId, 'index.md'),
-              contextKeys.list(communityId),
-              contextKeys.tree(communityId),
-            );
-          } catch (err) {
-            // "already exists" = someone else seeded it between list and create.
-            if (!(err instanceof Error && /already exists/i.test(err.message))) throw err;
-          }
-        }
-        router.push(noteHref('index.md'));
-      })
-      .catch(() => router.push(noteHref('index.md')));
+    prefetchNoteContext(communityId, ROOT_INDEX_PATH);
+    void ensureRootIndexNote(communityId, communityName).then(() => router.push(noteHref(ROOT_INDEX_PATH)));
   }, [communityId, communityName, router]);
 
   // ?view=context used to open the standalone knowledge browser here; that

@@ -20,6 +20,9 @@ import {
   isIndexPath,
   newIndexContent,
   nextIndexTitle,
+  parseChildrenBlock,
+  reattachChildrenBlock,
+  splitChildrenBlock,
 } from '../lib/notes/shared/indexNote'
 import { parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown'
 
@@ -149,6 +152,50 @@ test('newIndexContent is an Index note with an empty block ready to fill', () =>
   assert.ok(content.includes('# Research'))
   assert.ok(content.includes('Live work.'))
   assert.equal(hasChildrenBlock(content), true)
+})
+
+// The editor's side of the managed block: it is machine-owned text, and the
+// WYSIWYG surface renders HTML comments literally, so the block is split off
+// before the body reaches the editor and put back on the way out.
+test('splitChildrenBlock takes the block out and reattach puts it back', () => {
+  const block = `${CHILDREN_OPEN}\n- [Zoe](/people/zoe.md)\n${CHILDREN_CLOSE}`
+  const body = `Who we back.\n\n${block}\n`
+  const split = splitChildrenBlock(body)
+  assert.equal(split.body, 'Who we back.')
+  assert.equal(split.block, block)
+  assert.equal(hasChildrenBlock(split.body), false)
+  assert.equal(reattachChildrenBlock(split.body, split.block), body)
+})
+
+test('splitChildrenBlock leaves a body that has no block alone', () => {
+  const body = 'Just a note.\n'
+  const split = splitChildrenBlock(body)
+  assert.equal(split.block, null)
+  assert.equal(split.body, body)
+  assert.equal(reattachChildrenBlock(body, null), body)
+})
+
+test('an emptied index body keeps its block, without a leading blank run', () => {
+  const empty = `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}`
+  assert.equal(splitChildrenBlock(`${empty}\n`).body, '')
+  assert.equal(reattachChildrenBlock('', empty), `${empty}\n`)
+})
+
+test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () => {
+  const listed = applyChildrenBlock('---\ntype: Index\n---\n\n', [
+    { path: 'people/zoe.md', title: 'Zoe' },
+    { path: 'people/ann.md', title: 'Ann' },
+  ])
+  assert.deepEqual(parseChildrenBlock(splitChildrenBlock(listed).block), [
+    { path: 'people/ann.md', title: 'Ann' },
+    { path: 'people/zoe.md', title: 'Zoe' },
+  ])
+  assert.deepEqual(parseChildrenBlock(null), [])
+  // A block somebody hand-mangled loses the bad rows, not the good ones.
+  assert.deepEqual(
+    parseChildrenBlock(`${CHILDREN_OPEN}\nloose text\n- [Ann](/people/ann.md)\n${CHILDREN_CLOSE}`),
+    [{ path: 'people/ann.md', title: 'Ann' }],
+  )
 })
 
 // The BRAIN ROOT's index — the community home page the Directory's Context tab
