@@ -52,7 +52,7 @@ model Community {
 
   // --- restored: messaging ---
   channels      Conversation[]
-  channelSpaces ChannelSpace[]
+  channelSections ChannelSection[]
 
   @@index([personalOwnerId])
   @@map("communities")
@@ -666,27 +666,28 @@ model Conversation {
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
   /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
   communityId String?              @map("community_id")
-  /// Optional grouping of CHANNEL conversations into a community "space" section.
-  spaceId     String?              @map("space_id")
+  /// Optional grouping of CHANNEL conversations into a named section.
+  sectionId     String?              @map("section_id")
   createdById String               @map("created_by_id")
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
   members     ConversationMember[]
   community   Community?           @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  space       ChannelSpace?        @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+  section     ChannelSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
 
   @@index([type])
   @@index([updatedAt])
   @@index([communityId, type])
-  @@index([spaceId])
+  @@index([sectionId])
   @@map("conversations")
 }
 
-/// A named section grouping a community's channels in the channel rail
-/// (Circle-style "spaces"). Deleting a space unfiles its channels (spaceId → null).
-model ChannelSpace {
+/// A named section grouping a community's channels in the channel rail. Called
+/// a "space" until the 2026-08 vocabulary rename freed that word for the tenant
+/// itself. Deleting a section unfiles its channels (sectionId → null).
+model ChannelSection {
   id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
   communityId String         @map("community_id")
   name        String
@@ -697,7 +698,7 @@ model ChannelSpace {
   channels    Conversation[]
 
   @@index([communityId, position])
-  @@map("channel_spaces")
+  @@map("channel_sections")
 }
 
 model ConversationMember {

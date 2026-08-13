@@ -11,7 +11,7 @@ import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useMessageHeights } from '@/features/messages/hooks/useMessageHeights';
 import type {
   ChannelDirectoryEntry,
-  ChannelSpaceEntry,
+  ChannelSectionEntry,
   ChannelViewMode,
   ConversationSummary,
   SavedMessageEntry,
@@ -23,7 +23,7 @@ import { mergeMessages } from './MessageRow';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
 import PageTitle from '@/components/ui/PageTitle';
-import ConversationListPanel, { type ChannelSection } from './ConversationListPanel';
+import ConversationListPanel, { type ChannelListGroup } from './ConversationListPanel';
 import ThreadPanel from './ThreadPanel';
 import { useConversations } from './useConversations';
 import { useMessagesRealtime } from './useMessagesRealtime';
@@ -47,7 +47,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
   const { host, setDockRequested, contextOpen, setContextOpen } = useContextPanel();
-  // Channel + space creation lives in the global "Create new" (+) modal, opened
+  // Channel + section creation lives in the global "Create new" (+) modal, opened
   // from anywhere via this context.
   const { open: openCreateModal } = useCreateModal();
 
@@ -86,9 +86,9 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     });
   }, []);
   const [channelDirectory, setChannelDirectory] = useState<ChannelDirectoryEntry[]>([]);
-  const [channelSpaces, setChannelSpaces] = useState<ChannelSpaceEntry[]>([]);
-  // Collapsed rail sections, persisted per browser (keyed by space id, '__none__' = unfiled).
-  const [collapsedSpaces, setCollapsedSpaces] = useState<Record<string, boolean>>({});
+  const [channelSections, setChannelSections] = useState<ChannelSectionEntry[]>([]);
+  // Collapsed rail sections, persisted per browser (keyed by section id, '__none__' = unfiled).
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [joiningChannelId, setJoiningChannelId] = useState<string | null>(null);
   const [showChannelForm, setShowChannelForm] = useState(false);
   // Legacy ?new=channel deep link (older "Create new → Channel" tile routed here):
@@ -106,13 +106,13 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const [channelDescription, setChannelDescription] = useState('');
   const [channelIcon, setChannelIcon] = useState<string | null>(null);
   const [channelViewMode, setChannelViewMode] = useState<ChannelViewMode>('CHAT');
-  const [channelSpaceId, setChannelSpaceId] = useState('');
+  const [channelSectionId, setChannelSectionId] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [creatingChannel, setCreatingChannel] = useState(false);
-  // Inline "new space" form in the channel rail (community admins only).
-  const [showSpaceForm, setShowSpaceForm] = useState(false);
-  const [spaceName, setSpaceName] = useState('');
-  const [creatingSpace, setCreatingSpace] = useState(false);
+  // Inline "new section" form in the channel rail (community admins only).
+  const [showSectionForm, setShowSectionForm] = useState(false);
+  const [sectionName, setSectionName] = useState('');
+  const [creatingSection, setCreatingSection] = useState(false);
   // Channel-header extras: emoji-icon picker + saved-messages dropdown panel.
   const [showHeaderIconPicker, setShowHeaderIconPicker] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<'saved' | null>(null);
@@ -228,7 +228,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       if (!res.ok) return;
       const payload = await res.json();
       setChannelDirectory(payload.channels ?? []);
-      setChannelSpaces(payload.spaces ?? []);
+      setChannelSections(payload.sections ?? []);
     } catch { /* best-effort */ }
   }, [communityId]);
 
@@ -236,12 +236,12 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   useEffect(() => {
     try {
       const raw = localStorage.getItem('visvine.channels.collapsed');
-      if (raw) setCollapsedSpaces(JSON.parse(raw));
+      if (raw) setCollapsedSections(JSON.parse(raw));
     } catch { /* best-effort */ }
   }, []);
 
-  const toggleSpaceCollapsed = useCallback((key: string) => {
-    setCollapsedSpaces((prev) => {
+  const toggleSectionCollapsed = useCallback((key: string) => {
+    setCollapsedSections((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       try { localStorage.setItem('visvine.channels.collapsed', JSON.stringify(next)); } catch { /* best-effort */ }
       return next;
@@ -521,14 +521,14 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
         name: channelName.trim(),
         description: channelDescription.trim() || undefined,
         icon: channelIcon ?? undefined,
-        spaceId: channelSpaceId || undefined,
+        sectionId: channelSectionId || undefined,
         viewMode: channelViewMode,
       });
       setChannelName('');
       setChannelDescription('');
       setChannelIcon(null);
       setChannelViewMode('CHAT');
-      setChannelSpaceId('');
+      setChannelSectionId('');
       setShowChannelForm(false);
       await fetchConversations(conversationSearch);
       await fetchChannels();
@@ -540,27 +540,27 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     }
   };
 
-  const handleCreateSpace = async (e: FormEvent) => {
+  const handleCreateSection = async (e: FormEvent) => {
     e.preventDefault();
-    if (!communityId || !spaceName.trim() || creatingSpace) return;
+    if (!communityId || !sectionName.trim() || creatingSection) return;
     try {
-      setCreatingSpace(true);
-      await fetchJsonBody('/api/messages/spaces', 'POST', { communityId, name: spaceName.trim() });
-      setSpaceName('');
-      setShowSpaceForm(false);
+      setCreatingSection(true);
+      await fetchJsonBody('/api/messages/sections', 'POST', { communityId, name: sectionName.trim() });
+      setSectionName('');
+      setShowSectionForm(false);
       await fetchChannels();
     } catch (createError) {
       setError((createError as Error).message || 'Unable to create the section.');
     } finally {
-      setCreatingSpace(false);
+      setCreatingSection(false);
     }
   };
 
-  const handleRenameSpace = useCallback(async (spaceId: string, name: string) => {
+  const handleRenameSection = useCallback(async (sectionId: string, name: string) => {
     try {
       // The whole text (emoji included) lives in `name` — the rename form
       // prefills any legacy emoji into it, so clear the separate column.
-      await fetchJsonBody(`/api/messages/spaces/${spaceId}`, 'PATCH', { name, emoji: null });
+      await fetchJsonBody(`/api/messages/sections/${sectionId}`, 'PATCH', { name, emoji: null });
       await fetchChannels();
     } catch (e) {
       setError((e as Error).message || 'Unable to rename the section.');
@@ -568,11 +568,11 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     }
   }, [fetchChannels]);
 
-  const handleDeleteSpace = useCallback(async (spaceId: string) => {
+  const handleDeleteSection = useCallback(async (sectionId: string) => {
     if (!window.confirm('Delete this section? Its channels will move to the Channels list.')) return;
     try {
-      await fetchJson(`/api/messages/spaces/${spaceId}`, { method: 'DELETE' });
-      // Deleting a space unfiles its channels (spaceId → null), so refresh both lists.
+      await fetchJson(`/api/messages/sections/${sectionId}`, { method: 'DELETE' });
+      // Deleting a section unfiles its channels (sectionId → null), so refresh both lists.
       await fetchChannels();
       await fetchConversations(conversationSearch);
     } catch (e) {
@@ -580,8 +580,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     }
   }, [fetchChannels, fetchConversations, conversationSearch]);
 
-  /** PATCH the open channel (icon / space / view style) and refresh everything that shows it. */
-  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; spaceId?: string | null; viewMode?: ChannelViewMode }) => {
+  /** PATCH the open channel (icon / section / view style) and refresh everything that shows it. */
+  const updateSelectedChannel = useCallback(async (patch: { icon?: string | null; sectionId?: string | null; viewMode?: ChannelViewMode }) => {
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
     try {
@@ -731,28 +731,28 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       .filter((ch) => !q || ch.name.toLowerCase().includes(q) || (ch.description?.toLowerCase().includes(q) ?? false));
   }, [channelDirectory, conversations, conversationSearch]);
 
-  // Circle-style rail sections: one per space (joined + browsable channels filed
-  // there, empty spaces still shown so they can be filled/renamed/deleted), then
+  // Circle-style rail sections: one per section (joined + browsable channels filed
+  // there, empty sections still shown so they can be filled/renamed/deleted), then
   // an unfiled bucket.
-  const channelSections = useMemo(() => {
+  const channelGroups = useMemo(() => {
     const joined = filteredConversations.filter((c) => c.type === 'CHANNEL');
-    const spaceIds = new Set(channelSpaces.map((s) => s.id));
-    const sections: ChannelSection[] = [];
-    for (const space of channelSpaces) {
-      const joinedHere = joined.filter((c) => c.spaceId === space.id);
-      const browsableHere = browsableChannels.filter((ch) => ch.spaceId === space.id);
-      // While searching, hide spaces with no matches so results stay scannable.
+    const sectionIds = new Set(channelSections.map((s) => s.id));
+    const sections: ChannelListGroup[] = [];
+    for (const section of channelSections) {
+      const joinedHere = joined.filter((c) => c.sectionId === section.id);
+      const browsableHere = browsableChannels.filter((ch) => ch.sectionId === section.id);
+      // While searching, hide sections with no matches so results stay scannable.
       if (joinedHere.length || browsableHere.length || !conversationSearch.trim()) {
-        sections.push({ key: space.id, name: space.name, emoji: space.emoji, joined: joinedHere, browsable: browsableHere });
+        sections.push({ key: section.id, name: section.name, emoji: section.emoji, joined: joinedHere, browsable: browsableHere });
       }
     }
-    const joinedUnfiled = joined.filter((c) => !c.spaceId || !spaceIds.has(c.spaceId));
-    const browsableUnfiled = browsableChannels.filter((ch) => !ch.spaceId || !spaceIds.has(ch.spaceId));
+    const joinedUnfiled = joined.filter((c) => !c.sectionId || !sectionIds.has(c.sectionId));
+    const browsableUnfiled = browsableChannels.filter((ch) => !ch.sectionId || !sectionIds.has(ch.sectionId));
     if (joinedUnfiled.length || browsableUnfiled.length) {
       sections.push({ key: '__none__', name: 'Channels', emoji: null, joined: joinedUnfiled, browsable: browsableUnfiled });
     }
     return sections;
-  }, [filteredConversations, browsableChannels, channelSpaces, conversationSearch]);
+  }, [filteredConversations, browsableChannels, channelSections, conversationSearch]);
 
   // Slack-style default: on desktop /channels, land in the first joined channel
   // instead of an empty "No channel selected" pane. replaceState (not push) so
@@ -761,13 +761,13 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   useEffect(() => {
     if (isMobile || conversationsLoading) return;
     if (selectedConversationRef.current) return;
-    const first = channelSections.find((s) => s.joined.length > 0)?.joined[0];
+    const first = channelGroups.find((s) => s.joined.length > 0)?.joined[0];
     if (!first) return;
     setSelectedConversationId(first.id);
     selectedConversationRef.current = first.id;
     setActiveConversation(first);
     window.history.replaceState(null, '', `${basePath}/${first.id}`);
-  }, [isMobile, conversationsLoading, channelSections, basePath]);
+  }, [isMobile, conversationsLoading, channelGroups, basePath]);
 
   const isAdmin = selectedConversation?.currentUserRole === 'ADMIN';
 
@@ -821,10 +821,10 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       conversationSearch={conversationSearch}
       setConversationSearch={setConversationSearch}
       conversationsLoading={conversationsLoading}
+      channelGroups={channelGroups}
       channelSections={channelSections}
-      channelSpaces={channelSpaces}
-      collapsedSpaces={collapsedSpaces}
-      toggleSpaceCollapsed={toggleSpaceCollapsed}
+      collapsedSections={collapsedSections}
+      toggleSectionCollapsed={toggleSectionCollapsed}
       selectedConversationId={selectedConversationId}
       onSelectConversation={handleSelectConversation}
       onJoinChannel={handleJoinChannel}
@@ -841,19 +841,19 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       setChannelIcon={setChannelIcon}
       channelViewMode={channelViewMode}
       setChannelViewMode={setChannelViewMode}
-      channelSpaceId={channelSpaceId}
-      setChannelSpaceId={setChannelSpaceId}
+      channelSectionId={channelSectionId}
+      setChannelSectionId={setChannelSectionId}
       showIconPicker={showIconPicker}
       setShowIconPicker={setShowIconPicker}
       creatingChannel={creatingChannel}
-      showSpaceForm={showSpaceForm}
-      setShowSpaceForm={setShowSpaceForm}
-      spaceName={spaceName}
-      setSpaceName={setSpaceName}
-      creatingSpace={creatingSpace}
-      onCreateSpace={handleCreateSpace}
-      onRenameSpace={handleRenameSpace}
-      onDeleteSpace={handleDeleteSpace}
+      showSectionForm={showSectionForm}
+      setShowSectionForm={setShowSectionForm}
+      sectionName={sectionName}
+      setSectionName={setSectionName}
+      creatingSection={creatingSection}
+      onCreateSection={handleCreateSection}
+      onRenameSection={handleRenameSection}
+      onDeleteSection={handleDeleteSection}
     />
   );
 

@@ -81,8 +81,8 @@ export interface ConversationSummary {
   icon?: string | null;
   /** Channel rendering style — absent means 'CHAT' (classic thread). */
   viewMode?: ChannelViewMode;
-  /** Channel space (section) this channel is filed under, if any. */
-  spaceId?: string | null;
+  /** Channel section (section) this channel is filed under, if any. */
+  sectionId?: string | null;
   participants: ConversationParticipant[];
   lastMessage: SerializedMessage | null;
   unreadCount: number;
@@ -107,13 +107,13 @@ export interface ChannelDirectoryEntry {
   description: string | null;
   icon: string | null;
   viewMode: ChannelViewMode;
-  spaceId: string | null;
+  sectionId: string | null;
   memberCount: number;
   isMember: boolean;
 }
 
-/** A named section grouping channels in the rail (Circle-style space). */
-export interface ChannelSpaceEntry {
+/** A named section grouping channels in the rail (Circle-style section). */
+export interface ChannelSectionEntry {
   id: string;
   name: string;
   emoji: string | null;

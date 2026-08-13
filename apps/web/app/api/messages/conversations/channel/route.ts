@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       parsed.data.name,
       parsed.data.description,
       parsed.data.icon,
-      parsed.data.spaceId,
+      parsed.data.sectionId,
       parsed.data.viewMode,
       parsed.data.context,
     );

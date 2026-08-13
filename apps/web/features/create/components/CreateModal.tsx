@@ -30,7 +30,7 @@ import {
   SuccessScreen,
 } from './CreateModalForms';
 import { useBrainTree } from './ContextDestination';
-import type { ChannelSpaceEntry } from '@/lib/messages/types';
+import type { ChannelSectionEntry } from '@/lib/messages/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
@@ -103,7 +103,7 @@ export default function CreateModal() {
   const [personData, setPersonData] = useState<PersonFormData>({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
   const [resourceData, setResourceData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
   const [eventData, setEventData] = useState<EventFormData>({ name: '', subtitle: '', location: '', tags: '' });
-  const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
+  const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
   const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', hosts: '', secretName: '' });
@@ -112,9 +112,9 @@ export default function CreateModal() {
   // open it (null for types that have no viewer to jump to).
   const [createdHref, setCreatedHref] = useState<string | null>(null);
   const [createdDetail, setCreatedDetail] = useState<string | null>(null);
-  // Spaces for the channel form's "file into space" dropdown, loaded lazily when
+  // Sections for the channel form's "file into section" dropdown, loaded lazily when
   // the Channel form opens.
-  const [spaces, setSpaces] = useState<ChannelSpaceEntry[]>([]);
+  const [sections, setSections] = useState<ChannelSectionEntry[]>([]);
 
   // Folder list + existing note paths for the brain forms, loaded (from the
   // shared context cache) only while one of them is open.
@@ -203,7 +203,7 @@ export default function CreateModal() {
     setPersonData({ name: '', email: '', subtitle: '', location: '', tags: '', imageBlob: null, imagePreview: null });
     setResourceData({ name: '', subtitle: '', location: '', tags: '' });
     setEventData({ name: '', subtitle: '', location: '', tags: '' });
-    setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', spaceId: '', context: '' });
+    setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
     setConnectorData({ name: '', description: '', hosts: '', secretName: '' });
@@ -212,15 +212,15 @@ export default function CreateModal() {
     setCreatedDetail(null);
   }, []);
 
-  // Load the community's spaces once the Channel form is showing, so the user can
+  // Load the community's sections once the Channel form is showing, so the user can
   // file the new channel into one on creation.
   useEffect(() => {
     if (!isOpen || selectedType !== 'channel' || !currentCommunity) return;
     let cancelled = false;
-    fetch(`/api/messages/spaces?communityId=${encodeURIComponent(currentCommunity.id)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { spaces: [] }))
-      .then((payload) => { if (!cancelled) setSpaces(payload.spaces ?? []); })
-      .catch(() => { if (!cancelled) setSpaces([]); });
+    fetch(`/api/messages/sections?communityId=${encodeURIComponent(currentCommunity.id)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { sections: [] }))
+      .then((payload) => { if (!cancelled) setSections(payload.sections ?? []); })
+      .catch(() => { if (!cancelled) setSections([]); });
     return () => { cancelled = true; };
   }, [isOpen, selectedType, currentCommunity]);
 
@@ -345,7 +345,7 @@ export default function CreateModal() {
         name: channelData.name.trim(),
         description: channelData.description.trim() || undefined,
         icon: channelData.icon ?? undefined,
-        spaceId: channelData.spaceId || undefined,
+        sectionId: channelData.sectionId || undefined,
         viewMode: channelData.viewMode,
         context: channelData.context.trim() || undefined,
       }),
@@ -360,7 +360,7 @@ export default function CreateModal() {
 
   const createSpace = async () => {
     if (!currentCommunity) throw new Error('Select a space first');
-    const res = await fetch('/api/messages/spaces', {
+    const res = await fetch('/api/messages/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -747,7 +747,7 @@ export default function CreateModal() {
               </div>
             )}
             {step === 1 && selectedType === 'channel' && (
-              <ChannelForm data={channelData} onChange={setChannelData} nameRef={nameRef} spaces={spaces} />
+              <ChannelForm data={channelData} onChange={setChannelData} nameRef={nameRef} sections={sections} />
             )}
             {step === 1 && selectedType === 'section' && (
               <SpaceForm data={spaceData} onChange={setSpaceData} nameRef={nameRef} />

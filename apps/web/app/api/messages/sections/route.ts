@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getApiMessagingUser, unauthorizedResponse, forbiddenResponse } from '@/lib/messages/auth';
 import { handleMessagingError } from '@/lib/messages/http';
-import { createSpaceSchema } from '@/lib/messages/schemas';
-import { createChannelSpace, listChannelSpaces } from '@/lib/messages';
+import { createSectionSchema } from '@/lib/messages/schemas';
+import { createChannelSection, listChannelSections } from '@/lib/messages';
 import { featureAccessForbidden, isAdmin } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse();
     }
 
-    const spaces = await listChannelSpaces(communityId);
-    return NextResponse.json({ spaces });
+    const sections = await listChannelSections(communityId);
+    return NextResponse.json({ sections });
   } catch (error) {
     return handleMessagingError(error);
   }
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     if (!user) return unauthorizedResponse();
 
     const body = await request.json();
-    const parsed = createSpaceSchema.safeParse(body);
+    const parsed = createSectionSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'Validation error', details: parsed.error.issues },
@@ -43,17 +43,17 @@ export async function POST(request: NextRequest) {
 
     const allowed = await isAdmin(user.id, parsed.data.communityId, user.email);
     if (!allowed) {
-      return forbiddenResponse('Only community admins can create spaces');
+      return forbiddenResponse('Only community admins can create sections');
     }
 
-    const space = await createChannelSpace(
+    const section = await createChannelSection(
       parsed.data.communityId,
       parsed.data.name,
       parsed.data.emoji,
       parsed.data.context,
       user.id,
     );
-    return NextResponse.json({ space }, { status: 201 });
+    return NextResponse.json({ section }, { status: 201 });
   } catch (error) {
     return handleMessagingError(error);
   }

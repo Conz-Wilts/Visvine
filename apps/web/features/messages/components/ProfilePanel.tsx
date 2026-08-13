@@ -50,7 +50,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       {/* View style (channel admins): chat thread vs feed cards — lossless
           rendering switch over the same messages, flip any time. */}
       {isAdmin && onChangeViewMode && (
-        <div className="space-y-1.5 px-5 pb-4">
+        <div className="section-y-1.5 px-5 pb-4">
           <SectionLabel>View style</SectionLabel>
           <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
             {([
@@ -103,7 +103,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       </div>
 
       {/* Actions */}
-      <div className="space-y-0.5 border-t border-border-subtle px-3 py-3">
+      <div className="section-y-0.5 border-t border-border-subtle px-3 py-3">
         {isAdmin && (
           <>
             <button

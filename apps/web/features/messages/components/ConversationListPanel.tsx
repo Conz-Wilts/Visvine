@@ -6,10 +6,10 @@ import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
 import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2, Newspaper } from 'lucide-react';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
-import type { ChannelDirectoryEntry, ChannelSpaceEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
+import type { ChannelDirectoryEntry, ChannelSectionEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 
-/** Circle-style rail section: one per space (joined + browsable channels filed there), then an unfiled bucket. */
-export interface ChannelSection {
+/** Circle-style rail section: one per section (joined + browsable channels filed there), then an unfiled bucket. */
+export interface ChannelListGroup {
   key: string;
   name: string;
   emoji: string | null;
@@ -27,10 +27,10 @@ interface ConversationListPanelProps {
   setConversationSearch: (value: string) => void;
   // List data
   conversationsLoading: boolean;
-  channelSections: ChannelSection[];
-  channelSpaces: ChannelSpaceEntry[];
-  collapsedSpaces: Record<string, boolean>;
-  toggleSpaceCollapsed: (key: string) => void;
+  channelGroups: ChannelListGroup[];
+  channelSections: ChannelSectionEntry[];
+  collapsedSections: Record<string, boolean>;
+  toggleSectionCollapsed: (key: string) => void;
   selectedConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onJoinChannel: (channelId: string) => Promise<void>;
@@ -48,25 +48,25 @@ interface ConversationListPanelProps {
   setChannelIcon: (value: string | null) => void;
   channelViewMode: ChannelViewMode;
   setChannelViewMode: (value: ChannelViewMode) => void;
-  channelSpaceId: string;
-  setChannelSpaceId: (value: string) => void;
+  channelSectionId: string;
+  setChannelSectionId: (value: string) => void;
   showIconPicker: boolean;
   setShowIconPicker: Dispatch<SetStateAction<boolean>>;
   creatingChannel: boolean;
-  // Inline "new space" form (community admins only)
-  showSpaceForm: boolean;
-  setShowSpaceForm: Dispatch<SetStateAction<boolean>>;
-  spaceName: string;
-  setSpaceName: (value: string) => void;
-  creatingSpace: boolean;
-  onCreateSpace: (e: FormEvent) => Promise<void>;
-  // Space rename/delete (community admins only)
-  onRenameSpace: (spaceId: string, name: string) => Promise<void>;
-  onDeleteSpace: (spaceId: string) => Promise<void>;
+  // Inline "new section" form (community admins only)
+  showSectionForm: boolean;
+  setShowSectionForm: Dispatch<SetStateAction<boolean>>;
+  sectionName: string;
+  setSectionName: (value: string) => void;
+  creatingSection: boolean;
+  onCreateSection: (e: FormEvent) => Promise<void>;
+  // Section rename/delete (community admins only)
+  onRenameSection: (sectionId: string, name: string) => Promise<void>;
+  onDeleteSection: (sectionId: string) => Promise<void>;
 }
 
 /**
- * Channel rail — the community's channels grouped by space. On the Channels
+ * Channel rail — the community's channels grouped by section. On the Channels
  * page (wide) this content is portaled into the Sidebar dock instead of
  * floating as its own box (see dockChannels).
  */
@@ -77,10 +77,10 @@ export default function ConversationListPanel({
   conversationSearch,
   setConversationSearch,
   conversationsLoading,
+  channelGroups,
   channelSections,
-  channelSpaces,
-  collapsedSpaces,
-  toggleSpaceCollapsed,
+  collapsedSections,
+  toggleSectionCollapsed,
   selectedConversationId,
   onSelectConversation,
   onJoinChannel,
@@ -97,47 +97,47 @@ export default function ConversationListPanel({
   setChannelIcon,
   channelViewMode,
   setChannelViewMode,
-  channelSpaceId,
-  setChannelSpaceId,
+  channelSectionId,
+  setChannelSectionId,
   showIconPicker,
   setShowIconPicker,
   creatingChannel,
-  showSpaceForm,
-  setShowSpaceForm,
-  spaceName,
-  setSpaceName,
-  creatingSpace,
-  onCreateSpace,
-  onRenameSpace,
-  onDeleteSpace,
+  showSectionForm,
+  setShowSectionForm,
+  sectionName,
+  setSectionName,
+  creatingSection,
+  onCreateSection,
+  onRenameSection,
+  onDeleteSection,
 }: ConversationListPanelProps) {
-  // Creating channels + spaces lives in the global "Create new" (+) modal.
+  // Creating channels + sections lives in the global "Create new" (+) modal.
   const { open: openCreateModal } = useCreateModal();
-  // Inline space rename (community admins): which space header is being edited.
-  const [editingSpaceId, setEditingSpaceId] = useState<string | null>(null);
-  const [editingSpaceName, setEditingSpaceName] = useState('');
-  const [spaceActionBusy, setSpaceActionBusy] = useState(false);
+  // Inline section rename (community admins): which section header is being edited.
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editingSectionName, setEditingSectionName] = useState('');
+  const [sectionActionBusy, setSectionActionBusy] = useState(false);
 
-  const submitRenameSpace = async (e: FormEvent) => {
+  const submitRenameSection = async (e: FormEvent) => {
     e.preventDefault();
-    if (!editingSpaceId || !editingSpaceName.trim() || spaceActionBusy) return;
-    setSpaceActionBusy(true);
+    if (!editingSectionId || !editingSectionName.trim() || sectionActionBusy) return;
+    setSectionActionBusy(true);
     try {
-      await onRenameSpace(editingSpaceId, editingSpaceName.trim());
-      setEditingSpaceId(null);
-      setEditingSpaceName('');
+      await onRenameSection(editingSectionId, editingSectionName.trim());
+      setEditingSectionId(null);
+      setEditingSectionName('');
     } catch { /* error surfaced by the parent; keep the form open */ } finally {
-      setSpaceActionBusy(false);
+      setSectionActionBusy(false);
     }
   };
 
-  const deleteSpace = async (spaceId: string) => {
-    if (spaceActionBusy) return;
-    setSpaceActionBusy(true);
+  const deleteSection = async (sectionId: string) => {
+    if (sectionActionBusy) return;
+    setSectionActionBusy(true);
     try {
-      await onDeleteSpace(spaceId);
+      await onDeleteSection(sectionId);
     } finally {
-      setSpaceActionBusy(false);
+      setSectionActionBusy(false);
     }
   };
 
@@ -172,7 +172,7 @@ export default function ConversationListPanel({
 
     {/* Channel creation (community admins only) */}
     {showChannelForm && (
-      <form onSubmit={onCreateChannel} className="space-y-2 border-b border-border-subtle px-4 py-3">
+      <form onSubmit={onCreateChannel} className="section-y-2 border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="relative">
             <button
@@ -232,16 +232,16 @@ export default function ConversationListPanel({
             );
           })}
         </div>
-        {channelSpaces.length > 0 && (
+        {channelSections.length > 0 && (
           <select
-            value={channelSpaceId}
-            onChange={(e) => setChannelSpaceId(e.target.value)}
+            value={channelSectionId}
+            onChange={(e) => setChannelSectionId(e.target.value)}
             className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-green/40 focus:outline-none"
           >
             <option value="">No section</option>
-            {channelSpaces.map((space) => (
-              <option key={space.id} value={space.id}>
-                {space.emoji ? `${space.emoji} ` : ''}{space.name}
+            {channelSections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.emoji ? `${section.emoji} ` : ''}{section.name}
               </option>
             ))}
           </select>
@@ -249,7 +249,7 @@ export default function ConversationListPanel({
         <div className="flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelViewMode('CHAT'); setChannelSpaceId(''); setShowIconPicker(false); }}
+            onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelViewMode('CHAT'); setChannelSectionId(''); setShowIconPicker(false); }}
             className="rounded-full px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
           >
             Cancel
@@ -270,11 +270,11 @@ export default function ConversationListPanel({
 
       <>
           {conversationsLoading && (
-            <div className="space-y-1 px-3 py-2">
+            <div className="section-y-1 px-3 py-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 rounded-2xl p-3">
                   <div className="h-10 w-10 shrink-0 animate-pulse rounded-xl bg-surface-3" />
-                  <div className="flex-1 space-y-2">
+                  <div className="flex-1 section-y-2">
                     <div className="h-3 w-2/3 animate-pulse rounded bg-surface-3" />
                     <div className="h-2.5 w-1/2 animate-pulse rounded bg-surface-3" />
                   </div>
@@ -283,7 +283,7 @@ export default function ConversationListPanel({
             </div>
           )}
 
-          {!conversationsLoading && channelSections.length === 0 && (
+          {!conversationsLoading && channelGroups.length === 0 && (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
                 <Hash className="h-6 w-6 text-text-muted" />
@@ -292,33 +292,33 @@ export default function ConversationListPanel({
               <p className="mt-1 text-xs text-text-muted">
                 {communityIsAdmin
                   ? 'Create the first channel with the + button in the sidebar.'
-                  : 'Channels created by your space admins will appear here.'}
+                  : 'Channels created by your section admins will appear here.'}
               </p>
             </div>
           )}
 
-          {/* ── Channels grouped by space (Circle-style) ── */}
-          {!conversationsLoading && channelSections.length > 0 && (
+          {/* ── Channels grouped by section (Circle-style) ── */}
+          {!conversationsLoading && channelGroups.length > 0 && (
             <div className="px-2.5 py-1">
-              {channelSections.map((section) => {
-                const hasSpaces = channelSpaces.length > 0;
-                const isSpace = section.key !== '__none__';
-                const collapsed = Boolean(collapsedSpaces[section.key]);
+              {channelGroups.map((section) => {
+                const hasSections = channelSections.length > 0;
+                const isSection = section.key !== '__none__';
+                const collapsed = Boolean(collapsedSections[section.key]);
                 const sectionUnread = section.joined.reduce(
                   (sum, c) => sum + (selectedConversationId === c.id ? 0 : c.unreadCount),
                   0,
                 );
                 return (
                   <div key={section.key} className="pb-1.5">
-                    {editingSpaceId === section.key ? (
+                    {editingSectionId === section.key ? (
                       /* Just an input — Enter saves, Escape cancels (no buttons). */
-                      <form onSubmit={submitRenameSpace} className="px-2 py-1">
+                      <form onSubmit={submitRenameSection} className="px-2 py-1">
                         <input
-                          value={editingSpaceName}
-                          onChange={(e) => setEditingSpaceName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSpaceId(null); setEditingSpaceName(''); } }}
+                          value={editingSectionName}
+                          onChange={(e) => setEditingSectionName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setEditingSectionId(null); setEditingSectionName(''); } }}
                           autoFocus
-                          disabled={spaceActionBusy}
+                          disabled={sectionActionBusy}
                           maxLength={80}
                           className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
                         />
@@ -327,7 +327,7 @@ export default function ConversationListPanel({
                       <div className="group flex w-full items-center gap-1.5 rounded-lg px-2 py-2 transition-colors hover:bg-surface-2">
                         <button
                           type="button"
-                          onClick={() => toggleSpaceCollapsed(section.key)}
+                          onClick={() => toggleSectionCollapsed(section.key)}
                           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         >
                           {collapsed
@@ -342,12 +342,12 @@ export default function ConversationListPanel({
                             {sectionUnread > 99 ? '99+' : sectionUnread}
                           </span>
                         )}
-                        {communityIsAdmin && isSpace && (
+                        {communityIsAdmin && isSection && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
                               type="button"
                               title="Rename section"
-                              onClick={() => { setEditingSpaceId(section.key); setEditingSpaceName(`${section.emoji ? `${section.emoji} ` : ''}${section.name}`); }}
+                              onClick={() => { setEditingSectionId(section.key); setEditingSectionName(`${section.emoji ? `${section.emoji} ` : ''}${section.name}`); }}
                               className="rounded p-0.5 text-text-muted hover:text-text-secondary"
                             >
                               <Pencil className="h-3 w-3" />
@@ -355,8 +355,8 @@ export default function ConversationListPanel({
                             <button
                               type="button"
                               title="Delete section"
-                              disabled={spaceActionBusy}
-                              onClick={() => void deleteSpace(section.key)}
+                              disabled={sectionActionBusy}
+                              onClick={() => void deleteSection(section.key)}
                               className="rounded p-0.5 text-text-muted hover:text-red-500 disabled:opacity-50"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -400,7 +400,7 @@ export default function ConversationListPanel({
                         })}
                         {section.browsable.length > 0 && (
                           <>
-                            {!hasSpaces && (
+                            {!hasSections && (
                               <p className="px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
                                 Browse channels
                               </p>
@@ -437,19 +437,19 @@ export default function ConversationListPanel({
             </div>
           )}
 
-          {/* ── New space (community admins) ── */}
+          {/* ── New section (community admins) ── */}
           {communityIsAdmin && (
             <div className="px-2.5 pt-1">
-              {/* Space form is just an input — Enter creates, Escape cancels. */}
-              {showSpaceForm ? (
-                <form onSubmit={onCreateSpace} className="px-3 py-1">
+              {/* Section form is just an input — Enter creates, Escape cancels. */}
+              {showSectionForm ? (
+                <form onSubmit={onCreateSection} className="px-3 py-1">
                   <input
-                    value={spaceName}
-                    onChange={(e) => setSpaceName(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Escape') { setShowSpaceForm(false); setSpaceName(''); } }}
+                    value={sectionName}
+                    onChange={(e) => setSectionName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') { setShowSectionForm(false); setSectionName(''); } }}
                     placeholder="Section name"
                     autoFocus
-                    disabled={creatingSpace}
+                    disabled={creatingSection}
                     maxLength={80}
                     className="w-full rounded-lg border border-border-default bg-surface-1 px-3 py-2 text-[15px] text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
                   />

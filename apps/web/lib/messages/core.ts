@@ -239,7 +239,7 @@ export function serializeConversation(
     avatarUrl: getConversationAvatar(conversation, currentUserId),
     icon: conversation.icon,
     viewMode: conversation.viewMode,
-    spaceId: conversation.spaceId,
+    sectionId: conversation.sectionId,
     participants: conversation.members.map((member) => ({
       id: member.user.id,
       name: member.user.name,

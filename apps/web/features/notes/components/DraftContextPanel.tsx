@@ -55,7 +55,7 @@ import {
   type FileFormData,
 } from '@/features/create/components/CreateModalForms'
 import { newConnectorNote } from '@/lib/connectors/config'
-import type { ChannelSpaceEntry } from '@/lib/messages/types'
+import type { ChannelSectionEntry } from '@/lib/messages/types'
 import { useNodeSearch, type NodeSearchResult } from '@/features/shared/hooks/useNodeSearch'
 import MatchPanel from '@/features/create/components/MatchPanel'
 import { TAG_SWATCHES, tagKey, tagPalette } from '@/lib/tagColors'
@@ -185,14 +185,14 @@ interface Extras {
   secretName: string
   /** channel */
   viewMode: 'CHAT' | 'FEED'
-  spaceId: string
+  sectionId: string
 }
 
 const EMPTY_EXTRAS: Extras = {
   hosts: '',
   secretName: '',
   viewMode: 'CHAT',
-  spaceId: '',
+  sectionId: '',
 }
 
 function readStash(): Partial<Stash> {
@@ -229,7 +229,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
   const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}) })
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [spaces, setSpaces] = useState<ChannelSpaceEntry[]>([])
+  const [sections, setSections] = useState<ChannelSectionEntry[]>([])
   const [addingTag, setAddingTag] = useState(false)
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
@@ -258,15 +258,15 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   const brainTree = useBrainTree(communityId, type !== null && FOLDERED_TYPES.has(type))
 
-  // The spaces a new channel can be filed into. Loaded only while the Channel
+  // The sections a new channel can be filed into. Loaded only while the Channel
   // type is selected — every other draft has no use for the list.
   useEffect(() => {
     if (type !== 'channel' || !communityId) return
     let cancelled = false
-    fetch(`/api/messages/spaces?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : { spaces: [] }))
-      .then((payload) => { if (!cancelled) setSpaces(payload.spaces ?? []) })
-      .catch(() => { if (!cancelled) setSpaces([]) })
+    fetch(`/api/messages/sections?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { sections: [] }))
+      .then((payload) => { if (!cancelled) setSections(payload.sections ?? []) })
+      .catch(() => { if (!cancelled) setSections([]) })
     return () => { cancelled = true }
   }, [type, communityId])
 
@@ -571,7 +571,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         communityId,
         name: title.trim(),
         viewMode: extras.viewMode,
-        spaceId: extras.spaceId || undefined,
+        sectionId: extras.sectionId || undefined,
         context: bodyRef.current.trim() || undefined,
       }),
     })
@@ -584,7 +584,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   const commitSpace = useCallback(async () => {
     if (!communityId) return
-    const res = await fetch('/api/messages/spaces', {
+    const res = await fetch('/api/messages/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -868,7 +868,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       )}
 
       {type === 'channel' && (
-        <ChannelExtras extras={extras} onChange={setExtras} spaces={spaces} accent={theme.base} />
+        <ChannelExtras extras={extras} onChange={setExtras} sections={sections} accent={theme.base} />
       )}
 
       {conflict && (
@@ -1426,12 +1426,12 @@ function ConnectorExtras({
 function ChannelExtras({
   extras,
   onChange,
-  spaces,
+  sections,
   accent,
 }: {
   extras: Extras
   onChange: (next: Extras) => void
-  spaces: ChannelSpaceEntry[]
+  sections: ChannelSectionEntry[]
   accent: string
 }) {
   return (
@@ -1447,18 +1447,18 @@ function ChannelExtras({
           ] as const}
         />
       </ExtraField>
-      {spaces.length > 0 && (
+      {sections.length > 0 && (
         <ExtraField label="Section">
           <select
             className={extraInput}
             style={{ ['--accent' as string]: accent }}
-            value={extras.spaceId}
-            onChange={(e) => onChange({ ...extras, spaceId: e.target.value })}
+            value={extras.sectionId}
+            onChange={(e) => onChange({ ...extras, sectionId: e.target.value })}
           >
             <option value="">No section</option>
-            {spaces.map((space) => (
-              <option key={space.id} value={space.id}>
-                {space.emoji ? `${space.emoji} ` : ''}{space.name}
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.emoji ? `${section.emoji} ` : ''}{section.name}
               </option>
             ))}
           </select>

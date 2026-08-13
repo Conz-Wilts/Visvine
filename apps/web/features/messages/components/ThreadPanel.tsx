@@ -166,7 +166,7 @@ export default function ThreadPanel({
                 ? 'Pick a channel from the list to open its feed.'
                 : communityIsAdmin
                   ? 'Create your first channel to start a feed.'
-                  : 'Channels created by your space admins will appear here.'}
+                  : 'Channels created by your section admins will appear here.'}
             </p>
           </div>
           {communityIsAdmin && (
@@ -249,7 +249,7 @@ export default function ThreadPanel({
                   title={detailsShown ? 'Hide channel details' : 'Show channel details'}
                   className={`hidden items-center gap-1.5 rounded-lg border border-border-subtle px-2 py-1 transition-colors xl:flex ${detailsShown ? 'bg-brand-green/10' : 'hover:bg-surface-2'}`}
                 >
-                  <span className="flex -space-x-1.5">
+                  <span className="flex -section-x-1.5">
                     {selectedConversation.participants.slice(0, 3).map((p) => (
                       <Avatar key={p.id} name={p.name} imageUrl={p.image} size="sm" className="!h-5 !w-5 !text-[9px] ring-2 ring-surface-1" />
                     ))}
@@ -393,11 +393,11 @@ export default function ThreadPanel({
           {!isFeed && (
           <div ref={messagesContainerRef} className="relative flex-1 overflow-hidden">
             {messagesLoading && (
-              <div className="w-full space-y-4 px-6 py-5 md:px-8">
+              <div className="w-full section-y-4 px-6 py-5 md:px-8">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div key={i} className="flex gap-3">
                     <div className="h-9 w-9 shrink-0 animate-pulse rounded-xl bg-surface-3" />
-                    <div className="flex-1 space-y-2 pt-1">
+                    <div className="flex-1 section-y-2 pt-1">
                       <div className="h-3 w-40 animate-pulse rounded bg-surface-3" />
                       <div className="h-3 animate-pulse rounded bg-surface-3" style={{ width: `${85 - i * 12}%` }} />
                     </div>

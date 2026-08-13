@@ -6,7 +6,7 @@ import { Chip, chipClass, chipStyle } from '@/components/ui';
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext';
 import type { CreateSuggestion } from '@/lib/create/suggestedType';
 import type { CommunityAlias } from '@/lib/types';
-import type { ChannelSpaceEntry, ChannelViewMode } from '@/lib/messages/types';
+import type { ChannelSectionEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
 import { slugify } from '@/lib/eventUtils';
 import { searchLocations } from '@/lib/locationData';
@@ -571,7 +571,7 @@ export interface ChannelFormData {
   description: string;
   icon: string | null;
   viewMode: ChannelViewMode;
-  spaceId: string;
+  sectionId: string;
   /** Starting text for the channel's context note (channels/<slug>.md). */
   context: string;
 }
@@ -580,12 +580,12 @@ export function ChannelForm({
   data,
   onChange,
   nameRef,
-  spaces,
+  sections,
 }: {
   data: ChannelFormData;
   onChange: (d: ChannelFormData) => void;
   nameRef: React.RefObject<HTMLInputElement | null>;
-  spaces: ChannelSpaceEntry[];
+  sections: ChannelSectionEntry[];
 }) {
   const [showIconPicker, setShowIconPicker] = useState(false);
   return (
@@ -654,17 +654,17 @@ export function ChannelForm({
           })}
         </div>
       </Field>
-      {spaces.length > 0 && (
+      {sections.length > 0 && (
         <Field label="Section">
           <select
             className={inputClass}
-            value={data.spaceId}
-            onChange={(e) => onChange({ ...data, spaceId: e.target.value })}
+            value={data.sectionId}
+            onChange={(e) => onChange({ ...data, sectionId: e.target.value })}
           >
             <option value="">No section</option>
-            {spaces.map((space) => (
-              <option key={space.id} value={space.id}>
-                {space.emoji ? `${space.emoji} ` : ''}{space.name}
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.emoji ? `${section.emoji} ` : ''}{section.name}
               </option>
             ))}
           </select>

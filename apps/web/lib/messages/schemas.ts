@@ -11,7 +11,7 @@ export const createChannelSchema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(500).optional(),
   icon: emojiSchema.optional(),
-  spaceId: z.string().min(1).optional(),
+  sectionId: z.string().min(1).optional(),
   viewMode: viewModeSchema.optional(),
   // Starting text for the channel's context note (channels/<slug>.md). Optional
   // — the note is created either way, this just saves an empty first edit.
@@ -23,19 +23,19 @@ export const updateGroupSchema = z.object({
   description: z.string().trim().max(500).nullable().optional(),
   avatarUrl: z.string().url().nullable().optional(),
   icon: emojiSchema.nullable().optional(),
-  spaceId: z.string().min(1).nullable().optional(),
+  sectionId: z.string().min(1).nullable().optional(),
   viewMode: viewModeSchema.optional(),
 });
 
-export const createSpaceSchema = z.object({
+export const createSectionSchema = z.object({
   communityId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
   emoji: emojiSchema.optional(),
-  /** Starting text for the space's context note (spaces/<slug>.md). */
+  /** Starting text for the section's context note (sections/<slug>.md). */
   context: z.string().trim().max(5000).optional(),
 });
 
-export const updateSpaceSchema = z.object({
+export const updateSectionSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   emoji: emojiSchema.nullable().optional(),
   position: z.number().int().min(0).optional(),

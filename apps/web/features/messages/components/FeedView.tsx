@@ -258,7 +258,7 @@ const PostCard = memo(function PostCard({
       {isDeleted ? (
         <p className="mt-2 text-sm italic text-text-muted">This post was deleted</p>
       ) : isEditing ? (
-        <div className="mt-2 w-full space-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
+        <div className="mt-2 w-full section-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
@@ -448,7 +448,7 @@ export default function FeedView({
 
   return (
     <div ref={scrollRef} className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto w-full max-w-2xl space-y-3 px-3 py-4 md:px-4">
+      <div className="mx-auto w-full max-w-2xl section-y-3 px-3 py-4 md:px-4">
 
         {/* Composer on top — no onTyping: typing indicators are a chat affordance */}
         <MessageComposer
@@ -461,7 +461,7 @@ export default function FeedView({
         />
 
         {messagesLoading && (
-          <div className="space-y-3">
+          <div className="section-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 px-4 py-3">
                 <div className="flex items-center gap-2.5">

@@ -1,6 +1,6 @@
 import { ConversationMemberRole, ConversationType, Prisma } from '@prisma/client';
 import prisma from '@/lib/prisma';
-import type { ChannelDirectoryEntry, ChannelSpaceEntry, ConversationSummary } from './types';
+import type { ChannelDirectoryEntry, ChannelSectionEntry, ConversationSummary } from './types';
 import {
   CONVERSATION_INCLUDE,
   MessagingError,
@@ -121,7 +121,7 @@ export async function createChannelConversation(
   name: string,
   description?: string,
   icon?: string,
-  spaceId?: string,
+  sectionId?: string,
   viewMode?: 'CHAT' | 'FEED',
   context?: string,
 ): Promise<ConversationSummary> {
@@ -134,8 +134,8 @@ export async function createChannelConversation(
     throw new MessagingError(404, 'Space not found');
   }
 
-  if (spaceId) {
-    await ensureSpaceInCommunity(spaceId, communityId);
+  if (sectionId) {
+    await ensureSectionInCommunity(sectionId, communityId);
   }
 
   const created = await prisma.conversation.create({
@@ -145,7 +145,7 @@ export async function createChannelConversation(
       description: description?.trim() || null,
       icon: icon ?? null,
       viewMode: viewMode ?? 'CHAT',
-      spaceId: spaceId ?? null,
+      sectionId: sectionId ?? null,
       communityId,
       createdById: currentUserId,
       members: {
@@ -162,7 +162,7 @@ export async function createChannelConversation(
   });
 
   // A channel is a thing you can hold context about, so it gets a graph node and
-  // a channels/<slug>.md note, contained by its space (or by the community when
+  // a channels/<slug>.md note, contained by its section (or by the community when
   // it's unfiled). Best-effort: a channel without context still works.
   await syncEntityNodeSafe({
     communityId,
@@ -172,7 +172,7 @@ export async function createChannelConversation(
     subtitle: created.description,
     body: context,
     metadata: { viewMode: created.viewMode, icon: created.icon },
-    parentNodeId: await parentNodeForChannel(communityId, created.spaceId),
+    parentNodeId: await parentNodeForChannel(communityId, created.sectionId),
     actor: { id: currentUserId, name: '' },
   });
 
@@ -180,17 +180,17 @@ export async function createChannelConversation(
 }
 
 /**
- * What contains a channel in the graph: its space when it's filed, otherwise the
- * community itself. Returns null when the space has no node yet — syncEntityNode
+ * What contains a channel in the graph: its section when it's filed, otherwise the
+ * community itself. Returns null when the section has no node yet — syncEntityNode
  * skips a missing parent rather than failing.
  */
 async function parentNodeForChannel(
   communityId: string,
-  spaceId: string | null,
+  sectionId: string | null,
 ): Promise<string | null> {
-  if (!spaceId) return communityNodeId(communityId);
+  if (!sectionId) return communityNodeId(communityId);
   const node = await prisma.node.findFirst({
-    where: { communityId, type: 'section', metadata: { path: ['spaceId'], equals: spaceId } },
+    where: { communityId, type: 'section', metadata: { path: ['sectionId'], equals: sectionId } },
     select: { id: true },
   });
   return node?.id ?? communityNodeId(communityId);
@@ -218,7 +218,7 @@ export async function listChannelsForCommunity(
       description: true,
       icon: true,
       viewMode: true,
-      spaceId: true,
+      sectionId: true,
       _count: { select: { members: true } },
       members: {
         where: { userId },
@@ -234,43 +234,43 @@ export async function listChannelsForCommunity(
     description: channel.description,
     icon: channel.icon,
     viewMode: channel.viewMode,
-    spaceId: channel.spaceId,
+    sectionId: channel.sectionId,
     memberCount: channel._count.members,
     isMember: channel.members.length > 0,
   }));
 }
 
-// ─── Channel spaces (Circle-style sections) ─────────────────────────────────
+// ─── Channel sections (Circle-style sections) ─────────────────────────────────
 
-function serializeSpace(space: { id: string; name: string; emoji: string | null; position: number }): ChannelSpaceEntry {
-  return { id: space.id, name: space.name, emoji: space.emoji, position: space.position };
+function serializeSection(section: { id: string; name: string; emoji: string | null; position: number }): ChannelSectionEntry {
+  return { id: section.id, name: section.name, emoji: section.emoji, position: section.position };
 }
 
-async function ensureSpaceInCommunity(spaceId: string, communityId: string) {
-  const space = await prisma.channelSpace.findUnique({
-    where: { id: spaceId },
+async function ensureSectionInCommunity(sectionId: string, communityId: string) {
+  const section = await prisma.channelSection.findUnique({
+    where: { id: sectionId },
     select: { id: true, communityId: true },
   });
-  if (!space || space.communityId !== communityId) {
+  if (!section || section.communityId !== communityId) {
     throw new MessagingError(404, 'Section not found in this space');
   }
 }
 
-export async function listChannelSpaces(communityId: string): Promise<ChannelSpaceEntry[]> {
-  const spaces = await prisma.channelSpace.findMany({
+export async function listChannelSections(communityId: string): Promise<ChannelSectionEntry[]> {
+  const sections = await prisma.channelSection.findMany({
     where: { communityId },
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
   });
-  return spaces.map(serializeSpace);
+  return sections.map(serializeSection);
 }
 
-export async function createChannelSpace(
+export async function createChannelSection(
   communityId: string,
   name: string,
   emoji?: string,
   context?: string,
   actorId?: string,
-): Promise<ChannelSpaceEntry> {
+): Promise<ChannelSectionEntry> {
   const community = await prisma.community.findUnique({
     where: { id: communityId },
     select: { id: true },
@@ -278,12 +278,12 @@ export async function createChannelSpace(
   if (!community) {
     throw new MessagingError(404, 'Space not found');
   }
-  const last = await prisma.channelSpace.findFirst({
+  const last = await prisma.channelSection.findFirst({
     where: { communityId },
     orderBy: { position: 'desc' },
     select: { position: true },
   });
-  const created = await prisma.channelSpace.create({
+  const created = await prisma.channelSection.create({
     data: {
       communityId,
       name: name.trim(),
@@ -301,19 +301,19 @@ export async function createChannelSpace(
     parentNodeId: communityNodeId(communityId),
     ...(actorId ? { actor: { id: actorId, name: '' } } : {}),
   });
-  return serializeSpace(created);
+  return serializeSection(created);
 }
 
-export async function updateChannelSpace(
-  spaceId: string,
+export async function updateChannelSection(
+  sectionId: string,
   payload: { name?: string; emoji?: string | null; position?: number },
-): Promise<ChannelSpaceEntry> {
-  const existing = await prisma.channelSpace.findUnique({ where: { id: spaceId } });
+): Promise<ChannelSectionEntry> {
+  const existing = await prisma.channelSection.findUnique({ where: { id: sectionId } });
   if (!existing) {
     throw new MessagingError(404, 'Section not found');
   }
-  const updated = await prisma.channelSpace.update({
-    where: { id: spaceId },
+  const updated = await prisma.channelSection.update({
+    where: { id: sectionId },
     data: {
       ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
       ...(payload.emoji !== undefined ? { emoji: payload.emoji } : {}),
@@ -332,13 +332,13 @@ export async function updateChannelSpace(
       metadata: { emoji: updated.emoji },
     });
   }
-  return serializeSpace(updated);
+  return serializeSection(updated);
 }
 
-/** Delete a section — its channels are unfiled (spaceId → null), not deleted. */
-export async function deleteChannelSpace(spaceId: string): Promise<void> {
-  const existing = await prisma.channelSpace.findUnique({
-    where: { id: spaceId },
+/** Delete a section — its channels are unfiled (sectionId → null), not deleted. */
+export async function deleteChannelSection(sectionId: string): Promise<void> {
+  const existing = await prisma.channelSection.findUnique({
+    where: { id: sectionId },
     select: { id: true, communityId: true },
   });
   if (!existing) {
@@ -347,7 +347,7 @@ export async function deleteChannelSpace(spaceId: string): Promise<void> {
   // Channels survive the section, so their containment edge has to move up to the
   // community before the section's node (and its cascading edges) goes away.
   const orphaned = await prisma.conversation.findMany({
-    where: { spaceId, type: ConversationType.CHANNEL },
+    where: { sectionId, type: ConversationType.CHANNEL },
     select: { id: true },
   });
   for (const channel of orphaned) {
@@ -363,8 +363,8 @@ export async function deleteChannelSpace(spaceId: string): Promise<void> {
       await reparentEntityNode(existing.communityId, node.id, communityNodeId(existing.communityId));
     }
   }
-  await prisma.channelSpace.delete({ where: { id: spaceId } });
-  await removeEntityNode(existing.communityId, 'section', spaceId);
+  await prisma.channelSection.delete({ where: { id: sectionId } });
+  await removeEntityNode(existing.communityId, 'section', sectionId);
 }
 
 /** Join a community channel (any member of the channel's community can join). */
@@ -385,7 +385,7 @@ export async function joinChannel(userId: string, conversationId: string): Promi
     });
 
     if (!membership) {
-      throw new MessagingError(403, 'You must be a member of this space to join its channels');
+      throw new MessagingError(403, 'You must be a member of this section to join its channels');
     }
   }
 
@@ -583,7 +583,7 @@ export async function leaveConversation(currentUserId: string, conversationId: s
 export async function updateGroupConversation(
   currentUserId: string,
   conversationId: string,
-  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; spaceId?: string | null; viewMode?: 'CHAT' | 'FEED' },
+  payload: { name?: string; description?: string | null; avatarUrl?: string | null; icon?: string | null; sectionId?: string | null; viewMode?: 'CHAT' | 'FEED' },
 ): Promise<ConversationSummary> {
   const membership = await ensureConversationMember(conversationId, currentUserId);
 
@@ -597,16 +597,16 @@ export async function updateGroupConversation(
 
   const isChannel = membership.conversation.type === ConversationType.CHANNEL;
 
-  if ((payload.icon !== undefined || payload.spaceId !== undefined || payload.viewMode !== undefined) && !isChannel) {
+  if ((payload.icon !== undefined || payload.sectionId !== undefined || payload.viewMode !== undefined) && !isChannel) {
     throw new MessagingError(400, 'Icons, sections and view styles only apply to channels');
   }
 
-  if (payload.spaceId) {
+  if (payload.sectionId) {
     const communityId = membership.conversation.communityId;
     if (!communityId) {
-      throw new MessagingError(400, 'Channel has no space');
+      throw new MessagingError(400, 'Channel has no section');
     }
-    await ensureSpaceInCommunity(payload.spaceId, communityId);
+    await ensureSectionInCommunity(payload.sectionId, communityId);
   }
 
   const updates: Prisma.ConversationUpdateInput = {};
@@ -631,9 +631,9 @@ export async function updateGroupConversation(
     updates.viewMode = payload.viewMode;
   }
 
-  if (payload.spaceId !== undefined) {
-    updates.space = payload.spaceId
-      ? { connect: { id: payload.spaceId } }
+  if (payload.sectionId !== undefined) {
+    updates.section = payload.sectionId
+      ? { connect: { id: payload.sectionId } }
       : { disconnect: true };
   }
 
@@ -644,11 +644,11 @@ export async function updateGroupConversation(
   const updated = await prisma.conversation.update({
     where: { id: conversationId },
     data: { ...updates, updatedAt: new Date() },
-    select: { id: true, name: true, description: true, icon: true, viewMode: true, spaceId: true, communityId: true },
+    select: { id: true, name: true, description: true, icon: true, viewMode: true, sectionId: true, communityId: true },
   });
 
   // Keep the channel's node in step: the label follows a rename, and moving the
-  // channel between spaces moves its containment edge with it.
+  // channel between sections moves its containment edge with it.
   if (isChannel && updated.communityId) {
     const result = await syncEntityNodeSafe({
       communityId: updated.communityId,
@@ -658,8 +658,8 @@ export async function updateGroupConversation(
       subtitle: updated.description,
       metadata: { viewMode: updated.viewMode, icon: updated.icon },
     });
-    if (result && payload.spaceId !== undefined) {
-      const parent = await parentNodeForChannel(updated.communityId, updated.spaceId);
+    if (result && payload.sectionId !== undefined) {
+      const parent = await parentNodeForChannel(updated.communityId, updated.sectionId);
       if (parent) await reparentEntityNode(updated.communityId, result.nodeId, parent);
     }
   }

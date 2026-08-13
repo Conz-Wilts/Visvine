@@ -349,7 +349,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Body: rich text or edit mode */}
         {isEditing ? (
-          <div className="mt-1 w-full space-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
+          <div className="mt-1 w-full section-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
             <textarea
               ref={editRef}
               value={editText}

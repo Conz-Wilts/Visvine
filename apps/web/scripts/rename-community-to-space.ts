@@ -51,12 +51,12 @@ const STRUCTURAL_SPELLINGS = `('space','spaces')`;
  * The nodes.type predicate for STRUCTURAL rows only. After the first run,
  * 'space' is the canonical ORG value, so matching the string alone would
  * re-rename the freshly migrated org rows on a re-run (not idempotent). A
- * structural container row always carries `metadata.spaceId` (RECORD_KEY in
+ * structural container row always carries `metadata.sectionId` (RECORD_KEY in
  * lib/notes/context/entityNodes.ts — how the row is found for its
- * ChannelSpace); an org row never does. That makes the predicate correct in
+ * ChannelSection); an org row never does. That makes the predicate correct in
  * BOTH states, which is what idempotency requires.
  */
-const STRUCTURAL_NODE_PREDICATE = `lower("type") IN ${STRUCTURAL_SPELLINGS} AND "metadata" ? 'spaceId'`;
+const STRUCTURAL_NODE_PREDICATE = `lower("type") IN ${STRUCTURAL_SPELLINGS} AND "metadata" ? 'sectionId'`;
 
 // Must stay in sync with the `nodeTypes` @default in prisma/schema.prisma.
 const NEW_DEFAULT =
@@ -141,11 +141,11 @@ async function main() {
     );
     const [{ count: strayCount }] = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
       `SELECT count(*)::bigint AS count FROM "nodes"
-         WHERE lower("type") IN ${STRUCTURAL_SPELLINGS} AND NOT ("metadata" ? 'spaceId')`,
+         WHERE lower("type") IN ${STRUCTURAL_SPELLINGS} AND NOT ("metadata" ? 'sectionId')`,
     );
     if (Number(strayCount) > 0) {
       console.log(
-        `[dry-run] WARNING: ${strayCount} 'space' node(s) carry no metadata.spaceId — on an ` +
+        `[dry-run] WARNING: ${strayCount} 'space' node(s) carry no metadata.sectionId — on an ` +
           `un-migrated DB these are structural rows the predicate will MISS; inspect them first. ` +
           `On an already-migrated DB they are org rows and this is expected.`,
       );
@@ -167,7 +167,7 @@ async function main() {
   }
 
   // 1a. Structural rows FIRST — frees the 'space' name for the org type. The
-  // metadata.spaceId discriminator keeps this from touching org rows that
+  // metadata.sectionId discriminator keeps this from touching org rows that
   // already migrated to 'space' (see STRUCTURAL_NODE_PREDICATE).
   const sections = await prisma.$executeRawUnsafe(
     `UPDATE "nodes" SET "type" = 'section' WHERE ${STRUCTURAL_NODE_PREDICATE}`,

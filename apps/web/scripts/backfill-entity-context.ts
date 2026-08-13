@@ -92,7 +92,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
   }
 
   // ── 2. Spaces ──────────────────────────────────────────────────────────────
-  const spaces = await prisma.channelSpace.findMany({
+  const spaces = await prisma.channelSection.findMany({
     where: { communityId: community.id },
     select: { id: true, name: true, emoji: true },
   });
@@ -114,17 +114,17 @@ async function backfillCommunity(community: { id: string; name: string; descript
   // ── 3. Channels (after spaces, so their parent edge lands on the space) ─────
   const channels = await prisma.conversation.findMany({
     where: { communityId: community.id, type: ConversationType.CHANNEL },
-    select: { id: true, name: true, description: true, icon: true, viewMode: true, spaceId: true },
+    select: { id: true, name: true, description: true, icon: true, viewMode: true, sectionId: true },
   });
   for (const channel of channels) {
     if (!dryRun) {
-      const parent = channel.spaceId
+      const parent = channel.sectionId
         ? (
             await prisma.node.findFirst({
               where: {
                 communityId: community.id,
                 type: 'section',
-                metadata: { path: ['spaceId'], equals: channel.spaceId },
+                metadata: { path: ['sectionId'], equals: channel.sectionId },
               },
               select: { id: true },
             })

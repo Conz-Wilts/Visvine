@@ -54,14 +54,14 @@ const CONTAINS_RELATIONSHIP = 'contains'
  * The metadata key holding the underlying record's primary key, per type. Node
  * ids are human slugs (`space:general`) so the note path reads well, which
  * means the id is NOT the record id — this is how we find the node again for a
- * given ChannelSpace/Conversation/ContextSource without a second table.
+ * given ChannelSection/Conversation/ContextSource without a second table.
  */
-// The metadata KEYS keep their pre-rename names (`communityRef`, `spaceId`) —
+// The metadata KEYS keep their pre-rename names (`communityRef`, `sectionId`) —
 // they're stored data, not display vocabulary.
 const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   person: 'userId',
   space: 'communityRef',
-  section: 'spaceId',
+  section: 'sectionId',
   channel: 'conversationId',
   connector: 'notePath',
 }
@@ -77,7 +77,7 @@ export interface SyncEntityNodeInput {
   type: EntityNodeType
   /** Display name — also the slug source when `slugSource` is omitted. */
   name: string
-  /** The underlying record's id (ChannelSpace.id, Conversation.id, note path…). */
+  /** The underlying record's id (ChannelSection.id, Conversation.id, note path…). */
   recordId?: string | null
   /** Override the slug the node id and note path are derived from. */
   slugSource?: string | null
