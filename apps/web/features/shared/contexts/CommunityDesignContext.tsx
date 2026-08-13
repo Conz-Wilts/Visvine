@@ -1,22 +1,8 @@
 'use client';
 
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCommunity } from './CommunityContext';
 import type { CommunityDesignConfig } from '@/lib/types';
-
-interface CommunityDesignContextValue {
-  designConfig: CommunityDesignConfig | null;
-  backgroundStyle: React.CSSProperties;
-}
-
-const CommunityDesignContext = createContext<CommunityDesignContextValue>({
-  designConfig: null,
-  backgroundStyle: {},
-});
-
-export function useCommunityDesign() {
-  return useContext(CommunityDesignContext);
-}
 
 // Titles default to the body face, not the Visvine brand font: ABC Ginto
 // Rounded is the wordmark, reserved for marketing surfaces. A community that
@@ -94,29 +80,5 @@ export function CommunityDesignProvider({ children }: { children: React.ReactNod
     };
   }, [currentCommunity?.id, designConfig]);
 
-  // Compute background style
-  const backgroundStyle = useMemo(() => {
-    const style: React.CSSProperties = {};
-    const bg = designConfig?.background;
-    if (bg?.type === 'solid' && bg.color) {
-      style.backgroundColor = bg.color;
-    } else if (bg?.type === 'image' && bg.imageUrl) {
-      style.backgroundImage = `url('${bg.imageUrl}')`;
-      style.backgroundSize = 'cover';
-      style.backgroundPosition = 'center';
-      style.backgroundAttachment = 'fixed';
-    }
-    return style;
-  }, [designConfig]);
-
-  const value = useMemo<CommunityDesignContextValue>(
-    () => ({ designConfig, backgroundStyle }),
-    [designConfig, backgroundStyle]
-  );
-
-  return (
-    <CommunityDesignContext.Provider value={value}>
-      {children}
-    </CommunityDesignContext.Provider>
-  );
+  return <>{children}</>;
 }

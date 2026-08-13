@@ -28,10 +28,9 @@ export type EntityKind =
 // node follows it, rather than the other way round. It's listed here so a
 // connector gets the entity treatment — its own node id, backlinks, and
 // [[mentions]] resolving to it — see lib/notes/entityLinks.ts. Creating one from
-// the directory is deliberately NOT possible: CREATABLE_TYPES in
-// lib/directory/createEntity.ts stays person/space/resource, so the
-// admin-only write gate on connectors/ in brainService.writeDenial remains the
-// only door.
+// the directory is deliberately NOT possible: connector is absent from
+// CREATABLE_TYPES in lib/directory/createEntity.ts, so the admin-only write
+// gate on connectors/ in brainService.writeDenial remains the only door.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {

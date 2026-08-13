@@ -7,16 +7,11 @@ import UserMenu from "@/features/auth/components/UserMenu";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useCommunity } from "@/features/shared/contexts/CommunityContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { useSidebar, shellEntranceStyle } from "@/features/shared/contexts/SidebarContext";
 import { useSession } from "@/features/auth/lib/auth-client";
-import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
-
-const SEAM_R = 10; // radius of the concave fillet joining the navbar to the sidebar rail
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
   const { isAdmin, currentCommunity } = useCommunity();
-  const { expanded, entered, reduced } = useSidebar();
   const { dockRequested, contextOpen, setContextOpen } = useContextPanel();
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -26,34 +21,9 @@ export default function Navbar() {
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 h-16 bg-white"
-      style={shellEntranceStyle(entered, reduced)}
+      className="fixed top-0 left-0 right-0 z-50 h-16"
+      style={{ background: "var(--shell-bg, #ffffff)" }}
     >
-      {/* Bottom border starts at the rail's current width (COLLAPSED_W ↔ EXPANDED_W)
-          so no line ever crosses the top of the sidebar — the rail's right border
-          continues the seam down, making the navbar + rail read as one continuous
-          L-shaped shell. It stops SEAM_R short of the corner so the concave fillet
-          below completes the seam with a curve. Transition matches the rail's width. */}
-      <div
-        className="absolute bottom-0 right-0 h-px bg-border-subtle"
-        style={{ left: (expanded ? EXPANDED_W : COLLAPSED_W) + SEAM_R, transition: "left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)" }}
-      />
-      {/* Concave fillet at the navbar↔rail inner corner: the seam rounds INTO the
-          navbar (a quarter-circle notch), not away from it. White fills the shell;
-          the arc's hairline picks up where the navbar bottom border and rail right
-          border leave off. Sits just below the navbar (top: 100%) so its transparent
-          quadrant reveals the page background behind. */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "100%",
-          left: expanded ? EXPANDED_W : COLLAPSED_W,
-          width: SEAM_R,
-          height: SEAM_R,
-          background: `radial-gradient(circle at bottom right, transparent ${SEAM_R - 0.5}px, var(--color-border-subtle) ${SEAM_R - 0.5}px, var(--color-border-subtle) ${SEAM_R + 0.5}px, #fff ${SEAM_R + 0.5}px)`,
-          transition: "left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
-        }}
-      />
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
         {/* Left: community selector + community management cog. The selector's avatar
             is pulled left to sit directly ABOVE the sidebar rail's icon column: the
@@ -67,10 +37,8 @@ export default function Navbar() {
               href="/admin"
               aria-label="Space management"
               title="Space management"
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition ${
-                adminActive
-                  ? "text-brand-green hover:text-brand-dark-green"
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+              className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
+                adminActive ? "shell-icon-btn--active" : ""
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -88,10 +56,8 @@ export default function Navbar() {
               onClick={() => setContextOpen(!contextOpen)}
               aria-label={contextOpen ? "Hide context" : "Show context"}
               title={contextOpen ? "Hide context" : "Show context"}
-              className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-                contextOpen
-                  ? "text-brand-green hover:text-brand-dark-green"
-                  : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+              className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
+                contextOpen ? "shell-icon-btn--active" : ""
               }`}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -121,10 +87,8 @@ export default function Navbar() {
             href={currentCommunity ? "/events?scope=discover" : "/events/discover"}
             aria-label="Discover events"
             title="Discover events"
-            className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${
-              eventsActive
-                ? "text-brand-green hover:text-brand-dark-green"
-                : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
+            className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
+              eventsActive ? "shell-icon-btn--active" : ""
             }`}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

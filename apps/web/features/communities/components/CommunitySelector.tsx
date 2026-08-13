@@ -86,8 +86,8 @@ export default function CommunitySelector({
         onClick={() => setIsOpen(!isOpen)}
         className={
           iconOnly
-            ? "w-12 h-12 rounded-xl flex items-center justify-center hover:bg-surface-2 transition"
-            : "flex items-center gap-2 h-12 px-3 text-sm font-medium text-text-secondary rounded-xl hover:bg-surface-2 transition"
+            ? "w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn"
+            : "flex items-center gap-2 h-12 px-3 text-sm font-medium rounded-xl shell-icon-btn"
         }
       >
         {currentCommunity ? (

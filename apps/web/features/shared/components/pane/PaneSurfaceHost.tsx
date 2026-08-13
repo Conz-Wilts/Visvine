@@ -17,7 +17,11 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import {
+  CONNECTIONS_RAIL_MIN_W,
+  CONNECTIONS_RAIL_W,
+  useContextPanel,
+} from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { TabBarSlotGate } from '@/features/shared/contexts/TabBarSlotContext';
@@ -62,10 +66,8 @@ function identityOf(s: PaneSurface): string {
 }
 
 /** Inset for the note content while the tree is docked and open, so the panel
- *  column never covers it. The transition covers `padding`, not just
- *  `padding-left`: the connections rail insets the same element from the right
- *  via a class, and this inline declaration wins over any transition utility —
- *  naming only the left side left the rail's inset snapping while the rail slid. */
+ *  column never covers it. (The connections rail's inset is the shell's, not
+ *  this element's — <main> narrows for it.) */
 function useDockInsetStyle(): React.CSSProperties {
   const { dockRequested, contextOpen } = useContextPanel();
   return {
@@ -78,7 +80,7 @@ export default function PaneSurfaceHost() {
   const { chrome } = usePaneChromeState();
   const target = chrome?.surface ?? null;
   const dockInsetStyle = useDockInsetStyle();
-  const { connectionsOpen } = useContextPanel();
+  const { connectionsOpen, setRailInset } = useContextPanel();
 
   // The rail slides rather than popping, so closing can't unmount it in the
   // same commit — it stays mounted (open=false, sliding offscreen) until the
@@ -126,6 +128,29 @@ export default function PaneSurfaceHost() {
   const activeKind = isPanel(active) ? active.kind : null;
   const activeKindRef = useRef(activeKind);
   activeKindRef.current = activeKind;
+
+  // Hand the rail's strip back to the shell: <main> gives up that width at its
+  // right edge, which carries the page scrollbar left with the rail instead of
+  // leaving it buried under a panel that scrolls on its own.
+  //
+  // Gated on a PANEL surface being up, not on connectionsOpen alone: this host
+  // is mounted once by the directory layout and re-pointed, so it does NOT
+  // unmount when the user leaves a note for the Grid — the cleanup below never
+  // fires there. connectionsOpen deliberately survives that navigation, so
+  // without this gate the Grid kept a 300px empty strip at its right edge
+  // beside a rail that renders nothing (the surface branches above return
+  // before it). Cleared on unmount too, for the layouts that do drop the host.
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${CONNECTIONS_RAIL_MIN_W}px)`);
+    const apply = () =>
+      setRailInset(connectionsOpen && activeIsPanel && mq.matches ? CONNECTIONS_RAIL_W : 0);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => {
+      mq.removeEventListener('change', apply);
+      setRailInset(0);
+    };
+  }, [connectionsOpen, activeIsPanel, setRailInset]);
 
   // The reveal plays once per entry into a note surface and then stays open;
   // switching notes swaps content behind an already-visible surface. Reset only
@@ -177,12 +202,12 @@ export default function PaneSurfaceHost() {
     active.kind === 'entity' ? active : crossKind && target?.kind === 'entity' ? target : null;
 
   return (
-    // The right padding mirrors the left dock inset, but as a class rather than
-    // an inline style: the rail itself only exists at xl and up, so the inset
-    // must collapse with it — a breakpoint the style attribute can't express.
+    // No right inset here for the rail: the shell narrows <main> itself by
+    // `railInset` (see AuthLayoutClient), so the content — and the page
+    // scrollbar with it — already stops at the rail's left edge.
     <ContentReveal
       ready={revealReady}
-      className={`w-full pb-10 motion-reduce:[transition:none!important] ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
+      className="w-full pb-10 motion-reduce:[transition:none!important]"
       style={dockInsetStyle}
     >
       <ContextSidebar currentPath={treePath} />

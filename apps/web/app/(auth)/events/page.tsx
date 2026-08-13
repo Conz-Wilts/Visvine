@@ -101,9 +101,11 @@ function EventsPageInner() {
         if (event.visibility !== 'public') return false;
       }
 
-      // Time filter
+      // Time filter. An event with no date yet counts as upcoming — it hasn't
+      // happened, it just hasn't been scheduled (created note-first from the
+      // context surface). "Past" still needs a real date to be past.
       if (timeFilter === 'upcoming') {
-        if (!event.startAt || !isEventUpcoming(event.startAt)) return false;
+        if (event.startAt && !isEventUpcoming(event.startAt)) return false;
       }
       if (timeFilter === 'past') {
         if (!event.startAt || isEventUpcoming(event.startAt)) return false;

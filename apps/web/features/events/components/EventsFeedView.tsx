@@ -34,6 +34,9 @@ function getCoverImage(event: NBEvent): string | null {
 }
 
 function formatFullDate(startAt: string, endAt?: string): string {
+  // An event that exists but isn't scheduled yet — created note-first, its date
+  // still to be set on this page. Says so, rather than "Invalid Date".
+  if (!startAt) return 'No date yet';
   const start = new Date(startAt);
   const datePart = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const startTime = formatEventTime(startAt);
@@ -158,7 +161,12 @@ function FeedCard({
 }
 
 export default function EventsFeedView({ events, community, loading = false, onEdit, onEventClick }: EventsFeedViewProps) {
-  const { nextEvent, upcomingByMonth, pastEvents } = useMemo(() => {
+  const { nextEvent, upcomingByMonth, pastEvents, undated } = useMemo(() => {
+    // An event created from the context surface has a name and a note before it
+    // has a schedule. It belongs at the TOP of the feed, not filtered out of
+    // both halves — an event nobody can see is an event nobody will ever get
+    // round to dating.
+    const undatedEvents = events.filter(e => !e.startAt);
     const upcoming = events
       .filter(e => e.startAt && isEventUpcoming(e.startAt))
       .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
@@ -172,7 +180,7 @@ export default function EventsFeedView({ events, community, loading = false, onE
       const key = monthKey(new Date(ev.startAt));
       (grouped[key] ||= []).push(ev);
     }
-    return { nextEvent: next, upcomingByMonth: grouped, pastEvents: past };
+    return { nextEvent: next, upcomingByMonth: grouped, pastEvents: past, undated: undatedEvents };
   }, [events]);
 
   if (loading) {
@@ -195,6 +203,17 @@ export default function EventsFeedView({ events, community, loading = false, onE
 
   return (
     <div className="max-w-3xl mx-auto space-y-10">
+      {undated.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold text-brand-black">Date to be set</h2>
+          <div className="space-y-4">
+            {undated.map(ev => (
+              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {nextEvent && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-brand-black">Next event</h2>

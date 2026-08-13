@@ -25,7 +25,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
-import { getTypeColor, getOnWhiteTextBg } from '@/features/directory/components/typeStyles';
+import { getTypeColor } from '@/features/directory/components/typeStyles';
 import type { CommunityAlias } from '@/lib/types';
 import type { ContextItem } from '@/features/notes/lib/contextItems';
 
@@ -225,13 +225,12 @@ export default function ContextLinksPanel({
   const total = groups.reduce((sum, group) => sum + group.connections.length, 0);
 
   return (
+    // No heading of its own: the only surface that mounts this panel is the
+    // connections rail, whose own header already says "Connections" — a second
+    // label under it was the same word twice.
     <div className="flex h-full flex-col overflow-y-auto px-4 py-4">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">
-        Connections
-      </h2>
-
       {total === 0 ? (
-        <p className="mt-4 text-sm text-text-muted">
+        <p className="text-sm text-text-muted">
           {keep
             ? 'No connections match the current filters.'
             : 'Nothing links here yet, and this note links nowhere.'}
@@ -241,7 +240,7 @@ export default function ContextLinksPanel({
         // collapsed groups are a stack of colour bars and any gap between them
         // reads as missing content. They sit flush, parted by a hairline of the
         // panel behind them so two same-coloured neighbours stay two bars.
-        <div className="mt-3 flex flex-col gap-px">
+        <div className="flex flex-col gap-px">
           {groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
             const Chevron = isCollapsed ? ChevronRight : ChevronDown;
@@ -256,12 +255,16 @@ export default function ContextLinksPanel({
                       return next;
                     })
                   }
-                  // The header IS the colour: a full-width bar in the type's own
-                  // colour with white text, so the eye lands on the band before
-                  // it reads a word. getOnWhiteTextBg keeps the hue and darkens
-                  // only as far as white legibility needs — type colours are
-                  // console-configurable and some (Community green) are light.
-                  style={{ backgroundColor: getOnWhiteTextBg(group.color) }}
+                  // The header IS the colour: a full-width bar painted in the
+                  // type's own colour EXACTLY as the console configured it, so
+                  // the eye lands on the band before it reads a word and the
+                  // band matches the type everywhere else in the app. The band
+                  // is never darkened to carry its label — that changed the hue
+                  // (the Index amber read as brown) and a type band whose job is
+                  // to say "this is the Index colour" must be that colour. The
+                  // label stays white on every band, light types included, so a
+                  // stack of bands reads as one component rather than two.
+                  style={{ backgroundColor: group.color }}
                   // -mx-4 cancels the panel's own padding so the band runs edge
                   // to edge: a colour bar with a gutter either side reads as a
                   // button, a full-bleed one reads as a section divider.

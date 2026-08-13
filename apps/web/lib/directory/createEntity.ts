@@ -30,16 +30,22 @@ import type { NBNode } from '@/lib/types'
  * everything downstream — which fields exist (FIELDS_BY_TYPE in
  * lib/create/typeFields.ts), which note namespace the entity lives in
  * (ENTITY_DIRS in lib/notes/entities.ts), and whether it resolves to a
- * cross-community identity. Events are excluded because they're created through
- * /events (their detail route redirects there); section/channel are structural
- * and belong to admin surfaces.
+ * cross-community identity. section/channel are structural and belong to admin
+ * surfaces.
+ *
+ * Events create here like anything else: everything in this product starts as a
+ * context note, and an event is a node with a note at events/<slug>.md the same
+ * way a person is. The date, RSVP, form and theme settings live on the event
+ * page, which is where they're edited once the note exists — a dateless event
+ * is a real, valid event that hasn't been scheduled yet (the Events page files
+ * those under "Date to be set").
  *
  * A `space` here is a group, organisation or community — recorded as a card in
  * the directory. Recording one never provisions a real space: those are only
  * ever created deliberately, from the switcher. When the name resolves to one
  * that already runs here, `communityRef` links the card to it.
  */
-export const CREATABLE_TYPES = ['person', 'space', 'resource'] as const
+export const CREATABLE_TYPES = ['person', 'space', 'resource', 'event'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
 
 export function isCreatableType(type: string): type is CreatableType {

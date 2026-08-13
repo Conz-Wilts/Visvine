@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, ChevronRight } from 'lucide-react'
-import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
+import { CHIP_ACCENT_HOVER, Chip, chipClass, Modal } from '@/components/ui'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { canCreateType } from '@/lib/create/creatable'
 import { isNodeTypeEnabled } from '@/lib/featureAccess'
@@ -36,7 +36,6 @@ import {
   type CommunityFeatureConfig,
   type NodeTypeConfig,
 } from '@/lib/types'
-import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import {
   noteFileSlug,
@@ -46,7 +45,7 @@ import {
 } from '@/lib/notes/shared/newContext'
 import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref, sourceHref } from '@/lib/notes/entities'
-import { useBrainTree, FolderPicker, PathPreview } from '@/features/create/components/ContextDestination'
+import { useBrainTree, FolderDropBoard, PathPreview } from '@/features/create/components/ContextDestination'
 import {
   FileForm,
   connectorSlug,
@@ -91,8 +90,8 @@ export type DraftType =
   // note recording that a group/organisation exists. Provisioning a real space
   // of your own isn't a draft type; it's on the switcher.
   | 'space'
-  // Listed so the menu matches the console's Types tab, but not draftable —
-  // picking it goes to /events/new, where the date/RSVP fields live.
+  // Drafts like any other entity: title, date, location, body. The RSVP form,
+  // theme and guest list are edited on the event page afterwards.
   | 'event'
   | 'resource'
   | 'connector'
@@ -104,11 +103,12 @@ export type DraftType =
 interface DraftTypeOption {
   id: DraftType
   label: string
-  /** The `nodeTypes` name this maps to, for colour resolution (null → `color`). */
+  /** The `nodeTypes` name this maps to, for colour resolution. Resolved against
+   *  the community's OWN registry, falling back to `color` when it has no entry
+   *  under that name. */
   configName: string | null
-  /** Fixed colour for types the community's nodeTypes don't describe. */
+  /** Fallback colour, for a community whose nodeTypes don't describe this. */
   color: string
-  hint: string
   /** What `canCreateType` is asked about — the permission gate is shared with
    *  the docked panel, so this menu can't offer a form that 403s on submit. */
   creatable: CreateableType
@@ -119,22 +119,30 @@ const NOTE_COLOR = '#64748b'
 /** Note and File aren't node types — they're content in the brain, so the
  *  console's Types tab doesn't list them. They bookend the menu; everything
  *  between comes from DEFAULT_NODE_TYPES in the console's own order, so the
- *  menu and the Types tab always say the same thing (colours included). */
+ *  menu and the Types tab always say the same thing (colours included).
+ *
+ *  Note still carries a configName: plenty of communities DO keep a "Note"
+ *  entry in their registry (the seed writes one), and when they do, that colour
+ *  is the one every other surface paints notes in — so the menu must obey it
+ *  rather than show its own slate. The slate is the fallback for the
+ *  communities that don't. */
 const DRAFT_TYPES: DraftTypeOption[] = [
-  { id: 'note', label: 'Note', configName: null, color: NOTE_COLOR, hint: 'A plain context note in a folder', creatable: 'context' },
-  { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, hint: 'Someone in the directory', creatable: 'person' },
-  { id: 'space', label: 'Space', configName: 'Space', color: NOTE_COLOR, hint: 'A company, organisation or group', creatable: 'space' },
-  { id: 'event', label: 'Event', configName: 'Event', color: NOTE_COLOR, hint: 'A gathering, planned on the Events page', creatable: 'event' },
-  { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, hint: 'A document, link or tool', creatable: 'resource' },
-  { id: 'section', label: 'Section', configName: 'Section', color: NOTE_COLOR, hint: 'A group of related channels', creatable: 'section' },
-  { id: 'channel', label: 'Channel', configName: 'Channel', color: NOTE_COLOR, hint: 'A place to talk, in a section', creatable: 'channel' },
-  { id: 'connector', label: 'Connector', configName: 'Connector', color: NOTE_COLOR, hint: 'A gateway to an external API or database', creatable: 'connector' },
-  { id: 'index', label: 'Index', configName: 'Index', color: NOTE_COLOR, hint: 'The home page for a group of notes', creatable: 'index' },
-  { id: 'file', label: 'File', configName: null, color: '#0ea5e9', hint: 'Upload documents into the context', creatable: 'file' },
+  { id: 'note', label: 'Note', configName: 'Note', color: NOTE_COLOR, creatable: 'context' },
+  { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, creatable: 'person' },
+  { id: 'space', label: 'Space', configName: 'Space', color: NOTE_COLOR, creatable: 'space' },
+  { id: 'event', label: 'Event', configName: 'Event', color: NOTE_COLOR, creatable: 'event' },
+  { id: 'resource', label: 'Resource', configName: 'Resource', color: NOTE_COLOR, creatable: 'resource' },
+  { id: 'section', label: 'Section', configName: 'Section', color: NOTE_COLOR, creatable: 'section' },
+  { id: 'channel', label: 'Channel', configName: 'Channel', color: NOTE_COLOR, creatable: 'channel' },
+  { id: 'connector', label: 'Connector', configName: 'Connector', color: NOTE_COLOR, creatable: 'connector' },
+  { id: 'index', label: 'Index', configName: 'Index', color: NOTE_COLOR, creatable: 'index' },
+  { id: 'file', label: 'File', configName: null, color: '#0ea5e9', creatable: 'file' },
 ]
 
-/** Types that commit to a real directory node (and so get a dedupe check). */
-const ENTITY_TYPES = new Set<DraftType>(['person', 'space', 'resource'])
+/** Types that commit to a real directory node (and so get a dedupe check).
+ *  Keep in sync with CREATABLE_TYPES (lib/directory/createEntity.ts) — that is
+ *  the server's list, and a type here that isn't there 400s on commit. */
+const ENTITY_TYPES = new Set<DraftType>(['person', 'space', 'resource', 'event'])
 /** Types whose only inline field is the destination folder in the context.
  *  For an index the picker chooses its PARENT — the index is a folder itself. */
 const FOLDERED_TYPES = new Set<DraftType>(['note', 'index', 'file'])
@@ -215,6 +223,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // place that sets either, which is what keeps that true.
   const [customType, setCustomType] = useState<string | null>(stash.customType ?? null)
   const [folder, setFolder] = useState(stash.folder ?? initialFolder)
+  // The destination popup, opened by Create on a note or an index.
+  const [destOpen, setDestOpen] = useState(false)
   const [fields, setFields] = useState<Record<string, string>>(stash.fields ?? {})
   const [tags, setTags] = useState<string[]>(stash.tags ?? [])
   const [extras, setExtras] = useState<Extras>({ ...EMPTY_EXTRAS, ...(stash.extras ?? {}) })
@@ -343,9 +353,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     ? customConfig?.color ?? defaultNodeTypeColor(customType)
     : !typeOption
       ? NOTE_COLOR
-      : typeOption.configName
-        ? getTypeColor(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)
-        : typeOption.color
+      : (typeOption.configName
+          ? findNodeTypeConfig(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)?.color
+          : null) ?? typeOption.color
   const theme = hexToPalette(aliasColor ?? baseColor)
 
   // Only the types the community actually offers this person. The node types
@@ -376,12 +386,18 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   // The destination shown before anything is written. An index's destination is
   // the index note inside the folder it creates.
-  const notePath = useMemo(() => {
-    if (!titleUsable) return ''
-    if (type === 'note') return availableNotePath(folder, title, brainTree.notePaths)
-    if (type === 'index') return indexPathOf(availableFolderPath(folder, title, folderPaths))
-    return ''
-  }, [type, titleUsable, folder, title, brainTree.notePaths, folderPaths])
+  // Where the draft would land in a GIVEN folder — the destination board
+  // previews this under whichever row the draft is hovering over, so the path
+  // is visible before the drop commits it.
+  const pathIn = useCallback(
+    (dest: string) => {
+      if (!titleUsable) return ''
+      if (type === 'note') return availableNotePath(dest, title, brainTree.notePaths)
+      if (type === 'index') return indexPathOf(availableFolderPath(dest, title, folderPaths))
+      return ''
+    },
+    [type, titleUsable, title, brainTree.notePaths, folderPaths],
+  )
 
   const addTag = useCallback((raw: string) => {
     const tag = raw.trim()
@@ -429,9 +445,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   // ── Commit ────────────────────────────────────────────────────────────────
 
-  const commitNote = useCallback(async () => {
+  // `dest` is passed in rather than read off state: the destination is chosen
+  // by dropping the draft on a folder, and the drop must create in the SAME
+  // tick — a setFolder followed by commit() would commit the previous folder.
+  const commitNote = useCallback(async (dest: string) => {
     if (!communityId) return
-    const path = availableNotePath(folder, title, brainTree.notePaths)
+    const path = availableNotePath(dest, title, brainTree.notePaths)
     const content = newNoteContent({
       title: title.trim(),
       tags,
@@ -447,20 +466,20 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     primeContextCache(contextKeys.read(communityId, path), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
-  }, [communityId, folder, title, tags, brainTree.notePaths, router, customType, customConfig])
+  }, [communityId, title, tags, brainTree.notePaths, router, customType, customConfig])
 
   // An index IS a folder: this creates the folder and writes the note that names
-  // it, in one call. The picked `folder` is the parent.
-  const commitIndex = useCallback(async () => {
+  // it, in one call. `dest` is the PARENT it was dropped into.
+  const commitIndex = useCallback(async (dest: string) => {
     if (!communityId) return
-    const folderPath = availableFolderPath(folder, title, folderPaths)
+    const folderPath = availableFolderPath(dest, title, folderPaths)
     const content = newIndexContent({ title: title.trim(), tags, body: bodyRef.current })
     const { indexPath } = await notesApi.createFolder(communityId, folderPath, content)
     invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
     primeContextCache(contextKeys.read(communityId, indexPath), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(indexPath))
-  }, [communityId, folder, title, tags, folderPaths, router])
+  }, [communityId, title, tags, folderPaths, router])
 
   const commitEntity = useCallback(async () => {
     if (!communityId || !type) return
@@ -611,14 +630,18 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     router.replace(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory')
   }, [communityId, files, folder, router])
 
-  const commit = useCallback(async () => {
+  // `dest` is the folder the draft was dropped on, for the two types that ask.
+  // Defaults to the standing `folder` (the one "+" was pressed in) so Enter and
+  // the non-foldered types behave exactly as before.
+  const commit = useCallback(async (dest?: string) => {
     if (!ready || committing || committedRef.current || !communityId) return
+    const where = dest ?? folder
     committedRef.current = true
     setCommitting(true)
     setError(null)
     try {
-      if (type === 'note') await commitNote()
-      else if (type === 'index') await commitIndex()
+      if (type === 'note') await commitNote(where)
+      else if (type === 'index') await commitIndex(where)
       else if (type === 'connector') await commitConnector()
       else if (type === 'channel') await commitChannel()
       // 'section' is the channels-tool container; 'space' (the org type) falls
@@ -638,25 +661,36 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       setCommitting(false)
     }
   }, [
-    ready, committing, communityId, type,
+    ready, committing, communityId, type, folder,
     commitNote, commitIndex, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
+
+  // Pressing Create on a note or an index asks WHERE first, in a popup over the
+  // draft. The destination used to be a row in the header, which put a filing
+  // decision in front of a note nobody had written yet — and every entity type
+  // gets its folder from its namespace, so the row was blank space on most of
+  // them. Everything else commits straight away (a file carries its own
+  // destination inside the upload form).
+  const asksWhere = type === 'note' || type === 'index'
+  const requestCommit = useCallback(() => {
+    if (!ready || committing) return
+    if (asksWhere) setDestOpen(true)
+    else void commit()
+  }, [ready, committing, asksWhere, commit])
 
   // The one place type, alias and customType are set — together, so the
   // "a custom type is always a note" invariant can't drift apart.
   const pickType = useCallback((next: DraftType, nextAlias: string | null = null, nextCustom: string | null = null) => {
-    // An event isn't draftable here — its date/time/RSVP fields live on the
-    // Events composer, so the menu row is a doorway rather than a state.
-    if (next === 'event') {
-      router.push('/events/new')
-      return
-    }
+    // Every type is a state here now, events included: picking one used to jump
+    // straight to the Events composer, which threw away the draft you were
+    // writing and asked for a schedule before you had a name. An event is a
+    // context note first; the composer is where its details are edited after.
     setType(next)
     setAlias(nextAlias)
     setCustomType(nextCustom)
     setTypeMenuOpen(false)
     setConflict(null)
-  }, [router])
+  }, [])
 
   // A type nobody has named here before. It registers on the community straight
   // away — it is community-level vocabulary, not draft state — but the draft
@@ -709,7 +743,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     <button
       type="button"
       disabled={!ready || committing}
-      onClick={() => void commit()}
+      onClick={requestCommit}
       title={
         ready
           ? 'Create'
@@ -787,7 +821,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           // before the user has filled anything in.
           if (e.key === 'Enter') {
             e.preventDefault()
-            void commit()
+            requestCommit()
           }
         }}
         placeholder="Untitled"
@@ -807,22 +841,6 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         typeRow={typeRow}
         tagsRow={tagsRow}
       />
-
-      {(type === 'note' || type === 'index') && (
-        <div className="mt-3 space-y-1.5">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-            {/* An index IS a folder, so the picker chooses where it goes, not what it goes in. */}
-            {type === 'index' ? 'Inside' : 'Folder'}
-          </span>
-          <FolderPicker
-            folders={brainTree.folders}
-            value={folder}
-            onChange={setFolder}
-            contextName={currentCommunity?.name ?? 'Context'}
-          />
-          {titleUsable && <PathPreview path={notePath} />}
-        </div>
-      )}
 
       {/* Per-type extras: ONLY what can't be set afterwards on the thing itself,
           or what its create endpoint refuses to go without. Everything else
@@ -921,6 +939,45 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         onSave={(_, content) => { bodyRef.current = content }}
         onOpenNote={(p) => router.push(noteHref(p))}
       />
+
+      {/* Where it goes — asked at the moment of creating, not while the note
+          is still being written. The gesture IS the filing: drag the draft onto
+          a folder and the drop creates it there. Clicking a row does the same,
+          so this works from the keyboard and on touch. */}
+      <Modal
+        open={destOpen}
+        onClose={() => setDestOpen(false)}
+        size="sm"
+        title={type === 'index' ? 'Drop it in a folder' : 'Drop the note in a folder'}
+        footer={
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setDestOpen(false)}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+          </div>
+        }
+      >
+        <FolderDropBoard
+          folders={brainTree.folders}
+          contextName={currentCommunity?.name ?? 'Context'}
+          cardLabel={title.trim() || 'Untitled'}
+          accent={theme.base}
+          busy={committing}
+          loading={brainTree.loading}
+          pathFor={pathIn}
+          onPick={(dest) => {
+            // Remember it (the stash survives a reload) and create in the same
+            // tick — commit takes the destination rather than reading state.
+            setFolder(dest)
+            setDestOpen(false)
+            void commit(dest)
+          }}
+        />
+      </Modal>
     </div>
   )
 }
@@ -1001,8 +1058,11 @@ function TypeMenu({
   const rows = useMemo<TypeRow[]>(() => {
     const aliasesOf = (o: DraftTypeOption) =>
       o.configName ? aliasesForType(communityAliases, o.configName) : []
+    // findNodeTypeConfig, not getTypeColor: a name the registry doesn't know
+    // (Note in a community that never wrote one) must fall back to the option's
+    // own colour, where getTypeColor would answer with its unknown-type grey.
     const colorOf = (o: DraftTypeOption) =>
-      o.configName ? getTypeColor(o.configName, communityNodeTypes) : o.color
+      (o.configName ? findNodeTypeConfig(o.configName, communityNodeTypes)?.color : null) ?? o.color
 
     // Unfiltered: the built-ins in the console's order, their aliases folded
     // away behind a caret, then the community's own note vocabulary.
@@ -1107,7 +1167,11 @@ function TypeMenu({
             />
           </div>
 
-          <div className="max-h-[60vh] overflow-y-auto py-1" role="listbox">
+          {/* Six-odd rows tall, then it scrolls. The vocabulary grows with the
+              community, so a list sized to fit it ran most of the viewport and
+              buried the surface it was opened over — a short window you scroll
+              is the readable shape at any length. */}
+          <div className="max-h-56 overflow-y-auto py-1" role="listbox">
             {rows.length === 0 && (
               <p className="px-3 py-2 text-[12px] text-text-muted">No type by that name.</p>
             )}
@@ -1151,13 +1215,10 @@ function TypeMenu({
                     onMouseDown={() => { selecting.current = true }}
                     onMouseEnter={() => setHighlight(i)}
                     onClick={() => commit(row)}
-                    className={`flex w-full items-center gap-2.5 py-2 pl-8 pr-3 text-left transition hover:bg-surface-2 ${hover}`}
+                    className={`flex w-full items-center gap-2.5 py-1.5 pl-8 pr-3 text-left transition hover:bg-surface-2 ${hover}`}
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[13px] font-medium text-text-primary">{row.config.name}</span>
-                      {/* No hint of its own: a community's own type is a note
-                          with a name on it, and saying so once is enough. */}
-                      <span className="block truncate text-[11px] text-text-muted">A context note of this type</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">
+                      {row.config.name}
                     </span>
                     {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.config.color }} />
@@ -1218,11 +1279,14 @@ function TypeMenu({
                     onMouseDown={() => { selecting.current = true }}
                     onMouseEnter={() => setHighlight(i)}
                     onClick={() => commit(row)}
-                    className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-1 pr-3 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 py-1.5 pl-1 pr-3 text-left"
                   >
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-medium text-text-primary">{row.option.label}</span>
-                      <span className="block truncate text-[11px] text-text-muted">{row.option.hint}</span>
+                    {/* Name and colour only. The one-line descriptions under
+                        each type doubled the row height — and a list of them is
+                        a paragraph to read where the names alone are a menu to
+                        scan. */}
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">
+                      {row.option.label}
                     </span>
                     {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     {/* The same rounded square the console's Types tab paints —
@@ -1378,8 +1442,8 @@ function ChannelExtras({
           onPick={(viewMode) => onChange({ ...extras, viewMode })}
           accent={accent}
           options={[
-            { value: 'CHAT', label: 'Chat', hint: 'A classic thread' },
-            { value: 'FEED', label: 'Feed', hint: 'Post cards with comments' },
+            { value: 'CHAT', label: 'Chat' },
+            { value: 'FEED', label: 'Feed' },
           ] as const}
         />
       </ExtraField>

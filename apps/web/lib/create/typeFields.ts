@@ -79,10 +79,12 @@ const RESOURCE_FIELDS: TypeFieldDef[] = [
   { key: 'url', label: 'Link', kind: 'url', target: 'column', column: 'url', placeholder: 'https://…' },
 ]
 
-// Events are not creatable from the note-first surface yet (their detail route
-// redirects to /events/<id>, whose tab state isn't in the URL), but the profile
-// details section renders from this table too — and eventRepo writes these keys
-// in snake_case. Do NOT "fix" them to camelCase; lib/eventRepo.ts is the writer.
+// These render on the draft surface (an event is created note-first, like every
+// other entity) and on the profile's details section. eventRepo writes these
+// keys in snake_case — do NOT "fix" them to camelCase; lib/eventRepo.ts is the
+// writer, and a renamed key here silently stops matching what it stored.
+// Deliberately the schedulable basics only: RSVP, form, theme and guest-list
+// settings are the event page's job, not a draft's.
 const EVENT_FIELDS: TypeFieldDef[] = [
   { key: 'start_at', label: 'Date', kind: 'date', target: 'metadata' },
   { key: 'end_at', label: 'Ends', kind: 'date', target: 'metadata' },

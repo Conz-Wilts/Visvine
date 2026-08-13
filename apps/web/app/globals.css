@@ -108,6 +108,12 @@ html, body {
   height: 100%;
   font-family: var(--font-utility);
   accent-color: var(--theme-accent-color, #78d870);
+  /* No horizontal rubber-band: macOS Chrome elastically bounces the viewport on
+     a sideways trackpad swipe even with zero horizontal overflow. Fixed chrome
+     (navbar, rail) stays put while everything else stretches, so the content
+     visibly slides "behind the bar" — glaring once the colour-frame made the
+     page background distinguishable from the chrome. */
+  overscroll-behavior-x: none;
 }
 
 :root {
@@ -126,6 +132,28 @@ html, body {
 /* Plain class (not @utility): reads the var at paint time */
 .shadow-float {
   box-shadow: var(--shadow-float);
+}
+
+/* ── Shell chrome buttons (navbar icons, community selector) ──────────────
+   The --shell-* vars are written by ThemeContext: plain white shell by
+   default, solid pastel chrome when the user turns on "Solid shell". The
+   fallbacks here reproduce the white shell exactly, so these classes are a
+   no-op restyle when the vars are absent (e.g. before hydration). */
+.shell-icon-btn {
+  color: var(--shell-fg, #374151);
+  transition: color 0.15s, background-color 0.15s;
+}
+.shell-icon-btn:hover {
+  color: var(--shell-fg-strong, #111827);
+  background-color: var(--shell-hover, #f9fafb);
+}
+.shell-icon-btn--active {
+  color: var(--shell-active-fg, var(--color-brand-green));
+  background-color: var(--shell-active-bg, transparent);
+}
+.shell-icon-btn--active:hover {
+  color: var(--shell-active-fg-hover, var(--color-brand-dark-green));
+  background-color: var(--shell-active-bg, transparent);
 }
 
 /* In @layer base so text-* utilities on links (e.g. the navbar's active
@@ -286,9 +314,9 @@ html {
 }
 
 /* ─── Global custom scrollbar ──────────────────────────────────────────────
-   Brand-green thumb, transparent track, no arrow buttons — applied to every
-   scrollable element in the app (page, panels, dropdowns, textareas, …). A
-   clean bar, primary colour, no native chrome.
+   Grey thumb (semi-transparent so it reads on light and dark), transparent
+   track, no arrow buttons — applied to every scrollable element in the app
+   (page, panels, dropdowns, textareas, …). A clean bar, no native chrome.
 
    Firefox/Chromium split: the standard `scrollbar-*` props, when set in
    Chromium, force native (Fluent) rendering — which draws arrow buttons and
@@ -302,7 +330,7 @@ html {
   *,
   .custom-scrollbar {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-brand-green, #78d870) transparent;
+    scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
   }
 }
 
@@ -324,15 +352,46 @@ html {
   background: transparent;
 }
 
+/* Pane-top tab bar routes: the bar pins flush under the navbar INSIDE <main>,
+   so <main>'s scroll track starts behind it — and on a long page the thumb is
+   short enough to hide entirely behind the bar at rest. A track margin moves
+   the thumb's travel range to start below the bar, so the scrollbar genuinely
+   begins after the tab row instead of being masked over. PaneTabBar owns the
+   variable (set while a bar is mounted, removed with it). WebKit-only: Firefox's
+   standard scrollbar props have no track-margin equivalent, so it keeps the
+   masked behaviour. */
+main::-webkit-scrollbar-track {
+  margin-top: var(--scrollbar-track-inset, 0px);
+  /* A pinned bar's seam line, continued across the scrollbar's own lane.
+     A fixed strip outside <main> always paints OVER the native scrollbar, so
+     a seam drawn that way slices the thumb; the track background paints UNDER
+     the thumb, so the line stays continuous and the thumb passes in front.
+     Set as a positioned gradient by the bar that owns the seam (see
+     DirectoryToolbar). */
+  background: var(--scrollbar-track-seam, transparent);
+}
+
+/* The global thumb is translucent, which lets the track seam above show
+   through — reading as the line crossing the thumb. On <main> the thumb goes
+   opaque instead: the same grey pre-blended with the page surface, so it looks
+   identical but actually covers what the track paints beneath it. */
+main::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, rgb(128 128 128) 50%, var(--color-surface-1));
+}
+
+main::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, rgb(128 128 128) 75%, var(--color-surface-1));
+}
+
 *::-webkit-scrollbar-thumb,
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: var(--color-brand-green, #78d870);
+  background: rgba(128, 128, 128, 0.5);
   border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover,
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-dark-green, #2f7a3e);
+  background: rgba(128, 128, 128, 0.75);
 }
 
 /* Opt-in: the thumb only appears while the pointer is over the scroller. The
@@ -352,7 +411,7 @@ html {
 }
 
 .scrollbar-on-hover:hover {
-  scrollbar-color: var(--color-brand-green, #78d870) transparent;
+  scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
 }
 
 /* Date & Time Picker Styling */

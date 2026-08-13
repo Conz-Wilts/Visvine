@@ -59,8 +59,8 @@ function AppearanceSection() {
       {/* Theme colour — the only thing here that does anything. */}
       <div>
         <h3 className="text-sm font-semibold text-text-primary mb-1">Theme Colour</h3>
-        <p className="text-xs text-text-muted mb-4">
-          {theme.name} — applies instantly and persists between sessions.
+        <p className="text-lg font-bold mb-4" style={{ color: theme.accent }}>
+          {theme.name}
         </p>
         <div className="flex flex-wrap gap-3">
           {COLOR_THEMES.map(t => (

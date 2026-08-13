@@ -22,7 +22,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { CONNECTIONS_RAIL_W, useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
 import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
 import { contextKeys, prefetchNoteContext, swrFetch } from '@/features/notes/lib/contextPrefetch';
@@ -34,9 +35,6 @@ import { findNodeTypeConfig, getNodeTypeConfig } from '@/lib/types';
 import { tagPalette } from '@/lib/tagColors';
 import type { NoteMeta } from '@/lib/notes/shared/types';
 import ContextLinksPanel from './ContextLinksPanel';
-
-/** The rail's fixed width — what PaneSurfaceHost insets the note content by. */
-export const CONNECTIONS_RAIL_W = 300;
 
 export default function ConnectionsRail({ path, open }: { path: string | null; open: boolean }) {
   const router = useRouter();
@@ -57,7 +55,11 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   }, [open]);
   const { currentCommunity } = useCommunity();
   const communityId = currentCommunity?.id ?? null;
-  const { setConnectionsOpen } = useContextPanel();
+  // The pane tab row's height while one is up (PaneShell publishes it). The rail
+  // starts below that row rather than beside it, so the bar spans the card and
+  // the rail reads as hanging off it — the same rule the docked context tree
+  // follows on the other side.
+  const { setConnectionsOpen, dockTopInset } = useContextPanel();
   const { entityByPath } = useDirectoryEntities();
 
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -148,19 +150,57 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   );
 
   return (
-    // Starts below the navbar (64px) plus the pinned tab row (48px) — the row
-    // is opaque and stacked above (z-[45] on the note pages), so a rail that
-    // reached up to the navbar would just hide its own header behind it. The
-    // attached toolbar tray beside it is transparent; the tray recentres over
-    // the narrowed column (PageTabBar insets by the rail width), so nothing
-    // floats over the rail.
+    // The rail lives INSIDE the shell's rounded content card, not at the screen
+    // edge: the clip wrapper pins to the card's right region — below the navbar
+    // (64px) plus the frame gap, and inset from the viewport right/bottom by the
+    // card's own inset (SHELL_FRAME_MARGIN + SHELL_FRAME_GAP). Its
+    // overflow-hidden is what makes the slide emerge from the card's edge
+    // rather than the side of the screen, and it carries the card's right-hand
+    // corner radii so the rail doesn't poke square corners past the frame.
+    //
+    // Its CONTENT starts below the pane's pinned tab row: the row is the
+    // surface's chrome and belongs across the whole card, so the rail hangs
+    // under it rather than beside it. The rail can't simply be pushed down to
+    // clear the row, because the row can't reach across the strip either —
+    // <main> gives that width up as a border and clips its own content at the
+    // padding edge, so the bar stops at the rail's left edge. The rail
+    // therefore CONTINUES the row itself: a spacer of the row's height
+    // (dockTopInset), in the same surface and carrying the same bottom
+    // hairline, riding the slide with the rest of the column so it arrives and
+    // leaves as one piece.
+    //
+    // pointer-events-none so the transparent wrapper never swallows clicks;
+    // the aside re-enables them on itself.
+    <div
+      className="pointer-events-none fixed z-30 hidden overflow-hidden xl:block"
+      style={{
+        top: 64 + SHELL_FRAME_GAP,
+        right: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
+        bottom: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
+        width: CONNECTIONS_RAIL_W,
+        borderTopRightRadius: SHELL_FRAME_RADIUS,
+        borderBottomRightRadius: SHELL_FRAME_RADIUS,
+      }}
+    >
     <aside
-      className={`fixed right-0 top-[112px] z-30 hidden h-[calc(100dvh-112px)] w-[300px] flex-col border-l border-border-subtle bg-surface-1 transition-transform duration-300 [transition-timing-function:cubic-bezier(0.25,0.1,0.25,1)] motion-reduce:transition-none xl:flex ${
+      className={`pointer-events-auto flex h-full w-full flex-col border-l border-border-subtle bg-surface-1 transition-transform duration-300 [transition-timing-function:cubic-bezier(0.25,0.1,0.25,1)] motion-reduce:transition-none ${
         slidIn ? 'translate-x-0' : 'translate-x-full'
       }`}
       aria-label="Connections"
       aria-hidden={!open}
     >
+      {/* The tab row's continuation across the strip — the seam the bar can't
+          reach. Presentational only: the row's own tabs and actions stay in the
+          bar itself, which paints above this (z-45). Zero-height on a surface
+          with no bar, so the rail simply starts at the card top there. */}
+      {dockTopInset > 0 && (
+        <div
+          aria-hidden
+          className="shrink-0 border-b border-border-subtle bg-surface-1"
+          style={{ height: dockTopInset }}
+        />
+      )}
+
       <div className="shrink-0 border-b border-border-subtle px-4 py-2.5">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-text-primary">Connections</span>
@@ -227,5 +267,6 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
         />
       </div>
     </aside>
+    </div>
   );
 }

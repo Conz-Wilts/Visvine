@@ -7,8 +7,9 @@ import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/Cre
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useCommunity } from "@/features/shared/contexts/CommunityContext";
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
-import { shellEntranceStyle, DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
+import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/features/create/components/CreateModal";
 import type { CommunityFeatureConfig } from "@/lib/types";
@@ -31,8 +32,8 @@ import type { CommunityFeatureConfig } from "@/lib/types";
  * ContextPanelContext), so the icon rail + tree read as one connected container.
  */
 
-// Exported so the Navbar seam/fillet and the AuthLayout content padding track the
-// exact same rail widths — change them here and the whole L-shell stays in sync.
+// Exported so the AuthLayout's frame box and the rail track the exact same
+// widths — change them here and the whole shell stays in sync.
 export const COLLAPSED_W = 76;
 export const EXPANDED_W = 212;
 const ICON_SIZE = 40;
@@ -53,9 +54,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { isOpen: createOpen } = useCreateModal();
   const createSurface = useCreateSurface();
-  // `entered` + `reduced` are shared with the Navbar (SidebarContext) so the whole
-  // navbar + rail shell plays one coordinated entrance on load.
-  const { expanded, setExpanded, entered, reduced } = useSidebar();
+  const { expanded, setExpanded, reduced } = useSidebar();
   const { currentCommunity, isAdmin, loading: communityLoading } = useCommunity();
   const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
@@ -74,8 +73,14 @@ export default function Sidebar() {
   const noSpace = !communityLoading && !currentCommunity;
   const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin);
   const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin);
-  const moreActive = moreNav.some(({ href }) => pathname === href);
-  const railActiveIndex = allNav.findIndex(({ href }) => pathname === href);
+  // A tool stays lit on its sub-routes too (e.g. /channels redirects straight
+  // to /channels/<conversationId>, which used to drop the pill right after the
+  // click). Longest matching href wins so /directory/note/index.md beats /directory.
+  const activeHref = [...allNav, ...moreNav]
+    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+    .reduce<string | null>((best, { href }) => (href.length > (best?.length ?? -1) ? href : best), null);
+  const moreActive = moreNav.some(({ href }) => href === activeHref);
+  const railActiveIndex = allNav.findIndex(({ href }) => href === activeHref);
   // A More tool being active parks the pill on the More row — the last nav slot.
   const activeIndex = railActiveIndex >= 0 ? railActiveIndex : moreActive ? allNav.length : -1;
 
@@ -125,10 +130,6 @@ export default function Sidebar() {
   // (the grid's card cascade) is mid-animation beside it.
   const dur = reduced ? "0s" : `${docked || createOpen ? DOCK_MS : DOCK_CLOSE_MS}ms`;
 
-  // Shared with the Navbar: both drift in from the left by the same amount so the
-  // whole L-shell flows into place as one piece (see shellEntranceStyle).
-  const entranceStyle = shellEntranceStyle(entered, reduced);
-
   // The icon rail's inner content — reused by both the floating and docked cards.
   const railInner = (
     <>
@@ -138,7 +139,7 @@ export default function Sidebar() {
       {!noSpace && <div className="relative group">
         <button
           onClick={() => createSurface()}
-          className="flex items-center h-10 text-white"
+          className="flex items-center h-10"
           style={{ paddingLeft: ICON_LEFT }}
         >
           <span
@@ -146,7 +147,8 @@ export default function Sidebar() {
             style={{
               width: ICON_SIZE,
               height: ICON_SIZE,
-              background: "var(--color-brand-green, #78d870)",
+              color: "var(--shell-create-fg, white)",
+              background: "var(--shell-create-bg, var(--color-brand-green, #78d870))",
               boxShadow: "0 4px 12px color-mix(in srgb, var(--color-brand-green, #78d870) 50%, transparent)",
               transition: "transform 0.2s",
             }}
@@ -155,7 +157,7 @@ export default function Sidebar() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
           </span>
-          <span className="text-sm font-medium whitespace-nowrap" style={{ marginLeft: LABEL_ML, color: "var(--text-secondary, #374151)" }}>
+          <span className="text-sm font-medium whitespace-nowrap" style={{ marginLeft: LABEL_ML, color: "var(--shell-fg, #374151)" }}>
             Create new
           </span>
         </button>
@@ -179,8 +181,9 @@ export default function Sidebar() {
             stretches when expanded */}
         {activeIndex >= 0 && (
           <div
-            className="absolute rounded-full bg-brand-green shadow-md pointer-events-none"
+            className="absolute rounded-full shadow-md pointer-events-none"
             style={{
+              background: "var(--shell-pill, var(--color-brand-green, #78d870))",
               height: ICON_SIZE,
               left: ICON_LEFT,
               right: ICON_LEFT,
@@ -192,7 +195,7 @@ export default function Sidebar() {
         )}
 
         {allNav.map(({ href, label, icon }) => {
-          const active = pathname === href;
+          const active = href === activeHref;
           return (
             <div key={href} className="relative group">
               <Link
@@ -200,7 +203,7 @@ export default function Sidebar() {
                 className="relative z-10 flex items-center h-10"
                 style={{
                   paddingLeft: ICON_LEFT,
-                  color: active ? "white" : "var(--text-secondary, #374151)",
+                  color: active ? "var(--shell-pill-fg, white)" : "var(--shell-fg, #374151)",
                   transition: "color 0.3s",
                 }}
               >
@@ -240,7 +243,7 @@ export default function Sidebar() {
               className="relative z-10 flex items-center h-10 w-full"
               style={{
                 paddingLeft: ICON_LEFT,
-                color: moreActive ? "white" : "var(--text-secondary, #374151)",
+                color: moreActive ? "var(--shell-pill-fg, white)" : "var(--shell-fg, #374151)",
                 transition: "color 0.3s",
               }}
             >
@@ -278,16 +281,13 @@ export default function Sidebar() {
 
   // ONE <aside> for both modes, so it's the same persistent element across
   // navigation — identical placement (card top flush under the navbar at 64px =
-  // top-16) and the same entrance animation, never re-mounting. The top edge and
+  // top-16), never re-mounting. The top edge and
   // top-right corner are squared off (no top border) so the rail reads as one
   // continuous L-shaped shell with the navbar. On the docked routes the card
   // gains a panel column beside the rail; the page portals its panel content
   // into the host below.
   return (
-    <aside
-      className="fixed left-0 top-16 z-40"
-      style={entranceStyle}
-    >
+    <aside className="fixed left-0 top-16 z-40">
       {/* The card always runs from the navbar to the bottom of the viewport, flush
           against the left/bottom screen edges: those corners and borders are dropped
           so it reads as attached to the shell rather than floating.
@@ -301,14 +301,17 @@ export default function Sidebar() {
             Its border-r is the card's constant vertical seam: the closed card's
             right edge, the rail/panel divider when a panel is docked, and the
             line beside the pane tab bar (which starts one pixel in — PaneTabBar's
-            -ml-[23px] — so this stays visible). Width is +1 so the border sits
-            outside the icon area, at the x the navbar's corner fillet expects
-            (Navbar.tsx SEAM_R), letting the seam emerge from the curve instead
-            of poking a tick up through it. */}
+            -ml-[23px] — so this stays visible). */}
         <div
-          className="relative flex shrink-0 flex-col overflow-hidden bg-white border-r border-border-subtle"
+          className="relative flex shrink-0 flex-col overflow-hidden border-r"
           style={{
-            width: (expanded ? EXPANDED_W : COLLAPSED_W) + 1,
+            background: "var(--shell-bg, #ffffff)",
+            borderRightColor: "var(--shell-border, #e5e7eb)",
+            // No +1 border column: the rail is fixed at z-40, so an overhanging
+            // pixel would paint white OVER the frame box's left accent band
+            // (the box must sit in front of the shell there — nothing of the
+            // bar may cover it).
+            width: expanded ? EXPANDED_W : COLLAPSED_W,
             paddingTop: RAIL_PAD_Y,
             paddingBottom: RAIL_PAD_Y,
             gap: RAIL_GAP,
@@ -331,29 +334,60 @@ export default function Sidebar() {
             column is closing, so a gate would slide it up into the bar's band
             mid-close. Animated like the width, since docked surfaces with
             different top bars must glide rather than teleport. */}
+        {/* The colour frame insets <main> into a rounded card that starts
+            SHELL_FRAME_GAP below the navbar and stops the same gap above the
+            viewport bottom (AuthLayoutClient). The docked panel reads as part of
+            that card, so it takes the same top/bottom insets, lines its left edge
+            up with the card's (marginLeft closes the rail's railW → card's
+            railW+SHELL_FRAME_GAP difference so the vertical band runs unbroken),
+            and rounds its outer corners — otherwise its square edges poke past
+            the card's frame. */}
         <div
-          className="relative shrink-0 overflow-hidden bg-white"
+          className="relative shrink-0 overflow-hidden"
           style={{
+            background: "var(--color-surface-1, #ffffff)",
             width: columnW,
-            marginTop: dockTopInset,
+            marginTop: dockTopInset + SHELL_FRAME_GAP,
+            marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,
+            // Rail is railW wide (no +1 border column), so the full GAP closes
+            // the distance to the card's left edge.
+            marginLeft: SHELL_FRAME_GAP,
+            borderTopLeftRadius: SHELL_FRAME_RADIUS,
+            borderBottomLeftRadius: SHELL_FRAME_RADIUS,
             transition: `width ${dur} ${ease}, margin-top ${dur} ${ease}`,
           }}
         >
           {/* The panel's right edge (was the card wrapper's border-r, which spanned
               the bar band too). Lives inside the offset column so it starts below
               the bar and rides the clipping width; faded when closed so no stray
-              hairline lingers off-dock. */}
+              hairline lingers off-dock. Card-content grey, NOT --shell-border:
+              the frame theme sets that to transparent to drop the SHELL's seams,
+              but this line divides panel from note INSIDE the card — it must
+              stay visible or the tree bleeds into the note body. */}
           <div
-            className="absolute right-0 top-0 z-20 h-full w-px bg-border-subtle"
-            style={{ opacity: docked || createOpen ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
+            className="absolute right-0 top-0 z-20 h-full w-px"
+            style={{ background: "var(--border-subtle, #e5e7eb)", opacity: docked || createOpen ? 1 : 0, transition: `opacity ${dur} ${ease}` }}
           />
           {/* Portal host: the page (MessagesClient / ConsoleShell) mounts its panel
               here. Inner width tracks the active route's panel so the content is
-              revealed by the clipping column rather than reflowing as it opens. */}
+              revealed by the clipping column rather than reflowing as it opens.
+              It also SLIDES with the column's leading edge (parked under the icon
+              rail at -100%, like the Create panel above): the width change alone
+              is a wipe over motionless content, which reads as snapping open even
+              at the same duration. Travelling content is what gives the
+              connections rail its glide, so the panel is glued to the widening
+              edge on the same duration/easing. Transform is identity at rest, and
+              every popup the tree opens portals to <body>, so nothing inside is
+              trapped by the containing block this creates. */}
           <div
             ref={setHost}
             className="min-h-0"
-            style={{ width: panelW, height: '100%' }}
+            style={{
+              width: panelW,
+              height: '100%',
+              transform: docked ? 'translateX(0)' : 'translateX(-100%)',
+              transition: `transform ${dur} ${ease}`,
+            }}
           />
 
           {/* "Create new" — a layer over the host, clipped by this column so it
@@ -411,7 +445,7 @@ export default function Sidebar() {
           <div className="px-6 py-5">
             <div className="grid grid-cols-2 gap-3">
               {moreNav.map(({ href, label, icon }) => {
-                const active = pathname === href;
+                const active = href === activeHref;
                 return (
                   <Link
                     key={href}

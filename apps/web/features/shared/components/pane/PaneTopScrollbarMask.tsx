@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
+import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 
 /**
  * Hides the page scrollbar behind a pane-top tab bar.
@@ -21,22 +23,69 @@ import { createPortal } from 'react-dom';
  * with that bar.
  */
 export default function PaneTopScrollbarMask({
-  /** Bar height in px — matches the h-12 tab row by default. */
-  height = 48,
+  /** Bar height in px — the h-12 tab row PLUS its 1px bottom border by
+      default, so the strip's own border-b lands on exactly the same row of
+      pixels as the bar's. One short reads as a second line hanging 1px high
+      off the seam's right end. */
+  height = 49,
+  /** Viewport-y of the mask's bottom edge; overrides `height` when set. Lets a
+      bar of variable/measured height (e.g. a toolbar that grows a chip row)
+      mask exactly down to its own bottom. */
+  bottom,
+  /** Bottom seam on the strip — turn off for bars whose own border is
+      conditional, and pass their state instead. */
+  border = true,
+  /** Draw only the seam, not the surface: the strip's background goes clear so
+      the scrollbar thumb stays visible behind it, and just the 1px border-b
+      carries the bar's line across the gutter. */
+  transparent = false,
 }: {
   height?: number;
+  bottom?: number;
+  border?: boolean;
+  transparent?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
+  // The connections rail narrows <main>, and the scrollbar rides in with it —
+  // so the strip has to follow, or it masks blank rail and leaves the bar's top
+  // exposed beside the pinned row.
+  const { railInset } = useContextPanel();
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
+
+  const top = 64 + SHELL_FRAME_GAP;
+  const resolvedHeight = bottom != null ? Math.max(0, bottom - top) : height;
+
+  // A fixed strip always paints over <main>'s native scrollbar — nothing can
+  // put the thumb back in front of it. So the seam-only variant stops short of
+  // the 8px scrollbar column (see globals.css) and the scrollbar reads as
+  // passing in front of the line rather than being cut by it.
+  const scrollbarW = transparent ? 8 : 0;
 
   return createPortal(
     <div
       aria-hidden
-      // top-16 = the navbar's h-16, i.e. where <main> (and its scrollbar) starts.
-      // z-40 keeps it under the navbar (z-50) and under modals.
-      className="pointer-events-none fixed right-0 top-16 z-40 w-3 border-b border-border-subtle bg-surface-1"
-      style={{ height }}
+      // z-40 keeps it under the navbar (z-50) and under modals. Position and
+      // size are inline throughout: the colour frame insets <main> into a
+      // rounded card (see AuthLayoutClient), so every edge here is derived from
+      // the frame constants rather than a fixed utility.
+      className={`pointer-events-none fixed z-40 ${transparent ? '' : 'bg-surface-1'} ${
+        border ? 'border-b border-border-subtle' : ''
+      }`}
+      style={{
+        height: resolvedHeight,
+        right: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN + scrollbarW + railInset,
+        // 16px, not the 12px a w-3 strip would give: classic (always-on)
+        // scrollbars are 15px wide, and a sliver of track peeked past the
+        // mask's left edge.
+        width: 16 - scrollbarW,
+        // Where <main> (and its scrollbar) starts: the navbar's 64px, plus the
+        // frame gap above the card.
+        top,
+        // Only at the card's own corner — inset by the rail it sits mid-card,
+        // where a radius would round a corner that isn't there.
+        borderTopRightRadius: transparent || railInset ? 0 : SHELL_FRAME_RADIUS,
+      }}
     />,
     document.body,
   );

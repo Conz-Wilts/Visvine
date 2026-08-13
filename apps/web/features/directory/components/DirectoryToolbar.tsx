@@ -13,6 +13,7 @@
 // All state lives in the passed-in useDirectoryBrowse() instance.
 
 import { useEffect, useRef, useState } from 'react';
+import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 import { FilterDropdown, SortDropdown } from '@/features/directory/components/FilterDropdown';
 import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
@@ -54,13 +55,46 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   // a rule drawn through nothing.
   const ref = useRef<HTMLDivElement>(null);
   const [scrolled, setScrolled] = useState(false);
+  // No opaque gutter mask here, deliberately: the scroll track is inset to
+  // start just under the tab bar (see PaneTabBar's --scrollbar-track-inset)
+  // and the thumb stays visible in front of this bar. But the bar's scrolled
+  // border stops at <main>'s content edge — the gutter is outside it — so a
+  // transparent strip carries the 1px seam across the gutter up to the
+  // scrollbar's lane, and a positioned gradient on the track itself (see
+  // globals.css, --scrollbar-track-seam) finishes it across the lane UNDER
+  // the thumb. Bottom is measured because the chip row changes the height.
+  const [barBottom, setBarBottom] = useState(0);
   useEffect(() => {
-    const scroller = ref.current?.closest('main');
-    if (!scroller) return;
-    const onScroll = () => setScrolled(scroller.scrollTop > 0);
-    onScroll();
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', onScroll);
+    const el = ref.current;
+    const scroller = el?.closest('main');
+    if (!el || !scroller) return;
+    const update = () => {
+      const isScrolled = scroller.scrollTop > 0;
+      setScrolled(isScrolled);
+      const bottom = el.getBoundingClientRect().bottom;
+      setBarBottom(bottom);
+      if (isScrolled) {
+        // Offset of the seam within the track box: the track starts at
+        // <main>'s top plus its margin-top inset.
+        const inset = parseFloat(getComputedStyle(scroller).getPropertyValue('--scrollbar-track-inset')) || 0;
+        const off = Math.round(bottom - 1 - (scroller.getBoundingClientRect().top + inset));
+        scroller.style.setProperty(
+          '--scrollbar-track-seam',
+          `linear-gradient(to bottom, transparent ${off}px, var(--color-border-subtle) ${off}px, var(--color-border-subtle) ${off + 1}px, transparent ${off + 1}px)`,
+        );
+      } else {
+        scroller.style.removeProperty('--scrollbar-track-seam');
+      }
+    };
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    const resize = new ResizeObserver(update);
+    resize.observe(el);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      resize.disconnect();
+      scroller.style.removeProperty('--scrollbar-track-seam');
+    };
   }, []);
 
   const aliases = (community?.communityAliases ?? []) as CommunityAlias[];
@@ -94,6 +128,11 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
         scrolled ? 'border-b border-border-subtle' : 'border-b border-transparent'
       }`}
     >
+      {/* Seam-only continuation of the scrolled border across the gutter —
+          transparent, so the thumb shows through it. */}
+      {scrolled && barBottom > 0 && (
+        <PaneTopScrollbarMask bottom={barBottom} border transparent />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={searchTerm}

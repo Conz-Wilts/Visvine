@@ -50,6 +50,9 @@ export function formatEventDateRange(
   timezone?: string
 ): string {
   const startDate = new Date(start);
+  // Created note-first and not scheduled yet. Every formatter below would say
+  // "Invalid Date"; this is the one sentence that is actually true.
+  if (Number.isNaN(startDate.getTime())) return 'Date to be set';
   const endDate = end ? new Date(end) : null;
 
   const dateOptions: Intl.DateTimeFormatOptions = {
@@ -200,6 +203,7 @@ export function missingRequiredAnswers(
  */
 export function formatEventTime(date: string): string {
   const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
@@ -227,6 +231,8 @@ export function isEventUpcoming(startAt: string): boolean {
  */
 export function formatEventDateShort(startAt: string): { month: string; day: string } {
   const d = new Date(startAt);
+  // The calendar badge for an unscheduled event: no month, no number.
+  if (Number.isNaN(d.getTime())) return { month: 'TBD', day: '·' };
   return {
     month: d.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
     day: String(d.getDate()),
@@ -240,6 +246,9 @@ export function formatEventDateShort(startAt: string): { month: string; day: str
  */
 export function startsInLabel(startAt: string): string | null {
   const diffMs = new Date(startAt).getTime() - Date.now();
+  // No date set yet (an event created note-first) — there is no countdown to
+  // give, and NaN arithmetic below would happily render "Starts in NaN months".
+  if (Number.isNaN(diffMs)) return null;
   if (diffMs < 0) return null;
   const hours = Math.floor(diffMs / 3600000);
   if (hours < 1) return 'Starting soon';
@@ -264,6 +273,10 @@ export const RESPONSE_LABELS: Record<RSVPResponse, string> = {
 export function getEventStatus(startAt: string, endAt?: string): 'upcoming' | 'live' | 'past' {
   const now = Date.now();
   const start = new Date(startAt).getTime();
+  // Unscheduled, not over: every comparison against NaN is false, so without
+  // this an event awaiting its date fell through to 'past' and rendered dimmed
+  // with a "Past event" badge.
+  if (Number.isNaN(start)) return 'upcoming';
   const end = endAt ? new Date(endAt).getTime() : start + 3 * 60 * 60 * 1000;
 
   if (now < start) return 'upcoming';

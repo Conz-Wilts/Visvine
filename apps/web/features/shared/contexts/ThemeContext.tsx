@@ -9,6 +9,9 @@ export interface ColorTheme {
   accent: string;
   accentDark: string;
   accentLight: string;
+  /** Light-pastel frame colour for colour-frame mode: the band the shell shows
+      around the white content card (AuthLayoutClient). */
+  shellBg: string;
   pickerFilter: string;
   pickerFilterHover: string;
 }
@@ -20,6 +23,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#78d870',
     accentDark: '#2f7a3e',
     accentLight: '#eaf9ec',
+    shellBg: '#d8f0d4',
     pickerFilter: 'brightness(0) saturate(100%) invert(71%) sepia(0%) saturate(1%) hue-rotate(154deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(73%) sepia(21%) saturate(584%) hue-rotate(75deg) brightness(95%) contrast(85%)',
   },
@@ -29,6 +33,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#60a5fa',
     accentDark: '#1d4ed8',
     accentLight: '#eff6ff',
+    shellBg: '#d8e8fb',
     pickerFilter: 'brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(1%) hue-rotate(200deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(63%) sepia(40%) saturate(500%) hue-rotate(195deg) brightness(100%) contrast(90%)',
   },
@@ -38,6 +43,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#a78bfa',
     accentDark: '#6d28d9',
     accentLight: '#f5f3ff',
+    shellBg: '#e5defa',
     pickerFilter: 'brightness(0) saturate(100%) invert(62%) sepia(10%) saturate(800%) hue-rotate(230deg) brightness(95%) contrast(88%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(55%) sepia(40%) saturate(600%) hue-rotate(240deg) brightness(100%) contrast(90%)',
   },
@@ -47,6 +53,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#f87171',
     accentDark: '#dc2626',
     accentLight: '#fff1f2',
+    shellBg: '#fbdbdb',
     pickerFilter: 'brightness(0) saturate(100%) invert(55%) sepia(5%) saturate(200%) hue-rotate(320deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(52%) sepia(60%) saturate(600%) hue-rotate(330deg) brightness(100%) contrast(90%)',
   },
@@ -56,6 +63,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#fb923c',
     accentDark: '#c2410c',
     accentLight: '#fff7ed',
+    shellBg: '#fce4cb',
     pickerFilter: 'brightness(0) saturate(100%) invert(65%) sepia(5%) saturate(200%) hue-rotate(20deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(62%) sepia(50%) saturate(600%) hue-rotate(15deg) brightness(100%) contrast(90%)',
   },
@@ -65,6 +73,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#2dd4bf',
     accentDark: '#0f766e',
     accentLight: '#f0fdfa',
+    shellBg: '#cdf0ea',
     pickerFilter: 'brightness(0) saturate(100%) invert(70%) sepia(0%) saturate(1%) hue-rotate(170deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(72%) sepia(30%) saturate(500%) hue-rotate(155deg) brightness(95%) contrast(85%)',
   },
@@ -74,6 +83,7 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#f472b6',
     accentDark: '#be185d',
     accentLight: '#fdf2f8',
+    shellBg: '#fbd9eb',
     pickerFilter: 'brightness(0) saturate(100%) invert(60%) sepia(5%) saturate(200%) hue-rotate(295deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(58%) sepia(40%) saturate(600%) hue-rotate(295deg) brightness(100%) contrast(90%)',
   },
@@ -83,12 +93,33 @@ export const COLOR_THEMES: ColorTheme[] = [
     accent: '#818cf8',
     accentDark: '#3730a3',
     accentLight: '#eef2ff',
+    shellBg: '#dee3fb',
     pickerFilter: 'brightness(0) saturate(100%) invert(58%) sepia(5%) saturate(400%) hue-rotate(210deg) brightness(90%) contrast(87%)',
     pickerFilterHover: 'brightness(0) saturate(100%) invert(55%) sepia(35%) saturate(600%) hue-rotate(220deg) brightness(100%) contrast(90%)',
   },
 ];
 
 const THEME_STORAGE_KEY = 'nb_color_theme';
+
+// Colour-frame geometry. The frame is a rounded accent-coloured box sitting on
+// the white shell (below the navbar, right of the rail, inset from the
+// viewport's right/bottom edges by MARGIN of white); the content card floats
+// inside it with GAP of colour showing on every side. Shared by
+// AuthLayoutClient (the box + card), Sidebar (the docked panel aligns to the
+// card) and PaneTopScrollbarMask (sits over the card's top-right corner).
+export const SHELL_FRAME_GAP = 3;      // colour visible between box edge and card
+export const SHELL_FRAME_MARGIN = 8;   // white between the box and the viewport right/bottom
+export const SHELL_FRAME_RADIUS = 12;  // card corner radius (box outer radius = RADIUS + GAP)
+
+// Shell chrome vars (navbar + sidebar rail). Consumed via var(--shell-*) in
+// Navbar/Sidebar and the .shell-icon-btn classes in globals.css. The list is
+// what the unmount cleanup below iterates.
+const SHELL_VARS = [
+  '--shell-bg', '--shell-fg', '--shell-fg-strong', '--shell-border',
+  '--shell-hover', '--shell-active-fg', '--shell-active-fg-hover',
+  '--shell-active-bg', '--shell-pill', '--shell-pill-fg',
+  '--shell-create-bg', '--shell-create-fg', '--shell-frame',
+] as const;
 
 interface ThemeContextValue {
   theme: ColorTheme;
@@ -110,6 +141,27 @@ function applyAll(theme: ColorTheme) {
   root.style.setProperty('--theme-picker-filter', theme.pickerFilter);
   root.style.setProperty('--theme-picker-filter-hover', theme.pickerFilterHover);
   root.style.setProperty('--theme-accent-color', theme.accent);
+
+  // Shell chrome. The navbar/rail keep the plain white design; the colour
+  // frame paints the band around the content card (--shell-frame), and
+  // --shell-border goes transparent so the rail's own seam is dropped and the
+  // white chrome meets the band without a hairline between them.
+  const shell: Record<(typeof SHELL_VARS)[number], string> = {
+    '--shell-bg': '#ffffff',
+    '--shell-fg': '#374151',
+    '--shell-fg-strong': '#111827',
+    '--shell-border': 'transparent',
+    '--shell-hover': '#f9fafb',
+    '--shell-active-fg': theme.accent,
+    '--shell-active-fg-hover': theme.accentDark,
+    '--shell-active-bg': 'transparent',
+    '--shell-pill': theme.accent,
+    '--shell-pill-fg': '#ffffff',
+    '--shell-create-bg': theme.accent,
+    '--shell-create-fg': '#ffffff',
+    '--shell-frame': theme.accent,
+  };
+  SHELL_VARS.forEach(v => root.style.setProperty(v, shell[v]));
 
   // Structural color vars
   root.style.setProperty('--color-brand-black', '#111827');
@@ -140,7 +192,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
        '--color-brand-bg','--theme-picker-filter','--theme-picker-filter-hover',
        '--theme-accent-color','--color-brand-black','--color-brand-grey','--color-brand-white',
        '--surface-1','--surface-2','--surface-3','--border-subtle','--border-default',
-       '--text-primary','--text-secondary','--text-muted']
+       '--text-primary','--text-secondary','--text-muted', ...SHELL_VARS]
         .forEach(v => root.style.removeProperty(v));
     };
   }, []);

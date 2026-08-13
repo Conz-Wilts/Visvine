@@ -341,7 +341,11 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                     {formatEventDateRange(event.startAt, event.endAt, event.timezone)}
                   </div>
                   <div className="text-xs text-text-muted mt-0.5">
-                    {liveStatus === 'upcoming' && (startsInLabel(event.startAt) ?? 'Starting soon')}
+                    {liveStatus === 'upcoming' &&
+                      (startsInLabel(event.startAt) ??
+                        // No countdown and no date is a schedule waiting to be
+                        // set, not an event about to begin.
+                        (event.startAt ? 'Starting soon' : 'Set a date to publish it'))}
                     {liveStatus === 'live' && <span className="font-semibold" style={{ color: theme.dark }}>Happening now</span>}
                     {liveStatus === 'past' && 'This event has ended'}
                   </div>

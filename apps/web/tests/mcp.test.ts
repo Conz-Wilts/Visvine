@@ -387,8 +387,8 @@ test('a mention WITHOUT the leading slash silently resolves to nothing', () => {
   ])
 })
 
-test('only person, space and resource are creatable from the context layer', () => {
-  assert.deepEqual([...CREATABLE_TYPES], ['person', 'space', 'resource'])
+test('person, space, resource and event are creatable from the context layer', () => {
+  assert.deepEqual([...CREATABLE_TYPES], ['person', 'space', 'resource', 'event'])
   assert.equal(isCreatableType('person'), true)
   assert.equal(isCreatableType('space'), true)
   // The retired organisation spellings are NOT creatable ids — callers must
@@ -397,8 +397,10 @@ test('only person, space and resource are creatable from the context layer', () 
   assert.equal(isCreatableType('organization'), false)
   assert.equal(isCreatableType('community'), false)
   assert.equal(isCreatableType('resource'), true)
-  // Events go through the events surface; these are structural/admin types.
-  assert.equal(isCreatableType('event'), false)
+  // An event starts as a context note like everything else; its date and RSVP
+  // settings are edited on the event page afterwards.
+  assert.equal(isCreatableType('event'), true)
+  // Structural/admin types stay out.
   assert.equal(isCreatableType('channel'), false)
   assert.equal(isCreatableType('section'), false)
   assert.equal(isCreatableType('note'), false)
@@ -422,7 +424,10 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
     ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'index'],
   )
   const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
-  assert.deepEqual(creatable, ['person', 'space', 'resource'])
+  // Catalog order, not CREATABLE_TYPES order: an event is creatable now (it
+  // starts as a context note like everything else) and sits where the closed
+  // vocabulary puts it.
+  assert.deepEqual(creatable, ['person', 'space', 'event', 'resource'])
   // Connector is enabled by default but NEVER creatable from add_context —
   // its only door is an admin-authored note under connectors/.
   const connector = entries.find((e) => e.type === 'connector')!

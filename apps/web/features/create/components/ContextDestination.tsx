@@ -7,6 +7,7 @@
 // are identical for both.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Folder, GripVertical } from 'lucide-react';
 import { slugify } from '@/lib/eventUtils';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, swrFetch } from '@/features/notes/lib/contextPrefetch';
@@ -173,6 +174,155 @@ export function FolderPicker({
       >
         New folder
       </button>
+    </div>
+  );
+}
+
+/**
+ * The destination board: every folder in the brain as a drop target, and the
+ * draft as a card you drag into one. Dropping IS the create — that's the whole
+ * gesture, and it's why this isn't a select. Clicking a row does the same
+ * thing, so the board works from the keyboard and on touch, where HTML5 drag
+ * doesn't fire at all.
+ *
+ * `folders` is already depth-first by path, so indenting by depth reproduces
+ * the tree without rebuilding it.
+ */
+export function FolderDropBoard({
+  folders,
+  contextName,
+  cardLabel,
+  accent,
+  busy = false,
+  loading = false,
+  pathFor,
+  onPick,
+}: {
+  folders: FolderOption[];
+  contextName: string;
+  /** What's being filed — shown on the draggable card. */
+  cardLabel: string;
+  /** The draft's type colour, for the card and the hovered row. */
+  accent: string;
+  busy?: boolean;
+  loading?: boolean;
+  /** Full note path if it landed in this folder — previewed under the hover. */
+  pathFor: (folder: string) => string;
+  onPick: (folder: string) => void;
+}) {
+  // The row the pointer is over mid-drag. Tracked as a value rather than a CSS
+  // :hover because dragover fires on descendants too, and a class would flicker
+  // as the pointer crosses the label inside the row.
+  const [over, setOver] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  const rows: FolderOption[] = [{ path: '', label: `${contextName} (top level)` }, ...folders];
+
+  const pick = (folder: string) => {
+    if (busy) return;
+    setOver(null);
+    setDragging(false);
+    onPick(folder);
+  };
+
+  return (
+    <div className="space-y-3">
+      <div
+        draggable={!busy}
+        onDragStart={(e) => {
+          setDragging(true);
+          // Firefox ignores a drag with no payload; the value is unused (the
+          // board knows what it's filing) but it has to be set.
+          e.dataTransfer.setData('text/plain', cardLabel);
+          e.dataTransfer.effectAllowed = 'move';
+        }}
+        onDragEnd={() => { setDragging(false); setOver(null); }}
+        className={`flex cursor-grab items-center gap-2 rounded-xl border-2 border-dashed px-3 py-2.5 text-sm font-medium transition active:cursor-grabbing ${
+          dragging ? 'opacity-50' : ''
+        }`}
+        style={{ borderColor: accent, color: accent }}
+      >
+        <GripVertical className="h-4 w-4 shrink-0 opacity-70" />
+        <span className="min-w-0 flex-1 truncate">{cardLabel}</span>
+        <span className="shrink-0 text-[11px] font-normal opacity-70">drag into a folder</span>
+      </div>
+
+      <div className="max-h-64 overflow-y-auto rounded-xl border border-border-subtle">
+        {loading && folders.length === 0 && (
+          <p className="px-3 py-2 text-[12px] text-text-muted">Loading folders…</p>
+        )}
+        {rows.map((row) => {
+          const depth = row.path ? row.path.split('/').length - 1 : 0;
+          const isOver = over === row.path;
+          return (
+            <button
+              key={row.path || '__root__'}
+              type="button"
+              disabled={busy}
+              onClick={() => pick(row.path)}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setOver(row.path); }}
+              onDragLeave={() => setOver((p) => (p === row.path ? null : p))}
+              onDrop={(e) => { e.preventDefault(); pick(row.path); }}
+              className="flex w-full items-center gap-2 border-b border-border-subtle px-3 py-2 text-left text-sm transition last:border-b-0 hover:bg-surface-2 disabled:cursor-not-allowed"
+              style={{
+                paddingLeft: 12 + depth * 14,
+                background: isOver ? `${accent}1a` : undefined,
+                boxShadow: isOver ? `inset 2px 0 0 ${accent}` : undefined,
+              }}
+            >
+              <Folder className="h-4 w-4 shrink-0 text-text-muted" />
+              <span className="min-w-0 flex-1 truncate text-text-primary">{row.label}</span>
+              {isOver && (
+                <span className="shrink-0 truncate font-mono text-[11px] text-text-muted">
+                  {pathFor(row.path)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {creating ? (
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            className={inputClass}
+            placeholder="e.g. playbooks or deals/2026"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const clean = draft.trim().replace(/^\/+|\/+$/g, '');
+                if (clean) pick(clean);
+              } else if (e.key === 'Escape') {
+                setCreating(false);
+                setDraft('');
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const clean = draft.trim().replace(/^\/+|\/+$/g, '');
+              if (clean) pick(clean);
+            }}
+            className="shrink-0 rounded-lg border border-border-default px-3 py-2 text-xs font-semibold text-text-secondary transition-colors hover:border-brand-green/60 hover:text-text-primary"
+          >
+            Use
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className="text-xs font-semibold text-text-muted transition hover:text-text-primary"
+        >
+          + New folder
+        </button>
+      )}
     </div>
   );
 }

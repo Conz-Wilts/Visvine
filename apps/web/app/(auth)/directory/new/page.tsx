@@ -12,8 +12,6 @@
 import React, { Suspense, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import type { DraftType } from '@/features/notes/components/DraftContextPanel';
@@ -22,18 +20,10 @@ const DraftContextPanel = dynamic(
   () => import('@/features/notes/components/DraftContextPanel').then((m) => m.DraftContextPanel),
   { ssr: false, loading: () => null },
 );
-const ContextSidebar = dynamic(
-  () => import('@/features/notes/components/ContextSidebar').then((m) => m.ContextSidebar),
-  { ssr: false, loading: () => null },
-);
-
-function useDockInsetStyle(): React.CSSProperties {
-  const { dockRequested, contextOpen } = useContextPanel();
-  return {
-    paddingLeft: dockRequested && contextOpen ? CONTEXT_PANEL_W : undefined,
-    transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
-  };
-}
+// No docked context tree here on purpose. The draft has nothing to be beside:
+// there is no note to locate in the tree yet, and where this one lands is asked
+// for at the moment of creating (the destination popup), not browsed for while
+// typing. The surface gets the full card width.
 
 // Pre-commit the bar matches the standalone note view's — Context and Raw, no
 // phantom Profile tab. Until a type is picked this genuinely is a note.
@@ -45,14 +35,13 @@ const DRAFT_TABS: PaneTabItem[] = [
 // Every type the draft surface can commit — `?type=` is only a pre-pick, so an
 // unknown value just leaves the Type row unset rather than erroring.
 const DRAFT_TYPES = new Set<DraftType>([
-  'note', 'index', 'person', 'space', 'resource',
+  'note', 'index', 'person', 'space', 'resource', 'event',
   'file', 'connector', 'channel', 'section',
 ]);
 
 function DraftRoute() {
   const params = useSearchParams();
   const [mode, setMode] = useState<NoteMode>('wysiwyg');
-  const dockInsetStyle = useDockInsetStyle();
 
   const activeTab = mode === 'raw' ? 'raw' : 'context';
 
@@ -81,8 +70,7 @@ function DraftRoute() {
 
   return (
     <div className="w-full pb-10">
-      <div className="profile-enter" style={dockInsetStyle}>
-        <ContextSidebar currentPath="" />
+      <div className="profile-enter">
         <DraftContextPanel mode={mode} initialFolder={folder} initialType={initialType} />
       </div>
     </div>

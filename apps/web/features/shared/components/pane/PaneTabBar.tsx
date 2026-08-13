@@ -206,6 +206,18 @@ function PaneTabBarInner({
     return () => cancelAnimationFrame(id);
   }, []);
 
+  // While this bar is pinned over <main>'s top, inset the scroll track by the
+  // tab row so the thumb's travel starts below the bar (see globals.css,
+  // `--scrollbar-track-inset`) — the mask strip alone hides a short thumb
+  // completely at rest. Set on <main> itself so Chromium re-resolves the
+  // scrollbar style when it changes.
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    main.style.setProperty('--scrollbar-track-inset', `${TAB_ROW_H}px`);
+    return () => { main.style.removeProperty('--scrollbar-track-inset'); };
+  }, []);
+
   const onSelect = (id: string) => {
     if (live) select(id);
   };
@@ -241,7 +253,10 @@ function PaneTabBarInner({
           hanging off the nav line rather than a second bar. "-top-4 -mt-4"
           rather than top-0: <main> has pt-4 and sticky offsets resolve below
           it, so top-0 would pin the bar 16px short of the navbar. */}
-      <div className="pointer-events-auto flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
+      {/* pr-1 only: with a left inset the first tab's underline stopped 4px
+          short of the pane's left edge, reading as a chopped line against the
+          colour frame. Flush left, the underline meets the edge cleanly. */}
+      <div className="pointer-events-auto flex w-full items-center border-b border-border-subtle bg-surface-1 pr-1">
         <div
           role="tablist"
           aria-label={chrome.ariaLabel ?? 'Sections'}
@@ -346,7 +361,7 @@ function PaneTabBarInner({
             ref={setHost}
             className={`flex items-start justify-center [&>*]:pointer-events-auto motion-reduce:[transition:none!important] ${
               attachedOpen ? 'translate-y-0' : '-translate-y-full'
-            } ${connectionsOpen ? 'xl:pr-[300px]' : ''}`}
+            }`}
             style={{
               height: TRAY_ROW_H,
               paddingLeft: trayInset || undefined,
