@@ -99,11 +99,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ com
     });
   }
 
-  await prisma.community.update({
-    where: { id: communityId },
-    data: { memberCount: { increment: 1 } },
-  });
-
   // The new member's connected person node in this directory (best-effort).
   await ensureMemberNode(communityId, user.id, {
     id: session.userId,

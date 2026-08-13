@@ -8,7 +8,7 @@ import { assertMembersCanLeave } from '@/lib/notes/aliases';
 /**
  * PUT: Approve a pending join request (admin only). `status: 'active'` is the
  * only field — what a member can DO comes from the aliases they hold, so that
- * is edited through /api/aliases. Approving bumps the community's memberCount.
+ * is edited through /api/aliases.
  */
 export async function PUT(
   req: NextRequest,
@@ -45,10 +45,6 @@ export async function PUT(
   });
 
   if (approving) {
-    await prisma.community.update({
-      where: { id: communityId },
-      data: { memberCount: { increment: 1 } },
-    });
     // An approved member belongs in the directory: connected person node.
     await ensureMemberNode(communityId, userId, {
       id: session.userId,
@@ -89,20 +85,12 @@ export async function DELETE(
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  const membership = await prisma.userCommunity.delete({
+  await prisma.userCommunity.delete({
     where: { userId_communityId: { userId, communityId } },
   });
 
   // Brain access leaves with them: direct grants + the aliases they held here.
   await removeMemberAccess(communityId, userId);
-
-  // Only active members counted toward memberCount; pending (denied) ones didn't.
-  if (membership.status === 'active') {
-    await prisma.community.update({
-      where: { id: communityId },
-      data: { memberCount: { decrement: 1 } },
-    });
-  }
 
   return NextResponse.json({ success: true });
 }

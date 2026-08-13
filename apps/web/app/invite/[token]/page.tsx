@@ -32,7 +32,7 @@ export default async function InvitePage({
       description: true,
       location: true,
       imageUrl: true,
-      memberCount: true,
+      _count: { select: { userCommunities: { where: { status: 'active' } } } },
       personalOwnerId: true,
     },
   });
@@ -81,7 +81,7 @@ export default async function InvitePage({
               <p className="mt-2 text-sm text-text-muted">{community!.description}</p>
             )}
             <p className="mt-3 text-xs text-text-muted">
-              {community!.memberCount} member{community!.memberCount === 1 ? '' : 's'}
+              {community!._count.userCommunities} member{community!._count.userCommunities === 1 ? '' : 's'}
               {community!.location ? ` · ${community!.location}` : ''}
             </p>
 

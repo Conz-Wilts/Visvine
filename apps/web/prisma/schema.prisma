@@ -14,8 +14,6 @@ model Community {
   description      String?
   location         String?
   tags             String[]                 @default([])
-  memberCount      Int                      @default(0) @map("member_count")
-  dataFile         String?                  @map("data_file")
   createdAt        DateTime                 @default(now()) @map("created_at")
   imageUrl         String?                  @map("image_url")
   nodeTypes        Json?                    @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏘️\", \"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
@@ -23,7 +21,6 @@ model Community {
   communityAliases Json?                    @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]") @map("community_aliases")
   linkTypes        Json?                    @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country          String?
-  crmSettings      Json                     @default("{}") @map("crm_settings")
   designConfig     Json                     @default("{}") @map("design_config")
   featureConfig    Json                     @default("{}") @map("feature_config")
   // Set = a private, single-member "personal space" owned by this user (created on
@@ -338,30 +335,28 @@ model ContextSourceChunk {
 }
 
 model Node {
-  id                    String                 @id
-  type                  String
-  name                  String
-  subtitle              String?
-  location              String?
-  url                   String?
-  tags                  String[]               @default([])
-  imageUrl              String?                @map("image_url")
-  metadata              Json                   @default("{}")
-  communityId           String?                @map("community_id")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  alias                 String?
+  id             String     @id
+  type           String
+  name           String
+  subtitle       String?
+  location       String?
+  url            String?
+  tags           String[]   @default([])
+  imageUrl       String?    @map("image_url")
+  metadata       Json       @default("{}")
+  communityId    String?    @map("community_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  alias          String?
   // Canonical cross-community identity this node represents (people/orgs). Nullable:
   // legacy rows and non-person/org types may have none. Set by lib/identity/resolve.
-  identityId            String?                @map("identity_id")
-  identity              Identity?              @relation(fields: [identityId], references: [id], onDelete: SetNull)
-  attendees             Attendee[]             @relation("EventNode")
-  attendeePerson        Attendee[]             @relation("PersonNode")
-  communityColumnValues CommunityColumnValue[]
-  linksAsSource         Link[]                 @relation("SourceNode")
-  linksAsTarget         Link[]                 @relation("TargetNode")
-  community             Community?             @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  privateColumnValues   PrivateColumnValue[]
+  identityId     String?    @map("identity_id")
+  identity       Identity?  @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  attendees      Attendee[] @relation("EventNode")
+  attendeePerson Attendee[] @relation("PersonNode")
+  linksAsSource  Link[]     @relation("SourceNode")
+  linksAsTarget  Link[]     @relation("TargetNode")
+  community      Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
 
   @@index([communityId])
   @@index([type])
@@ -400,28 +395,28 @@ model Link {
 }
 
 model Attendee {
-  id              String    @id
-  eventId         String    @map("event_id")
-  personId        String?   @map("person_id")
-  name            String? // typed guest name (loginless RSVP; no Person node required)
-  email           String?
-  linkedinUrl     String?   @map("linkedin_url")
-  companyName     String?   @map("company_name")
-  roleTitle       String?   @map("role_title")
-  answers         Json      @default("{}")
+  id           String    @id
+  eventId      String    @map("event_id")
+  personId     String?   @map("person_id")
+  name         String? // typed guest name (loginless RSVP; no Person node required)
+  email        String?
+  linkedinUrl  String?   @map("linkedin_url")
+  companyName  String?   @map("company_name")
+  roleTitle    String?   @map("role_title")
+  answers      Json      @default("{}")
   // Operational lifecycle: going | waitlisted | pending | checked_in | no_show | cancelled | invited.
   // Legacy rows may still hold 'registered' (normalized to 'going' on read — see eventUtils.normalizeStatus).
-  status          String    @default("going")
+  status       String    @default("going")
   // Guest's intent, separate from the operational status: going | maybe | declined.
-  response        String?
-  plusOnes        Int       @default(0) @map("plus_ones")
-  plusOneNames    String[]  @default([]) @map("plus_one_names")
-  invitedBy       String?   @map("invited_by") // userId/personId who invited/added them
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  checkinAt       DateTime? @map("checkin_at")
-  event           Node      @relation("EventNode", fields: [eventId], references: [id], onDelete: Cascade)
-  person          Node?     @relation("PersonNode", fields: [personId], references: [id])
+  response     String?
+  plusOnes     Int       @default(0) @map("plus_ones")
+  plusOneNames String[]  @default([]) @map("plus_one_names")
+  invitedBy    String?   @map("invited_by") // userId/personId who invited/added them
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  checkinAt    DateTime? @map("checkin_at")
+  event        Node      @relation("EventNode", fields: [eventId], references: [id], onDelete: Cascade)
+  person       Node?     @relation("PersonNode", fields: [personId], references: [id])
 
   @@unique([eventId, email]) // dedupe RSVPs by email (NULL emails remain distinct in Postgres)
   @@index([eventId])
@@ -432,42 +427,31 @@ model Attendee {
 }
 
 model User {
-  id                      String                   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name                    String
-  email                   String                   @unique
-  emailVerified           Boolean                  @default(false) @map("email_verified")
-  image                   String?
-  createdAt               DateTime                 @default(now()) @map("created_at")
-  updatedAt               DateTime                 @updatedAt @map("updated_at")
-  claimNonce              String?                  @unique @map("claim_nonce")
-  googleId                String?                  @unique @map("google_id")
-  passwordHash            String?                  @map("password_hash")
-  isActive                Boolean                  @default(true) @map("is_active")
-  oauthProvider           String?                  @map("oauth_provider")
-  publicMeta              Json                     @default("{}") @map("public_meta")
-  columnRequestsSubmitted CommunityColumnRequest[] @relation("ColumnRequestRequester")
-  columnRequestsReviewed  CommunityColumnRequest[] @relation("ColumnRequestReviewer")
-  communityColumnValues   CommunityColumnValue[]
-  person                  Person?
-  privateColumnValues     PrivateColumnValue[]
-  privateColumns          PrivateColumn[]
-  membersAdded            UserCommunity[]          @relation("AddedByRelation")
-  userCommunities         UserCommunity[]          @relation("MemberOf")
-  valueSharesSubmitted    ValueShareRequest[]      @relation("ValueShareRequester")
-  valueSharesReviewed     ValueShareRequest[]      @relation("ValueShareReviewer")
+  id              String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name            String
+  email           String          @unique
+  emailVerified   Boolean         @default(false) @map("email_verified")
+  image           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  claimNonce      String?         @unique @map("claim_nonce")
+  googleId        String?         @unique @map("google_id")
+  passwordHash    String?         @map("password_hash")
+  isActive        Boolean         @default(true) @map("is_active")
+  oauthProvider   String?         @map("oauth_provider")
+  publicMeta      Json            @default("{}") @map("public_meta")
+  person          Person?
+  membersAdded    UserCommunity[] @relation("AddedByRelation")
+  userCommunities UserCommunity[] @relation("MemberOf")
 
-  // --- restored: messaging / feed ---
+  // --- messaging ---
   conversationMemberships ConversationMember[]
-  conversationsCreated    Conversation[]        @relation("ConversationCreator")
-  messagesSent            Message[]             @relation("MessageSender")
-  posts                   Post[]                @relation("PostAuthor")
-  postComments            PostComment[]         @relation("CommentAuthor")
-  postReactions           PostReaction[]        @relation("PostReactor")
-  postCommentReactions    PostCommentReaction[] @relation("CommentReactor")
-  messageReactions        MessageReaction[]     @relation("ReactionAuthor")
-  messageStars            MessageStar[]         @relation("StarAuthor")
+  conversationsCreated    Conversation[]       @relation("ConversationCreator")
+  messagesSent            Message[]            @relation("MessageSender")
+  messageReactions        MessageReaction[]    @relation("ReactionAuthor")
+  messageStars            MessageStar[]        @relation("StarAuthor")
 
-  @@map("user")
+  @@map("users")
 }
 
 /// A person's membership of a community. Deliberately carries no role — what
@@ -492,143 +476,26 @@ model UserCommunity {
   @@map("user_communities")
 }
 
-model PrivateColumn {
-  id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId      String               @map("user_id")
-  communityId String?              @map("community_id")
-  columnKey   String               @map("column_key")
-  columnName  String               @map("column_name")
-  columnType  String               @map("column_type")
-  options     Json?
-  position    Int                  @default(0)
-  createdAt   DateTime             @default(now()) @map("created_at")
-  values      PrivateColumnValue[]
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, columnKey])
-  @@index([userId])
-  @@map("private_columns")
-}
-
-model PrivateColumnValue {
-  id        String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId    String        @map("user_id")
-  nodeId    String        @map("node_id")
-  columnId  String        @map("column_id")
-  value     String?
-  updatedAt DateTime      @updatedAt @map("updated_at")
-  column    PrivateColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  node      Node          @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, nodeId, columnId])
-  @@index([userId, nodeId])
-  @@index([columnId])
-  @@map("private_column_values")
-}
-
-model CommunityColumnRequest {
-  id              String           @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId     String           @map("community_id")
-  requesterId     String           @map("requester_id")
-  columnKey       String           @map("column_key")
-  columnName      String           @map("column_name")
-  columnType      String           @map("column_type")
-  options         Json?
-  description     String?
-  status          String           @default("pending")
-  reviewerId      String?          @map("reviewer_id")
-  reviewerNote    String?          @map("reviewer_note")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  reviewedAt      DateTime?        @map("reviewed_at")
-  requester       User             @relation("ColumnRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  reviewer        User?            @relation("ColumnRequestReviewer", fields: [reviewerId], references: [id])
-  communityColumn CommunityColumn? @relation("CreatedFromRequest")
-
-  @@index([communityId, status])
-  @@index([requesterId])
-  @@map("community_column_requests")
-}
-
-model CommunityColumn {
-  id                   String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId          String                  @map("community_id")
-  columnKey            String                  @map("column_key")
-  columnName           String                  @map("column_name")
-  columnType           String                  @map("column_type")
-  options              Json?
-  position             Int                     @default(0)
-  createdFromRequestId String?                 @unique @map("created_from_request_id")
-  createdAt            DateTime                @default(now()) @map("created_at")
-  values               CommunityColumnValue[]
-  createdFromRequest   CommunityColumnRequest? @relation("CreatedFromRequest", fields: [createdFromRequestId], references: [id])
-
-  @@unique([communityId, columnKey])
-  @@index([communityId])
-  @@map("community_columns")
-}
-
-model CommunityColumnValue {
-  id              String          @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId     String          @map("community_id")
-  nodeId          String          @map("node_id")
-  columnKey       String          @map("column_key")
-  columnId        String          @map("column_id")
-  value           String?
-  contributedById String?         @map("contributed_by_id")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  column          CommunityColumn @relation(fields: [columnId], references: [id], onDelete: Cascade)
-  contributedBy   User?           @relation(fields: [contributedById], references: [id])
-  node            Node            @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-
-  @@unique([communityId, nodeId, columnKey])
-  @@index([communityId, nodeId])
-  @@index([columnId])
-  @@map("community_column_values")
-}
-
-model ValueShareRequest {
-  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  requesterId  String    @map("requester_id")
-  communityId  String    @map("community_id")
-  nodeId       String    @map("node_id")
-  columnKey    String    @map("column_key")
-  columnName   String    @map("column_name")
-  columnType   String    @map("column_type")
-  value        String?
-  status       String    @default("pending")
-  reviewerId   String?   @map("reviewer_id")
-  reviewerNote String?   @map("reviewer_note")
-  reviewedAt   DateTime? @map("reviewed_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  requester    User      @relation("ValueShareRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  reviewer     User?     @relation("ValueShareReviewer", fields: [reviewerId], references: [id])
-
-  @@index([communityId, status])
-  @@index([requesterId])
-  @@map("value_share_requests")
-}
-
 model Person {
-  id           String   @id
-  userId       String?  @unique @map("user_id")
-  name         String
-  subtitle     String?
-  bio          String?
-  location     String?
-  website      String?  @map("website")
-  linkedinUrl  String?  @map("linkedin_url")
-  twitterUrl   String?  @map("twitter_url")
-  phone        String?
-  pronouns     String?
-  imageUrl     String?  @map("image_url")
-  tags         String[] @default([])
-  metadata     Json     @default("{}")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  user         User?    @relation(fields: [userId], references: [id])
+  id          String   @id
+  userId      String?  @unique @map("user_id")
+  name        String
+  subtitle    String?
+  bio         String?
+  location    String?
+  website     String?  @map("website")
+  linkedinUrl String?  @map("linkedin_url")
+  twitterUrl  String?  @map("twitter_url")
+  phone       String?
+  pronouns    String?
+  imageUrl    String?  @map("image_url")
+  tags        String[] @default([])
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User?    @relation(fields: [userId], references: [id])
 
-  @@map("persons")
+  @@map("people")
 }
 
 /// Canonical, cross-community identity for a real person or organization.
@@ -734,22 +601,6 @@ model ResourceChange {
   @@map("resource_changes")
 }
 
-model AuditLog {
-  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  actorId     String   @map("actor_id")
-  communityId String?  @map("community_id")
-  targetId    String?  @map("target_id")
-  action      String
-  diff        Json?
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  @@index([actorId])
-  @@index([communityId])
-  @@index([targetId])
-  @@index([createdAt])
-  @@map("audit_log")
-}
-
 // ─── MCP OAuth 2.1 authorization server (self-hosted) ───
 
 /// A Dynamically-Registered (RFC 7591) MCP/OAuth client. Public clients (PKCE),
@@ -813,7 +664,6 @@ model Conversation {
   icon        String?
   /// How a CHANNEL renders: classic chat thread or social-feed post cards.
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
-  dmKey       String?              @unique @map("dm_key")
   /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
   communityId String?              @map("community_id")
   /// Optional grouping of CHANNEL conversations into a community "space" section.
@@ -869,25 +719,25 @@ model ConversationMember {
 }
 
 model Message {
-  id              String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  conversationId  String               @map("conversation_id")
-  senderId        String               @map("sender_id")
-  text            String
-  attachmentUrl   String?              @map("attachment_url")
-  editedAt        DateTime?            @map("edited_at")
-  deletedAt       DateTime?            @map("deleted_at")
-  replyToId       String?              @map("reply_to_id")
-  pinnedAt        DateTime?            @map("pinned_at")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  conversation    Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender          User                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  replyTo         Message?             @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies         Message[]            @relation("MessageReplies")
-  images          MessageImage[]
-  mentions        MessageMention[]
-  reactions       MessageReaction[]
-  linkPreviews    MessageLinkPreview[]
-  stars           MessageStar[]
+  id             String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  conversationId String               @map("conversation_id")
+  senderId       String               @map("sender_id")
+  text           String
+  attachmentUrl  String?              @map("attachment_url")
+  editedAt       DateTime?            @map("edited_at")
+  deletedAt      DateTime?            @map("deleted_at")
+  replyToId      String?              @map("reply_to_id")
+  pinnedAt       DateTime?            @map("pinned_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  conversation   Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User                 @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo        Message?             @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]            @relation("MessageReplies")
+  images         MessageImage[]
+  mentions       MessageMention[]
+  reactions      MessageReaction[]
+  linkPreviews   MessageLinkPreview[]
+  stars          MessageStar[]
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
@@ -974,83 +824,6 @@ model MessageLinkPreview {
   @@map("message_link_previews")
 }
 
-model Post {
-  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String         @map("community_id")
-  authorId    String         @map("author_id")
-  content     String
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @updatedAt @map("updated_at")
-  images      PostImage[]
-  comments    PostComment[]
-  reactions   PostReaction[]
-  author      User           @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@index([communityId, createdAt])
-  @@index([authorId])
-  @@map("posts")
-}
-
-model PostImage {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  imageUrl  String   @map("image_url")
-  position  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-
-  @@index([postId])
-  @@map("post_images")
-}
-
-model PostComment {
-  id        String                @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String                @map("post_id")
-  authorId  String                @map("author_id")
-  parentId  String?               @map("parent_id")
-  content   String
-  createdAt DateTime              @default(now()) @map("created_at")
-  updatedAt DateTime              @updatedAt @map("updated_at")
-  post      Post                  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User                  @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  parent    PostComment?          @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
-  replies   PostComment[]         @relation("CommentThread")
-  reactions PostCommentReaction[]
-
-  @@index([postId, createdAt])
-  @@index([authorId])
-  @@index([parentId])
-  @@map("post_comments")
-}
-
-model PostReaction {
-  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
-  postId    String   @map("post_id")
-  userId    String   @map("user_id")
-  emoji     String
-  createdAt DateTime @default(now()) @map("created_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User     @relation("PostReactor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([postId, userId, emoji])
-  @@index([postId])
-  @@map("post_reactions")
-}
-
-model PostCommentReaction {
-  id        String      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  commentId String      @map("comment_id")
-  userId    String      @map("user_id")
-  emoji     String
-  createdAt DateTime    @default(now()) @map("created_at")
-  comment   PostComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  user      User        @relation("CommentReactor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([commentId, userId, emoji])
-  @@index([commentId])
-  @@map("post_comment_reactions")
-}
-
 enum ConversationType {
   DM
   GROUP
@@ -1067,4 +840,3 @@ enum ChannelViewMode {
   CHAT
   FEED
 }
-

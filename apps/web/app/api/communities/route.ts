@@ -66,8 +66,6 @@ export async function POST(request: NextRequest) {
           description,
           location: location || null,
           visibility,
-          memberCount: 1,
-          dataFile: `${id}.json`,
           inviteToken: randomUUID(),
           // Only the Directory tool to begin with — every toggleable tool starts
           // off and the admin opts in from the console. (Core keys — directory,
@@ -138,7 +136,7 @@ export async function POST(request: NextRequest) {
           description: created.description ?? '',
           location: created.location ?? undefined,
           tags: created.tags,
-          memberCount: created.memberCount,
+          memberCount: 1,
           createdAt: created.createdAt.toISOString(),
           visibility: created.visibility,
         },

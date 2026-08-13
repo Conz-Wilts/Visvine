@@ -18,16 +18,15 @@ import { logger } from '@/lib/logger'
  * What goes:
  *  - the profile (`Person`) and the cross-community `Identity` it was claimed by
  *  - the member node representing them in every community directory, and with it
- *    (via cascade) their links and column values there
+ *    (via cascade) their links there
  *  - every personal brain: notes, folders, files, embeddings, sources, chunks
  *  - brain grants, aliases held, and outstanding access requests
- *  - the `User` row, which cascades memberships, messages, posts, reactions,
- *    stars, private columns, and the conversations they created
+ *  - the `User` row, which cascades memberships, messages, reactions, stars,
+ *    and the conversations they created
  *
  * What stays, deliberately: notes other people wrote in a community's SHARED
  * brain, even when the subject is the departing member — that text is the
- * community's, not theirs, and index notes point at it. The `AuditLog` row this
- * writes stays too; `actorId` is a scalar, so the trail survives the account.
+ * community's, not theirs, and index notes point at it.
  *
  * Refused when they are the last person who can manage a community — the same
  * invariant that blocks an admin from removing that member (`assertOwnerSurvives`).
@@ -67,8 +66,6 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     if (node) nodeIds.push(node.id)
   }
 
-  const activeCommunityIds = memberships.filter((m) => m.status === 'active').map((m) => m.communityId)
-
   const result = await prisma.$transaction(async (tx) => {
     // Personal brains (`ownerKey` = userId). Chunks cascade from their source,
     // but the delete is spelled out so a source-less chunk cannot be stranded.
@@ -94,29 +91,8 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.identity.deleteMany({ where: { userId } })
     await tx.person.deleteMany({ where: { userId } })
 
-    // Only active members were counted when they joined.
-    for (const communityId of activeCommunityIds) {
-      await tx.community.update({
-        where: { id: communityId },
-        data: { memberCount: { decrement: 1 } },
-      })
-    }
-
-    await tx.auditLog.create({
-      data: {
-        actorId: userId,
-        targetId: userId,
-        action: 'delete_account',
-        diff: {
-          communities: memberships.length,
-          nodes: nodeIds.length,
-          notes: notes.count,
-        },
-      },
-    })
-
-    // Last: cascades memberships, messages, posts, reactions, private columns
-    // and the conversations they created.
+    // Last: cascades memberships, messages, reactions and the conversations
+    // they created.
     await tx.user.delete({ where: { id: userId } })
 
     return { communities: memberships.length, nodes: nodeIds.length, notes: notes.count }

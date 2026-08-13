@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiSession } from "@/lib/api/route";
-import { PublicFieldPatchSchema } from "@/lib/schemas/crm";
+import { PublicFieldPatchSchema } from "@/lib/schemas/profile";
 import { Prisma } from "@prisma/client";
 import { revalidateTag } from "next/cache";
 import prisma from "@/lib/prisma";
@@ -24,15 +24,6 @@ export async function PATCH(req: NextRequest) {
   });
 
   revalidateTag(`crm-user-public-${session.userId}`, { expire: 0 });
-
-  await prisma.auditLog.create({
-    data: {
-      actorId: session.userId,
-      targetId: session.userId,
-      action: "edit_public",
-      diff: { before: { [field]: current[field] }, after: { [field]: value } } as Prisma.InputJsonObject,
-    },
-  });
 
   return NextResponse.json({ field, value });
 }

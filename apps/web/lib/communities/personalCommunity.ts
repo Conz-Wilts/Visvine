@@ -84,8 +84,6 @@ export async function provisionPersonalCommunity(user: {
       // Explicitly private: the column defaults to 'public', and a personal space
       // must never be discoverable or self-joinable.
       visibility: 'private',
-      dataFile: `${communityId}.json`,
-      memberCount: 1,
     },
     // Repair rows provisioned before visibility was set on create.
     update: { visibility: 'private' },

@@ -765,7 +765,7 @@ try {
   // that list directly and fall back to the earliest member.
   const adminRes = await client.query(
     `SELECT u.id, u.name FROM user_communities uc
-       JOIN "user" u ON u.id = uc.user_id
+       JOIN users u ON u.id = uc.user_id
       WHERE uc.community_id = $1
       ORDER BY EXISTS (
         SELECT 1 FROM user_aliases ua

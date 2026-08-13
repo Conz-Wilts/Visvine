@@ -42,7 +42,7 @@ const COMM_DESC =
   'This community maps its portfolio companies and the founders behind them.';
 
 const NODE_TYPES = [
-  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
+  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
@@ -61,29 +61,10 @@ const COMMUNITY_ALIASES = [
   { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
   { name: 'Employee', color: '#db2777', nodeType: 'Person' },
   { name: 'LP', color: '#d97706', nodeType: 'Person' },
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Community' },
-  { name: 'Fund', color: '#0f766e', nodeType: 'Community' },
+  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Space' },
+  { name: 'Fund', color: '#0f766e', nodeType: 'Space' },
 ];
 
-const SECTOR_OPTIONS = [
-  'Fintech', 'Healthtech', 'Climate & Energy', 'SaaS & Enterprise',
-  'Consumer & Marketplace', 'AI & ML', 'Deep Tech & Hardware', 'Space & Defence',
-  'Biotech', 'Developer Tools', 'Agtech & Food', 'Crypto & Web3', 'Other',
-];
-
-const STATUS_OPTIONS = ['Active', 'Exited', 'IPO', 'Onboarding', 'Written Off'];
-const STAGE_OPTIONS = ['Pre-seed', 'Seed', 'Series A', 'Series B', 'Series C', 'Series D+', 'Growth', 'Public', 'Acquired', 'Defunct'];
-const COUNTRY_OPTIONS = ['Australia', 'New Zealand', 'USA', 'United Kingdom', 'Singapore', 'Other'];
-
-const COLUMNS = [
-  { key: 'status', name: 'Status', type: 'select', options: STATUS_OPTIONS },
-  { key: 'sector', name: 'Sector', type: 'select', options: SECTOR_OPTIONS },
-  { key: 'funding_stage', name: 'Funding Stage', type: 'select', options: STAGE_OPTIONS },
-  { key: 'founded', name: 'Founded', type: 'number', options: null },
-  { key: 'hq_country', name: 'HQ Country', type: 'select', options: COUNTRY_OPTIONS },
-  { key: 'total_raised', name: 'Total Raised', type: 'text', options: null },
-  { key: 'website', name: 'Website', type: 'text', options: null },
-];
 
 const STATUS_GROUP = {
   'Active': 'active', 'Exited': 'exit', 'IPO': 'ipo',
@@ -142,39 +123,8 @@ function snapSector(c) {
   return 'Other';
 }
 
-function parseRound(s) {
-  if (!s) return null;
-  const l = String(s).toLowerCase();
-  if (l.includes('pre-seed') || l.includes('preseed') || l.includes('pre seed')) return 'Pre-seed';
-  if (/series\s*[d-z]/.test(l)) return 'Series D+';
-  if (l.includes('series c')) return 'Series C';
-  if (l.includes('series b')) return 'Series B';
-  if (l.includes('series a')) return 'Series A';
-  if (l.includes('seed')) return 'Seed';
-  if (l.includes('growth') || l.includes('late')) return 'Growth';
-  if (l.includes('ipo') || l.includes('public')) return 'Public';
-  if (l.includes('acqui')) return 'Acquired';
-  return null;
-}
 
-function snapStage(c) {
-  if (c.status === 'IPO') return 'Public';
-  const parsed = parseRound(c.fundingStage);
-  if (c.status === 'Written Off') return parsed || 'Defunct';
-  if (c.status === 'Exited') return parsed || 'Acquired';
-  return parsed; // Active / Onboarding: may be null
-}
 
-function snapCountry(x) {
-  if (!x) return null;
-  const l = String(x).toLowerCase();
-  if (l.includes('australia')) return 'Australia';
-  if (l.includes('zealand') || l === 'nz' || l.includes('aotearoa')) return 'New Zealand';
-  if (l.includes('united states') || l === 'usa' || l === 'us' || l.includes('u.s') || l.includes('america')) return 'USA';
-  if (l.includes('united kingdom') || l === 'uk' || l.includes('england') || l.includes('britain') || l.includes('scotland')) return 'United Kingdom';
-  if (l.includes('singapore')) return 'Singapore';
-  return 'Other';
-}
 
 function uniq(arr) {
   return Array.from(new Set(arr.filter(Boolean)));
@@ -182,7 +132,7 @@ function uniq(arr) {
 
 // ---- build the in-memory model ---------------------------------------------
 
-const orgs = [];           // { id, c, sector, columnValues }
+const orgs = [];           // { id, c, snappedSector }
 const orgSlugSeen = new Set();
 const foundedYearByOrg = new Map();
 
@@ -201,17 +151,7 @@ for (const c of RAW) {
   if (c.foundedYear) foundedYearByOrg.set(id, String(c.foundedYear));
 
   const snappedSector = snapSector(c);
-  const columnValues = {
-    status: c.status,
-    sector: snappedSector,
-    funding_stage: snapStage(c),
-    founded: c.foundedYear ? String(c.foundedYear) : null,
-    hq_country: snapCountry(c.hqCountry),
-    total_raised: c.totalRaised || null,
-    website: c.website || null,
-  };
-
-  orgs.push({ id, c, snappedSector, columnValues });
+  orgs.push({ id, c, snappedSector });
 }
 
 // founders: dedupe across companies
@@ -302,7 +242,7 @@ try {
   // aliases they hold (lib/auth.ts#isAdmin), so admin@local.dev also gets a
   // user_aliases row for Owner. Everyone else is just an active member; the
   // full seed (prisma/seed.ts) is what hands out the rest of the aliases.
-  const devUsers = await client.query(`SELECT id, email FROM "user" WHERE email LIKE '%@local.dev'`);
+  const devUsers = await client.query(`SELECT id, email FROM users WHERE email LIKE '%@local.dev'`);
   for (const u of devUsers.rows) {
     await client.query(
       `INSERT INTO user_communities (user_id, community_id, status, joined_at, private_meta)
@@ -321,31 +261,10 @@ try {
       [COMM, owner.id, OWNER_ALIAS_NAME],
     );
   }
-  await client.query(
-    `UPDATE communities SET member_count = (SELECT COUNT(*) FROM user_communities WHERE community_id = $1) WHERE id = $1`,
-    [COMM],
-  );
   console.log(
     `  ✓ ${devUsers.rowCount} local dev user(s) joined` +
       (owner ? `, ${owner.email} holds ${OWNER_ALIAS_NAME}` : ''),
   );
-
-  // 2. CRM columns (before values so column_id exists). DB defaults the uuid id.
-  console.log('\n--- Upserting CRM columns ---');
-  const columnIdByKey = new Map();
-  for (let i = 0; i < COLUMNS.length; i++) {
-    const col = COLUMNS[i];
-    const r = await client.query(
-      `INSERT INTO community_columns (community_id, column_key, column_name, column_type, options, position, created_at)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6, NOW())
-       ON CONFLICT (community_id, column_key) DO UPDATE SET column_name = EXCLUDED.column_name,
-         column_type = EXCLUDED.column_type, options = EXCLUDED.options, position = EXCLUDED.position
-       RETURNING id`,
-      [COMM, col.key, col.name, col.type, col.options ? JSON.stringify(col.options) : null, i],
-    );
-    columnIdByKey.set(col.key, r.rows[0].id);
-    console.log(`  ✓ ${col.key.padEnd(14)} (${col.type})`);
-  }
 
   // Clear this community's existing portfolio nodes first so re-runs (and any
   // id-scheme change) don't leave orphans. Cascades to links +
@@ -358,7 +277,7 @@ try {
   );
   console.log(`\n--- Cleared ${cleared.rowCount} existing node(s) for a clean rebuild ---`);
 
-  // 3. Organization (company) nodes
+  // 2. Organization (company) nodes
   console.log('\n--- Inserting companies ---');
   for (const o of orgs) {
     const c = o.c;
@@ -386,8 +305,8 @@ try {
     };
     await client.query(
       `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
-       VALUES ($1, 'Community', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE SET type = 'Community', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+       VALUES ($1, 'space', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
+       ON CONFLICT (id) DO UPDATE SET type = 'space', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
          metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
@@ -395,7 +314,7 @@ try {
   }
   console.log(`  ✓ ${orgs.length} companies`);
 
-  // 4. Founder (person) nodes
+  // 3. Founder (person) nodes
   console.log('\n--- Inserting founders ---');
   for (const p of persons) {
     const subtitle = (p.role || 'Founder') + (p.primaryCompanyName ? `, ${p.primaryCompanyName}` : '');
@@ -420,30 +339,11 @@ try {
   }
   console.log(`  ✓ ${persons.length} founders`);
 
-  // 5. Directory links are NOT written here anymore. Founder↔company edges are
+  // 4. Directory links are NOT written here anymore. Founder↔company edges are
   // derived from the shared-brain context notes (origin 'context', relationship
   // 'mentioned') seeded by add-blackbird-notes.mjs and materialised by
   // scripts/backfill-context-links.ts.
   void links; // computed above for reference only; no longer inserted
-
-  // 6. CRM column values (organization nodes)
-  console.log('\n--- Inserting CRM column values ---');
-  let valueCount = 0;
-  for (const o of orgs) {
-    for (const col of COLUMNS) {
-      const v = o.columnValues[col.key];
-      if (v === null || v === undefined || v === '') continue;
-      await client.query(
-        `INSERT INTO community_column_values (community_id, node_id, column_key, column_id, value, contributed_by_id, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NULL, NOW())
-         ON CONFLICT (community_id, node_id, column_key) DO UPDATE SET value = EXCLUDED.value,
-           column_id = EXCLUDED.column_id, updated_at = NOW()`,
-        [COMM, o.id, col.key, columnIdByKey.get(col.key), String(v)],
-      );
-      valueCount++;
-    }
-  }
-  console.log(`  ✓ ${valueCount} column values`);
 
   await client.query('COMMIT');
   console.log('\n=== Committed ===');
@@ -456,7 +356,7 @@ try {
   console.log('\n--- Company status breakdown ---');
   console.table((await client.query(
     `SELECT metadata->>'status' AS status, COUNT(*)::int AS count FROM nodes
-     WHERE community_id = $1 AND type = 'Community' GROUP BY 1 ORDER BY 1`, [COMM],
+     WHERE community_id = $1 AND type = 'space' GROUP BY 1 ORDER BY 1`, [COMM],
   )).rows);
 
   console.log('\n--- Link breakdown ---');

@@ -80,8 +80,6 @@ export async function POST(request: NextRequest) {
         description: community.description || '',
         location: community.location ?? null,
         tags: community.tags || [],
-        memberCount: community.memberCount || 0,
-        dataFile: community.dataFile || `${community.id}.json`,
         imageUrl: community.imageUrl ?? null,
         nodeTypes: community.nodeTypes as object ?? null,
         communityAliases: community.communityAliases as object ?? [],
@@ -114,8 +112,7 @@ export async function POST(request: NextRequest) {
       description: created.description ?? '',
       location: created.location ?? undefined,
       tags: created.tags,
-      memberCount: created.memberCount,
-      dataFile: created.dataFile ?? '',
+      memberCount: 0,
       createdAt: created.createdAt.toISOString(),
       imageUrl: created.imageUrl ?? undefined,
       nodeTypes: (created.nodeTypes as unknown) as Community['nodeTypes'],
@@ -203,8 +200,6 @@ export async function PUT(request: NextRequest) {
         description: community.description,
         location: community.location ?? null,
         tags: community.tags,
-        memberCount: community.memberCount,
-        dataFile: community.dataFile,
         imageUrl: community.imageUrl ?? null,
         // Additive: this is a whole-record save from a client snapshot that can
         // be minutes old, and any member may add a type in the meantime
@@ -225,8 +220,7 @@ export async function PUT(request: NextRequest) {
       description: updated.description ?? '',
       location: updated.location ?? undefined,
       tags: updated.tags,
-      memberCount: updated.memberCount,
-      dataFile: updated.dataFile ?? '',
+      memberCount: community.memberCount,
       createdAt: updated.createdAt.toISOString(),
       imageUrl: updated.imageUrl ?? undefined,
       nodeTypes: (updated.nodeTypes as unknown) as Community['nodeTypes'],
@@ -274,13 +268,7 @@ export async function DELETE(request: NextRequest) {
     // communityId without a foreign key, so they must be swept by hand or
     // they'd survive as orphans.
     await prisma.$transaction([
-      prisma.post.deleteMany({ where: { communityId: id } }),
       prisma.resource.deleteMany({ where: { communityId: id } }),
-      prisma.privateColumn.deleteMany({ where: { communityId: id } }),
-      prisma.communityColumn.deleteMany({ where: { communityId: id } }),
-      prisma.communityColumnRequest.deleteMany({ where: { communityId: id } }),
-      prisma.valueShareRequest.deleteMany({ where: { communityId: id } }),
-      prisma.auditLog.deleteMany({ where: { communityId: id } }),
       prisma.community.delete({ where: { id } }),
     ]);
 

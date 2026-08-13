@@ -167,18 +167,6 @@ export async function consumeClaimToken(
     },
   });
 
-  await prisma.auditLog.create({
-    data: {
-      actorId: user.id,
-      targetId: user.id,
-      action: "claim_profile",
-      diff: {
-        before: { isActive: false },
-        after: { isActive: true, googleId: payload.google_id },
-      },
-    },
-  });
-
   return {
     userId: activatedUser.id,
     name: activatedUser.name,

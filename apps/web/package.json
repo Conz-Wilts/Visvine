@@ -25,7 +25,6 @@
     "db:notes-vault": "node scripts/import-notes-vault.mjs",
     "db:blackbird:notes": "node scripts/add-blackbird-notes.mjs",
     "db:identities:backfill": "tsx scripts/backfill-identities.ts",
-    "db:rename-org-to-group": "tsx scripts/rename-organization-to-group.ts",
     "db:context-links:backfill": "tsx scripts/backfill-context-links.ts",
     "db:link-reasons": "tsx scripts/backfill-context-links.ts --reasons",
     "db:entity-context:backfill": "tsx scripts/backfill-entity-context.ts",

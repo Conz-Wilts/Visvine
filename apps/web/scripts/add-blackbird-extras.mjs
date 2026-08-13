@@ -285,7 +285,7 @@ try {
   if (comm.rowCount === 0) {
     throw new Error(`community "${COMM}" not found — run \`pnpm db:seed\` first`);
   }
-  const users = await client.query(`SELECT id FROM "user" WHERE id = ANY($1)`, [ANCHORS]);
+  const users = await client.query(`SELECT id FROM users WHERE id = ANY($1)`, [ANCHORS]);
   if (users.rowCount < ANCHORS.length) {
     throw new Error(`add-blackbird-extras: expected the ${ANCHORS.length} seed anchors, found ${users.rowCount} — run \`pnpm db:seed\` first`);
   }

@@ -192,27 +192,13 @@ async function wipeData() {
   console.log("Wiping existing data…");
   // Delete in dependency order. Anything with onDelete: Cascade is wiped by the
   // parent deletes; the rest are explicit — including the tables that carry a
-  // communityId with no FK behind it, which would otherwise orphan. Of those,
-  // communityColumn matters most: it is unique on (communityId, columnKey), so
-  // a leftover row collides when a community with the same id is recreated.
+  // communityId with no FK behind it, which would otherwise orphan.
   await prisma.$transaction([
     prisma.link.deleteMany({}),
     prisma.attendee.deleteMany({}),
-    prisma.privateColumnValue.deleteMany({}),
-    prisma.privateColumn.deleteMany({}),
-    prisma.communityColumnValue.deleteMany({}),
-    prisma.communityColumn.deleteMany({}),
-    prisma.communityColumnRequest.deleteMany({}),
-    prisma.valueShareRequest.deleteMany({}),
-    prisma.postCommentReaction.deleteMany({}),
-    prisma.postComment.deleteMany({}),
-    prisma.postReaction.deleteMany({}),
-    prisma.postImage.deleteMany({}),
-    prisma.post.deleteMany({}),
     prisma.resourceComment.deleteMany({}),
     prisma.resourceChange.deleteMany({}),
     prisma.resource.deleteMany({}),
-    prisma.auditLog.deleteMany({}),
     prisma.userCommunity.deleteMany({}),
     prisma.person.deleteMany({}),
     prisma.node.deleteMany({}),
@@ -344,10 +330,6 @@ async function createAnchorUsers() {
       },
     });
   }
-  await prisma.community.update({
-    where: { id: COMMUNITY_ID },
-    data: { memberCount: ANCHORS.length },
-  });
 }
 
 async function main() {

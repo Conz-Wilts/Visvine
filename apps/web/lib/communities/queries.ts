@@ -51,7 +51,6 @@ export async function listVisibleCommunities(session: SessionPayload): Promise<C
       country: true,
       location: true,
       tags: true,
-      memberCount: true,
       createdAt: true,
       imageUrl: true,
       // The type vocabulary has to ride along: this list is what
@@ -64,6 +63,10 @@ export async function listVisibleCommunities(session: SessionPayload): Promise<C
       designConfig: true,
       featureConfig: true,
       visibility: true,
+      // Derived, not stored: `memberCount` used to be a hand-maintained column
+      // that four separate call sites incremented. Counting active memberships
+      // here cannot drift.
+      _count: { select: { userCommunities: { where: { status: 'active' } } } },
     },
     orderBy: { name: 'asc' },
   });
@@ -76,8 +79,7 @@ export async function listVisibleCommunities(session: SessionPayload): Promise<C
     country: c.country ?? undefined,
     location: c.location ?? undefined,
     tags: c.tags ?? [],
-    memberCount: c.memberCount,
-    dataFile: '',
+    memberCount: c._count.userCommunities,
     createdAt: c.createdAt.toISOString(),
     imageUrl: c.imageUrl ?? undefined,
     nodeTypes: (c.nodeTypes as unknown) as Community['nodeTypes'],
@@ -97,7 +99,6 @@ export interface UserCommunityMembership {
   location: string | null;
   tags: string[];
   memberCount: number;
-  dataFile: string;
   createdAt: string;
   imageUrl: string | null;
   nodeTypes: unknown;
@@ -128,13 +129,13 @@ export async function listUserCommunities(session: SessionPayload): Promise<User
           country: true,
           location: true,
           tags: true,
-          memberCount: true,
           createdAt: true,
           imageUrl: true,
           nodeTypes: true,
           communityAliases: true,
           linkTypes: true,
           designConfig: true,
+          _count: { select: { userCommunities: { where: { status: 'active' } } } },
         },
       },
     },
@@ -154,8 +155,7 @@ export async function listUserCommunities(session: SessionPayload): Promise<User
     country: m.community.country,
     location: m.community.location,
     tags: m.community.tags,
-    memberCount: m.community.memberCount,
-    dataFile: '',
+    memberCount: m.community._count.userCommunities,
     createdAt: m.community.createdAt.toISOString(),
     imageUrl: m.community.imageUrl,
     nodeTypes: m.community.nodeTypes,

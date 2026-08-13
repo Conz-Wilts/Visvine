@@ -164,9 +164,9 @@ explicit about columns rather than relying on the cap.
 | Table | Notable columns |
 | --- | --- |
 | \`communities\` | \`id\`, \`name\`, \`slug\`, \`personal_owner_id\` |
-| \`"user"\` | \`id\`, \`name\`, \`email\` — note the table name is a reserved word and must be quoted |
+| \`users\` | \`id\`, \`name\`, \`email\` |
 | \`user_communities\` | \`user_id\`, \`community_id\`, \`status\` (\`active\` / \`pending\`) |
-| \`aliases\` / \`user_aliases\` | who holds what; \`aliases.owner\` = its holders manage the community |
+| \`user_aliases\` | who holds what; \`owner\` = its holders manage the community |
 | \`nodes\` | \`id\`, \`community_id\`, \`type\` (\`person\`/\`group\`/\`resource\`/\`event\`…), \`name\`, \`slug\` |
 | \`links\` | \`source_id\`, \`target_id\`, \`relationship\`, \`origin\` (\`context\`/\`manual\`/\`structure\`…) |
 | \`community_notes\` | \`community_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
@@ -185,7 +185,7 @@ return await sql(
 
 ## What not to read
 
-\`community_secrets\` holds connector secret ciphertext and \`"user".password_hash\`
+\`community_secrets\` holds connector secret ciphertext and \`users.password_hash\`
 holds password hashes. Neither is useful to you and both are off limits — the
 read-only transaction does not make them any less sensitive.
 `;

@@ -83,7 +83,8 @@ async function searchCommunities(q: string, session: { userId: string; email: st
     },
     select: {
       id: true, name: true, description: true, location: true, tags: true,
-      imageUrl: true, memberCount: true,
+      imageUrl: true,
+      _count: { select: { userCommunities: { where: { status: 'active' } } } },
     },
     orderBy: { name: 'asc' },
     take: 10,
@@ -102,7 +103,7 @@ async function searchCommunities(q: string, session: { userId: string; email: st
     communities: [],
     metadata: {
       communityRef: c.id,
-      memberCount: c.memberCount,
+      memberCount: c._count.userCommunities,
     } as Record<string, unknown>,
   }));
 }

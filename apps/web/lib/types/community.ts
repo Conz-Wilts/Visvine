@@ -55,7 +55,6 @@ export interface Community {
   location?: string;
   tags: string[];
   memberCount: number;
-  dataFile: string; // filename in /data/ecosystems/
   createdAt: string;
   imageUrl?: string;
   nodeTypes?: NodeTypeConfig[]; // Customizable node types for this community
