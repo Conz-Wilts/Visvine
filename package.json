@@ -26,6 +26,7 @@
     "db:psql": "docker exec -it visvine-postgres psql -U postgres -d visvine",
     "db:migrate": "pnpm --filter @visvine/web db:migrate",
     "db:migrate:new": "pnpm --filter @visvine/web db:migrate:new",
+    "db:inspect:prod": "pnpm --filter @visvine/web db:inspect:prod",
     "db:seed": "pnpm --filter @visvine/web db:seed",
     "db:embed": "pnpm --filter @visvine/web db:embed",
     "db:nz": "node apps/web/scripts/add-nz-ecosystem.mjs",
