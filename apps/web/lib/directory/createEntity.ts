@@ -30,7 +30,7 @@ import type { NBNode } from '@/lib/types'
  * everything downstream — which fields exist (FIELDS_BY_TYPE in
  * lib/create/typeFields.ts), which note namespace the entity lives in
  * (ENTITY_DIRS in lib/notes/entities.ts), and whether it resolves to a
- * cross-community identity. section/channel are structural and belong to admin
+ * cross-space identity. section/channel are structural and belong to admin
  * surfaces.
  *
  * Events create here like anything else: everything in this product starts as a
@@ -40,10 +40,10 @@ import type { NBNode } from '@/lib/types'
  * is a real, valid event that hasn't been scheduled yet (the Events page files
  * those under "Date to be set").
  *
- * A `space` here is a group, organisation or community — recorded as a card in
+ * A `space` here is a group, organisation or space — recorded as a card in
  * the directory. Recording one never provisions a real space: those are only
  * ever created deliberately, from the switcher. When the name resolves to one
- * that already runs here, `communityRef` links the card to it.
+ * that already runs here, `spaceRef` links the card to it.
  */
 export const CREATABLE_TYPES = ['person', 'space', 'resource', 'event'] as const
 export type CreatableType = (typeof CREATABLE_TYPES)[number]
@@ -61,11 +61,11 @@ export interface CreateEntityInput {
   alias?: string | null
   identityId?: string | null
   /**
-   * For `space` only: the community row this card refers to, set when the user
+   * For `space` only: the space row this card refers to, set when the user
    * picked one that already runs here out of the match list. Null for an org
    * that's only a directory record — nothing is provisioned for those.
    */
-  communityRef?: string | null
+  spaceRef?: string | null
   /** Flat `{ fieldKey: value }`, split into columns + metadata by `applyFields`. */
   fields?: Record<string, unknown>
   /** Markdown body appended under the generated frontmatter. */
@@ -92,7 +92,7 @@ export type CreateEntityResult =
 
 const NODE_SELECT = {
   id: true, type: true, name: true, alias: true, subtitle: true, location: true,
-  url: true, imageUrl: true, tags: true, metadata: true, communityId: true, createdAt: true,
+  url: true, imageUrl: true, tags: true, metadata: true, spaceId: true, createdAt: true,
 } as const
 
 type NodeRow = Prisma.NodeGetPayload<{ select: typeof NODE_SELECT }>
@@ -109,7 +109,7 @@ function nodeRowToNBNode(row: NodeRow): NBNode {
     image_url: normalizeImageUrl(row.imageUrl),
     tags: row.tags,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
-    community_id: row.communityId ?? null,
+    space_id: row.spaceId ?? null,
     createdAt: row.createdAt.toISOString(),
   }
 }
@@ -171,7 +171,7 @@ export async function createEntity(
   // null just means the caller offers the note rather than the profile.
   if (await readNoteOrNull(brain, basePath)) {
     const existing = await prisma.node.findFirst({
-      where: { communityId: brain.communityId, name: { equals: name, mode: 'insensitive' } },
+      where: { spaceId: brain.spaceId, name: { equals: name, mode: 'insensitive' } },
       select: { id: true },
     })
     return {
@@ -203,7 +203,7 @@ export async function createEntity(
           imageUrl: columns.image_url ?? null,
           tags,
           metadata: metadata as Prisma.InputJsonObject,
-          communityId: brain.communityId,
+          spaceId: brain.spaceId,
         },
         select: NODE_SELECT,
       })
@@ -237,11 +237,11 @@ export async function createEntity(
   // Nothing is provisioned when it doesn't resolve: recording that Movac exists
   // is a note in your directory, and real spaces are only ever created
   // deliberately, from the switcher. An unresolved card is just a card.
-  const communityRef = rawType === 'space' ? input.communityRef?.trim() : null
-  if (communityRef) {
+  const spaceRef = rawType === 'space' ? input.spaceRef?.trim() : null
+  if (spaceRef) {
     row = await prisma.node.update({
       where: { id: row.id },
-      data: { metadata: { ...metadata, communityRef } as Prisma.InputJsonObject },
+      data: { metadata: { ...metadata, spaceRef } as Prisma.InputJsonObject },
       select: NODE_SELECT,
     })
   }

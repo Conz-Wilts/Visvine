@@ -67,20 +67,20 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
           </div>
         </div>
 
-        {/* Community membership summary */}
-        {profile.communityCount > 0 && (
+        {/* Space membership summary */}
+        {profile.spaceCount > 0 && (
           <div className="mx-8 mb-6 rounded-lg bg-blue-50 px-4 py-3">
             <p className="text-sm text-blue-800">
               Already a member of{" "}
-              <span className="font-semibold">{profile.communityCount}</span>{" "}
-              {profile.communityCount === 1 ? "space" : "spaces"}
-              {profile.communityNames.length > 0 && (
+              <span className="font-semibold">{profile.spaceCount}</span>{" "}
+              {profile.spaceCount === 1 ? "space" : "spaces"}
+              {profile.spaceNames.length > 0 && (
                 <>
                   :{" "}
                   <span className="font-medium">
-                    {profile.communityNames.slice(0, 3).join(", ")}
-                    {profile.communityNames.length > 3 &&
-                      ` and ${profile.communityNames.length - 3} more`}
+                    {profile.spaceNames.slice(0, 3).join(", ")}
+                    {profile.spaceNames.length > 3 &&
+                      ` and ${profile.spaceNames.length - 3} more`}
                   </span>
                 </>
               )}

@@ -198,8 +198,8 @@ test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () 
   )
 })
 
-// The BRAIN ROOT's index — the community home page the Directory's Context tab
-// routes to. Seeded by ensureRootIndex (lib/notes/store.ts) at community
+// The BRAIN ROOT's index — the space home page the Directory's Context tab
+// routes to. Seeded by ensureRootIndex (lib/notes/store.ts) at space
 // creation; these pin the contract that helper leans on.
 test('the root index path is the bare basename, and declares itself an Index', () => {
   assert.equal(indexPathOf(''), INDEX_BASENAME)
@@ -209,9 +209,9 @@ test('the root index path is the bare basename, and declares itself an Index', (
   // (scripts/verify-notes-rules.ts: an index.md must declare `type: Index`),
   // and carry a children block so the root opts in to auto-listing — a root
   // WITHOUT one is deliberately left alone by refreshFolderIndex.
-  const content = newIndexContent({ title: "Connor's Community" })
+  const content = newIndexContent({ title: "Connor's Space" })
   assert.equal(parseFrontmatter(content).type, 'Index')
-  assert.equal(parseFrontmatter(content).title, "Connor's Community")
+  assert.equal(parseFrontmatter(content).title, "Connor's Space")
   assert.equal(hasChildrenBlock(content), true)
 })
 

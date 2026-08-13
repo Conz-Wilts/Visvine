@@ -48,7 +48,7 @@ const QUESTION_TYPES: { value: FormField['type']; label: string }[] = [
 ];
 
 interface EventComposerProps {
-  communityId: string;
+  spaceId: string;
   mode?: 'create' | 'edit';
   initialEvent?: NBEvent;
   onDelete?: () => void;
@@ -57,7 +57,7 @@ interface EventComposerProps {
 const THEME_COLORS = ['#78d870', '#2563eb', '#9333ea', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#111827'];
 
 const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'community', label: 'Space', icon: <Users className="w-4 h-4" />, description: 'Members of this space' },
+  { value: 'space', label: 'Space', icon: <Users className="w-4 h-4" />, description: 'Members of this space' },
   { value: 'public', label: 'Public link', icon: <Globe className="w-4 h-4" />, description: 'Anyone with the link can RSVP' },
   { value: 'private', label: 'Unlisted', icon: <Lock className="w-4 h-4" />, description: 'Only people you invite' },
 ];
@@ -91,7 +91,7 @@ function plusHoursIso(iso: string, hours: number): string {
   return new Date(new Date(iso).getTime() + hours * 3600_000).toISOString();
 }
 
-export function EventComposer({ communityId, mode = 'create', initialEvent, onDelete }: EventComposerProps) {
+export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete }: EventComposerProps) {
   const router = useRouter();
   const draftIdRef = useRef<`event:${string}`>(initialEvent?.id ?? makeDraftId());
   const createdRef = useRef(mode === 'edit');
@@ -112,7 +112,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
   const [location, setLocation] = useState(initialEvent?.location ?? { label: '' });
   const [coverImageUrl, setCoverImageUrl] = useState(initialEvent?.coverImageUrl ?? '');
   const [themeColor, setThemeColor] = useState(initialEvent?.theme?.color ?? THEME_COLORS[0]);
-  const [visibility, setVisibility] = useState<EventVisibility>(initialEvent?.visibility ?? 'community');
+  const [visibility, setVisibility] = useState<EventVisibility>(initialEvent?.visibility ?? 'space');
   const [capacity, setCapacity] = useState<number | undefined>(initialEvent?.capacity);
   const [requireApproval, setRequireApproval] = useState(initialEvent?.form?.requireApproval ?? false);
   const [guestListVisible, setGuestListVisible] = useState(initialEvent?.guestListVisible ?? true);
@@ -141,7 +141,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
   const buildBody = useCallback(
     (overrides: Record<string, unknown> = {}) => ({
       id: draftIdRef.current,
-      communityId,
+      spaceId,
       title: title.trim() || 'Untitled event',
       description: description.trim() || undefined,
       startAt,
@@ -186,7 +186,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
       },
       ...overrides,
     }),
-    [communityId, title, description, startAt, endAt, timezone, location, capacity, visibility,
+    [spaceId, title, description, startAt, endAt, timezone, location, capacity, visibility,
      coverImageUrl, themeColor, guestListVisible, allowPlusOnes, allowMaybe, requireApproval, eventType, virtualLink, initialStatus,
      waitlistEnabled, questions],
   );
@@ -213,7 +213,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
         }
         return res.json();
       }
-      const res = await fetch(`/api/events/${draftIdRef.current}?communityId=${encodeURIComponent(communityId)}`, {
+      const res = await fetch(`/api/events/${draftIdRef.current}?spaceId=${encodeURIComponent(spaceId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -221,7 +221,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not save event');
       return res.json();
     },
-    [buildBody, communityId],
+    [buildBody, spaceId],
   );
 
   // ── autosave (debounced) ─────────────────────────────────────────────────────
@@ -617,7 +617,7 @@ export function EventComposer({ communityId, mode = 'create', initialEvent, onDe
       {shareEvent && (
         <ShareSheet
           event={shareEvent}
-          communityId={communityId}
+          spaceId={spaceId}
           onClose={() => router.push(`/events/${shareEvent.id}`)}
         />
       )}
@@ -650,10 +650,10 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint: string;
   );
 }
 
-function ShareSheet({ event, communityId, onClose }: { event: NBEvent; communityId: string; onClose: () => void }) {
+function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const slug = event.slug ?? event.id.replace(/^event:/, '');
-  // Only `public` events have a working /e/<slug> page; community/unlisted events
+  // Only `public` events have a working /e/<slug> page; space/unlisted events
   // are shared via their in-app page (members only). Don't hand out a public link
   // that the visibility gate would 404.
   const isPublic = event.visibility === 'public';
@@ -693,7 +693,7 @@ function ShareSheet({ event, communityId, onClose }: { event: NBEvent; community
 
         <div className="mt-3 grid grid-cols-2 gap-2.5">
           <a
-            href={`/api/events/${event.id}/ics?communityId=${encodeURIComponent(communityId)}`}
+            href={`/api/events/${event.id}/ics?spaceId=${encodeURIComponent(spaceId)}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"

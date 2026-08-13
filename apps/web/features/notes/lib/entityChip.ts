@@ -7,7 +7,7 @@
 //
 // The avatar (photo entities only) lives in a widget placed before the link; the
 // name is the link text (class `entity-link`). Entity data is supplied by the
-// caller via `getEntity(path)` (a ref into the community node map), and a
+// caller via `getEntity(path)` (a ref into the space node map), and a
 // `setMeta('entityChipRefresh')` transaction forces a recompute once that map loads.
 
 import { Extension } from '@tiptap/core'
@@ -66,10 +66,10 @@ function buildDecorations(doc: PMNode, getEntity: EntityChipOptions['getEntity']
     const start = pos
     const end = pos + node.nodeSize
     // entityKindOf, not a prefix test: an organisation's stored type has been
-    // 'organization', then 'group', and is now 'community', and only the first
+    // 'organization', then 'group', and is now 'space', and only the first
     // of those starts with "org".
     // CSS class name is styling plumbing — it keeps its old spelling.
-    const kindClass = entityKindOf(entity.type) === 'space' ? 'entity-community' : 'entity-person'
+    const kindClass = entityKindOf(entity.type) === 'space' ? 'entity-space' : 'entity-person'
     if (entity.image_url) {
       decorations.push(
         Decoration.widget(start, () => buildWidget(entity, path, kindClass), {

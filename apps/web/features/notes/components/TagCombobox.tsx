@@ -1,7 +1,7 @@
 'use client'
 
 // Inline tag picker for the context-note header: a text field with a dropdown of
-// the community's existing tags (each shown in its own colour) plus a "Create"
+// the space's existing tags (each shown in its own colour) plus a "Create"
 // flow where you pick the new tag's colour from a swatch palette. Selecting an
 // existing tag calls onAdd; creating calls onCreate with the chosen colour.
 // blur / Escape / empty-selection calls onClose.
@@ -11,12 +11,12 @@ import Chip from '@/components/ui/Chip'
 import { TAG_SWATCHES, resolveTagBase, tagKey, tagPalette } from '@/lib/tagColors'
 
 interface TagComboboxProps {
-  /** Community tags in use and not already on this entity, sorted. Merged with
+  /** Space tags in use and not already on this entity, sorted. Merged with
    *  the registry below, so a caller need not chase down every source. */
   suggestions: string[]
   /** Lower-cased tags already on this entity, to suppress a redundant "Create". */
   existing: Set<string>
-  /** Community tag → base-colour registry, for colouring suggestions. */
+  /** Space tag → base-colour registry, for colouring suggestions. */
   registry: Record<string, string>
   /** Entity accent (input focus ring). */
   accentBase: string
@@ -35,7 +35,7 @@ export function TagCombobox({
 
   const query = draft.trim().toLowerCase()
 
-  // Every tag the community knows, not just the ones currently ON something:
+  // Every tag the space knows, not just the ones currently ON something:
   // the colour registry holds tags whose last node was retyped or deleted, and
   // a plain note's tags are as real as an entity's. The list scrolls, so it is
   // shown whole rather than truncated — a hidden tag gets re-created by hand,

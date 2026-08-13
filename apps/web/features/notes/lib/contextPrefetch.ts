@@ -15,7 +15,7 @@
 // the next mount.
 
 import { useEffect } from 'react'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath } from '@/lib/notes/entities'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from './notesApi'
@@ -136,9 +136,9 @@ export type NoteRead =
 // the entity stub over content that simply failed to load. Errors are returned,
 // not thrown, so they'd stick in the cache — cache callers must not memoize the
 // error arm (see readNote below).
-async function readNoteWithStatus(communityId: string, path: string): Promise<NoteRead> {
+async function readNoteWithStatus(spaceId: string, path: string): Promise<NoteRead> {
   try {
-    const params = new URLSearchParams({ communityId, path })
+    const params = new URLSearchParams({ spaceId, path })
     const res = await fetch(`/api/notes/item?${params.toString()}`)
     if (res.status === 404) return { status: 'missing' }
     if (!res.ok) {
@@ -154,9 +154,9 @@ async function readNoteWithStatus(communityId: string, path: string): Promise<No
 
 /** Cached note read: an 'error' result evicts itself (mirrors the rejection
  *  rule) so a blip during prefetch can't lock the panel into the error state. */
-export function readNote(communityId: string, path: string): Promise<NoteRead> {
-  const key = contextKeys.read(communityId, path)
-  return cachedFetch(key, () => readNoteWithStatus(communityId, path)).then((r) => {
+export function readNote(spaceId: string, path: string): Promise<NoteRead> {
+  const key = contextKeys.read(spaceId, path)
+  return cachedFetch(key, () => readNoteWithStatus(spaceId, path)).then((r) => {
     if (r.status === 'error') cache.delete(key)
     return r
   })
@@ -169,17 +169,17 @@ export function readNote(communityId: string, path: string): Promise<NoteRead> {
  *  requests then overlap the route change instead of starting after the new
  *  panel mounts, and swrFetch serves them synchronously on that first paint —
  *  no skeleton between the tree click and the note. */
-export function prefetchNoteContext(communityId: string, path: string) {
+export function prefetchNoteContext(spaceId: string, path: string) {
   void cachedFetch(contextKeys.config(), () => notesApi.config()).catch(() => {})
-  void cachedFetch(contextKeys.access(communityId, path), () => notesApi.getAccess(communityId, path)).catch(() => {})
-  void cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId)).catch(() => {})
-  void cachedFetch(contextKeys.tree(communityId), () => notesApi.tree(communityId)).catch(() => {})
-  void readNote(communityId, path).catch(() => {})
+  void cachedFetch(contextKeys.access(spaceId, path), () => notesApi.getAccess(spaceId, path)).catch(() => {})
+  void cachedFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId)).catch(() => {})
+  void cachedFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId)).catch(() => {})
+  void readNote(spaceId, path).catch(() => {})
   // Fired alongside the read (not after it — no waterfall): both endpoints
   // return empty results for a missing path, and the panel ignores them when
   // the read lands as anything but 'ok'.
-  void cachedFetch(contextKeys.references(communityId, path), () =>
-    notesApi.references(communityId, path),
+  void cachedFetch(contextKeys.references(spaceId, path), () =>
+    notesApi.references(spaceId, path),
   ).catch(() => {})
 }
 
@@ -187,15 +187,15 @@ export function prefetchNoteContext(communityId: string, path: string) {
  *  as soon as the node is known, so clicking over is (near-)instant. Pass
  *  `enabled` = the same condition that shows the Context tab. */
 export function usePrefetchEntityContext(nodeId: string, node: NBNode | null, enabled: boolean) {
-  const { currentCommunity } = useCommunity()
-  const communityId = currentCommunity?.id ?? null
+  const { currentSpace } = useSpace()
+  const spaceId = currentSpace?.id ?? null
   const nodeType = node?.type ?? null
 
   useEffect(() => {
-    if (!enabled || !nodeType || !communityId) return
+    if (!enabled || !nodeType || !spaceId) return
     // Warm the code-split chunk (Tiptap + toolbar icons) alongside the data.
     void import('../components/EntityContextPanel').catch(() => {})
     const path = entityNotePath({ id: nodeId, type: nodeType })
-    if (path) prefetchNoteContext(communityId, path)
-  }, [enabled, nodeId, nodeType, communityId])
+    if (path) prefetchNoteContext(spaceId, path)
+  }, [enabled, nodeId, nodeType, spaceId])
 }

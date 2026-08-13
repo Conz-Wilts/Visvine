@@ -13,7 +13,7 @@
 //     (that just writes a direct grant, and our effective level is the max) but
 //     never lowered or removed here — you go to the folder it came from, or cut
 //     the boundary with limited access.
-//   • General access = Restricted ↔ Everyone in the community, plus the
+//   • General access = Restricted ↔ Everyone in the space, plus the
 //     limited-access boundary (Drive's "disable inherited permissions").
 //
 // All enforcement is server-side (/api/notes/access, /api/notes/publications) —
@@ -33,7 +33,7 @@ import {
   Check,
   ChevronDown,
 } from 'lucide-react'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey'
 import Avatar from '@/components/ui/Avatar'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
@@ -362,7 +362,7 @@ const ALL_LEVELS = ACCESS_LEVELS.map((l) => l.name)
 // the dialog
 
 interface SharePanelProps {
-  communityId: string
+  spaceId: string
   /** The note or folder the panel is about. */
   path: string
   kind: 'note' | 'folder'
@@ -371,10 +371,10 @@ interface SharePanelProps {
   onClose: () => void
 }
 
-export function SharePanel({ communityId, path, kind, title, onClose }: SharePanelProps) {
-  const { joinedCommunities } = useCommunity()
-  const isPersonalSpace = communityId.startsWith(PERSONAL_ID_PREFIX)
-  const communityName = joinedCommunities.find((c) => c.id === communityId)?.name ?? 'the space'
+export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelProps) {
+  const { joinedSpaces } = useSpace()
+  const isPersonalSpace = spaceId.startsWith(PERSONAL_ID_PREFIX)
+  const spaceName = joinedSpaces.find((c) => c.id === spaceId)?.name ?? 'the space'
   const displayName =
     title ?? (path === '' ? 'brain root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
 
@@ -405,21 +405,21 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   })
 
   const reload = useCallback(() => {
-    notesApi.getAccess(communityId, path).then(setAccess).catch((e: unknown) => {
+    notesApi.getAccess(spaceId, path).then(setAccess).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : 'Failed to load access')
     })
     if (kind === 'note') {
-      notesApi.getPublications(communityId, path).then(setPubs).catch(() => setPubs(null))
+      notesApi.getPublications(spaceId, path).then(setPubs).catch(() => setPubs(null))
     }
     if (!isPersonalSpace) {
       // Best-effort: the endpoint returns everything the caller may see, and the
       // block below narrows it to open requests for THIS path.
       notesApi
-        .listAccessRequests(communityId)
+        .listAccessRequests(spaceId)
         .then(({ requests: r }) => setRequests(r))
         .catch(() => setRequests([]))
     }
-  }, [communityId, path, kind, isPersonalSpace])
+  }, [spaceId, path, kind, isPersonalSpace])
 
   useEffect(() => {
     reload()
@@ -428,12 +428,12 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   const afterMutation = useCallback(() => {
     // Access changed: the caller's own read/write answers may have too.
     invalidateContextCache(
-      contextKeys.access(communityId, path),
-      contextKeys.list(communityId),
-      contextKeys.tree(communityId),
+      contextKeys.access(spaceId, path),
+      contextKeys.list(spaceId),
+      contextKeys.tree(spaceId),
     )
     reload()
-  }, [communityId, path, reload])
+  }, [spaceId, path, reload])
 
   const run = useCallback(
     async (fn: () => Promise<unknown>, successNotice?: string) => {
@@ -454,10 +454,10 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   )
 
   const grant = (
-    subjectType: 'community' | 'alias' | 'user',
+    subjectType: 'space' | 'alias' | 'user',
     subjectId: string,
     lvl: AccessLevelName,
-  ) => notesApi.accessAction(communityId, { action: 'grant', subjectType, subjectId, path, level: lvl })
+  ) => notesApi.accessAction(spaceId, { action: 'grant', subjectType, subjectId, path, level: lvl })
 
   const cancelAdd = () => {
     setPending([])
@@ -481,11 +481,11 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   )
 
   const resolveRequest = (id: string, approve: boolean) =>
-    run(() => notesApi.resolveAccessRequest(communityId, id, approve), approve ? undefined : 'Request denied.')
+    run(() => notesApi.resolveAccessRequest(spaceId, id, approve), approve ? undefined : 'Request denied.')
 
   const revokeGrants = (grantIds: string[]) =>
     run(async () => {
-      for (const id of grantIds) await notesApi.accessAction(communityId, { action: 'revoke', grantId: id })
+      for (const id of grantIds) await notesApi.accessAction(spaceId, { action: 'revoke', grantId: id })
     })
 
   // The restriction boundary is the panel's own subject: a folder limits the
@@ -528,7 +528,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
 
   const toggleRestrict = () =>
     run(() =>
-      notesApi.accessAction(communityId, {
+      notesApi.accessAction(spaceId, {
         action: 'restrict',
         folderPath: path,
         restricted: !isRestricted,
@@ -542,7 +542,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
 
   const toggleLock = () =>
     run(() =>
-      notesApi.accessAction(communityId, {
+      notesApi.accessAction(spaceId, {
         action: 'setLock',
         folderPath: path,
         locked: !isLocked,
@@ -552,7 +552,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
   const publish = () =>
     run(async () => {
       const result = await notesApi.publish(publishTarget, {
-        fromCommunityId: communityId,
+        fromSpaceId: spaceId,
         fromPath: path,
         toPath: publishPath.trim() || path,
       })
@@ -562,21 +562,21 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
     })
 
   const unlink = (id: string) =>
-    run(() => notesApi.unpublish(communityId, id), 'Unlinked — the copy stays, no longer syncing.')
+    run(() => notesApi.unpublish(spaceId, id), 'Unlinked — the copy stays, no longer syncing.')
 
   const publishTargets = useMemo(
-    () => joinedCommunities.filter((c) => c.id !== communityId && !c.id.startsWith(PERSONAL_ID_PREFIX)),
-    [joinedCommunities, communityId],
+    () => joinedSpaces.filter((c) => c.id !== spaceId && !c.id.startsWith(PERSONAL_ID_PREFIX)),
+    [joinedSpaces, spaceId],
   )
 
   const entries = useMemo(() => access?.entries ?? [], [access?.entries])
-  const communityEntry = entries.find((e) => e.subjectType === 'community') ?? null
+  const spaceEntry = entries.find((e) => e.subjectType === 'space') ?? null
   const myUserId = access?.me.userId
 
   // Drive's ordering: you first, then everyone granted right here, then the
   // inherited rows — so the list reads "this note" before "the folders above".
   const peopleEntries = useMemo(() => {
-    const rows = entries.filter((e) => e.subjectType !== 'community')
+    const rows = entries.filter((e) => e.subjectType !== 'space')
     const rank = (e: (typeof rows)[number]) =>
       e.subjectType === 'user' && e.subjectId === myUserId ? 0 : e.via === path ? 1 : 2
     return [...rows].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
@@ -713,7 +713,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       )}
 
       {/* Waiting for access — requests filed against THIS path. The console
-          queue covers community admins; this block is the only place a
+          queue covers space admins; this block is the only place a
           non-admin folder manager can resolve their own. */}
       {canManage && openRequests.length > 0 && (
         <section>
@@ -794,7 +794,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
               </div>
             )
           })}
-          {peopleEntries.length === 0 && !communityEntry && (
+          {peopleEntries.length === 0 && !spaceEntry && (
             <p className="px-2 py-1 text-sm text-text-muted">
               No one has been added yet — only space admins can see this.
             </p>
@@ -809,16 +809,16 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
       <section>
         <SectionHeading>General access</SectionHeading>
         <div className={`-mx-2 ${ROW_CLASS}`}>
-          <IconTile tone={communityEntry ? 'brand' : 'muted'}>
-            {communityEntry ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+          <IconTile tone={spaceEntry ? 'brand' : 'muted'}>
+            {spaceEntry ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
           </IconTile>
           <div className="min-w-0 flex-1">
-            {canManage && (!communityEntry || communityEntry.via === path) ? (
+            {canManage && (!spaceEntry || spaceEntry.via === path) ? (
               <PickerMenu
                 align="left"
                 emphasis
                 disabled={busy}
-                current={communityEntry ? 'community' : 'restricted'}
+                current={spaceEntry ? 'space' : 'restricted'}
                 items={[
                   {
                     value: 'restricted',
@@ -826,46 +826,46 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
                     hint: 'Only people added above and space admins',
                   },
                   {
-                    value: 'community',
-                    label: `Everyone in ${communityName}`,
+                    value: 'space',
+                    label: `Everyone in ${spaceName}`,
                     hint: 'Any member of this space can find and open it',
                   },
                 ]}
                 onPick={(v) => {
-                  if (v === 'community') {
-                    if (!communityEntry) void run(() => grant('community', '', 'view'))
-                  } else if (communityEntry) {
+                  if (v === 'space') {
+                    if (!spaceEntry) void run(() => grant('space', '', 'view'))
+                  } else if (spaceEntry) {
                     void revokeGrants(
-                      communityEntry.grants.filter((g) => g.resourcePath === path).map((g) => g.id),
+                      spaceEntry.grants.filter((g) => g.resourcePath === path).map((g) => g.id),
                     )
                   }
                 }}
               />
             ) : (
               <div className="text-sm font-medium text-text-primary">
-                {communityEntry ? `Everyone in ${communityName}` : 'Restricted'}
+                {spaceEntry ? `Everyone in ${spaceName}` : 'Restricted'}
               </div>
             )}
             <div className="truncate text-[11px] text-text-muted">
-              {communityEntry
-                ? communityEntry.via === path
-                  ? `Anyone in ${communityName} can ${
-                      communityEntry.levelName === 'view' ? 'view' : 'access'
+              {spaceEntry
+                ? spaceEntry.via === path
+                  ? `Anyone in ${spaceName} can ${
+                      spaceEntry.levelName === 'view' ? 'view' : 'access'
                     } this`
-                  : `Inherited from ${communityEntry.via === '' ? 'the brain root' : `${communityEntry.via}/`}`
+                  : `Inherited from ${spaceEntry.via === '' ? 'the brain root' : `${spaceEntry.via}/`}`
                 : 'Only people added above and space admins'}
             </div>
           </div>
-          {communityEntry && (
+          {spaceEntry && (
             <RoleMenu
-              current={communityEntry.levelName}
+              current={spaceEntry.levelName}
               levels={
                 canManage
-                  ? editableLevels(communityEntry.level, communityEntry.via === path)
+                  ? editableLevels(spaceEntry.level, spaceEntry.via === path)
                   : []
               }
               disabled={busy}
-              onLevel={(l) => void run(() => grant('community', '', l))}
+              onLevel={(l) => void run(() => grant('space', '', l))}
             />
           )}
         </div>
@@ -921,7 +921,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
             <div className="mb-1 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-sm">
               <Radio className="h-4 w-4 shrink-0 text-brand-green" />
               <span className="min-w-0 flex-1 text-text-secondary">
-                Published from <span className="font-medium">{pubs.asTarget.sourceCommunityName}</span> —
+                Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> —
                 read-only here.
               </span>
               <button
@@ -939,7 +939,7 @@ export function SharePanel({ communityId, path, kind, title, onClose }: SharePan
             <div key={pub.id} className={`-mx-2 text-sm ${ROW_CLASS}`}>
               <Radio className={`h-4 w-4 shrink-0 ${pub.active ? 'text-brand-green' : 'text-text-muted'}`} />
               <span className="min-w-0 flex-1 truncate text-text-secondary">
-                → {pub.targetCommunityName} · {pub.targetPath}
+                → {pub.targetSpaceName} · {pub.targetPath}
                 {!pub.active && ' (unlinked)'}
               </span>
               {pub.active && (

@@ -43,19 +43,19 @@ export async function requireApiSession(): Promise<SessionPayload | NextResponse
 }
 
 /**
- * Session + community-admin gate, or 401/403. "Admin" has one definition in
+ * Session + space-admin gate, or 401/403. "Admin" has one definition in
  * this app: holding a Person alias flagged `owner` (lib/auth.ts#isAdmin, super
  * admins bypass). Membership carries no role, so there is nothing finer than
  * this to check. Usage:
- * `const session = await requireCommunityAdmin(communityId); if (session instanceof NextResponse) return session;`
+ * `const session = await requireSpaceAdmin(spaceId); if (session instanceof NextResponse) return session;`
  */
-export async function requireCommunityAdmin(
-  communityId: string,
+export async function requireSpaceAdmin(
+  spaceId: string,
 ): Promise<SessionPayload | NextResponse> {
   const session = await getSession();
   if (!session) return unauthorizedResponse();
   if (!(await sessionUserValid(session.userId))) return unauthorizedResponse();
-  if (!(await isAdmin(session.userId, communityId, session.email))) {
+  if (!(await isAdmin(session.userId, spaceId, session.email))) {
     return forbiddenResponse('permission_denied');
   }
   return session;

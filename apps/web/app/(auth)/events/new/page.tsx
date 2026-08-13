@@ -4,13 +4,13 @@
  * Create new event page
  */
 
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
 
 export default function NewEventPage() {
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <p className="text-center text-brand-grey">
@@ -22,7 +22,7 @@ export default function NewEventPage() {
 
   return (
     <div className="px-4 sm:px-6 lg:px-8 py-10">
-      <EventComposer communityId={currentCommunity.id} mode="create" />
+      <EventComposer spaceId={currentSpace.id} mode="create" />
     </div>
   );
 }

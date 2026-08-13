@@ -11,7 +11,7 @@ interface PageTitleProps {
 
 /**
  * Canonical page heading for the main app pages (Directory, Resources, Events,
- * Communities, Discover…). Owns both the type scale and the positioning so every
+ * Spaces, Discover…). Owns both the type scale and the positioning so every
  * page's title lands at the same size in the same spot. Pass `subtitle` for the
  * promo-style pages that need a supporting line.
  */

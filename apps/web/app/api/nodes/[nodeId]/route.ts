@@ -1,12 +1,12 @@
 /**
- * Node profile API — returns full node data with connection + community counts
+ * Node profile API — returns full node data with connection + space counts
  * GET /api/nodes/[nodeId]
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { communityMemberForbidden } from '@/lib/auth';
+import { spaceMemberForbidden } from '@/lib/auth';
 import { requireApiSession } from '@/lib/api/route';
 import { logger } from '@/lib/logger';
 import { entityNotePath } from '@/lib/notes/entities';
@@ -24,13 +24,13 @@ const RESERVED_METADATA_KEYS = ['userId'];
  *  rename. The note path is id-derived and never moves; a missing note is fine
  *  (the Context tab stubs it from node.name anyway). */
 async function syncNoteTitle(
-  node: { id: string; type: string; communityId: string },
+  node: { id: string; type: string; spaceId: string },
   name: string,
   actor: { id: string; name: string; email: string | null },
 ): Promise<void> {
   const notePath = entityNotePath(node);
   if (!notePath) return;
-  const brain = { communityId: node.communityId, ownerKey: SHARED_OWNER_KEY };
+  const brain = { spaceId: node.spaceId, ownerKey: SHARED_OWNER_KEY };
   try {
     const content = await readNoteOrNull(brain, notePath);
     if (content === null) return;
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
   const [node, linksWithNodes] = await Promise.all([
     prisma.node.findUnique({
       where: { id: nodeId },
-      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, communityId: true, createdAt: true, identity: { select: { userId: true } } },
+      select: { id: true, type: true, name: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, alias: true, spaceId: true, createdAt: true, identity: { select: { userId: true } } },
     }),
     prisma.$queryRaw<Array<{
       source_id: string;
@@ -110,11 +110,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
-  // The node's profile + full connection graph are community-scoped confidential
-  // data: only an active member (or admin) of its community may read them. A
+  // The node's profile + full connection graph are space-scoped confidential
+  // data: only an active member (or admin) of its space may read them. A
   // personal space is likewise private to its owner. Anyone else gets a 404 so
   // the endpoint reveals nothing — not even that the node exists.
-  if (node.communityId && (await communityMemberForbidden(session.userId, node.communityId, session.email))) {
+  if (node.spaceId && (await spaceMemberForbidden(session.userId, node.spaceId, session.email))) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
@@ -122,23 +122,23 @@ export async function GET(request: NextRequest, context: RouteContext) {
   // the Person-id lookup below covers legacy rows the backfill hasn't touched.
   let connectedUserId: string | null = node.identity?.userId ?? null;
 
-  // Real shared-community count: communities where both the viewer and the
+  // Real shared-space count: spaces where both the viewer and the
   // profile's linked user are active members. Nodes without a linked user
-  // exist in exactly their own community.
-  let communityCount = 1;
+  // exist in exactly their own space.
+  let spaceCount = 1;
   if (nodeId.startsWith('person:')) {
     const person = connectedUserId
       ? { userId: connectedUserId }
       : await prisma.person.findUnique({ where: { id: nodeId }, select: { userId: true } });
     if (person?.userId) {
       connectedUserId = person.userId;
-      communityCount = Math.max(1, await prisma.userCommunity.count({
+      spaceCount = Math.max(1, await prisma.spaceMember.count({
         where: {
           userId: person.userId,
           status: 'active',
-          community: {
-            personalOwnerId: null, // personal spaces aren't communities
-            userCommunities: { some: { userId: session.userId, status: 'active' } },
+          space: {
+            personalOwnerId: null, // personal spaces aren't spaces
+            members: { some: { userId: session.userId, status: 'active' } },
           },
         },
       }));
@@ -168,12 +168,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
         image_url: node.imageUrl ?? undefined,
         metadata: node.metadata as Record<string, unknown>,
         alias: node.alias ?? undefined,
-        community_id: node.communityId ?? undefined,
+        space_id: node.spaceId ?? undefined,
         connected_user_id: connectedUserId ?? undefined,
         createdAt: node.createdAt.toISOString(),
       },
       connectionCount: linksWithNodes.length,
-      communityCount,
+      spaceCount,
       connections: resolvedConnections,
     },
     {
@@ -199,10 +199,10 @@ const PATCHABLE_COLUMNS = {
 
 /**
  * PATCH /api/nodes/[nodeId] — update an entity's tags, property rows, and
- * display name from its context note. Body: { communityId, name?, tags?,
+ * display name from its context note. Body: { spaceId, name?, tags?,
  * metadata?, subtitle?, location?, url?, image_url? }. Gated on active
- * membership of the node's own community
- * (the same audience that can read/write the community brain); these are shared
+ * membership of the node's own space
+ * (the same audience that can read/write the space brain); these are shared
  * collaborative metadata, so any member with write access may edit them.
  *
  * `metadata` MERGES into the stored blob rather than replacing it — the property
@@ -215,9 +215,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const { nodeId } = await context.params;
   const body = await request.json().catch(() => ({}));
-  const { communityId } = body as { communityId?: string };
-  if (!communityId) {
-    return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+  const { spaceId } = body as { spaceId?: string };
+  if (!spaceId) {
+    return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
   }
 
   const columnKeys = Object.keys(PATCHABLE_COLUMNS).filter((k) => k in body);
@@ -238,17 +238,17 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { communityId: true, metadata: true, type: true },
+    select: { spaceId: true, metadata: true, type: true },
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
-  // The note (and thus its tags) live in the node's own community brain; a
-  // mismatched community would edit a misbound entity.
-  if (node.communityId !== communityId) {
+  // The note (and thus its tags) live in the node's own space brain; a
+  // mismatched space would edit a misbound entity.
+  if (node.spaceId !== spaceId) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
-  // Active membership (or admin) of the node's own community is the write gate.
-  if (await communityMemberForbidden(session.userId, communityId, session.email)) {
+  // Active membership (or admin) of the node's own space is the write gate.
+  if (await spaceMemberForbidden(session.userId, spaceId, session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -274,7 +274,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   // Update the context node; keep the Person mirror in sync so the person
   // profile's Skills section and avatar stay consistent with the same
   // underlying values. `name` deliberately stays OUT of the mirror — the node
-  // name is a community-local display label, the Person name is the member's own.
+  // name is a space-local display label, the Person name is the member's own.
   const personMirror: Record<string, unknown> = {};
   if (tags !== null) personMirror.tags = tags;
   if ('image_url' in body) personMirror.imageUrl = data.imageUrl;
@@ -286,9 +286,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       : []),
   ]);
 
-  if (name !== null && node.communityId) {
+  if (name !== null && node.spaceId) {
     await syncNoteTitle(
-      { id: nodeId, type: node.type, communityId: node.communityId },
+      { id: nodeId, type: node.type, spaceId: node.spaceId },
       name,
       { id: session.userId, name: session.name, email: session.email ?? null },
     );

@@ -1,4 +1,4 @@
-// GET  /api/notes/references?communityId=&scope=&path=
+// GET  /api/notes/references?spaceId=&scope=&path=
 // Roam-style backlinks for a note: notes that link to it (with the surrounding
 // passage) and notes that mention its title in plain text but haven't linked it.
 // Computed over the FULL corpus, then run through the access lens
@@ -8,7 +8,7 @@
 // (POST /api/notes/access-requests with referenceToken).
 //
 // POST /api/notes/references
-//   { communityId, scope, path, fromPath, offset? } → { ok, references }
+//   { spaceId, scope, path, fromPath, offset? } → { ok, references }
 // Turn ONE unlinked mention into a real link: rewrites the mention at `offset`
 // in `fromPath` into a markdown link to `path`. Read → mutate → write happens
 // server-side so the write is gated once (against the SOURCE note) and can't

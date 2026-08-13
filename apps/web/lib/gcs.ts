@@ -31,7 +31,7 @@ function requireEnv(name: string): string {
 export const MEDIA_BUCKET = () => requireEnv('GCS_MEDIA_BUCKET');
 export const RESOURCES_BUCKET = () => requireEnv('GCS_RESOURCES_BUCKET');
 
-// Image variants generated on every profile/community image upload
+// Image variants generated on every profile/space image upload
 type AvatarSize = 'original' | 'avatar-lg' | 'avatar-md' | 'avatar-sm';
 
 const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }> = [
@@ -41,10 +41,10 @@ const AVATAR_VARIANTS: Array<{ name: AvatarSize; size: number; quality: number }
   { name: 'avatar-sm',  size: 64,   quality: 75 },
 ];
 
-// Upload a profile/community image — generates 4 WebP variants in parallel
+// Upload a profile/space image — generates 4 WebP variants in parallel
 // Returns the GCS object path for the original (caller stores this in DB)
 export async function uploadProfileImage(
-  prefix: string, // e.g. "media/nodeId" or "media/community-communityId"
+  prefix: string, // e.g. "media/nodeId" or "media/space-spaceId"
   buffer: Buffer
 ): Promise<string> {
   const storage = getStorage();

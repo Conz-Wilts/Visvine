@@ -71,9 +71,9 @@ export function newNoteContent(input: {
   tags?: string[]
   body?: string
   /**
-   * The frontmatter type. Defaults to `Note`; a community type a member picked
+   * The frontmatter type. Defaults to `Note`; a space type a member picked
    * (or invented) on the draft surface goes here instead. Pass the REGISTERED
-   * spelling from `Community.nodeTypes` — retrieval filters this field with an
+   * spelling from `Space.nodeTypes` — retrieval filters this field with an
    * exact, case-sensitive compare (lib/notes/shared/retrieval.ts), so a note
    * written as `playbook` would be invisible to a `Playbook` filter.
    */

@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, use } from 'react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { RSVPForm } from '@/features/events/components/RSVPForm';
 import { EventHeader } from '@/features/events/components/EventHeader';
 import type { NBEvent } from '@/lib/types';
@@ -16,19 +16,19 @@ export default function RSVPPage({
   params: Promise<{ eventId: string }>;
 }) {
   const resolvedParams = use(params);
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const [event, setEvent] = useState<NBEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentCommunity) return;
+    if (!currentSpace) return;
 
     const loadEvent = async () => {
       try {
         setLoading(true);
         const response = await fetch(
-          `/api/events/${resolvedParams.eventId}?communityId=${currentCommunity.id}`
+          `/api/events/${resolvedParams.eventId}?spaceId=${currentSpace.id}`
         );
 
         if (!response.ok) {
@@ -49,9 +49,9 @@ export default function RSVPPage({
     };
 
     loadEvent();
-  }, [currentCommunity, resolvedParams.eventId]);
+  }, [currentSpace, resolvedParams.eventId]);
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <p className="text-center text-brand-grey">
@@ -88,7 +88,7 @@ export default function RSVPPage({
           <h2 className="text-3xl font-bold text-brand-black mb-8">
             Register for this event
           </h2>
-          <RSVPForm event={event} communityId={currentCommunity.id} />
+          <RSVPForm event={event} spaceId={currentSpace.id} />
         </div>
       </div>
     </div>

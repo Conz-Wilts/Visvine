@@ -16,7 +16,7 @@ interface ProfileConnection {
 export interface NodeProfileData {
   node: NBNode;
   connectionCount: number;
-  communityCount: number;
+  spaceCount: number;
   connections: ProfileConnection[];
 }
 
@@ -50,13 +50,13 @@ function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
  * created the node, so priming here is what makes the jump from the draft
  * surface to /directory/<id>?tab=context land without a skeleton frame.
  *
- * A brand-new node has no links and belongs to exactly the community it was
+ * A brand-new node has no links and belongs to exactly the space it was
  * created in, hence the zeroed counts — the real numbers arrive with the next
  * revalidation, and there is nothing to show until then anyway.
  */
 export function primeNodeProfile(nodeId: string, node: NBNode): void {
   nodeProfileCache.set(nodeId, {
-    data: { node, connectionCount: 0, communityCount: node.community_id ? 1 : 0, connections: [] },
+    data: { node, connectionCount: 0, spaceCount: node.space_id ? 1 : 0, connections: [] },
     timestamp: Date.now(),
   });
 }

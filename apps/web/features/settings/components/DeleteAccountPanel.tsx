@@ -15,10 +15,10 @@ import { useSession } from '@/features/auth/lib/auth-client';
 
 const REMOVED = [
   'Your profile — name, photo, bio, contact details and links',
-  'Your personal notes and context in every community',
-  'Your community memberships, aliases and brain access',
+  'Your personal notes and context in every space',
+  'Your space memberships, aliases and brain access',
   'Your messages, posts, comments and reactions',
-  'Your entry in every community directory',
+  'Your entry in every space directory',
 ];
 
 export default function DeleteAccountPanel() {
@@ -72,8 +72,8 @@ export default function DeleteAccountPanel() {
         ))}
       </ul>
       <p className="mb-4 text-xs text-text-muted">
-        Notes other people wrote about you in a community&apos;s shared context stay with that
-        community — that text is theirs, not yours. Ask an admin of the community to remove it.
+        Notes other people wrote about you in a space&apos;s shared context stay with that
+        space — that text is theirs, not yours. Ask an admin of the space to remove it.
       </p>
 
       <Button variant="danger" onClick={() => setOpen(true)} disabled={!email}>

@@ -6,7 +6,7 @@ type ResourceChangeStatus = 'pending' | 'approved' | 'rejected';
 
 export interface Resource {
   id: string;
-  communityId: string;
+  spaceId: string;
   name: string;
   fileType: ResourceFileType;
   fileUrl: string;

@@ -73,8 +73,8 @@ export interface ShadowProfilePreview {
   name: string;
   headline?: string;
   avatarUrl?: string;
-  communityCount: number;
-  communityNames: string[];
+  spaceCount: number;
+  spaceNames: string[];
 }
 
 /**
@@ -90,7 +90,7 @@ export async function getShadowProfilePreview(
   const user = await prisma.user.findUnique({
     where: { id: payload.shadow_user_id },
     include: {
-      userCommunities: { include: { community: { select: { name: true } } } },
+      memberships: { include: { space: { select: { name: true } } } },
     },
   });
 
@@ -105,8 +105,8 @@ export async function getShadowProfilePreview(
     name: (meta.name as string) || user.name,
     headline: meta.headline as string | undefined,
     avatarUrl: (meta.avatar_url as string) || user.image || undefined,
-    communityCount: user.userCommunities.length,
-    communityNames: user.userCommunities.map((uc) => uc.community.name),
+    spaceCount: user.memberships.length,
+    spaceNames: user.memberships.map((uc) => uc.space.name),
   };
 }
 

@@ -26,7 +26,7 @@ export class EventFullError extends Error {
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
   location: string | null; url: string | null; imageUrl: string | null;
-  tags: string[]; metadata: unknown; communityId: string | null;
+  tags: string[]; metadata: unknown; spaceId: string | null;
 }): NBNode {
   return {
     id: row.id,
@@ -39,12 +39,12 @@ function nodeRowToNBNode(row: {
     image_url: normalizeImageUrl(row.imageUrl) ?? undefined,
     tags: row.tags,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
-    community_id: row.communityId ?? undefined,
+    space_id: row.spaceId ?? undefined,
   };
 }
 
 function nodeRowToNBEvent(row: {
-  id: string; communityId: string | null; name: string; subtitle: string | null;
+  id: string; spaceId: string | null; name: string; subtitle: string | null;
   imageUrl?: string | null; alias?: string | null;
   metadata: unknown; createdAt: Date; updatedAt: Date;
 }): NBEvent {
@@ -52,7 +52,7 @@ function nodeRowToNBEvent(row: {
   const locationData = meta.locationData as NBEvent['location'] | undefined;
   return {
     id: row.id as `event:${string}`,
-    communityId: row.communityId ?? '',
+    spaceId: row.spaceId ?? '',
     title: row.name,
     description: (meta.description as string) ?? row.subtitle ?? undefined,
     startAt: (meta.start_at as string) ?? '',
@@ -62,7 +62,7 @@ function nodeRowToNBEvent(row: {
     hosts: (meta.hosts as string[]) ?? [],
     organizerEmail: (meta.organizerEmail as string) ?? undefined,
     capacity: (meta.capacity as number) ?? undefined,
-    visibility: ((meta.visibility as string) ?? 'community') as NBEvent['visibility'],
+    visibility: ((meta.visibility as string) ?? 'space') as NBEvent['visibility'],
     // rebuild fields (Node.imageUrl/alias are authoritative; fall back to metadata)
     coverImageUrl: normalizeImageUrl(row.imageUrl ?? (meta.coverImageUrl as string) ?? null) ?? undefined,
     theme: (meta.theme as NBEvent['theme']) ?? undefined,
@@ -113,20 +113,20 @@ function attendeeRowToNBAttendee(a: {
 // ─── Context data ───────────────────────────────────────────────────────────────
 
 /**
- * Fetch a community's nodes (with person-profile enrichment) — WITHOUT links.
+ * Fetch a space's nodes (with person-profile enrichment) — WITHOUT links.
  *
  * This is the payload the directory grid/table views actually render. Keeping it
  * separate from links means those views never pay to load (or serialize) the edge
- * set. The context view composes this with links via {@link getCommunityContextData}.
+ * set. The context view composes this with links via {@link getSpaceContextData}.
  */
-async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
+async function fetchSpaceNodes(spaceId: string): Promise<NBNode[]> {
   const allRows = await prisma.node.findMany({
-    where: { communityId },
-    select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true },
+    where: { spaceId },
+    select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, spaceId: true },
   });
 
   // Keep draft and unlisted (private) events out of the directory/context — they're
-  // reached only via their own page / share link, never the community listing.
+  // reached only via their own page / share link, never the space listing.
   const nodeRows = allRows.filter((n) => {
     if (n.type !== 'event') return true;
     const meta = (n.metadata as Record<string, unknown>) ?? {};
@@ -187,10 +187,10 @@ async function fetchCommunityNodes(communityId: string): Promise<NBNode[]> {
   });
 }
 
-async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
+async function fetchSpaceLinks(spaceId: string): Promise<NBLink[]> {
   const linkRows = await prisma.link.findMany({
-    where: { communityId },
-    select: { id: true, sourceId: true, targetId: true, relationship: true, since: true, metadata: true, communityId: true, origin: true },
+    where: { spaceId },
+    select: { id: true, sourceId: true, targetId: true, relationship: true, since: true, metadata: true, spaceId: true, origin: true },
   });
   return linkRows.map(l => ({
     id: l.id,
@@ -199,7 +199,7 @@ async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
     relationship: l.relationship,
     since: l.since ?? undefined,
     metadata: (l.metadata as Record<string, unknown>) ?? {},
-    community_id: l.communityId ?? undefined,
+    space_id: l.spaceId ?? undefined,
     origin: l.origin as NBLink['origin'],
   }));
 }
@@ -208,51 +208,51 @@ async function fetchCommunityLinks(communityId: string): Promise<NBLink[]> {
  * Nodes-only data source for the directory grid/table. Cached under the shared
  * `context-data-v2` tag, which every node/profile write already revalidates.
  */
-export async function getCommunityNodes(communityId: string): Promise<NBNode[]> {
+export async function getSpaceNodes(spaceId: string): Promise<NBNode[]> {
   try {
     return await unstable_cache(
-      () => fetchCommunityNodes(communityId),
-      ['community-nodes', communityId],
+      () => fetchSpaceNodes(spaceId),
+      ['space-nodes', spaceId],
       { tags: ['context-data-v2'] },
     )();
   } catch (err) {
-    logger.error('eventRepo.getCommunityNodes.failed', { err });
+    logger.error('eventRepo.getSpaceNodes.failed', { err });
     return [];
   }
 }
 
-async function getCommunityLinks(communityId: string): Promise<NBLink[]> {
+async function getSpaceLinks(spaceId: string): Promise<NBLink[]> {
   try {
     return await unstable_cache(
-      () => fetchCommunityLinks(communityId),
-      ['community-links', communityId],
+      () => fetchSpaceLinks(spaceId),
+      ['space-links', spaceId],
       { tags: ['context-data-v2'] },
     )();
   } catch (err) {
-    logger.error('eventRepo.getCommunityLinks.failed', { err });
+    logger.error('eventRepo.getSpaceLinks.failed', { err });
     return [];
   }
 }
 
-export async function getCommunityContextData(communityId: string): Promise<ContextData> {
+export async function getSpaceContextData(spaceId: string): Promise<ContextData> {
   try {
     const [nodes, links] = await Promise.all([
-      getCommunityNodes(communityId),
-      getCommunityLinks(communityId),
+      getSpaceNodes(spaceId),
+      getSpaceLinks(spaceId),
     ]);
     return { nodes, links };
   } catch (err) {
-    logger.error('eventRepo.getCommunityContextData.failed', { err });
+    logger.error('eventRepo.getSpaceContextData.failed', { err });
     return { nodes: [], links: [] };
   }
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
-export async function getEventsData(communityId: string): Promise<EventsData> {
+export async function getEventsData(spaceId: string): Promise<EventsData> {
   try {
     const eventRows = await prisma.node.findMany({
-      where: { communityId, type: 'event' },
+      where: { spaceId, type: 'event' },
     });
     const eventIds = eventRows.map(e => e.id);
     const attendeeRows = eventIds.length > 0
@@ -269,9 +269,9 @@ export async function getEventsData(communityId: string): Promise<EventsData> {
   }
 }
 
-export async function getEvent(communityId: string, eventId: string): Promise<NBEvent | null> {
+export async function getEvent(spaceId: string, eventId: string): Promise<NBEvent | null> {
   try {
-    const row = await prisma.node.findFirst({ where: { id: eventId, communityId, type: 'event' } });
+    const row = await prisma.node.findFirst({ where: { id: eventId, spaceId, type: 'event' } });
     return row ? nodeRowToNBEvent(row) : null;
   } catch (err) {
     logger.error('eventRepo.getEvent.failed', { err });
@@ -281,7 +281,7 @@ export async function getEvent(communityId: string, eventId: string): Promise<NB
 
 /**
  * Resolve an event from a public URL slug (Node.alias, or the id minus the
- * `event:` prefix). Global lookup — no community scope needed for the public page.
+ * `event:` prefix). Global lookup — no space scope needed for the public page.
  */
 export async function getEventBySlug(slug: string): Promise<NBEvent | null> {
   try {
@@ -295,7 +295,7 @@ export async function getEventBySlug(slug: string): Promise<NBEvent | null> {
   }
 }
 
-export async function upsertEvent(communityId: string, event: NBEvent): Promise<void> {
+export async function upsertEvent(spaceId: string, event: NBEvent): Promise<void> {
   const meta = {
     ...(event.metadata ?? {}),
     description: event.description,
@@ -334,7 +334,7 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
       location: event.location?.label ?? null,
       imageUrl,
       alias,
-      communityId,
+      spaceId,
       tags: [],
       metadata: meta as object,
     },
@@ -350,7 +350,7 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
   // Events have always been nodes; what they lacked was the events/<slug>.md
   // note every other entity gets. Best-effort and create-only, so re-saving an
   // event never clobbers what someone wrote about it.
-  await ensureEntityNote(communityId, {
+  await ensureEntityNote(spaceId, {
     id: event.id,
     type: 'event',
     name: event.title,
@@ -359,22 +359,22 @@ export async function upsertEvent(communityId: string, event: NBEvent): Promise<
   revalidateTag('context-data-v2', { expire: 0 });
 }
 
-export async function deleteEvent(communityId: string, eventId: string): Promise<void> {
-  await prisma.node.deleteMany({ where: { id: eventId, communityId, type: 'event' } });
+export async function deleteEvent(spaceId: string, eventId: string): Promise<void> {
+  await prisma.node.deleteMany({ where: { id: eventId, spaceId, type: 'event' } });
   revalidateTag('context-data-v2', { expire: 0 });
 }
 
-async function updateEventAnalytics(communityId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
-  const event = await getEvent(communityId, eventId);
+async function updateEventAnalytics(spaceId: string, eventId: string, updates: Partial<NBEvent['analytics']>): Promise<void> {
+  const event = await getEvent(spaceId, eventId);
   if (event) {
     event.analytics = { ...event.analytics, ...updates, updatedAt: new Date().toISOString() };
-    await upsertEvent(communityId, event);
+    await upsertEvent(spaceId, event);
   }
 }
 
 // ─── Attendees ────────────────────────────────────────────────────────────────
 
-export async function getAttendees(communityId: string, eventId: string): Promise<NBAttendee[]> {
+export async function getAttendees(spaceId: string, eventId: string): Promise<NBAttendee[]> {
   try {
     const rows = await prisma.attendee.findMany({ where: { eventId } });
     return rows.map(attendeeRowToNBAttendee);
@@ -403,7 +403,7 @@ function attendeeToWritable(a: NBAttendee) {
   };
 }
 
-async function upsertAttendee(communityId: string, attendee: NBAttendee): Promise<void> {
+async function upsertAttendee(spaceId: string, attendee: NBAttendee): Promise<void> {
   const writable = attendeeToWritable(attendee);
   await prisma.attendee.upsert({
     where: { id: attendee.id },
@@ -417,11 +417,11 @@ async function upsertAttendee(communityId: string, attendee: NBAttendee): Promis
  * "what did person Y attend"). Never throws into the RSVP path.
  */
 async function ensureAttendedLink(
-  communityId: string, personId: string, eventId: string, status: RSVPStatus, attendeeId: string, since?: string,
+  spaceId: string, personId: string, eventId: string, status: RSVPStatus, attendeeId: string, since?: string,
 ): Promise<void> {
   try {
     await upsertLink({
-      communityId,
+      spaceId,
       sourceId: personId,
       targetId: eventId,
       relationship: 'attended',
@@ -452,21 +452,21 @@ export interface RsvpInput {
  * Create or update an RSVP for an event. Single source of truth shared by the
  * authenticated and public RSVP endpoints.
  *
- *  - Matches an existing community member (so the context links up) but NEVER
+ *  - Matches an existing space member (so the context links up) but NEVER
  *    auto-creates a Person node for an unknown public guest — name/email live on
  *    the Attendee row. This keeps the directory clean and the RSVP path fast.
  *  - Computes going / waitlisted / pending from capacity + approval settings.
  *  - Idempotent per (event, email|name): re-RSVP updates the same row.
  */
 export async function submitRsvp(
-  communityId: string,
+  spaceId: string,
   event: NBEvent,
   submission: RsvpInput,
 ): Promise<{ attendee: NBAttendee; status: RSVPStatus; created: boolean }> {
   const eventId = event.id;
 
   // Person match is read-only — safe to resolve outside the capacity lock.
-  const nodes = await getCommunityNodes(communityId);
+  const nodes = await getSpaceNodes(spaceId);
   const matched = findMatchingPerson(nodes, {
     name: submission.name,
     email: submission.email,
@@ -542,10 +542,10 @@ export async function submitRsvp(
 
   // Best-effort side effects, outside the lock.
   if (personId) {
-    await ensureAttendedLink(communityId, personId, eventId, attendee.status, attendee.id, event.startAt);
+    await ensureAttendedLink(spaceId, personId, eventId, attendee.status, attendee.id, event.startAt);
   }
   if (created) {
-    await updateEventAnalytics(communityId, eventId, { rsvpCount: event.analytics.rsvpCount + 1 });
+    await updateEventAnalytics(spaceId, eventId, { rsvpCount: event.analytics.rsvpCount + 1 });
   }
 
   return { attendee, status: attendee.status, created };
@@ -557,12 +557,12 @@ export async function submitRsvp(
  * or null if not found.
  */
 export async function setAttendeeStatus(
-  communityId: string,
+  spaceId: string,
   eventId: string,
   attendeeId: string,
   status: RSVPStatus,
 ): Promise<NBAttendee | null> {
-  const attendees = await getAttendees(communityId, eventId);
+  const attendees = await getAttendees(spaceId, eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);
   if (!attendee) return null;
 
@@ -572,12 +572,12 @@ export async function setAttendeeStatus(
     checkinAt: status === 'checked_in' ? (attendee.checkinAt ?? new Date().toISOString()) : attendee.checkinAt,
     updatedAt: new Date().toISOString(),
   };
-  await upsertAttendee(communityId, next);
+  await upsertAttendee(spaceId, next);
 
   if (status === 'checked_in') {
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
     if (event) {
-      await updateEventAnalytics(communityId, eventId, {
+      await updateEventAnalytics(spaceId, eventId, {
         checkinCount: (event.analytics.checkinCount ?? 0) + (attendee.status === 'checked_in' ? 0 : 1),
       });
     }
@@ -586,17 +586,17 @@ export async function setAttendeeStatus(
     // Symmetric auto-undo: cancelling removes the auto 'attended' edge (origin-scoped,
     // so a manual/promoted edge between the same person and event is left intact).
     if (status === 'cancelled') {
-      await removeAutoLink(communityId, 'event_attendance', next.id);
+      await removeAutoLink(spaceId, 'event_attendance', next.id);
     } else {
-      await ensureAttendedLink(communityId, next.personId, eventId, status, next.id, undefined);
+      await ensureAttendedLink(spaceId, next.personId, eventId, status, next.id, undefined);
     }
   }
   return next;
 }
 
 /** Permanently remove an attendee (and any 'attended' context link). */
-export async function removeAttendee(communityId: string, eventId: string, attendeeId: string): Promise<boolean> {
-  const attendees = await getAttendees(communityId, eventId);
+export async function removeAttendee(spaceId: string, eventId: string, attendeeId: string): Promise<boolean> {
+  const attendees = await getAttendees(spaceId, eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);
   if (!attendee) return false;
   await prisma.attendee.deleteMany({ where: { id: attendeeId, eventId } });
@@ -604,7 +604,7 @@ export async function removeAttendee(communityId: string, eventId: string, atten
     try {
       // Origin-scoped: removes only the auto 'attended' edge for this attendee,
       // never a manual/promoted edge between the same person and event.
-      await removeAutoLink(communityId, 'event_attendance', attendeeId);
+      await removeAutoLink(spaceId, 'event_attendance', attendeeId);
     } catch (err) {
       logger.error('eventRepo.removeAttendee.linkCleanup.failed', { err });
     }

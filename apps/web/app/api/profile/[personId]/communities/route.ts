@@ -1,51 +1,51 @@
 /**
- * Profile communities API — which communities appear on a person's profile.
+ * Profile spaces API — which spaces appear on a person's profile.
  *
  * GET  /api/profile/[personId]/communities
- *   Communities the person manages (holds an alias that manages it — always listed) plus member
- *   communities they've opted into showing (UserCommunity.privateMeta.showOnProfile).
- *   The owner gets ALL their communities with visibility flags so the panel
+ *   Spaces the person manages (holds an alias that manages it — always listed) plus member
+ *   spaces they've opted into showing (SpaceMember.privateMeta.showOnProfile).
+ *   The owner gets ALL their spaces with visibility flags so the panel
  *   can render toggles; other viewers only get the visible ones.
  *
  * PATCH /api/profile/[personId]/communities  (owner only)
- *   { communityId, showOnProfile } — toggle a member community's visibility.
+ *   { spaceId, showOnProfile } — toggle a member space's visibility.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
-import { adminCommunityIds } from '@/lib/auth';
+import { adminSpaceIds } from '@/lib/auth';
 
 type RouteContext = { params: Promise<{ personId: string }> };
 
-export interface ProfileCommunity {
+export interface ProfileSpace {
   id: string;
   name: string;
   imageUrl: string | null;
   emoji: string | null;
   visibility: string;
   memberCount: number;
-  /** Whether this person holds an alias that manages the community. */
+  /** Whether this person holds an alias that manages the space. */
   isAdmin: boolean;
-  /** Member communities only — owner has opted in to showing it. */
+  /** Member spaces only — owner has opted in to showing it. */
   showOnProfile: boolean;
-  /** Managed communities are always visible; the rest only when opted in. */
+  /** Managed spaces are always visible; the rest only when opted in. */
   visible: boolean;
 }
 
 async function loadRows(userId: string) {
-  return prisma.userCommunity.findMany({
+  return prisma.spaceMember.findMany({
     where: {
       userId,
       status: 'active',
-      community: { personalOwnerId: null }, // personal spaces aren't communities
+      space: { personalOwnerId: null }, // personal spaces aren't spaces
     },
     include: {
-      community: {
+      space: {
         select: {
           id: true, name: true, imageUrl: true, emoji: true, visibility: true,
-          _count: { select: { userCommunities: { where: { status: 'active' } } } },
+          _count: { select: { members: { where: { status: 'active' } } } },
         },
       },
     },
@@ -64,26 +64,26 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   });
 
   // Context-only people (no linked user) have no memberships to show.
-  if (!person?.userId) return NextResponse.json({ communities: [], isOwner: false });
+  if (!person?.userId) return NextResponse.json({ spaces: [], isOwner: false });
 
   const isOwner = person.userId === session.userId;
   const rows = await loadRows(person.userId);
-  const adminIds = await adminCommunityIds(
+  const adminIds = await adminSpaceIds(
     person.userId,
-    rows.map((r) => r.community.id),
+    rows.map((r) => r.space.id),
   );
 
-  const communities: ProfileCommunity[] = rows.map((row) => {
+  const spaces: ProfileSpace[] = rows.map((row) => {
     const meta = (row.privateMeta ?? {}) as Record<string, unknown>;
     const showOnProfile = meta.showOnProfile === true;
-    const isAdmin = adminIds.has(row.community.id);
+    const isAdmin = adminIds.has(row.space.id);
     return {
-      id: row.community.id,
-      name: row.community.name,
-      imageUrl: normalizeImageUrl(row.community.imageUrl) ?? row.community.imageUrl,
-      emoji: row.community.emoji,
-      visibility: row.community.visibility,
-      memberCount: row.community._count.userCommunities,
+      id: row.space.id,
+      name: row.space.name,
+      imageUrl: normalizeImageUrl(row.space.imageUrl) ?? row.space.imageUrl,
+      emoji: row.space.emoji,
+      visibility: row.space.visibility,
+      memberCount: row.space._count.members,
       isAdmin,
       showOnProfile,
       visible: isAdmin || showOnProfile,
@@ -91,7 +91,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   });
 
   return NextResponse.json({
-    communities: isOwner ? communities : communities.filter((c) => c.visible),
+    spaces: isOwner ? spaces : spaces.filter((c) => c.visible),
     isOwner,
   });
 }
@@ -111,25 +111,25 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   }
 
   const body = await req.json();
-  const communityId = typeof body.communityId === 'string' ? body.communityId : null;
+  const spaceId = typeof body.spaceId === 'string' ? body.spaceId : null;
   const showOnProfile = body.showOnProfile;
-  if (!communityId || typeof showOnProfile !== 'boolean') {
-    return NextResponse.json({ error: 'communityId and showOnProfile (boolean) required' }, { status: 400 });
+  if (!spaceId || typeof showOnProfile !== 'boolean') {
+    return NextResponse.json({ error: 'spaceId and showOnProfile (boolean) required' }, { status: 400 });
   }
 
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: person.userId, communityId } },
+  const membership = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId: person.userId, spaceId } },
   });
   if (!membership || membership.status !== 'active') {
-    return NextResponse.json({ error: 'Not a member of that community' }, { status: 404 });
+    return NextResponse.json({ error: 'Not a member of that space' }, { status: 404 });
   }
 
   // privateMeta also carries private CRM values — merge, never replace.
   const meta = (membership.privateMeta ?? {}) as Record<string, unknown>;
-  await prisma.userCommunity.update({
+  await prisma.spaceMember.update({
     where: { id: membership.id },
     data: { privateMeta: { ...meta, showOnProfile } },
   });
 
-  return NextResponse.json({ ok: true, communityId, showOnProfile });
+  return NextResponse.json({ ok: true, spaceId, showOnProfile });
 }

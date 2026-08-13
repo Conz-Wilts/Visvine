@@ -3,13 +3,13 @@
  * person node and a registered User, routed through the canonical Identity
  * (Node.identityId → Identity.userId → User).
  *
- * A CONNECTED node is a member's presence in a community — it gets the Profile
+ * A CONNECTED node is a member's presence in a space — it gets the Profile
  * tab and userId-based ownership. A DISCONNECTED node is a plain person-typed
  * context: renameable, profileless, and never silently re-attached (disconnect
  * writes a 'split' anti-match the resolver honours).
  *
  * This module is the only writer of member connections. Node.name stays a
- * community-local display label throughout — connecting never renames the node.
+ * space-local display label throughout — connecting never renames the node.
  */
 
 import prisma from '../prisma';
@@ -87,7 +87,7 @@ export async function ensureUserIdentity(userId: string): Promise<{ id: string }
 
 /**
  * Connect a person node to a registered User. One connected node per user per
- * community; the connection is recorded as a confirmed identity resolution so
+ * space; the connection is recorded as a confirmed identity resolution so
  * the audit trail explains itself.
  */
 export async function connectNodeToUser(
@@ -97,7 +97,7 @@ export async function connectNodeToUser(
 ): Promise<{ ok: true; identityId: string } | { ok: false; error: ConnectError; message: string }> {
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { id: true, type: true, communityId: true, identityId: true },
+    select: { id: true, type: true, spaceId: true, identityId: true },
   });
   if (!node) return { ok: false, error: 'not_found', message: 'Node not found' };
   if (!isPersonNode(node)) {
@@ -112,11 +112,11 @@ export async function connectNodeToUser(
     return { ok: false, error: 'identity_conflict', message };
   }
 
-  // One member, one node, per community.
-  if (node.communityId) {
+  // One member, one node, per space.
+  if (node.spaceId) {
     const rival = await prisma.node.findFirst({
       where: {
-        communityId: node.communityId,
+        spaceId: node.spaceId,
         identityId: identity.id,
         id: { not: nodeId },
       },
@@ -142,7 +142,7 @@ export async function connectNodeToUser(
 /**
  * Detach a node from its member. The 'split' anti-match keeps the resolver
  * from quietly re-attaching the pair on the next name/email coincidence; the
- * Identity and Person rows are untouched (other communities stay connected).
+ * Identity and Person rows are untouched (other spaces stay connected).
  */
 export async function disconnectNode(
   nodeId: string,
@@ -205,13 +205,13 @@ export async function resolveNodeConnection(nodeId: string): Promise<NodeConnect
   };
 }
 
-/** The member's connected node in a community, or null. */
+/** The member's connected node in a space, or null. */
 export async function findMemberNode(
-  communityId: string,
+  spaceId: string,
   userId: string,
 ): Promise<{ id: string; name: string } | null> {
   return prisma.node.findFirst({
-    where: { communityId, identity: { userId } },
+    where: { spaceId, identity: { userId } },
     select: { id: true, name: true },
   });
 }

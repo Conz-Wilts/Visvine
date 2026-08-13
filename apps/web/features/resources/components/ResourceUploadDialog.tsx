@@ -3,11 +3,11 @@ import { useState, useRef } from 'react';
 import Modal from '@/components/ui/Modal';
 
 export default function ResourceUploadDialog({
-  communityId,
+  spaceId,
   onClose,
   onUploaded,
 }: {
-  communityId: string;
+  spaceId: string;
   onClose: () => void;
   onUploaded: () => void;
 }) {
@@ -28,7 +28,7 @@ export default function ResourceUploadDialog({
       const createRes = await fetch('/api/resources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ communityId, name: file.name, fileType, fileUrl, fileSize, metadata: { originalFilename, gcsPath } }),
+        body: JSON.stringify({ spaceId, name: file.name, fileType, fileUrl, fileSize, metadata: { originalFilename, gcsPath } }),
       });
       if (!createRes.ok) throw new Error('Failed to create resource record');
       onUploaded();

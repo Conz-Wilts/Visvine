@@ -24,7 +24,7 @@ import type { TreeNode } from '@/lib/notes/shared/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { Button, chipClass, chipStyle } from '@/components/ui';
 
-export interface CommunityMember {
+export interface SpaceMember {
   id: string;
   userId: string;
   /** The Person aliases this person holds — their entire standing here. */
@@ -51,7 +51,7 @@ export interface PathOption {
 
 /** Everything the sections share, loaded once by PeopleDataProvider. */
 export interface PeopleData {
-  members: CommunityMember[];
+  members: SpaceMember[];
   aliases: AliasInfo[];
   overview: AccessOverviewResponse | null;
   paths: PathOption[];
@@ -59,7 +59,7 @@ export interface PeopleData {
   requests: AccessRequest[];
   /** The brain tree as the server returns it (root node), for hierarchy UIs. */
   tree: TreeNode | null;
-  /** Admin-set display name for the brain root (default "Community context"). */
+  /** Admin-set display name for the brain root (default "Space context"). */
   contextName: string;
 }
 
@@ -68,7 +68,7 @@ export interface PeopleData {
  * by the member drawer on People and the invite form on Invite.
  *
  * The built-in Owner alias wears gold whichever way it is flipped, so the one
- * thing that grants the community is never mistaken for an ordinary label.
+ * thing that grants the space is never mistaken for an ordinary label.
  */
 export function AliasToggle({ name, color, owner, on, onClick, disabled }: {
   name: string;
@@ -313,7 +313,7 @@ function PathPicker({
  * composer to grant a new path. subjectType/subjectId pick who receives them.
  */
 export function GrantEditor({
-  communityId,
+  spaceId,
   subjectType,
   subjectId,
   grants,
@@ -325,7 +325,7 @@ export function GrantEditor({
   placeholder,
   addLabel,
 }: {
-  communityId: string;
+  spaceId: string;
   subjectType: GrantSubjectType;
   subjectId: string;
   grants: OverviewGrant[];
@@ -345,7 +345,7 @@ export function GrantEditor({
     const path = grantPath;
     setGrantPath(null);
     void run(() =>
-      notesApi.accessAction(communityId, { action: 'grant', subjectType, subjectId, path, level: grantLevel }),
+      notesApi.accessAction(spaceId, { action: 'grant', subjectType, subjectId, path, level: grantLevel }),
     );
   };
 
@@ -359,11 +359,11 @@ export function GrantEditor({
             disabled={busy}
             allowRemove
             onRemove={() =>
-              void run(() => notesApi.accessAction(communityId, { action: 'revoke', grantId: grant.id }))
+              void run(() => notesApi.accessAction(spaceId, { action: 'revoke', grantId: grant.id }))
             }
             onChange={(level) =>
               void run(() =>
-                notesApi.accessAction(communityId, {
+                notesApi.accessAction(spaceId, {
                   action: 'grant',
                   subjectType,
                   subjectId,

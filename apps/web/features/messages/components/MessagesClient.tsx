@@ -6,7 +6,7 @@ import { VirtuosoHandle } from 'react-virtuoso';
 import { Search, X } from 'lucide-react';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { useMessageHeights } from '@/features/messages/hooks/useMessageHeights';
 import type {
@@ -42,7 +42,7 @@ interface MessagesClientProps {
 
 export default function MessagesClient({ currentUser, initialConversationId }: MessagesClientProps) {
   const { setHeaderContent } = useHeader();
-  const communityCtx = useCommunity();
+  const spaceCtx = useSpace();
   // On wide viewports the Channels page docks its channel list INTO the global
   // Sidebar (the same portal host the /context notes tree uses), so the rail +
   // channel list read as one connected card instead of a separate floating box.
@@ -109,7 +109,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const [channelSectionId, setChannelSectionId] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [creatingChannel, setCreatingChannel] = useState(false);
-  // Inline "new section" form in the channel rail (community admins only).
+  // Inline "new section" form in the channel rail (space admins only).
   const [showSectionForm, setShowSectionForm] = useState(false);
   const [sectionName, setSectionName] = useState('');
   const [creatingSection, setCreatingSection] = useState(false);
@@ -219,18 +219,18 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     } catch { /* best-effort */ }
   }, []);
 
-  const communityId = communityCtx?.currentCommunity?.id;
+  const spaceId = spaceCtx?.currentSpace?.id;
 
   const fetchChannels = useCallback(async () => {
-    if (!communityId) return;
+    if (!spaceId) return;
     try {
-      const res = await fetch(`/api/messages/channels?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' });
+      const res = await fetch(`/api/messages/channels?spaceId=${encodeURIComponent(spaceId)}`, { cache: 'no-store' });
       if (!res.ok) return;
       const payload = await res.json();
       setChannelDirectory(payload.channels ?? []);
       setChannelSections(payload.sections ?? []);
     } catch { /* best-effort */ }
-  }, [communityId]);
+  }, [spaceId]);
 
   // Collapsed rail sections survive reloads (client-only read to avoid SSR mismatch).
   useEffect(() => {
@@ -513,11 +513,11 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   const handleCreateChannel = async (e: FormEvent) => {
     e.preventDefault();
-    if (!communityId || !channelName.trim() || creatingChannel) return;
+    if (!spaceId || !channelName.trim() || creatingChannel) return;
     try {
       setCreatingChannel(true);
       const payload = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/channel', 'POST', {
-        communityId,
+        spaceId,
         name: channelName.trim(),
         description: channelDescription.trim() || undefined,
         icon: channelIcon ?? undefined,
@@ -542,10 +542,10 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   const handleCreateSection = async (e: FormEvent) => {
     e.preventDefault();
-    if (!communityId || !sectionName.trim() || creatingSection) return;
+    if (!spaceId || !sectionName.trim() || creatingSection) return;
     try {
       setCreatingSection(true);
-      await fetchJsonBody('/api/messages/sections', 'POST', { communityId, name: sectionName.trim() });
+      await fetchJsonBody('/api/messages/sections', 'POST', { spaceId, name: sectionName.trim() });
       setSectionName('');
       setShowSectionForm(false);
       await fetchChannels();
@@ -722,7 +722,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     [conversations],
   );
 
-  // Channels in the community directory the user hasn't joined yet.
+  // Channels in the space directory the user hasn't joined yet.
   const browsableChannels = useMemo(() => {
     const joined = new Set(conversations.map((c) => c.id));
     const q = conversationSearch.trim().toLowerCase();
@@ -829,7 +829,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       onSelectConversation={handleSelectConversation}
       onJoinChannel={handleJoinChannel}
       joiningChannelId={joiningChannelId}
-      communityIsAdmin={communityCtx?.isAdmin}
+      spaceIsAdmin={spaceCtx?.isAdmin}
       showChannelForm={showChannelForm}
       setShowChannelForm={setShowChannelForm}
       onCreateChannel={handleCreateChannel}
@@ -920,8 +920,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
           currentUser={currentUser}
           isMobile={isMobile}
           isAdmin={isAdmin}
-          communityIsAdmin={communityCtx?.isAdmin}
-          communityId={communityCtx?.currentCommunity?.id}
+          spaceIsAdmin={spaceCtx?.isAdmin}
+          spaceId={spaceCtx?.currentSpace?.id}
           hasChannelsInList={filteredConversations.length > 0}
           onShowChannelForm={() => openCreateModal('channel')}
           onShowAddMembers={() => setShowAddMembersModal(true)}

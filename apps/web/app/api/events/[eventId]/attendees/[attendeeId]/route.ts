@@ -1,6 +1,6 @@
 /**
  * Host actions on a single attendee: change status (approve / decline / promote /
- * check-in / no-show / waitlist) or remove them. Host or community admin only.
+ * check-in / no-show / waitlist) or remove them. Host or space admin only.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -34,15 +34,15 @@ const patchSchema = z.object({
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { eventId, attendeeId } = await context.params;
-    const communityId = new URL(request.url).searchParams.get('communityId');
-    if (!communityId) {
-      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    const spaceId = new URL(request.url).searchParams.get('spaceId');
+    if (!spaceId) {
+      return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
     const parsed = patchSchema.safeParse(await request.json());
@@ -51,7 +51,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     const updated = await setAttendeeStatus(
-      communityId, eventId, attendeeId, ACTION_TO_STATUS[parsed.data.action],
+      spaceId, eventId, attendeeId, ACTION_TO_STATUS[parsed.data.action],
     );
     if (!updated) return NextResponse.json({ error: 'Attendee not found' }, { status: 404 });
 
@@ -64,18 +64,18 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 export async function DELETE(request: NextRequest, context: RouteContext) {
   try {
     const { eventId, attendeeId } = await context.params;
-    const communityId = new URL(request.url).searchParams.get('communityId');
-    if (!communityId) {
-      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    const spaceId = new URL(request.url).searchParams.get('spaceId');
+    if (!spaceId) {
+      return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    const ok = await removeAttendee(communityId, eventId, attendeeId);
+    const ok = await removeAttendee(spaceId, eventId, attendeeId);
     if (!ok) return NextResponse.json({ error: 'Attendee not found' }, { status: 404 });
 
     return NextResponse.json({ success: true });

@@ -46,7 +46,7 @@ export async function verifySession(token: string): Promise<SessionPayload | nul
 
 /**
  * Returns true if the given email is listed in SUPER_ADMIN_EMAILS.
- * Super admins have admin access to every community without a DB membership record.
+ * Super admins have admin access to every space without a DB membership record.
  */
 export function isSuperAdmin(email: string | null | undefined): boolean {
   if (!email) return false;

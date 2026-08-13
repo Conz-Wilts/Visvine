@@ -26,7 +26,7 @@ interface AttendeeRow extends NBAttendee {
 
 interface GuestManagerProps {
   event: NBEvent;
-  communityId: string;
+  spaceId: string;
 }
 
 // Client-safe status helpers (kept local to avoid importing node `crypto` via eventUtils).
@@ -62,7 +62,7 @@ const STATUS_BADGE: Partial<Record<RSVPStatus, { label: string; cls: string; ico
   invited: { label: 'Invited', cls: 'bg-blue-100 text-blue-700', icon: <Clock className="w-3 h-3" /> },
 };
 
-export function GuestManager({ event, communityId }: GuestManagerProps) {
+export function GuestManager({ event, spaceId }: GuestManagerProps) {
   const eventId = event.id;
   const [attendees, setAttendees] = useState<AttendeeRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,14 +75,14 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/attendees?communityId=${encodeURIComponent(communityId)}`);
+      const res = await fetch(`/api/events/${eventId}/attendees?spaceId=${encodeURIComponent(spaceId)}`);
       if (!res.ok) return;
       const data = await res.json();
       setAttendees(data.attendees ?? []);
     } finally {
       setLoading(false);
     }
-  }, [eventId, communityId]);
+  }, [eventId, spaceId]);
 
   useEffect(() => {
     load();
@@ -116,7 +116,7 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
   );
 
   const act = async (id: string, action: string) => {
-    const res = await fetch(`/api/events/${eventId}/attendees/${id}?communityId=${encodeURIComponent(communityId)}`, {
+    const res = await fetch(`/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action }),
@@ -131,7 +131,7 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
 
   const remove = async (id: string) => {
     setAttendees((prev) => prev.filter((a) => a.id !== id)); // optimistic
-    const res = await fetch(`/api/events/${eventId}/attendees/${id}?communityId=${encodeURIComponent(communityId)}`, {
+    const res = await fetch(`/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, {
       method: 'DELETE',
     });
     if (!res.ok) load();
@@ -141,7 +141,7 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
     if (selected.size === 0) return;
     setBusy(true);
     try {
-      await fetch(`/api/events/${eventId}/attendees/bulk?communityId=${encodeURIComponent(communityId)}`, {
+      await fetch(`/api/events/${eventId}/attendees/bulk?spaceId=${encodeURIComponent(spaceId)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, attendeeIds: [...selected] }),
@@ -209,7 +209,7 @@ export function GuestManager({ event, communityId }: GuestManagerProps) {
           {copied ? 'Copied' : 'Invite link'}
         </button>
         <a
-          href={`/api/events/${eventId}/export.csv?communityId=${encodeURIComponent(communityId)}`}
+          href={`/api/events/${eventId}/export.csv?spaceId=${encodeURIComponent(spaceId)}`}
           target="_blank"
           rel="noreferrer"
           className={actionBtn}

@@ -1,4 +1,4 @@
-import type { CommunityFeatureConfig } from '@/lib/types';
+import type { SpaceFeatureConfig } from '@/lib/types';
 
 /**
  * Pure feature-access logic, kept out of features/shared/lib/features.tsx (which carries JSX
@@ -21,7 +21,7 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
 
 /**
  * Feature keys that are admins-only by nature rather than by choice — their
- * pages and APIs refuse a member outright, so the per-community "Restrict to
+ * pages and APIs refuse a member outright, so the per-space "Restrict to
  * admins" switch has nothing left to decide. `adminOnlyFeatureKeys` folds these
  * in unconditionally and the console renders their switch locked on.
  *
@@ -40,11 +40,11 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events'];
 
 /**
- * Is `key` enabled for a community? Core features are always enabled; any other
+ * Is `key` enabled for a space? Core features are always enabled; any other
  * feature is enabled unless `featureConfig.enabled[key]` is explicitly `false` —
- * so existing communities (empty config) keep every surface by default.
+ * so existing spaces (empty config) keep every surface by default.
  */
-export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefined, key: string): boolean {
+export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, key: string): boolean {
   if (CORE_FEATURE_KEYS.includes(key)) return true;
   const enabled = config?.enabled;
   if (!enabled || enabled[key] === undefined) return true;
@@ -56,7 +56,7 @@ export function isFeatureEnabled(config: CommunityFeatureConfig | null | undefin
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person and Space (the org type, formerly Community) belong to the always-on
+ * Person and Space (the org type, formerly Space) belong to the always-on
  * directory and Event to the always-on navbar Events surface — none of them
  * appears here, so they're never hidden. In particular 'space' must NOT be
  * added: it would hide every org record whenever the Channels tool is off.
@@ -88,7 +88,7 @@ export function featureNodeTypeNames(featureKey: string): string[] {
  * The tool each BUILT-IN node type belongs to, for display.
  *
  * Deliberately separate from NODE_TYPE_FEATURE_KEYS above: that map decides what
- * gets HIDDEN when a tool is off, so it may only ever hold types a community can
+ * gets HIDDEN when a tool is off, so it may only ever hold types a space can
  * afford to lose. This one names the owning tool for every built-in, including
  * the always-on ones (Person and Space are the directory's, Index the context
  * surface's, Event the navbar calendar's) — naming a type's tool is safe where
@@ -111,13 +111,13 @@ export function nodeTypeToolKey(typeName: string): string | null {
 }
 
 /**
- * Should a node type be offered at all in this community? False only when the
- * type belongs to a feature the community has switched off — turning off
+ * Should a node type be offered at all in this space? False only when the
+ * type belongs to a feature the space has switched off — turning off
  * Channels should take the Channel and Section types with it, not leave them
  * listed in the console and the directory filters.
  */
 export function isNodeTypeEnabled(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   typeName: string,
 ): boolean {
   const key = nodeTypeFeatureKey(typeName);
@@ -130,7 +130,7 @@ export function isNodeTypeEnabled(
  * directory-only `directoryPrivate` flag so old configs keep working, and with
  * the features that are admins-only whatever the config says.
  */
-export function adminOnlyFeatureKeys(config: CommunityFeatureConfig | null | undefined): string[] {
+export function adminOnlyFeatureKeys(config: SpaceFeatureConfig | null | undefined): string[] {
   const keys = (config?.adminOnly ?? []).filter(
     (key) => typeof key === 'string' && ALL_FEATURE_KEYS.includes(key) && !NAV_HIDDEN_FEATURE_KEYS.includes(key),
   );
@@ -140,14 +140,14 @@ export function adminOnlyFeatureKeys(config: CommunityFeatureConfig | null | und
 
 /** Is feature `key` restricted to admins? */
 export function isFeatureAdminOnly(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   key: string,
 ): boolean {
   return adminOnlyFeatureKeys(config).includes(key);
 }
 
-/** Is the community's directory restricted to admins only? */
-export function isDirectoryPrivate(config: CommunityFeatureConfig | null | undefined): boolean {
+/** Is the space's directory restricted to admins only? */
+export function isDirectoryPrivate(config: SpaceFeatureConfig | null | undefined): boolean {
   return isFeatureAdminOnly(config, 'directory');
 }
 
@@ -156,7 +156,7 @@ export function isDirectoryPrivate(config: CommunityFeatureConfig | null | undef
  * the ones marked admins-only, which members can neither see nor visit.
  */
 export function canAccessFeature(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   key: string,
   isAdmin: boolean,
 ): boolean {
@@ -166,14 +166,14 @@ export function canAccessFeature(
 }
 
 /**
- * Sort `keys` into the community's configured display order: keys listed in
+ * Sort `keys` into the space's configured display order: keys listed in
  * `config.order` come first, in that order; anything unlisted keeps its original
  * (registry) order behind them. Keys the caller didn't ask for are never added,
  * so this is safe to run over an already-filtered list. An absent or empty
  * `order` leaves `keys` exactly as given.
  */
 export function sortFeatureKeys(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   keys: string[],
 ): string[] {
   const order = config?.order;
@@ -184,11 +184,11 @@ export function sortFeatureKeys(
 }
 
 /**
- * The feature keys a community has tucked into the sidebar's "More" popup —
+ * The feature keys a space has tucked into the sidebar's "More" popup —
  * deduped and reduced to known, nav-bearing keys. Membership only: the caller
  * still filters by `canAccessFeature` and orders via `sortFeatureKeys`.
  */
-export function moreFeatureKeys(config: CommunityFeatureConfig | null | undefined): string[] {
+export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): string[] {
   const more = config?.more;
   if (!more || more.length === 0) return [];
   const seen = new Set<string>();
@@ -212,9 +212,9 @@ export function moreFeatureKeys(config: CommunityFeatureConfig | null | undefine
  * array for the keys it does own; a partial array would still overwrite.
  */
 export function mergeFeatureConfig(
-  stored: CommunityFeatureConfig | null | undefined,
+  stored: SpaceFeatureConfig | null | undefined,
   patch: Parameters<typeof sanitizeFeatureConfig>[0],
-): CommunityFeatureConfig {
+): SpaceFeatureConfig {
   return sanitizeFeatureConfig({ ...(stored ?? {}), ...patch });
 }
 
@@ -232,8 +232,8 @@ export function sanitizeFeatureConfig(input: {
   adminOnly?: unknown;
   order?: unknown;
   more?: unknown;
-}): CommunityFeatureConfig {
-  const out: CommunityFeatureConfig = {};
+}): SpaceFeatureConfig {
+  const out: SpaceFeatureConfig = {};
   if (input.enabled) {
     const enabled: Record<string, boolean> = {};
     for (const [key, value] of Object.entries(input.enabled)) {

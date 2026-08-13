@@ -10,9 +10,9 @@
 // description; it just doesn't edit them, so no name is ever edited twice.
 
 import { useState, useEffect } from 'react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DEFAULT_NODE_TYPES, aliasesForType, mergeNodeTypeList } from '@/lib/types';
-import type { CommunityAlias, Community, NodeTypeConfig } from '@/lib/types';
+import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { FEATURES } from '@/features/shared/lib/features';
 import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
@@ -20,7 +20,7 @@ import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveC
 import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
 
 // The type whose aliases are the permission model. Everything else's aliases are
-// plain directory labels, stored on the community and edited in place.
+// plain directory labels, stored on the space and edited in place.
 const PERMISSION_TYPE = 'person';
 
 // ─── Alias Chip ───────────────────────────────────────────────────────────────
@@ -29,7 +29,7 @@ const PERMISSION_TYPE = 'person';
 // you'll meet it in (components/ui/Chip.tsx).
 
 function AliasChip({ alias, onColorChange, onRemove, disabled }: {
-  alias: CommunityAlias;
+  alias: SpaceAlias;
   onColorChange: (c: string) => void;
   onRemove: () => void;
   disabled: boolean;
@@ -66,8 +66,8 @@ function AliasChip({ alias, onColorChange, onRemove, disabled }: {
 function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabled }: {
   nodeType: string;
   defaultColor: string;
-  existing: CommunityAlias[];
-  onAdd: (a: CommunityAlias) => void;
+  existing: SpaceAlias[];
+  onAdd: (a: SpaceAlias) => void;
   onCancel: () => void;
   disabled: boolean;
 }) {
@@ -128,7 +128,7 @@ function AddAliasRow({ nodeType, defaultColor, existing, onAdd, onCancel, disabl
 
 /**
  * What a Person can be, without being the place you change it. The chips are the
- * live permission snapshot rather than the community record, so they include the
+ * live permission snapshot rather than the space record, so they include the
  * built-in Owner and stay honest the moment an alias is renamed on Members. The
  * hover title carries the holder count; the row itself is just the vocabulary.
  */
@@ -168,14 +168,14 @@ function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPe
   /** The tool this type came in with — named on the row so switching a tool off
       never silently takes a type with it. Absent on member-made types. */
   toolLabel?: string;
-  aliases: CommunityAlias[];
-  allAliases: CommunityAlias[];
+  aliases: SpaceAlias[];
+  allAliases: SpaceAlias[];
   /** Person's aliases are the permission model, so it renders its own list. */
   isPerson?: boolean;
   /** A type a member invented: it labels context notes, so it has no aliases. */
   noteScoped?: boolean;
   previewChips: { name: string; color: string }[];
-  onAddAlias: (a: CommunityAlias) => void;
+  onAddAlias: (a: SpaceAlias) => void;
   onRemoveAlias: (name: string, nodeType: string) => void;
   onUpdateAliasColor: (name: string, nodeType: string, color: string) => void;
   onUpdateTypeColor: (color: string) => void;
@@ -185,7 +185,7 @@ function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPe
   const [adding, setAdding] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  const handleAdd = (alias: CommunityAlias) => {
+  const handleAdd = (alias: SpaceAlias) => {
     onAddAlias(alias);
     setAdding(false);
   };
@@ -341,29 +341,29 @@ function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPe
 // rendering falls back to DEFAULT_LINK_TYPES / getLinkTypeConfig.)
 
 export default function TypesPanel() {
-  const { currentCommunity, refreshCommunity } = useCommunity();
+  const { currentSpace, refreshSpace } = useSpace();
   const { data, error: accessError, setError: setAccessError } = usePeopleSection();
 
   const [types, setTypes] = useState<NodeTypeConfig[]>(
-    currentCommunity?.nodeTypes ?? DEFAULT_NODE_TYPES
+    currentSpace?.nodeTypes ?? DEFAULT_NODE_TYPES
   );
-  const [aliases, setAliases] = useState<CommunityAlias[]>(
-    (currentCommunity?.communityAliases as CommunityAlias[]) ?? []
+  const [aliases, setAliases] = useState<SpaceAlias[]>(
+    (currentSpace?.aliases as SpaceAlias[]) ?? []
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { report } = useConsoleSave();
 
   useEffect(() => {
-    if (currentCommunity?.nodeTypes) setTypes(currentCommunity.nodeTypes);
-    if (currentCommunity?.communityAliases) setAliases(currentCommunity.communityAliases as CommunityAlias[]);
-  }, [currentCommunity]);
+    if (currentSpace?.nodeTypes) setTypes(currentSpace.nodeTypes);
+    if (currentSpace?.aliases) setAliases(currentSpace.aliases as SpaceAlias[]);
+  }, [currentSpace]);
 
-  // Types and non-Person aliases ride on the community record. Person aliases do
+  // Types and non-Person aliases ride on the space record. Person aliases do
   // NOT go through here: a rename has to carry UserAlias, BrainGrant and Node
   // rows with it, which only /api/aliases does (lib/notes/aliases.ts).
-  const saveCommunity = async (nextTypes: NodeTypeConfig[], nextAliases: CommunityAlias[]) => {
-    if (!currentCommunity) return;
+  const saveSpace = async (nextTypes: NodeTypeConfig[], nextAliases: SpaceAlias[]) => {
+    if (!currentSpace) return;
     setSaving(true);
     setError(null);
     report('saving');
@@ -372,11 +372,11 @@ export default function TypesPanel() {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          community: { ...currentCommunity, nodeTypes: nextTypes, communityAliases: nextAliases } satisfies Community,
+          space: { ...currentSpace, nodeTypes: nextTypes, aliases: nextAliases } satisfies Space,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
-      await refreshCommunity();
+      await refreshSpace();
       report('saved');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error saving');
@@ -386,17 +386,17 @@ export default function TypesPanel() {
     }
   };
 
-  const handleAddAlias = (alias: CommunityAlias) => saveCommunity(types, [...aliases, alias]);
+  const handleAddAlias = (alias: SpaceAlias) => saveSpace(types, [...aliases, alias]);
   const handleRemoveAlias = (name: string, nodeType: string) =>
-    saveCommunity(types, aliases.filter(a => !(a.name === name && a.nodeType === nodeType)));
+    saveSpace(types, aliases.filter(a => !(a.name === name && a.nodeType === nodeType)));
   const handleUpdateAliasColor = (name: string, nodeType: string, color: string) =>
-    saveCommunity(types, aliases.map(a => a.name === name && a.nodeType === nodeType ? { ...a, color } : a));
-  // A built-in the community never stored has nothing to map over, so recolour
+    saveSpace(types, aliases.map(a => a.name === name && a.nodeType === nodeType ? { ...a, color } : a));
+  // A built-in the space never stored has nothing to map over, so recolour
   // by merging the edited entry in — mapping alone would silently no-op.
   const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
-    saveCommunity(mergeNodeTypeList(types, [{ ...type, color }]), aliases);
+    saveSpace(mergeNodeTypeList(types, [{ ...type, color }]), aliases);
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;
   }
 
@@ -408,7 +408,7 @@ export default function TypesPanel() {
   for (const t of DEFAULT_NODE_TYPES) byLower.set(t.name.toLowerCase(), t);
   for (const t of types) byLower.set(t.name.toLowerCase(), t);
   const listedTypes = Array.from(byLower.values())
-    .filter(t => isNodeTypeEnabled(currentCommunity.featureConfig ?? null, t.name))
+    .filter(t => isNodeTypeEnabled(currentSpace.featureConfig ?? null, t.name))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // Two different things share this page. A tool type arrived with a tool and
@@ -440,7 +440,7 @@ export default function TypesPanel() {
         isPerson={isPerson}
         // Person's preview comes from the live permission snapshot, which
         // already grafts in the built-in Owner; every other type's from the
-        // community record it saves to.
+        // space record it saves to.
         previewChips={isPerson ? (data?.aliases ?? []) : typeAliases}
         onAddAlias={handleAddAlias}
         onRemoveAlias={handleRemoveAlias}
@@ -458,7 +458,7 @@ export default function TypesPanel() {
 
       {/* The tab bar above already says "Types", so each list starts straight
           away under its own heading. A type whose tool is switched off isn't
-          offered at all — no point curating aliases for something the community
+          offered at all — no point curating aliases for something the space
           can't create.
 
           Alphabetical within each group: the registry order in

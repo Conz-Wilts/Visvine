@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { eventUpdateInputSchema } from '@/lib/schemas/eventSchemas';
 import { getEvent, upsertEvent, getAttendees, deleteEvent } from '@/lib/eventRepo';
-import { requireEventManager, requireCommunityMember } from '@/lib/eventAuth';
+import { requireEventManager, requireSpaceMember } from '@/lib/eventAuth';
 import { normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import prisma from '@/lib/prisma';
 import { handleApiError } from '@/lib/api/route';
@@ -24,20 +24,20 @@ export async function GET(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    // Events are community-scoped: only members/admins may read event details.
-    const member = await requireCommunityMember(communityId);
+    // Events are space-scoped: only members/admins may read event details.
+    const member = await requireSpaceMember(spaceId);
     if (member instanceof Response) return member;
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(
@@ -46,7 +46,7 @@ export async function GET(
       );
     }
 
-    const attendees = await getAttendees(communityId, eventId);
+    const attendees = await getAttendees(spaceId, eventId);
 
     // Calculate stats ('registered' is legacy for 'going')
     const norm = (a: (typeof attendees)[number]) => normalizeStatus(a.status);
@@ -110,7 +110,7 @@ export async function GET(
     let attendeeList = undefined;
 
     if (includeAttendees) {
-      const auth = await requireEventManager(communityId, event);
+      const auth = await requireEventManager(spaceId, event);
       if (auth instanceof Response) return auth;
 
       const personIds = attendees
@@ -168,16 +168,16 @@ export async function PATCH(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(
@@ -186,7 +186,7 @@ export async function PATCH(
       );
     }
 
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
     const body = await request.json();
@@ -212,7 +212,7 @@ export async function PATCH(
       },
     };
 
-    await upsertEvent(communityId, updatedEvent);
+    await upsertEvent(spaceId, updatedEvent);
 
     return NextResponse.json(updatedEvent);
   } catch (error) {
@@ -230,16 +230,16 @@ export async function DELETE(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(
@@ -248,7 +248,7 @@ export async function DELETE(
       );
     }
 
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
     // Delete the event node. Attendee.event and Link.source/target are
@@ -256,7 +256,7 @@ export async function DELETE(
     // attendees and every connected context link automatically. (The old
     // read-filter-reupsert-the-whole-context dance here threw 500s and clobbered
     // node metadata with person-profile enrichment — see eventRepo notes.)
-    await deleteEvent(communityId, eventId);
+    await deleteEvent(spaceId, eventId);
 
     return NextResponse.json({ success: true, message: 'Event deleted successfully' });
   } catch (error) {

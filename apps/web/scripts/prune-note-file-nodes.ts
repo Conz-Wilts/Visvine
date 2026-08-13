@@ -2,7 +2,7 @@
  * One-off cleanup: delete the `note:` and `file:` graph nodes left over from
  * when Note and File were node types.
  *
- * A note is content in a community brain and an uploaded file is a ContextSource
+ * A note is content in a space brain and an uploaded file is a ContextSource
  * — neither is a thing in the context graph any more, so nothing syncs a node
  * for them. The rows already written keep drawing on the canvas until this runs.
  *
@@ -20,7 +20,7 @@
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/prune-note-file-nodes.ts
  *   pnpm --filter @visvine/web exec tsx scripts/prune-note-file-nodes.ts --dry-run
- *   pnpm --filter @visvine/web exec tsx scripts/prune-note-file-nodes.ts --community=<id>
+ *   pnpm --filter @visvine/web exec tsx scripts/prune-note-file-nodes.ts --space=<id>
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -29,8 +29,8 @@ import prisma from '../lib/prisma';
 import { CONTEXT_ORIGIN } from '../lib/notes/entityLinks';
 
 const dryRun = process.argv.includes('--dry-run');
-const onlyArg = process.argv.find((a) => a.startsWith('--community='));
-const only = onlyArg ? onlyArg.slice('--community='.length) : null;
+const onlyArg = process.argv.find((a) => a.startsWith('--space='));
+const only = onlyArg ? onlyArg.slice('--space='.length) : null;
 
 // Stored `type` casing has drifted over the life of the graph ('note' vs
 // 'Note'), so match case-insensitively rather than on the exact spelling.
@@ -39,12 +39,12 @@ const RETIRED_TYPES = ['note', 'file'];
 async function main() {
   const where = {
     type: { in: RETIRED_TYPES, mode: 'insensitive' as const },
-    ...(only ? { communityId: only } : {}),
+    ...(only ? { spaceId: only } : {}),
   };
 
   const nodes = await prisma.node.findMany({
     where,
-    select: { id: true, communityId: true, type: true, name: true },
+    select: { id: true, spaceId: true, type: true, name: true },
     orderBy: { id: 'asc' },
   });
 
@@ -55,7 +55,7 @@ async function main() {
   const orphanedLinks = await prisma.link.findMany({
     where: {
       origin: CONTEXT_ORIGIN,
-      ...(only ? { communityId: only } : {}),
+      ...(only ? { spaceId: only } : {}),
     },
     select: { id: true, originRef: true, sourceId: true, targetId: true },
   });
@@ -75,9 +75,9 @@ async function main() {
   console.log(
     `${dryRun ? '[dry run] ' : ''}${nodes.length} note/file nodes, ` +
       `${staleLinks.length} orphaned context links` +
-      (only ? ` in ${only}` : ' across every community'),
+      (only ? ` in ${only}` : ' across every space'),
   );
-  for (const node of nodes) console.log(`  ${node.communityId}  ${node.type}  ${node.id}  ${node.name}`);
+  for (const node of nodes) console.log(`  ${node.spaceId}  ${node.type}  ${node.id}  ${node.name}`);
 
   if (dryRun) {
     console.log('\nNothing was deleted — re-run without --dry-run to apply.');

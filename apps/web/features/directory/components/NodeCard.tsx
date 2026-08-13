@@ -3,7 +3,7 @@ import { DirectoryItem } from './types'
 import { getHeaderBgStyle } from './typeStyles'
 import { getInitials } from './utils'
 import { getNodeTypeConfig, getNodeGlyph, findAlias, nodeTypeLabel } from '@/lib/types'
-import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
+import type { NodeTypeConfig, SpaceAlias } from '@/lib/types'
 import Chip from '@/components/ui/Chip'
 import PersonSilhouette from '@/components/ui/PersonSilhouette'
 import TypeSilhouette from '@/components/ui/TypeSilhouette'
@@ -13,10 +13,10 @@ interface DirectoryCardProps {
   item: DirectoryItem
   onClick?: (item: DirectoryItem) => void
   nodeTypes?: NodeTypeConfig[]
-  communityAliases?: CommunityAlias[]
+  aliases?: SpaceAlias[]
 }
 
-function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardProps) {
+function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
   const { getCached, version } = useProfileCache()
   const isPerson = item.id?.startsWith('person:')
   void version // subscribe for reactivity when any profile is updated
@@ -28,7 +28,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
 
   const glyph = getNodeGlyph(item.type)
   const baseTypeColor = getNodeTypeConfig(item.type, nodeTypes).color
-  const aliasConfig = findAlias(communityAliases, item.alias, item.type)
+  const aliasConfig = findAlias(aliases, item.alias, item.type)
   const typeColor = aliasConfig?.color ?? baseTypeColor
 
   // Glow colors exposed as CSS vars so the hover state is pure CSS (no JS
@@ -86,7 +86,7 @@ function NodeCard({ item, onClick, nodeTypes, communityAliases }: DirectoryCardP
 
         {/* Type badge — pinned to bottom center */}
         <Chip color={typeColor} size="md" className="mt-auto mb-2">
-          {nodeTypeLabel(item.type, item.alias, communityAliases, nodeTypes)}
+          {nodeTypeLabel(item.type, item.alias, aliases, nodeTypes)}
         </Chip>
       </div>
     </div>

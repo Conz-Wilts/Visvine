@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession, isAdmin, communityMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
+import { getSession, isAdmin, spaceMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
@@ -11,7 +11,7 @@ import { ensureEntityNote } from '@/lib/notes/context/entityNodes';
 function nodeRowToNBNode(row: {
   id: string; type: string; name: string; alias: string | null; subtitle: string | null;
   location: string | null; url: string | null; imageUrl: string | null;
-  tags: string[]; metadata: unknown; communityId: string | null; createdAt: Date;
+  tags: string[]; metadata: unknown; spaceId: string | null; createdAt: Date;
 }): NBNode {
   return {
     id: row.id,
@@ -24,39 +24,43 @@ function nodeRowToNBNode(row: {
     image_url: normalizeImageUrl(row.imageUrl),
     tags: row.tags,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
-    community_id: row.communityId ?? null,
+    space_id: row.spaceId ?? null,
+    // Pre-rename spelling, still decoded by shipped mobile builds. Emitted
+    // alongside space_id rather than instead of it; drop once they roll over.
+    community_id: row.spaceId ?? null,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
 /**
- * GET: Fetch all nodes for a community
+ * GET: Fetch all nodes for a space
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('community_id');
+    // `community_id` is the pre-rename spelling shipped mobile builds send.
+    const spaceId = searchParams.get('space_id') ?? searchParams.get('community_id');
 
-    if (!communityId) {
-      return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
+    if (!spaceId) {
+      return NextResponse.json({ error: 'space_id is required' }, { status: 400 });
     }
 
-    // The whole node directory is community-scoped confidential data: only an
+    // The whole node directory is space-scoped confidential data: only an
     // active member (or admin) may pull it, and never across tenants by passing
-    // a foreign `community_id`. `directoryAccessForbidden` additionally honours
+    // a foreign `space_id`. `directoryAccessForbidden` additionally honours
     // the admins-only-directory setting for members.
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
     if (
-      (await communityMemberForbidden(session.userId, communityId, session.email)) ||
-      (await directoryAccessForbidden(session.userId, communityId, session.email))
+      (await spaceMemberForbidden(session.userId, spaceId, session.email)) ||
+      (await directoryAccessForbidden(session.userId, spaceId, session.email))
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const rows = await prisma.node.findMany({
-      where: { communityId },
-      select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, communityId: true, createdAt: true },
+      where: { spaceId },
+      select: { id: true, type: true, name: true, alias: true, subtitle: true, location: true, url: true, imageUrl: true, tags: true, metadata: true, spaceId: true, createdAt: true },
       orderBy: { name: 'asc' },
     });
 
@@ -73,9 +77,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { node, community_id, identity_id } = body as {
+    const { node, space_id, identity_id } = body as {
       node: NBNode;
-      community_id: string;
+      space_id: string;
       // Optional: an identity the user explicitly picked from the quick-add finder.
       // An explicit human choice is trusted (and recorded as 'confirmed'); without
       // it the server resolves the identity itself — the client can never silently
@@ -83,8 +87,8 @@ export async function POST(request: NextRequest) {
       identity_id?: string | null;
     };
 
-    if (!community_id) {
-      return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
+    if (!space_id) {
+      return NextResponse.json({ error: 'space_id is required' }, { status: 400 });
     }
 
     if (!node.id || !node.type || !node.name) {
@@ -92,13 +96,13 @@ export async function POST(request: NextRequest) {
     }
 
     const session = await getSession();
-    const userIsAdmin = session ? await isAdmin(session.userId, community_id, session.email) : false;
+    const userIsAdmin = session ? await isAdmin(session.userId, space_id, session.email) : false;
 
     if (!userIsAdmin) {
       return NextResponse.json({ error: 'Admin access required to create nodes' }, { status: 403 });
     }
 
-    // ── Resolve the canonical cross-community identity (people/orgs only) ──
+    // ── Resolve the canonical cross-space identity (people/orgs only) ──
     const { identityId, resolution } = await attachIdentity(node, {
       identityId: identity_id,
       actorUserId: session?.userId ?? null,
@@ -118,7 +122,7 @@ export async function POST(request: NextRequest) {
         imageUrl: node.image_url ?? null,
         tags: node.tags ?? [],
         metadata: (node.metadata as object) ?? {},
-        communityId: community_id,
+        spaceId: space_id,
         identityId,
       },
     });
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest) {
     // admin Data tab — otherwise the same person exists in the graph but not in
     // the brain depending on which surface created them.
     await ensureEntityNote(
-      community_id,
+      space_id,
       { id: row.id, type: row.type, name: row.name, subtitle: row.subtitle },
       {
         tags: row.tags,
@@ -150,10 +154,10 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const { node, community_id } = body as { node: NBNode; community_id: string };
+    const { node, space_id } = body as { node: NBNode; space_id: string };
 
-    if (!community_id || !node.id) {
-      return NextResponse.json({ error: 'community_id and node.id are required' }, { status: 400 });
+    if (!space_id || !node.id) {
+      return NextResponse.json({ error: 'space_id and node.id are required' }, { status: 400 });
     }
 
     if (!node.type || !node.name) {
@@ -161,11 +165,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const session = await getSession();
-    if (!session || !(await isAdmin(session.userId, community_id, session.email))) {
+    if (!session || !(await isAdmin(session.userId, space_id, session.email))) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const existing = await prisma.node.findFirst({ where: { id: node.id, communityId: community_id } });
+    const existing = await prisma.node.findFirst({ where: { id: node.id, spaceId: space_id } });
     if (!existing) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
     // Build update data — only include fields that are explicitly present in the
@@ -209,18 +213,18 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
-    const communityId = searchParams.get('community_id');
+    const spaceId = searchParams.get('space_id');
 
-    if (!id || !communityId) {
-      return NextResponse.json({ error: 'id and community_id are required' }, { status: 400 });
+    if (!id || !spaceId) {
+      return NextResponse.json({ error: 'id and space_id are required' }, { status: 400 });
     }
 
     const session = await getSession();
-    if (!session || !(await isAdmin(session.userId, communityId, session.email))) {
+    if (!session || !(await isAdmin(session.userId, spaceId, session.email))) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    await prisma.node.deleteMany({ where: { id, communityId } });
+    await prisma.node.deleteMany({ where: { id, spaceId } });
 
     revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({ success: true });

@@ -5,10 +5,10 @@ import { createPortal } from 'react-dom';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCreateModal, type CreateableType } from '@/features/shared/contexts/CreateModalContext';
 import { suggestedCreateType } from '@/lib/create/suggestedType';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { canCreateType } from '@/lib/create/creatable';
 import { slugify } from '@/lib/eventUtils';
-import type { CommunityAlias, CommunityFeatureConfig } from '@/lib/types';
+import type { SpaceAlias, SpaceFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
 import { uploadCroppedNodeImage } from '@/lib/imageUpload';
 import ImageCropper from '@/features/directory/components/data/ImageCropper';
@@ -66,20 +66,20 @@ export default function CreateModal() {
   const router = useRouter();
   const pathname = usePathname();
   const { isOpen, defaultType, close } = useCreateModal();
-  const { currentCommunity, isAdmin } = useCommunity();
+  const { currentSpace, isAdmin } = useSpace();
   const { reduced } = useSidebar();
 
   // The "Create new" grid: the registry's grid types, minus any this person
   // can't create here. `inGrid` says which surface lists a type; canCreateType
   // says who may — the sidebar's caret menu asks the same question, so the two
   // entry points can't drift apart (see lib/create/creatable.ts).
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
   const gridOptions = TYPE_OPTIONS.filter(
     (o) => o.inGrid && canCreateType(o.id, { featureConfig, isAdmin }),
   );
 
   // What the current page implies you came here to create, narrowed to the types
-  // actually offered in this community (e.g. Channel/Space drop out with channels
+  // actually offered in this space (e.g. Channel/Space drop out with channels
   // off, or for non-admins) — and dropped entirely when none survive.
   const routeSuggestion = suggestedCreateType(pathname);
   const suggestedTypes =
@@ -119,8 +119,8 @@ export default function CreateModal() {
   // Folder list + existing note paths for the brain forms, loaded (from the
   // shared context cache) only while one of them is open.
   const brainForm = selectedType === 'context' || selectedType === 'file';
-  const brainTree = useBrainTree(currentCommunity?.id ?? null, isOpen && brainForm);
-  const contextName = currentCommunity?.name ?? 'Context';
+  const brainTree = useBrainTree(currentSpace?.id ?? null, isOpen && brainForm);
+  const contextName = currentSpace?.name ?? 'Context';
 
   // The note's real destination: the title's slug in the chosen folder, suffixed
   // when that path is already taken, so the preview matches what gets written.
@@ -134,7 +134,7 @@ export default function CreateModal() {
 
   const nameRef = useRef<HTMLInputElement | null>(null);
 
-  // Cross-community finder — one search per addable node type. Inactive types
+  // Cross-space finder — one search per addable node type. Inactive types
   // have an empty name, so their hook short-circuits without fetching.
   const personSearch = useNodeSearch(personData.name, 'person', personData.email);
   const resourceSearch = useNodeSearch(resourceData.name, 'resource');
@@ -153,8 +153,8 @@ export default function CreateModal() {
       imageBlob: null,
       imagePreview: r.image_url || null,
     });
-    // Attach the new community node to the SAME canonical identity (if resolved),
-    // so adding someone another community already has doesn't create a duplicate.
+    // Attach the new space node to the SAME canonical identity (if resolved),
+    // so adding someone another space already has doesn't create a duplicate.
     setSelectedIdentityId(r.identity_id ?? null);
   };
 
@@ -183,8 +183,8 @@ export default function CreateModal() {
     });
   };
 
-  // Aliases from current community, filtered to the selected node type
-  const allAliases = (currentCommunity?.communityAliases as CommunityAlias[] | undefined) ?? [];
+  // Aliases from current space, filtered to the selected node type
+  const allAliases = (currentSpace?.aliases as SpaceAlias[] | undefined) ?? [];
   const nodeTypeName = selectedType === 'person' ? 'Person'
     : selectedType === 'resource' ? 'Resource'
     : selectedType === 'event' ? 'Event'
@@ -212,17 +212,17 @@ export default function CreateModal() {
     setCreatedDetail(null);
   }, []);
 
-  // Load the community's sections once the Channel form is showing, so the user can
+  // Load the space's sections once the Channel form is showing, so the user can
   // file the new channel into one on creation.
   useEffect(() => {
-    if (!isOpen || selectedType !== 'channel' || !currentCommunity) return;
+    if (!isOpen || selectedType !== 'channel' || !currentSpace) return;
     let cancelled = false;
-    fetch(`/api/messages/sections?communityId=${encodeURIComponent(currentCommunity.id)}`, { cache: 'no-store' })
+    fetch(`/api/messages/sections?spaceId=${encodeURIComponent(currentSpace.id)}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { sections: [] }))
       .then((payload) => { if (!cancelled) setSections(payload.sections ?? []); })
       .catch(() => { if (!cancelled) setSections([]); });
     return () => { cancelled = true; };
-  }, [isOpen, selectedType, currentCommunity]);
+  }, [isOpen, selectedType, currentSpace]);
 
   // On open, if a default type is given skip to step 1
   useEffect(() => {
@@ -336,12 +336,12 @@ export default function CreateModal() {
   };
 
   const createChannel = async (): Promise<string> => {
-    if (!currentCommunity) throw new Error('Select a space first');
+    if (!currentSpace) throw new Error('Select a space first');
     const res = await fetch('/api/messages/conversations/channel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        communityId: currentCommunity.id,
+        spaceId: currentSpace.id,
         name: channelData.name.trim(),
         description: channelData.description.trim() || undefined,
         icon: channelData.icon ?? undefined,
@@ -359,12 +359,12 @@ export default function CreateModal() {
   };
 
   const createSpace = async () => {
-    if (!currentCommunity) throw new Error('Select a space first');
+    if (!currentSpace) throw new Error('Select a space first');
     const res = await fetch('/api/messages/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        communityId: currentCommunity.id,
+        spaceId: currentSpace.id,
         name: spaceData.name.trim(),
         context: spaceData.context.trim() || undefined,
       }),
@@ -380,20 +380,20 @@ export default function CreateModal() {
   // (403 with its reason), and intermediate folders come into being with the
   // note, so a brand-new folder name needs no separate create call.
   const createContextNote = async () => {
-    if (!currentCommunity) throw new Error('Select a space first');
+    if (!currentSpace) throw new Error('Select a space first');
     const path = contextDestination;
     const tags = contextData.tags.split(',').map((t) => t.trim()).filter(Boolean);
     await notesApi.create(
-      currentCommunity.id,
+      currentSpace.id,
       path,
       newNoteContent({ title: contextTitle, tags, body: contextData.body }),
     );
     // The tree, the note index and this path's (cached "missing") read all went
     // stale — the sidebar and the note view must see it immediately.
     invalidateContextCache(
-      contextKeys.tree(currentCommunity.id),
-      contextKeys.list(currentCommunity.id),
-      contextKeys.read(currentCommunity.id, path),
+      contextKeys.tree(currentSpace.id),
+      contextKeys.list(currentSpace.id),
+      contextKeys.read(currentSpace.id, path),
     );
     setCreatedHref(noteHref(path));
     setCreatedDetail(`Saved to ${path}`);
@@ -405,11 +405,11 @@ export default function CreateModal() {
   // take. The secret's VALUE is deliberately not collected here: it's set on
   // the connector's own page, which is where the success screen points.
   const createConnectorNote = async () => {
-    if (!currentCommunity) throw new Error('Select a space first');
+    if (!currentSpace) throw new Error('Select a space first');
     const name = connectorSlug(connectorData.name);
     const path = `connectors/${name}.md`;
     await notesApi.create(
-      currentCommunity.id,
+      currentSpace.id,
       path,
       newConnectorNote({
         name,
@@ -419,9 +419,9 @@ export default function CreateModal() {
       }),
     );
     invalidateContextCache(
-      contextKeys.tree(currentCommunity.id),
-      contextKeys.list(currentCommunity.id),
-      contextKeys.read(currentCommunity.id, path),
+      contextKeys.tree(currentSpace.id),
+      contextKeys.list(currentSpace.id),
+      contextKeys.read(currentSpace.id, path),
     );
     setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
     setCreatedDetail(
@@ -436,8 +436,8 @@ export default function CreateModal() {
   // pipeline synchronously, so a parallel burst would just contend. Per-file
   // status lands on the row; a file that fails leaves the others alone.
   const uploadFiles = async () => {
-    if (!currentCommunity) throw new Error('Select a space first');
-    const communityId = currentCommunity.id;
+    if (!currentSpace) throw new Error('Select a space first');
+    const spaceId = currentSpace.id;
     const queue = fileData.files
       .map((entry, index) => ({ entry, index }))
       .filter(({ entry }) => entry.status === 'queued');
@@ -454,7 +454,7 @@ export default function CreateModal() {
     for (const { entry, index } of queue) {
       patch(index, { status: 'uploading', error: undefined });
       try {
-        const { source } = await notesApi.uploadSource(communityId, entry.file, fileData.folder);
+        const { source } = await notesApi.uploadSource(spaceId, entry.file, fileData.folder);
         patch(index, { status: 'done', path: source.path });
         uploaded++;
         lastPath = source.path;
@@ -468,7 +468,7 @@ export default function CreateModal() {
 
     if (!uploaded) throw new Error('No files could be uploaded — see the list above');
 
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId));
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId));
     const failed = queue.length - uploaded;
     setCreatedHref(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory/note/index.md');
     setCreatedDetail(
@@ -478,7 +478,7 @@ export default function CreateModal() {
   };
 
   const createNode = async () => {
-    if (!currentCommunity) throw new Error('Select a space first');
+    if (!currentSpace) throw new Error('Select a space first');
 
     let name = '';
     let subtitle = '';
@@ -508,7 +508,7 @@ export default function CreateModal() {
 
     const baseId = generateNodeId(type, name);
 
-    const existing = await fetch(`/api/data/nodes?community_id=${currentCommunity.id}`).then(r => r.json());
+    const existing = await fetch(`/api/data/nodes?space_id=${currentSpace.id}`).then(r => r.json());
     const ids = new Set<string>((existing.nodes ?? []).map((n: { id: string }) => n.id));
     let id = baseId;
     let counter = 2;
@@ -518,7 +518,7 @@ export default function CreateModal() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        community_id: currentCommunity.id,
+        space_id: currentSpace.id,
         // When the user picked an existing person from the finder, tell the server
         // to attach this node to that canonical identity instead of resolving anew.
         identity_id: selectedType === 'person' ? (selectedIdentityId ?? undefined) : undefined,
@@ -556,7 +556,7 @@ export default function CreateModal() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              community_id: currentCommunity.id,
+              space_id: currentSpace.id,
               node: { id, type, name, image_url: imageUrl },
             }),
           });
@@ -693,7 +693,7 @@ export default function CreateModal() {
               <TypeList options={gridOptions} suggestion={suggestion} onSelect={handleTypeSelect} />
             )}
 
-            {/* Entity steps: form first, then the cross-community finder stacked
+            {/* Entity steps: form first, then the cross-space finder stacked
                 below it — the panel is one sidebar-width column, so the finder
                 can't sit beside the form. */}
             {step === 1 && selectedType === 'person' && (
@@ -710,7 +710,7 @@ export default function CreateModal() {
                     loading={personSearch.loading}
                     onSelect={handleMatchSelect}
                     title="Existing People"
-                    emptyHint="Type a name or email to find existing people across communities."
+                    emptyHint="Type a name or email to find existing people across spaces."
                     fallbackIcon={PERSON_FINDER_ICON}
                   />
                 </div>
@@ -725,7 +725,7 @@ export default function CreateModal() {
                     loading={resourceSearch.loading}
                     onSelect={handleResourceMatch}
                     title="Existing Resources"
-                    emptyHint="Type a name to find existing resources across communities."
+                    emptyHint="Type a name to find existing resources across spaces."
                     fallbackIcon={RESOURCE_FINDER_ICON}
                   />
                 </div>
@@ -740,7 +740,7 @@ export default function CreateModal() {
                     loading={eventSearch.loading}
                     onSelect={handleEventMatch}
                     title="Existing Events"
-                    emptyHint="Type a name to find existing events across communities."
+                    emptyHint="Type a name to find existing events across spaces."
                     fallbackIcon={EVENT_FINDER_ICON}
                   />
                 </div>

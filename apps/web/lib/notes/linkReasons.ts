@@ -47,7 +47,7 @@ function bustContextCache(): void {
 }
 
 const SYSTEM_PROMPT =
-  'You annotate a community directory. For each item you are given two entities ' +
+  'You annotate a space directory. For each item you are given two entities ' +
   'and the passage(s) from notes that link them. Return ONLY JSON of the shape ' +
   '{"reasons": [{"id": "<id>", "reason": "<phrase>"}]} with one entry per item. ' +
   'Each reason is one short phrase (at most 12 words, no trailing period) stating ' +
@@ -81,16 +81,16 @@ function coerceReasons(raw: string): Map<string, string> {
 }
 
 /**
- * Generate reasons for every context link in the community whose excerpt set
+ * Generate reasons for every context link in the space whose excerpt set
  * has changed since its reason was last written. Throws only on programmer
  * error — LLM/API failures are logged per batch and skipped, so a partial run
  * still lands what it produced.
  */
 export async function generateLinkReasons(
-  communityId: string,
+  spaceId: string,
 ): Promise<{ considered: number; updated: number }> {
   const links = await prisma.link.findMany({
-    where: { communityId, origin: CONTEXT_ORIGIN },
+    where: { spaceId, origin: CONTEXT_ORIGIN },
     select: { id: true, sourceId: true, targetId: true, metadata: true },
   })
 
@@ -129,7 +129,7 @@ export async function generateLinkReasons(
         ]),
       )
     } catch (err) {
-      logger.error('notes.linkReasons.batch.failed', { err, communityId })
+      logger.error('notes.linkReasons.batch.failed', { err, spaceId })
       continue
     }
     for (const candidate of batch) {
@@ -156,24 +156,24 @@ export async function generateLinkReasons(
   return { considered: candidates.length, updated }
 }
 
-// One in-flight run per community: overlapping saves during a run don't stack
+// One in-flight run per space: overlapping saves during a run don't stack
 // LLM calls — a save landing mid-run still mismatches reasonHash, so the next
 // trigger picks it up.
 const running = new Set<string>()
 
 /**
  * Fire-and-forget wrapper for the save path. No-op while a run for the
- * community is already in flight or when AI is unconfigured.
+ * space is already in flight or when AI is unconfigured.
  */
-export function scheduleLinkReasons(communityId: string): void {
+export function scheduleLinkReasons(spaceId: string): void {
   if (!aiConfigured()) return
-  if (running.has(communityId)) return
-  running.add(communityId)
-  void generateLinkReasons(communityId)
+  if (running.has(spaceId)) return
+  running.add(spaceId)
+  void generateLinkReasons(spaceId)
     .catch((err) => {
-      logger.error('notes.linkReasons.failed', { err, communityId })
+      logger.error('notes.linkReasons.failed', { err, spaceId })
     })
     .finally(() => {
-      running.delete(communityId)
+      running.delete(spaceId)
     })
 }

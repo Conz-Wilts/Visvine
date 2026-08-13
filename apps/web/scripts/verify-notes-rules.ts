@@ -17,7 +17,7 @@
  *
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts                 # all brains
- *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts <communityId>   # one community
+ *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts <spaceId>   # one space
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -64,33 +64,33 @@ function directChildrenOf(notes: Note[], folder: string): IndexChild[] {
 
 async function main() {
   const only = process.argv[2];
-  const where = only ? { communityId: only } : {};
+  const where = only ? { spaceId: only } : {};
 
-  const noteBrains = await prisma.communityNote.groupBy({
-    by: ['communityId', 'ownerKey'],
+  const noteBrains = await prisma.spaceNote.groupBy({
+    by: ['spaceId', 'ownerKey'],
     where: { ...where, deletedAt: null },
   });
-  const folderBrains = await prisma.communityNoteFolder.groupBy({
-    by: ['communityId', 'ownerKey'],
+  const folderBrains = await prisma.spaceNoteFolder.groupBy({
+    by: ['spaceId', 'ownerKey'],
     where,
   });
-  const brains = new Map<string, { communityId: string; ownerKey: string }>();
+  const brains = new Map<string, { spaceId: string; ownerKey: string }>();
   for (const b of [...noteBrains, ...folderBrains]) {
-    brains.set(`${b.communityId} ${b.ownerKey}`, { communityId: b.communityId, ownerKey: b.ownerKey });
+    brains.set(`${b.spaceId} ${b.ownerKey}`, { spaceId: b.spaceId, ownerKey: b.ownerKey });
   }
-  if (only && brains.size === 0) throw new Error(`No notes found for community: ${only}`);
+  if (only && brains.size === 0) throw new Error(`No notes found for space: ${only}`);
 
   const violations: string[] = [];
   let checked = 0;
 
   for (const brain of brains.values()) {
-    const label = `${brain.communityId} [${brain.ownerKey}]`;
-    const notes: Note[] = await prisma.communityNote.findMany({
-      where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null },
+    const label = `${brain.spaceId} [${brain.ownerKey}]`;
+    const notes: Note[] = await prisma.spaceNote.findMany({
+      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
       select: { path: true, content: true },
     });
-    const explicit = await prisma.communityNoteFolder.findMany({
-      where: { communityId: brain.communityId, ownerKey: brain.ownerKey },
+    const explicit = await prisma.spaceNoteFolder.findMany({
+      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
       select: { path: true },
     });
     const live = new Set(notes.map((n) => n.path));

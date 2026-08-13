@@ -10,16 +10,16 @@
  * what the client gates the Profile tab and ownership on.
  *
  * Profile edits update the Person row ONLY. Node.name (and friends) are
- * community-local display fields owned by the context surfaces — the old
+ * space-local display fields owned by the context surfaces — the old
  * Person→Node sync is gone on purpose: it clobbered local labels in every
- * community the member appears in.
+ * space the member appears in.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
-import { communityMemberForbidden } from '@/lib/auth';
+import { spaceMemberForbidden } from '@/lib/auth';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { resolveNodeConnection } from '@/lib/identity/connection';
 
@@ -43,17 +43,17 @@ async function resolveProfileUserId(personId: string): Promise<string | null> {
   return person?.userId ?? null;
 }
 
-/** Whether `viewerId` shares at least one real (non-personal) community with the
+/** Whether `viewerId` shares at least one real (non-personal) space with the
  *  member `targetUserId` — the visibility test for another member's contact PII. */
-async function sharesCommunity(viewerId: string, targetUserId: string): Promise<boolean> {
+async function sharesSpace(viewerId: string, targetUserId: string): Promise<boolean> {
   if (viewerId === targetUserId) return true;
-  const overlap = await prisma.userCommunity.findFirst({
+  const overlap = await prisma.spaceMember.findFirst({
     where: {
       userId: targetUserId,
       status: 'active',
-      community: {
+      space: {
         personalOwnerId: null,
-        userCommunities: { some: { userId: viewerId, status: 'active' } },
+        members: { some: { userId: viewerId, status: 'active' } },
       },
     },
     select: { id: true },
@@ -61,7 +61,7 @@ async function sharesCommunity(viewerId: string, targetUserId: string): Promise<
   return overlap !== null;
 }
 
-/** Contact fields are visible only to people who share a community with the
+/** Contact fields are visible only to people who share a space with the
  *  subject. Everyone else gets the profile with email/phone nulled — the profile
  *  stays a global identity surface without leaking direct contact details across
  *  tenant boundaries. Mutates and returns the record for call-site brevity. */
@@ -84,7 +84,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     const person = await prisma.person.findUnique({ where: { userId } });
     if (person) {
       person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
-      const shared = await sharesCommunity(session.userId, userId);
+      const shared = await sharesSpace(session.userId, userId);
       // `id` stays the requested node id so client-side routing keys hold.
       return NextResponse.json(
         redactContact({ ...person, id: personId, connected: true }, shared),
@@ -97,7 +97,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   const person = await prisma.person.findUnique({ where: { id: personId } });
   if (person) {
     person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
-    const shared = person.userId ? await sharesCommunity(session.userId, person.userId) : false;
+    const shared = person.userId ? await sharesSpace(session.userId, person.userId) : false;
     return NextResponse.json(
       redactContact({ ...person, connected: !!person.userId }, shared),
       { headers: CACHE_HEADERS },
@@ -112,14 +112,14 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     if (node) {
       const meta = (node.metadata ?? {}) as Record<string, unknown>;
       const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
-      // Unconnected node: its contact fields belong to the node's community, so
-      // gate phone on membership of that community.
-      const sharedNode = node.communityId
-        ? !(await communityMemberForbidden(session.userId, node.communityId, session.email))
+      // Unconnected node: its contact fields belong to the node's space, so
+      // gate phone on membership of that space.
+      const sharedNode = node.spaceId
+        ? !(await spaceMemberForbidden(session.userId, node.spaceId, session.email))
         : false;
       const synthesized = {
         id: node.id,
-        communityId: node.communityId,
+        spaceId: node.spaceId,
         name: node.name,
         subtitle: node.subtitle ?? null,
         bio: str(meta.bio),

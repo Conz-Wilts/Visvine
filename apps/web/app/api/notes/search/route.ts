@@ -1,5 +1,5 @@
 // POST /api/notes/search
-//   { communityId, scope, query, k?, filters? } → { results: FusedResult[], semantic }
+//   { spaceId, scope, query, k?, filters? } → { results: FusedResult[], semantic }
 // Fused retrieval (frontmatter filter → BM25 → pgvector → chunks → link context,
 // weighted RRF) over
 // everything the caller can read in the brain; the visibility lens and the

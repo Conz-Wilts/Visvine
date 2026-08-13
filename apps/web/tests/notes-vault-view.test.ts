@@ -27,10 +27,10 @@ function principal(
   userId: string,
   grants: AccessGrant[],
   restricted: string[] = [],
-  communityAdmin = false,
+  spaceAdmin = false,
 ): BrainPrincipal {
   const access: BrainAccess = { grants, restricted, locked: [] }
-  return { userId, email: `${userId}@x.com`, name: userId, communityId: 'c1', communityAdmin, access }
+  return { userId, email: `${userId}@x.com`, name: userId, spaceId: 'c1', spaceAdmin, access }
 }
 
 const RAWS: RawNote[] = [

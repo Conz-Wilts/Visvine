@@ -18,7 +18,7 @@ import { OWNER_ALIAS_NAME } from '../lib/types/context';
 import { resolveBrain, principalOf } from '../lib/notes/brain';
 import { executeConnectorScript, listConnectors, loadConnector } from '../lib/connectors/service';
 
-const COMMUNITY = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
 
 let pass = 0;
 let fail = 0;
@@ -30,10 +30,10 @@ function check(label: string, ok: boolean, detail: string) {
 
 async function main() {
   const holder = await prisma.userAlias.findFirst({
-    where: { communityId: COMMUNITY, aliasName: OWNER_ALIAS_NAME },
+    where: { spaceId: SPACE, aliasName: OWNER_ALIAS_NAME },
     select: { userId: true },
   });
-  if (!holder) throw new Error(`nobody manages ${COMMUNITY}`);
+  if (!holder) throw new Error(`nobody manages ${SPACE}`);
   const admin = await prisma.user.findUnique({
     where: { id: holder.userId },
     select: { id: true, name: true, email: true },
@@ -41,7 +41,7 @@ async function main() {
   if (!admin) throw new Error(`alias holder ${holder.userId} has no user row`);
   const session = { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' };
 
-  const resolved = await resolveBrain(session, COMMUNITY);
+  const resolved = await resolveBrain(session, SPACE);
   if (resolved instanceof Response) throw new Error(`resolveBrain: ${resolved.status}`);
   const principal = await principalOf(resolved);
   const brain = resolved; // ResolvedBrain extends Brain
@@ -59,7 +59,7 @@ async function main() {
 
   const sandbox = await loadConnector(principal, brain, 'sandbox');
   if (!sandbox) throw new Error('sandbox connector did not load');
-  const run = (code: string) => executeConnectorScript(principal, brain, COMMUNITY, sandbox, code);
+  const run = (code: string) => executeConnectorScript(principal, brain, SPACE, sandbox, code);
   const shown = (r: { value?: unknown }) => JSON.stringify(r.value ?? null);
 
   // a real call, secret resolved server-side
@@ -119,9 +119,9 @@ async function main() {
   const query = await executeConnectorScript(
     principal,
     brain,
-    COMMUNITY,
+    SPACE,
     appdb,
-    `return await sql(env.APPDB_DSN, 'SELECT count(*) FROM communities')`,
+    `return await sql(env.APPDB_DSN, 'SELECT count(*) FROM spaces')`,
   );
   check(
     'sql() queries the app database through the isolate',
@@ -131,7 +131,7 @@ async function main() {
   const write = await executeConnectorScript(
     principal,
     brain,
-    COMMUNITY,
+    SPACE,
     appdb,
     `try { await sql(env.APPDB_DSN, 'CREATE TABLE should_not_exist (id int)') } catch (e) { return e.message }`,
   );

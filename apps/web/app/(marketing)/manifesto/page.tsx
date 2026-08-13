@@ -25,7 +25,7 @@ export default function Manifesto() {
       </p>
 
       <p className="mt-12 text-xl sm:text-2xl leading-relaxed text-neutral-800">
-        Every industry, every scene, every community has a shape: a web of
+        Every industry, every scene, every space has a shape: a web of
         people, relationships, events, and openings that fits together into an
         ecosystem.
       </p>
@@ -35,7 +35,7 @@ export default function Manifesto() {
         the smartest or hardest-working in the room. They got there because
         someone showed them the map: the program built for people like them,
         the company that was hiring before the job was ever posted, the room
-        where the real introductions happen, and the community of people who
+        where the real introductions happen, and the space of people who
         want to help them grow.
       </p>
 
@@ -46,32 +46,32 @@ export default function Manifesto() {
         the cost is real: we have watched a whole generation shape the next
         forty years of their lives while only ever seeing a fraction of the
         map, people with brilliant ideas spend years assembling a context that
-        someone, somewhere, already had, and whole communities die quietly
+        someone, somewhere, already had, and whole spaces die quietly
         inside group chats nobody grew.
       </p>
 
-      <h2 className={HEADLINE}>Community is the unit of human life.</h2>
+      <h2 className={HEADLINE}>Space is the unit of human life.</h2>
 
       <p className={BODY}>
-        Your family is a community. So are your friends. So is the hobby
+        Your family is a space. So are your friends. So is the hobby
         you&rsquo;ve always wanted to start, the people you want to learn from,
         and the company you dream of working for. Everything that matters to us
-        has a community attached.
+        has a space attached.
       </p>
 
       <p className={BODY}>
-        We survived as a species because of community. We grew because of it.
+        We survived as a species because of space. We grew because of it.
         We found meaning, and found each other through it.
       </p>
 
       <p className={BODY}>
-        Communities are the doors to the information, relationships, and
+        Spaces are the doors to the information, relationships, and
         opportunities that shape our lives. And yet the platforms we live on
         every day have done nothing to open them. Every platform before us
         optimised for the wrong thing. LinkedIn optimised for profession.
         Twitter for dialogue. Instagram for attention. None of them optimised
         for the thing we actually belong to. No one has ever tried to organise,
-        visualise, and open the world&rsquo;s communities in one place.
+        visualise, and open the world&rsquo;s spaces in one place.
       </p>
 
       <h2 className={HEADLINE}>Imagine this.</h2>
@@ -86,7 +86,7 @@ export default function Manifesto() {
       </p>
 
       <p className={BODY}>
-        You see the community you&rsquo;ve just joined, the communities next to
+        You see the space you&rsquo;ve just joined, the spaces next to
         it, and the people inside who once stood exactly where you&rsquo;re
         standing now.
       </p>
@@ -106,11 +106,11 @@ export default function Manifesto() {
       <h2 className={HEADLINE}>What we&rsquo;re building.</h2>
 
       <p className={BODY}>
-        Visvine is a platform that organises the world&rsquo;s communities and
+        Visvine is a platform that organises the world&rsquo;s spaces and
         makes as much of their context public and accessible as possible.
-        We&rsquo;re building it for the community owners who want to grow and
+        We&rsquo;re building it for the space owners who want to grow and
         scale on it, and for the individuals who simply want to find their
-        people and belong to the communities that spark something in them.
+        people and belong to the spaces that spark something in them.
       </p>
 
       <p className={BODY}>
@@ -119,14 +119,14 @@ export default function Manifesto() {
         place we most want to see the impact first. But starting there
         doesn&rsquo;t mean stopping there. Your career and your hobby, your
         craft and your sport, your professional life and your personal one all
-        belong on the same platform, so whatever community you come from, we
+        belong on the same platform, so whatever space you come from, we
         want you here from day one.
       </p>
 
       <p className={BODY}>
-        This is a platform built by the community, and we&rsquo;ll keep
+        This is a platform built by the space, and we&rsquo;ll keep
         listening to it and building with it, because the opportunity people
-        can reach depends entirely on how well we grow these communities
+        can reach depends entirely on how well we grow these spaces
         together.
       </p>
 
@@ -140,7 +140,7 @@ export default function Manifesto() {
 
       <p className="mt-12 text-xl sm:text-2xl leading-relaxed text-neutral-800">
         From now on, opportunity will never depend on your ability to see and
-        interact with the world&rsquo;s communities.
+        interact with the world&rsquo;s spaces.
       </p>
 
       <p className="mt-4 text-xl sm:text-2xl leading-relaxed text-neutral-800">
@@ -160,7 +160,7 @@ export default function Manifesto() {
           className="inline-block rounded-md px-8 py-3.5 text-base font-medium shadow-sm transition hover:opacity-90 active:scale-[0.99]"
           style={{ backgroundColor: BRAND, color: "#ffffff" }}
         >
-          Join our community
+          Join our space
         </Link>
       </div>
     </article>

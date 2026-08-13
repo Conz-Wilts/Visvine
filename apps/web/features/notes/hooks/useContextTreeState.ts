@@ -63,7 +63,7 @@ export function useContextTreeState(
 ): ContextTreeState {
   const [openPaths, setOpenPaths] = useState<Set<string>>(() => readOpenPaths(storageKey))
 
-  // Re-read when the scope changes (switching communities swaps the whole tree).
+  // Re-read when the scope changes (switching spaces swaps the whole tree).
   const lastKeyRef = useRef(storageKey)
   useEffect(() => {
     if (lastKeyRef.current === storageKey) return

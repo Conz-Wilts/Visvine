@@ -15,7 +15,7 @@ if (!connectionString) throw new Error('add-nz-ecosystem: no DATABASE_URL or DB_
 const pool = new pg.Pool({ connectionString });
 
 // Matches pairKeyFor in lib/context/relationships.ts — links.pair_key is NOT
-// NULL and backs the (community, pairKey, relationship) dedup index.
+// NULL and backs the (space, pairKey, relationship) dedup index.
 const pairKey = (a, b) => [a, b].sort().join('|');
 
 const COMM = 'community:nz-ecosystem';
@@ -24,7 +24,7 @@ const COMM_NAME = 'NZ Startup Ecosystem';
 const NODE_TYPES = [
   { icon: '👤', name: 'Person',    color: '#2563eb', shape: 'rectangle' },
   { icon: '📅', name: 'Event',     color: '#ef4444', shape: 'rectangle' },
-  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square'   },
+  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square'   },
   { icon: '📦', name: 'Resource',     color: '#f59e0b', shape: 'rectangle' },
 ];
 
@@ -54,7 +54,7 @@ const ORGS = [
   { id: 'community:nzgcp',            name: 'NZGCP',                 subtitle: 'NZ Growth Capital Partners — Aspire & Elevate funds', location: 'Wellington', url: 'https://nzgcp.co.nz', tags: ['Government', 'Funding', 'VC'],                metadata: { kind: 'gov_agency' } },
 
   // coworking
-  { id: 'community:bizdojo',          name: 'BizDojo',               subtitle: 'Coworking & community spaces across NZ',          location: 'Auckland / Wellington', url: 'https://bizdojo.com', tags: ['Coworking', 'Community'],                metadata: { kind: 'coworking' } },
+  { id: 'community:bizdojo',          name: 'BizDojo',               subtitle: 'Coworking & space spaces across NZ',          location: 'Auckland / Wellington', url: 'https://bizdojo.com', tags: ['Coworking', 'Space'],                metadata: { kind: 'coworking' } },
   { id: 'community:gridakl',          name: 'GridAKL',               subtitle: 'Innovation precinct in Auckland\'s Wynyard Quarter', location: 'Auckland', url: 'https://gridakl.co.nz', tags: ['Coworking', 'Innovation', 'Auckland'],                metadata: { kind: 'coworking' } },
   { id: 'community:epic-chch',        name: 'EPIC Christchurch',     subtitle: 'Post-quake innovation campus for ChCh tech',      location: 'Christchurch', url: 'https://epicinnovation.co.nz', tags: ['Coworking', 'Innovation', 'Christchurch'],                metadata: { kind: 'coworking' } },
 
@@ -68,7 +68,7 @@ const ORGS = [
 const EVENTS = [
   { id: 'event:techweek-akl-2026',      name: 'TechWeek Auckland 2026',   subtitle: 'NZ\'s biggest week of tech meetups & summits',         location: 'Auckland-wide', url: 'https://techweek.co.nz',         tags: ['Tech Week', 'Auckland', 'Meetups'],            metadata: { date: '2026-05-18', endDate: '2026-05-24', format: 'Hybrid', capacity: 8000, ticketPrice: 'Mostly free', status: 'upcoming' } },
   { id: 'event:hi-tech-awards-2026',    name: 'NZ Hi-Tech Awards 2026',   subtitle: 'Annual celebration of NZ\'s top tech companies & founders', location: 'Christchurch', url: 'https://hitech.org.nz', tags: ['Awards', 'National', 'Tech'],                  metadata: { date: '2026-05-29', format: 'In-person', capacity: 1000, ticketPrice: '$345', status: 'upcoming' } },
-  { id: 'event:southern-saas-2026',     name: 'Southern SaaS 2026',       subtitle: 'NZ\'s SaaS founder community conference',             location: 'Queenstown',    url: 'https://southernsaas.co', tags: ['SaaS', 'Conference', 'Queenstown'],          metadata: { date: '2026-09-10', endDate: '2026-09-11', format: 'In-person', capacity: 350, ticketPrice: '$899', status: 'upcoming' } },
+  { id: 'event:southern-saas-2026',     name: 'Southern SaaS 2026',       subtitle: 'NZ\'s SaaS founder space conference',             location: 'Queenstown',    url: 'https://southernsaas.co', tags: ['SaaS', 'Conference', 'Queenstown'],          metadata: { date: '2026-09-10', endDate: '2026-09-11', format: 'In-person', capacity: 350, ticketPrice: '$899', status: 'upcoming' } },
   { id: 'event:startup-grind-akl-may',  name: 'Startup Grind Auckland — May meetup', subtitle: 'Monthly founder fireside chat',          location: 'GridAKL',       url: 'https://startupgrind.com/auckland', tags: ['Meetup', 'Auckland', 'Founders'],                metadata: { date: '2026-05-21', format: 'In-person', capacity: 120, ticketPrice: '$15', status: 'upcoming' } },
   { id: 'event:startup-grind-wlg-may',  name: 'Startup Grind Wellington — May meetup', subtitle: 'Monthly fireside with a Wellington founder', location: 'BizDojo Wellington', url: 'https://startupgrind.com/wellington', tags: ['Meetup', 'Wellington', 'Founders'],                metadata: { date: '2026-05-28', format: 'In-person', capacity: 80, ticketPrice: '$10', status: 'upcoming' } },
   { id: 'event:icehouse-first-cut-2026',name: 'Icehouse First Cut Demo Day', subtitle: 'Icehouse pre-seed cohort pitches its companies',   location: 'GridAKL',       url: 'https://theicehouse.co.nz',         tags: ['Demo Day', 'Pre-seed', 'Icehouse'],            metadata: { date: '2026-06-12', format: 'In-person', capacity: 200, ticketPrice: 'Invite only', status: 'upcoming' } },
@@ -142,10 +142,10 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  // 1. Community
-  console.log('--- Upserting NZ community ---');
+  // 1. Space
+  console.log('--- Upserting NZ space ---');
   await client.query(`
-    INSERT INTO communities (id, name, description, location, tags, node_types, country, visibility, created_at)
+    INSERT INTO spaces (id, name, description, location, tags, node_types, country, visibility, created_at)
     VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'NZ', 'public', NOW())
     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
       location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types, country = 'NZ'
@@ -156,9 +156,9 @@ try {
   console.log('\n--- Inserting organizations ---');
   for (const o of ORGS) {
     const r = await client.query(`
-      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
-      VALUES ($1, 'Community', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
-      ON CONFLICT (id) DO UPDATE SET type = 'Community', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
+      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
+      VALUES ($1, 'Space', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
+      ON CONFLICT (id) DO UPDATE SET type = 'Space', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata, updated_at = NOW()
       RETURNING id, name`,
       [o.id, o.name, o.subtitle, o.location, o.url, o.tags, JSON.stringify(o.metadata ?? {}), COMM]);
@@ -169,7 +169,7 @@ try {
   console.log('\n--- Inserting events ---');
   for (const e of EVENTS) {
     const r = await client.query(`
-      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
+      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
       VALUES ($1, 'event', $2, $3, $4, $5, $6, $7::jsonb, $8, NULL, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET type = 'event', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata, updated_at = NOW()
@@ -182,7 +182,7 @@ try {
   console.log('\n--- Inserting resources ---');
   for (const r of RESOURCES) {
     const res = await client.query(`
-      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
+      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
       VALUES ($1, 'resource', $2, $3, NULL, $4, $5, '{}'::jsonb, $6, NULL, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET type = 'resource', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         url = EXCLUDED.url, tags = EXCLUDED.tags, updated_at = NOW()
@@ -198,15 +198,15 @@ try {
     const tExists = await client.query('SELECT 1 FROM nodes WHERE id = $1', [l.targetId]);
     if (sExists.rowCount === 0) { console.log(`  ⚠ source missing: ${l.sourceId}`); continue; }
     if (tExists.rowCount === 0) { console.log(`  ⚠ target missing: ${l.targetId}`); continue; }
-    // Dedup on the same key the app uses — (community, pairKey, relationship),
+    // Dedup on the same key the app uses — (space, pairKey, relationship),
     // not the raw endpoint pair — so a reversed edge counts as the same link.
     const dup = await client.query(
-      'SELECT 1 FROM links WHERE community_id = $1 AND pair_key = $2 AND relationship = $3',
+      'SELECT 1 FROM links WHERE space_id = $1 AND pair_key = $2 AND relationship = $3',
       [COMM, pairKey(l.sourceId, l.targetId), l.relationship]
     );
     if (dup.rowCount > 0) { console.log(`  ~ exists: ${l.sourceId} -[${l.relationship}]-> ${l.targetId}`); continue; }
     await client.query(
-      `INSERT INTO links (source_id, target_id, relationship, community_id, metadata, pair_key, created_at)
+      `INSERT INTO links (source_id, target_id, relationship, space_id, metadata, pair_key, created_at)
        VALUES ($1, $2, $3, $4, '{}'::jsonb, $5, NOW())`,
       [l.sourceId, l.targetId, l.relationship, COMM, pairKey(l.sourceId, l.targetId)]
     );
@@ -218,7 +218,7 @@ try {
 
   console.log('\n--- NZ node type breakdown ---');
   const r = await client.query(
-    "SELECT type, COUNT(*)::int AS count FROM nodes WHERE community_id = $1 GROUP BY type ORDER BY type",
+    "SELECT type, COUNT(*)::int AS count FROM nodes WHERE space_id = $1 GROUP BY type ORDER BY type",
     [COMM]
   );
   console.table(r.rows);

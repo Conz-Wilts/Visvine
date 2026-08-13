@@ -10,7 +10,7 @@
 // The metadata keys are not free choices. `tryResolveIdentity` (see
 // app/api/data/nodes/route.ts and lib/identity/attachIdentity.ts) reads exactly
 // `email`, `companyName`, `linkedinUrl` and `website` — spelling any of them
-// differently here silently disables cross-community identity matching, with no
+// differently here silently disables cross-space identity matching, with no
 // error anywhere. Pure: no DOM/Prisma imports, so tests/create-type-fields.test.ts
 // covers it directly.
 
@@ -32,7 +32,7 @@ export interface TypeFieldDef {
   placeholder?: string
   /**
    * Column-backed fields that ALSO mirror into metadata under this key, because
-   * identity resolution reads metadata and not the column (a community's website).
+   * identity resolution reads metadata and not the column (a space's website).
    */
   mirrorMetadataKey?: string
 }
@@ -40,7 +40,7 @@ export interface TypeFieldDef {
 // Node types are stored lowercased (both POST and PUT in /api/data/nodes call
 // `type.toLowerCase()`), so every lookup here normalizes first. The synonym map
 // mirrors `entityKindOf` in lib/notes/entities.ts — 'organization'/'org'/
-// 'group'/'company'/'community' are all the same thing wearing different legacy
+// 'group'/'company'/'space' are all the same thing wearing different legacy
 // prefixes, and that thing is now a space.
 function canonicalType(type: string | null | undefined): string {
   const t = (type ?? '').trim().toLowerCase()
@@ -102,7 +102,7 @@ const FIELDS_BY_TYPE: Record<string, TypeFieldDef[]> = {
 
 /**
  * The property rows for a node type, or `[]` for a type with none (a plain
- * Note, or a community-invented type we know nothing about). Never null, so
+ * Note, or a space-invented type we know nothing about). Never null, so
  * callers can map straight over the result.
  */
 export function fieldsForType(type: string | null | undefined): TypeFieldDef[] {

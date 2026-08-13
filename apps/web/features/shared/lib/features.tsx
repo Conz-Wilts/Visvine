@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { CommunityFeatureConfig } from '@/lib/types';
+import type { SpaceFeatureConfig } from '@/lib/types';
 import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, moreFeatureKeys, sortFeatureKeys } from '@/lib/featureAccess';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
@@ -17,13 +17,13 @@ export {
 } from '@/lib/featureAccess';
 
 /**
- * Community feature registry — the single source of truth for the optional
- * surfaces a community builder can switch on or off (directory, context,
+ * Space feature registry — the single source of truth for the optional
+ * surfaces a space builder can switch on or off (directory, context,
  * events, resources). The Sidebar renders its nav items from this list, so
- * the nav and the per-community feature toggles never drift.
+ * the nav and the per-space feature toggles never drift.
  */
 export interface FeatureDef {
-  key: string;        // stable id stored in Community.featureConfig.enabled
+  key: string;        // stable id stored in Space.featureConfig.enabled
   label: string;
   href: string;
   description: string; // shown on the launcher card
@@ -82,7 +82,7 @@ export const FEATURES: FeatureDef[] = [
     description: 'Create and RSVP to events, manage guests and invitations.',
     // Always on and nav-less: events are reached from the calendar button in the
     // global navbar, not a sidebar rail item, so there is nothing to toggle or
-    // reorder per community. See NAV_HIDDEN_FEATURE_KEYS.
+    // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
     icon: (
       <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,9 +114,9 @@ export const FEATURES: FeatureDef[] = [
   },
 ];
 
-/** Sort a filtered feature list into the community's configured display order. */
+/** Sort a filtered feature list into the space's configured display order. */
 function inConfiguredOrder(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   features: FeatureDef[],
 ): FeatureDef[] {
   const keys = sortFeatureKeys(config, features.map((f) => f.key));
@@ -125,7 +125,7 @@ function inConfiguredOrder(
 
 /** The features a given user should see in the nav, in the configured order. */
 function visibleFeatures(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {
   return inConfiguredOrder(config, FEATURES.filter((f) => canAccessFeature(config, f.key, isAdmin)));
@@ -138,7 +138,7 @@ function visibleFeatures(
  * order; `more` membership comes from `featureConfig.more`.
  */
 function navFeatures(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {
   return visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
@@ -146,7 +146,7 @@ function navFeatures(
 
 /** The features a given user sees as sidebar rail rows, in configured order. */
 export function railFeatures(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {
   const more = moreFeatureKeys(config);
@@ -155,7 +155,7 @@ export function railFeatures(
 
 /** The features a given user sees inside the "More" popup, in configured order. */
 export function moreFeatures(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): FeatureDef[] {
   const more = moreFeatureKeys(config);
@@ -163,14 +163,14 @@ export function moreFeatures(
 }
 
 /**
- * Where a user lands when they enter a community: the first rail tab they can
+ * Where a user lands when they enter a space: the first rail tab they can
  * actually see, else the first "More" tool if everything's tucked away. Falls
  * back to the directory — it's core, so the only way to have no visible tab at
  * all is an admins-only directory seen by a member with every other feature
  * switched off.
  */
 export function defaultLandingHref(
-  config: CommunityFeatureConfig | null | undefined,
+  config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
 ): string {
   return railFeatures(config, isAdmin)[0]?.href ?? moreFeatures(config, isAdmin)[0]?.href ?? '/directory';

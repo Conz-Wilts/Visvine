@@ -25,9 +25,9 @@ export interface PickerEntity {
   type: string
   image_url?: string | null
   subtitle?: string | null
-  /** The node's community alias, if it holds one — the name its type goes by
-   *  here ("Portfolio Company" for a Community). Display only: resolve it
-   *  through the community's own alias list before showing it (nodeTypeLabel). */
+  /** The node's space alias, if it holds one — the name its type goes by
+   *  here ("Portfolio Company" for a Space). Display only: resolve it
+   *  through the space's own alias list before showing it (nodeTypeLabel). */
   alias?: string | null
 }
 

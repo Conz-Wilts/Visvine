@@ -1,4 +1,4 @@
-// GET /api/notes/trash?communityId=&scope=
+// GET /api/notes/trash?spaceId=&scope=
 // The soft-deleted notes for a brain (newest first), for the trash modal.
 
 import { NextRequest, NextResponse } from 'next/server'

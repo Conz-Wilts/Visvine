@@ -8,7 +8,7 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { isEventUpcoming } from '@/lib/eventUtils';
@@ -35,14 +35,14 @@ interface EventWithStats extends NBEvent {
 function EventsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<EventView>('feed');
   // ?scope=discover deep-links from the navbar's discover-events icon.
   const initialScope = searchParams.get('scope');
   const [scope, setScope] = useState<EventScope>(
-    initialScope === 'discover' || initialScope === 'mine' ? initialScope : 'community'
+    initialScope === 'discover' || initialScope === 'mine' ? initialScope : 'space'
   );
   const [timeFilter, setTimeFilter] = useState<'upcoming' | 'past'>('upcoming');
   const [locationFilter, setLocationFilter] = useState<'all' | 'in-person' | 'virtual'>('all');
@@ -51,7 +51,7 @@ function EventsPageInner() {
   // Clicking the navbar icon while already on /events updates the param, not a
   // remount — keep the scope tab in sync with the URL.
   useEffect(() => {
-    if (initialScope === 'discover' || initialScope === 'mine' || initialScope === 'community') {
+    if (initialScope === 'discover' || initialScope === 'mine' || initialScope === 'space') {
       setScope(initialScope);
     }
   }, [initialScope]);
@@ -74,10 +74,10 @@ function EventsPageInner() {
 
   useEffect(() => {
     const loadEvents = async () => {
-      if (!currentCommunity) return;
+      if (!currentSpace) return;
       try {
         setLoading(true);
-        const response = await fetch(`/api/events?communityId=${currentCommunity.id}`);
+        const response = await fetch(`/api/events?spaceId=${currentSpace.id}`);
         const data = await response.json();
         setEvents(data.events || []);
       } catch (error) {
@@ -88,13 +88,13 @@ function EventsPageInner() {
     };
 
     loadEvents();
-  }, [currentCommunity]);
+  }, [currentSpace]);
 
   // Apply filters
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
       // Scope: "My events" = events I host; "Discover" = publicly discoverable
-      // events; "Community" = everything in the current community.
+      // events; "Space" = everything in the current space.
       if (scope === 'mine') {
         if (!myNodeId || !event.hosts?.includes(myNodeId)) return false;
       } else if (scope === 'discover') {
@@ -132,7 +132,7 @@ function EventsPageInner() {
     });
   }, [events, scope, myNodeId, timeFilter, locationFilter, searchQuery]);
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return (
       <div className="min-h-screen w-full py-8">
         <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -193,7 +193,7 @@ function EventsPageInner() {
         </div>
       </div>
 
-      {/* Scope tabs: discover / community / events I host */}
+      {/* Scope tabs: discover / space / events I host */}
       <div className="flex justify-center px-4 sm:px-6 pt-4">
         <EventsScopeSelector scope={scope} onScopeChange={setScope} />
       </div>
@@ -219,7 +219,7 @@ function EventsPageInner() {
         {currentView === 'feed' && (
           <EventsFeedView
             events={filteredEvents}
-            community={{ name: currentCommunity.name, imageUrl: currentCommunity.imageUrl }}
+            space={{ name: currentSpace.name, imageUrl: currentSpace.imageUrl }}
             loading={loading}
             onEdit={(eventId) => router.push(`/events/${eventId}/edit`)}
             onEventClick={handleEventClick}

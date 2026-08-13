@@ -1,5 +1,5 @@
 /**
- * Pure normalization helpers for cross-community identity resolution.
+ * Pure normalization helpers for cross-space identity resolution.
  *
  * These turn raw, messy field values (typed names, pasted LinkedIn URLs, website
  * URLs with protocols/paths) into stable comparison keys. They are deliberately

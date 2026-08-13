@@ -33,7 +33,7 @@ function models(): Model[] {
   return out
 }
 
-/** `CommunityNote` → `communityNote`, the prisma delegate the service calls. */
+/** `SpaceNote` → `spaceNote`, the prisma delegate the service calls. */
 function delegate(name: string): string {
   return name[0].toLowerCase() + name.slice(1)
 }

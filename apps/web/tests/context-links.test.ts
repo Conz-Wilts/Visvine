@@ -52,25 +52,25 @@ test("normalizeRelationship trims, lowercases, collapses, strips edges", () => {
 
 // ── getLinkTypeConfig: resolve a stored relationship to a display config ──
 
-const COMMUNITY_TYPES: LinkTypeConfig[] = [
+const SPACE_TYPES: LinkTypeConfig[] = [
   { name: "Backs", color: "#111111", directed: true },
   { name: "Related", color: "#222222", directed: false },
 ];
 
-test("getLinkTypeConfig prefers the community config (by slugified name)", () => {
-  const cfg = getLinkTypeConfig("backs", COMMUNITY_TYPES);
+test("getLinkTypeConfig prefers the space config (by slugified name)", () => {
+  const cfg = getLinkTypeConfig("backs", SPACE_TYPES);
   assert.equal(cfg.color, "#111111");
   assert.equal(cfg.directed, true);
 });
 
-test("getLinkTypeConfig falls back to the default set when no community config", () => {
+test("getLinkTypeConfig falls back to the default set when no space config", () => {
   const cfg = getLinkTypeConfig("works_at");
   assert.equal(cfg.name, "Works at");
   assert.equal(cfg.directed, true);
 });
 
 test("getLinkTypeConfig returns a neutral, title-cased config for unknown relationships", () => {
-  const cfg = getLinkTypeConfig("co_invests_with", COMMUNITY_TYPES);
+  const cfg = getLinkTypeConfig("co_invests_with", SPACE_TYPES);
   assert.equal(cfg.name, "Co Invests With");
   assert.equal(cfg.color, "#94a3b8");
   assert.equal(cfg.directed, false);
@@ -104,11 +104,11 @@ test("isStructuralNodeType covers the container kinds", () => {
   assert.equal(isStructuralNodeType("file"), true);
 });
 
-// `space` (the org type, formerly `community`) belongs here, not above: it
+// `space` (the org type, formerly `space`) belongs here, not above: it
 // carries the organisations that used to be the Group type, which are
 // directory records people expect to see.
 test("isStructuralNodeType leaves the directory kinds alone", () => {
-  for (const type of ["person", "space", "community", "group", "organization", "event", "resource"]) {
+  for (const type of ["person", "space", "space", "group", "organization", "event", "resource"]) {
     assert.equal(isStructuralNodeType(type), false, type);
   }
   assert.equal(isStructuralNodeType(null), false);

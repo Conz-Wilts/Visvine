@@ -8,7 +8,7 @@ import ConnectClaudePanel from '@/features/settings/components/ConnectClaudePane
 import DeleteAccountPanel from '@/features/settings/components/DeleteAccountPanel';
 
 /**
- * Personal settings. Same shell as the Community Console — a pane-top tab bar
+ * Personal settings. Same shell as the Space Console — a pane-top tab bar
  * with `?section=` in the URL — so the two settings-shaped pages navigate
  * identically instead of one docking a column into the Sidebar and the other
  * not. See ConsoleShell for the bar itself.

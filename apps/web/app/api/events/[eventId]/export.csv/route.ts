@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getEvent, getAttendees, getCommunityContextData } from '@/lib/eventRepo';
+import { getEvent, getAttendees, getSpaceContextData } from '@/lib/eventRepo';
 import { requireEventManager } from '@/lib/eventAuth';
 import { normalizeStatus } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
@@ -34,16 +34,16 @@ export async function GET(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(
@@ -52,12 +52,12 @@ export async function GET(
       );
     }
 
-    // Attendee export is PII — host or community admin only.
-    const auth = await requireEventManager(communityId, event);
+    // Attendee export is PII — host or space admin only.
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    const attendees = await getAttendees(communityId, eventId);
-    const contextData = await getCommunityContextData(communityId);
+    const attendees = await getAttendees(spaceId, eventId);
+    const contextData = await getSpaceContextData(spaceId);
 
     // CSV header
     const headers = [

@@ -1,7 +1,7 @@
 // POST /api/notes/ai/enrich
-//   { communityId, since?, only? } → { applied, considered }
+//   { spaceId, since?, only? } → { applied, considered }
 // On-demand enrichment: distills the CALLER's own personal brain into the
-// community's shared brain (abstracted insight, provenance-stamped, applied
+// space's shared brain (abstracted insight, provenance-stamped, applied
 // through the gated write path as the caller). 400 when no LLM is configured.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,8 +18,8 @@ export async function POST(req: NextRequest) {
   const since = typeof body.since === 'number' ? body.since : undefined
   const only = typeof body.only === 'string' ? body.only : undefined
   const p = await principalOf(brain)
-  // Enrichment reads the caller's PERSONAL COMMUNITY brain and writes distilled
-  // insight into the resolved community's brain (as the caller, gated).
+  // Enrichment reads the caller's PERSONAL SPACE brain and writes distilled
+  // insight into the resolved space's brain (as the caller, gated).
   const personal = await resolvePersonalBrain({ userId: p.userId, name: p.name, email: p.email || null })
   try {
     return NextResponse.json(await runEnrichment(p, personal, { trigger: 'on-demand', since, only }))

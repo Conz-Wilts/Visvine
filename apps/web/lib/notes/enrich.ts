@@ -1,6 +1,6 @@
 // The enrichment runner — the port of blackbird-brain's src/server/enrichment.ts,
 // re-scoped for multi-tenant privacy: it distills the CALLING user's own personal
-// brain (never anyone else's) into the community's shared brain. The LLM ABSTRACTS
+// brain (never anyone else's) into the space's shared brain. The LLM ABSTRACTS
 // reusable insight upward — synthesise, never copy — the output is coerced against
 // guardrails, provenance-stamped, and applied through the gated write path as the
 // caller. A sha256 ledger (per personal brain) makes the pass idempotent.
@@ -25,10 +25,10 @@ import {
 } from './shared/enrichment'
 import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
 
-// One ledger per TARGET community (stored on the personal brain), so distilling
-// into community A doesn't mark a note "seen" for community B.
-function ledgerName(targetCommunityId: string): string {
-  return `enrichment-state.${targetCommunityId.replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`
+// One ledger per TARGET space (stored on the personal brain), so distilling
+// into space A doesn't mark a note "seen" for space B.
+function ledgerName(targetSpaceId: string): string {
+  return `enrichment-state.${targetSpaceId.replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`
 }
 
 function sha256(s: string): string {
@@ -41,7 +41,7 @@ function slugify(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'insight'
 }
 
-const SYSTEM = `You distill a member's personal working notes into knowledge worth sharing with their community.
+const SYSTEM = `You distill a member's personal working notes into knowledge worth sharing with their space.
 Given one personal note and a list of existing shared notes, decide whether the note contains a REUSABLE insight others would benefit from — a lesson, pattern, thesis, or durable fact. Private, personal, or ephemeral content (todos, feelings, scheduling, half-thoughts) has no insight.
 ABSTRACT upward: rewrite the insight in general, shareable terms. Never copy private specifics (names of uninvolved people, private numbers) unless they are the insight.
 Respond with ONLY a JSON object:
@@ -66,7 +66,7 @@ async function applyOutput(
   out: EnrichmentOutput,
   c: EnrichmentCandidate,
 ): Promise<WriteResult> {
-  const src = provenanceRef(`${personalBrain.communityId}/${c.sourcePath}`)
+  const src = provenanceRef(`${personalBrain.spaceId}/${c.sourcePath}`)
   if (out.action === 'new_note') {
     const fm = stampProvenance(
       {
@@ -102,7 +102,7 @@ export interface EnrichmentRunResult {
 }
 
 /**
- * Distill the caller's personal brain into the community's shared brain.
+ * Distill the caller's personal brain into the space's shared brain.
  * No-op when AI is unconfigured.
  */
 export async function runEnrichment(
@@ -111,7 +111,7 @@ export async function runEnrichment(
   opts: SelectOptions,
 ): Promise<EnrichmentRunResult> {
   if (!aiConfigured()) return { applied: 0, considered: 0 }
-  const shared: Brain = { communityId: p.communityId, ownerKey: SHARED_OWNER_KEY }
+  const shared: Brain = { spaceId: p.spaceId, ownerKey: SHARED_OWNER_KEY }
 
   const raws = await store.listRaw(personalBrain)
   const metas = buildNoteIndex(raws)
@@ -129,7 +129,7 @@ export async function runEnrichment(
     }
   })
 
-  const ledger = await readJson<EnrichmentLedger>(personalBrain, ledgerName(p.communityId), { seen: {} })
+  const ledger = await readJson<EnrichmentLedger>(personalBrain, ledgerName(p.spaceId), { seen: {} })
   const candidates = selectEnrichmentCandidates(sources, ledger, opts)
 
   // Targets the LLM may append to: what the caller can see in the shared brain.
@@ -159,6 +159,6 @@ export async function runEnrichment(
     }
     ledger.seen[c.sourcePath] = c.sha256
   }
-  await writeJson(personalBrain, ledgerName(p.communityId), ledger)
+  await writeJson(personalBrain, ledgerName(p.spaceId), ledger)
   return { applied, considered: candidates.length }
 }

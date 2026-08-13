@@ -3,7 +3,7 @@
 // There are two entry points into creation — the "+" caret menu in the sidebar
 // rail and the docked panel's type grid — and they used to disagree: the grid
 // filtered by feature flags and admin, the caret menu offered a hardcoded list
-// to everyone. A member of a community with channels off was shown "Channel"
+// to everyone. A member of a space with channels off was shown "Channel"
 // and got an error on submit. This module is the single gate both now ask.
 //
 // It answers "may this person create this here", NOT "does this surface list
@@ -11,26 +11,26 @@
 // /directory/new, which is what `inGrid` is for.
 
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
-import type { CommunityFeatureConfig } from '@/lib/types'
+import type { SpaceFeatureConfig } from '@/lib/types'
 // From featureAccess, not features.tsx: the latter carries JSX, which drags a
 // React runtime into anything that imports this (including the unit tests).
 import { isFeatureEnabled } from '@/lib/featureAccess'
 
 export interface CreatePermissions {
-  featureConfig: CommunityFeatureConfig | null
+  featureConfig: SpaceFeatureConfig | null
   isAdmin: boolean
 }
 
 export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: CreatePermissions): boolean {
   switch (type) {
     // Channels and sections are admin surfaces behind the channels feature.
-    // NOTE: 'space' (the org type, formerly 'community') must NOT appear here —
+    // NOTE: 'space' (the org type, formerly 'space') must NOT appear here —
     // it falls through to the default arm, creatable by any member.
     case 'channel':
     case 'section':
       return isFeatureEnabled(featureConfig, 'channels') && isAdmin
 
-    // An uploaded file lands in the community brain, so it follows the notes
+    // An uploaded file lands in the space brain, so it follows the notes
     // ("Context") feature.
     case 'file':
       return isFeatureEnabled(featureConfig, 'notes')

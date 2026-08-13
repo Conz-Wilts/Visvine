@@ -23,7 +23,7 @@ import {
 // node test runner never has to evaluate that module's JSX icons.
 const ALL_KEYS = ALL_FEATURE_KEYS;
 // The keys a member can reach with an empty config — everything except the tools
-// that are admins-only whatever the community says (ADMIN_ONLY_FEATURE_KEYS).
+// that are admins-only whatever the space says (ADMIN_ONLY_FEATURE_KEYS).
 const OPEN_KEYS = ALL_FEATURE_KEYS.filter((k) => !ADMIN_ONLY_FEATURE_KEYS.includes(k));
 
 describe('isFeatureEnabled', () => {
@@ -244,7 +244,7 @@ describe('moreFeatureKeys', () => {
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    // 'Space' is the org type (formerly Community) — always on, like Person.
+    // 'Space' is the org type (formerly Space) — always on, like Person.
     for (const type of ['Person', 'Space', 'space', 'Event']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);

@@ -91,7 +91,7 @@ export function buildNoteIndex(notes: RawNote[]): NoteMeta[] {
  * filename, which would label every untitled folder "index". Folders without an
  * index, or whose index declares no title, get no title and fall back to their
  * path segment at the point of display. The root is skipped — its label is the
- * community/context name, not its home note's title.
+ * space/context name, not its home note's title.
  */
 function folderTitles(metas: NoteMeta[]): Map<string, string> {
   const titles = new Map<string, string>()

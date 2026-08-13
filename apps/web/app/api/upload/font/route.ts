@@ -36,24 +36,24 @@ function getMimeFromFormat(format: string): string {
 
 /**
  * POST /api/upload/font
- * Body: multipart form with fields: communityId, file, category ('main' | 'utility')
+ * Body: multipart form with fields: spaceId, file, category ('main' | 'utility')
  */
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const communityId = formData.get('communityId') as string | null;
+    const spaceId = formData.get('spaceId') as string | null;
     const category = formData.get('category') as string | null;
 
-    if (!file || !communityId || !category) {
-      return NextResponse.json({ error: 'file, communityId, and category are required' }, { status: 400 });
+    if (!file || !spaceId || !category) {
+      return NextResponse.json({ error: 'file, spaceId, and category are required' }, { status: 400 });
     }
 
     if (category !== 'main' && category !== 'utility') {
       return NextResponse.json({ error: 'category must be main or utility' }, { status: 400 });
     }
 
-    const session = await requireAdmin(communityId);
+    const session = await requireAdmin(spaceId);
     if (!session) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const format = getFormatFromExtension(file.name);
-    const objectPath = `communities/${communityId}/fonts/${category}${ext}`;
+    const objectPath = `communities/${spaceId}/fonts/${category}${ext}`;
 
     const storage = getStorage();
     const bucket = storage.bucket(MEDIA_BUCKET());

@@ -7,19 +7,19 @@ import { handleApiError } from '@/lib/api/route';
 import { OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
-import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/communities/publicName';
-import { ensureMemberNode } from '@/lib/communities/memberNode';
+import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/spaces/publicName';
+import { ensureMemberNode } from '@/lib/spaces/memberNode';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
 
 /**
- * POST /api/communities — user-facing community creation.
+ * POST /api/communities — user-facing space creation.
  *
- * Any signed-in user may create a brand-new top-level community and becomes its
+ * Any signed-in user may create a brand-new top-level space and becomes its
  * admin. (This is distinct from POST /api/data/communities, the super-admin-only
  * bulk-create path that trusts a client-supplied id.) The server derives the id
  * from the name and guarantees uniqueness, so a caller can't collide with or
- * hijack an existing community.
+ * hijack an existing space.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -35,11 +35,11 @@ export async function POST(request: NextRequest) {
     const visibility = body.visibility === 'public' ? 'public' : 'private';
 
     if (!name) {
-      return NextResponse.json({ error: 'Community name is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Space name is required' }, { status: 400 });
     }
 
     // Only public names have to be unique — the default private create can be
-    // called anything (lib/communities/publicName.ts).
+    // called anything (lib/spaces/publicName.ts).
     if (visibility === 'public') {
       const clash = await findPublicNameConflict(name);
       if (clash) {
@@ -52,14 +52,14 @@ export async function POST(request: NextRequest) {
 
     // Derive a unique id from the name. slugify never yields "me:"-prefixed ids,
     // so this can't collide with a personal-space id.
-    const base = slugify(name) || 'community';
+    const base = slugify(name) || 'space';
     let id = base;
-    for (let n = 2; await prisma.community.findUnique({ where: { id }, select: { id: true } }); n++) {
+    for (let n = 2; await prisma.space.findUnique({ where: { id }, select: { id: true } }); n++) {
       id = `${base}-${n}`;
     }
 
     const created = await prisma.$transaction(async (tx) => {
-      const community = await tx.community.create({
+      const space = await tx.space.create({
         data: {
           id,
           name,
@@ -77,21 +77,21 @@ export async function POST(request: NextRequest) {
           },
         },
       });
-      await tx.userCommunity.create({
-        data: { userId: session.userId, communityId: id, status: 'active' },
+      await tx.spaceMember.create({
+        data: { userId: session.userId, spaceId: id, status: 'active' },
       });
-      // Every community's Person aliases start with the built-in Owner one
-      // (the communityAliases column default). The creator holds it — otherwise
-      // nobody could ever manage the community (lib/auth.ts#isAdmin).
+      // Every space's Person aliases start with the built-in Owner one
+      // (the aliases column default). The creator holds it — otherwise
+      // nobody could ever manage the space (lib/auth.ts#isAdmin).
       await tx.userAlias.create({
         data: {
-          communityId: id,
+          spaceId: id,
           userId: session.userId,
           aliasName: OWNER_ALIAS_NAME,
           addedBy: session.userId,
         },
       });
-      return community;
+      return space;
     });
 
     // Access here is decided by aliases from the start, so there is nothing to
@@ -119,18 +119,18 @@ export async function POST(request: NextRequest) {
     const actor = { id: session.userId, name: session.name, email: session.email };
     await ensureMemberNode(id, session.userId, actor, OWNER_ALIAS_NAME);
 
-    // Seed the brain's root index — the community's home page, which the
+    // Seed the brain's root index — the space's home page, which the
     // Directory's Context tab routes to. Best-effort for the same reason as
     // the context node above.
     try {
-      await ensureRootIndex({ communityId: id, ownerKey: SHARED_OWNER_KEY }, name, actor);
+      await ensureRootIndex({ spaceId: id, ownerKey: SHARED_OWNER_KEY }, name, actor);
     } catch (err) {
-      logger.warn('communities.root_index_failed', { communityId: id, err });
+      logger.warn('spaces.root_index_failed', { spaceId: id, err });
     }
 
     return NextResponse.json(
       {
-        community: {
+        space: {
           id: created.id,
           name: created.name,
           description: created.description ?? '',
@@ -144,6 +144,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (err) {
-    return handleApiError(err, 'api.communities.create.failed');
+    return handleApiError(err, 'api.spaces.create.failed');
   }
 }

@@ -150,11 +150,11 @@ export interface ConnectorCall {
  * shape callers see survives a change to that wording.
  */
 export async function listConnectorCalls(
-  communityId: string,
+  spaceId: string,
   path: string,
   limit = 25,
 ): Promise<ConnectorCall[]> {
-  const entries = await listAudit(communityId)
+  const entries = await listAudit(spaceId)
   const calls: ConnectorCall[] = []
   for (const entry of entries) {
     if (entry.action !== 'connector' || entry.path !== path) continue
@@ -199,14 +199,14 @@ export async function loadConnector(
   return { perimeter: parsed.perimeter, path, warnings: parsed.warnings }
 }
 
-/** Decrypt the named secrets for a community; every name must exist. */
+/** Decrypt the named secrets for a space; every name must exist. */
 async function resolveSecretValues(
-  communityId: string,
+  spaceId: string,
   names: readonly string[],
 ): Promise<Map<string, string>> {
   if (names.length === 0) return new Map()
-  const rows = await prisma.communitySecret.findMany({
-    where: { communityId, name: { in: [...names] } },
+  const rows = await prisma.spaceSecret.findMany({
+    where: { spaceId, name: { in: [...names] } },
     select: { name: true, ciphertext: true },
   })
   const byName = new Map(rows.map((r) => [r.name, r.ciphertext]))
@@ -250,7 +250,7 @@ const AUDIT_CODE_CHARS = 200
 export async function executeConnectorScript(
   p: BrainPrincipal,
   brain: Brain,
-  communityId: string,
+  spaceId: string,
   loaded: LoadedConnector,
   code: string,
 ): Promise<IsolateRunResult> {
@@ -261,7 +261,7 @@ export async function executeConnectorScript(
 
   const summary = code.slice(0, AUDIT_CODE_CHARS).replace(/\s+/g, ' ').trim()
   try {
-    const secrets = await resolveSecretValues(communityId, perimeterSecretRefs(loaded.perimeter))
+    const secrets = await resolveSecretValues(spaceId, perimeterSecretRefs(loaded.perimeter))
     const env: Record<string, string> = {}
     for (const [key, template] of Object.entries(loaded.perimeter.env)) {
       const resolved = interpolateSecrets(template, secrets)
@@ -298,5 +298,5 @@ function auditConnectorCall(
   path: string,
   detail: string,
 ): void {
-  void logAudit(p.communityId, { userId: p.userId, name: p.name, action: 'connector', path, detail })
+  void logAudit(p.spaceId, { userId: p.userId, name: p.name, action: 'connector', path, detail })
 }

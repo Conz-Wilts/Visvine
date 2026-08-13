@@ -1,4 +1,4 @@
-// POST /api/notes/star  { communityId, scope, path, starred } → { ok }
+// POST /api/notes/star  { spaceId, scope, path, starred } → { ok }
 // Star / unstar a note (sidebar "Starred" section + editor toolbar star).
 // Rewrites the note's frontmatter `starred:` flag — the same state the editor
 // toggles — so both surfaces always agree.

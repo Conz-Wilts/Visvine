@@ -1,8 +1,8 @@
 /**
- * Seeds an end-to-end connector test case with data a fund community actually
+ * Seeds an end-to-end connector test case with data a fund space actually
  * cares about: fund metrics.
  *
- * Three things land in the community's SHARED brain:
+ * Three things land in the space's SHARED brain:
  *   • connectors/fund-metrics.md — a v2 connector (hosts + env perimeter, prose
  *     body) pointed at /api/dev/fund-metrics, this app's fake fund-admin API.
  *   • funds/fund-portfolio.md — an ordinary CONTEXT note about the funds, which
@@ -15,8 +15,8 @@
  *
  * Usage:
  *   pnpm db:connectors:funds                      # community:blackbird-ventures
- *   pnpm db:connectors:funds <communityId>
- *   pnpm db:connectors:funds <communityId> --remove
+ *   pnpm db:connectors:funds <spaceId>
+ *   pnpm db:connectors:funds <spaceId> --remove
  *
  * Local-only, guarded like the other db:* seeds — it writes plaintext-derived
  * secrets and points a connector at a private host.
@@ -32,7 +32,7 @@ import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 /** Kept in step with the same expression in the fund-metrics route by hand. */
 const FUND_KEY = process.env.CONNECTOR_FUND_METRICS_KEY || 'sk_fundmetrics_local_dev';
 
-const communityId = process.argv[2]?.startsWith('--')
+const spaceId = process.argv[2]?.startsWith('--')
   ? 'community:blackbird-ventures'
   : (process.argv[2] ?? 'community:blackbird-ventures');
 const REMOVE = process.argv.includes('--remove');
@@ -176,37 +176,37 @@ const SECRETS = [{ name: 'FUND_METRICS_KEY', value: FUND_KEY }];
 // write
 
 async function main() {
-  const community = await prisma.community.findUnique({
-    where: { id: communityId },
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
     select: { id: true, name: true },
   });
-  if (!community) {
-    throw new Error(`community ${communityId} not found — run \`pnpm db:seed\` first`);
+  if (!space) {
+    throw new Error(`space ${spaceId} not found — run \`pnpm db:seed\` first`);
   }
 
   if (REMOVE) {
-    const notes = await prisma.communityNote.deleteMany({
-      where: { communityId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
+    const notes = await prisma.spaceNote.deleteMany({
+      where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.communitySecret.deleteMany({
-      where: { communityId, name: { in: SECRETS.map((s) => s.name) } },
+    const secrets = await prisma.spaceSecret.deleteMany({
+      where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
-    await syncContextLinksBulk({ communityId, ownerKey: SHARED }, NOTES.map((n) => n.path));
-    console.log(`Removed ${notes.count} note(s) and ${secrets.count} secret(s) from ${community.name}`);
+    await syncContextLinksBulk({ spaceId, ownerKey: SHARED }, NOTES.map((n) => n.path));
+    console.log(`Removed ${notes.count} note(s) and ${secrets.count} secret(s) from ${space.name}`);
     return;
   }
 
   const owner =
     (await prisma.userAlias.findFirst({
-      where: { communityId, aliasName: OWNER_ALIAS_NAME },
+      where: { spaceId, aliasName: OWNER_ALIAS_NAME },
       select: { userId: true },
-    })) ?? (await prisma.userCommunity.findFirst({ where: { communityId }, select: { userId: true } }));
-  if (!owner) throw new Error(`community ${communityId} has no members to attribute the notes to`);
+    })) ?? (await prisma.spaceMember.findFirst({ where: { spaceId }, select: { userId: true } }));
+  if (!owner) throw new Error(`space ${spaceId} has no members to attribute the notes to`);
 
   for (const note of NOTES) {
-    await prisma.communityNote.upsert({
-      where: { note_identity: { communityId, ownerKey: SHARED, path: note.path } },
-      create: { communityId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
+    await prisma.spaceNote.upsert({
+      where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
+      create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
     });
   }
@@ -214,16 +214,16 @@ async function main() {
   // Direct table writes bypass the note store, so the connector node and the
   // context links between these notes are ours to keep in step.
   await syncContextLinksBulk(
-    { communityId, ownerKey: SHARED },
+    { spaceId, ownerKey: SHARED },
     [],
     NOTES.map((n) => [n.path, n.content] as [string, string]),
   );
 
   for (const secret of SECRETS) {
-    await prisma.communitySecret.upsert({
-      where: { secret_identity: { communityId, name: secret.name } },
+    await prisma.spaceSecret.upsert({
+      where: { secret_identity: { spaceId, name: secret.name } },
       create: {
-        communityId,
+        spaceId,
         name: secret.name,
         ciphertext: encryptSecret(secret.value),
         createdBy: 'add-fund-metrics-demo',
@@ -232,7 +232,7 @@ async function main() {
     });
   }
 
-  console.log(`=== Seeded fund-metrics test case into ${community.name} (${communityId}) ===`);
+  console.log(`=== Seeded fund-metrics test case into ${space.name} (${spaceId}) ===`);
   for (const note of NOTES) console.log(`  note   shared:${note.path}`);
   for (const secret of SECRETS) console.log(`  secret ${secret.name}`);
   console.log(`\n  API: ${apiBase}  (host gate: ${apiHost})`);

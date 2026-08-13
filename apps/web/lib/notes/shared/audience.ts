@@ -1,8 +1,8 @@
 // A one-line "who can see this path" summary computed purely from grant rows —
 // the shape the MCP tools expose so an agent can pick where to store a note.
 // Structurally incapable of enumerating members: the input is grant rows only
-// (community/alias/user + level + path), never user names, and user grants are
-// COUNTED in the output rather than named. Community admins always see
+// (space/alias/user + level + path), never user names, and user grants are
+// COUNTED in the output rather than named. Space admins always see
 // everything, so every summary ends in "admins".
 //
 // Pure — no Prisma/Node/DOM imports; usable from server, client, and tests.
@@ -20,23 +20,23 @@ export interface AudienceSummary {
 const DEFAULT_MAX_ALIASES = 4
 
 /**
- * Summarise who can READ `path`, given every grant row in the community
- * (loadCommunityAccess) and the restricted-folder cuts. O(grants × restricted),
- * bounded by grant rows — not community size — since community-wide access is
+ * Summarise who can READ `path`, given every grant row in the space
+ * (loadSpaceAccess) and the restricted-folder cuts. O(grants × restricted),
+ * bounded by grant rows — not space size — since space-wide access is
  * one row and alias access is one row per alias.
  */
 export function audienceSummary(
   path: string,
   grants: AccessGrant[],
   restricted: string[],
-  opts: { selfUserId: string; communityName?: string; maxAliases?: number },
+  opts: { selfUserId: string; spaceName?: string; maxAliases?: number },
 ): AudienceSummary {
   const reaching = grants.filter(
     (g) => g.level >= LEVEL_VIEW && grantReaches(g, path, restricted),
   )
   const flagged = isRestrictedPath(restricted, path)
 
-  const everyone = reaching.some((g) => g.subjectType === 'community')
+  const everyone = reaching.some((g) => g.subjectType === 'space')
   const aliasNames = [...new Set(
     reaching.filter((g) => g.subjectType === 'alias').map((g) => g.subjectId),
   )].sort()
@@ -50,7 +50,7 @@ export function audienceSummary(
   let line: string
   if (everyone) {
     audience = 'everyone'
-    line = `everyone in ${opts.communityName ?? 'this space'}`
+    line = `everyone in ${opts.spaceName ?? 'this space'}`
   } else if (aliasNames.length === 0 && otherUsers === 0) {
     if (selfReached) {
       audience = 'you-only'

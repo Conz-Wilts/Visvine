@@ -37,7 +37,7 @@ export function createSourceStage(
         >`
           SELECT path, seq, text, 1 - (embedding <=> ${vectorLiteral(queryVector)}::vector) AS score
           FROM context_source_chunks
-          WHERE community_id = ${brain.communityId}
+          WHERE space_id = ${brain.spaceId}
             AND owner_key = ${brain.ownerKey}
             AND model = ${config.model}
             AND embedding IS NOT NULL
@@ -67,7 +67,7 @@ export function createSourceStage(
           SELECT path, seq, text,
                  ts_rank(to_tsvector('english', text), websearch_to_tsquery('english', ${query})) AS score
           FROM context_source_chunks
-          WHERE community_id = ${brain.communityId}
+          WHERE space_id = ${brain.spaceId}
             AND owner_key = ${brain.ownerKey}
             AND path IN (${Prisma.join(visiblePaths)})
             AND to_tsvector('english', text) @@ websearch_to_tsquery('english', ${query})

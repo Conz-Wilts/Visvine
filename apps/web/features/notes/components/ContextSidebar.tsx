@@ -4,7 +4,7 @@
 // profile's Context tab is open — the same mechanism /channels and /admin use
 // (ContextPanelContext's portal host), so the icon rail + tree read as one
 // connected card rather than a panel floating over the page. It shows the
-// community brain's full organised tree — index files, the people/ and
+// space brain's full organised tree — index files, the people/ and
 // communities/ namespaces, and every entity note. Clicking a note that maps to
 // a directory entity opens that entity's profile Context tab;
 // index/organisational notes just highlight. `currentPath` (the profile view)
@@ -16,10 +16,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
-import type { CommunityFeatureConfig } from '@/lib/types'
+import type { SpaceFeatureConfig } from '@/lib/types'
 import { noteHref, parseEntityHref } from '@/lib/notes/entities'
 import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
@@ -41,14 +41,14 @@ export function ContextSidebar({
   focusPath?: string | null
 }) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
+  const { currentSpace } = useSpace()
   const { host, setDockRequested } = useContextPanel()
-  const communityId = currentCommunity?.id ?? null
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null
+  const spaceId = currentSpace?.id ?? null
+  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes')
 
   const { entityByPath } = useDirectoryEntities()
-  const ctx = useContextTree({ communityId, enabled: notesEnabled, currentPath })
+  const ctx = useContextTree({ spaceId, enabled: notesEnabled, currentPath })
   const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
 
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
@@ -67,10 +67,10 @@ export function ContextSidebar({
   }, [])
 
   useEffect(() => {
-    const active = wide && notesEnabled && !!communityId
+    const active = wide && notesEnabled && !!spaceId
     setDockRequested(active)
     return () => setDockRequested(false)
-  }, [wide, notesEnabled, communityId, setDockRequested])
+  }, [wide, notesEnabled, spaceId, setDockRequested])
 
   // Keep the highlight on the open entity's note as the profile view navigates
   // between entities (the sidebar itself survives via the layout portal).
@@ -94,19 +94,19 @@ export function ContextSidebar({
       // route change — both surfaces read the same note path through the same
       // cache, so by the time the panel mounts swrFetch paints it on the first
       // frame instead of holding a skeleton.
-      if (communityId) {
-        prefetchNoteContext(communityId, path)
+      if (spaceId) {
+        prefetchNoteContext(spaceId, path)
         if (entity) void import('./EntityContextPanel').catch(() => {})
         else void import('./NoteContextPanel').catch(() => {})
       }
       if (entity) router.push(`/directory/${encodeURIComponent(entity.id)}?tab=context`)
       else router.push(noteHref(path))
     },
-    [entityByPath, router, currentPath, communityId],
+    [entityByPath, router, currentPath, spaceId],
   )
 
   // Nothing to render until the Sidebar's portal host is mounted and we're docking.
-  if (!host || !wide || !notesEnabled || !communityId) return null
+  if (!host || !wide || !notesEnabled || !spaceId) return null
 
   return createPortal(
     // No entrance animation here: this component re-mounts on every navigation
@@ -135,7 +135,7 @@ export function ContextSidebar({
               onDeleteNote={ctx.handleDeleteNote}
               bare
               root={ctx.rootFolder}
-              storageKey={communityId}
+              storageKey={spaceId}
               // The search focus (and, on a profile, the open note) only PEEKS
               // the tree open — clearing the search restores the user's own
               // expand/collapse state. selectedPath keeps the highlight after
@@ -143,7 +143,7 @@ export function ContextSidebar({
               revealPath={focusPath ?? currentPath}
               folderBadges={ctx.folderBadges}
               onFolderAccess={
-                communityId.startsWith('me:')
+                spaceId.startsWith('me:')
                   ? undefined
                   : (path) => setShareTarget({ path, kind: 'folder' })
               }
@@ -160,7 +160,7 @@ export function ContextSidebar({
             />
             {shareTarget !== null && (
               <SharePanel
-                communityId={communityId}
+                spaceId={spaceId}
                 path={shareTarget.path}
                 kind={shareTarget.kind}
                 onClose={() => setShareTarget(null)}

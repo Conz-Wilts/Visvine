@@ -11,7 +11,7 @@ import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { getPalette, hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, findAlias } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
@@ -32,7 +32,7 @@ import EditAboutModal from './edit/EditAboutModal';
 import EditSkillsModal from './edit/EditSkillsModal';
 import EditContactModal from './edit/EditContactModal';
 import EditExperienceModal from './edit/EditExperienceModal';
-import CommunitiesModal, { type ProfileCommunity } from './CommunitiesModal';
+import SpacesModal, { type ProfileSpace } from './SpacesModal';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'experience' | 'communities' | null;
 /** Which edit modal completes each profile-strength item. */
@@ -57,37 +57,37 @@ interface ProfilePageContentProps {
 
 export default function ProfilePageContent({ nodeId, overlay = false }: ProfilePageContentProps) {
   const { data: session } = useSession();
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
   const [modal, setModal] = useState<ModalState>(null);
   const [copied, setCopied] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  const [profileCommunities, setProfileCommunities] = useState<ProfileCommunity[]>([]);
+  const [profileSpaces, setProfileSpaces] = useState<ProfileSpace[]>([]);
 
-  // Communities shown on the profile: managed (admin) ones always, member ones
+  // Spaces shown on the profile: managed (admin) ones always, member ones
   // only when the owner has toggled them visible. Owner receives the full list
   // (for the toggles); everyone else gets the pre-filtered visible set.
   useEffect(() => {
     let cancelled = false;
-    setProfileCommunities([]);
+    setProfileSpaces([]);
     fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`)
-      .then((res) => (res.ok ? res.json() : { communities: [] }))
-      .then((data) => { if (!cancelled) setProfileCommunities(data.communities ?? []); })
+      .then((res) => (res.ok ? res.json() : { spaces: [] }))
+      .then((data) => { if (!cancelled) setProfileSpaces(data.spaces ?? []); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [nodeId]);
 
-  const toggleCommunityVisibility = useCallback(async (communityId: string, showOnProfile: boolean) => {
+  const toggleSpaceVisibility = useCallback(async (spaceId: string, showOnProfile: boolean) => {
     const res = await fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ communityId, showOnProfile }),
+      body: JSON.stringify({ spaceId, showOnProfile }),
     });
     if (!res.ok) return;
-    setProfileCommunities((prev) => prev.map((c) =>
-      c.id === communityId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
+    setProfileSpaces((prev) => prev.map((c) =>
+      c.id === spaceId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
     ));
   }, [nodeId]);
 
@@ -96,13 +96,13 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   // Connecting has to move two caches on its way out: the cached node carries
   // `connected_user_id` (what the route and a later mount read), and the profile
   // itself flips from a node-synthesized stand-in to the member's real record.
-  const communityId = currentCommunity?.id ?? null;
-  const isPersonalSpace = communityId?.startsWith(PERSONAL_ID_PREFIX) ?? false;
+  const spaceId = currentSpace?.id ?? null;
+  const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false;
   const onConnectionChange = useCallback((userId: string | null) => {
     patchCachedNodeProfile(nodeId, { connected_user_id: userId });
     void reload();
   }, [nodeId, reload]);
-  const memberConnection = useMemberConnection({ nodeId, communityId, onChange: onConnectionChange });
+  const memberConnection = useMemberConnection({ nodeId, spaceId, onChange: onConnectionChange });
 
   // Ownership follows the member connection (profile.userId resolves through
   // Node.identityId → Identity.userId), not node-id equality — a member's node
@@ -134,17 +134,17 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     }
   };
 
-  // Aliases ("Founder", "Investor", …) carry a per-community colour; when this
+  // Aliases ("Founder", "Investor", …) carry a per-space colour; when this
   // node has one, the whole page theme uses it instead of the base type colour.
   const aliasName = nodeData?.node?.alias;
   const aliasColor = aliasName
-    ? findAlias(currentCommunity?.communityAliases, aliasName, nodeData?.node?.type ?? 'People')?.color
+    ? findAlias(currentSpace?.aliases, aliasName, nodeData?.node?.type ?? 'People')?.color
     : undefined;
 
   const systemPalette = useMemo(() => {
     const nodeType = nodeData?.node?.type ?? 'People';
-    return hexToPalette(aliasColor ?? getNodeTypeConfig(nodeType, currentCommunity?.nodeTypes).color);
-  }, [aliasColor, nodeData?.node?.type, currentCommunity?.nodeTypes]);
+    return hexToPalette(aliasColor ?? getNodeTypeConfig(nodeType, currentSpace?.nodeTypes).color);
+  }, [aliasColor, nodeData?.node?.type, currentSpace?.nodeTypes]);
   const savedThemeId = profile?.metadata?.themeColor as string | undefined;
   const theme = savedThemeId ? getPalette(savedThemeId) : systemPalette;
 
@@ -167,7 +167,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   // Live connection state wins once it resolves; until then the cached node's
   // `connected_user_id` stands in, so a connected profile doesn't flash the
   // prompt on arrival. When the connection endpoint could not answer at all —
-  // no Node row behind this id, a community it won't read for us, a network
+  // no Node row behind this id, a space it won't read for us, a network
   // blip — fall back to the profile's own `connected`, which resolves through
   // the Person row as well. Only a definite "no member" shows the prompt: the
   // prompt is a dead end (its own PUT hits the same endpoint), so guessing it
@@ -187,11 +187,11 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     );
   }
 
-  // Prefer the profile-visible community list; fall back to the shared-count
+  // Prefer the profile-visible space list; fall back to the shared-count
   // for context-only people with no linked user.
-  const visibleCommunityCount = profileCommunities.filter((c) => c.visible).length;
-  const communityCount = profileCommunities.length > 0 ? visibleCommunityCount : (nodeData?.communityCount ?? 1);
-  const communitiesClickable = profileCommunities.length > 0;
+  const visibleSpaceCount = profileSpaces.filter((c) => c.visible).length;
+  const spaceCount = profileSpaces.length > 0 ? visibleSpaceCount : (nodeData?.spaceCount ?? 1);
+  const spacesClickable = profileSpaces.length > 0;
   const joinedLabel = profile.createdAt
     ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null;
@@ -287,8 +287,8 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
           {/* stat strip — pinned to the card's bottom edge */}
           <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
-            <StatItem value={communityCount} label={communityCount === 1 ? 'Space' : 'Spaces'}
-                      onClick={communitiesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
+            <StatItem value={spaceCount} label={spaceCount === 1 ? 'Space' : 'Spaces'}
+                      onClick={spacesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
             {experience.length > 0 && (
               <StatItem value={experience.length} label={experience.length === 1 ? 'Role' : 'Roles'}
                         onClick={() => jump('experience')} accent={theme.dark} />
@@ -420,9 +420,9 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
       {modal === 'contact' && <EditContactModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
       {modal === 'experience' && <EditExperienceModal open onClose={() => setModal(null)} profile={profile} onSave={updateBasicInfo} />}
       {modal === 'communities' && (
-        <CommunitiesModal open onClose={() => setModal(null)} communities={profileCommunities}
+        <SpacesModal open onClose={() => setModal(null)} spaces={profileSpaces}
                           isOwner={isOwner} personName={profile.name} theme={theme}
-                          onToggle={isOwner ? toggleCommunityVisibility : undefined} />
+                          onToggle={isOwner ? toggleSpaceVisibility : undefined} />
       )}
     </div>
   );

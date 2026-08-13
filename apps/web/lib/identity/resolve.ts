@@ -1,5 +1,5 @@
 /**
- * Cross-community identity resolution — the DB layer over the pure matcher.
+ * Cross-space identity resolution — the DB layer over the pure matcher.
  *
  * resolveIdentity() is the single entry point every node-creation path should use:
  * it blocks candidate identities out of Postgres, runs the pure tiered matcher

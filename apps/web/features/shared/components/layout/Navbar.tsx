@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CommunitySelector } from "@/features/communities";
+import { SpaceSelector } from "@/features/spaces";
 import UserMenu from "@/features/auth/components/UserMenu";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
-import { useCommunity } from "@/features/shared/contexts/CommunityContext";
+import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSession } from "@/features/auth/lib/auth-client";
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
-  const { isAdmin, currentCommunity } = useCommunity();
+  const { isAdmin, currentSpace } = useSpace();
   const { dockRequested, contextOpen, setContextOpen } = useContextPanel();
   const { data: session } = useSession();
   const pathname = usePathname();
@@ -25,13 +25,13 @@ export default function Navbar() {
       style={{ background: "var(--shell-bg, #ffffff)" }}
     >
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
-        {/* Left: community selector + community management cog. The selector's avatar
+        {/* Left: space selector + space management cog. The selector's avatar
             is pulled left to sit directly ABOVE the sidebar rail's icon column: the
             rail centers a 40px icon at ICON_LEFT (17px) from the viewport edge, and the
             selector button's own px-3 (12px) + the grid's px-6 (24px) would otherwise
             land the avatar at 36px — so a -19px nudge aligns the two icon columns. */}
         <div className="flex items-center gap-3" style={{ marginLeft: -19 }}>
-          <CommunitySelector />
+          <SpaceSelector />
           {canAccessAdmin && (
             <Link
               href="/admin"
@@ -79,12 +79,12 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {headerRight}
           {/* Events live here, not in the sidebar rail: they're a shell-level
-              surface (like Messages), always reachable and not a per-community
-              tool, so public events from other communities stay discoverable. */}
-          {/* With no space selected the community-scoped events page has nothing
+              surface (like Messages), always reachable and not a per-space
+              tool, so public events from other spaces stay discoverable. */}
+          {/* With no space selected the space-scoped events page has nothing
               to show, so the calendar lands on the global discover grid instead. */}
           <Link
-            href={currentCommunity ? "/events?scope=discover" : "/events/discover"}
+            href={currentSpace ? "/events?scope=discover" : "/events/discover"}
             aria-label="Discover events"
             title="Discover events"
             className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${

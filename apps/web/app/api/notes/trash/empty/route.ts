@@ -1,4 +1,4 @@
-// POST /api/notes/trash/empty  { communityId, scope } → { ok }
+// POST /api/notes/trash/empty  { spaceId, scope } → { ok }
 // Permanently purge the brain's trash. Irreversible, so the shared brain restricts
 // it to admins (personal brain: always the owner).
 
@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const brain = await requireBrain(req, body)
   if (brain instanceof Response) return brain
   if (brain.scope === 'shared' && !brain.isAdmin) {
-    return fail('Only an admin can empty the community brain trash', 403)
+    return fail('Only an admin can empty the space brain trash', 403)
   }
   try {
     await emptyTrash(brain)

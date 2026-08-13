@@ -41,7 +41,7 @@ interface FeedViewProps {
   onEdit: (messageId: string, text: string) => Promise<void>;
   onDelete: (messageId: string) => Promise<void>;
   onToggleStar: (messageId: string) => Promise<void>;
-  communityId?: string;
+  spaceId?: string;
 }
 
 /**
@@ -427,7 +427,7 @@ export default function FeedView({
   onEdit,
   onDelete,
   onToggleStar,
-  communityId,
+  spaceId,
 }: FeedViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const feed = useMemo(() => buildFeed(messages), [messages]);
@@ -453,7 +453,7 @@ export default function FeedView({
         {/* Composer on top — no onTyping: typing indicators are a chat affordance */}
         <MessageComposer
           onSend={onSendMessage}
-          communityId={communityId}
+          spaceId={spaceId}
           conversationId={conversation.id}
           variant="slim"
           currentUser={currentUser}

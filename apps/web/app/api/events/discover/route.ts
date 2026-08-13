@@ -2,7 +2,7 @@
  * GET /api/events/discover — publicly discoverable upcoming events across every
  * space, for the navbar calendar when no space is selected.
  *
- * Deliberately space-agnostic: `/api/events` is community-scoped and gated on
+ * Deliberately space-agnostic: `/api/events` is space-scoped and gated on
  * membership, so it can't answer "what's on anywhere". Only `visibility: public`
  * events are ever returned, which is the same bar the public `/e/<slug>` page
  * already uses — no membership check is needed beyond being signed in.
@@ -33,7 +33,7 @@ export async function GET() {
         imageUrl: true,
         alias: true,
         metadata: true,
-        community: { select: { id: true, name: true } },
+        space: { select: { id: true, name: true } },
       },
     });
 
@@ -49,8 +49,8 @@ export async function GET() {
           startAt: (meta.start_at as string) ?? '',
           locationLabel: location?.label ?? null,
           coverImageUrl: row.imageUrl ?? null,
-          communityName: row.community?.name ?? null,
-          visibility: (meta.visibility as string) ?? 'community',
+          spaceName: row.space?.name ?? null,
+          visibility: (meta.visibility as string) ?? 'space',
           status: (meta.status as string) ?? 'published',
         };
       })
@@ -73,7 +73,7 @@ export async function GET() {
       startAt: e.startAt,
       locationLabel: e.locationLabel,
       coverImageUrl: e.coverImageUrl,
-      communityName: e.communityName,
+      spaceName: e.spaceName,
     }));
 
     return NextResponse.json({ events });

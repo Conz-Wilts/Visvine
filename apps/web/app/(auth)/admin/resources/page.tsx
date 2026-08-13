@@ -1,26 +1,26 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useAdminRole } from '@/features/shared/hooks/useAdminRole';
 import type { ResourceChange } from '@/lib/types';
 
 export default function AdminResourcesPage() {
-  const { currentCommunity } = useCommunity();
-  const { isAdmin } = useAdminRole(currentCommunity?.id ?? null);
+  const { currentSpace } = useSpace();
+  const { isAdmin } = useAdminRole(currentSpace?.id ?? null);
   const [changes, setChanges] = useState<ResourceChange[]>([]);
   const [loading, setLoading] = useState(false);
   const [resourceNames, setResourceNames] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (!currentCommunity || !isAdmin) return;
+    if (!currentSpace || !isAdmin) return;
     loadChanges();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCommunity, isAdmin]);
+  }, [currentSpace, isAdmin]);
 
   async function loadChanges() {
-    if (!currentCommunity) return;
+    if (!currentSpace) return;
     setLoading(true);
-    const res = await fetch(`/api/resources?community_id=${currentCommunity.id}`);
+    const res = await fetch(`/api/resources?space_id=${currentSpace.id}`);
     const resources = await res.json();
     const nameMap: Record<string, string> = {};
     for (const r of resources) nameMap[r.id] = r.name;
@@ -47,7 +47,7 @@ export default function AdminResourcesPage() {
     setChanges(prev => prev.filter(c => c.id !== changeId));
   }
 
-  if (!currentCommunity) return <div className="p-6 text-gray-500">Select a space.</div>;
+  if (!currentSpace) return <div className="p-6 text-gray-500">Select a space.</div>;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">

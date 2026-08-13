@@ -1,6 +1,6 @@
 // Per-note revision history.
-//   GET  /api/notes/history?communityId=&scope=&path=   → { revisions }  (newest first)
-//   POST { communityId, scope, path, revisionId }        → { ok }         (restore a version)
+//   GET  /api/notes/history?spaceId=&scope=&path=   → { revisions }  (newest first)
+//   POST { spaceId, scope, path, revisionId }        → { ok }         (restore a version)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'

@@ -1,8 +1,8 @@
-// Seeds the "Icehouse Ventures" community from web-researched data.
+// Seeds the "Icehouse Ventures" space from web-researched data.
 //
 // Data lives in ./data/icehouse-ventures.json (firm + portfolio companies +
 // founders + links), produced by the research workflow. This loader is generic:
-// it upserts the community, then every node, then every link, idempotently.
+// it upserts the space, then every node, then every link, idempotently.
 //
 // Mirrors add-nz-ecosystem.mjs: loads apps/web/.env (cwd-independent) and refuses
 // to run against any non-local host via the shared guard.
@@ -25,39 +25,39 @@ const connectionString =
 if (!connectionString) throw new Error('add-icehouse-ventures: no DATABASE_URL or DB_HOST resolved from apps/web/.env');
 
 const data = JSON.parse(readFileSync(DATA_PATH, 'utf8'));
-const { community, nodes, links } = data;
-if (!community?.id || !Array.isArray(nodes) || !Array.isArray(links)) {
-  throw new Error('add-icehouse-ventures: data file must have { community, nodes[], links[] }');
+const { space, nodes, links } = data;
+if (!space?.id || !Array.isArray(nodes) || !Array.isArray(links)) {
+  throw new Error('add-icehouse-ventures: data file must have { space, nodes[], links[] }');
 }
-const COMM = community.id;
+const COMM = space.id;
 
 // The research data models portfolio companies / the VC firm as custom node
 // types ("Startup"/"Investor"). The app's alias model wants a canonical base
-// type plus a community-specific alias label (mirrors Blackbird), so collapse
+// type plus a space-specific alias label (mirrors Blackbird), so collapse
 // the custom types onto base types and carry the label across as the alias.
 const TYPE_REMAP = {
-  Investor:     { type: 'Community', alias: 'Investor' },
-  Startup:      { type: 'Community', alias: 'Startup'  },
+  Investor:     { type: 'Space', alias: 'Investor' },
+  Startup:      { type: 'Space', alias: 'Startup'  },
   Person:       { type: 'person', alias: null },
-  Organization: { type: 'Community', alias: null },
+  Organization: { type: 'Space', alias: null },
 };
 
 // Base node types shown in the Types & Aliases console.
 const NODE_TYPES = [
-  { icon: '🏘️', name: 'Community', color: '#78d870', shape: 'square' },
+  { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
   { icon: '👤', name: 'Person', color: '#2563eb', shape: 'rectangle' },
 ];
 
 // The research data still prefixes organisation ids `org:`, the spelling that
-// preceded Group and then Community. Remapped here rather than in the JSON so
+// preceded Group and then Space. Remapped here rather than in the JSON so
 // the source file stays a faithful copy of the research export — nodes and both
 // ends of every link go through this.
-const nodeId = (id) => String(id).replace(/^org:/, 'community:');
+const nodeId = (id) => String(id).replace(/^org:/, 'space:');
 
 // `nodeType` matching is case-insensitive across the app; use canonical names.
-const COMMUNITY_ALIASES = [
-  { name: 'Investor', color: '#0ea5e9', nodeType: 'Community' },
-  { name: 'Startup',  color: '#f59e0b', nodeType: 'Community' },
+const SPACE_ALIASES = [
+  { name: 'Investor', color: '#0ea5e9', nodeType: 'Space' },
+  { name: 'Startup',  color: '#f59e0b', nodeType: 'Space' },
 ];
 
 const pool = new pg.Pool({ connectionString });
@@ -65,24 +65,24 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  // 1. Community
-  console.log('--- Upserting community ---');
+  // 1. Space
+  console.log('--- Upserting space ---');
   await client.query(
-    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, visibility, created_at)
+    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, emoji, visibility, created_at)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, 'public', NOW())
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
-       community_aliases = EXCLUDED.community_aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       aliases = EXCLUDED.aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
     [
-      community.id,
-      community.name,
-      community.description ?? null,
-      community.location ?? null,
-      community.tags ?? [],
+      space.id,
+      space.name,
+      space.description ?? null,
+      space.location ?? null,
+      space.tags ?? [],
       JSON.stringify(NODE_TYPES),
-      JSON.stringify(COMMUNITY_ALIASES),
-      community.country ?? 'NZ',
-      community.emoji ?? null,
+      JSON.stringify(SPACE_ALIASES),
+      space.country ?? 'NZ',
+      space.emoji ?? null,
     ]
   );
   console.log(`  ✓ ${COMM}`);
@@ -92,11 +92,11 @@ try {
   for (const n of nodes) {
     const m = TYPE_REMAP[n.type] ?? { type: String(n.type).toLowerCase(), alias: null };
     await client.query(
-      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
+      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, NOW(), NOW())
        ON CONFLICT (id) DO UPDATE SET type = EXCLUDED.type, name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata,
-         community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
+         space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [
         nodeId(n.id), m.type, n.name, n.subtitle ?? null, n.location ?? null, n.url ?? null,
         n.tags ?? [], JSON.stringify(n.metadata ?? {}), COMM, n.alias ?? m.alias,
@@ -122,7 +122,7 @@ try {
     );
     if (dup.rowCount > 0) { skipped++; continue; }
     await client.query(
-      `INSERT INTO links (source_id, target_id, relationship, community_id, metadata, created_at)
+      `INSERT INTO links (source_id, target_id, relationship, space_id, metadata, created_at)
        VALUES ($1, $2, $3, $4, '{}'::jsonb, NOW())`,
       [l.sourceId, l.targetId, l.relationship, COMM]
     );
@@ -135,13 +135,13 @@ try {
 
   console.log('\n--- Node type breakdown ---');
   const breakdown = await client.query(
-    "SELECT type, COUNT(*)::int AS count FROM nodes WHERE community_id = $1 GROUP BY type ORDER BY count DESC, type",
+    "SELECT type, COUNT(*)::int AS count FROM nodes WHERE space_id = $1 GROUP BY type ORDER BY count DESC, type",
     [COMM]
   );
   console.table(breakdown.rows);
 
   const linkCount = await client.query(
-    'SELECT relationship, COUNT(*)::int AS count FROM links WHERE community_id = $1 GROUP BY relationship ORDER BY count DESC',
+    'SELECT relationship, COUNT(*)::int AS count FROM links WHERE space_id = $1 GROUP BY relationship ORDER BY count DESC',
     [COMM]
   );
   console.table(linkCount.rows);

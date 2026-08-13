@@ -27,7 +27,7 @@ import { canMoveInto, moveDenial, parentFolderOf } from '../lib/useContextTree'
 
 // Expansion state (openPaths + reveal overlay + persistence) lives in
 // useContextTreeState, shared with the full-screen Context explorer so both
-// surfaces read and write the same per-community blob.
+// surfaces read and write the same per-space blob.
 // VS Code-style row band: the hover/selection background runs the FULL panel
 // width, square-edged, regardless of how deeply the row is nested. Rows sit
 // inside per-level indent containers, so the depth offset isn't knowable here â€”
@@ -121,11 +121,11 @@ interface NoteSidebarProps {
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
   /** Show the brain root as a real (collapsible) folder row at the top of the
-   *  tree instead of a separate header bar, so the community reads as the parent
+   *  tree instead of a separate header bar, so the space reads as the parent
    *  folder of everything below it. `icon` replaces the folder glyph; the root
    *  row shows no glyph at all when it's omitted. */
   root?: { label: string; icon?: React.ReactNode }
-  /** Scopes the persisted expand/collapse state (pass the community id). Omit to
+  /** Scopes the persisted expand/collapse state (pass the space id). Omit to
    *  keep the state in memory only. */
   storageKey?: string | null
   /** Soft-deleted notes for this brain, shown as a Trash folder pinned to the
@@ -312,7 +312,7 @@ export function NoteSidebar({
           {root ? (
             // The brain root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
-            // community down.
+            // space down.
             <FolderRow
               node={tree}
               label={root.label}
@@ -534,7 +534,7 @@ function Tree({
   // A folder's own index.md never renders as a child row â€” the folder row IS
   // the index (clicking the folder name opens it; see FolderRow). The brain
   // root included: its index.md folds into the root folder row, so the
-  // community reads as the parent folder of everything below it.
+  // space reads as the parent folder of everything below it.
   const ownIndex = node.path ? `${node.path}/index.md` : 'index.md'
   const children = (node.children ?? []).filter(
     (c) => !(c.kind === 'note' && c.path === ownIndex),
@@ -612,8 +612,8 @@ function FolderRow(props: {
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
-  // The brain root works the same way over its own index.md, so the community
-  // row opens the community's home note.
+  // The brain root works the same way over its own index.md, so the space
+  // row opens the space's home note.
   // The folder's display name: an explicit label (the brain root's), else the
   // title its index note declares, else the path segment.
   const folderLabel = props.label ?? props.node.title ?? props.node.name

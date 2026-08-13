@@ -21,7 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { CONNECTIONS_RAIL_W, useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
 import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
@@ -53,8 +53,8 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     const raf = requestAnimationFrame(() => setSlidIn(true));
     return () => cancelAnimationFrame(raf);
   }, [open]);
-  const { currentCommunity } = useCommunity();
-  const communityId = currentCommunity?.id ?? null;
+  const { currentSpace } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
   // The pane tab row's height while one is up (PaneShell publishes it). The rail
   // starts below that row rather than beside it, so the bar spans the card and
   // the rail reads as hanging off it — the same rule the docked context tree
@@ -66,13 +66,13 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   // Re-run on path change too: a save that added a link invalidated the list
   // key, and landing on the linked note is exactly when it should be re-read.
   useEffect(() => {
-    if (!communityId) return;
+    if (!spaceId) return;
     let stale = false;
-    swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
+    swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), (l) => {
       if (!stale) setNotes(l.notes);
     }).catch(() => {});
     return () => { stale = true; };
-  }, [communityId, path]);
+  }, [spaceId, path]);
 
   const allItems = useMemo(() => toContextItems(notes), [notes]);
   const item = useMemo(
@@ -103,8 +103,8 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     return allItems.filter((i) => paths.has(i.path));
   }, [item, allItems]);
 
-  const nodeTypes = currentCommunity?.nodeTypes;
-  const tagColors = currentCommunity?.designConfig?.tagColors ?? null;
+  const nodeTypes = currentSpace?.nodeTypes;
+  const tagColors = currentSpace?.designConfig?.tagColors ?? null;
   const presentTypes = useMemo(() => {
     const counts = new Map<string, number>();
     for (const i of connectedItems) if (i.type) counts.set(i.type, (counts.get(i.type) ?? 0) + 1);
@@ -141,12 +141,12 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   const openPath = useCallback(
     (p: string) => {
       if (p === path) return;
-      if (communityId) prefetchNoteContext(communityId, p);
+      if (spaceId) prefetchNoteContext(spaceId, p);
       const targetId = resolveEntityNode(p, entityByPath);
       if (targetId) router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`);
       else router.push(noteHref(p));
     },
-    [communityId, entityByPath, path, router],
+    [spaceId, entityByPath, path, router],
   );
 
   return (
@@ -221,7 +221,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
                 label="Type"
                 options={presentTypes.map(([type, count]) => ({
                   value: type,
-                  // Free-text frontmatter types read as the community console
+                  // Free-text frontmatter types read as the space console
                   // names them whenever the value resolves to a real type.
                   label: findNodeTypeConfig(type, nodeTypes)?.name ?? type,
                   count,

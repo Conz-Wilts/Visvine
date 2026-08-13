@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isForeignPersonalSpace } from "../lib/communities/personalSpace";
+import { isForeignPersonalSpace } from "../lib/spaces/personalSpaceAccess";
 
-test("non-personal (shared) communities are accessible to anyone", () => {
+test("non-personal (shared) spaces are accessible to anyone", () => {
   assert.equal(isForeignPersonalSpace(null, "user_a"), false);
   assert.equal(isForeignPersonalSpace(undefined, "user_a"), false);
 });
@@ -18,7 +18,7 @@ test("another user's personal space is forbidden", () => {
 
 test("empty-string owner is treated as a real owner id (not null)", () => {
   // Defensive: an empty string is not null, so it must not be mistaken for a
-  // shared community. A different (non-empty) user is still forbidden.
+  // shared space. A different (non-empty) user is still forbidden.
   assert.equal(isForeignPersonalSpace("", "user_a"), true);
   assert.equal(isForeignPersonalSpace("", ""), false);
 });

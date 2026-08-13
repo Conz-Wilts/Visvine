@@ -32,20 +32,20 @@ export interface EmbedSweepResult {
 }
 
 /**
- * Embed every stale note and unembedded source chunk, for one community or all.
+ * Embed every stale note and unembedded source chunk, for one space or all.
  * Returns counts; `configured: false` (and zero work) when no key is set.
  */
-export async function embedSweep(communityId?: string): Promise<EmbedSweepResult> {
+export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
   const config = embeddingsConfig()
   if (!config) return { configured: false, notes: 0, chunks: 0 }
-  const where = communityId ? { communityId } : {}
+  const where = spaceId ? { spaceId } : {}
 
-  const brainRows = await prisma.communityNote.groupBy({
-    by: ['communityId', 'ownerKey'],
+  const brainRows = await prisma.spaceNote.groupBy({
+    by: ['spaceId', 'ownerKey'],
     where: { ...where, deletedAt: null },
   })
   const brains: Brain[] = brainRows.map((b) => ({
-    communityId: b.communityId,
+    spaceId: b.spaceId,
     ownerKey: b.ownerKey,
   }))
 
@@ -54,8 +54,8 @@ export async function embedSweep(communityId?: string): Promise<EmbedSweepResult
     const { raws, metas } = await getVault(brain)
     const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
 
-    const cached = await prisma.communityNoteEmbedding.findMany({
-      where: { communityId: brain.communityId, ownerKey: brain.ownerKey, model: config.model },
+    const cached = await prisma.spaceNoteEmbedding.findMany({
+      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, model: config.model },
       select: { path: true, mtime: true },
     })
     const cachedMtime = new Map(cached.map((r) => [r.path, Number(r.mtime)]))
@@ -69,9 +69,9 @@ export async function embedSweep(communityId?: string): Promise<EmbedSweepResult
       for (let j = 0; j < batch.length; j++) {
         const literal = vectorLiteral(vectors[j])
         await prisma.$executeRaw`
-          INSERT INTO community_note_embeddings (id, community_id, owner_key, path, model, mtime, embedding, updated_at)
-          VALUES ((gen_random_uuid())::text, ${brain.communityId}, ${brain.ownerKey}, ${batch[j].path}, ${config.model}, ${BigInt(batch[j].mtime)}, ${literal}::vector, now())
-          ON CONFLICT (community_id, owner_key, path)
+          INSERT INTO space_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
+          VALUES ((gen_random_uuid())::text, ${brain.spaceId}, ${brain.ownerKey}, ${batch[j].path}, ${config.model}, ${BigInt(batch[j].mtime)}, ${literal}::vector, now())
+          ON CONFLICT (space_id, owner_key, path)
           DO UPDATE SET model = ${config.model}, mtime = ${BigInt(batch[j].mtime)}, embedding = ${literal}::vector, updated_at = now()`
       }
       notes += batch.length

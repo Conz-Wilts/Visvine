@@ -3,11 +3,11 @@
 // Settings → MCP. How someone points Claude at their own Visvine
 // context.
 //
-// This lives in personal settings rather than the community console on purpose:
+// This lives in personal settings rather than the space console on purpose:
 // the OAuth token an MCP client holds belongs to the *person*, and every tool
-// call names its own community_id, which is then re-checked against live
+// call names its own space_id, which is then re-checked against live
 // membership and brain grants server-side. So one connection covers every
-// community you belong to, and there is nothing here for an admin to configure
+// space you belong to, and there is nothing here for an admin to configure
 // on someone else's behalf.
 //
 // There is no deep link or one-click install for a remote connector — Claude

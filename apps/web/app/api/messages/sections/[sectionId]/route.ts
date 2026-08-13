@@ -9,11 +9,11 @@ import { isAdmin } from '@/lib/auth';
 async function requireSectionAdmin(userId: string, email: string, sectionId: string) {
   const section = await prisma.channelSection.findUnique({
     where: { id: sectionId },
-    select: { communityId: true },
+    select: { spaceId: true },
   });
   if (!section) return { error: NextResponse.json({ error: 'Section not found' }, { status: 404 }) };
-  const allowed = await isAdmin(userId, section.communityId, email);
-  if (!allowed) return { error: forbiddenResponse('Only community admins can manage sections') };
+  const allowed = await isAdmin(userId, section.spaceId, email);
+  if (!allowed) return { error: forbiddenResponse('Only space admins can manage sections') };
   return { error: null };
 }
 

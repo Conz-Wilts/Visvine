@@ -19,20 +19,20 @@ import { notesApi } from './notesApi'
 export const ROOT_INDEX_PATH = 'index.md'
 
 /**
- * Make sure `communityId` has a root index and that its content is in the
+ * Make sure `spaceId` has a root index and that its content is in the
  * context cache, so the next paint of the note comes from memory rather than a
  * fetch. Resolves either way — a space you can't write to still opens, it just
  * opens on whatever the note read gave back.
  */
-export async function ensureRootIndexNote(communityId: string, communityName: string): Promise<void> {
+export async function ensureRootIndexNote(spaceId: string, spaceName: string): Promise<void> {
   try {
-    const { notes } = await cachedFetch(contextKeys.list(communityId), () => notesApi.list(communityId))
+    const { notes } = await cachedFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId))
     if (!notes.some((n) => n.path === ROOT_INDEX_PATH)) {
       try {
         await notesApi.create(
-          communityId,
+          spaceId,
           ROOT_INDEX_PATH,
-          newIndexContent({ title: communityName || 'Home' }),
+          newIndexContent({ title: spaceName || 'Home' }),
         )
       } catch (err) {
         // "already exists" = the server's own seed, or another tab, got there
@@ -40,14 +40,14 @@ export async function ensureRootIndexNote(communityId: string, communityName: st
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
       invalidateContextCache(
-        contextKeys.read(communityId, ROOT_INDEX_PATH),
-        contextKeys.list(communityId),
-        contextKeys.tree(communityId),
+        contextKeys.read(spaceId, ROOT_INDEX_PATH),
+        contextKeys.list(spaceId),
+        contextKeys.tree(spaceId),
       )
     }
     // The read is the point: it both warms the cache and is the thing that
     // proves the note is there to be shown.
-    await readNote(communityId, ROOT_INDEX_PATH)
+    await readNote(spaceId, ROOT_INDEX_PATH)
   } catch {
     // Nothing here is worth blocking navigation over — the note page has its own
     // loading, missing and error states for whatever we failed to pre-empt.

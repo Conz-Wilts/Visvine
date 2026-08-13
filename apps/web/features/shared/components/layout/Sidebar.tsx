@@ -6,13 +6,13 @@ import { useEffect, useState } from "react";
 import { useCreateModal, useCreateSurface } from "@/features/shared/contexts/CreateModalContext";
 import { useSidebar } from "@/features/shared/contexts/SidebarContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
-import { useCommunity } from "@/features/shared/contexts/CommunityContext";
+import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from "@/features/shared/contexts/ThemeContext";
 import { railFeatures, moreFeatures } from "@/features/shared/lib/features";
 import { DOCK_MS, DOCK_CLOSE_MS, DOCK_EASE } from "@/features/shared/contexts/SidebarContext";
 import Modal from "@/components/ui/Modal";
 import CreateModal from "@/features/create/components/CreateModal";
-import type { CommunityFeatureConfig } from "@/lib/types";
+import type { SpaceFeatureConfig } from "@/lib/types";
 
 /*
  * Layout model (nothing changes on expanded toggle except container width):
@@ -55,22 +55,22 @@ export default function Sidebar() {
   const { isOpen: createOpen } = useCreateModal();
   const createSurface = useCreateSurface();
   const { expanded, setExpanded, reduced } = useSidebar();
-  const { currentCommunity, isAdmin, loading: communityLoading } = useCommunity();
+  const { currentSpace, isAdmin, loading: spaceLoading } = useSpace();
   const { setHost, dockRequested, contextOpen, dockTopInset } = useContextPanel();
 
   const ease = DOCK_EASE;
 
-  // Nav items come from the feature registry, filtered to the community's
+  // Nav items come from the feature registry, filtered to the space's
   // enabled surfaces (empty config → everything on) and to what this user may
   // see (an admins-only directory is hidden from members), then split between
   // the rail and the "More" popup per featureConfig.more. See features/shared/lib/features.tsx.
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
   // No space selected (and not merely still loading one): the tools and the
   // Create button all act on the current space, so none of them belong on the
   // rail. The empty rail card stays — the L-shell and the content inset are
   // sized around it. During the initial load the tools render as usual so the
   // rail doesn't flash empty on every page load.
-  const noSpace = !communityLoading && !currentCommunity;
+  const noSpace = !spaceLoading && !currentSpace;
   const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin);
   const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin);
   // A tool stays lit on its sub-routes too (e.g. /channels redirects straight
@@ -107,7 +107,7 @@ export default function Sidebar() {
   // Channels honours the navbar's panel toggle (open by default) — the page
   // raises dockRequested so the toggle shows, and closing hides the list.
   const dockedChannels = pathname.startsWith("/channels") && wide && contextOpen;
-  // The Community Console and personal Settings both used to dock their section
+  // The Space Console and personal Settings both used to dock their section
   // lists here; they now carry a pane-top tab bar instead (see ConsoleShell),
   // so /admin and /settings get the plain rail.
   // The /context page and profile Context tabs raise dockRequested (already
@@ -163,7 +163,7 @@ export default function Sidebar() {
         </button>
 
         {/* No menu hangs off this button. Every type — including a channel,
-            space, community, connector or uploaded file — is a choice in the
+            space, space, connector or uploaded file — is a choice in the
             draft surface's own Type row, so "+" is one click to a surface you
             can type into rather than a list of decisions. */}
         {!expanded && (
@@ -230,7 +230,7 @@ export default function Sidebar() {
         })}
 
         {/* "More" — 3x3 grid glyph. Opens a flyout listing the tools the
-            community tucked out of the rail (featureConfig.more). Hidden when
+            space tucked out of the rail (featureConfig.more). Hidden when
             nothing is tucked away. Sits in the same gap-1 column as the nav
             rows, so the active pill's translateY math covers it too. */}
         {moreNav.length > 0 && (

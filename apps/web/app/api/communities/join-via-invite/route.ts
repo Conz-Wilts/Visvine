@@ -4,9 +4,9 @@ import { requireSession } from '@/lib/session';
 import { handleApiError } from '@/lib/api/route';
 
 /**
- * POST /api/communities/join-via-invite — accept a community invite link.
+ * POST /api/communities/join-via-invite — accept a space invite link.
  *
- * Resolves the community by its invite token and records a *pending* membership
+ * Resolves the space by its invite token and records a *pending* membership
  * for the signed-in user (invite-link joins require admin approval in the
  * console). Idempotent: an existing active member is a no-op; an existing pending
  * request stays pending.
@@ -22,32 +22,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invite token is required' }, { status: 400 });
     }
 
-    const community = await prisma.community.findUnique({
+    const space = await prisma.space.findUnique({
       where: { inviteToken: token },
       select: { id: true, name: true },
     });
-    if (!community) {
+    if (!space) {
       return NextResponse.json({ error: 'This invite link is invalid or has been revoked.' }, { status: 404 });
     }
 
-    const existing = await prisma.userCommunity.findUnique({
-      where: { userId_communityId: { userId: session.userId, communityId: community.id } },
+    const existing = await prisma.spaceMember.findUnique({
+      where: { userId_spaceId: { userId: session.userId, spaceId: space.id } },
       select: { status: true },
     });
 
     if (existing?.status === 'active') {
-      return NextResponse.json({ status: 'active', communityId: community.id, communityName: community.name });
+      return NextResponse.json({ status: 'active', spaceId: space.id, spaceName: space.name });
     }
     if (existing?.status === 'pending') {
-      return NextResponse.json({ status: 'pending', communityId: community.id, communityName: community.name });
+      return NextResponse.json({ status: 'pending', spaceId: space.id, spaceName: space.name });
     }
 
-    await prisma.userCommunity.create({
-      data: { userId: session.userId, communityId: community.id, status: 'pending' },
+    await prisma.spaceMember.create({
+      data: { userId: session.userId, spaceId: space.id, status: 'pending' },
     });
 
-    return NextResponse.json({ status: 'pending', communityId: community.id, communityName: community.name });
+    return NextResponse.json({ status: 'pending', spaceId: space.id, spaceName: space.name });
   } catch (err) {
-    return handleApiError(err, 'api.communities.join_via_invite.failed');
+    return handleApiError(err, 'api.spaces.join_via_invite.failed');
   }
 }

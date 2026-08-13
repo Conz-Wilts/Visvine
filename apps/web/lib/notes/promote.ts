@@ -1,17 +1,17 @@
 // Promotion — how knowledge moves up the tree (blackbird-brain README §"How
-// knowledge moves up"). A member SHARES a note from their personal community's
-// brain into a community brain. With write access to the destination the copy
+// knowledge moves up"). A member SHARES a note from their personal space's
+// brain into a space brain. With write access to the destination the copy
 // applies immediately (provenance-stamped, audited; the personal original stays
 // theirs to keep editing); without it, the promotion is queued as a proposal
 // ("move-proposals.jsonl") for a folder admin to approve. One-time copy, not a
-// live sync — the shared copy evolves in the community from then on.
+// live sync — the shared copy evolves in the space from then on.
 
 import { randomUUID } from 'crypto'
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Brain } from './store'
 import { writeDenial } from './brainService'
 import { publishNote } from './publications'
-import { personalCommunityId } from '@/lib/communities/personalCommunity'
+import { personalSpaceId } from '@/lib/spaces/personalSpace'
 import { logAudit } from './audit'
 import { appendJsonl, readJsonl, writeJsonl } from './sidecar'
 import { folderIdOfPath } from './shared/placement'
@@ -22,8 +22,8 @@ import type { BrainPrincipal, MoveProposalEntry } from './shared/brainTypes'
 
 const FILE = 'move-proposals.jsonl'
 
-function sharedBrain(communityId: string): Brain {
-  return { communityId, ownerKey: SHARED_OWNER_KEY }
+function sharedBrain(spaceId: string): Brain {
+  return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
 export type PromoteResult =
@@ -56,7 +56,7 @@ async function applyPromotion(
   toPath: string,
   content: string,
 ): Promise<string> {
-  const shared = sharedBrain(p.communityId)
+  const shared = sharedBrain(p.spaceId)
   let dest = toPath
   let n = 1
   // Suffix on collision rather than overwriting someone else's note.
@@ -64,7 +64,7 @@ async function applyPromotion(
     dest = toPath.replace(/\.md$/i, '') + `-${n++}.md`
   }
   await store.writeNote(shared, dest, content, { id: p.userId, name: p.name, email: p.email || null })
-  void logAudit(p.communityId, {
+  void logAudit(p.spaceId, {
     userId: p.userId,
     name: p.name,
     action: 'promote',
@@ -75,8 +75,8 @@ async function applyPromotion(
 }
 
 /**
- * Share (promote) a note from the caller's personal community brain into the
- * target community's brain (`p.communityId`). Copies — the personal original
+ * Share (promote) a note from the caller's personal space brain into the
+ * target space's brain (`p.spaceId`). Copies — the personal original
  * stays. Applies directly when the caller can write the destination; otherwise
  * queues a proposal for a folder admin.
  */
@@ -88,10 +88,10 @@ export async function promoteNote(
 ): Promise<PromoteResult> {
   const raw = await store.readNoteOrNull(personalBrain, fromPath)
   if (raw === null) return { status: 'denied', reason: `Note not found: ${fromPath}` }
-  const fromRef = provenanceRef(`${personalBrain.communityId}/${fromPath}`)
+  const fromRef = provenanceRef(`${personalBrain.spaceId}/${fromPath}`)
   const content = promotedContent(raw, fromRef, p)
 
-  const denial = writeDenial(p, sharedBrain(p.communityId), toPath)
+  const denial = writeDenial(p, sharedBrain(p.spaceId), toPath)
   if (!denial) {
     const path = await applyPromotion(p, fromRef, toPath, content)
     return { status: 'applied', path }
@@ -108,7 +108,7 @@ export async function promoteNote(
     proposedAt: Date.now(),
     status: 'pending',
   }
-  await appendJsonl(sharedBrain(p.communityId), FILE, proposal)
+  await appendJsonl(sharedBrain(p.spaceId), FILE, proposal)
   return { status: 'proposed', proposalId: proposal.id }
 }
 
@@ -135,13 +135,13 @@ export async function queuePublishProposal(
     proposedAt: Date.now(),
     status: 'pending',
   }
-  await appendJsonl(sharedBrain(p.communityId), FILE, proposal)
+  await appendJsonl(sharedBrain(p.spaceId), FILE, proposal)
   return proposal
 }
 
 /** Proposals the principal may see: their own, plus any folder they manage. */
 export async function listProposals(p: BrainPrincipal): Promise<MoveProposalEntry[]> {
-  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.communityId), FILE)
+  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.spaceId), FILE)
   return all
     .filter((r) => r.proposedBy === p.userId || principalCanManage(p, r.folderId))
     .reverse()
@@ -160,7 +160,7 @@ export async function resolveProposal(
   proposalId: string,
   approve: boolean,
 ): Promise<MoveProposalEntry> {
-  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.communityId), FILE)
+  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.spaceId), FILE)
   const proposal = all.find((r) => r.id === proposalId)
   if (!proposal) throw new Error('Proposal not found')
   if (!principalCanManage(p, proposal.folderId)) {
@@ -169,14 +169,14 @@ export async function resolveProposal(
   if (proposal.status !== 'pending') return proposal
   if (approve && proposal.kind === 'publish') {
     const result = await publishNote(
-      personalCommunityId(proposal.proposedBy),
+      personalSpaceId(proposal.proposedBy),
       proposal.fromPath,
-      p.communityId,
+      p.spaceId,
       proposal.toPath,
       { id: proposal.proposedBy, name: proposal.proposerName },
     )
     if (result.status === 'denied') throw new Error(result.reason)
-    void logAudit(p.communityId, {
+    void logAudit(p.spaceId, {
       userId: p.userId,
       name: p.name,
       action: 'publish',
@@ -184,7 +184,7 @@ export async function resolveProposal(
       detail: `approved publish proposal from ${proposal.proposerName}`,
     })
   } else if (approve) {
-    const shared = sharedBrain(p.communityId)
+    const shared = sharedBrain(p.spaceId)
     let dest = proposal.toPath
     let n = 1
     while (await store.readNoteOrNull(shared, dest)) {
@@ -194,7 +194,7 @@ export async function resolveProposal(
       id: proposal.proposedBy,
       name: proposal.proposerName,
     })
-    void logAudit(p.communityId, {
+    void logAudit(p.spaceId, {
       userId: p.userId,
       name: p.name,
       action: 'promote',
@@ -205,6 +205,6 @@ export async function resolveProposal(
   proposal.status = approve ? 'approved' : 'denied'
   proposal.resolvedBy = p.userId
   proposal.resolvedAt = Date.now()
-  await writeJsonl(sharedBrain(p.communityId), FILE, all)
+  await writeJsonl(sharedBrain(p.spaceId), FILE, all)
   return proposal
 }

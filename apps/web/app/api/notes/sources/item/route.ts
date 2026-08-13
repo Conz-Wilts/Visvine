@@ -1,8 +1,8 @@
 // Single Context Source route.
-//   GET  ?communityId=&path=&offset=&maxChars= → { source, text, totalChars, downloadUrl }
+//   GET  ?spaceId=&path=&offset=&maxChars= → { source, text, totalChars, downloadUrl }
 //        A page of the extracted text plus a short-lived signed URL for the
 //        original file. Private-folder reads are audited inside brainService.
-//   POST { communityId, path, action: 'reingest' } → { source } — gated retry
+//   POST { spaceId, path, action: 'reingest' } → { source } — gated retry
 //        (failed ingestion or embedding-model change).
 
 import { NextRequest, NextResponse } from 'next/server'

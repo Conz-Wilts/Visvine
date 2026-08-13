@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireCommunityAdmin } from '@/lib/api/route';
+import { requireSpaceAdmin } from '@/lib/api/route';
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ resourceId: string; changeId: string }> }) {
   const { resourceId, changeId } = await params;
   const change = await prisma.resourceChange.findUnique({
     where: { id: changeId },
-    select: { resourceId: true, resource: { select: { communityId: true } } },
+    select: { resourceId: true, resource: { select: { spaceId: true } } },
   });
   if (!change || change.resourceId !== resourceId) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  const session = await requireCommunityAdmin(change.resource.communityId);
+  const session = await requireSpaceAdmin(change.resource.spaceId);
   if (session instanceof NextResponse) return session;
 
   const body = await req.json();

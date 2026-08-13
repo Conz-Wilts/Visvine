@@ -4,7 +4,7 @@
  * Shared resource-file presentation helpers — file-type colors/icons, size
  * formatting, pin persistence, and the DOCX preview pane. Used by the
  * resources library grid, the detail drawer, the resource detail page, and
- * the community page's resources preview.
+ * the space page's resources preview.
  */
 
 import { useState, useEffect } from 'react';

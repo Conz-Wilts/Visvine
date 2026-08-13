@@ -1,8 +1,8 @@
 // POST /api/notes/capture — quick capture, two forms:
-//   { communityId, text, refs?, tags? }        → { path }  — append a dated line
-//        to the caller's private monthly log (their PERSONAL COMMUNITY's brain,
-//        whatever community the request came from).
-//   { communityId, path, entry }               → { path }  — append a dated `## Log`
+//   { spaceId, text, refs?, tags? }        → { path }  — append a dated line
+//        to the caller's private monthly log (their PERSONAL SPACE's brain,
+//        whatever space the request came from).
+//   { spaceId, path, entry }               → { path }  — append a dated `## Log`
 //        entry to an existing note in the resolved brain (gated; denied → 403).
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     if (!text) return fail('text is required (or path + entry for a note-bound log)')
     const refs = Array.isArray(body.refs) ? body.refs.map(String) : undefined
     const tags = Array.isArray(body.tags) ? body.tags.map(String) : undefined
-    // Captures always land in the caller's personal community's log, whatever
-    // community the request resolved.
+    // Captures always land in the caller's personal space's log, whatever
+    // space the request resolved.
     const personal = await resolvePersonalBrain({ userId: p.userId, name: p.name, email: p.email || null })
     return NextResponse.json({ path: await appendCapture(p, personal, text, refs, tags) })
   } catch (err) {

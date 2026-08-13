@@ -133,7 +133,7 @@ function buildPrefix(frontmatter: string | null): string {
 
 // The note title renders as a heading above the body (from frontmatter), so a body
 // that still opens with a `# Title` line duplicating it — older notes, or notes from
-// a community whose seed predates this — gets that leading heading stripped on load.
+// a space whose seed predates this — gets that leading heading stripped on load.
 // Display-side only: the stored markdown migrates the next time the note is saved.
 function stripLeadingTitleHeading(body: string, title: string): string {
   if (!title.trim()) return body
@@ -238,7 +238,7 @@ export function NoteEditor({
   const notesSetRef = useRef(notesSet)
   notesSetRef.current = notesSet
   // The entity map is read by the EntityChip decoration through a stable getter so
-  // the chips update as the community node map loads without recreating the editor.
+  // the chips update as the space node map loads without recreating the editor.
   const entityByPathRef = useRef(entityByPath)
   entityByPathRef.current = entityByPath
   const getEntityRef = useRef((p: string) => entityByPathRef.current?.get(p) ?? null)
@@ -458,7 +458,7 @@ export function NoteEditor({
     }
   }, [editor, meta, path, initialContent, mode])
 
-  // Repaint entity chips when the community node map arrives/changes (the editor
+  // Repaint entity chips when the space node map arrives/changes (the editor
   // isn't recreated, so nudge the decoration plugin to recompute).
   useEffect(() => {
     if (!editor) return

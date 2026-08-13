@@ -1,7 +1,7 @@
 // Events domain: events, RSVP/attendee records, and registration forms.
 
 // Event types
-export type EventVisibility = 'public' | 'community' | 'private';
+export type EventVisibility = 'public' | 'space' | 'private';
 // Operational lifecycle. 'registered' is legacy (read as 'going' via normalizeStatus).
 export type RSVPStatus = 'invited' | 'pending' | 'going' | 'registered' | 'waitlisted' | 'cancelled' | 'checked_in' | 'no_show';
 // The guest's intent, independent of the operational status above.
@@ -19,7 +19,7 @@ export interface FormField {
 
 export interface NBEvent {
   id: `event:${string}`;
-  communityId: string;
+  spaceId: string;
   title: string;
   description?: string;
   startAt: string;

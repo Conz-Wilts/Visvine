@@ -9,7 +9,7 @@
  *
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts                 # all brains
- *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts <communityId>   # one community
+ *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts <spaceId>   # one space
  */
 
 import 'dotenv/config';
@@ -24,7 +24,7 @@ async function main() {
     process.exit(1);
   }
   const only = process.argv[2];
-  console.log(`Embedding with ${config.model}${only ? ` for ${only}` : ' (all communities)'}…`);
+  console.log(`Embedding with ${config.model}${only ? ` for ${only}` : ' (all spaces)'}…`);
   const result = await embedSweep(only);
   console.log(`Done: ${result.notes} notes, ${result.chunks} source chunks.`);
 }

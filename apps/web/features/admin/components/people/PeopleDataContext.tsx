@@ -21,11 +21,11 @@ import { useConsoleAction } from '@/features/admin/components/console/ConsoleSav
 import { fetchJson } from '@/lib/fetchJson';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
-import { flattenTree, type CommunityMember, type PeopleData } from './shared';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { flattenTree, type SpaceMember, type PeopleData } from './shared';
 
 interface PeopleDataValue {
-  communityId: string;
+  spaceId: string;
   /** null until the first load lands. */
   data: PeopleData | null;
   busy: boolean;
@@ -55,11 +55,11 @@ export function usePeopleSection(): PeopleDataValue {
 }
 
 export default function PeopleDataProvider({
-  communityId,
+  spaceId,
   onPendingCountChange,
   children,
 }: {
-  communityId: string;
+  spaceId: string;
   /** Feeds the console tab badges: members awaiting approval, and open access requests. */
   onPendingCountChange?: (counts: { members: number; requests: number }) => void;
   children: React.ReactNode;
@@ -70,17 +70,17 @@ export default function PeopleDataProvider({
   const runAction = useConsoleAction();
   // Only for the root's label: a context nobody has renamed goes by the space's
   // own name, the same way the sidebar's root folder does.
-  const { currentCommunity } = useCommunity();
-  const communityName = currentCommunity?.name ?? null;
+  const { currentSpace } = useSpace();
+  const spaceName = currentSpace?.name ?? null;
 
   const reload = useCallback(async () => {
     const [membersRes, aliasesRes, overview, treeRes, settingsRes, requestsRes] = await Promise.all([
-      fetchJson<{ members: CommunityMember[] }>(`/api/communities/${communityId}/members`),
-      notesApi.listAliases(communityId),
-      notesApi.getAccessOverview(communityId).catch(() => null),
-      notesApi.tree(communityId).catch(() => null),
-      notesApi.getBrainSettings(communityId).catch(() => null),
-      notesApi.listAccessRequests(communityId).catch(() => null),
+      fetchJson<{ members: SpaceMember[] }>(`/api/communities/${spaceId}/members`),
+      notesApi.listAliases(spaceId),
+      notesApi.getAccessOverview(spaceId).catch(() => null),
+      notesApi.tree(spaceId).catch(() => null),
+      notesApi.getBrainSettings(spaceId).catch(() => null),
+      notesApi.listAccessRequests(spaceId).catch(() => null),
     ]);
     setData({
       members: membersRes.members,
@@ -88,10 +88,10 @@ export default function PeopleDataProvider({
       overview,
       paths: flattenTree(treeRes?.tree ?? null),
       tree: treeRes?.tree ?? null,
-      contextName: contextDisplayName(settingsRes?.settings.contextName, communityName),
+      contextName: contextDisplayName(settingsRes?.settings.contextName, spaceName),
       requests: requestsRes?.requests ?? [],
     });
-  }, [communityId, communityName]);
+  }, [spaceId, spaceName]);
 
   useEffect(() => {
     setData(null);
@@ -128,8 +128,8 @@ export default function PeopleDataProvider({
   );
 
   const value = useMemo(
-    () => ({ communityId, data, busy, error, setError, run }),
-    [communityId, data, busy, error, run],
+    () => ({ spaceId, data, busy, error, setError, run }),
+    [spaceId, data, busy, error, run],
   );
 
   return <PeopleDataCtx.Provider value={value}>{children}</PeopleDataCtx.Provider>;

@@ -134,17 +134,17 @@ import { lockedDenial } from '../lib/notes/brainService'
 import { OPEN_ACCESS, LEVEL_FULL } from '../lib/notes/shared/authz'
 import type { BrainPrincipal } from '../lib/notes/shared/brainTypes'
 
-const SHARED = { communityId: 'c1', ownerKey: 'shared' }
-const PERSONAL = { communityId: 'me:u1', ownerKey: 'shared' }
+const SHARED = { spaceId: 'c1', ownerKey: 'shared' }
+const PERSONAL = { spaceId: 'me:u1', ownerKey: 'shared' }
 
 const principal = (locked: string[]): BrainPrincipal => ({
   userId: 'u1',
   email: 'u1@x.dev',
   name: 'U One',
-  communityId: 'c1',
-  communityAdmin: true, // the lock binds even admins' AI writes — it is about origin, not rank
+  spaceId: 'c1',
+  spaceAdmin: true, // the lock binds even admins' AI writes — it is about origin, not rank
   access: {
-    grants: [{ subjectType: 'community', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
+    grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
     restricted: [],
     locked,
   },

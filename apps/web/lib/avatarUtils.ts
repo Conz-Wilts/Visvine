@@ -1,5 +1,5 @@
 /**
- * Shared avatar utility functions used across messaging, directory, and community components.
+ * Shared avatar utility functions used across messaging, directory, and space components.
  */
 
 /**
@@ -20,7 +20,7 @@ export const PERSON_SILHOUETTE_PATH =
 
 /**
  * SVG path for the group/organisation avatar fallback (24×24 viewBox): a house —
- * reads as "community/place" rather than a cluster of people. The canvas glyph
+ * reads as "space/place" rather than a cluster of people. The canvas glyph
  * drawer and <TypeSilhouette> both draw this so the glyph is identical on the
  * context and in the DOM. Filled (non-zero winding), so it fills white the same
  * way the person glyph does.
@@ -44,7 +44,7 @@ const RESOURCE_SILHOUETTE_PATH =
 
 /**
  * SVG path for the connector avatar fallback (24×24 viewBox): an electrical
- * plug — a connector is a gateway to something outside the community, and the
+ * plug — a connector is a gateway to something outside the space, and the
  * plug is the same metaphor the console's Connectors section uses.
  */
 const CONNECTOR_SILHOUETTE_PATH =

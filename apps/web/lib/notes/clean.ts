@@ -1,7 +1,7 @@
 // The role-aware clean pass behind the MCP clean_context tool — the DB half of
 // lib/notes/shared/clean.ts. Reuses the review agent's pure checks
 // (shared/review.ts) unchanged and scopes their output to the caller's reach:
-// a MEMBER cleans the notes they authored (CommunityNote.createdBy) inside the
+// a MEMBER cleans the notes they authored (SpaceNote.createdBy) inside the
 // paths they can write; an ADMIN or personal-space owner cleans everything
 // under the target. The tool never rewrites content itself beyond the review
 // allow-list — judgment work comes back as a worklist for the calling agent.
@@ -56,9 +56,9 @@ export interface CleanAnalysis {
 const FULL_MODE_NOTE_CAP = 1500
 
 async function ownedPathSet(p: BrainPrincipal, brain: Brain): Promise<Set<string>> {
-  const rows = await prisma.communityNote.findMany({
+  const rows = await prisma.spaceNote.findMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       deletedAt: null,
       createdBy: p.userId,
@@ -195,8 +195,8 @@ export async function applyCleanFixes(
       'mcp',
     )
     contentByPath.set(fix.path, next) // later fixes on the same note compose
-    if (brain.ownerKey === 'shared' && !brain.communityId.startsWith('me:')) {
-      void logAudit(p.communityId, {
+    if (brain.ownerKey === 'shared' && !brain.spaceId.startsWith('me:')) {
+      void logAudit(p.spaceId, {
         userId: p.userId,
         name: p.name,
         action: 'write',
@@ -251,7 +251,7 @@ export async function trashNotes(
     }
     await store.deleteNote(brain, path)
     if (resolved && !resolved.isPersonalSpace) {
-      void logAudit(p.communityId, {
+      void logAudit(p.spaceId, {
         userId: p.userId,
         name: p.name,
         action: 'delete',

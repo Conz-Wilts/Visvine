@@ -3,7 +3,7 @@
 import { clsx } from 'clsx';
 
 /**
- * Flat settings section used across the Community Console panes, styled after
+ * Flat settings section used across the Space Console panes, styled after
  * the profile settings page: small bold heading, muted one-liner, and a
  * hairline divider between siblings (stack sections inside a `space-y-8`
  * container). No card chrome — children render directly under the header.

@@ -4,10 +4,10 @@
  * systems through admin-configured connectors.
  *
  * Scopes are the COARSE capability gate carried by an access token, enforced
- * per-tool in `withCtx`. They do NOT replace the per-community authorization
+ * per-tool in `withCtx`. They do NOT replace the per-space authorization
  * check: every tool re-derives the caller's membership and brain grants live
  * (via `resolveBrain`/`principalOf`, the same path the web routes use), so a
- * token carrying `context:write` is still refused on a community where the
+ * token carrying `context:write` is still refused on a space where the
  * caller has no write access.
  */
 
@@ -33,7 +33,7 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
  * the same map, so the two can never disagree.
  */
 export const TOOL_SCOPES = {
-  list_communities: 'context:read',
+  list_spaces: 'context:read',
   list_context: 'context:read',
   search_context: 'context:read',
   read_context: 'context:read',

@@ -26,8 +26,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ res
   const resource = await prisma.resource.findUnique({ where: { id: resourceId } });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId: resource.communityId } },
+  const membership = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId: session.userId, spaceId: resource.spaceId } },
     select: { id: true },
   });
   if (!membership) return forbiddenResponse();

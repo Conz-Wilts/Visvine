@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadProfileImage, deleteProfileImage, getMediaUrl } from '@/lib/gcs';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
-import { isAdmin, communityMemberForbidden } from '@/lib/auth';
+import { isAdmin, spaceMemberForbidden } from '@/lib/auth';
 import type { SessionPayload } from '@/lib/session';
 import prisma from '@/lib/prisma';
 import type { ImageEntityType } from '@/lib/imageUpload';
@@ -27,11 +27,14 @@ const ALLOWED_TYPES = [
 
 const MAX_SIZE = 10 * 1024 * 1024;
 
+// GCS object prefixes. Two of them predate their type's rename ('persons',
+// 'communities') and stay as they are: the prefix is part of the stored object
+// path, so changing it would orphan every image already uploaded.
 const ENTITY_PREFIXES: Record<ImageEntityType, string> = {
-  card:      'cards',
-  person:    'persons',
-  community: 'communities',
-  event:     'events',
+  card:   'cards',
+  person: 'persons',
+  space:  'communities',
+  event:  'events',
 };
 
 function buildPrefix(entityType: ImageEntityType, entityId: string): string {
@@ -42,29 +45,29 @@ function buildPrefix(entityType: ImageEntityType, entityId: string): string {
  * Whether `session` may write/delete the image for (entityType, entityId).
  * Without this any signed-in user could overwrite or delete any tenant's logo,
  * avatar, card or event image — the id becomes the GCS prefix verbatim.
- *  - community: entityId IS a community id → require admin of it.
+ *  - space: entityId IS a space id → require admin of it.
  *  - card | person | event: entityId is a node id → require active membership of
- *    the node's own community (the same audience that can edit that node).
+ *    the node's own space (the same audience that can edit that node).
  */
 async function uploadForbidden(
   session: SessionPayload,
   entityType: ImageEntityType,
   entityId: string,
 ): Promise<boolean> {
-  if (entityType === 'community') {
+  if (entityType === 'space') {
     return !(await isAdmin(session.userId, entityId, session.email));
   }
   const node = await prisma.node.findUnique({
     where: { id: entityId },
-    select: { communityId: true },
+    select: { spaceId: true },
   });
-  if (!node?.communityId) return true; // unknown target → deny
-  return communityMemberForbidden(session.userId, node.communityId, session.email);
+  if (!node?.spaceId) return true; // unknown target → deny
+  return spaceMemberForbidden(session.userId, node.spaceId, session.email);
 }
 
 /**
  * POST /api/upload
- * Body: multipart form with fields: entityType ('card'|'person'|'community'), entityId, file
+ * Body: multipart form with fields: entityType ('card'|'person'|'space'), entityId, file
  * Legacy: also accepts nodeId (treated as entityType=card)
  */
 export async function POST(request: NextRequest) {
@@ -94,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!Object.keys(ENTITY_PREFIXES).includes(entityType)) {
-      return NextResponse.json({ error: 'entityType must be card, person, community, or event' }, { status: 400 });
+      return NextResponse.json({ error: 'entityType must be card, person, space, or event' }, { status: 400 });
     }
 
     if (await uploadForbidden(session, entityType, entityId)) return forbiddenResponse();
@@ -161,7 +164,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     if (!Object.keys(ENTITY_PREFIXES).includes(entityType)) {
-      return NextResponse.json({ error: 'entityType must be card, person, community, or event' }, { status: 400 });
+      return NextResponse.json({ error: 'entityType must be card, person, space, or event' }, { status: 400 });
     }
 
     if (await uploadForbidden(session, entityType, entityId)) return forbiddenResponse();

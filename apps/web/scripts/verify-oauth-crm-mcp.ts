@@ -6,7 +6,7 @@
  *
  * Needs `pnpm dev` running and `pnpm db:connectors:oauth` seeded.
  *
- *   pnpm connectors:verify:oauth [communityId]
+ *   pnpm connectors:verify:oauth [spaceId]
  */
 import 'dotenv/config';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -15,7 +15,7 @@ import { OWNER_ALIAS_NAME } from '../lib/types/context';
 import { mintAccessToken } from '../lib/mcp/tokens';
 import { MCP_SCOPES } from '../lib/mcp/scopes';
 
-const COMMUNITY = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
 const APP = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MCP_URL = new URL(`${APP}/api/mcp`);
 
@@ -85,10 +85,10 @@ const settle = () => new Promise((r) => setTimeout(r, RATE_WINDOW_MS));
 
 async function main() {
   const holder = await prisma.userAlias.findFirst({
-    where: { communityId: COMMUNITY, aliasName: OWNER_ALIAS_NAME },
+    where: { spaceId: SPACE, aliasName: OWNER_ALIAS_NAME },
     select: { userId: true },
   });
-  if (!holder) throw new Error(`nobody manages ${COMMUNITY}`);
+  if (!holder) throw new Error(`nobody manages ${SPACE}`);
   const admin = await prisma.user.findUnique({
     where: { id: holder.userId },
     select: { id: true, name: true, email: true },
@@ -109,7 +109,7 @@ async function main() {
     payload(await client.callTool({ name, arguments: args }));
 
   const runConnector = (code: string) =>
-    call('run_connector', { community_id: COMMUNITY, connector: 'crm', code });
+    call('run_connector', { space_id: SPACE, connector: 'crm', code });
 
   /** The run's returned value as compact JSON, for substring assertions. */
   const shown = (r: { value?: unknown }) => JSON.stringify(r.value ?? null);

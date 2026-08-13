@@ -1,12 +1,12 @@
 // Folder operations within a brain.
-//   POST   { communityId, scope, path, content? }   → { ok, indexPath? }  (create folder)
-//   PATCH  { communityId, scope, from, to }         → { path }  (rename/move subtree)
-//   DELETE ?communityId=&scope=&path=               → { ok }    (soft-delete subtree)
+//   POST   { spaceId, scope, path, content? }   → { ok, indexPath? }  (create folder)
+//   PATCH  { spaceId, scope, from, to }         → { path }  (rename/move subtree)
+//   DELETE ?spaceId=&scope=&path=               → { ok }    (soft-delete subtree)
 //
 // Shared-brain rules (grant model — lib/notes/shared/authz.ts): creating a
 // folder needs EDIT at its path (you can shape where you can write); renaming
 // or deleting a subtree needs FULL at the source (full = manage the subtree,
-// community admins included) plus EDIT at a move's destination. Personal
+// space admins included) plus EDIT at a move's destination. Personal
 // brains: always the owner.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,7 +24,7 @@ function gated(brain: ResolvedBrain): boolean {
 function manageDenial(p: BrainPrincipal, folderPath: string): string | null {
   return principalCanManage(p, folderPath)
     ? null
-    : `Only someone with full access to "${folderPath}" (or a community admin) can reorganize it`
+    : `Only someone with full access to "${folderPath}" (or a space admin) can reorganize it`
 }
 
 export async function POST(req: NextRequest) {

@@ -1,5 +1,5 @@
 /**
- * Seeds a community's SHARED brain with working connectors, so the MCP tools
+ * Seeds a space's SHARED brain with working connectors, so the MCP tools
  * `list_connectors` / `run_connector` have something real
  * to talk to in local dev.
  *
@@ -9,13 +9,13 @@
  *   • connectors/appdb.md    (postgres) → the local dev Postgres itself, via
  *     the APPDB_DSN secret. Read-only is enforced by the sql() capability.
  *
- * Both secrets are written to community_secrets encrypted under SECRETS_KEY,
+ * Both secrets are written to space_secrets encrypted under SECRETS_KEY,
  * the same way the admin console writes them.
  *
  * Usage:
  *   pnpm db:connectors:demo                      # community:blackbird-ventures
- *   pnpm db:connectors:demo <communityId>
- *   pnpm db:connectors:demo <communityId> --remove
+ *   pnpm db:connectors:demo <spaceId>
+ *   pnpm db:connectors:demo <spaceId> --remove
  *
  * Local-only — guarded exactly like the destructive db:* scripts. The postgres
  * connector points at your dev database and the executor has no table
@@ -35,7 +35,7 @@ import { syncContextLinksBulk } from '../lib/notes/entityLinks';
  *  route is a Next entry point and isn't worth importing into a CLI script. */
 const SANDBOX_KEY = process.env.CONNECTOR_SANDBOX_KEY || 'sk_sandbox_local_dev';
 
-const communityId = process.argv[2]?.startsWith('--')
+const spaceId = process.argv[2]?.startsWith('--')
   ? 'community:blackbird-ventures'
   : (process.argv[2] ?? 'community:blackbird-ventures');
 const REMOVE = process.argv.includes('--remove');
@@ -163,13 +163,13 @@ explicit about columns rather than relying on the cap.
 
 | Table | Notable columns |
 | --- | --- |
-| \`communities\` | \`id\`, \`name\`, \`slug\`, \`personal_owner_id\` |
+| \`spaces\` | \`id\`, \`name\`, \`slug\`, \`personal_owner_id\` |
 | \`users\` | \`id\`, \`name\`, \`email\` |
-| \`user_communities\` | \`user_id\`, \`community_id\`, \`status\` (\`active\` / \`pending\`) |
-| \`user_aliases\` | who holds what; \`owner\` = its holders manage the community |
-| \`nodes\` | \`id\`, \`community_id\`, \`type\` (\`person\`/\`group\`/\`resource\`/\`event\`…), \`name\`, \`slug\` |
+| \`space_members\` | \`user_id\`, \`space_id\`, \`status\` (\`active\` / \`pending\`) |
+| \`user_aliases\` | who holds what; \`owner\` = its holders manage the space |
+| \`nodes\` | \`id\`, \`space_id\`, \`type\` (\`person\`/\`group\`/\`resource\`/\`event\`…), \`name\`, \`slug\` |
 | \`links\` | \`source_id\`, \`target_id\`, \`relationship\`, \`origin\` (\`context\`/\`manual\`/\`structure\`…) |
-| \`community_notes\` | \`community_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
+| \`space_notes\` | \`space_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
 
 ### Example
 
@@ -177,7 +177,7 @@ explicit about columns rather than relying on the cap.
 return await sql(
   env.APPDB_DSN,
   \`SELECT type, count(*) AS n FROM nodes
-   WHERE community_id = '${communityId}' GROUP BY type ORDER BY n DESC\`,
+   WHERE space_id = '${spaceId}' GROUP BY type ORDER BY n DESC\`,
 )
 \`\`\`
 
@@ -185,7 +185,7 @@ return await sql(
 
 ## What not to read
 
-\`community_secrets\` holds connector secret ciphertext and \`users.password_hash\`
+\`space_secrets\` holds connector secret ciphertext and \`users.password_hash\`
 holds password hashes. Neither is useful to you and both are off limits — the
 read-only transaction does not make them any less sensitive.
 `;
@@ -201,7 +201,7 @@ tags: []
 
 # Connectors
 
-A connector is this community's gateway to an external API or database. The note
+A connector is this space's gateway to an external API or database. The note
 IS the config: its frontmatter picks the executor (\`alias\`), the hosts it may
 reach and the secrets it may resolve, and the body is what the agent reads to
 know how to call it.
@@ -224,40 +224,40 @@ const SECRETS = [
 // write
 
 async function main() {
-  const community = await prisma.community.findUnique({
-    where: { id: communityId },
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
     select: { id: true, name: true },
   });
-  if (!community) {
-    throw new Error(`community ${communityId} not found — run \`pnpm db:seed\` first`);
+  if (!space) {
+    throw new Error(`space ${spaceId} not found — run \`pnpm db:seed\` first`);
   }
 
   if (REMOVE) {
-    const notes = await prisma.communityNote.deleteMany({
-      where: { communityId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
+    const notes = await prisma.spaceNote.deleteMany({
+      where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.communitySecret.deleteMany({
-      where: { communityId, name: { in: SECRETS.map((s) => s.name) } },
+    const secrets = await prisma.spaceSecret.deleteMany({
+      where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
     // Writing notes straight to the table bypasses the note store, so the
     // `connector:<name>` nodes it would have kept in step are ours to drop.
-    await syncContextLinksBulk({ communityId, ownerKey: SHARED }, NOTES.map((n) => n.path));
-    console.log(`Removed ${notes.count} connector note(s) and ${secrets.count} secret(s) from ${community.name}`);
+    await syncContextLinksBulk({ spaceId, ownerKey: SHARED }, NOTES.map((n) => n.path));
+    console.log(`Removed ${notes.count} connector note(s) and ${secrets.count} secret(s) from ${space.name}`);
     return;
   }
 
-  // Someone who manages the community owns the seeded notes; else any member.
+  // Someone who manages the space owns the seeded notes; else any member.
   const owner =
     (await prisma.userAlias.findFirst({
-      where: { communityId, aliasName: OWNER_ALIAS_NAME },
+      where: { spaceId, aliasName: OWNER_ALIAS_NAME },
       select: { userId: true },
-    })) ?? (await prisma.userCommunity.findFirst({ where: { communityId }, select: { userId: true } }));
-  if (!owner) throw new Error(`community ${communityId} has no members to attribute the notes to`);
+    })) ?? (await prisma.spaceMember.findFirst({ where: { spaceId }, select: { userId: true } }));
+  if (!owner) throw new Error(`space ${spaceId} has no members to attribute the notes to`);
 
   for (const note of NOTES) {
-    await prisma.communityNote.upsert({
-      where: { note_identity: { communityId, ownerKey: SHARED, path: note.path } },
-      create: { communityId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
+    await prisma.spaceNote.upsert({
+      where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
+      create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
     });
   }
@@ -265,18 +265,18 @@ async function main() {
   // The note store does this on every save; a direct table write has to do it by
   // hand, or the connectors have no `connector:<name>` nodes and so no page in
   // the directory, no backlinks and no place on the context map. Bulk, because
-  // the per-note call reloads the community's whole node map each time.
+  // the per-note call reloads the space's whole node map each time.
   await syncContextLinksBulk(
-    { communityId, ownerKey: SHARED },
+    { spaceId, ownerKey: SHARED },
     [],
     NOTES.map((n) => [n.path, n.content] as [string, string]),
   );
 
   for (const secret of SECRETS) {
-    await prisma.communitySecret.upsert({
-      where: { secret_identity: { communityId, name: secret.name } },
+    await prisma.spaceSecret.upsert({
+      where: { secret_identity: { spaceId, name: secret.name } },
       create: {
-        communityId,
+        spaceId,
         name: secret.name,
         ciphertext: encryptSecret(secret.value),
         createdBy: 'add-connector-demo',
@@ -285,7 +285,7 @@ async function main() {
     });
   }
 
-  console.log(`=== Seeded connectors into ${community.name} (${communityId}) ===`);
+  console.log(`=== Seeded connectors into ${space.name} (${spaceId}) ===`);
   for (const note of NOTES) console.log(`  note   shared:${note.path}`);
   for (const secret of SECRETS) console.log(`  secret ${secret.name}`);
   console.log(`\n  sandbox base_url: ${sandboxBaseUrl}`);

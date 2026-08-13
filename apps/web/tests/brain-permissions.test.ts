@@ -65,8 +65,8 @@ const principal = (userId: string, acc: BrainAccess, over: Partial<BrainPrincipa
   userId,
   email: `${userId}@x.test`,
   name: userId,
-  communityId: 'c1',
-  communityAdmin: false,
+  spaceId: 'c1',
+  spaceAdmin: false,
   access: acc,
   ...over,
 })
@@ -154,15 +154,15 @@ test('the model has no deny rules: adding a grant can never remove access', () =
   }
 })
 
-// alias and community subjects (pre-scoped, so reach is subject-agnostic)
+// alias and space subjects (pre-scoped, so reach is subject-agnostic)
 
-test('community, alias, and user grants compose additively for one principal', () => {
+test('space, alias, and user grants compose additively for one principal', () => {
   const acc = access([
-    grant('', LEVEL_VIEW, { type: 'community', id: '' }),
+    grant('', LEVEL_VIEW, { type: 'space', id: '' }),
     grant('teams/engineering', LEVEL_EDIT, { type: 'alias', id: 'a-eng' }),
     grant('strategy/plan.md', LEVEL_FULL, { type: 'user', id: 'u-me' }),
   ], ['teams/engineering'])
-  assert.equal(effectiveLevel(acc, 'handbook/intro.md'), LEVEL_VIEW) // community
+  assert.equal(effectiveLevel(acc, 'handbook/intro.md'), LEVEL_VIEW) // space
   assert.equal(effectiveLevel(acc, 'teams/engineering/oncall.md'), LEVEL_EDIT) // alias, through the cut
   assert.equal(effectiveLevel(acc, 'strategy/plan.md'), LEVEL_FULL) // direct note grant
   assert.equal(effectiveLevel(acc, 'strategy/other.md'), LEVEL_VIEW) // note grant does not spread
@@ -190,12 +190,12 @@ test('isRestrictedPath and isLockedPath cover boundaries and their subtrees', ()
 
 // provenance and signatures
 
-test('winningGrant picks highest level, then deepest resource, then user > alias > community', () => {
+test('winningGrant picks highest level, then deepest resource, then user > alias > space', () => {
   const cuts: string[] = []
-  const g1 = grant('', LEVEL_EDIT, { type: 'community', id: '' })
+  const g1 = grant('', LEVEL_EDIT, { type: 'space', id: '' })
   const g2 = grant('portfolio', LEVEL_EDIT, { type: 'alias', id: 'a1' })
   const g3 = grant('portfolio', LEVEL_EDIT, { type: 'user', id: 'u1' })
-  const g4 = grant('portfolio', LEVEL_FULL, { type: 'community', id: '' })
+  const g4 = grant('portfolio', LEVEL_FULL, { type: 'space', id: '' })
   assert.equal(winningGrant([g1, g2], 'portfolio/x.md', cuts), g2) // deeper beats shallower
   assert.equal(winningGrant([g2, g3], 'portfolio/x.md', cuts), g3) // user beats alias
   assert.equal(winningGrant([g3, g4], 'portfolio/x.md', cuts), g4) // level beats everything
@@ -231,7 +231,7 @@ test('principal predicates fold in the admin/system bypass', () => {
   assert.equal(principalCanManage(gated, 'welcome.md'), false)
   assert.equal(principalSeesFolder(gated, 'wiki'), false)
   for (const p of [
-    principal('u-new', access([]), { communityAdmin: true }),
+    principal('u-new', access([]), { spaceAdmin: true }),
     principal('u-new', access([]), { system: true }),
   ]) {
     assert.equal(principalIsSuperAdmin(p), true)
@@ -259,7 +259,7 @@ test('filterVisible hides everything no grant reaches — no title leak into the
 
   const gatedOut = principal('u-none', access([], ['teams/engineering']))
   assert.deepEqual(filterVisible(TREE, gatedOut), [])
-  assert.equal(filterVisible(TREE, principal('u-none', access([]), { communityAdmin: true })).length, 4)
+  assert.equal(filterVisible(TREE, principal('u-none', access([]), { spaceAdmin: true })).length, 4)
 })
 
 test('source paths (non-.md) go through the same predicates', () => {
@@ -298,7 +298,7 @@ const legacyFolder = (
 function scopeFor(migrated: MigratedRegistry, userId: string): BrainAccess {
   return {
     grants: migrated.grants.filter(
-      (g) => g.subjectType === 'community' || (g.subjectType === 'user' && g.subjectId === userId),
+      (g) => g.subjectType === 'space' || (g.subjectType === 'user' && g.subjectId === userId),
     ),
     restricted: migrated.restricted,
     locked: migrated.locked,
@@ -369,7 +369,7 @@ test('parity: public folders stay readable by every member, even gated-out ones'
   }
   const migrated = migrateLegacyRegistry(cfg)
   const gatedOut = principal('u-outside', scopeFor(migrated, 'u-outside'))
-  assert.equal(principalCanRead(gatedOut, 'wiki/handbook.md'), true) // community view grant
+  assert.equal(principalCanRead(gatedOut, 'wiki/handbook.md'), true) // space view grant
   assert.equal(principalCanWrite(gatedOut, 'wiki/handbook.md'), false)
   const writer = principal('u-writer', scopeFor(migrated, 'u-writer'))
   assert.equal(principalCanWrite(writer, 'wiki/handbook.md'), true)
@@ -381,9 +381,9 @@ test('parity: public folders stay readable by every member, even gated-out ones'
 
 // ── audienceSummary: the one-line "who can see this path" the MCP tools expose ──
 
-test('audience: a community-wide grant reads as everyone', () => {
-  const grants = [grant('', LEVEL_VIEW, { type: 'community', id: '' })]
-  const a = audienceSummary('notes/idea.md', grants, [], { selfUserId: 'u-me', communityName: 'Blackbird' })
+test('audience: a space-wide grant reads as everyone', () => {
+  const grants = [grant('', LEVEL_VIEW, { type: 'space', id: '' })]
+  const a = audienceSummary('notes/idea.md', grants, [], { selfUserId: 'u-me', spaceName: 'Blackbird' })
   assert.equal(a.audience, 'everyone')
   assert.equal(a.line, 'everyone in Blackbird')
 })
@@ -395,10 +395,10 @@ test('audience: no reaching grants means admins only', () => {
 })
 
 test('audience: the private-by-default note shape — restricted, you + admins only', () => {
-  // Exactly what makeNotePrivate produces: a community root grant that a
+  // Exactly what makeNotePrivate produces: a space root grant that a
   // restricted note path cuts, plus the author's own FULL grant on the note.
   const grants = [
-    grant('', LEVEL_VIEW, { type: 'community', id: '' }),
+    grant('', LEVEL_VIEW, { type: 'space', id: '' }),
     grant('people/x.md', LEVEL_FULL, { id: 'u-me' }),
   ]
   const a = audienceSummary('people/x.md', grants, ['people/x.md'], { selfUserId: 'u-me' })
@@ -436,7 +436,7 @@ test('audience: alias grants are named, deduped, capped, and other users only co
 })
 
 test('audience: a restricted folder cuts outside grants, so inside it only admins remain', () => {
-  const grants = [grant('', LEVEL_VIEW, { type: 'community', id: '' })]
+  const grants = [grant('', LEVEL_VIEW, { type: 'space', id: '' })]
   const outside = audienceSummary('notes/open.md', grants, ['secret'], { selfUserId: 'u-me' })
   assert.equal(outside.audience, 'everyone')
   const inside = audienceSummary('secret/plan.md', grants, ['secret'], { selfUserId: 'u-me' })
@@ -455,6 +455,6 @@ test('audience: a restricted folder cuts outside grants, so inside it only admin
 test('audience: sub-view grants never count as audience', () => {
   // Levels below VIEW cannot exist today (view is the floor), but the guard
   // keeps a future level-0 tombstone from widening the reported audience.
-  const a = audienceSummary('x.md', [grant('', 5, { type: 'community', id: '' })], [], { selfUserId: 'u-me' })
+  const a = audienceSummary('x.md', [grant('', 5, { type: 'space', id: '' })], [], { selfUserId: 'u-me' })
   assert.equal(a.audience, 'admins-only')
 })

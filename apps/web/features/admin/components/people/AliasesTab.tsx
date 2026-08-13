@@ -58,7 +58,7 @@ function PermissionRow({ name, color, tone, detail, open, onToggle, children }: 
  * on the People tab, on Invite and on Types at the same moment.
  */
 export default function AliasesTab() {
-  const { communityId, data, busy, run } = usePeopleSection();
+  const { spaceId, data, busy, run } = usePeopleSection();
   const [open, setOpen] = useState<OpenSubject>(null);
 
   const aliases = useMemo(
@@ -91,7 +91,7 @@ export default function AliasesTab() {
           open={open === ''}
           onToggle={() => toggle('')}
         >
-          <EveryoneSettings communityId={communityId} data={data} busy={busy} run={run} />
+          <EveryoneSettings spaceId={spaceId} data={data} busy={busy} run={run} />
         </PermissionRow>
 
         {aliases.map((alias) => (
@@ -105,7 +105,7 @@ export default function AliasesTab() {
             onToggle={() => toggle(alias.name)}
           >
             <AliasSettings
-              communityId={communityId}
+              spaceId={spaceId}
               alias={alias}
               data={data}
               busy={busy}
@@ -116,7 +116,7 @@ export default function AliasesTab() {
       </div>
 
       <NewAliasRow
-        communityId={communityId}
+        spaceId={spaceId}
         taken={aliases.map((a) => a.name)}
         busy={busy}
         run={run}

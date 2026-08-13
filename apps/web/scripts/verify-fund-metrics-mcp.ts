@@ -12,7 +12,7 @@
  *
  * Needs `pnpm dev` running and `pnpm db:connectors:funds` seeded.
  *
- *   pnpm connectors:verify:funds [communityId]
+ *   pnpm connectors:verify:funds [spaceId]
  */
 import 'dotenv/config';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
@@ -21,7 +21,7 @@ import { OWNER_ALIAS_NAME } from '../lib/types/context';
 import { mintAccessToken } from '../lib/mcp/tokens';
 import { MCP_SCOPES } from '../lib/mcp/scopes';
 
-const COMMUNITY = process.argv[2] ?? 'community:blackbird-ventures';
+const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
 const APP = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 const MCP_URL = new URL(`${APP}/api/mcp`);
 
@@ -51,12 +51,12 @@ function payload(result: { content?: unknown }): Json {
 }
 
 async function main() {
-  // an access token for a real admin of the community
+  // an access token for a real admin of the space
   const holder = await prisma.userAlias.findFirst({
-    where: { communityId: COMMUNITY, aliasName: OWNER_ALIAS_NAME },
+    where: { spaceId: SPACE, aliasName: OWNER_ALIAS_NAME },
     select: { userId: true },
   });
-  if (!holder) throw new Error(`nobody manages ${COMMUNITY}`);
+  if (!holder) throw new Error(`nobody manages ${SPACE}`);
   const admin = await prisma.user.findUnique({
     where: { id: holder.userId },
     select: { id: true, name: true, email: true },
@@ -87,7 +87,7 @@ async function main() {
     tools.tools.map((t) => t.name).join(', '),
   );
 
-  const listed = await call('list_connectors', { community_id: COMMUNITY });
+  const listed = await call('list_connectors', { space_id: SPACE });
   const fundConnector = (listed.connectors ?? []).find((c: Json) => c.name === 'fund-metrics');
   check(
     'list_connectors returns the fund-metrics connector, valid, with its perimeter',
@@ -105,7 +105,7 @@ async function main() {
 
   // the actual data pull
   const runConnector = (code: string) =>
-    call('run_connector', { community_id: COMMUNITY, connector: 'fund-metrics', code });
+    call('run_connector', { space_id: SPACE, connector: 'fund-metrics', code });
   const shown = (r: Json) => JSON.stringify(r.value ?? null);
 
   const funds = await runConnector(`
@@ -185,7 +185,7 @@ async function main() {
   );
 
   // the context note that hangs off the connector
-  const context = await call('search_context', { community_id: COMMUNITY, query: 'TVPI' });
+  const context = await call('search_context', { space_id: SPACE, query: 'TVPI' });
   const hit = JSON.stringify(context);
   check(
     'the attached context note is discoverable and points at the connector',

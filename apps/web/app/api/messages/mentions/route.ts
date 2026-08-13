@@ -10,13 +10,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim() ?? '';
     const type = searchParams.get('type') ?? 'user';
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (type === 'event' && communityId) {
-      // Search events (nodes with type='event') in the community
+    if (type === 'event' && spaceId) {
+      // Search events (nodes with type='event') in the space
       const events = await prisma.node.findMany({
         where: {
-          communityId,
+          spaceId,
           type: 'event',
           ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
         },
@@ -43,17 +43,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Default: search users — scoped to people the caller shares a real
-    // (non-personal) community with, and by name only. Querying all users by
+    // (non-personal) space with, and by name only. Querying all users by
     // email platform-wide was a cross-tenant roster leak + email-existence oracle.
-    const myCommunities = await prisma.userCommunity.findMany({
-      where: { userId: user.id, status: 'active', community: { personalOwnerId: null } },
-      select: { communityId: true },
+    const mySpaces = await prisma.spaceMember.findMany({
+      where: { userId: user.id, status: 'active', space: { personalOwnerId: null } },
+      select: { spaceId: true },
     });
-    const communityIds = myCommunities.map((c) => c.communityId);
-    const users = communityIds.length === 0 ? [] : await prisma.user.findMany({
+    const spaceIds = mySpaces.map((c) => c.spaceId);
+    const users = spaceIds.length === 0 ? [] : await prisma.user.findMany({
       where: {
         id: { not: user.id },
-        userCommunities: { some: { communityId: { in: communityIds }, status: 'active' } },
+        memberships: { some: { spaceId: { in: spaceIds }, status: 'active' } },
         ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
       },
       select: {

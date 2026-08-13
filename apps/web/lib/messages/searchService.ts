@@ -98,24 +98,24 @@ export async function searchConversationsAndMessages(currentUserId: string, quer
 export async function searchUsers(currentUserId: string, query?: string) {
   const normalized = query?.trim();
 
-  // Only surface people the caller shares a real (non-personal) community with.
+  // Only surface people the caller shares a real (non-personal) space with.
   // Without this, the endpoint returned the entire platform's name+email roster
   // across every tenant to any signed-in user — a cross-tenant identity leak and
   // an email-existence oracle. Email stays in the projection for the directory
   // dedup in searchUsersAndDirectory; the HTTP route strips it from the response.
-  const myCommunities = await prisma.userCommunity.findMany({
-    where: { userId: currentUserId, status: 'active', community: { personalOwnerId: null } },
-    select: { communityId: true },
+  const mySpaces = await prisma.spaceMember.findMany({
+    where: { userId: currentUserId, status: 'active', space: { personalOwnerId: null } },
+    select: { spaceId: true },
   });
-  const communityIds = myCommunities.map((c) => c.communityId);
-  if (communityIds.length === 0) return [];
+  const spaceIds = mySpaces.map((c) => c.spaceId);
+  if (spaceIds.length === 0) return [];
 
   const users = await prisma.user.findMany({
     where: {
       id: {
         not: currentUserId,
       },
-      userCommunities: { some: { communityId: { in: communityIds }, status: 'active' } },
+      memberships: { some: { spaceId: { in: spaceIds }, status: 'active' } },
       ...(normalized ? {
         OR: [
           {
@@ -152,26 +152,26 @@ export async function searchUsersAndDirectory(
   currentUserId: string,
   query?: string,
 ): Promise<{ users: Awaited<ReturnType<typeof searchUsers>>; directoryPeople: DirectoryPerson[] }> {
-  const [users, userCommunities] = await Promise.all([
+  const [users, memberships] = await Promise.all([
     searchUsers(currentUserId, query),
-    prisma.userCommunity.findMany({
+    prisma.spaceMember.findMany({
       where: { userId: currentUserId },
-      select: { communityId: true },
+      select: { spaceId: true },
     }),
   ]);
 
-  const communityIds = userCommunities.map((uc) => uc.communityId);
+  const spaceIds = memberships.map((uc) => uc.spaceId);
 
-  if (communityIds.length === 0) {
+  if (spaceIds.length === 0) {
     return { users, directoryPeople: [] };
   }
 
   const normalized = query?.trim();
 
-  // Query Node table (has communityId) for person-type nodes, then join with Person data
+  // Query Node table (has spaceId) for person-type nodes, then join with Person data
   const nodes = await prisma.node.findMany({
     where: {
-      communityId: { in: communityIds },
+      spaceId: { in: spaceIds },
       type: 'person',
       ...(normalized ? {
         name: { contains: normalized, mode: 'insensitive' },
@@ -183,7 +183,7 @@ export async function searchUsersAndDirectory(
       subtitle: true,
       imageUrl: true,
       metadata: true,
-      community: { select: { name: true } },
+      space: { select: { name: true } },
     },
     orderBy: { name: 'asc' },
     take: 30,
@@ -201,7 +201,7 @@ export async function searchUsersAndDirectory(
         subtitle: n.subtitle ?? null,
         email,
         imageUrl: n.imageUrl ?? null,
-        communityName: n.community?.name ?? null,
+        spaceName: n.space?.name ?? null,
       };
     })
     .filter((p) => !p.email || !activeEmails.has(p.email.toLowerCase()));

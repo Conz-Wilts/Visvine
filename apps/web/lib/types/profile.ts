@@ -1,6 +1,6 @@
 export interface FullProfile {
   id: string;
-  communityId?: string | null;
+  spaceId?: string | null;
   name: string;
   subtitle?: string | null;
   bio?: string | null;

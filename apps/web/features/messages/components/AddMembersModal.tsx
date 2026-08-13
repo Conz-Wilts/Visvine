@@ -19,7 +19,7 @@ interface DirectoryPerson {
   subtitle: string | null;
   email: string | null;
   imageUrl: string | null;
-  communityName: string | null;
+  spaceName: string | null;
 }
 
 interface AddMembersModalProps {
@@ -279,7 +279,7 @@ export default function AddMembersModal({
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-text-secondary">{person.name}</p>
                       <p className="truncate text-xs text-text-muted">
-                        {person.subtitle ?? person.communityName ?? 'Directory member'}
+                        {person.subtitle ?? person.spaceName ?? 'Directory member'}
                       </p>
                     </div>
                     {/* Invite button — copies contact info to clipboard */}

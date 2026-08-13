@@ -1,4 +1,4 @@
-export type ImageEntityType = 'card' | 'person' | 'community' | 'event';
+export type ImageEntityType = 'card' | 'person' | 'space' | 'event';
 
 /**
  * Upload an image for any entity type.

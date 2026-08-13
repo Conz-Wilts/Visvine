@@ -16,7 +16,7 @@ interface EventHeaderProps {
 
 const VISIBILITY_COLORS: Record<EventVisibility, string> = {
   public: 'bg-brand-light-bg text-brand-green',
-  community: 'bg-brand-green text-brand-green',
+  space: 'bg-brand-green text-brand-green',
   private: 'bg-gray-100 text-brand-grey',
 };
 

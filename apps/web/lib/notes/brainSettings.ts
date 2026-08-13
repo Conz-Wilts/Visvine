@@ -1,4 +1,4 @@
-// Display settings for a community's brain, stored in the control-plane
+// Display settings for a space's brain, stored in the control-plane
 // sidecar ("settings.json" — see sidecar.ts). Currently just the context's
 // display name, shown wherever the brain root needs a human label.
 

@@ -5,24 +5,24 @@ import { useDebounce } from './useDebounce';
 
 export interface NodeSearchResult {
   id: string;
-  /** Canonical cross-community identity, when the node has been resolved to one. */
+  /** Canonical cross-space identity, when the node has been resolved to one. */
   identity_id: string | null;
   name: string;
   subtitle: string | null;
   location: string | null;
   tags: string[];
   image_url: string | null;
-  community_id: string | null;
-  community_name: string | null;
-  /** All communities this identity appears in (for the finder badge). */
-  communities?: string[];
+  space_id: string | null;
+  space_name: string | null;
+  /** All spaces this identity appears in (for the finder badge). */
+  spaces?: string[];
   metadata: Record<string, unknown> | null;
 }
 
 /**
- * Fuzzy-search nodes of a given type across all communities, so you can find an
- * existing entry to re-add to the current community instead of recreating it.
- * Debounces input by 300ms and deduplicates cross-community matches.
+ * Fuzzy-search nodes of a given type across all spaces, so you can find an
+ * existing entry to re-add to the current space instead of recreating it.
+ * Debounces input by 300ms and deduplicates cross-space matches.
  *
  * `email` is only meaningful for `person` (people store an email in metadata);
  * pass it to also match on email. Other types match by name only.

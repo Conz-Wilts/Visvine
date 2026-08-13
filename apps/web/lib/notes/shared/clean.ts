@@ -22,7 +22,7 @@ export interface CleanScope {
 
 /**
  * The caller's reach for one clean pass. `ownedPaths` is required for members
- * (CommunityNote.createdBy === caller); admins and personal-space owners own
+ * (SpaceNote.createdBy === caller); admins and personal-space owners own
  * everything. `targetPath` narrows any role to one folder (or a single note).
  */
 export function buildCleanScope(opts: {

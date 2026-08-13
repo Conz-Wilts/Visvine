@@ -1,6 +1,6 @@
 // The one shape a label wears in this app: a rounded square.
 //
-// Node types, community aliases and tags are all the same object to a reader —
+// Node types, space aliases and tags are all the same object to a reader —
 // a short coloured word that says what something is — so they are all drawn by
 // this component. Before it, the same alias was a `rounded-full` pill in the
 // console's Types tab, a `rounded-md` square on the directory card, a bordered

@@ -1,7 +1,7 @@
 // Brain display settings (lib/notes/brainSettings.ts).
-//   GET  ?communityId=            → { settings } — any member of the brain.
-//   POST { communityId, contextName } → community admins only; empty name
-//         resets to the default ("Community context").
+//   GET  ?spaceId=            → { settings } — any member of the brain.
+//   POST { spaceId, contextName } → space admins only; empty name
+//         resets to the default ("Space context").
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     return fail('Personal spaces have no context settings')
   }
   if (!brain.isAdmin) {
-    return fail('Only community admins can rename the context', 403)
+    return fail('Only space admins can rename the context', 403)
   }
   if (typeof body.contextName !== 'string') {
     return fail('contextName is required')

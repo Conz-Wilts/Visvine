@@ -11,7 +11,7 @@ import Select from '@/components/ui/Select';
 
 interface RSVPFormProps {
   event: NBEvent;
-  communityId: string;
+  spaceId: string;
 }
 
 interface FormState {
@@ -23,7 +23,7 @@ interface FormState {
   [key: string]: string | boolean;
 }
 
-export function RSVPForm({ event, communityId }: RSVPFormProps) {
+export function RSVPForm({ event, spaceId }: RSVPFormProps) {
   const [formState, setFormState] = useState<FormState>({
     name: '',
     email: '',
@@ -55,7 +55,7 @@ export function RSVPForm({ event, communityId }: RSVPFormProps) {
       }
 
       const response = await fetch(
-        `/api/events/${event.id}/attendees?communityId=${communityId}`,
+        `/api/events/${event.id}/attendees?spaceId=${spaceId}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -159,7 +159,7 @@ export function RSVPForm({ event, communityId }: RSVPFormProps) {
           </p>
         </div>
         <a
-          href={`/api/events/${event.id}/ics?communityId=${communityId}`}
+          href={`/api/events/${event.id}/ics?spaceId=${spaceId}`}
           className="inline-flex items-center gap-2 px-6 py-3 text-sm font-semibold text-brand-white bg-brand-green rounded-lg hover:opacity-90 transition-all shadow-sm"
           download
         >

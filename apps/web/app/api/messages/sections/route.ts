@@ -11,16 +11,16 @@ export async function GET(request: NextRequest) {
     if (!user) return unauthorizedResponse();
 
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
-    if (!communityId) {
-      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    const spaceId = searchParams.get('spaceId');
+    if (!spaceId) {
+      return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
     }
 
-    if (await featureAccessForbidden(user.id, communityId, 'channels', user.email)) {
+    if (await featureAccessForbidden(user.id, spaceId, 'channels', user.email)) {
       return forbiddenResponse();
     }
 
-    const sections = await listChannelSections(communityId);
+    const sections = await listChannelSections(spaceId);
     return NextResponse.json({ sections });
   } catch (error) {
     return handleMessagingError(error);
@@ -41,13 +41,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const allowed = await isAdmin(user.id, parsed.data.communityId, user.email);
+    const allowed = await isAdmin(user.id, parsed.data.spaceId, user.email);
     if (!allowed) {
-      return forbiddenResponse('Only community admins can create sections');
+      return forbiddenResponse('Only space admins can create sections');
     }
 
     const section = await createChannelSection(
-      parsed.data.communityId,
+      parsed.data.spaceId,
       parsed.data.name,
       parsed.data.emoji,
       parsed.data.context,

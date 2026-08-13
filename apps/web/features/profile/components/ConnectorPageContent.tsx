@@ -29,7 +29,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Check, KeyRound, Pencil, Play, Plus, Trash2 } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
@@ -86,7 +86,7 @@ const SAVE_BUTTON =
  * validation (it re-parses the merged note), so an editor's job is to send the
  * fields and show back whatever it refused.
  */
-function useConnectorSave(communityId: string, name: string, reload: () => Promise<void>) {
+function useConnectorSave(spaceId: string, name: string, reload: () => Promise<void>) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -96,7 +96,7 @@ function useConnectorSave(communityId: string, name: string, reload: () => Promi
       setError(null);
       try {
         await fetchJsonBody(
-          `/api/communities/${communityId}/connectors/${encodeURIComponent(name)}`,
+          `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}`,
           'PATCH',
           patch,
         );
@@ -109,7 +109,7 @@ function useConnectorSave(communityId: string, name: string, reload: () => Promi
         setSaving(false);
       }
     },
-    [communityId, name, reload],
+    [spaceId, name, reload],
   );
 
   return { save, saving, error, setError };
@@ -389,12 +389,12 @@ function EnvEditor({
  */
 function SecretEditor({
   secret,
-  communityId,
+  spaceId,
   onChanged,
   onClose,
 }: {
   secret: SecretStatus;
-  communityId: string;
+  spaceId: string;
   onChanged: () => void;
   onClose: () => void;
 }) {
@@ -406,7 +406,7 @@ function SecretEditor({
     setBusy(true);
     setError(null);
     try {
-      await fetchJsonBody(`/api/communities/${communityId}/secrets`, 'PUT', {
+      await fetchJsonBody(`/api/communities/${spaceId}/secrets`, 'PUT', {
         name: secret.name,
         value,
       });
@@ -424,7 +424,7 @@ function SecretEditor({
     setBusy(true);
     setError(null);
     try {
-      await fetchJsonBody(`/api/communities/${communityId}/secrets`, 'DELETE', { name: secret.name });
+      await fetchJsonBody(`/api/communities/${spaceId}/secrets`, 'DELETE', { name: secret.name });
       onChanged();
       onClose();
     } catch (e) {
@@ -485,10 +485,10 @@ function SecretEditor({
  */
 function ConnectorConsole({
   connector,
-  communityId,
+  spaceId,
 }: {
   connector: ConnectorDetail;
-  communityId: string;
+  spaceId: string;
 }) {
   const [code, setCode] = useState('');
   const [running, setRunning] = useState(false);
@@ -500,7 +500,7 @@ function ConnectorConsole({
     setRunning(true);
     try {
       const res = await fetchJsonBody<{ result: RunResult }>(
-        `/api/communities/${communityId}/connectors/${encodeURIComponent(connector.name)}/test`,
+        `/api/communities/${spaceId}/connectors/${encodeURIComponent(connector.name)}/test`,
         'POST',
         { code: source },
       );
@@ -696,8 +696,8 @@ const TONE_CLASSES = {
 
 export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('connector:') ? nodeId.slice('connector:'.length) : nodeId;
-  const { currentCommunity, loading: communityLoading } = useCommunity();
-  const communityId = currentCommunity?.id;
+  const { currentSpace, loading: spaceLoading } = useSpace();
+  const spaceId = currentSpace?.id;
 
   const [connector, setConnector] = useState<ConnectorDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -715,10 +715,10 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   const [testing, setTesting] = useState(false);
 
   const reload = useCallback(async () => {
-    if (!communityId) return;
+    if (!spaceId) return;
     try {
       const data = await fetchJson<{ connector: ConnectorDetail; calls: ConnectorCall[] }>(
-        `/api/communities/${communityId}/connectors/${encodeURIComponent(name)}`,
+        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}`,
       );
       setConnector(data.connector);
       setCalls(data.calls);
@@ -728,20 +728,20 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [communityId, name]);
+  }, [spaceId, name]);
 
   useEffect(() => {
-    if (communityLoading) return;
-    if (!communityId) {
+    if (spaceLoading) return;
+    if (!spaceId) {
       setLoading(false);
       return;
     }
     setLoading(true);
     void reload();
-  }, [communityId, communityLoading, reload]);
+  }, [spaceId, spaceLoading, reload]);
 
   const { save, saving, error: saveError, setError: setSaveError } = useConnectorSave(
-    communityId ?? '',
+    spaceId ?? '',
     name,
     reload,
   );
@@ -762,12 +762,12 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
    * needs the connector's own code, which is what the console is for.
    */
   const runTest = async () => {
-    if (!communityId) return;
+    if (!spaceId) return;
     setTesting(true);
     setTest(null);
     try {
       const res = await fetchJsonBody<{ result: RunResult }>(
-        `/api/communities/${communityId}/connectors/${encodeURIComponent(name)}/test`,
+        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/test`,
         'POST',
         { code: "return 'connector ok'" },
       );
@@ -796,7 +796,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
     [connector],
   );
 
-  if (loading || communityLoading) {
+  if (loading || spaceLoading) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-8 w-48 rounded-lg" />
@@ -974,11 +974,11 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
                   </li>
                 ))}
               </ul>
-              {pickedSecretStatus && communityId && (
+              {pickedSecretStatus && spaceId && (
                 <SecretEditor
                   key={pickedSecretStatus.name}
                   secret={pickedSecretStatus}
-                  communityId={communityId}
+                  spaceId={spaceId}
                   onChanged={reload}
                   onClose={() => setPickedSecret(null)}
                 />
@@ -989,7 +989,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       {/* ══ TERMINAL — the same path an agent's run_connector takes ══ */}
-      {connector.perimeter && communityId && (
+      {connector.perimeter && spaceId && (
         <Section title="Console" meta="runs for real">
           {!runnable ? (
             <p className="flex items-start gap-2 text-sm text-text-muted">
@@ -1001,7 +1001,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
               </span>
             </p>
           ) : (
-            <ConnectorConsole connector={connector} communityId={communityId} />
+            <ConnectorConsole connector={connector} spaceId={spaceId} />
           )}
         </Section>
       )}

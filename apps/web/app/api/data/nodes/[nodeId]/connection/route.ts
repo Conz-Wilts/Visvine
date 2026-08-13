@@ -2,8 +2,8 @@
  * Member connection for a person context node.
  *
  *   GET    → { connected: { userId, name, email, isActive } | null }
- *   PUT    { userId } → connect (community admin, or the member claiming themself)
- *   DELETE → disconnect (community admin, or the connected member)
+ *   PUT    { userId } → connect (space admin, or the member claiming themself)
+ *   DELETE → disconnect (space admin, or the connected member)
  *
  * The connection routes through Identity (see lib/identity/connection.ts); this
  * endpoint is the only way clients touch it — the generic node PATCH cannot.
@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { isAdmin, communityMemberForbidden } from '@/lib/auth';
+import { isAdmin, spaceMemberForbidden } from '@/lib/auth';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import {
   connectNodeToUser,
@@ -25,12 +25,12 @@ type RouteContext = { params: Promise<{ nodeId: string }> };
 async function loadNode(nodeId: string, viewerUserId: string, viewerEmail?: string | null) {
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { id: true, type: true, communityId: true },
+    select: { id: true, type: true, spaceId: true },
   });
-  if (!node?.communityId) return null;
+  if (!node?.spaceId) return null;
   // A node's connection (incl. the connected member's email) is member-scoped.
-  if (await communityMemberForbidden(viewerUserId, node.communityId, viewerEmail)) return null;
-  return node as { id: string; type: string; communityId: string };
+  if (await spaceMemberForbidden(viewerUserId, node.spaceId, viewerEmail)) return null;
+  return node as { id: string; type: string; spaceId: string };
 }
 
 export async function GET(_req: NextRequest, context: RouteContext) {
@@ -61,13 +61,13 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   const node = await loadNode(nodeId, session.userId, session.email);
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
-  const admin = await isAdmin(session.userId, node.communityId, session.email);
+  const admin = await isAdmin(session.userId, node.spaceId, session.email);
   const selfClaim = session.userId === userId;
   if (!admin && !selfClaim) return forbiddenResponse();
 
-  // Only active members of the node's community can be connected.
-  const membership = await prisma.userCommunity.findFirst({
-    where: { userId, communityId: node.communityId, status: 'active' },
+  // Only active members of the node's space can be connected.
+  const membership = await prisma.spaceMember.findFirst({
+    where: { userId, spaceId: node.spaceId, status: 'active' },
     select: { id: true },
   });
   if (!membership) {
@@ -103,7 +103,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   const connection = await resolveNodeConnection(nodeId);
   if (!connection) return NextResponse.json({ connected: null });
 
-  const admin = await isAdmin(session.userId, node.communityId, session.email);
+  const admin = await isAdmin(session.userId, node.spaceId, session.email);
   if (!admin && connection.userId !== session.userId) return forbiddenResponse();
 
   await disconnectNode(nodeId, { actorUserId: session.userId });

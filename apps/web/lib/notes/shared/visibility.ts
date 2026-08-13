@@ -15,6 +15,6 @@ export function pathVisibleTo(path: string, p: BrainPrincipal): boolean {
 
 /** The subset of items (anything carrying a brain path) the principal may read. */
 export function filterVisible<T extends { path: string }>(items: T[], p: BrainPrincipal): T[] {
-  if (p.system || p.communityAdmin) return items
+  if (p.system || p.spaceAdmin) return items
   return items.filter((item) => pathVisibleTo(item.path, p))
 }

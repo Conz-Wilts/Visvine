@@ -14,13 +14,13 @@ import { nameKey, normalizeEmail, linkedinHandle, websiteDomain } from './normal
 export interface SuggestionItem {
   nodeId: string;
   nodeName: string;
-  nodeCommunityId: string | null;
-  nodeCommunityName: string | null;
+  nodeSpaceId: string | null;
+  nodeSpaceName: string | null;
   /** The node's CURRENT identity (what a "same" merge would fold into the candidate). */
   nodeIdentityId: string | null;
   candidateIdentityId: string;
   candidateName: string;
-  candidateCommunities: string[];
+  candidateSpaces: string[];
   confidence: number;
   reason: string;
 }
@@ -28,9 +28,9 @@ export interface SuggestionItem {
 /**
  * Pending suggestions: 'suggested' audit rows whose (nodeId, identityId) pair has
  * not since been confirmed/rejected/merged/split. Super admins see everything; a
- * community admin sees only suggestions whose node lives in one of their communities.
+ * space admin sees only suggestions whose node lives in one of their spaces.
  */
-export async function listSuggestions(opts: { communityIds?: string[] | null } = {}): Promise<SuggestionItem[]> {
+export async function listSuggestions(opts: { spaceIds?: string[] | null } = {}): Promise<SuggestionItem[]> {
   const suggested = await prisma.identityResolution.findMany({
     where: { decision: 'suggested' },
     orderBy: { createdAt: 'desc' },
@@ -55,14 +55,14 @@ export async function listSuggestions(opts: { communityIds?: string[] | null } =
   // Enrich with node + candidate-identity detail.
   const nodes = await prisma.node.findMany({
     where: { id: { in: [...new Set(pending.map((p) => p.nodeId))] } },
-    select: { id: true, name: true, communityId: true, identityId: true, community: { select: { name: true } } },
+    select: { id: true, name: true, spaceId: true, identityId: true, space: { select: { name: true } } },
   });
   const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
   const candidateIds = [...new Set(pending.map((p) => p.identityId!).filter(Boolean))];
   const identities = await prisma.identity.findMany({
     where: { id: { in: candidateIds } },
-    select: { id: true, canonicalName: true, nodes: { select: { community: { select: { name: true } } } } },
+    select: { id: true, canonicalName: true, nodes: { select: { space: { select: { name: true } } } } },
   });
   const idMap = new Map(identities.map((i) => [i.id, i]));
 
@@ -71,16 +71,16 @@ export async function listSuggestions(opts: { communityIds?: string[] | null } =
     const node = nodeMap.get(p.nodeId);
     const cand = idMap.get(p.identityId!);
     if (!node || !cand) continue; // node or candidate deleted since
-    if (opts.communityIds && !(node.communityId && opts.communityIds.includes(node.communityId))) continue;
+    if (opts.spaceIds && !(node.spaceId && opts.spaceIds.includes(node.spaceId))) continue;
     items.push({
       nodeId: node.id,
       nodeName: node.name,
-      nodeCommunityId: node.communityId,
-      nodeCommunityName: node.community?.name ?? null,
+      nodeSpaceId: node.spaceId,
+      nodeSpaceName: node.space?.name ?? null,
       nodeIdentityId: node.identityId,
       candidateIdentityId: cand.id,
       candidateName: cand.canonicalName,
-      candidateCommunities: [...new Set(cand.nodes.map((n) => n.community?.name).filter((x): x is string => !!x))],
+      candidateSpaces: [...new Set(cand.nodes.map((n) => n.space?.name).filter((x): x is string => !!x))],
       confidence: p.confidence,
       reason: p.reason,
     });
@@ -156,11 +156,11 @@ export async function splitNodeToNewIdentity(
 ): Promise<{ ok: boolean; identityId?: string; error?: string }> {
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
-    select: { id: true, type: true, name: true, location: true, url: true, imageUrl: true, metadata: true, identityId: true, communityId: true },
+    select: { id: true, type: true, name: true, location: true, url: true, imageUrl: true, metadata: true, identityId: true, spaceId: true },
   });
   if (!node) return { ok: false, error: 'node not found' };
 
-  // Every organisation spelling — 'organization', 'group', today's 'community' —
+  // Every organisation spelling — 'organization', 'group', today's 'space' —
   // splits to an org identity; anything else is a person. `Identity.kind` keeps
   // the internal 'organization' name.
   // Identity.kind keeps its internal 'organization' value — it's plumbing.

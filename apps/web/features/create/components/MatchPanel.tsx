@@ -46,14 +46,14 @@ export default function MatchPanel({
       <div className="flex flex-col gap-1 overflow-y-auto max-h-[340px] pr-1">
         {results.map((r) => {
           const email = r.metadata?.email as string | undefined;
-          // A result carrying communityRef is a community that actually runs
-          // here (see searchCommunities), not a card in somebody's directory —
+          // A result carrying spaceRef is a space that actually runs
+          // here (see searchSpaces), not a card in somebody's directory —
           // worth saying out loud, because picking it links the two.
-          const isLiveCommunity = typeof r.metadata?.communityRef === 'string';
+          const isLiveSpace = typeof r.metadata?.spaceRef === 'string';
           const memberCount = typeof r.metadata?.memberCount === 'number' ? r.metadata.memberCount : 0;
           return (
             <button
-              key={`${r.id}-${r.community_id}`}
+              key={`${r.id}-${r.space_id}`}
               type="button"
               onClick={() => onSelect(r)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors hover:bg-surface-2 group"
@@ -77,12 +77,12 @@ export default function MatchPanel({
                   {email && (
                     <span className="text-[11px] text-text-muted truncate">{email}</span>
                   )}
-                  {r.community_name && (
+                  {r.space_name && (
                     <span className="text-[10px] text-text-muted bg-surface-2 px-1.5 py-0.5 rounded-full truncate">
-                      {r.community_name}
+                      {r.space_name}
                     </span>
                   )}
-                  {isLiveCommunity && (
+                  {isLiveSpace && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-brand-dark-green bg-brand-green/10 px-1.5 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-brand-green" />
                       Space · {memberCount} member{memberCount === 1 ? '' : 's'}

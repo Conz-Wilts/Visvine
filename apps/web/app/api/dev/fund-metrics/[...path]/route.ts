@@ -1,6 +1,6 @@
 /**
  * A fake "fund administrator API" for exercising connectors end to end with
- * data an actual community would care about: fund-level metrics (committed
+ * data an actual space would care about: fund-level metrics (committed
  * capital, called, DPI/TVPI/IRR), the position list behind them, and a
  * quarterly time series.
  *

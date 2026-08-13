@@ -9,8 +9,8 @@
  * Local-only — guarded exactly like the destructive db:* scripts.
  *
  * Usage:
- *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts                 # all communities
- *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts <communityId>   # one community
+ *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts                 # all spaces
+ *   pnpm --filter @visvine/web exec tsx scripts/backfill-context-links.ts <spaceId>   # one space
  *   … --reasons   also generate AI reason phrases for the links (needs GEMINI_API_KEY)
  */
 
@@ -26,20 +26,20 @@ async function main() {
   const reasons = args.includes('--reasons');
   const only = args.find((a) => !a.startsWith('--'));
   if (reasons && !aiConfigured()) throw new Error('--reasons needs GEMINI_API_KEY set.');
-  const communities = only
-    ? await prisma.community.findMany({ where: { id: only }, select: { id: true, name: true } })
-    : await prisma.community.findMany({ select: { id: true, name: true } });
-  if (only && communities.length === 0) throw new Error(`Community not found: ${only}`);
+  const spaces = only
+    ? await prisma.space.findMany({ where: { id: only }, select: { id: true, name: true } })
+    : await prisma.space.findMany({ select: { id: true, name: true } });
+  if (only && spaces.length === 0) throw new Error(`Space not found: ${only}`);
 
-  for (const community of communities) {
-    const processed = await backfillContextLinks(community.id);
+  for (const space of spaces) {
+    const processed = await backfillContextLinks(space.id);
     if (processed === 0) continue;
     const total = await prisma.link.count({
-      where: { communityId: community.id, origin: CONTEXT_ORIGIN },
+      where: { spaceId: space.id, origin: CONTEXT_ORIGIN },
     });
-    console.log(`${community.name} (${community.id}): ${processed} entity notes → ${total} context links`);
+    console.log(`${space.name} (${space.id}): ${processed} entity notes → ${total} context links`);
     if (reasons) {
-      const res = await generateLinkReasons(community.id);
+      const res = await generateLinkReasons(space.id);
       console.log(`  reasons: ${res.updated} written of ${res.considered} pending`);
     }
   }

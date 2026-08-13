@@ -1,16 +1,16 @@
 /**
  * The single "this thing now exists — give it context" path.
  *
- * Everything a user can create (a community, a space, a channel, a person, an
+ * Everything a user can create (a space, a space, a channel, a person, an
  * event, a note, an uploaded file) should be reachable in two places: the
  * context graph as a `Node`, and the brain as a markdown note that records what
  * we know about it. Before this module every call site hand-wrote
- * `prisma.node.create` + `revalidateTag`, which is exactly why communities,
+ * `prisma.node.create` + `revalidateTag`, which is exactly why spaces,
  * spaces, channels, notes and files never made it into the graph at all.
  *
  * Two kinds of thing go through here:
  *
- *  * **Records and containers** (person, resource, event, community,
+ *  * **Records and containers** (person, resource, event, space,
  *    space, channel) get BOTH a node and a canonical note under their fixed
  *    namespace — `spaces/general.md`, `channels/announcements.md`, and so on.
  *  * **Documents** (a note, an uploaded file) get ONLY a node: the artifact IS
@@ -18,7 +18,7 @@
  *
  * Everything here is idempotent. Re-running a create, or the backfill, upserts
  * the node, tolerates an existing note, and re-asserts the containment edge —
- * `upsertLink` dedups on (community, pair, relationship) and never demotes a
+ * `upsertLink` dedups on (space, pair, relationship) and never demotes a
  * manual edge, so a second pass is a no-op rather than a duplicate.
  */
 import { revalidateTag } from 'next/cache'
@@ -28,7 +28,7 @@ import { slugify } from '../../eventUtils'
 import { logger } from '../../logger'
 import { createNote, SHARED_OWNER_KEY, type Actor } from '../store'
 import { entityDraftContent, entityKindOf, entityNotePath } from '../entities'
-import { communityNodeId } from '../../types/context'
+import { spaceNodeId } from '../../types/context'
 import { upsertLink } from './links'
 
 /** The node `type` values this module knows how to place in the graph. */
@@ -56,11 +56,11 @@ const CONTAINS_RELATIONSHIP = 'contains'
  * means the id is NOT the record id — this is how we find the node again for a
  * given ChannelSection/Conversation/ContextSource without a second table.
  */
-// The metadata KEYS keep their pre-rename names (`communityRef`, `sectionId`) —
+// The metadata KEYS keep their pre-rename names (`spaceRef`, `sectionId`) —
 // they're stored data, not display vocabulary.
 const RECORD_KEY: Partial<Record<EntityNodeType, string>> = {
   person: 'userId',
-  space: 'communityRef',
+  space: 'spaceRef',
   section: 'sectionId',
   channel: 'conversationId',
   connector: 'notePath',
@@ -73,7 +73,7 @@ const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Visvine', email: null }
 const MAX_ID_ATTEMPTS = 5
 
 export interface SyncEntityNodeInput {
-  communityId: string
+  spaceId: string
   type: EntityNodeType
   /** Display name — also the slug source when `slugSource` is omitted. */
   name: string
@@ -83,9 +83,9 @@ export interface SyncEntityNodeInput {
   slugSource?: string | null
   /**
    * Pin the node id instead of deriving it. Only for things whose id is already
-   * a stable global slug — a community, whose own id IS the slug, so the node
+   * a stable global slug — a space, whose own id IS the slug, so the node
    * for `blackbird` is always `community:blackbird` and callers can name it
-   * without a lookup (see {@link communityNodeId}).
+   * without a lookup (see {@link spaceNodeId}).
    */
   nodeId?: string | null
   subtitle?: string | null
@@ -93,7 +93,7 @@ export interface SyncEntityNodeInput {
   url?: string | null
   imageUrl?: string | null
   /**
-   * The node's alias — the type-scoped label (see CommunityAlias). Omit to
+   * The node's alias — the type-scoped label (see SpaceAlias). Omit to
    * leave the column alone: events reuse `alias` for their public /e/<slug>
    * slug, so blindly writing null here would break their share links.
    */
@@ -123,11 +123,11 @@ export interface SyncEntityNodeResult {
   noteError: string | null
 }
 
-// Lives in lib/types/context.ts (alongside its sibling `isOwnCommunityNode`) so
+// Lives in lib/types/context.ts (alongside its sibling `isOwnSpaceNode`) so
 // client components can reach it — this module imports prisma. Re-exported here
 // because every server call site has always asked entityNodes for the
-// community's node id.
-export { communityNodeId }
+// space's node id.
+export { spaceNodeId }
 
 function bustContextCache(): void {
   // revalidateTag throws outside a Next.js request scope (scripts, tests).
@@ -145,13 +145,13 @@ function bustContextCache(): void {
  */
 /**
  * Pre-rename spellings that may still sit on stored rows until
- * scripts/rename-community-to-space.ts has run against that database. Matching
+ * scripts/rename-space-to-space.ts has run against that database. Matching
  * them here keeps the sync idempotent across the deploy→migrate window instead
  * of spawning `-2` suffixed duplicates or losing track of a record's node.
  */
 const LEGACY_TYPE_SPELLINGS: Partial<Record<EntityNodeType, string[]>> = {
   section: ['space'],
-  space: ['community', 'group', 'organization', 'organisation', 'org', 'company'],
+  space: ['space', 'group', 'organization', 'organisation', 'org', 'company'],
 }
 
 function typeSpellings(type: EntityNodeType): string[] {
@@ -163,7 +163,7 @@ function sameEntityType(stored: string, type: EntityNodeType): boolean {
 }
 
 async function findNodeIdByRecord(
-  communityId: string,
+  spaceId: string,
   type: EntityNodeType,
   recordId: string,
 ): Promise<string | null> {
@@ -171,7 +171,7 @@ async function findNodeIdByRecord(
   if (!key) return null
   const row = await prisma.node.findFirst({
     where: {
-      communityId,
+      spaceId,
       type: { in: typeSpellings(type) },
       metadata: { path: [key], equals: recordId },
     },
@@ -190,7 +190,7 @@ async function findNodeIdByRecord(
  * about) and only need the note half.
  */
 export async function ensureEntityNote(
-  communityId: string,
+  spaceId: string,
   node: { id: string; type: string; name?: string | null; subtitle?: string | null },
   opts: { tags?: string[]; body?: string; actor?: Actor | null } = {},
 ): Promise<{ notePath: string | null; noteError: string | null; created: boolean }> {
@@ -199,7 +199,7 @@ export async function ensureEntityNote(
   if (!notePath) return { notePath: null, noteError: null, created: false }
   try {
     await createNote(
-      { communityId, ownerKey: SHARED_OWNER_KEY },
+      { spaceId, ownerKey: SHARED_OWNER_KEY },
       notePath,
       entityDraftContent(node, { tags: opts.tags, body: opts.body }),
       opts.actor ?? SYSTEM_ACTOR,
@@ -221,7 +221,7 @@ export async function ensureEntityNote(
  * Create or update the node for an entity, and ensure its canonical note.
  *
  * The node id is `<type>:<slug>`, suffixed `-2`, `-3`… on collision — node ids
- * are globally unique, not per-community, so two communities that both have a
+ * are globally unique, not per-space, so two spaces that both have a
  * "General" section land on `section:general` and `section:general-2`. That's the same
  * rule the note-first entity create already uses (app/api/directory/entities).
  *
@@ -230,7 +230,7 @@ export async function ensureEntityNote(
  * fail because the brain rejected a path.
  */
 export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEntityNodeResult> {
-  const { communityId, type } = input
+  const { spaceId, type } = input
   const name = input.name.trim() || type
   const recordId = input.recordId ?? null
 
@@ -251,12 +251,12 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
     ...(input.alias === undefined ? {} : { alias: input.alias }),
     tags: input.tags ?? [],
     metadata: metadata as Prisma.InputJsonObject,
-    communityId,
+    spaceId,
   }
 
   // Already synced? Update in place — the id (and therefore the note path and
   // the saved canvas position) must survive a rename.
-  let nodeId = input.nodeId ?? (recordId ? await findNodeIdByRecord(communityId, type, recordId) : null)
+  let nodeId = input.nodeId ?? (recordId ? await findNodeIdByRecord(spaceId, type, recordId) : null)
   if (input.nodeId) {
     await prisma.node.upsert({
       where: { id: input.nodeId },
@@ -273,15 +273,15 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
       const candidate = attempt === 1 ? baseId : `${baseId}-${attempt}`
       const existing = await prisma.node.findUnique({
         where: { id: candidate },
-        select: { communityId: true, type: true },
+        select: { spaceId: true, type: true },
       })
       if (existing) {
         // Adopt the node only when it's the same kind of thing in the same
-        // community — that's the pre-backfill row for this very record, and
+        // space — that's the pre-backfill row for this very record, and
         // updating it in place is exactly right. Anything else just got to the
         // slug first (node ids are global), so move to the next suffix.
         // Legacy spellings count as the same kind (see LEGACY_TYPE_SPELLINGS).
-        if (existing.communityId !== communityId || !sameEntityType(existing.type, type)) continue
+        if (existing.spaceId !== spaceId || !sameEntityType(existing.type, type)) continue
         await prisma.node.update({ where: { id: candidate }, data: nodeData })
         nodeId = candidate
         break
@@ -308,22 +308,22 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
   const { notePath, noteError } = DOCUMENT_TYPES.has(type) || input.skipNote
     ? { notePath: null as string | null, noteError: null as string | null }
     : await ensureEntityNote(
-        communityId,
+        spaceId,
         { id, type, name, subtitle: input.subtitle ?? null },
         { tags: input.tags, body: input.body, actor: input.actor },
       )
 
   // `Link.sourceId` is a FK onto `nodes`, so a parent that hasn't been synced yet
-  // (an old community meeting this code for the first time) would make the whole
+  // (an old space meeting this code for the first time) would make the whole
   // call fail on a foreign key. The node itself is the valuable part — skip the
-  // edge and let the backfill, which syncs the community first, draw it later.
+  // edge and let the backfill, which syncs the space first, draw it later.
   const parentExists =
     input.parentNodeId != null &&
     (await prisma.node.count({ where: { id: input.parentNodeId } })) > 0
 
   if (parentExists && input.parentNodeId && input.parentNodeId !== id) {
     await upsertLink({
-      communityId,
+      spaceId,
       sourceId: input.parentNodeId,
       targetId: id,
       relationship: CONTAINS_RELATIONSHIP,
@@ -339,8 +339,8 @@ export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEn
 
 /**
  * Best-effort {@link syncEntityNode} for callers whose primary write has already
- * succeeded. A community that fails to gain a context node is a degraded
- * community, not a failed create, so this swallows and logs.
+ * succeeded. A space that fails to gain a context node is a degraded
+ * space, not a failed create, so this swallows and logs.
  */
 export async function syncEntityNodeSafe(
   input: SyncEntityNodeInput,
@@ -350,7 +350,7 @@ export async function syncEntityNodeSafe(
   } catch (err) {
     logger.error('context.entityNode.sync.failed', {
       err,
-      communityId: input.communityId,
+      spaceId: input.spaceId,
       type: input.type,
       name: input.name,
     })
@@ -368,34 +368,34 @@ export async function syncEntityNodeSafe(
  * user's call, from the brain.
  */
 export async function removeEntityNode(
-  communityId: string,
+  spaceId: string,
   type: EntityNodeType,
   recordId: string,
 ): Promise<boolean> {
   try {
-    const nodeId = await findNodeIdByRecord(communityId, type, recordId)
+    const nodeId = await findNodeIdByRecord(spaceId, type, recordId)
     if (!nodeId) return false
     await prisma.node.delete({ where: { id: nodeId } })
     bustContextCache()
     return true
   } catch (err) {
-    logger.error('context.entityNode.remove.failed', { err, communityId, type, recordId })
+    logger.error('context.entityNode.remove.failed', { err, spaceId, type, recordId })
     return false
   }
 }
 
 /**
  * Re-point a channel's containment edge after it moves between spaces (or is
- * unfiled back to the community). Deleting the old edge first is what keeps a
+ * unfiled back to the space). Deleting the old edge first is what keeps a
  * moved channel from reading as contained by two parents at once.
  */
 export async function reparentEntityNode(
-  communityId: string,
+  spaceId: string,
   nodeId: string,
   parentNodeId: string,
 ): Promise<void> {
   await prisma.link.deleteMany({
-    where: { communityId, origin: 'structure', originRef: nodeId },
+    where: { spaceId, origin: 'structure', originRef: nodeId },
   })
   // Same foreign-key guard syncEntityNode applies: unfiling points a channel at
   // `community:<id>`, and a space created after we stopped making a node for
@@ -406,7 +406,7 @@ export async function reparentEntityNode(
     return
   }
   await upsertLink({
-    communityId,
+    spaceId,
     sourceId: parentNodeId,
     targetId: nodeId,
     relationship: CONTAINS_RELATIONSHIP,

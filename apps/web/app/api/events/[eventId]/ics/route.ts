@@ -21,16 +21,16 @@ export async function GET(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(

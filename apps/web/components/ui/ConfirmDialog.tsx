@@ -9,7 +9,7 @@ import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 /**
  * Confirmation modal for destructive or irreversible actions — replaces
  * `window.confirm` across the console. For the most dangerous actions
- * (deleting a community) pass `confirmText` to require the user to type it
+ * (deleting a space) pass `confirmText` to require the user to type it
  * before the confirm button unlocks.
  */
 interface ConfirmDialogProps {
@@ -19,7 +19,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   /** Red confirm button for destructive actions. */
   destructive?: boolean;
-  /** Require typing this exact text (e.g. the community name) to enable confirm. */
+  /** Require typing this exact text (e.g. the space name) to enable confirm. */
   confirmText?: string;
   /** Error message shown under the body (e.g. when the confirm action failed). */
   error?: React.ReactNode;

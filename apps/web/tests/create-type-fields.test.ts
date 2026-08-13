@@ -41,7 +41,7 @@ test('every column-targeted field names its column', () => {
 })
 
 // The identity resolver reads these exact metadata keys; a rename here silently
-// breaks cross-community matching with no error, so pin them.
+// breaks cross-space matching with no error, so pin them.
 test('person carries the metadata keys identity resolution reads', () => {
   for (const key of ['email', 'companyName', 'linkedinUrl']) {
     const def = fieldDef('person', key)
@@ -50,8 +50,8 @@ test('person carries the metadata keys identity resolution reads', () => {
   }
 })
 
-test('a community website mirrors into the metadata key the org resolver reads', () => {
-  const def = fieldDef('community', 'url')
+test('a space website mirrors into the metadata key the org resolver reads', () => {
+  const def = fieldDef('space', 'url')
   assert.ok(def)
   assert.equal(def.column, 'url')
   assert.equal(def.mirrorMetadataKey, 'website')
@@ -79,7 +79,7 @@ test('applyFields splits values into node columns and metadata', () => {
 })
 
 test('applyFields writes a mirrored column to both places', () => {
-  const { node, metadata } = applyFields('community', { url: 'halter.io' })
+  const { node, metadata } = applyFields('space', { url: 'halter.io' })
   assert.equal(node.url, 'halter.io')
   assert.equal(metadata.website, 'halter.io')
 })
@@ -107,7 +107,7 @@ test('applyFields ignores keys that do not belong to the type', () => {
 })
 
 test('applyFields coerces number fields', () => {
-  const { metadata } = applyFields('community', { founded: '2016', memberCount: '120' })
+  const { metadata } = applyFields('space', { founded: '2016', memberCount: '120' })
   assert.equal(metadata.founded, 2016)
   assert.equal(metadata.memberCount, 120)
 })
@@ -133,6 +133,6 @@ test('readFields omits unset columns and metadata rather than emitting empties',
 })
 
 test('readFields stringifies numeric metadata for the input rows', () => {
-  const back = readFields({ type: 'community', metadata: { founded: 2016 } })
+  const back = readFields({ type: 'space', metadata: { founded: 2016 } })
   assert.equal(back.founded, '2016')
 })

@@ -31,7 +31,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const event = await getEventBySlug(slug);
-    // Only `public` events accept loginless RSVPs. Community/unlisted events are
+    // Only `public` events accept loginless RSVPs. Space/unlisted events are
     // RSVP'd from inside the app — treat them as not found here so a guessable
     // slug can't be used to inject attendees into a non-public event.
     if (!event || event.status === 'draft' || event.visibility !== 'public') {
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     const plusOnes = Math.min(submission.plusOnes ?? 0, event.allowPlusOnes ?? 0);
-    const { status, created } = await submitRsvp(event.communityId, event, { ...submission, plusOnes });
+    const { status, created } = await submitRsvp(event.spaceId, event, { ...submission, plusOnes });
 
     return NextResponse.json(
       { status, message: rsvpMessage(status), created },

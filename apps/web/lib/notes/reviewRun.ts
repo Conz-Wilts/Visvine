@@ -25,7 +25,7 @@ export interface ReviewRunResult {
 
 /**
  * Run a review pass over the brain. `apply` = also write the auto-fixes (the
- * caller has already checked authority: community admin for the shared brain,
+ * caller has already checked authority: space admin for the shared brain,
  * the owner for a personal brain).
  */
 export async function runReview(

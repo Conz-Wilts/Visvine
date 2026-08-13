@@ -1,4 +1,4 @@
-// Unit tests for the one rule that decides whether a community may add a type
+// Unit tests for the one rule that decides whether a space may add a type
 // to its vocabulary — shared by the member endpoint, the console and the
 // backfill script.
 // Run: node --import tsx --test tests/node-type-registry.test.ts
@@ -39,7 +39,7 @@ test('re-adding is idempotent and keeps the first colour', () => {
 
 test('a synonym of a built-in is already served', () => {
   // Company / Org / Group all fold onto Space.
-  for (const name of ['Company', 'org', 'GROUP', 'communities']) {
+  for (const name of ['Company', 'org', 'GROUP', 'community']) {
     const r = ok(mergeNodeType(null, { name, color: '#3b82f6' }))
     assert.equal(r.created, false, `${name} should resolve to an existing type`)
     assert.equal(r.type.name, 'Space')

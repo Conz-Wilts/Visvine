@@ -7,7 +7,7 @@
 // Best-effort per-instance memory cache, made safe for multi-instance
 // serverless by a cheap DB stamp: outside a short coalesce window every
 // getVault revalidates `(count, max(updatedAt))` over the brain's live rows
-// (one aggregate on the [communityId, ownerKey, deletedAt] index) and rebuilds
+// (one aggregate on the [spaceId, ownerKey, deletedAt] index) and rebuilds
 // on mismatch. Same-instance writers invalidate explicitly (store.ts mutators),
 // so their own reads are never stale; cross-instance staleness is bounded by
 // COALESCE_MS.
@@ -53,12 +53,12 @@ const cache = new Map<string, VaultEntry>()
 const loading = new Map<string, Promise<VaultEntry>>()
 
 function keyOf(brain: Brain): string {
-  return `${brain.communityId}:${brain.ownerKey}`
+  return `${brain.spaceId}:${brain.ownerKey}`
 }
 
 async function stampOf(brain: Brain): Promise<Stamp> {
-  const agg = await prisma.communityNote.aggregate({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null },
+  const agg = await prisma.spaceNote.aggregate({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
     _count: true,
     _max: { updatedAt: true },
   })

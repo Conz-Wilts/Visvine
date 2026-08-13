@@ -1,10 +1,10 @@
 // Context Sources collection route.
-//   GET    ?communityId=&scope=&folderId=            → { sources: ContextSourceMeta[] }
-//   POST   multipart (file, path|folder) ?communityId= → { source } — upload + ingest
-//   DELETE ?communityId=&path=                        → { ok } — row + chunks + GCS object
+//   GET    ?spaceId=&scope=&folderId=            → { sources: ContextSourceMeta[] }
+//   POST   multipart (file, path|folder) ?spaceId= → { source } — upload + ingest
+//   DELETE ?spaceId=&path=                        → { ok } — row + chunks + GCS object
 // Sources are non-note files living at brain paths, so the folder gate and
 // visibility lens (inside brainService) govern them exactly like notes. The
-// POST reads communityId from the query string — multipart has no JSON body,
+// POST reads spaceId from the query string — multipart has no JSON body,
 // and requireBrain falls back to searchParams.
 
 import { NextRequest, NextResponse } from 'next/server'

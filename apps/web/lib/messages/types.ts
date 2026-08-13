@@ -90,17 +90,17 @@ export interface ConversationSummary {
   currentUserRole: ConversationMemberRole;
 }
 
-/** A person from a community directory (Node of type "person"), surfaced in user search. */
+/** A person from a space directory (Node of type "person"), surfaced in user search. */
 export interface DirectoryPerson {
   id: string;
   name: string;
   subtitle: string | null;
   email: string | null;
   imageUrl: string | null;
-  communityName: string | null;
+  spaceName: string | null;
 }
 
-/** One row in a community's channel directory (joined or not). */
+/** One row in a space's channel directory (joined or not). */
 export interface ChannelDirectoryEntry {
   id: string;
   name: string;

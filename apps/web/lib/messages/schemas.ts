@@ -7,7 +7,7 @@ const emojiSchema = z.string().trim().min(1).max(16);
 const viewModeSchema = z.enum(['CHAT', 'FEED']);
 
 export const createChannelSchema = z.object({
-  communityId: z.string().min(1),
+  spaceId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(500).optional(),
   icon: emojiSchema.optional(),
@@ -28,7 +28,7 @@ export const updateGroupSchema = z.object({
 });
 
 export const createSectionSchema = z.object({
-  communityId: z.string().min(1),
+  spaceId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
   emoji: emojiSchema.optional(),
   /** Starting text for the section's context note (sections/<slug>.md). */

@@ -1,4 +1,4 @@
-// GET /api/notes/export/all?communityId=&scope=
+// GET /api/notes/export/all?spaceId=&scope=
 // Download the whole brain as a .zip of .md files, preserving the folder layout.
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (brain instanceof Response) return brain
   const raw = await listRaw(brain)
   const zip = makeZip(raw.map((n) => ({ name: n.path, content: n.content })))
-  const label = brain.scope === 'shared' ? 'community-brain' : 'my-notes'
+  const label = brain.scope === 'shared' ? 'space-brain' : 'my-notes'
   return new NextResponse(new Uint8Array(zip), {
     headers: {
       'Content-Type': 'application/zip',

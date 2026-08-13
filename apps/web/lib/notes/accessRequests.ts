@@ -1,7 +1,7 @@
 // Access requests for the brain gate, restricted folders, and individual notes
 // (table `brain_access_requests`, successor of the "join-requests.jsonl"
 // sidecar). A member asks for a resource path ('' = the brain root, i.e. brain
-// access); whoever MANAGES that path — full-level grant holders and community
+// access); whoever MANAGES that path — full-level grant holders and space
 // admins — approves, which writes a grant at EXACTLY that path, or denies.
 // Resolved rows are kept as the audit trail behind the console queue.
 //
@@ -17,7 +17,7 @@ import type { AccessRequest, BrainPrincipal } from './shared/brainTypes'
 import { canRequest, canResolveRequest, requestVisibleTo, sortRequests } from './shared/accessRequests'
 import { LEVEL_VIEW, levelDisplayLabel, levelName } from './shared/authz'
 
-/** The pre-table store — imported once per community, then deleted. */
+/** The pre-table store — imported once per space, then deleted. */
 const LEGACY_FILE = 'join-requests.jsonl'
 
 interface LegacyJoinRequest {
@@ -44,8 +44,8 @@ type RequestRow = {
   grantedLevel: number | null
 }
 
-function sharedBrain(communityId: string): Brain {
-  return { communityId, ownerKey: SHARED_OWNER_KEY }
+function sharedBrain(spaceId: string): Brain {
+  return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
 function toRequest(row: RequestRow): AccessRequest {
@@ -63,7 +63,7 @@ function toRequest(row: RequestRow): AccessRequest {
   }
 }
 
-// Runs at most once per community per process; deleting the sidecar row makes it
+// Runs at most once per space per process; deleting the sidecar row makes it
 // at most once ever (a racing instance just re-imports the same records).
 const imported = new Set<string>()
 
@@ -72,16 +72,16 @@ const imported = new Set<string>()
  * drop the sidecar. Same lazy shape as access.ensureAccessSeeded — nothing has
  * to be backfilled ahead of a deploy.
  */
-async function ensureRequestsImported(communityId: string): Promise<void> {
-  if (imported.has(communityId)) return
-  imported.add(communityId)
-  const legacy = await readJsonl<LegacyJoinRequest>(sharedBrain(communityId), LEGACY_FILE)
+async function ensureRequestsImported(spaceId: string): Promise<void> {
+  if (imported.has(spaceId)) return
+  imported.add(spaceId)
+  const legacy = await readJsonl<LegacyJoinRequest>(sharedBrain(spaceId), LEGACY_FILE)
   if (!legacy.length) return
   await prisma.brainAccessRequest.createMany({
     data: legacy
       .filter((r): r is LegacyJoinRequest & { userId: string } => typeof r.userId === 'string')
       .map((r) => ({
-        communityId,
+        spaceId,
         userId: r.userId,
         resourcePath: typeof r.folderId === 'string' ? r.folderId : '',
         level: LEVEL_VIEW,
@@ -93,7 +93,7 @@ async function ensureRequestsImported(communityId: string): Promise<void> {
       })),
   })
   // Empty the sidecar so a second process can't import the same records again.
-  await writeJsonl(sharedBrain(communityId), LEGACY_FILE, [])
+  await writeJsonl(sharedBrain(spaceId), LEGACY_FILE, [])
 }
 
 /** Attach requester/resolver display snapshots for the review queue. */
@@ -128,14 +128,14 @@ export async function createAccessRequest(
 ): Promise<AccessRequest> {
   const path = normalizeResourcePath(resourcePath)
   if (!canRequest(p, path)) throw new Error('You already have access here')
-  await ensureRequestsImported(p.communityId)
+  await ensureRequestsImported(p.spaceId)
   const open = await prisma.brainAccessRequest.findFirst({
-    where: { communityId: p.communityId, userId: p.userId, resourcePath: path, status: 'pending' },
+    where: { spaceId: p.spaceId, userId: p.userId, resourcePath: path, status: 'pending' },
   })
   if (open) return toRequest(open)
   const row = await prisma.brainAccessRequest.create({
     data: {
-      communityId: p.communityId,
+      spaceId: p.spaceId,
       userId: p.userId,
       resourcePath: path,
       level: LEVEL_VIEW,
@@ -151,9 +151,9 @@ export async function createAccessRequest(
  * requested shows "pending" instead of offering the button again.
  */
 export async function pendingRequestPaths(p: BrainPrincipal): Promise<Set<string>> {
-  await ensureRequestsImported(p.communityId)
+  await ensureRequestsImported(p.spaceId)
   const rows = await prisma.brainAccessRequest.findMany({
-    where: { communityId: p.communityId, userId: p.userId, status: 'pending' },
+    where: { spaceId: p.spaceId, userId: p.userId, status: 'pending' },
     select: { resourcePath: true },
   })
   return new Set(rows.map((r) => r.resourcePath))
@@ -161,13 +161,13 @@ export async function pendingRequestPaths(p: BrainPrincipal): Promise<Set<string
 
 /**
  * Every request the caller may see — their own plus every request for a path
- * they manage (community admins manage everything). One payload serves both the
+ * they manage (space admins manage everything). One payload serves both the
  * console queue and a folder manager's SharePanel; each filters what it shows.
  */
 export async function listVisibleAccessRequests(p: BrainPrincipal): Promise<AccessRequest[]> {
-  await ensureRequestsImported(p.communityId)
+  await ensureRequestsImported(p.spaceId)
   const rows = await prisma.brainAccessRequest.findMany({
-    where: { communityId: p.communityId },
+    where: { spaceId: p.spaceId },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })
@@ -186,7 +186,7 @@ export async function resolveAccessRequest(
   level?: number,
 ): Promise<AccessRequest> {
   const row = await prisma.brainAccessRequest.findFirst({
-    where: { id: requestId, communityId: p.communityId },
+    where: { id: requestId, spaceId: p.spaceId },
   })
   if (!row) throw new Error('Access request not found')
   const request = toRequest(row)
@@ -196,10 +196,10 @@ export async function resolveAccessRequest(
   if (request.status !== 'pending') return request
   const grantLevel = level ?? request.level
   // Grant BEFORE persisting the resolution: if the grant fails (e.g. the
-  // requester left the community), the request stays pending and retryable.
+  // requester left the space), the request stays pending and retryable.
   if (approve) {
     await grantAccess(
-      p.communityId,
+      p.spaceId,
       {
         subjectType: 'user',
         subjectId: request.userId,
@@ -218,7 +218,7 @@ export async function resolveAccessRequest(
       grantedLevel: approve ? grantLevel : null,
     },
   })
-  await logAudit(p.communityId, {
+  await logAudit(p.spaceId, {
     userId: p.userId,
     name: p.name,
     action: 'grant',

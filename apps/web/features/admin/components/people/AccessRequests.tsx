@@ -39,7 +39,7 @@ function TargetChip({ path, contextName }: { path: string; contextName: string }
 }
 
 export default function AccessRequests() {
-  const { communityId, data, busy, run } = usePeopleSection();
+  const { spaceId, data, busy, run } = usePeopleSection();
   const [denyRequest, setDenyRequest] = useState<AccessRequest | null>(null);
   // Level chosen per request before approving; absent = what was asked for.
   const [levels, setLevels] = useState<Record<string, AccessLevelName>>({});
@@ -56,7 +56,7 @@ export default function AccessRequests() {
   const resolveRequest = (request: AccessRequest, approveIt: boolean) =>
     run(() =>
       notesApi.resolveAccessRequest(
-        communityId,
+        spaceId,
         request.id,
         approveIt,
         approveIt ? (levels[request.id] ?? levelName(request.level) ?? 'view') : undefined,

@@ -7,14 +7,14 @@ import { fetchJsonBody } from '@/lib/fetchJson';
 /**
  * Join button for the invite landing page. Posts the token to
  * /api/communities/join-via-invite, which records a pending membership. Already-
- * active members are sent straight into the community.
+ * active members are sent straight into the space.
  */
 export default function InviteActions({
   token,
   initialStatus,
 }: {
   token: string;
-  communityId: string;
+  spaceId: string;
   initialStatus: 'active' | 'pending' | null;
 }) {
   const router = useRouter();

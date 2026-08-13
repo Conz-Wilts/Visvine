@@ -1,7 +1,7 @@
 /**
  * Public event page — the share target for visvine.com/e/<slug>. No login
  * required: anyone with the link sees the event and can RSVP. Server-rendered so
- * shared links resolve cleanly. Only `public` events are served here — community,
+ * shared links resolve cleanly. Only `public` events are served here — space,
  * unlisted (private), and draft events 404 (they live behind the app's auth).
  */
 
@@ -24,7 +24,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
   const event = await getEventBySlug(slug);
   if (!event || event.status === 'draft' || event.visibility !== 'public') notFound();
 
-  const attendees = await getAttendees(event.communityId, event.id);
+  const attendees = await getAttendees(event.spaceId, event.id);
   const going = occupiedSpots(attendees);
   const guestNames = event.guestListVisible
     ? attendees

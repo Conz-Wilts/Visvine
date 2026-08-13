@@ -19,7 +19,7 @@ export function canRequest(p: BrainPrincipal, path: string): boolean {
 
 /**
  * Whether a principal may see a request in a queue: their own, or any request
- * for a path they manage (community admins manage everything).
+ * for a path they manage (space admins manage everything).
  */
 export function requestVisibleTo(p: BrainPrincipal, request: AccessRequest): boolean {
   return request.userId === p.userId || principalCanManage(p, request.resourcePath)

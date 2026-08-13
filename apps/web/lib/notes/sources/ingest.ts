@@ -24,7 +24,7 @@ export interface IngestInput {
 }
 
 function gcsObjectPath(brain: Brain, sourceId: string, name: string): string {
-  return `context-sources/${brain.communityId}/${brain.ownerKey}/${sourceId}/${name}`
+  return `context-sources/${brain.spaceId}/${brain.ownerKey}/${sourceId}/${name}`
 }
 
 // Like embeddings, original-file storage degrades to off when unconfigured
@@ -56,7 +56,7 @@ async function processSource(
     }
 
     await sourceStore.replaceChunks(
-      { id: source.id, communityId: brain.communityId, ownerKey: brain.ownerKey, path: source.path },
+      { id: source.id, spaceId: brain.spaceId, ownerKey: brain.ownerKey, path: source.path },
       chunks,
       vectors,
       config?.model ?? null,

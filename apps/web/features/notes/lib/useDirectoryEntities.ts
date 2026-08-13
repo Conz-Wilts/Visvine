@@ -2,23 +2,23 @@
 
 // Directory entities (person/org nodes) usable in `[[ ]]` mentions and for
 // entity-note resolution: the picker list + a canonical-note-path → entity map,
-// built from the cached community context (all nodes). Consumed by the profile
+// built from the cached space context (all nodes). Consumed by the profile
 // Context tab (EntityContextPanel).
 
 import { useMemo } from 'react'
-import { useCommunityContextData } from '@/features/notes/hooks/useCommunityContextData'
+import { useSpaceContextData } from '@/features/notes/hooks/useSpaceContextData'
 import { entityNotePath } from '@/lib/notes/entities'
 import type { PickerEntity } from '../components/NotePicker'
 
 export interface DirectoryEntities {
   entities: PickerEntity[]
   entityByPath: Map<string, PickerEntity>
-  /** Every distinct tag used across the community, sorted — powers the tag picker. */
+  /** Every distinct tag used across the space, sorted — powers the tag picker. */
   allTags: string[]
 }
 
 export function useDirectoryEntities(): DirectoryEntities {
-  const { contextData } = useCommunityContextData()
+  const { contextData } = useSpaceContextData()
 
   return useMemo(() => {
     const list: PickerEntity[] = []

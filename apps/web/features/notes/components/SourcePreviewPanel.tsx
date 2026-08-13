@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
 
@@ -17,8 +17,8 @@ const PAGE_CHARS = 20_000
 
 export function SourcePreviewPanel({ path }: { path: string }) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
-  const communityId = currentCommunity?.id ?? null
+  const { currentSpace } = useSpace()
+  const spaceId = currentSpace?.id ?? null
 
   const [source, setSource] = useState<ContextSourceMeta | null>(null)
   const [text, setText] = useState('')
@@ -29,11 +29,11 @@ export function SourcePreviewPanel({ path }: { path: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    if (!communityId) return
+    if (!spaceId) return
     setLoading(true)
     setError(null)
     try {
-      const r = await notesApi.readSource(communityId, path, { maxChars: PAGE_CHARS })
+      const r = await notesApi.readSource(spaceId, path, { maxChars: PAGE_CHARS })
       setSource(r.source)
       setText(r.text)
       setTotalChars(r.totalChars)
@@ -44,16 +44,16 @@ export function SourcePreviewPanel({ path }: { path: string }) {
     } finally {
       setLoading(false)
     }
-  }, [communityId, path])
+  }, [spaceId, path])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const loadMore = async () => {
-    if (!communityId) return
+    if (!spaceId) return
     try {
-      const r = await notesApi.readSource(communityId, path, {
+      const r = await notesApi.readSource(spaceId, path, {
         offset: text.length,
         maxChars: PAGE_CHARS,
       })
@@ -64,11 +64,11 @@ export function SourcePreviewPanel({ path }: { path: string }) {
   }
 
   const reingest = async () => {
-    if (!communityId) return
+    if (!spaceId) return
     setBusy(true)
     setError(null)
     try {
-      await notesApi.reingestSource(communityId, path)
+      await notesApi.reingestSource(spaceId, path)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Retry failed')
@@ -78,12 +78,12 @@ export function SourcePreviewPanel({ path }: { path: string }) {
   }
 
   const remove = async () => {
-    if (!communityId) return
+    if (!spaceId) return
     if (!window.confirm(`Delete source "${source?.name ?? path}"? This cannot be undone.`)) return
     setBusy(true)
     setError(null)
     try {
-      await notesApi.deleteSource(communityId, path)
+      await notesApi.deleteSource(spaceId, path)
       router.push('/directory/note/index.md')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed')
@@ -91,7 +91,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
     }
   }
 
-  if (!communityId || loading) {
+  if (!spaceId || loading) {
     return (
       <div className="mx-auto max-w-3xl animate-pulse space-y-3 py-6">
         <div className="h-4 w-2/3 rounded bg-surface-2" />

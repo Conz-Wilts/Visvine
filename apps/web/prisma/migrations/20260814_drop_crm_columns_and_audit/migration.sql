@@ -20,8 +20,6 @@
 --                                hand-maintained counter (it was incremented
 --                                and decremented across four separate files).
 --   communities.member_count   — see above
---   conversations.dm_key       — never written; nothing in the codebase creates
---                                a DM, so the unique key had no rows to key.
 --
 -- Children before parents, though the FKs cascade either way.
 
@@ -36,5 +34,3 @@ DROP TABLE IF EXISTS "audit_logs" CASCADE;
 ALTER TABLE "communities" DROP COLUMN IF EXISTS "crm_settings";
 ALTER TABLE "communities" DROP COLUMN IF EXISTS "data_file";
 ALTER TABLE "communities" DROP COLUMN IF EXISTS "member_count";
-
-ALTER TABLE "conversations" DROP COLUMN IF EXISTS "dm_key";

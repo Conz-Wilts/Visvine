@@ -22,17 +22,17 @@ import prisma from '../lib/prisma';
 import { resolveIdentity } from '../lib/identity/resolve';
 import type { IdentityKind } from '../lib/identity/match';
 import { entityKindOf } from '../lib/notes/entities';
-import { isOwnCommunityNode } from '../lib/types/context';
+import { isOwnSpaceNode } from '../lib/types/context';
 
-// Every organisation spelling — 'organization', 'group', 'community', today's
+// Every organisation spelling — 'organization', 'group', 'space', today's
 // 'space' — resolves to an org identity. The space's OWN node is excluded: it
 // is the space itself, not an organisation recorded inside it, and giving it an
-// identity would merge unrelated communities that happen to share a name.
-function kindFor(node: { id: string; type: string; communityId: string | null }): IdentityKind | null {
+// identity would merge unrelated spaces that happen to share a name.
+function kindFor(node: { id: string; type: string; spaceId: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase();
   if (t === 'person' || t === 'people') return 'person';
   if (entityKindOf(t) === 'space') {
-    return isOwnCommunityNode(node) ? null : 'organization';
+    return isOwnSpaceNode(node) ? null : 'organization';
   }
   return null;
 }
@@ -42,7 +42,7 @@ async function main() {
 
   const nodes = await prisma.node.findMany({
     where: { identityId: null },
-    select: { id: true, type: true, name: true, location: true, url: true, metadata: true, communityId: true },
+    select: { id: true, type: true, name: true, location: true, url: true, metadata: true, spaceId: true },
     orderBy: { createdAt: 'asc' },
   });
 

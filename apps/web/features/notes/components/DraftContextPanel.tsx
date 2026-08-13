@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Check, ChevronRight } from 'lucide-react'
 import { CHIP_ACCENT_HOVER, Chip, chipClass, Modal } from '@/components/ui'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { canCreateType } from '@/lib/create/creatable'
 import { isNodeTypeEnabled } from '@/lib/featureAccess'
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext'
@@ -32,8 +32,8 @@ import {
   findNodeTypeConfig,
   isReservedTypeName,
   mergeNodeType,
-  type CommunityAlias,
-  type CommunityFeatureConfig,
+  type SpaceAlias,
+  type SpaceFeatureConfig,
   type NodeTypeConfig,
 } from '@/lib/types'
 import { hexToPalette } from '@/lib/profileTheme'
@@ -61,7 +61,7 @@ import MatchPanel from '@/features/create/components/MatchPanel'
 import { TAG_SWATCHES, tagKey, tagPalette } from '@/lib/tagColors'
 import { scoreText } from '@/lib/fuzzy'
 import { primeNodeProfile } from '@/features/shared/hooks/useNodeProfile'
-import { clearContextCache } from '@/features/notes/hooks/useCommunityContextData'
+import { clearContextCache } from '@/features/notes/hooks/useSpaceContextData'
 import type { NBNode } from '@/lib/types'
 import { notesApi } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, primeContextCache } from '../lib/contextPrefetch'
@@ -77,7 +77,7 @@ import '../notes.css'
  *
  *  Everything creatable in the app is here: there is no second menu. The five
  *  that used to hide behind the sidebar's caret (file, channel, section,
- *  connector, community) are ordinary types on this surface — the title is
+ *  connector, space) are ordinary types on this surface — the title is
  *  their name and the editor body is their starting context, with only the
  *  handful of fields that CANNOT be filled in afterwards shown inline. */
 export type DraftType =
@@ -86,7 +86,7 @@ export type DraftType =
   // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
   | 'index'
   | 'person'
-  // The org type (formerly 'community', 'group' before that) — a node and a
+  // The org type (formerly 'space', 'group' before that) — a node and a
   // note recording that a group/organisation exists. Provisioning a real space
   // of your own isn't a draft type; it's on the switcher.
   | 'space'
@@ -104,10 +104,10 @@ interface DraftTypeOption {
   id: DraftType
   label: string
   /** The `nodeTypes` name this maps to, for colour resolution. Resolved against
-   *  the community's OWN registry, falling back to `color` when it has no entry
+   *  the space's OWN registry, falling back to `color` when it has no entry
    *  under that name. */
   configName: string | null
-  /** Fallback colour, for a community whose nodeTypes don't describe this. */
+  /** Fallback colour, for a space whose nodeTypes don't describe this. */
   color: string
   /** What `canCreateType` is asked about — the permission gate is shared with
    *  the docked panel, so this menu can't offer a form that 403s on submit. */
@@ -121,11 +121,11 @@ const NOTE_COLOR = '#64748b'
  *  between comes from DEFAULT_NODE_TYPES in the console's own order, so the
  *  menu and the Types tab always say the same thing (colours included).
  *
- *  Note still carries a configName: plenty of communities DO keep a "Note"
+ *  Note still carries a configName: plenty of spaces DO keep a "Note"
  *  entry in their registry (the seed writes one), and when they do, that colour
  *  is the one every other surface paints notes in — so the menu must obey it
  *  rather than show its own slate. The slate is the fallback for the
- *  communities that don't. */
+ *  spaces that don't. */
 const DRAFT_TYPES: DraftTypeOption[] = [
   { id: 'note', label: 'Note', configName: 'Note', color: NOTE_COLOR, creatable: 'context' },
   { id: 'person', label: 'Person', configName: 'Person', color: NOTE_COLOR, creatable: 'person' },
@@ -206,8 +206,8 @@ function readStash(): Partial<Stash> {
 
 export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initialType = null }: DraftContextPanelProps) {
   const router = useRouter()
-  const { currentCommunity, isAdmin } = useCommunity()
-  const communityId = currentCommunity?.id ?? null
+  const { currentSpace, isAdmin } = useSpace()
+  const spaceId = currentSpace?.id ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
   const stash = useRef<Partial<Stash>>(readStash()).current
@@ -215,7 +215,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [title, setTitle] = useState(stash.title ?? '')
   const [type, setType] = useState<DraftType | null>(stash.type ?? initialType)
   const [alias, setAlias] = useState<string | null>(stash.alias ?? null)
-  // A type this community invented rather than one of the built-ins. It is a
+  // A type this space invented rather than one of the built-ins. It is a
   // NARROWING of 'note', never a type of its own: what it creates is a context
   // note wearing that name in its frontmatter, so every rule about notes —
   // the folder picker, the path preview, the commit path — still applies.
@@ -233,7 +233,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const [addingTag, setAddingTag] = useState(false)
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const [typeMenuOpen, setTypeMenuOpen] = useState(false)
-  // A type created in this session, held locally until refreshCommunity lands —
+  // A type created in this session, held locally until refreshSpace lands —
   // the same bargain createTag makes, so the menu doesn't blink the type away
   // the moment you pick it.
   const [addedTypes, setAddedTypes] = useState<NodeTypeConfig[]>([])
@@ -245,7 +245,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // was picked under: edit the title afterwards and you meant a different org,
   // so the binding has to fall away rather than quietly attach your card to
   // whatever you first clicked.
-  const [pickedCommunity, setPickedCommunity] = useState<{ ref: string; name: string } | null>(null)
+  const [pickedSpace, setPickedSpace] = useState<{ ref: string; name: string } | null>(null)
   const [dismissedMatches, setDismissedMatches] = useState(false)
 
   // The editor body lives in a ref, not state: it changes on every keystroke and
@@ -256,22 +256,22 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const committedRef = useRef(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  const brainTree = useBrainTree(communityId, type !== null && FOLDERED_TYPES.has(type))
+  const brainTree = useBrainTree(spaceId, type !== null && FOLDERED_TYPES.has(type))
 
   // The sections a new channel can be filed into. Loaded only while the Channel
   // type is selected — every other draft has no use for the list.
   useEffect(() => {
-    if (type !== 'channel' || !communityId) return
+    if (type !== 'channel' || !spaceId) return
     let cancelled = false
-    fetch(`/api/messages/sections?communityId=${encodeURIComponent(communityId)}`, { cache: 'no-store' })
+    fetch(`/api/messages/sections?spaceId=${encodeURIComponent(spaceId)}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : { sections: [] }))
       .then((payload) => { if (!cancelled) setSections(payload.sections ?? []) })
       .catch(() => { if (!cancelled) setSections([]) })
     return () => { cancelled = true }
-  }, [type, communityId])
+  }, [type, spaceId])
 
-  // Cross-community duplicate check — the highest-value carry-over from the old
-  // modal. Dropping it re-opens duplicate people and orgs across communities.
+  // Cross-space duplicate check — the highest-value carry-over from the old
+  // modal. Dropping it re-opens duplicate people and orgs across spaces.
   const searchType = type && ENTITY_TYPES.has(type) ? type : ''
   const { results: matches, loading: matchesLoading } = useNodeSearch(
     searchType ? title : '',
@@ -317,12 +317,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           ? connectorFormReady(connectorDraft)
           : titleUsable
 
-  // The types this community invented — anything in its nodeTypes that isn't a
+  // The types this space invented — anything in its nodeTypes that isn't a
   // built-in (or a synonym of one), plus whatever was created in this session.
   // These are the note vocabulary: they label a context note and nothing more,
   // so they're offered as narrowings of Note rather than as types of their own.
   const customTypes = useMemo(() => {
-    const stored = (currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined) ?? []
+    const stored = (currentSpace?.nodeTypes as NodeTypeConfig[] | undefined) ?? []
     const byLower = new Map<string, NodeTypeConfig>()
     for (const t of [...stored, ...addedTypes]) {
       const name = t.name?.trim()
@@ -334,7 +334,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       byLower.set(name.toLowerCase(), t)
     }
     return Array.from(byLower.values()).sort((a, b) => a.name.localeCompare(b.name))
-  }, [currentCommunity?.nodeTypes, addedTypes])
+  }, [currentSpace?.nodeTypes, addedTypes])
 
   const customConfig = customType
     ? customTypes.find((t) => t.name.toLowerCase() === customType.toLowerCase()) ?? null
@@ -343,28 +343,28 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // A stashed custom type that no longer exists — its create request failed, or
   // an admin removed it — must not come back as a live selection.
   useEffect(() => {
-    if (!customType || !currentCommunity || customConfig) return
+    if (!customType || !currentSpace || customConfig) return
     setCustomType(null)
-  }, [customType, customConfig, currentCommunity])
+  }, [customType, customConfig, currentSpace])
 
   const typeOption = type ? DRAFT_TYPES.find((t) => t.id === type) ?? null : null
-  const aliasColor = alias ? findAlias(currentCommunity?.communityAliases, alias, typeOption?.configName ?? '')?.color : null
+  const aliasColor = alias ? findAlias(currentSpace?.aliases, alias, typeOption?.configName ?? '')?.color : null
   const baseColor = customType
     ? customConfig?.color ?? defaultNodeTypeColor(customType)
     : !typeOption
       ? NOTE_COLOR
       : (typeOption.configName
-          ? findNodeTypeConfig(typeOption.configName, currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined)?.color
+          ? findNodeTypeConfig(typeOption.configName, currentSpace?.nodeTypes as NodeTypeConfig[] | undefined)?.color
           : null) ?? typeOption.color
   const theme = hexToPalette(aliasColor ?? baseColor)
 
-  // Only the types the community actually offers this person. The node types
+  // Only the types the space actually offers this person. The node types
   // are EXACTLY the console's Types tab — same source (DEFAULT_NODE_TYPES),
   // same feature filter (isNodeTypeEnabled), same order — then narrowed to
   // what this person may create (lib/create/creatable.ts). Note and File
   // bookend the list: they're brain content, not node types, so the console
   // doesn't list them but this surface can't do without them.
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null
+  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
   const availableTypes = useMemo(() => {
     const byConfigName = new Map(DRAFT_TYPES.filter((o) => o.configName).map((o) => [o.configName, o]))
     const nodeTypeOptions = DEFAULT_NODE_TYPES
@@ -406,20 +406,20 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     setAddingTag(false)
   }, [])
 
-  // A brand-new tag with a chosen colour. The colour registers on the community
-  // immediately (it is community-level config, not draft state) — best effort,
+  // A brand-new tag with a chosen colour. The colour registers on the space
+  // immediately (it is space-level config, not draft state) — best effort,
   // the tag still lands on the draft if that write fails.
   const createTag = useCallback((raw: string, color: string) => {
     const tag = raw.trim()
-    if (!tag || !communityId) return
+    if (!tag || !spaceId) return
     setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
-    void fetch(`/api/communities/${encodeURIComponent(communityId)}/tag-colors`, {
+    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/tag-colors`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag, color }),
     }).catch(() => {})
     addTag(tag)
-  }, [communityId, addTag])
+  }, [spaceId, addTag])
 
   const removeTag = useCallback((tag: string) => {
     setTags((prev) => prev.filter((t) => t !== tag))
@@ -438,8 +438,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       image_url: result.image_url ?? prev.image_url ?? '',
     }))
     setSelectedIdentityId(result.identity_id)
-    const ref = typeof meta.communityRef === 'string' ? meta.communityRef : null
-    setPickedCommunity(ref ? { ref, name: result.name } : null)
+    const ref = typeof meta.spaceRef === 'string' ? meta.spaceRef : null
+    setPickedSpace(ref ? { ref, name: result.name } : null)
     setDismissedMatches(true)
   }, [])
 
@@ -449,7 +449,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // by dropping the draft on a folder, and the drop must create in the SAME
   // tick — a setFolder followed by commit() would commit the previous folder.
   const commitNote = useCallback(async (dest: string) => {
-    if (!communityId) return
+    if (!spaceId) return
     const path = availableNotePath(dest, title, brainTree.notePaths)
     const content = newNoteContent({
       title: title.trim(),
@@ -459,43 +459,43 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       // field with an exact, case-sensitive compare.
       type: customConfig?.name ?? customType ?? undefined,
     })
-    await notesApi.create(communityId, path, content)
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    await notesApi.create(spaceId, path, content)
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     // The note we just wrote IS the freshest read — priming it means the note
     // page paints its content on first render instead of flashing a skeleton.
-    primeContextCache(contextKeys.read(communityId, path), { status: 'ok', content })
+    primeContextCache(contextKeys.read(spaceId, path), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
-  }, [communityId, title, tags, brainTree.notePaths, router, customType, customConfig])
+  }, [spaceId, title, tags, brainTree.notePaths, router, customType, customConfig])
 
   // An index IS a folder: this creates the folder and writes the note that names
   // it, in one call. `dest` is the PARENT it was dropped into.
   const commitIndex = useCallback(async (dest: string) => {
-    if (!communityId) return
+    if (!spaceId) return
     const folderPath = availableFolderPath(dest, title, folderPaths)
     const content = newIndexContent({ title: title.trim(), tags, body: bodyRef.current })
-    const { indexPath } = await notesApi.createFolder(communityId, folderPath, content)
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
-    primeContextCache(contextKeys.read(communityId, indexPath), { status: 'ok', content })
+    const { indexPath } = await notesApi.createFolder(spaceId, folderPath, content)
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+    primeContextCache(contextKeys.read(spaceId, indexPath), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(indexPath))
-  }, [communityId, title, tags, folderPaths, router])
+  }, [spaceId, title, tags, folderPaths, router])
 
   const commitEntity = useCallback(async () => {
-    if (!communityId || !type) return
+    if (!spaceId || !type) return
     const res = await fetch('/api/directory/entities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        communityId,
+        spaceId,
         type,
         name: title.trim(),
         alias,
         identityId: selectedIdentityId,
-        // Only while the title still says what they picked — see pickedCommunity.
-        communityRef:
-          pickedCommunity && pickedCommunity.name.trim() === title.trim()
-            ? pickedCommunity.ref
+        // Only while the title still says what they picked — see pickedSpace.
+        spaceRef:
+          pickedSpace && pickedSpace.name.trim() === title.trim()
+            ? pickedSpace.ref
             : null,
         fields,
         tags,
@@ -517,19 +517,19 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     // profile fetch and the note read both already have their answers.
     primeNodeProfile(node.id, node)
     if (!data.noteError) {
-      primeContextCache(contextKeys.read(communityId, notePath), {
+      primeContextCache(contextKeys.read(spaceId, notePath), {
         status: 'ok',
-        content: await notesApi.read(communityId, notePath).then((r) => r.content).catch(() => ''),
+        content: await notesApi.read(spaceId, notePath).then((r) => r.content).catch(() => ''),
       })
     }
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     // The directory grid, the graph and the `[[ ]]` picker all read a 5-minute
     // cache — without this the entity you just made is invisible in all three.
-    clearContextCache(communityId)
+    clearContextCache(spaceId)
 
     sessionStorage.removeItem(STASH_KEY)
     router.replace(`/directory/${encodeURIComponent(node.id)}?tab=context`)
-  }, [communityId, type, title, alias, selectedIdentityId, pickedCommunity, fields, tags, router])
+  }, [spaceId, type, title, alias, selectedIdentityId, pickedSpace, fields, tags, router])
 
   // ── The non-note commits ──────────────────────────────────────────────────
   // Each one is the same shape: the title is the name, the editor body is the
@@ -538,7 +538,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // endpoints (and a connector is a note whose frontmatter IS its config).
 
   const commitConnector = useCallback(async () => {
-    if (!communityId) return
+    if (!spaceId) return
     const name = connectorSlug(title)
     const path = `connectors/${name}.md`
     const body = bodyRef.current.trim()
@@ -549,26 +549,26 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     })
     // The generated note already carries a documentation body; anything typed
     // in the editor is appended to it rather than replacing the scaffold.
-    await notesApi.create(communityId, path, body ? `${note}\n\n${body}` : note)
+    await notesApi.create(spaceId, path, body ? `${note}\n\n${body}` : note)
     invalidateContextCache(
-      contextKeys.tree(communityId),
-      contextKeys.list(communityId),
-      contextKeys.read(communityId, path),
+      contextKeys.tree(spaceId),
+      contextKeys.list(spaceId),
+      contextKeys.read(spaceId, path),
     )
-    clearContextCache(communityId)
+    clearContextCache(spaceId)
     sessionStorage.removeItem(STASH_KEY)
     // Its own page, not the bare note: the write synced a `connector:<name>`
     // node, and that page is where the secret gets set.
     router.replace(`/directory/${encodeURIComponent(`connector:${name}`)}`)
-  }, [communityId, title, extras, router])
+  }, [spaceId, title, extras, router])
 
   const commitChannel = useCallback(async () => {
-    if (!communityId) return
+    if (!spaceId) return
     const res = await fetch('/api/messages/conversations/channel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        communityId,
+        spaceId,
         name: title.trim(),
         viewMode: extras.viewMode,
         sectionId: extras.sectionId || undefined,
@@ -577,34 +577,34 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'Failed to create channel')
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     sessionStorage.removeItem(STASH_KEY)
     router.replace(`/channels/${encodeURIComponent(data.conversation.id as string)}`)
-  }, [communityId, title, extras, router])
+  }, [spaceId, title, extras, router])
 
   const commitSpace = useCallback(async () => {
-    if (!communityId) return
+    if (!spaceId) return
     const res = await fetch('/api/messages/sections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        communityId,
+        spaceId,
         name: title.trim(),
         context: bodyRef.current.trim() || undefined,
       }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(data.error || 'Failed to create section')
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     sessionStorage.removeItem(STASH_KEY)
     router.replace('/channels')
-  }, [communityId, title, router])
+  }, [spaceId, title, router])
 
   // Uploaded one at a time: each request runs the whole extract → chunk → embed
   // pipeline synchronously, so a parallel burst would just contend. A file that
   // fails leaves the others alone and keeps its row.
   const commitFiles = useCallback(async () => {
-    if (!communityId) return
+    if (!spaceId) return
     const patch = (index: number, next: Partial<FileEntry>) =>
       setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, ...next } : f)))
 
@@ -614,7 +614,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       if (entry.status !== 'queued') continue
       patch(index, { status: 'uploading', error: undefined })
       try {
-        const { source } = await notesApi.uploadSource(communityId, entry.file, folder)
+        const { source } = await notesApi.uploadSource(spaceId, entry.file, folder)
         patch(index, { status: 'done', path: source.path })
         uploaded++
         lastPath = source.path
@@ -624,17 +624,17 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
     if (!uploaded) throw new Error('No files could be uploaded — see the list above')
 
-    invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
-    clearContextCache(communityId)
+    invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
+    clearContextCache(spaceId)
     sessionStorage.removeItem(STASH_KEY)
     router.replace(uploaded === 1 && lastPath ? sourceHref(lastPath) : '/directory')
-  }, [communityId, files, folder, router])
+  }, [spaceId, files, folder, router])
 
   // `dest` is the folder the draft was dropped on, for the two types that ask.
   // Defaults to the standing `folder` (the one "+" was pressed in) so Enter and
   // the non-foldered types behave exactly as before.
   const commit = useCallback(async (dest?: string) => {
-    if (!ready || committing || committedRef.current || !communityId) return
+    if (!ready || committing || committedRef.current || !spaceId) return
     const where = dest ?? folder
     committedRef.current = true
     setCommitting(true)
@@ -661,7 +661,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       setCommitting(false)
     }
   }, [
-    ready, committing, communityId, type, folder,
+    ready, committing, spaceId, type, folder,
     commitNote, commitIndex, commitEntity, commitConnector, commitChannel, commitSpace, commitFiles,
   ])
 
@@ -692,12 +692,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     setConflict(null)
   }, [])
 
-  // A type nobody has named here before. It registers on the community straight
-  // away — it is community-level vocabulary, not draft state — but the draft
+  // A type nobody has named here before. It registers on the space straight
+  // away — it is space-level vocabulary, not draft state — but the draft
   // takes it either way: a failed write costs a grey chip, not a note. Exactly
   // the bargain `createTag` above makes.
   const createType = useCallback((raw: string, color: string) => {
-    const merged = mergeNodeType([...((currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined) ?? []), ...addedTypes], { name: raw, color })
+    const merged = mergeNodeType([...((currentSpace?.nodeTypes as NodeTypeConfig[] | undefined) ?? []), ...addedTypes], { name: raw, color })
     if (!merged.ok) {
       setError(merged.error)
       return
@@ -711,13 +711,13 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     }
     if (merged.created) setAddedTypes((prev) => [...prev, merged.type])
     pickType('note', null, merged.type.name)
-    if (!communityId || !merged.created) return
-    void fetch(`/api/communities/${encodeURIComponent(communityId)}/node-types`, {
+    if (!spaceId || !merged.created) return
+    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/node-types`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: merged.type.name, color: merged.type.color }),
     }).catch(() => {})
-  }, [communityId, currentCommunity?.nodeTypes, addedTypes, pickType])
+  }, [spaceId, currentSpace?.nodeTypes, addedTypes, pickType])
 
   const typeRow = (
     <TypeMenu
@@ -731,8 +731,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       theme={theme}
       onPick={pickType}
       onCreate={canCreateType('context', { featureConfig, isAdmin }) ? createType : null}
-      communityAliases={currentCommunity?.communityAliases}
-      communityNodeTypes={currentCommunity?.nodeTypes as NodeTypeConfig[] | undefined}
+      aliases={currentSpace?.aliases}
+      spaceNodeTypes={currentSpace?.nodeTypes as NodeTypeConfig[] | undefined}
     />
   )
 
@@ -768,7 +768,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // the note's frontmatter, or the entity payload) rather than being saved one
   // at a time the way the committed entity's row does it.
   const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
-  const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
+  const tagColors = { ...(currentSpace?.designConfig?.tagColors ?? {}), ...tagColorOverride }
   const tagsRow = (
     <div className="flex flex-wrap items-center gap-1.5">
       {tags.map((tag) => (
@@ -844,7 +844,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
       {/* Per-type extras: ONLY what can't be set afterwards on the thing itself,
           or what its create endpoint refuses to go without. Everything else
-          (a channel's icon, a community's location…) is one click away on the
+          (a channel's icon, a space's location…) is one click away on the
           page you land on. */}
       {type === 'file' && (
         <div className="mt-4">
@@ -852,7 +852,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
             data={{ files, folder }}
             onChange={(d: FileFormData) => { setFiles(d.files); setFolder(d.folder) }}
             folders={brainTree.folders}
-            contextName={currentCommunity?.name ?? 'Context'}
+            contextName={currentSpace?.name ?? 'Context'}
             loading={brainTree.loading}
           />
         </div>
@@ -963,7 +963,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       >
         <FolderDropBoard
           folders={brainTree.folders}
-          contextName={currentCommunity?.name ?? 'Context'}
+          contextName={currentSpace?.name ?? 'Context'}
           cardLabel={title.trim() || 'Untitled'}
           accent={theme.base}
           busy={committing}
@@ -986,8 +986,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
 /** One keyboard-selectable line in the menu. */
 type TypeRow =
-  | { kind: 'type'; key: string; option: DraftTypeOption; color: string; aliases: CommunityAlias[] }
-  | { kind: 'alias'; key: string; option: DraftTypeOption; alias: CommunityAlias }
+  | { kind: 'type'; key: string; option: DraftTypeOption; color: string; aliases: SpaceAlias[] }
+  | { kind: 'alias'; key: string; option: DraftTypeOption; alias: SpaceAlias }
   | { kind: 'custom'; key: string; config: NodeTypeConfig }
   | { kind: 'create'; key: string; name: string }
 
@@ -1010,13 +1010,13 @@ function TypeMenu({
   theme,
   onPick,
   onCreate,
-  communityAliases,
-  communityNodeTypes,
+  aliases,
+  spaceNodeTypes,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   options: DraftTypeOption[]
-  /** The community's own note vocabulary — types nobody wrote code for. */
+  /** The space's own note vocabulary — types nobody wrote code for. */
   customTypes: NodeTypeConfig[]
   type: DraftType | null
   alias: string | null
@@ -1025,8 +1025,8 @@ function TypeMenu({
   onPick: (type: DraftType, alias?: string | null, customType?: string | null) => void
   /** Null when this person may not write notes here, which is the same gate. */
   onCreate: ((name: string, color: string) => void) | null
-  communityAliases: CommunityAlias[] | undefined
-  communityNodeTypes: NodeTypeConfig[] | undefined
+  aliases: SpaceAlias[] | undefined
+  spaceNodeTypes: NodeTypeConfig[] | undefined
 }) {
   const wrapperRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -1057,15 +1057,15 @@ function TypeMenu({
 
   const rows = useMemo<TypeRow[]>(() => {
     const aliasesOf = (o: DraftTypeOption) =>
-      o.configName ? aliasesForType(communityAliases, o.configName) : []
+      o.configName ? aliasesForType(aliases, o.configName) : []
     // findNodeTypeConfig, not getTypeColor: a name the registry doesn't know
-    // (Note in a community that never wrote one) must fall back to the option's
+    // (Note in a space that never wrote one) must fall back to the option's
     // own colour, where getTypeColor would answer with its unknown-type grey.
     const colorOf = (o: DraftTypeOption) =>
-      (o.configName ? findNodeTypeConfig(o.configName, communityNodeTypes)?.color : null) ?? o.color
+      (o.configName ? findNodeTypeConfig(o.configName, spaceNodeTypes)?.color : null) ?? o.color
 
     // Unfiltered: the built-ins in the console's order, their aliases folded
-    // away behind a caret, then the community's own note vocabulary.
+    // away behind a caret, then the space's own note vocabulary.
     if (!query) {
       const out: TypeRow[] = []
       for (const option of typeOptions) {
@@ -1098,7 +1098,7 @@ function TypeMenu({
     scored.sort((a, b) => b.score - a.score)
     const out = scored.map((s) => s.row)
 
-    // Nothing already means this, and it's a name a community may have: offer
+    // Nothing already means this, and it's a name a space may have: offer
     // to make it. Only notes can wear a type nobody wrote code for, so this is
     // gated on the note permission and commits down the note path.
     const exact = out.some((row) => rowLabel(row).toLowerCase() === query)
@@ -1106,7 +1106,7 @@ function TypeMenu({
       out.push({ kind: 'create', key: `create:${trimmed}`, name: trimmed })
     }
     return out
-  }, [query, trimmed, typeOptions, customTypes, expanded, communityAliases, communityNodeTypes, onCreate])
+  }, [query, trimmed, typeOptions, customTypes, expanded, aliases, spaceNodeTypes, onCreate])
 
   const active = Math.min(highlight, rows.length - 1)
   const createRow = rows.find((r) => r.kind === 'create')
@@ -1138,7 +1138,7 @@ function TypeMenu({
       </button>
 
       {open && (
-        /* One list of types. Unfiltered, a type that has community aliases
+        /* One list of types. Unfiltered, a type that has space aliases
            (Founder, Investor…) carries a disclosure caret: press the row to
            take the plain type, press the caret to unfold its aliases and take
            one of those instead. Type anything and the whole vocabulary —
@@ -1168,7 +1168,7 @@ function TypeMenu({
           </div>
 
           {/* Six-odd rows tall, then it scrolls. The vocabulary grows with the
-              community, so a list sized to fit it ran most of the viewport and
+              space, so a list sized to fit it ran most of the viewport and
               buried the surface it was opened over — a short window you scroll
               is the readable shape at any length. */}
           <div className="max-h-56 overflow-y-auto py-1" role="listbox">

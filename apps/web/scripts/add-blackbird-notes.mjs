@@ -1,20 +1,20 @@
 // Seeds the "Blackbird Ventures" notes brains with rich, data-driven content.
 //
-// Builds two brains in the community_notes table:
-//   • the SHARED community brain (owner_key = 'shared') — a portfolio knowledge
+// Builds two brains in the space_notes table:
+//   • the SHARED space brain (owner_key = 'shared') — a portfolio knowledge
 //     base generated from ./data/blackbird-ventures.research.json: a per-company
 //     note for all 182 portfolio companies, one note per lead founder, per-sector
 //     index pages, partner notes, a deals pipeline and fund-data notes — every
 //     internal reference is an absolute `/path.md` link so the notes graph,
 //     backlinks and search all light up.
-//   • a PERSONAL "My Notes" brain (owner_key = <community admin userId>) — a small
+//   • a PERSONAL "My Notes" brain (owner_key = <space admin userId>) — a small
 //     self-contained set of working notes (journal, meetings, watchlist, todos,
 //     diligence) cross-linked to each other.
 //
 //   pnpm db:blackbird:notes            (after pnpm db:blackbird)
 //   pnpm db:blackbird:notes -- --reset (clean rebuild of the live seeded notes)
 //
-// Requires the community + users from `pnpm db:blackbird` to already exist.
+// Requires the space + users from `pnpm db:blackbird` to already exist.
 // Loads apps/web/.env (cwd-independent, via the guard) and refuses to run against
 // any non-local host — same guard the destructive db:* scripts use.
 import '../../../scripts/guard-local-db.mjs';
@@ -628,7 +628,7 @@ const personal = [];
 note(personal, 'index.md', { type: 'Index', title: 'My Context', tags: ['home'] }, `
 # My Context
 
-My own brain — nothing here is shared with the community.
+My own brain — nothing here is shared with the space.
 
 - ${link('Journal', '/journal/index.md')} — weekly notes and reflections
 - ${link('Meetings', '/meetings/index.md')} — partner syncs, founder calls, IC prep
@@ -754,24 +754,24 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  const comm = await client.query('SELECT id FROM communities WHERE id = $1', [COMM]);
+  const comm = await client.query('SELECT id FROM spaces WHERE id = $1', [COMM]);
   if (comm.rowCount === 0) {
-    throw new Error(`community "${COMM}" not found — run \`pnpm db:blackbird\` first`);
+    throw new Error(`space "${COMM}" not found — run \`pnpm db:blackbird\` first`);
   }
 
-  // Whoever manages the community gets the personal brain. There is no role
+  // Whoever manages the space gets the personal brain. There is no role
   // column — an admin is someone holding a Person alias flagged `owner` or
-  // `system` in communities.community_aliases (lib/auth.ts#isAdmin), so ask
+  // `system` in spaces.aliases (lib/auth.ts#isAdmin), so ask
   // that list directly and fall back to the earliest member.
   const adminRes = await client.query(
-    `SELECT u.id, u.name FROM user_communities uc
+    `SELECT u.id, u.name FROM space_members uc
        JOIN users u ON u.id = uc.user_id
-      WHERE uc.community_id = $1
+      WHERE uc.space_id = $1
       ORDER BY EXISTS (
         SELECT 1 FROM user_aliases ua
-          JOIN communities c ON c.id = uc.community_id
-          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.community_aliases, '[]'::jsonb)) AS a
-         WHERE ua.community_id = uc.community_id
+          JOIN spaces c ON c.id = uc.space_id
+          CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.aliases, '[]'::jsonb)) AS a
+         WHERE ua.space_id = uc.space_id
            AND ua.user_id = uc.user_id
            AND ua.alias_name = a->>'name'
            AND (a->>'owner' = 'true' OR a->>'system' = 'true')
@@ -785,8 +785,8 @@ try {
 
   if (RESET) {
     const del = await client.query(
-      `DELETE FROM community_notes
-        WHERE community_id = $1 AND owner_key = ANY($2) AND deleted_at IS NULL`,
+      `DELETE FROM space_notes
+        WHERE space_id = $1 AND owner_key = ANY($2) AND deleted_at IS NULL`,
       [COMM, [SHARED, adminId]],
     );
     console.log(`add-blackbird-notes: --reset removed ${del.rowCount} live note(s) (trash preserved)`);
@@ -805,9 +805,9 @@ try {
   for (const { ownerKey, notes } of brains) {
     for (const n of notes) {
       await client.query(
-        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, starred, updated_at)
+        `INSERT INTO space_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
-         ON CONFLICT (community_id, owner_key, path)
+         ON CONFLICT (space_id, owner_key, path)
          DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
         [COMM, ownerKey, n.path, withStar(n.content, n.pinned), adminId, n.pinned],
       );

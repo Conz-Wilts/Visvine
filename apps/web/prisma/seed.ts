@@ -1,25 +1,25 @@
 /**
- * Local-dev seed — the base layer of the Blackbird Ventures community.
+ * Local-dev seed — the base layer of the Blackbird Ventures space.
  *
  * Creates four anchor users for the /dev/login picker:
- *   - admin@local.dev    (Owner + Partner — the one who manages the community)
+ *   - admin@local.dev    (Owner + Partner — the one who manages the space)
  *   - partner@local.dev  (Partner)
  *   - member@local.dev   (Founder)
  *   - lp@local.dev       (LP)
  *
- * Plus the community itself and its aliases, spread across the permission model
+ * Plus the space itself and its aliases, spread across the permission model
  * so every shape of grant is represented:
  *
- *   Owner      system, owns the community — built in, cannot be changed
+ *   Owner      system, owns the space — built in, cannot be changed
  *   Partner    edit on communities/, deals/ and data/ — the working set
  *   Founder    view on communities/
  *   Investor   view on communities/ and sectors/
  *   Employee   view on communities/ and people/
  *   LP         view on one note only — the tightest grant there is
- *   Everyone   view on sectors/ (the community-wide grant)
+ *   Everyone   view on sectors/ (the space-wide grant)
  *
  * `communities/` is where a portfolio company's note lives — an organisation IS
- * a community, so company notes share the directory with them (lib/notes/entities.ts).
+ * a space, so company notes share the directory with them (lib/notes/entities.ts).
  *
  * The grant paths line up with the brain `add-blackbird-notes.mjs` builds, so
  * the layers on top of this one land on real folders. This seed is only the
@@ -37,8 +37,8 @@ import { OWNER_ALIAS, OWNER_ALIAS_NAME } from "../lib/types/context";
 
 assertLocalTarget();
 
-const COMMUNITY_ID = "community:blackbird-ventures";
-const COMMUNITY_NAME = "Blackbird Ventures";
+const SPACE_ID = "community:blackbird-ventures";
+const SPACE_NAME = "Blackbird Ventures";
 
 const connectionString =
   process.env.DIRECT_DATABASE_URL ||
@@ -93,7 +93,7 @@ const VIEW = 10;
 const EDIT = 30;
 
 /**
- * The node types this community uses. Written explicitly because the schema
+ * The node types this space uses. Written explicitly because the schema
  * default omits Resource, and the layers above seed events and resources.
  *
  * The second group is the note vocabulary: every `type:` the seeded notes write
@@ -127,13 +127,13 @@ interface SeedAlias {
 }
 
 /**
- * The community's aliases, stored in `Community.communityAliases` exactly as
+ * The space's aliases, stored in `Space.aliases` exactly as
  * the console writes them. The Person ones are the permission vocabulary; the
  * Space ones are directory labels with no access meaning.
  */
 const ALIASES: SeedAlias[] = [
   {
-    // Owners manage the community outright; no grant needed to see everything.
+    // Owners manage the space outright; no grant needed to see everything.
     name: OWNER_ALIAS_NAME,
     color: OWNER_ALIAS.color,
     nodeType: "Person",
@@ -186,33 +186,33 @@ const ALIASES: SeedAlias[] = [
 ];
 
 /** What every member reaches without holding anything — the "Everyone" card. */
-const COMMUNITY_GRANTS: Array<[string, number]> = [["sectors", VIEW]];
+const SPACE_GRANTS: Array<[string, number]> = [["sectors", VIEW]];
 
 async function wipeData() {
   console.log("Wiping existing data…");
   // Delete in dependency order. Anything with onDelete: Cascade is wiped by the
   // parent deletes; the rest are explicit — including the tables that carry a
-  // communityId with no FK behind it, which would otherwise orphan.
+  // spaceId with no FK behind it, which would otherwise orphan.
   await prisma.$transaction([
     prisma.link.deleteMany({}),
     prisma.attendee.deleteMany({}),
     prisma.resourceComment.deleteMany({}),
     prisma.resourceChange.deleteMany({}),
     prisma.resource.deleteMany({}),
-    prisma.userCommunity.deleteMany({}),
+    prisma.spaceMember.deleteMany({}),
     prisma.person.deleteMany({}),
     prisma.node.deleteMany({}),
     prisma.user.deleteMany({}),
-    prisma.community.deleteMany({}),
+    prisma.space.deleteMany({}),
   ]);
 }
 
-async function createCommunity() {
-  console.log(`Creating ${COMMUNITY_NAME}…`);
-  await prisma.community.create({
+async function createSpace() {
+  console.log(`Creating ${SPACE_NAME}…`);
+  await prisma.space.create({
     data: {
-      id: COMMUNITY_ID,
-      name: COMMUNITY_NAME,
+      id: SPACE_ID,
+      name: SPACE_NAME,
       description:
         "Blackbird Ventures is a leading Australian & New Zealand venture capital firm. " +
         "This space maps its portfolio companies and the founders behind them.",
@@ -228,18 +228,18 @@ async function createCommunity() {
 }
 
 /**
- * Record that this community's access is already established. Without it the
+ * Record that this space's access is already established. Without it the
  * first brain touch grandfathers every member a root grant (lib/notes/access.ts
  * #ensureAccessSeeded), which would swamp the alias grants above with blanket
  * edit-everywhere and make the seeded permissions meaningless.
  */
 async function markAccessSeeded() {
-  await prisma.communityBrainFile.upsert({
+  await prisma.spaceBrainFile.upsert({
     where: {
-      brain_file_identity: { communityId: COMMUNITY_ID, ownerKey: "shared", name: "access-state.json" },
+      brain_file_identity: { spaceId: SPACE_ID, ownerKey: "shared", name: "access-state.json" },
     },
     create: {
-      communityId: COMMUNITY_ID,
+      spaceId: SPACE_ID,
       ownerKey: "shared",
       name: "access-state.json",
       content: JSON.stringify({ seededAt: Date.now(), seededFrom: "aliases" }, null, 2),
@@ -248,13 +248,13 @@ async function markAccessSeeded() {
   });
 }
 
-/** Write the aliases onto the community, then grant what each one reaches. */
+/** Write the aliases onto the space, then grant what each one reaches. */
 async function createAliases() {
   console.log("Creating aliases…");
-  await prisma.community.update({
-    where: { id: COMMUNITY_ID },
+  await prisma.space.update({
+    where: { id: SPACE_ID },
     data: {
-      communityAliases: ALIASES.map((a) => ({
+      aliases: ALIASES.map((a) => ({
         name: a.name,
         color: a.color,
         nodeType: a.nodeType,
@@ -266,7 +266,7 @@ async function createAliases() {
   const grants = [
     ...ALIASES.flatMap((a) =>
       a.grants.map(([resourcePath, level]) => ({
-        communityId: COMMUNITY_ID,
+        spaceId: SPACE_ID,
         subjectType: "alias",
         subjectId: a.name, // alias grants are keyed by NAME
         resourcePath,
@@ -274,9 +274,9 @@ async function createAliases() {
         grantedBy: ANCHORS[0].id,
       })),
     ),
-    ...COMMUNITY_GRANTS.map(([resourcePath, level]) => ({
-      communityId: COMMUNITY_ID,
-      subjectType: "community",
+    ...SPACE_GRANTS.map(([resourcePath, level]) => ({
+      spaceId: SPACE_ID,
+      subjectType: "space",
       subjectId: "",
       resourcePath,
       level,
@@ -298,10 +298,10 @@ async function createAnchorUsers() {
         isActive: true,
       },
     });
-    await prisma.userCommunity.create({
+    await prisma.spaceMember.create({
       data: {
         userId: a.id,
-        communityId: COMMUNITY_ID,
+        spaceId: SPACE_ID,
       },
     });
     for (const aliasName of a.aliases) {
@@ -309,7 +309,7 @@ async function createAnchorUsers() {
         throw new Error(`seed: anchor ${a.email} wants unknown Person alias "${aliasName}"`);
       }
       await prisma.userAlias.create({
-        data: { communityId: COMMUNITY_ID, userId: a.id, aliasName, addedBy: ANCHORS[0].id },
+        data: { spaceId: SPACE_ID, userId: a.id, aliasName, addedBy: ANCHORS[0].id },
       });
     }
     await prisma.node.create({
@@ -317,7 +317,7 @@ async function createAnchorUsers() {
         id: a.personNodeId,
         type: "person",
         name: a.name,
-        communityId: COMMUNITY_ID,
+        spaceId: SPACE_ID,
         alias: a.aliases.find((n) => n !== OWNER_ALIAS_NAME) ?? null,
         metadata: { seeded: true, anchor: true },
       },
@@ -335,7 +335,7 @@ async function createAnchorUsers() {
 async function main() {
   const t0 = Date.now();
   await wipeData();
-  await createCommunity();
+  await createSpace();
   await createAliases();
   await createAnchorUsers();
   await markAccessSeeded();

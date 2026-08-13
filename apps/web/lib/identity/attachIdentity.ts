@@ -1,4 +1,4 @@
-// Attaching a freshly-created directory node to its canonical cross-community
+// Attaching a freshly-created directory node to its canonical cross-space
 // Identity. Extracted from app/api/data/nodes/route.ts so the note-first create
 // endpoint (app/api/directory/entities/route.ts) runs the SAME resolution — two
 // copies of this would drift, and the failure mode is silent: a node that simply
@@ -7,7 +7,7 @@
 import prisma from '@/lib/prisma'
 import type { NBNode } from '@/lib/types'
 import { entityKindOf } from '@/lib/notes/entities'
-import { isOwnCommunityNode } from '@/lib/types/context'
+import { isOwnSpaceNode } from '@/lib/types/context'
 import { tryResolveIdentity, confirmIdentity, type ResolveResult } from './resolve'
 import type { IdentityKind } from './match'
 
@@ -18,15 +18,15 @@ import type { IdentityKind } from './match'
  * rule (website domains, no email), not a display label, and renaming it would
  * churn every stored row for nothing.
  *
- * The community's own root node is excluded: it is the community you are in,
- * not an organisation recorded inside it, and merging those across communities
- * would collapse unrelated communities onto one identity.
+ * The space's own root node is excluded: it is the space you are in,
+ * not an organisation recorded inside it, and merging those across spaces
+ * would collapse unrelated spaces onto one identity.
  */
-function identityKindFor(node: { id: string; type: string; community_id?: string | null }): IdentityKind | null {
+function identityKindFor(node: { id: string; type: string; space_id?: string | null }): IdentityKind | null {
   const t = node.type.toLowerCase()
   if (t === 'person' || t === 'people') return 'person'
   if (entityKindOf(t) === 'space') {
-    return isOwnCommunityNode({ id: node.id, communityId: node.community_id }) ? null : 'organization'
+    return isOwnSpaceNode({ id: node.id, spaceId: node.space_id }) ? null : 'organization'
   }
   return null
 }
@@ -45,10 +45,10 @@ export interface AttachIdentityResult {
  * can never silently force a merge.
  *
  * Returns `{ identityId: null, resolution: null }` for types with no identity
- * (resources, events, community-invented types, and a community's own node).
+ * (resources, events, space-invented types, and a space's own node).
  */
 export async function attachIdentity(
-  node: Pick<NBNode, 'id' | 'type' | 'name' | 'url' | 'location' | 'metadata' | 'community_id'>,
+  node: Pick<NBNode, 'id' | 'type' | 'name' | 'url' | 'location' | 'metadata' | 'space_id'>,
   opts: { identityId?: string | null; actorUserId?: string | null } = {},
 ): Promise<AttachIdentityResult> {
   const kind = identityKindFor(node)

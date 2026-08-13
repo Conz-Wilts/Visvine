@@ -35,8 +35,8 @@ interface ConversationListPanelProps {
   onSelectConversation: (id: string) => void;
   onJoinChannel: (channelId: string) => Promise<void>;
   joiningChannelId: string | null;
-  communityIsAdmin: boolean | undefined;
-  // Channel-creation form (community admins only)
+  spaceIsAdmin: boolean | undefined;
+  // Channel-creation form (space admins only)
   showChannelForm: boolean;
   setShowChannelForm: Dispatch<SetStateAction<boolean>>;
   onCreateChannel: (e: FormEvent) => Promise<void>;
@@ -53,20 +53,20 @@ interface ConversationListPanelProps {
   showIconPicker: boolean;
   setShowIconPicker: Dispatch<SetStateAction<boolean>>;
   creatingChannel: boolean;
-  // Inline "new section" form (community admins only)
+  // Inline "new section" form (space admins only)
   showSectionForm: boolean;
   setShowSectionForm: Dispatch<SetStateAction<boolean>>;
   sectionName: string;
   setSectionName: (value: string) => void;
   creatingSection: boolean;
   onCreateSection: (e: FormEvent) => Promise<void>;
-  // Section rename/delete (community admins only)
+  // Section rename/delete (space admins only)
   onRenameSection: (sectionId: string, name: string) => Promise<void>;
   onDeleteSection: (sectionId: string) => Promise<void>;
 }
 
 /**
- * Channel rail — the community's channels grouped by section. On the Channels
+ * Channel rail — the space's channels grouped by section. On the Channels
  * page (wide) this content is portaled into the Sidebar dock instead of
  * floating as its own box (see dockChannels).
  */
@@ -85,7 +85,7 @@ export default function ConversationListPanel({
   onSelectConversation,
   onJoinChannel,
   joiningChannelId,
-  communityIsAdmin,
+  spaceIsAdmin,
   showChannelForm,
   setShowChannelForm,
   onCreateChannel,
@@ -113,7 +113,7 @@ export default function ConversationListPanel({
 }: ConversationListPanelProps) {
   // Creating channels + sections lives in the global "Create new" (+) modal.
   const { open: openCreateModal } = useCreateModal();
-  // Inline section rename (community admins): which section header is being edited.
+  // Inline section rename (space admins): which section header is being edited.
   const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
   const [editingSectionName, setEditingSectionName] = useState('');
   const [sectionActionBusy, setSectionActionBusy] = useState(false);
@@ -170,7 +170,7 @@ export default function ConversationListPanel({
     {/* Docked panel gets its own search up top */}
     {docked && channelControls}
 
-    {/* Channel creation (community admins only) */}
+    {/* Channel creation (space admins only) */}
     {showChannelForm && (
       <form onSubmit={onCreateChannel} className="section-y-2 border-b border-border-subtle px-4 py-3">
         <div className="flex items-center gap-2">
@@ -290,7 +290,7 @@ export default function ConversationListPanel({
               </div>
               <p className="text-sm font-medium text-text-secondary">No channels yet</p>
               <p className="mt-1 text-xs text-text-muted">
-                {communityIsAdmin
+                {spaceIsAdmin
                   ? 'Create the first channel with the + button in the sidebar.'
                   : 'Channels created by your section admins will appear here.'}
               </p>
@@ -342,7 +342,7 @@ export default function ConversationListPanel({
                             {sectionUnread > 99 ? '99+' : sectionUnread}
                           </span>
                         )}
-                        {communityIsAdmin && isSection && (
+                        {spaceIsAdmin && isSection && (
                           <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
                               type="button"
@@ -437,8 +437,8 @@ export default function ConversationListPanel({
             </div>
           )}
 
-          {/* ── New section (community admins) ── */}
-          {communityIsAdmin && (
+          {/* ── New section (space admins) ── */}
+          {spaceIsAdmin && (
             <div className="px-2.5 pt-1">
               {/* Section form is just an input — Enter creates, Escape cancels. */}
               {showSectionForm ? (

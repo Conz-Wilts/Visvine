@@ -1,5 +1,5 @@
 // Unit tests for the pure alias rules (lib/notes/shared/aliases.ts): who manages
-// a community, and the one invariant the whole model rests on — a community can
+// a space, and the one invariant the whole model rests on — a space can
 // never be left with nobody able to manage it. The DB side
 // (lib/notes/aliases.ts) is a thin wrapper that loads summaries and calls
 // ownerSurvives before writing.
@@ -99,7 +99,7 @@ test('setting the owner flag ON is never refused', () => {
     ownerSurvives(soleOwner(), { kind: 'setOwner', name: 'eng', owner: true }),
     true,
   )
-  // Even from a community that has nobody managing it — turning owner on can
+  // Even from a space that has nobody managing it — turning owner on can
   // only ever add managers.
   const stranded = [alias('eng', false, ['u-2'])]
   assert.equal(ownerSurvives(stranded, { kind: 'setOwner', name: 'eng', owner: true }), true)
@@ -120,7 +120,7 @@ test('a bulk removal is judged on the whole set, not one at a time', () => {
   // Either alone is safe...
   assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-1'] }), true)
   assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-2'] }), true)
-  // ...but together they strip the community.
+  // ...but together they strip the space.
   assert.equal(ownerSurvives(aliases, { kind: 'removeMember', userIds: ['u-1', 'u-2'] }), false)
 })
 
@@ -133,7 +133,7 @@ test('ownerSurvives does not mutate the aliases it is given', () => {
   assert.equal(JSON.stringify(aliases), before)
 })
 
-test('an unknown alias name leaves the community exactly as it was', () => {
+test('an unknown alias name leaves the space exactly as it was', () => {
   assert.equal(ownerSurvives(soleOwner(), { kind: 'removeAlias', name: 'ghost' }), true)
   assert.equal(
     ownerSurvives(soleOwner(), { kind: 'removeHolder', name: 'ghost', userId: 'u-1' }),

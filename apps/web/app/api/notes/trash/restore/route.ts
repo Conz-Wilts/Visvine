@@ -1,4 +1,4 @@
-// POST /api/notes/trash/restore  { communityId, scope, id } → { path }
+// POST /api/notes/trash/restore  { spaceId, scope, id } → { path }
 // Restore a soft-deleted note to its original path (suffixed on collision).
 
 import { NextRequest, NextResponse } from 'next/server'

@@ -15,14 +15,14 @@ interface EventWithStats extends NBEvent {
   };
 }
 
-interface CommunityInfo {
+interface SpaceInfo {
   name: string;
   imageUrl?: string | null;
 }
 
 interface EventsFeedViewProps {
   events: EventWithStats[];
-  community?: CommunityInfo;
+  space?: SpaceInfo;
   loading?: boolean;
   onEdit?: (eventId: string) => void;
   onEventClick?: (event: EventWithStats) => void;
@@ -53,13 +53,13 @@ function monthKey(date: Date): string {
 
 function FeedCard({
   event,
-  community,
+  space,
   featured,
   onEdit,
   onClick,
 }: {
   event: EventWithStats;
-  community?: CommunityInfo;
+  space?: SpaceInfo;
   featured?: boolean;
   onEdit?: (id: string) => void;
   onClick?: (event: EventWithStats) => void;
@@ -99,10 +99,10 @@ function FeedCard({
             <p className="text-sm font-medium text-text-secondary">
               {formatFullDate(event.startAt, event.endAt)}
             </p>
-            {community && (
+            {space && (
               <div className="flex items-center gap-1.5 text-sm text-text-muted">
-                <Avatar name={community.name} imageUrl={community.imageUrl} size="xs" />
-                {community.name} community
+                <Avatar name={space.name} imageUrl={space.imageUrl} size="xs" />
+                {space.name} space
               </div>
             )}
           </div>
@@ -160,7 +160,7 @@ function FeedCard({
   );
 }
 
-export default function EventsFeedView({ events, community, loading = false, onEdit, onEventClick }: EventsFeedViewProps) {
+export default function EventsFeedView({ events, space, loading = false, onEdit, onEventClick }: EventsFeedViewProps) {
   const { nextEvent, upcomingByMonth, pastEvents, undated } = useMemo(() => {
     // An event created from the context surface has a name and a note before it
     // has a schedule. It belongs at the TOP of the feed, not filtered out of
@@ -208,7 +208,7 @@ export default function EventsFeedView({ events, community, loading = false, onE
           <h2 className="text-lg font-semibold text-brand-black">Date to be set</h2>
           <div className="space-y-4">
             {undated.map(ev => (
-              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
+              <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}
           </div>
         </section>
@@ -217,7 +217,7 @@ export default function EventsFeedView({ events, community, loading = false, onE
       {nextEvent && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-brand-black">Next event</h2>
-          <FeedCard event={nextEvent} community={community} featured onEdit={onEdit} onClick={onEventClick} />
+          <FeedCard event={nextEvent} space={space} featured onEdit={onEdit} onClick={onEventClick} />
         </section>
       )}
 
@@ -226,7 +226,7 @@ export default function EventsFeedView({ events, community, loading = false, onE
           <h2 className="text-lg font-semibold text-brand-black">{month}</h2>
           <div className="space-y-4">
             {monthEvents.map(ev => (
-              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
+              <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}
           </div>
         </section>
@@ -237,7 +237,7 @@ export default function EventsFeedView({ events, community, loading = false, onE
           <h2 className="text-lg font-semibold text-text-muted">Past events</h2>
           <div className="space-y-4">
             {pastEvents.map(ev => (
-              <FeedCard key={ev.id} event={ev} community={community} onEdit={onEdit} onClick={onEventClick} />
+              <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}
           </div>
         </section>

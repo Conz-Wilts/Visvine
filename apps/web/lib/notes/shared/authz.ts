@@ -1,7 +1,7 @@
-// The grant-based access model for community brains — the pure core of the
+// The grant-based access model for space brains — the pure core of the
 // multiplayer-brains permission system. One
 // mental model: every brain is a folder tree and access flows DOWN it. A grant
-// gives a subject (the whole community, an alias, or one member) a level on a
+// gives a subject (the whole space, an alias, or one member) a level on a
 // resource path ('' = the brain root, a folder at any depth, or a single note);
 // a RESTRICTED folder cuts inheritance at its boundary (only grants on or
 // inside it reach past); a member's effective level on a path is the MAX across
@@ -56,14 +56,14 @@ export function parseLevel(name: unknown): number | null {
 
 // grants
 
-export type GrantSubjectType = 'community' | 'alias' | 'user'
+export type GrantSubjectType = 'space' | 'alias' | 'user'
 
-export const SUBJECT_TYPES: readonly GrantSubjectType[] = ['community', 'alias', 'user']
+export const SUBJECT_TYPES: readonly GrantSubjectType[] = ['space', 'alias', 'user']
 
 /** One access grant: *subject* gets *level* on *resource*. */
 export interface AccessGrant {
   subjectType: GrantSubjectType
-  /** '' for community-wide grants, else an aliasId / userId. */
+  /** '' for space-wide grants, else an aliasId / userId. */
   subjectId: string
   /** '' = brain root, a folder path ('teams/engineering'), or a note path. */
   resourcePath: string
@@ -72,7 +72,7 @@ export interface AccessGrant {
 
 /**
  * Everything the pure checks need about ONE principal's standing in a brain:
- * the grants that apply to them (community-wide + their aliases' + their own,
+ * the grants that apply to them (space-wide + their aliases' + their own,
  * pre-scoped by the loader) and the brain's folder-boundary flags.
  */
 export interface BrainAccess {
@@ -85,7 +85,7 @@ export interface BrainAccess {
 
 /** Full access from the root — personal spaces are never folder-gated. */
 export const OPEN_ACCESS: BrainAccess = {
-  grants: [{ subjectType: 'community', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
+  grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
   restricted: [],
   locked: [],
 }
@@ -189,14 +189,14 @@ export function accessSignature(access: BrainAccess): string {
 /**
  * The one grant that answers "why can this subject act here": the highest
  * reaching level, tie-broken toward the most specific resource, then the most
- * specific subject (user > alias > community). Null when nothing reaches.
+ * specific subject (user > alias > space). Null when nothing reaches.
  */
 export function winningGrant(
   grants: AccessGrant[],
   path: string,
   restricted: string[],
 ): AccessGrant | null {
-  const specificity: Record<GrantSubjectType, number> = { user: 2, alias: 1, community: 0 }
+  const specificity: Record<GrantSubjectType, number> = { user: 2, alias: 1, space: 0 }
   let win: AccessGrant | null = null
   for (const g of grants) {
     if (!grantReaches(g, path, restricted)) continue
@@ -235,14 +235,14 @@ const LEGACY_LEVELS: Record<string, number> = {
 
 /**
  * Map a legacy `folders.json` registry (lib/notes/shared/brainTypes.ts) onto
- * grant rows — the one-time migration lib/notes/access.ts runs per community.
+ * grant rows — the one-time migration lib/notes/access.ts runs per space.
  * The mapping preserves who could READ what exactly:
  * - every folder member becomes a direct user grant at the folder's path
  *   (read→view, write→edit, admin→full); the ROOT entry's members become
  *   root grants — the brain gate, expressed as rows;
  * - a PRIVATE registered folder becomes a RESTRICTED folder (the cut keeps
  *   non-members out, exactly as the old refines-the-root ACL did);
- * - a PUBLIC folder gains a community-wide view grant (it was readable by every
+ * - a PUBLIC folder gains a space-wide view grant (it was readable by every
  *   member, even those outside the root gate). Under the additive model, root
  *   writers now also keep their write level INSIDE public folders — a
  *   deliberate widening (the old model narrowed there; deny-on-top is the one
@@ -263,7 +263,7 @@ export function migrateLegacyRegistry(cfg: {
     if (folder.locked && folder.id !== '') locked.push(folder.id)
     if (folder.visibility === 'public') {
       grants.push({
-        subjectType: 'community',
+        subjectType: 'space',
         subjectId: '',
         resourcePath: folder.id,
         level: LEVEL_VIEW,

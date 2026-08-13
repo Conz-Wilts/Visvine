@@ -1,8 +1,8 @@
-// Typed client for the notes REST API. Every call is scoped to a community's
-// single brain (communityId) — a user's personal context is just the brain of
-// their personal-space community (`me:<userId>`), so there is no scope param
+// Typed client for the notes REST API. Every call is scoped to a space's
+// single brain (spaceId) — a user's personal context is just the brain of
+// their personal-space space (`me:<userId>`), so there is no scope param
 // anymore. Reads use query params; mutations send a JSON body that also carries
-// communityId (see lib/notes/api.ts:requireBrain). Plain fetch + thrown errors,
+// spaceId (see lib/notes/api.ts:requireBrain). Plain fetch + thrown errors,
 // matching Visvine's client conventions (no SWR/react-query).
 
 import type {
@@ -31,7 +31,7 @@ import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
  *  merged who-has-access list (readable) and grantable subjects (managers). */
 export interface PathAccessResponse {
   path: string
-  me: { userId: string; communityAdmin: boolean }
+  me: { userId: string; spaceAdmin: boolean }
   /** No grant reaches the caller ANYWHERE — the brain gate is closed to them. */
   gated: boolean
   canRead: boolean
@@ -49,9 +49,9 @@ export interface PathAccessResponse {
 }
 
 /** GET /api/notes/access (no path) — the brain-wide overview for tree badges
- *  and (for community admins) the full grant dump behind the Access page. */
+ *  and (for space admins) the full grant dump behind the Access page. */
 export interface AccessOverviewResponse {
-  me: { userId: string; communityAdmin: boolean }
+  me: { userId: string; spaceAdmin: boolean }
   gated: boolean
   restricted: string[]
   locked: string[]
@@ -75,8 +75,8 @@ export type AccessActionInput =
   | { action: 'setLock'; folderPath: string; locked: boolean }
 
 type PublicationWithNames = PublicationInfo & {
-  sourceCommunityName: string
-  targetCommunityName: string
+  sourceSpaceName: string
+  targetSpaceName: string
 }
 
 export interface PublicationStateResponse {
@@ -109,8 +109,8 @@ export interface ReviewReport {
   counts: Record<string, number>
 }
 
-function qs(communityId: string, extra?: Record<string, string>): string {
-  const params = new URLSearchParams({ communityId, ...(extra ?? {}) })
+function qs(spaceId: string, extra?: Record<string, string>): string {
+  const params = new URLSearchParams({ spaceId, ...(extra ?? {}) })
   return params.toString()
 }
 
@@ -144,7 +144,7 @@ export const notesApi = {
     getJson<{ settings: { contextName: string } }>(`/api/notes/settings?${qs(c)}`),
   setContextName: (c: string, contextName: string) =>
     sendJson<{ settings: { contextName: string } }>('/api/notes/settings', 'POST', {
-      communityId: c,
+      spaceId: c,
       contextName,
     }),
 
@@ -157,19 +157,19 @@ export const notesApi = {
   // IS a folder, so `type: Index` at a/b.md lands at a/b/index.md.
   create: (c: string, path: string, content?: string) =>
     sendJson<{ note: NoteMeta | null; movedTo?: string }>('/api/notes/item', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       content,
     }),
   write: (c: string, path: string, content: string, origin?: string) =>
     sendJson<{ ok: true; movedTo?: string }>('/api/notes/item', 'PUT', {
-      communityId: c,
+      spaceId: c,
       path,
       content,
       origin,
     }),
   rename: (c: string, from: string, to: string) =>
-    sendJson<{ path: string }>('/api/notes/item', 'PATCH', { communityId: c, from, to }),
+    sendJson<{ path: string }>('/api/notes/item', 'PATCH', { spaceId: c, from, to }),
   remove: async (c: string, path: string) => {
     const res = await fetch(`/api/notes/item?${qs(c, { path })}`, { method: 'DELETE' })
     if (!res.ok) {
@@ -185,7 +185,7 @@ export const notesApi = {
    *  real link. Returns `path`'s refreshed references. */
   linkMention: (c: string, path: string, fromPath: string, offset: number) =>
     sendJson<{ ok: true; references: References }>('/api/notes/references', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       fromPath,
       offset,
@@ -195,7 +195,7 @@ export const notesApi = {
     getJson<{ revisions: NoteRevision[] }>(`/api/notes/history?${qs(c, { path })}`),
   restoreRevision: (c: string, path: string, revisionId: string) =>
     sendJson<{ ok: true }>('/api/notes/history', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       revisionId,
     }),
@@ -204,12 +204,12 @@ export const notesApi = {
   // "Index" create tile), or omit it for the auto-generated stub.
   createFolder: (c: string, path: string, content?: string) =>
     sendJson<{ ok: true; indexPath: string }>('/api/notes/folders', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       ...(content ? { content } : {}),
     }),
   renameFolder: (c: string, from: string, to: string) =>
-    sendJson<{ path: string }>('/api/notes/folders', 'PATCH', { communityId: c, from, to }),
+    sendJson<{ path: string }>('/api/notes/folders', 'PATCH', { spaceId: c, from, to }),
   deleteFolder: async (c: string, path: string) => {
     const res = await fetch(`/api/notes/folders?${qs(c, { path })}`, { method: 'DELETE' })
     if (!res.ok) {
@@ -221,20 +221,20 @@ export const notesApi = {
 
   trash: (c: string) => getJson<{ trash: TrashEntry[] }>(`/api/notes/trash?${qs(c)}`),
   restoreTrash: (c: string, id: string) =>
-    sendJson<{ path: string }>('/api/notes/trash/restore', 'POST', { communityId: c, id }),
+    sendJson<{ path: string }>('/api/notes/trash/restore', 'POST', { spaceId: c, id }),
   purgeTrash: (c: string, id: string) =>
-    sendJson<{ ok: true }>('/api/notes/trash/purge', 'POST', { communityId: c, id }),
+    sendJson<{ ok: true }>('/api/notes/trash/purge', 'POST', { spaceId: c, id }),
   emptyTrash: (c: string) =>
-    sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { communityId: c }),
+    sendJson<{ ok: true }>('/api/notes/trash/empty', 'POST', { spaceId: c }),
 
   star: (c: string, path: string, starred: boolean) =>
-    sendJson<{ ok: true }>('/api/notes/star', 'POST', { communityId: c, path, starred }),
+    sendJson<{ ok: true }>('/api/notes/star', 'POST', { spaceId: c, path, starred }),
 
   refactor: (mode: 'note' | 'selection', text: string, instruction?: string) =>
     sendJson<{ result: string }>('/api/notes/ai/refactor', 'POST', { mode, text, instruction }),
   reorganize: (c: string) =>
     sendJson<{ plan: ReorganizePlan }>('/api/notes/ai/reorganize', 'POST', {
-      communityId: c,
+      spaceId: c,
     }),
 
   exportUrl: (c: string, path: string) => `/api/notes/export?${qs(c, { path })}`,
@@ -245,7 +245,7 @@ export const notesApi = {
 
   searchNotes: (c: string, query: string, opts?: { k?: number; filters?: SearchFilters }) =>
     sendJson<{ results: FusedResult[] }>('/api/notes/search', 'POST', {
-      communityId: c,
+      spaceId: c,
       query,
       k: opts?.k,
       filters: opts?.filters,
@@ -258,7 +258,7 @@ export const notesApi = {
   getAccessOverview: (c: string) =>
     getJson<AccessOverviewResponse>(`/api/notes/access?${qs(c)}`),
   accessAction: (c: string, input: AccessActionInput) =>
-    sendJson<{ ok?: boolean }>('/api/notes/access', 'POST', { communityId: c, ...input }),
+    sendJson<{ ok?: boolean }>('/api/notes/access', 'POST', { spaceId: c, ...input }),
 
   listAliases: (c: string) => getJson<{ aliases: AliasInfo[] }>(`/api/aliases?${qs(c)}`),
   aliasAction: (
@@ -270,21 +270,21 @@ export const notesApi = {
       | { action: 'setOwner'; name: string; owner: boolean }
       | { action: 'addHolder'; name: string; userId: string }
       | { action: 'removeHolder'; name: string; userId: string },
-  ) => sendJson<{ ok?: boolean }>('/api/aliases', 'POST', { communityId: c, ...input }),
+  ) => sendJson<{ ok?: boolean }>('/api/aliases', 'POST', { spaceId: c, ...input }),
 
-  /** How `path` participates in publishing, from community `c`'s point of view. */
+  /** How `path` participates in publishing, from space `c`'s point of view. */
   getPublications: (c: string, path: string) =>
     getJson<PublicationStateResponse>(`/api/notes/publications?${qs(c, { path })}`),
   /** Publish a note the caller can read (default source: their personal brain)
-   *  into community `c`. Queues a proposal when they can't write the target. */
-  publish: (c: string, input: { fromCommunityId?: string; fromPath: string; toPath: string }) =>
+   *  into space `c`. Queues a proposal when they can't write the target. */
+  publish: (c: string, input: { fromSpaceId?: string; fromPath: string; toPath: string }) =>
     sendJson<
       | { status: 'applied'; publication: PublicationInfo }
       | { status: 'proposed'; proposalId: string }
-    >('/api/notes/publications', 'POST', { communityId: c, action: 'publish', ...input }),
+    >('/api/notes/publications', 'POST', { spaceId: c, action: 'publish', ...input }),
   unpublish: (c: string, id: string) =>
     sendJson<{ publication: PublicationInfo }>('/api/notes/publications', 'POST', {
-      communityId: c,
+      spaceId: c,
       action: 'unpublish',
       id,
     }),
@@ -292,12 +292,12 @@ export const notesApi = {
   /** Own requests + every request for a path the caller manages, newest first. */
   listAccessRequests: (c: string) =>
     getJson<{ requests: AccessRequest[]; pending: number }>(
-      `/api/notes/access-requests?communityId=${encodeURIComponent(c)}`,
+      `/api/notes/access-requests?spaceId=${encodeURIComponent(c)}`,
     ),
   /** Ask for access to `resourcePath` ('' = the brain root gate). Idempotent. */
   requestAccess: (c: string, resourcePath: string, message?: string) =>
     sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'POST', {
-      communityId: c,
+      spaceId: c,
       resourcePath,
       message,
     }),
@@ -306,39 +306,39 @@ export const notesApi = {
    *  server resolves it, so the client never learns which note it is. */
   requestReferenceAccess: (c: string, path: string, referenceToken: string) =>
     sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       referenceToken,
     }),
   /** Approve (granting `level`, default = what was asked for) or deny. */
   resolveAccessRequest: (c: string, requestId: string, approve: boolean, level?: AccessLevelName) =>
     sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'PUT', {
-      communityId: c,
+      spaceId: c,
       requestId,
       approve,
       level,
     }),
 
   /** One-time share: copies `fromPath` from the CALLER's personal brain into the
-   *  TARGET community's brain (`c`). The personal original stays. */
+   *  TARGET space's brain (`c`). The personal original stays. */
   promoteNote: (c: string, fromPath: string, toPath: string) =>
-    sendJson<PromoteResult>('/api/notes/promote', 'POST', { communityId: c, fromPath, toPath }),
+    sendJson<PromoteResult>('/api/notes/promote', 'POST', { spaceId: c, fromPath, toPath }),
   listProposals: (c: string) =>
     getJson<{ proposals: MoveProposalEntry[] }>(
-      `/api/notes/promote?communityId=${encodeURIComponent(c)}`,
+      `/api/notes/promote?spaceId=${encodeURIComponent(c)}`,
     ),
   resolveProposal: (c: string, proposalId: string, approve: boolean) =>
     sendJson<{ proposal: MoveProposalEntry }>('/api/notes/promote', 'PUT', {
-      communityId: c,
+      spaceId: c,
       proposalId,
       approve,
     }),
 
-  /** Always writes to the CALLER's personal community log, whichever community
+  /** Always writes to the CALLER's personal space log, whichever space
    *  the request names. */
   capture: (c: string, text: string, refs?: string[], tags?: string[]) =>
     sendJson<{ path: string }>('/api/notes/capture', 'POST', {
-      communityId: c,
+      spaceId: c,
       text,
       refs,
       tags,
@@ -346,19 +346,19 @@ export const notesApi = {
 
   runReview: (c: string, mode: 'light' | 'full', apply?: boolean) =>
     sendJson<{ report: ReviewReport; applied: number }>('/api/notes/review', 'POST', {
-      communityId: c,
+      spaceId: c,
       mode,
       apply,
     }),
-  /** Distills the caller's personal brain INTO community `c`'s brain. */
+  /** Distills the caller's personal brain INTO space `c`'s brain. */
   runEnrich: (c: string, since?: string) =>
     sendJson<{ applied: number; considered: number }>('/api/notes/ai/enrich', 'POST', {
-      communityId: c,
+      spaceId: c,
       since,
     }),
 
   getAudit: (c: string) =>
-    getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?communityId=${encodeURIComponent(c)}`),
+    getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?spaceId=${encodeURIComponent(c)}`),
 
   // context sources (non-note files/tables attached to the brain)
 
@@ -366,7 +366,7 @@ export const notesApi = {
     getJson<{ sources: ContextSourceMeta[] }>(
       `/api/notes/sources?${qs(c, folderId !== undefined ? { folderId } : undefined)}`,
     ),
-  /** Multipart upload — communityId travels in the query string (no JSON body). */
+  /** Multipart upload — spaceId travels in the query string (no JSON body). */
   uploadSource: async (c: string, file: File, folder?: string) => {
     const form = new FormData()
     form.append('file', file)
@@ -388,7 +388,7 @@ export const notesApi = {
     ),
   reingestSource: (c: string, path: string) =>
     sendJson<{ source: ContextSourceMeta }>('/api/notes/sources/item', 'POST', {
-      communityId: c,
+      spaceId: c,
       path,
       action: 'reingest',
     }),

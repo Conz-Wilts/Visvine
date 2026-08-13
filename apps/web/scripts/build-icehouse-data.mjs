@@ -6,7 +6,7 @@
 // Each input file is a task-output envelope { summary, logs, result } (or the
 // raw result object), where result = { firm, companies[], dropped[] } for the
 // main run and { companies[] } for supplements. Output: data/icehouse-ventures.json
-// shaped as { community, nodes[], links[], report }.
+// shaped as { space, nodes[], links[], report }.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,7 +60,7 @@ const nodeTypes = [
   { icon: '🏢', name: 'Organization', color: '#f59e0b', shape: 'rectangle' },
 ];
 
-const community = {
+const space = {
   id: COMM,
   name: 'Icehouse Ventures',
   description:
@@ -177,7 +177,7 @@ for (const c of companies) {
       sources: c.sources ?? [],
     },
   });
-  // Icehouse invested_in company (the whole community is its portfolio)
+  // Icehouse invested_in company (the whole space is its portfolio)
   addLink(FIRM_ID, id, 'invested_in');
   // Founders
   for (const f of c.founders ?? []) {
@@ -198,7 +198,7 @@ const flagged = companies
 const noFounders = companies.filter((c) => !(c.founders ?? []).length).map((c) => c.name);
 
 const data = {
-  community,
+  space,
   nodes,
   links,
   report: {

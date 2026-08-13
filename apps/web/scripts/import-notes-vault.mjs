@@ -1,15 +1,15 @@
-// Import the blackbird-brain markdown vault into a community's notes brain.
+// Import the blackbird-brain markdown vault into a space's notes brain.
 // Reads blackbird-brain/.data/vault/**/*.md (skipping dotfolders like .trash /
-// .history) and upserts each as a CommunityNote row, preserving the folder
+// .history) and upserts each as a SpaceNote row, preserving the folder
 // layout in the `path`. The vault is the seed source; once imported, notes live
 // in the DB (the source-of-truth markdown is in `content`).
 //
 // Usage (local only — guarded):
-//   node scripts/import-notes-vault.mjs --community community:blackbird-ventures [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
-//   pnpm db:notes-vault -- --community community:blackbird-ventures
+//   node scripts/import-notes-vault.mjs --space community:blackbird-ventures [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
+//   pnpm db:notes-vault -- --space community:blackbird-ventures
 //
 // Defaults: --scope shared. For --scope personal you must pass --owner <userId>
-// (the brain owner). created_by is resolved to a community admin if not given.
+// (the brain owner). created_by is resolved to a space admin if not given.
 
 import '../../../scripts/guard-local-db.mjs'
 import 'dotenv/config'
@@ -26,13 +26,13 @@ function arg(name, fallback = null) {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
 
-const communityId = arg('community')
+const spaceId = arg('space')
 const scope = arg('scope', 'shared')
 const owner = arg('owner')
 let createdBy = arg('created-by')
 
-if (!communityId) {
-  console.error('import-notes-vault: --community <id> is required')
+if (!spaceId) {
+  console.error('import-notes-vault: --space <id> is required')
   process.exit(1)
 }
 if (scope !== 'shared' && scope !== 'personal') {
@@ -79,34 +79,34 @@ async function main() {
   const pool = new pg.Pool({ connectionString })
   const client = await pool.connect()
   try {
-    const community = await client.query('SELECT id FROM communities WHERE id = $1', [communityId])
-    if (community.rowCount === 0) {
-      console.error(`import-notes-vault: community "${communityId}" not found`)
+    const space = await client.query('SELECT id FROM spaces WHERE id = $1', [spaceId])
+    if (space.rowCount === 0) {
+      console.error(`import-notes-vault: space "${spaceId}" not found`)
       process.exit(1)
     }
 
     if (!createdBy) {
       // Membership carries no role — an admin is someone holding a Person
-      // alias flagged `owner`/`system` in communities.community_aliases
+      // alias flagged `owner`/`system` in spaces.aliases
       // (lib/auth.ts#isAdmin). Prefer one of those, else the earliest member.
       const admin = await client.query(
-        `SELECT uc.user_id FROM user_communities uc
-          WHERE uc.community_id = $1
+        `SELECT uc.user_id FROM space_members uc
+          WHERE uc.space_id = $1
           ORDER BY EXISTS (
             SELECT 1 FROM user_aliases ua
-              JOIN communities c ON c.id = uc.community_id
-              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.community_aliases, '[]'::jsonb)) AS a
-             WHERE ua.community_id = uc.community_id
+              JOIN spaces c ON c.id = uc.space_id
+              CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.aliases, '[]'::jsonb)) AS a
+             WHERE ua.space_id = uc.space_id
                AND ua.user_id = uc.user_id
                AND ua.alias_name = a->>'name'
                AND (a->>'owner' = 'true' OR a->>'system' = 'true')
           ) DESC, uc.joined_at ASC
           LIMIT 1`,
-        [communityId],
+        [spaceId],
       )
       createdBy = admin.rows[0]?.user_id
       if (!createdBy) {
-        console.error('import-notes-vault: no members found for community; pass --created-by <userId>')
+        console.error('import-notes-vault: no members found for space; pass --created-by <userId>')
         process.exit(1)
       }
     }
@@ -121,17 +121,17 @@ async function main() {
     let imported = 0
     for (const note of notes) {
       await client.query(
-        `INSERT INTO community_notes (community_id, owner_key, path, content, created_by, starred, updated_at)
+        `INSERT INTO space_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
-         ON CONFLICT (community_id, owner_key, path)
+         ON CONFLICT (space_id, owner_key, path)
          DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
-        [communityId, ownerKey, note.path, note.content, createdBy, isStarred(note.content)],
+        [spaceId, ownerKey, note.path, note.content, createdBy, isStarred(note.content)],
       )
       imported++
     }
 
     console.log(
-      `import-notes-vault: imported ${imported} note(s) into ${communityId} / ${scope} brain (owner_key=${ownerKey}, created_by=${createdBy}).`,
+      `import-notes-vault: imported ${imported} note(s) into ${spaceId} / ${scope} brain (owner_key=${ownerKey}, created_by=${createdBy}).`,
     )
   } finally {
     client.release()

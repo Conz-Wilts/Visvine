@@ -10,7 +10,7 @@
  */
 import prisma from '@/lib/prisma'
 import type { SessionPayload } from '@/lib/session'
-import { adminCommunityIds } from '@/lib/auth'
+import { adminSpaceIds } from '@/lib/auth'
 import {
   resolveBrain,
   resolvePersonalBrain,
@@ -46,15 +46,15 @@ async function messageOf(res: Response): Promise<string> {
 }
 
 /**
- * Resolve + authorize the community brain a call targets. This is the hard
+ * Resolve + authorize the space brain a call targets. This is the hard
  * tenant boundary: a caller who is neither an admin nor a member gets a 403,
  * exactly as they would from the HTTP routes.
  */
-export async function requireCommunityBrain(
+export async function requireSpaceBrain(
   ctx: McpContext,
-  communityId: string,
+  spaceId: string,
 ): Promise<ResolvedBrain> {
-  const resolved = await resolveBrain(sessionOf(ctx), communityId)
+  const resolved = await resolveBrain(sessionOf(ctx), spaceId)
   if (resolved instanceof Response) {
     throw new McpError(resolved.status, await messageOf(resolved))
   }
@@ -70,23 +70,23 @@ export interface Target {
 
 /**
  * The (principal, brain) pair a call targets. `'shared'` is the requested
- * community's brain under that community's principal; `'personal'` is the
+ * space's brain under that space's principal; `'personal'` is the
  * caller's own personal-space brain (`me:<userId>`, provisioned on demand) —
- * personal context lives there, not in a per-community personal brain.
+ * personal context lives there, not in a per-space personal brain.
  *
- * Membership in the requested community is checked either way, so `scope:
+ * Membership in the requested space is checked either way, so `scope:
  * 'personal'` can't be used to skip the tenant boundary.
  */
 export async function resolveTarget(
   ctx: McpContext,
-  communityId: string,
+  spaceId: string,
   scope: BrainScope,
 ): Promise<Target> {
-  const resolved = await requireCommunityBrain(ctx, communityId)
+  const resolved = await requireSpaceBrain(ctx, spaceId)
   if (scope === 'shared') {
     return {
       principal: await principalOf(resolved),
-      brain: { communityId, ownerKey: SHARED_OWNER_KEY },
+      brain: { spaceId, ownerKey: SHARED_OWNER_KEY },
       resolved,
     }
   }
@@ -98,31 +98,31 @@ export async function resolveTarget(
   }
 }
 
-/** The communities the caller can act in. */
-export async function listMyCommunities(ctx: McpContext) {
-  const rows = await prisma.userCommunity.findMany({
+/** The spaces the caller can act in. */
+export async function listMySpaces(ctx: McpContext) {
+  const rows = await prisma.spaceMember.findMany({
     where: { userId: ctx.userId, status: 'active' },
     select: {
-      community: { select: { id: true, name: true, personalOwnerId: true } },
+      space: { select: { id: true, name: true, personalOwnerId: true } },
     },
   })
-  const communityIds = rows.map((r) => r.community.id)
+  const spaceIds = rows.map((r) => r.space.id)
   const [held, owns] = await Promise.all([
     prisma.userAlias.findMany({
-      where: { userId: ctx.userId, communityId: { in: communityIds } },
-      select: { communityId: true, aliasName: true },
+      where: { userId: ctx.userId, spaceId: { in: spaceIds } },
+      select: { spaceId: true, aliasName: true },
     }),
-    adminCommunityIds(ctx.userId, communityIds),
+    adminSpaceIds(ctx.userId, spaceIds),
   ])
-  const aliasesByCommunity = new Map<string, string[]>()
+  const aliasesBySpace = new Map<string, string[]>()
   for (const h of held) {
-    aliasesByCommunity.set(h.communityId, [...(aliasesByCommunity.get(h.communityId) ?? []), h.aliasName])
+    aliasesBySpace.set(h.spaceId, [...(aliasesBySpace.get(h.spaceId) ?? []), h.aliasName])
   }
   return rows.map((r) => ({
-    id: r.community.id,
-    name: r.community.name,
-    your_aliases: aliasesByCommunity.get(r.community.id) ?? [],
-    you_manage_it: owns.has(r.community.id),
-    is_personal_space: r.community.personalOwnerId !== null,
+    id: r.space.id,
+    name: r.space.name,
+    your_aliases: aliasesBySpace.get(r.space.id) ?? [],
+    you_manage_it: owns.has(r.space.id),
+    is_personal_space: r.space.personalOwnerId !== null,
   }))
 }

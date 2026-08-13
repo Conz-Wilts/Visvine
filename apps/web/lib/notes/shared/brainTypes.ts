@@ -10,15 +10,15 @@ import type { BrainAccess } from './authz'
 /**
  * The resolved caller identity every brain-service function takes explicitly —
  * identity is never implicit. Built by lib/notes/brain.ts#principalOf from the
- * session, the community membership, and the caller's grant rows.
+ * session, the space membership, and the caller's grant rows.
  */
 export interface BrainPrincipal {
   userId: string
   email: string
   name: string
-  communityId: string
-  /** Admin of this community (incl. super admins) — bypasses every brain gate. */
-  communityAdmin: boolean
+  spaceId: string
+  /** Admin of this space (incl. super admins) — bypasses every brain gate. */
+  spaceAdmin: boolean
   /** The caller's grants + the brain's restricted/locked folder boundaries. */
   access: BrainAccess
   /** True for internal maintenance passes (review/enrichment) — sees/writes all. */
@@ -35,7 +35,7 @@ export type WriteResult =
 /** Legacy cumulative folder levels: admin ⊃ write ⊃ read (now view/edit/full). */
 export type FolderLevel = 'read' | 'write' | 'admin'
 
-/** Legacy: public = every community member can read; private = members-only. */
+/** Legacy: public = every space member can read; private = members-only. */
 type FolderVisibility = 'public' | 'private'
 
 interface FolderMember {
@@ -49,7 +49,7 @@ interface FolderMember {
 }
 
 /**
- * A legacy registered top-level folder of a community's SHARED brain (`id` was
+ * A legacy registered top-level folder of a space's SHARED brain (`id` was
  * the top-level path segment; '' the brain-gating root entry). Only read at
  * migration time — see authz.migrateLegacyRegistry.
  */

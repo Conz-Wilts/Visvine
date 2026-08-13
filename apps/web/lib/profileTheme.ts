@@ -41,7 +41,7 @@ function darkenHex(hex: string, amount = 0.35): string {
 
 /**
  * Build a ThemePalette from any hex color (used for the "system" default
- * which derives from the community's node-type color).
+ * which derives from the space's node-type color).
  */
 export function hexToPalette(hex: string): ThemePalette {
   const [r, g, b] = hexToRgb(hex);

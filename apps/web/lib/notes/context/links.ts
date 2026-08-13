@@ -20,7 +20,7 @@ function bustContextCache(): void {
 }
 
 export interface UpsertLinkInput {
-  communityId: string;
+  spaceId: string;
   sourceId: string;
   targetId: string;
   relationship: string;
@@ -34,7 +34,7 @@ export interface UpsertLinkInput {
 }
 
 /**
- * Create or update an edge, deduped on (communityId, pairKey, relationship).
+ * Create or update an edge, deduped on (spaceId, pairKey, relationship).
  *
  * Promotion: a `manual` write adopts an existing auto row in place (origin ->
  * manual, records createdBy) so the human assertion wins and there is never a
@@ -47,7 +47,7 @@ export async function upsertLink(input: UpsertLinkInput) {
 
   const link = await prisma.link.upsert({
     where: {
-      link_identity: { communityId: input.communityId, pairKey, relationship },
+      link_identity: { spaceId: input.spaceId, pairKey, relationship },
     },
     create: {
       sourceId: input.sourceId,
@@ -55,7 +55,7 @@ export async function upsertLink(input: UpsertLinkInput) {
       relationship,
       pairKey,
       origin: input.origin,
-      communityId: input.communityId,
+      spaceId: input.spaceId,
       since: input.since ?? null,
       metadata: (input.metadata as object) ?? {},
       createdBy: input.createdBy ?? null,
@@ -85,11 +85,11 @@ export async function upsertLink(input: UpsertLinkInput) {
  * has origin 'manual', so this deleteMany matches 0 rows for it.
  */
 export async function removeAutoLink(
-  communityId: string,
+  spaceId: string,
   origin: LinkOrigin,
   originRef: string,
 ): Promise<number> {
-  const res = await prisma.link.deleteMany({ where: { communityId, origin, originRef } });
+  const res = await prisma.link.deleteMany({ where: { spaceId, origin, originRef } });
   if (res.count > 0) bustContextCache();
   return res.count;
 }
@@ -100,7 +100,7 @@ export async function removeAutoLink(
  * `relationship` removes every edge between the pair.
  */
 export async function removeLink(
-  communityId: string,
+  spaceId: string,
   sourceId: string,
   targetId: string,
   relationship?: string,
@@ -108,7 +108,7 @@ export async function removeLink(
   const pairKey = pairKeyFor(sourceId, targetId);
   const res = await prisma.link.deleteMany({
     where: {
-      communityId,
+      spaceId,
       pairKey,
       ...(relationship ? { relationship: normalizeRelationship(relationship) } : {}),
     },

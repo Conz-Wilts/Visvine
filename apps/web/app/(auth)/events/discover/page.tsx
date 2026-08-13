@@ -24,7 +24,7 @@ interface DiscoverEvent {
   startAt: string;
   locationLabel: string | null;
   coverImageUrl: string | null;
-  communityName: string | null;
+  spaceName: string | null;
 }
 
 // Matches the Directory grid: fixed-width cards, auto-filled and evenly spread.
@@ -58,8 +58,8 @@ function EventCard({ event }: { event: DiscoverEvent }) {
         {event.locationLabel && (
           <p className="line-clamp-1 text-xs text-text-secondary">{event.locationLabel}</p>
         )}
-        {event.communityName && (
-          <p className="mt-auto line-clamp-1 text-xs text-text-muted">{event.communityName}</p>
+        {event.spaceName && (
+          <p className="mt-auto line-clamp-1 text-xs text-text-muted">{event.spaceName}</p>
         )}
       </div>
     </Link>
@@ -92,7 +92,7 @@ export default function DiscoverEventsPage() {
     const q = query.trim().toLowerCase();
     if (!q) return events;
     return events.filter((e) =>
-      [e.title, e.locationLabel, e.communityName, e.description]
+      [e.title, e.locationLabel, e.spaceName, e.description]
         .some((field) => field?.toLowerCase().includes(q)),
     );
   }, [events, query]);

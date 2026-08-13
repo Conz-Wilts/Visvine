@@ -24,7 +24,7 @@ interface MessageComposerProps {
   }) => void;
   replyTo?: SerializedReplyTo | null;
   onCancelReply?: () => void;
-  communityId?: string | null;
+  spaceId?: string | null;
   disabled?: boolean;
   typingLabel?: string | null;
   onTyping?: () => void;
@@ -47,7 +47,7 @@ export default function MessageComposer({
   onSend,
   replyTo,
   onCancelReply,
-  communityId,
+  spaceId,
   disabled,
   typingLabel,
   onTyping,
@@ -170,7 +170,7 @@ export default function MessageComposer({
     async (query: string, type: 'user' | 'event') => {
       try {
         const params = new URLSearchParams({ q: query, type });
-        if (communityId) params.set('communityId', communityId);
+        if (spaceId) params.set('spaceId', spaceId);
         const res = await fetch(`/api/messages/mentions?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
@@ -179,7 +179,7 @@ export default function MessageComposer({
         }
       } catch { /* ignore */ }
     },
-    [communityId],
+    [spaceId],
   );
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {

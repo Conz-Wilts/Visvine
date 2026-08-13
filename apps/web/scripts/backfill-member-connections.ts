@@ -3,11 +3,11 @@
  * connection to their person node(s), unifying the two legacy schemes:
  *
  *   (a) node id === Person.id (personal spaces / auth bootstrap)
- *   (b) node carries metadata.userId (community-create person nodes)
+ *   (b) node carries metadata.userId (space-create person nodes)
  *
  * and then ensuring every ACTIVE membership has a connected person node in its
- * community's directory — matching what all the member-add paths now do live
- * (lib/communities/memberNode.ts).
+ * space's directory — matching what all the member-add paths now do live
+ * (lib/spaces/memberNode.ts).
  *
  * Uses the same runtime service (lib/identity/connection) so backfill behaviour
  * can never drift from live creation. Idempotent: connects are keyed by
@@ -23,7 +23,7 @@ import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
 import { connectNodeToUser, ensureUserIdentity, findMemberNode } from '../lib/identity/connection';
-import { ensureMemberNode } from '../lib/communities/memberNode';
+import { ensureMemberNode } from '../lib/spaces/memberNode';
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
@@ -95,20 +95,20 @@ async function main() {
     else { stats.failed++; console.warn(`  failed: ${node.id} — ${result.message}`); }
   }
 
-  // 4. Every active membership ends with a connected node in its community.
-  const memberships = await prisma.userCommunity.findMany({
+  // 4. Every active membership ends with a connected node in its space.
+  const memberships = await prisma.spaceMember.findMany({
     where: { status: 'active' },
-    select: { userId: true, communityId: true },
+    select: { userId: true, spaceId: true },
   });
   let missing = 0;
   for (const m of memberships) {
-    const existing = await findMemberNode(m.communityId, m.userId);
+    const existing = await findMemberNode(m.spaceId, m.userId);
     if (existing) continue;
     missing++;
     if (dryRun) continue;
-    const nodeId = await ensureMemberNode(m.communityId, m.userId);
+    const nodeId = await ensureMemberNode(m.spaceId, m.userId);
     if (nodeId) stats.memberNodes++;
-    else { stats.failed++; console.warn(`  no node created for user ${m.userId} in ${m.communityId}`); }
+    else { stats.failed++; console.warn(`  no node created for user ${m.userId} in ${m.spaceId}`); }
   }
   console.log(`Active memberships without a connected node: ${missing} (of ${memberships.length})`);
 

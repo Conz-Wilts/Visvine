@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Radio } from 'lucide-react'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
@@ -31,7 +31,7 @@ import { AccessRequestCard } from './AccessRequestCard'
 import { useShareAction } from './useShareAction'
 import { SharePanel } from './SharePanel'
 import type { PickerEntity } from './NotePicker'
-import type { CommunityAlias } from '@/lib/types'
+import type { SpaceAlias } from '@/lib/types'
 import '../notes.css'
 
 const PERSONAL_ID_PREFIX = 'me:'
@@ -48,9 +48,9 @@ interface NoteContextPanelProps {
 
 export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady }: NoteContextPanelProps) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
-  const communityId = currentCommunity?.id ?? null
-  const isPersonalSpace = communityId?.startsWith(PERSONAL_ID_PREFIX) ?? false
+  const { currentSpace } = useSpace()
+  const spaceId = currentSpace?.id ?? null
+  const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false
   const { entities, entityByPath } = useDirectoryEntities()
 
   const [aiConfigured, setAiConfigured] = useState(false)
@@ -71,9 +71,9 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // replaces editor and toolbar together on a single commit, so there is never an
   // empty frame. The body itself is hidden while it lags (ContentReveal), so the
   // outgoing note is never actually seen under the incoming note's title.
-  // Scoped by community as well as path: the same path in two brains is two
-  // different notes, so a community switch must not be able to reuse a held read.
-  const [shown, setShown] = useState<{ communityId: string; path: string; read: NoteRead } | null>(null)
+  // Scoped by space as well as path: the same path in two brains is two
+  // different notes, so a space switch must not be able to reuse a held read.
+  const [shown, setShown] = useState<{ spaceId: string; path: string; read: NoteRead } | null>(null)
   const [everPainted, setEverPainted] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
   const [references, setReferences] = useState<References | null>(null)
@@ -104,11 +104,11 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // those buttons even with the editor still mounted — the same flash by another
   // route. accessPath records which note the held answer belongs to.
   useEffect(() => {
-    if (!communityId || !path) return
+    if (!spaceId || !path) return
     let stale = false
     swrFetch(
-      contextKeys.access(communityId, path),
-      () => notesApi.getAccess(communityId, path),
+      contextKeys.access(spaceId, path),
+      () => notesApi.getAccess(spaceId, path),
       (a) => {
         if (stale) return
         setAccess(a)
@@ -121,19 +121,19 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       }
     })
     return () => { stale = true }
-  }, [communityId, path])
+  }, [spaceId, path])
 
   // Surface the viewer's own open request for whichever resource denied them —
   // the root gate ('') when gated out of the brain, else this exact note path.
   const requestPath = gatedOut ? '' : path
   useEffect(() => {
-    if (!communityId || isPersonalSpace) {
+    if (!spaceId || isPersonalSpace) {
       setRequestPending(false)
       return
     }
     let stale = false
     notesApi
-      .listAccessRequests(communityId)
+      .listAccessRequests(spaceId)
       .then(({ requests }) => {
         if (stale) return
         setRequestPending(
@@ -146,14 +146,14 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         if (!stale) setRequestPending(false)
       })
     return () => { stale = true }
-  }, [communityId, isPersonalSpace, requestPath, access?.me.userId])
+  }, [spaceId, isPersonalSpace, requestPath, access?.me.userId])
 
   const requestAccess = async (message?: string) => {
-    if (!communityId) return
+    if (!spaceId) return
     setRequesting(true)
     setError(null)
     try {
-      await notesApi.requestAccess(communityId, requestPath, message)
+      await notesApi.requestAccess(spaceId, requestPath, message)
       setRequestPending(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request access')
@@ -164,7 +164,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   // Load the note + the brain's note index + references.
   useEffect(() => {
-    if (!communityId || !path) return
+    if (!spaceId || !path) return
     const seq = ++loadSeq.current
     // No setShown(null) here — that is exactly the teardown that blanks the
     // toolbar. The previous note stays mounted until this read lands.
@@ -173,27 +173,27 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     onModeChange?.('wysiwyg')
     // References fire in parallel with the read (no waterfall); their
     // results only apply once the read lands 'ok' — same as EntityContextPanel.
-    const refsPromise = cachedFetch(contextKeys.references(communityId, path), () =>
-      notesApi.references(communityId, path),
+    const refsPromise = cachedFetch(contextKeys.references(spaceId, path), () =>
+      notesApi.references(spaceId, path),
     )
-    readNote(communityId, path).then((r) => {
+    readNote(spaceId, path).then((r) => {
       if (loadSeq.current !== seq) return
-      setShown({ communityId, path, read: r })
+      setShown({ spaceId, path, read: r })
       if (r.status === 'ok') {
         refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
         // Replica banner: is this note a live published copy?
-        notesApi.getPublications(communityId, path).then((state) => {
+        notesApi.getPublications(spaceId, path).then((state) => {
           if (loadSeq.current === seq) setPubs(state)
         }).catch(() => {})
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
-    swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
+    swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), (l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
-  }, [communityId, path, onModeChange])
+  }, [spaceId, path, onModeChange])
 
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
   // Keyed to the note on screen, not the one being fetched — while `shown` lags,
@@ -211,30 +211,30 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   const handleSave = useCallback(
     async (p: string, body: string, origin?: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       try {
-        const { movedTo } = await notesApi.write(communityId, p, body, origin)
+        const { movedTo } = await notesApi.write(spaceId, p, body, origin)
         invalidateContextCache(
-          contextKeys.read(communityId, p),
-          contextKeys.references(communityId, p),
-          contextKeys.list(communityId),
-          contextKeys.tree(communityId), // a save can create the note — the tree gains it
+          contextKeys.read(spaceId, p),
+          contextKeys.references(spaceId, p),
+          contextKeys.list(spaceId),
+          contextKeys.tree(spaceId), // a save can create the note — the tree gains it
         )
         setError(null)
         // Retyping to `Index` made this note a folder and moved it there — the
         // path in the URL no longer exists, so follow it.
         if (movedTo) {
-          invalidateContextCache(contextKeys.read(communityId, movedTo))
+          invalidateContextCache(contextKeys.read(spaceId, movedTo))
           router.replace(noteHref(movedTo))
           return
         }
-        cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
+        cachedFetch(contextKeys.references(spaceId, p), () => notesApi.references(spaceId, p))
           .then(({ references: refs }) => setReferences(refs)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
     },
-    [communityId, router],
+    [spaceId, router],
   )
 
   // Turn one unlinked reference into a real link. The write lands on the SOURCE
@@ -242,22 +242,22 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // refreshed references. Errors bubble to the reference's own inline slot.
   const handleLinkMention = useCallback(
     async (ref: UnlinkedReference) => {
-      if (!communityId || !path) return
+      if (!spaceId || !path) return
       const { references: refs } = await notesApi.linkMention(
-        communityId,
+        spaceId,
         path,
         ref.fromPath,
         ref.offset,
       )
       setReferences(refs)
       invalidateContextCache(
-        contextKeys.read(communityId, ref.fromPath),
-        contextKeys.references(communityId, ref.fromPath),
-        contextKeys.references(communityId, path),
-        contextKeys.list(communityId),
+        contextKeys.read(spaceId, ref.fromPath),
+        contextKeys.references(spaceId, ref.fromPath),
+        contextKeys.references(spaceId, path),
+        contextKeys.list(spaceId),
       )
     },
-    [communityId, path],
+    [spaceId, path],
   )
 
   // "Get access" on a locked reference stub: file a request for the hidden
@@ -265,11 +265,11 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // references cache is dropped so a refetch reports the stub as pending.
   const handleRequestReferenceAccess = useCallback(
     async (ref: RestrictedReference) => {
-      if (!communityId || !path) return
-      await notesApi.requestReferenceAccess(communityId, path, ref.token)
-      invalidateContextCache(contextKeys.references(communityId, path))
+      if (!spaceId || !path) return
+      await notesApi.requestReferenceAccess(spaceId, path, ref.token)
+      invalidateContextCache(contextKeys.references(spaceId, path))
     },
-    [communityId, path],
+    [spaceId, path],
   )
 
   // Links inside the note: entity → its profile Context tab; anything else →
@@ -290,31 +290,31 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     async (entity: PickerEntity): Promise<string> => {
       const p = entityNotePath({ id: entity.id, type: entity.type })
       if (!p) throw new Error('Not a directory entity')
-      if (!communityId) throw new Error('No space')
+      if (!spaceId) throw new Error('No space')
       try {
-        await notesApi.create(communityId, p, entityStub(entity))
+        await notesApi.create(spaceId, p, entityStub(entity))
         invalidateContextCache(
-          contextKeys.read(communityId, p),
-          contextKeys.list(communityId),
-          contextKeys.tree(communityId),
+          contextKeys.read(spaceId, p),
+          contextKeys.list(spaceId),
+          contextKeys.tree(spaceId),
         )
       } catch (err) {
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
       return p
     },
-    [communityId],
+    [spaceId],
   )
 
   // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
   // being left when this is false; that lag is what keeps the toolbar up.
-  const shownFresh = shown?.path === path && shown?.communityId === communityId
+  const shownFresh = shown?.path === path && shown?.spaceId === spaceId
   const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
 
   // "Nothing left to wait for" — the note being opened has fully landed, or we've
   // reached a terminal branch (gated out) that renders its own final surface. The
   // page holds its reveal until this flips, so the animation plays over the note.
-  const revealReady = !!communityId && (gatedOut || dataReady)
+  const revealReady = !!spaceId && (gatedOut || dataReady)
   useEffect(() => {
     if (revealReady) onReady?.()
   }, [revealReady, onReady])
@@ -327,14 +327,14 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
 
   // ── Render states ───────────────────────────────────────────────────────────
 
-  if (!communityId) return <PanelSkeleton />
+  if (!spaceId) return <PanelSkeleton />
 
   if (gatedOut) {
     return (
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope="brain"
-          communityName={currentCommunity?.name ?? 'this space'}
+          spaceName={currentSpace?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}
@@ -369,7 +369,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope="path"
-          communityName={currentCommunity?.name ?? 'this space'}
+          spaceName={currentSpace?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}
@@ -401,15 +401,15 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         // alias, the same name its card carries in the directory.
         alias={entityByPath.get(path)?.alias ?? null}
         tags={openMeta?.tags ?? []}
-        nodeTypes={currentCommunity?.nodeTypes}
-        communityAliases={currentCommunity?.communityAliases as CommunityAlias[] | undefined}
-        tagColors={currentCommunity?.designConfig?.tagColors ?? null}
+        nodeTypes={currentSpace?.nodeTypes}
+        aliases={currentSpace?.aliases as SpaceAlias[] | undefined}
+        tagColors={currentSpace?.designConfig?.tagColors ?? null}
       />
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <Radio className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
-            Published from <span className="font-medium">{pubs.asTarget.sourceCommunityName}</span> — kept in
+            Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.
           </span>
         </div>
@@ -455,7 +455,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       {share.slot}
       {shareOpen && (
         <SharePanel
-          communityId={communityId}
+          spaceId={spaceId}
           path={shown.path}
           kind="note"
           onClose={() => setShareOpen(false)}

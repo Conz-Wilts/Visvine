@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
 import { isSuperAdmin } from '@/lib/session';
 import { requireApiSession } from '@/lib/api/route';
-import { listUserCommunities } from '@/lib/communities/queries';
+import { listUserSpaces } from '@/lib/spaces/queries';
 
 /**
- * GET: Return all communities the current user has joined
+ * GET: Return all spaces the current user has joined
  */
 export async function GET() {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
 
-  const communities = await listUserCommunities(session);
+  const spaces = await listUserSpaces(session);
 
-  return NextResponse.json({ communities, isSuperAdmin: isSuperAdmin(session.email) });
+  return NextResponse.json({ spaces, isSuperAdmin: isSuperAdmin(session.email) });
 }

@@ -1,7 +1,7 @@
 /**
  * The MCP tool surface: thirteen tools over the context layer.
  *
- *   read     list_communities, list_context, search_context, read_context,
+ *   read     list_spaces, list_context, search_context, read_context,
  *            list_files, read_file
  *   write    add_context, edit_context, append_context, move_context
  *   maintain clean_context
@@ -27,9 +27,9 @@ import { z } from 'zod'
 import prisma from '@/lib/prisma'
 import { withCtx, McpError } from '@/lib/mcp/auth'
 import {
-  listMyCommunities,
+  listMySpaces,
   resolveTarget,
-  requireCommunityBrain,
+  requireSpaceBrain,
   type BrainScope,
 } from '@/lib/mcp/context'
 import {
@@ -44,7 +44,7 @@ import {
 } from '@/lib/notes/brainService'
 import { readableRoots, LEVEL_FULL } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
-import { loadCommunityAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
+import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
 import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permissions'
 import type { WriteResult } from '@/lib/notes/shared/brainTypes'
@@ -61,7 +61,7 @@ import { readNoteOrNull, type Brain } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
 import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
-import type { CommunityFeatureConfig } from '@/lib/types'
+import type { SpaceFeatureConfig } from '@/lib/types'
 
 const scopeArg = z
   .enum(['shared', 'personal'])
@@ -129,17 +129,17 @@ const visibilityArg = z
  * audit-log themselves.
  */
 async function makeNotePrivate(
-  communityId: string,
+  spaceId: string,
   path: string,
   actor: { userId: string; name: string },
 ): Promise<string | null> {
   try {
     await grantAccess(
-      communityId,
+      spaceId,
       { subjectType: 'user', subjectId: actor.userId, resourcePath: path, level: LEVEL_FULL },
       actor,
     )
-    await setFolderRestricted(communityId, path, true, actor)
+    await setFolderRestricted(spaceId, path, true, actor)
     return null
   } catch (e) {
     return e instanceof Error ? e.message : 'Failed to restrict the note'
@@ -215,18 +215,18 @@ export function registerTools(server: McpServer): void {
   // ── Read ────────────────────────────────────────────────────────────────
 
   server.registerTool(
-    'list_communities',
+    'list_spaces',
     {
       description:
         'List the spaces you can act in, with your role in each and whether it is your own personal space. ' +
-        'Start here: every other tool needs a community_id (the wire name for a space id).',
+        'Start here: every other tool needs a space_id (the wire name for a space id).',
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     (_args, extra) =>
-      withCtx(extra, 'list_communities', async (ctx) => ({
+      withCtx(extra, 'list_spaces', async (ctx) => ({
         you: { name: ctx.name, email: ctx.email },
-        communities: await listMyCommunities(ctx),
+        spaces: await listMySpaces(ctx),
       })),
   )
 
@@ -242,7 +242,7 @@ export function registerTools(server: McpServer): void {
         'path summarising who can see notes stored there — use these to pick the right type and the right home ' +
         'for what you write.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         scope: scopeArg,
         type: z
           .string()
@@ -256,7 +256,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'list_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const limit = args.limit ?? 100
 
         // Notes (visibility lens applied inside visibleVault).
@@ -264,34 +264,34 @@ export function registerTools(server: McpServer): void {
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
-        // Grant-derived context — only meaningful for a real community's shared
+        // Grant-derived context — only meaningful for a real space's shared
         // brain (personal spaces are never gated, and the personal scope has no
         // directory). One indexed query per piece; the grant table is bounded by
         // alias/folder rows, not by member count, so this stays cheap however
-        // large the community is.
+        // large the space is.
         const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
-        const [community, aliasRows, communityAccess] = isGatedShared
+        const [space, aliasRows, spaceAccess] = isGatedShared
           ? await Promise.all([
-              prisma.community.findUnique({
-                where: { id: args.community_id },
+              prisma.space.findUnique({
+                where: { id: args.space_id },
                 select: { name: true, featureConfig: true },
               }),
               prisma.userAlias.findMany({
-                where: { communityId: args.community_id, userId: ctx.userId },
+                where: { spaceId: args.space_id, userId: ctx.userId },
                 select: { aliasName: true },
               }),
-              loadCommunityAccess(args.community_id),
+              loadSpaceAccess(args.space_id),
             ])
           : [null, [], null]
 
-        // Entities live in the community directory, not in the personal space,
+        // Entities live in the space directory, not in the personal space,
         // so a personal-scope call reports notes only.
         const entitiesByType: Record<string, ReturnType<typeof describeNode>[]> = {}
         let entityTotal = 0
         const usageByType: Record<string, number> = {}
         if (scope === 'shared') {
           const rows = await prisma.node.findMany({
-            where: { communityId: args.community_id },
+            where: { spaceId: args.space_id },
             select: NODE_SELECT,
             orderBy: { name: 'asc' },
           })
@@ -319,7 +319,7 @@ export function registerTools(server: McpServer): void {
         // A grant's resource path can be a single NOTE, not a folder
         // (shared/authz.ts) — reporting those as folders sends an agent off to
         // write files inside a .md path. Split them, and say so.
-        const writablePaths = (principal.communityAdmin ? [''] : readableRoots(principal.access)).filter(
+        const writablePaths = (principal.spaceAdmin ? [''] : readableRoots(principal.access)).filter(
           (path) => principalCanWrite(principal, path),
         )
         const describeWritable = (path: string) => ({
@@ -327,11 +327,11 @@ export function registerTools(server: McpServer): void {
           your_level: principalLevelName(principal, path),
           // One line, computed from grant rows only — it can name aliases but
           // never individual members, however many grants exist.
-          ...(communityAccess
+          ...(spaceAccess
             ? {
-                audience: audienceSummary(path, communityAccess.grants, communityAccess.restricted, {
+                audience: audienceSummary(path, spaceAccess.grants, spaceAccess.restricted, {
                   selfUserId: ctx.userId,
-                  communityName: community?.name,
+                  spaceName: space?.name,
                 }).line,
               }
             : {}),
@@ -342,18 +342,18 @@ export function registerTools(server: McpServer): void {
           scope,
           you: {
             name: ctx.name,
-            admin: principal.communityAdmin === true,
+            admin: principal.spaceAdmin === true,
             aliases: aliasRows.map((r) => r.aliasName),
           },
           entities: entitiesByType,
           entity_count: entityTotal,
-          // The community's node-type vocabulary — closed: pick the best
+          // The space's node-type vocabulary — closed: pick the best
           // existing type; nobody (agents included) creates new ones.
           ...(isGatedShared
             ? {
                 types: buildTypeCatalog({
-                  featureConfig: (community?.featureConfig ?? null) as CommunityFeatureConfig | null,
-                  isAdmin: principal.communityAdmin === true,
+                  featureConfig: (space?.featureConfig ?? null) as SpaceFeatureConfig | null,
+                  isAdmin: principal.spaceAdmin === true,
                   usageByType,
                   creatableTypes: CREATABLE_TYPES,
                 }),
@@ -382,7 +382,7 @@ export function registerTools(server: McpServer): void {
         'keyword-only, so prefer literal terms and try more phrasings. Filters beat ranking: narrow with ' +
         'type/tags/folder/updated_after when you can.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         query: z.string().describe('Natural-language or keyword query'),
         scope: scopeArg,
         k: z.number().int().min(1).max(50).optional().describe('Max results per kind (default 10)'),
@@ -400,7 +400,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'search_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
         const k = args.k ?? 10
 
         const { hits, semantic } = await searchBrain(
@@ -422,7 +422,7 @@ export function registerTools(server: McpServer): void {
             ? (
                 await prisma.node.findMany({
                   where: {
-                    communityId: args.community_id,
+                    spaceId: args.space_id,
                     OR: [
                       { name: { contains: args.query, mode: 'insensitive' } },
                       { alias: { contains: args.query, mode: 'insensitive' } },
@@ -478,7 +478,7 @@ export function registerTools(server: McpServer): void {
         'the entities it is linked to (with where each link came from), and the notes that mention it. ' +
         'Identify it by node_id or by note_path — search_context and list_context give you both.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         node_id: z.string().optional().describe("The entity's node id, e.g. 'person:craig-piggott'"),
         note_path: z.string().optional().describe("The entity's context note path, e.g. 'people/craig-piggott.md'"),
       },
@@ -489,19 +489,19 @@ export function registerTools(server: McpServer): void {
         if (!args.node_id && !args.note_path) {
           throw new McpError(400, 'Pass either node_id or note_path')
         }
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
 
         // node_id resolves directly; note_path has to go through the node list,
         // because entityNotePath is lossy and only invertible over real nodes.
         let row: NodeRow | null = null
         if (args.node_id) {
           row = await prisma.node.findFirst({
-            where: { id: args.node_id, communityId: args.community_id },
+            where: { id: args.node_id, spaceId: args.space_id },
             select: NODE_SELECT,
           })
         } else {
           const all = await prisma.node.findMany({
-            where: { communityId: args.community_id },
+            where: { spaceId: args.space_id },
             select: NODE_SELECT,
           })
           row = all.find((n) => entityNotePath({ id: n.id, type: n.type }) === args.note_path) ?? null
@@ -533,7 +533,7 @@ export function registerTools(server: McpServer): void {
 
         const linkRows = await prisma.link.findMany({
           where: {
-            communityId: args.community_id,
+            spaceId: args.space_id,
             OR: [{ sourceId: row.id }, { targetId: row.id }],
           },
           select: { sourceId: true, targetId: true, relationship: true, origin: true, originRef: true, metadata: true },
@@ -593,7 +593,7 @@ export function registerTools(server: McpServer): void {
         'alongside notes at their own paths and are what search_context returns as `kind: "source"` hits. ' +
         'Each entry reports its extraction status; only `ready` sources are searchable and readable.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         scope: scopeArg,
         folder: z.string().optional().describe("Only sources in this top-level folder ('' = the brain root)"),
       },
@@ -602,7 +602,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'list_files', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
         const sources = await listVisibleSources(principal, brain, args.folder)
         return {
           scope,
@@ -631,7 +631,7 @@ export function registerTools(server: McpServer): void {
         'whose snippet is one chunk of this. Returns plain text (the original binary is not served here), ' +
         'paged: pass offset_chars to continue where the last call stopped, guided by total_chars.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         path: z.string().describe("The source's path, exactly as search_context or list_files reported it"),
         scope: scopeArg,
         offset_chars: z.number().int().min(0).optional().describe('Start here in the extracted text (default 0)'),
@@ -648,7 +648,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'read_file', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
         // A '#<seq>' suffix is how search used to report a chunk; accept it.
         const path = args.path.replace(/#\d+$/, '')
         const result = await readSourceVisible(principal, brain, path, {
@@ -685,7 +685,7 @@ export function registerTools(server: McpServer): void {
         '  • person   → people/<slug>.md      fields: subtitle (role), email, companyName, linkedinUrl, location, image_url\n' +
         '  • space    → communities/<slug>.md fields: subtitle (tagline), url (website), location, founded, memberCount, image_url\n' +
         '  • resource → resources/<slug>.md   fields: subtitle (description), url\n' +
-        'A "space" here is a group, organisation or community — a company, collective or investor — recorded as a ' +
+        'A "space" here is a group, organisation or space — a company, collective or investor — recorded as a ' +
         'card in the directory of the space you are working in. It NEVER provisions a new workspace: the card ' +
         'points at a real (possibly unclaimed) space via its identity, and the space you are in is not creatable ' +
         'from here.\n' +
@@ -698,7 +698,7 @@ export function registerTools(server: McpServer): void {
         "it; pass visibility:'inherit' to let it follow its folder's visibility instead. " +
         `To connect it to others, write mentions: ${MENTION_RULE}`,
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         type: z.enum(CREATABLE_TYPES),
         name: z.string().describe('Display name — also the basis of the id and note path'),
         fields: z
@@ -716,7 +716,7 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'add_context', async (ctx) => {
-        const brain = await requireCommunityBrain(ctx, args.community_id)
+        const brain = await requireSpaceBrain(ctx, args.space_id)
         const result = await createEntity(brain, {
           type: args.type,
           name: args.name,
@@ -740,7 +740,7 @@ export function registerTools(server: McpServer): void {
         const wantPrivate =
           !brain.isPersonalSpace && args.visibility !== 'inherit' && result.notePath !== null && !result.noteError
         const visibilityError = wantPrivate
-          ? await makeNotePrivate(args.community_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
+          ? await makeNotePrivate(args.space_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
           : null
         return {
           node_id: result.node.id,
@@ -773,7 +773,7 @@ export function registerTools(server: McpServer): void {
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
         `clobber it; use append_context when you only want to add. ${MENTION_RULE}`,
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         path: z.string().describe("Brain-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
         scope: scopeArg.describe(
@@ -785,9 +785,9 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'edit_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
         // Private-by-default applies only to a note this call CREATES in a real
-        // community's shared brain — checked before the write, since afterwards
+        // space's shared brain — checked before the write, since afterwards
         // the note always exists. Personal spaces are private already.
         const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
         const existed = isGatedShared ? (await readNoteOrNull(brain, args.path)) !== null : true
@@ -798,7 +798,7 @@ export function registerTools(server: McpServer): void {
         )
         const wantPrivate = !existed && args.visibility !== 'inherit'
         const visibilityError = wantPrivate
-          ? await makeNotePrivate(args.community_id, result.path, { userId: ctx.userId, name: ctx.name })
+          ? await makeNotePrivate(args.space_id, result.path, { userId: ctx.userId, name: ctx.name })
           : null
         return {
           status: 'applied',
@@ -828,7 +828,7 @@ export function registerTools(server: McpServer): void {
         "Defaults to your personal space; pass scope:'shared' for the space's shared context. " +
         `Mentions in the entry create links the same way: ${MENTION_RULE}`,
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         path: z.string().describe('Path of the existing note to append to'),
         entry: z.string().describe('The entry text — one update. The date and your name are added for you.'),
         scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the space's shared context"),
@@ -837,7 +837,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'append_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
         const result = unwrapWrite(
           await appendLogGated(principal, brain, args.path, args.entry, 'agent', 'mcp'),
         )
@@ -856,7 +856,7 @@ export function registerTools(server: McpServer): void {
         'does NOT carry note-level sharing or restriction with it — a private note becomes governed by its ' +
         'new folder; re-apply sharing after moving if it matters.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         from: z.string().describe('Current path of the note'),
         to: z
           .string()
@@ -870,7 +870,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'move_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
         const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to, 'agent'))
         return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
       }),
@@ -895,7 +895,7 @@ export function registerTools(server: McpServer): void {
         'full access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
         `reading them. When fixing orphans, remember: ${MENTION_RULE}`,
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         scope: scopeArg.describe(
           "Which brain to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
         ),
@@ -921,11 +921,11 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'clean_context', async (ctx) => {
         const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.community_id, scope)
+        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const role: CleanRole =
           scope === 'personal' || resolved?.isPersonalSpace
             ? 'owner'
-            : principal.communityAdmin
+            : principal.spaceAdmin
               ? 'admin'
               : 'member'
         const opts = {
@@ -964,12 +964,12 @@ export function registerTools(server: McpServer): void {
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
         'and the env var names its code can read. Run one with run_connector; a connector with no hosts is ' +
         "documentation-only. Executing needs the 'connectors:use' scope.",
-      inputSchema: { community_id: z.string() },
+      inputSchema: { space_id: z.string() },
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
       withCtx(extra, 'list_connectors', async (ctx) => {
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
         return { connectors: await listConnectors(principal, brain) }
       }),
   )
@@ -989,7 +989,7 @@ export function registerTools(server: McpServer): void {
         '`{ Authorization: `Bearer ${env.API_KEY}` }`), never ask for or supply credential values; they are ' +
         'redacted from everything that comes back. Output is capped at 256KB.',
       inputSchema: {
-        community_id: z.string(),
+        space_id: z.string(),
         connector: z.string().describe("The connector's name, e.g. 'stripe' for connectors/stripe.md"),
         code: z
           .string()
@@ -1001,10 +1001,10 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'run_connector', async (ctx) => {
-        const { principal, brain } = await resolveTarget(ctx, args.community_id, 'shared')
+        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
         const loaded = await loadConnectorOr404(principal, brain, args.connector)
         try {
-          const result = await executeConnectorScript(principal, brain, args.community_id, loaded, args.code)
+          const result = await executeConnectorScript(principal, brain, args.space_id, loaded, args.code)
           return {
             ok: result.ok,
             value: result.value,

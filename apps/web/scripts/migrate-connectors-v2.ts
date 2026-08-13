@@ -15,9 +15,9 @@
  * Dry-run by default; nothing is written without --write.
  *
  * Usage:
- *   pnpm db:connectors:migrate                # every community, dry-run
+ *   pnpm db:connectors:migrate                # every space, dry-run
  *   pnpm db:connectors:migrate --write
- *   pnpm db:connectors:migrate <communityId> --write
+ *   pnpm db:connectors:migrate <spaceId> --write
  */
 
 import 'dotenv/config'
@@ -34,7 +34,7 @@ import { syncContextLinksBulk } from '../lib/notes/entityLinks'
 import type { NoteFrontmatter } from '../lib/notes/shared/types'
 
 const WRITE = process.argv.includes('--write')
-const communityArg = process.argv[2]?.startsWith('--') ? undefined : process.argv[2]
+const spaceArg = process.argv[2]?.startsWith('--') ? undefined : process.argv[2]
 
 /**
  * A template as a JS expression: a bare `{{secret:X}}` becomes `env.X`, and
@@ -60,7 +60,7 @@ function headersLiteral(headers: Record<string, string>): string {
 }
 
 /** The v2 usage section appended to the body — worked examples per legacy alias. */
-function usageSection(config: ConnectorConfig, communityDsnName?: string): string {
+function usageSection(config: ConnectorConfig, spaceDsnName?: string): string {
   const lines: string[] = ['## Calling this connector', '']
   switch (config.alias) {
     case 'http': {
@@ -101,17 +101,17 @@ function usageSection(config: ConnectorConfig, communityDsnName?: string): strin
         'one statement at a time.',
         '',
         '```js',
-        `return await sql(env.${communityDsnName}, 'SELECT 1')`,
+        `return await sql(env.${spaceDsnName}, 'SELECT 1')`,
         '```',
       )
       break
     case 'mysql':
       lines.push(
-        `The DSN is on env as env.${communityDsnName} (mysql://user:pass@host:port/db).`,
+        `The DSN is on env as env.${spaceDsnName} (mysql://user:pass@host:port/db).`,
         '`sql()` reads the scheme and picks the driver; statements stay read-only.',
         '',
         '```js',
-        `return await sql(env.${communityDsnName}, 'SELECT 1')`,
+        `return await sql(env.${spaceDsnName}, 'SELECT 1')`,
         '```',
       )
       break
@@ -154,16 +154,16 @@ function v2Frontmatter(fm: NoteFrontmatter, perimeter: ConnectorPerimeter): Note
 }
 
 async function main() {
-  const notes = await prisma.communityNote.findMany({
+  const notes = await prisma.spaceNote.findMany({
     where: {
-      ...(communityArg ? { communityId: communityArg } : {}),
+      ...(spaceArg ? { spaceId: spaceArg } : {}),
       path: { startsWith: 'connectors/' },
       deletedAt: null,
     },
-    select: { communityId: true, ownerKey: true, path: true, content: true },
+    select: { spaceId: true, ownerKey: true, path: true, content: true },
   })
 
-  const rewritten: { communityId: string; ownerKey: string; path: string; content: string }[] = []
+  const rewritten: { spaceId: string; ownerKey: string; path: string; content: string }[] = []
   let skipped = 0
 
   for (const note of notes) {
@@ -176,7 +176,7 @@ async function main() {
     }
     const parsed = parseConnectorConfig(fm)
     if (!parsed.ok) {
-      console.log(`  skip   ${note.communityId} ${note.ownerKey}:${note.path} — invalid legacy config: ${parsed.error}`)
+      console.log(`  skip   ${note.spaceId} ${note.ownerKey}:${note.path} — invalid legacy config: ${parsed.error}`)
       skipped++
       continue
     }
@@ -186,19 +186,19 @@ async function main() {
     if (parsed.config.alias === 'postgres' || parsed.config.alias === 'mysql') {
       // The one thing the pure shim can't know: the DB host hides in the secret.
       dsnName = Object.keys(perimeter.env)[0]
-      const row = await prisma.communitySecret.findUnique({
-        where: { secret_identity: { communityId: note.communityId, name: dsnName } },
+      const row = await prisma.spaceSecret.findUnique({
+        where: { secret_identity: { spaceId: note.spaceId, name: dsnName } },
         select: { ciphertext: true },
       })
       if (!row) {
-        console.log(`  skip   ${note.communityId} ${note.ownerKey}:${note.path} — secret ${dsnName} not stored, cannot derive hosts`)
+        console.log(`  skip   ${note.spaceId} ${note.ownerKey}:${note.path} — secret ${dsnName} not stored, cannot derive hosts`)
         skipped++
         continue
       }
       try {
         perimeter.hosts = [dsnHost(decryptSecret(row.ciphertext), parsed.config.alias === 'postgres' ? 5432 : 3306)]
       } catch {
-        console.log(`  skip   ${note.communityId} ${note.ownerKey}:${note.path} — could not read DSN from ${dsnName}`)
+        console.log(`  skip   ${note.spaceId} ${note.ownerKey}:${note.path} — could not read DSN from ${dsnName}`)
         skipped++
         continue
       }
@@ -213,27 +213,27 @@ async function main() {
       `${body}\n\n${usageSection(parsed.config, dsnName)}\n`,
     )
     rewritten.push({ ...note, content })
-    console.log(`  ${WRITE ? 'write' : 'would '} ${note.communityId} ${note.ownerKey}:${note.path} (${parsed.config.alias} → hosts: ${perimeter.hosts.join(', ') || 'none'})`)
+    console.log(`  ${WRITE ? 'write' : 'would '} ${note.spaceId} ${note.ownerKey}:${note.path} (${parsed.config.alias} → hosts: ${perimeter.hosts.join(', ') || 'none'})`)
   }
 
   if (WRITE) {
     const byBrain = new Map<string, typeof rewritten>()
     for (const note of rewritten) {
-      const key = `${note.communityId} ${note.ownerKey}`
+      const key = `${note.spaceId} ${note.ownerKey}`
       byBrain.set(key, [...(byBrain.get(key) ?? []), note])
     }
     for (const [key, group] of byBrain) {
-      const [communityId, ownerKey] = key.split(' ')
+      const [spaceId, ownerKey] = key.split(' ')
       for (const note of group) {
-        await prisma.communityNote.update({
-          where: { note_identity: { communityId, ownerKey, path: note.path } },
+        await prisma.spaceNote.update({
+          where: { note_identity: { spaceId, ownerKey, path: note.path } },
           data: { content: note.content },
         })
       }
       // Direct table writes bypass the note store, so keep the connector nodes
       // (and their chips) in step ourselves, as the demo seeder does.
       await syncContextLinksBulk(
-        { communityId, ownerKey },
+        { spaceId, ownerKey },
         [],
         group.map((n) => [n.path, n.content] as [string, string]),
       )

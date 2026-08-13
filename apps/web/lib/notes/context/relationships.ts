@@ -2,7 +2,7 @@
  * Relationship (edge) type registry helpers.
  *
  * The stored `Link.relationship` is a slug (e.g. "works_at"); the human label +
- * colour come from the community's configurable `linkTypes` (managed in the
+ * colour come from the space's configurable `linkTypes` (managed in the
  * console, mirroring node types), falling back to DEFAULT_LINK_TYPES.
  */
 import { DEFAULT_LINK_TYPES, getLinkTypes, type LinkTypeConfig } from '../../types';
@@ -28,17 +28,17 @@ export function normalizeRelationship(label: string): string {
 
 /**
  * Resolve the LinkTypeConfig for a stored relationship slug by matching the
- * slugified type name against the community's configured types (then the
+ * slugified type name against the space's configured types (then the
  * defaults). Unknown relationships (e.g. legacy import vocabulary not in any
  * config) resolve to a neutral grey with a title-cased label, so the renderer
  * never hard-fails — the same forgiving strategy as getNodeTypeConfig.
  */
 export function getLinkTypeConfig(
   relationship: string,
-  communityLinkTypes?: LinkTypeConfig[],
+  spaceLinkTypes?: LinkTypeConfig[],
 ): LinkTypeConfig {
   const slug = normalizeRelationship(relationship);
-  const all = getLinkTypes(communityLinkTypes);
+  const all = getLinkTypes(spaceLinkTypes);
   const match = all.find((t) => normalizeRelationship(t.name) === slug);
   if (match) return match;
   const name = slug
@@ -48,7 +48,7 @@ export function getLinkTypeConfig(
 }
 
 /** True when the relationship's configured type is the kind the auto-flows own. */
-export function isSystemRelationship(relationship: string, communityLinkTypes?: LinkTypeConfig[]): boolean {
-  return getLinkTypeConfig(relationship, communityLinkTypes).system === true
+export function isSystemRelationship(relationship: string, spaceLinkTypes?: LinkTypeConfig[]): boolean {
+  return getLinkTypeConfig(relationship, spaceLinkTypes).system === true
     || DEFAULT_LINK_TYPES.some((t) => t.system && normalizeRelationship(t.name) === normalizeRelationship(relationship));
 }

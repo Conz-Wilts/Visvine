@@ -4,7 +4,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { rsvpSubmissionSchema } from '@/lib/schemas/eventSchemas';
-import { getEvent, getAttendees, getCommunityNodes, submitRsvp, EventFullError } from '@/lib/eventRepo';
+import { getEvent, getAttendees, getSpaceNodes, submitRsvp, EventFullError } from '@/lib/eventRepo';
 import { isEmailDomainAllowed, missingRequiredAnswers } from '@/lib/eventUtils';
 import { rsvpMessage } from '@/lib/eventCopy';
 import { requireEventManager } from '@/lib/eventAuth';
@@ -44,11 +44,11 @@ export async function POST(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
@@ -62,7 +62,7 @@ export async function POST(
       );
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
 
     if (!event) {
       return NextResponse.json(
@@ -109,7 +109,7 @@ export async function POST(
     // Clamp +guests to what the event allows.
     const plusOnes = Math.min(submission.plusOnes ?? 0, event.allowPlusOnes ?? 0);
 
-    const { attendee, status, created } = await submitRsvp(communityId, event, {
+    const { attendee, status, created } = await submitRsvp(spaceId, event, {
       ...submission,
       plusOnes,
     });
@@ -136,27 +136,27 @@ export async function GET(
   try {
     const { eventId } = await context.params;
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    const spaceId = searchParams.get('spaceId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    // Guest list is PII — host or community admin only.
-    const event = await getEvent(communityId, eventId);
+    // Guest list is PII — host or space admin only.
+    const event = await getEvent(spaceId, eventId);
     if (!event) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 });
     }
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
-    const attendees = await getAttendees(communityId, eventId);
+    const attendees = await getAttendees(spaceId, eventId);
 
     // Get person details for each attendee (nodes only — no need to load links)
-    const nodes = await getCommunityNodes(communityId);
+    const nodes = await getSpaceNodes(spaceId);
 
     const attendeesWithPersons = attendees.map((attendee) => {
       const person = attendee.personId ? nodes.find((n) => n.id === attendee.personId) : undefined;

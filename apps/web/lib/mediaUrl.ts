@@ -63,7 +63,7 @@ export function getMediaProxyUrl(objectPath: string): string {
  *   communities/{id}/…
  *
  * The upload route uses ENTITY_PREFIXES { card → 'cards', person → 'persons',
- * community → 'communities' }. Node images (table view) always go to 'cards/'
+ * space → 'communities' }. Node images (table view) always go to 'cards/'
  * regardless of node type.
  */
 function normalizeObjectPath(objectPath: string): string {
@@ -72,7 +72,7 @@ function normalizeObjectPath(objectPath: string): string {
   // media/anything-else/… → cards/anything-else/…
   if (objectPath.startsWith('media/')) {
     const rest = objectPath.slice('media/'.length);
-    if (rest.startsWith('community:')) {
+    if (rest.startsWith('space:')) {
       return `communities/${rest}`;
     }
     return `cards/${rest}`;

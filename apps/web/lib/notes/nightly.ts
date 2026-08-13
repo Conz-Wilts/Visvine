@@ -22,7 +22,7 @@ import { msUntilNextRun, nightlyEnabled, nightlyRunHour } from './shared/nightly
 let sweeping = false
 
 /**
- * One full maintenance pass over every community: embeddings first (search
+ * One full maintenance pass over every space: embeddings first (search
  * freshness benefits everyone), then link reasons. Each stage keys off its own
  * env (OPENAI_API_KEY / GEMINI_API_KEY) and skips silently when unkeyed, so
  * partial configuration runs whatever it can.
@@ -40,11 +40,11 @@ async function runNightlyMaintenance(): Promise<void> {
       })
     }
     if (aiConfigured()) {
-      const communities = await prisma.community.findMany({ select: { id: true } })
+      const spaces = await prisma.space.findMany({ select: { id: true } })
       let updated = 0
       let considered = 0
-      for (const community of communities) {
-        const res = await generateLinkReasons(community.id)
+      for (const space of spaces) {
+        const res = await generateLinkReasons(space.id)
         updated += res.updated
         considered += res.considered
       }

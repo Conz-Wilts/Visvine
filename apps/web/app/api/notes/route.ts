@@ -1,4 +1,4 @@
-// GET /api/notes?communityId=&scope=shared|personal
+// GET /api/notes?spaceId=&scope=shared|personal
 // The note index for a brain: enriched NoteMeta[] (titles, tags, resolved links,
 // broken links) plus the starred paths. Reads only — see /item for mutations.
 // Shared-brain reads go through the visibility lens, so private folders the

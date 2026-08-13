@@ -100,7 +100,7 @@ test("a person never matches an organization of the same name", () => {
 
 // ── decisions ────────────────────────────────────────────────────────────────
 
-test("decideMatch auto-links the same person across communities (email)", () => {
+test("decideMatch auto-links the same person across spaces (email)", () => {
   const input = toSignals({ kind: "person", name: "Craig Piggott", email: "craig@halter.io" });
   const r = decideMatch(input, [
     candidate("id-craig", { kind: "person", name: "Craig Piggott", email: "craig@halter.io" }),

@@ -1,5 +1,5 @@
 // The embeddings stage of the fused search stack — blackbird-brain's
-// src/server/vectorStage.ts re-backed by pgvector (CommunityNoteEmbedding)
+// src/server/vectorStage.ts re-backed by pgvector (SpaceNoteEmbedding)
 // instead of a JSON sidecar. Whole-note vectors are cached per brain path and
 // invalidated by the note's updatedAt (mtime); stale notes are embedded lazily
 // at query time, bounded per call. Cosine ranking runs in Postgres. The QUERY
@@ -54,8 +54,8 @@ export function createVectorStage(
         const config = embeddingsConfig()
         if (!config || !queryVector || docs.length === 0) return []
 
-        const cached = await prisma.communityNoteEmbedding.findMany({
-          where: { communityId: brain.communityId, ownerKey: brain.ownerKey, model: config.model },
+        const cached = await prisma.spaceNoteEmbedding.findMany({
+          where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, model: config.model },
           select: { path: true, mtime: true },
         })
         const cachedMtime = new Map(cached.map((r) => [r.path, Number(r.mtime)]))
@@ -71,9 +71,9 @@ export function createVectorStage(
             const d = stale[i]
             const literal = vectorLiteral(staleVectors[i])
             await prisma.$executeRaw`
-              INSERT INTO community_note_embeddings (id, community_id, owner_key, path, model, mtime, embedding, updated_at)
-              VALUES ((gen_random_uuid())::text, ${brain.communityId}, ${brain.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
-              ON CONFLICT (community_id, owner_key, path)
+              INSERT INTO space_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
+              VALUES ((gen_random_uuid())::text, ${brain.spaceId}, ${brain.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
+              ON CONFLICT (space_id, owner_key, path)
               DO UPDATE SET model = ${config.model}, mtime = ${BigInt(d.mtime!)}, embedding = ${literal}::vector, updated_at = now()`
           }
         }
@@ -81,8 +81,8 @@ export function createVectorStage(
         const paths = docs.map((d) => d.path)
         const rows = await prisma.$queryRaw<{ path: string; score: number }[]>`
           SELECT path, 1 - (embedding <=> ${vectorLiteral(queryVector)}::vector) AS score
-          FROM community_note_embeddings
-          WHERE community_id = ${brain.communityId}
+          FROM space_note_embeddings
+          WHERE space_id = ${brain.spaceId}
             AND owner_key = ${brain.ownerKey}
             AND model = ${config.model}
             AND embedding IS NOT NULL

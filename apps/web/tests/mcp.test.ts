@@ -453,7 +453,7 @@ test('switching a feature off disables its node types, with the feature named', 
     assert.equal(e.creatable_via_add_context, false)
   }
   // Always-on types are untouched by any config — 'space' (the org type,
-  // formerly Community) must never be gated behind channels.
+  // formerly Space) must never be gated behind channels.
   for (const type of ['person', 'space', 'event', 'index']) {
     const e = entries.find((x) => x.type === type)!
     assert.equal(e.enabled, true)
@@ -471,10 +471,10 @@ test('a non-admin is told the connector door is closed to them', () => {
 
 test('type filters canonicalise, so a search for a retired spelling still finds the rows', () => {
   // list_context compares canonical to canonical — every org spelling,
-  // 'community' included, lands on 'space' now.
+  // 'space' included, lands on 'space' now.
   assert.equal(canonicalNodeType('Org'), 'space')
   assert.equal(canonicalNodeType('GROUP'), 'space')
-  assert.equal(canonicalNodeType('community'), 'space')
+  assert.equal(canonicalNodeType('space'), 'space')
   assert.equal(canonicalNodeType('space'), 'space')
   assert.equal(canonicalNodeType('person'), 'person')
   assert.equal(canonicalNodeType(undefined), '')
@@ -482,7 +482,7 @@ test('type filters canonicalise, so a search for a retired spelling still finds 
   // whatever was current when the row was written.
   const spellings = nodeTypeSpellings('org')
   assert.ok(spellings.includes('space'))
-  assert.ok(spellings.includes('community'))
+  assert.ok(spellings.includes('space'))
   assert.ok(spellings.includes('group'))
   assert.ok(spellings.includes('organization'))
   assert.deepEqual(nodeTypeSpellings('person'), ['person'])

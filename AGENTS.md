@@ -30,7 +30,7 @@ apps/web/features/<domain>/{components,hooks,lib}   domain UI
 apps/web/components/ui/                             the ONLY shared UI
 apps/web/lib/          domain + server logic (the real code lives here)
 apps/web/tests/        node:test + tsx, one file per concern
-apps/web/prisma/       schema.prisma (~50 models), seed, migrations
+apps/web/prisma/       schema.prisma (37 models), seed, migrations
 scripts/               repo-level db/env tooling (dump, restore, proxy, guards)
 ```
 
@@ -41,7 +41,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 ## Conventions
 
 - **Route handlers are thin.** Use `lib/api/route.ts`: `requireApiSession`,
-  `requireCommunityAdmin`, `parseBody(request, zodSchema)`, and `ApiError(status,
+  `requireSpaceAdmin`, `parseBody(request, zodSchema)`, and `ApiError(status,
   msg)` for throws. Each returns either a value or a `NextResponse` — check
   `instanceof NextResponse` and return it.
 - **Reuse the shared helpers** rather than re-rolling: `lib/fetchJson.ts`,
@@ -58,7 +58,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   transports.
 - **There is no role column.** What someone can do comes from the aliases they
   hold. "Admin" has exactly one definition: a Person alias flagged `owner`
-  (`lib/auth.ts#isAdmin`); `SUPER_ADMIN_EMAILS` bypasses per-community checks.
+  (`lib/auth.ts#isAdmin`); `SUPER_ADMIN_EMAILS` bypasses per-space checks.
 - Brain access is grant-based (`lib/notes/access.ts` for DB,
   `lib/notes/shared/authz.ts` for the pure checks). Grants apply to **shared**
   brains only; personal spaces bypass the model (`lib/notes/principal.ts`).
@@ -141,7 +141,7 @@ A connector is a note. Two halves, and the split is the security model:
 - **Body = behavior.** Free prose teaching an agent how to call the service.
   No platform code per vendor.
 
-`alias` is display-only. Secrets live encrypted in `CommunitySecret`, never in
+`alias` is display-only. Secrets live encrypted in `SpaceSecret`, never in
 notes. The `connectors/` folder is admin-only for writes regardless of grants
 (`brainService.writeDenial`).
 
@@ -184,7 +184,7 @@ backoff, cursor pagination, i.e. many host calls in one run.
 
 ## Gotchas
 
-- A stale community id in `localStorage` produces "Unknown community" 404s after
+- A stale space id in `localStorage` produces "Unknown space" 404s after
   a reseed. Reload the tab first before debugging anything else.
 - `pnpm db:seed` **wipes the local DB**. `db:fresh` drops and rebuilds tables;
   `db:reset` destroys the docker volume (both guarded by

@@ -1,9 +1,9 @@
 // The single-note CRUD endpoint.
-//   GET    /api/notes/item?communityId=&scope=&path=        → { content }
-//   POST   { communityId, scope, path, content? }            → { note, movedTo? }  (create)
-//   PUT    { communityId, scope, path, content, origin? }    → { ok, movedTo? }    (write + revision)
-//   PATCH  { communityId, scope, from, to }                  → { path }   (rename/move)
-//   DELETE ?communityId=&scope=&path=                        → { ok }     (soft-delete → trash)
+//   GET    /api/notes/item?spaceId=&scope=&path=        → { content }
+//   POST   { spaceId, scope, path, content? }            → { note, movedTo? }  (create)
+//   PUT    { spaceId, scope, path, content, origin? }    → { ok, movedTo? }    (write + revision)
+//   PATCH  { spaceId, scope, from, to }                  → { path }   (rename/move)
+//   DELETE ?spaceId=&scope=&path=                        → { ok }     (soft-delete → trash)
 //
 // Shared-brain reads go through the visibility lens (404 when hidden — absent and
 // inaccessible are indistinguishable) and every write through the folder gate

@@ -1,6 +1,6 @@
-// Adding a type to a community's vocabulary, in one place.
+// Adding a type to a space's vocabulary, in one place.
 //
-// A community's `nodeTypes` used to be write-only-by-admin and closed: the
+// A space's `nodeTypes` used to be write-only-by-admin and closed: the
 // console could recolour the built-ins and nothing could create a type. Members
 // can now invent one from the draft-context surface, which means the "is this
 // name already served, and what should it look like" rule is asked from three
@@ -21,7 +21,7 @@ const MAX_NAME = 32;
  * Names that must never become a type, whatever the synonym table says.
  *
  * `Index` is the dangerous one: the notes API relocates a `type: Index` note
- * into a folder of its own (app/api/notes/item/route.ts), so a community that
+ * into a folder of its own (app/api/notes/item/route.ts), so a space that
  * created an "Index" type would silently move its members' notes. `Note` and
  * `File` are the two things that are content in a brain rather than nodes in
  * the graph — the draft menu offers them already and they are not node types.
@@ -29,7 +29,7 @@ const MAX_NAME = 32;
 const RESERVED = ['note', 'file', 'index'];
 
 /**
- * Is this name one no community may create a type for? Surfaces that OFFER
+ * Is this name one no space may create a type for? Surfaces that OFFER
  * stored types ask this too: a brain seeded with a `Note` or `Index` type (see
  * prisma/seed.ts) still has one, and it must not reach a picker that would
  * write it into a note's frontmatter.
@@ -69,8 +69,8 @@ export function defaultNodeTypeColor(name: string): string {
 }
 
 /**
- * A community's type list as the app should see it. The column is nullable and
- * a community seeded before a built-in existed can be missing it, so anything
+ * A space's type list as the app should see it. The column is nullable and
+ * a space seeded before a built-in existed can be missing it, so anything
  * that MERGES has to start from the defaults — otherwise the first write turns
  * a full vocabulary into a one-entry array.
  */
@@ -81,7 +81,7 @@ export function seedNodeTypes(stored: NodeTypeConfig[] | null | undefined): Node
 /**
  * Fold an edited type list back onto what is stored, additively.
  *
- * The console saves the WHOLE community record from a client snapshot that can
+ * The console saves the WHOLE space record from a client snapshot that can
  * be minutes old (features/admin/components/TypesPanel.tsx), so a plain
  * overwrite means an admin recolouring Person deletes every type a member
  * created in the meantime. Incoming entries win on colour/shape/icon — that is
@@ -109,7 +109,7 @@ export type MergeNodeTypeResult =
   | { ok: false; error: string };
 
 /**
- * Add a type to a community's vocabulary, or resolve the one already serving
+ * Add a type to a space's vocabulary, or resolve the one already serving
  * that name.
  *
  * First writer wins: if the name (or a synonym of it — `Company` is served by
@@ -137,7 +137,7 @@ export function mergeNodeType(
 
   const types = seedNodeTypes(stored);
   // findNodeTypeConfig resolves synonyms as well as exact names, so this single
-  // check covers the built-ins, the community's own types, and every retired
+  // check covers the built-ins, the space's own types, and every retired
   // spelling that folds onto one of them.
   const existing = findNodeTypeConfig(name, types);
   if (existing) return { ok: true, types, type: existing, created: false };

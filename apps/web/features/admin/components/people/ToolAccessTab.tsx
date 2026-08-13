@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
-import type { Community, CommunityFeatureConfig } from '@/lib/types';
+import type { Space, SpaceFeatureConfig } from '@/lib/types';
 import {
   ADMIN_ONLY_FEATURE_KEYS,
   FEATURES,
@@ -23,18 +23,18 @@ import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
-export default function ToolAccessTab({ community, onSaved }: {
-  community: Community;
-  onSaved: (updated: Partial<Community>) => void;
+export default function ToolAccessTab({ space, onSaved }: {
+  space: Space;
+  onSaved: (updated: Partial<Space>) => void;
 }) {
-  const savedConfig = (community.featureConfig ?? {}) as CommunityFeatureConfig;
+  const savedConfig = (space.featureConfig ?? {}) as SpaceFeatureConfig;
   const [adminOnly, setAdminOnly] = useState<string[]>(() => adminOnlyFeatureKeys(savedConfig));
 
   const { queue } = useConsoleAutosave(async (patch) => {
-    const data = await fetchJsonBody<{ community: Partial<Community> }>(
-      `/api/communities/${community.id}/settings`, 'PUT', patch,
+    const data = await fetchJsonBody<{ space: Partial<Space> }>(
+      `/api/communities/${space.id}/settings`, 'PUT', patch,
     );
-    onSaved(data.community);
+    onSaved(data.space);
   });
 
   // Only `adminOnly` goes up: the Tools tab owns enabled/order/more, and the

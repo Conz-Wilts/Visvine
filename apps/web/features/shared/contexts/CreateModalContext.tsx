@@ -7,11 +7,11 @@ import { suggestedCreateType } from '@/lib/create/suggestedType';
 
 export type CreateableType =
   | 'person'
-  // A group, organisation or community recorded in the directory (the org node
-  // type, formerly 'community'). A node and a note, in the space you're already
+  // A group, organisation or space recorded in the directory (the org node
+  // type, formerly 'space'). A node and a note, in the space you're already
   // in. Provisioning a real space of your own is NOT a create type: it's the
   // one act that takes you somewhere else, and lives on the switcher instead
-  // (features/communities/components/NewCommunityDialog).
+  // (features/spaces/components/NewSpaceDialog).
   | 'space'
   | 'resource'
   | 'event'
@@ -19,7 +19,7 @@ export type CreateableType =
   // The channels-tool container (formerly 'space').
   | 'section'
   // Brain surfaces: a written note, and an uploaded file ingested as a Context
-  // Source. Both land at a path in the current community's context.
+  // Source. Both land at a path in the current space's context.
   | 'context'
   | 'file'
   // A folder in the context — written as its index note, because an index note
@@ -39,7 +39,7 @@ export type CreateableType =
  * (channels/<slug>.md, spaces/…) or lands in the context tree,
  * so the draft surface takes a name and a starting body for them just like the
  * rest. The docked panel is still reachable from the places that open it
- * directly (the community switcher, the channel list) — it just isn't the only
+ * directly (the space switcher, the channel list) — it just isn't the only
  * way to reach these types any more.
  */
 const NOTE_FIRST: Partial<Record<CreateableType, string>> = {

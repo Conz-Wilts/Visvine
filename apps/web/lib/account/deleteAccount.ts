@@ -16,42 +16,42 @@ import { logger } from '@/lib/logger'
  * again with the same email would then land next to that orphan.
  *
  * What goes:
- *  - the profile (`Person`) and the cross-community `Identity` it was claimed by
- *  - the member node representing them in every community directory, and with it
+ *  - the profile (`Person`) and the cross-space `Identity` it was claimed by
+ *  - the member node representing them in every space directory, and with it
  *    (via cascade) their links there
  *  - every personal brain: notes, folders, files, embeddings, sources, chunks
  *  - brain grants, aliases held, and outstanding access requests
  *  - the `User` row, which cascades memberships, messages, reactions, stars,
  *    and the conversations they created
  *
- * What stays, deliberately: notes other people wrote in a community's SHARED
+ * What stays, deliberately: notes other people wrote in a space's SHARED
  * brain, even when the subject is the departing member — that text is the
- * community's, not theirs, and index notes point at it.
+ * space's, not theirs, and index notes point at it.
  *
- * Refused when they are the last person who can manage a community — the same
+ * Refused when they are the last person who can manage a space — the same
  * invariant that blocks an admin from removing that member (`assertOwnerSurvives`).
  * Ownership has to be handed over first.
  */
 
 export interface DeleteAccountResult {
-  /** Communities they were a member of. */
-  communities: number
-  /** Directory nodes removed (one per community that had one). */
+  /** Spaces they were a member of. */
+  spaces: number
+  /** Directory nodes removed (one per space that had one). */
   nodes: number
-  /** Personal-brain notes removed across all communities. */
+  /** Personal-brain notes removed across all spaces. */
   notes: number
 }
 
 export async function deleteAccount(userId: string): Promise<DeleteAccountResult> {
-  const memberships = await prisma.userCommunity.findMany({
+  const memberships = await prisma.spaceMember.findMany({
     where: { userId },
-    select: { communityId: true, status: true },
+    select: { spaceId: true, status: true },
   })
 
-  // Guard before we delete anything: a community must not be left unmanageable.
-  for (const { communityId } of memberships) {
+  // Guard before we delete anything: a space must not be left unmanageable.
+  for (const { spaceId } of memberships) {
     try {
-      await assertMembersCanLeave(communityId, [userId])
+      await assertMembersCanLeave(spaceId, [userId])
     } catch (e) {
       // 409, the same shape lib/messages/* uses for a service-level refusal.
       throw new ApiError(409, `${(e as Error).message} Hand ownership over, then delete your account.`)
@@ -61,23 +61,23 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
   // Member nodes are found through `Identity.userId`, so they must be collected
   // before the identity row goes.
   const nodeIds: string[] = []
-  for (const { communityId } of memberships) {
-    const node = await findMemberNode(communityId, userId)
+  for (const { spaceId } of memberships) {
+    const node = await findMemberNode(spaceId, userId)
     if (node) nodeIds.push(node.id)
   }
 
   const result = await prisma.$transaction(async (tx) => {
     // Personal brains (`ownerKey` = userId). Chunks cascade from their source,
     // but the delete is spelled out so a source-less chunk cannot be stranded.
-    const notes = await tx.communityNote.deleteMany({ where: { ownerKey: userId } })
-    await tx.communityNoteFolder.deleteMany({ where: { ownerKey: userId } })
-    await tx.communityBrainFile.deleteMany({ where: { ownerKey: userId } })
-    await tx.communityNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
+    const notes = await tx.spaceNote.deleteMany({ where: { ownerKey: userId } })
+    await tx.spaceNoteFolder.deleteMany({ where: { ownerKey: userId } })
+    await tx.spaceBrainFile.deleteMany({ where: { ownerKey: userId } })
+    await tx.spaceNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSourceChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSource.deleteMany({ where: { ownerKey: userId } })
 
-    // Access, in every community at once — what `removeMemberAccess` does per
-    // community, plus the requests that outlive a denial.
+    // Access, in every space at once — what `removeMemberAccess` does per
+    // space, plus the requests that outlive a denial.
     await tx.brainGrant.deleteMany({ where: { subjectType: 'user', subjectId: userId } })
     await tx.userAlias.deleteMany({ where: { userId } })
     await tx.brainAccessRequest.deleteMany({ where: { userId } })
@@ -95,7 +95,7 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     // they created.
     await tx.user.delete({ where: { id: userId } })
 
-    return { communities: memberships.length, nodes: nodeIds.length, notes: notes.count }
+    return { spaces: memberships.length, nodes: nodeIds.length, notes: notes.count }
   })
 
   logger.info('account.deleted', { userId, ...result })

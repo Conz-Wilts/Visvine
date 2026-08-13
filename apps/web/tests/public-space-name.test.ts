@@ -1,4 +1,4 @@
-// The pure half of the public-space-name rule (lib/communities/publicName.ts):
+// The pure half of the public-space-name rule (lib/spaces/publicName.ts):
 // what counts as the same name, and what a space's name/visibility will BE once
 // a partial settings patch lands. The DB half (findPublicNameConflict) is a thin
 // query over those two.
@@ -10,7 +10,7 @@ import {
   normalizePublicName,
   effectiveNameAndVisibility,
   publicNameTakenMessage,
-} from '../lib/communities/publicName';
+} from '../lib/spaces/publicName';
 
 describe('normalizePublicName', () => {
   it('ignores case and surrounding whitespace', () => {

@@ -5,7 +5,7 @@
 // browser's note column.
 //
 // A note's type and tags always show. The type is resolved against the types
-// the community created in its console, so the chip carries the console's own
+// the space created in its console, so the chip carries the console's own
 // spelling and colour; a type the console doesn't know still shows (a note that
 // says what it is must be able to say so) but falls back to the neutral grey
 // treatment — which is the visible signal that the type wants creating in the
@@ -20,37 +20,37 @@
 import Chip from '@/components/ui/Chip'
 import { findAlias, getNodeTypeConfig, nodeTypeLabel } from '@/lib/types'
 import { tagPalette } from '@/lib/tagColors'
-import type { CommunityAlias, NodeTypeConfig } from '@/lib/types'
+import type { SpaceAlias, NodeTypeConfig } from '@/lib/types'
 
 const LABEL_CLASS = 'text-[10px] font-semibold uppercase tracking-wide text-text-muted'
 
 interface NoteMetaRowsProps {
-  /** The note's frontmatter type, named and coloured by the community console. */
+  /** The note's frontmatter type, named and coloured by the space console. */
   type?: string | null
   /**
    * The alias the note's directory node holds, when it has one. A type is shown
-   * by its alias wherever the community gave it one — "Portfolio Company", not
-   * "Community" — so the chip here matches the node's card in the directory.
+   * by its alias wherever the space gave it one — "Portfolio Company", not
+   * "Space" — so the chip here matches the node's card in the directory.
    * Unrecognised values fall back to the type name (nodeTypeLabel), which is
    * what keeps an event's public slug from surfacing as a type.
    */
   alias?: string | null
   tags: string[]
-  /** The community's configured node types, from the console. */
+  /** The space's configured node types, from the console. */
   nodeTypes?: NodeTypeConfig[]
-  /** The community's aliases — the registry an alias has to appear in to count. */
-  communityAliases?: CommunityAlias[]
+  /** The space's aliases — the registry an alias has to appear in to count. */
+  aliases?: SpaceAlias[]
   tagColors?: Record<string, string> | null
   className?: string
 }
 
 export function NoteMetaRows({
-  type, alias, tags, nodeTypes, communityAliases, tagColors, className = '',
+  type, alias, tags, nodeTypes, aliases, tagColors, className = '',
 }: NoteMetaRowsProps) {
   const trimmedType = type?.trim() || null
   const typeConfig = trimmedType ? getNodeTypeConfig(trimmedType, nodeTypes) : null
   // An alias carries its own colour, the one the directory card is painted in.
-  const aliasConfig = trimmedType ? findAlias(communityAliases, alias, trimmedType) : undefined
+  const aliasConfig = trimmedType ? findAlias(aliases, alias, trimmedType) : undefined
   if (!typeConfig && tags.length === 0) return null
 
   return (
@@ -61,9 +61,9 @@ export function NoteMetaRows({
           <span className="flex">
             {/* The console's own spelling of the type, not the note's — one name
                 for one type, wherever you meet it — and its alias in preference
-                to it, since that's the name the community actually uses. */}
+                to it, since that's the name the space actually uses. */}
             <Chip size="lg" color={aliasConfig?.color ?? typeConfig.color}>
-              {nodeTypeLabel(trimmedType, alias, communityAliases, nodeTypes)}
+              {nodeTypeLabel(trimmedType, alias, aliases, nodeTypes)}
             </Chip>
           </span>
         </div>

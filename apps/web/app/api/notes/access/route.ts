@@ -2,13 +2,13 @@
 // endpoint that answers "who can see this and why" and carries every grant
 // mutation. All semantics live in lib/notes/shared/authz.ts + lib/notes/access.ts.
 //
-//   GET ?communityId=&path=<p>   → per-path view: the caller's effective level
+//   GET ?spaceId=&path=<p>   → per-path view: the caller's effective level
 //        (canRead/canWrite/canManage), the merged who-has-access list with
 //        provenance (when readable), restricted ancestors, and — for managers —
 //        the grantable subjects (members + aliases). `path` may be '' (the root).
-//   GET ?communityId=            → overview: restricted/locked folders, whether
+//   GET ?spaceId=            → overview: restricted/locked folders, whether
 //        the caller is gated out of the brain entirely, their readable roots.
-//   POST { communityId, action, ... }:
+//   POST { spaceId, action, ... }:
 //        'grant'    { subjectType, subjectId?, path, level }   — manage at path
 //        'revoke'   { grantId }                                — manage at the grant's path
 //        'restrict' { folderPath, restricted }                 — manage at path
@@ -21,7 +21,7 @@ import { principalOf } from '@/lib/notes/brain'
 import {
   accessListFor,
   grantAccess,
-  loadCommunityAccess,
+  loadSpaceAccess,
   revokeAccess,
   setFolderLocked,
   setFolderRestricted,
@@ -61,16 +61,16 @@ export async function GET(req: NextRequest) {
 
   const gated =
     !brain.isPersonalSpace &&
-    !p.communityAdmin &&
+    !p.spaceAdmin &&
     !p.access.grants.some((g) => g.level > 0)
 
   if (path === null) {
-    // Community admins additionally get the full grant dump with subject
+    // Space admins additionally get the full grant dump with subject
     // names — the Access-overview page (forgotten restrictions and grants are
     // the #1 permissions support ticket).
     let grants = null
-    if (p.communityAdmin && !brain.isPersonalSpace) {
-      const all = await loadCommunityAccess(brain.communityId)
+    if (p.spaceAdmin && !brain.isPersonalSpace) {
+      const all = await loadSpaceAccess(brain.spaceId)
       // Alias grants are stored by NAME — no lookup needed.
       const userIds = [...new Set(all.grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId))]
       const users = userIds.length
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       grants = all.grants.map((g) => ({
         ...g,
         subjectName:
-          g.subjectType === 'community'
+          g.subjectType === 'space'
             ? 'Everyone'
             : g.subjectType === 'alias'
               ? g.subjectId
@@ -88,11 +88,11 @@ export async function GET(req: NextRequest) {
       }))
     }
     return NextResponse.json({
-      me: { userId: p.userId, communityAdmin: p.communityAdmin },
+      me: { userId: p.userId, spaceAdmin: p.spaceAdmin },
       gated,
       restricted: p.access.restricted,
       locked: p.access.locked,
-      readableRoots: p.communityAdmin ? [''] : readableRoots(p.access),
+      readableRoots: p.spaceAdmin ? [''] : readableRoots(p.access),
       grants,
     })
   }
@@ -104,16 +104,16 @@ export async function GET(req: NextRequest) {
   let entries = null
   let subjects = null
   if (!brain.isPersonalSpace && canRead) {
-    entries = await accessListFor(brain.communityId, path)
+    entries = await accessListFor(brain.spaceId, path)
   }
   if (!brain.isPersonalSpace && canManage) {
     const [members, aliases] = await Promise.all([
-      prisma.userCommunity.findMany({
-        where: { communityId: brain.communityId, status: 'active' },
+      prisma.spaceMember.findMany({
+        where: { spaceId: brain.spaceId, status: 'active' },
         select: { userId: true, user: { select: { name: true, email: true, image: true } } },
         orderBy: { joinedAt: 'asc' },
       }),
-      listAliases(brain.communityId),
+      listAliases(brain.spaceId),
     ])
     subjects = {
       members: members.map((m) => ({
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     path,
-    me: { userId: p.userId, communityAdmin: p.communityAdmin },
+    me: { userId: p.userId, spaceAdmin: p.spaceAdmin },
     gated,
     canRead,
     canWrite,
@@ -164,10 +164,10 @@ export async function POST(req: NextRequest) {
           return fail('path, level, and subjectType are required')
         }
         if (!principalCanManage(p, path)) {
-          return fail('Only someone with full access here (or a community admin) can share it', 403)
+          return fail('Only someone with full access here (or a space admin) can share it', 403)
         }
         const grant = await grantAccess(
-          brain.communityId,
+          brain.spaceId,
           {
             subjectType,
             subjectId: typeof body.subjectId === 'string' ? body.subjectId : '',
@@ -182,42 +182,42 @@ export async function POST(req: NextRequest) {
         const grantId = typeof body.grantId === 'string' ? body.grantId : null
         if (!grantId) return fail('grantId is required')
         const row = await prisma.brainGrant.findFirst({
-          where: { id: grantId, communityId: brain.communityId },
+          where: { id: grantId, spaceId: brain.spaceId },
           select: { resourcePath: true },
         })
         if (!row) return fail('Unknown grant', 404)
         if (!principalCanManage(p, row.resourcePath)) {
-          return fail('Only someone with full access here (or a community admin) can revoke it', 403)
+          return fail('Only someone with full access here (or a space admin) can revoke it', 403)
         }
-        await revokeAccess(brain.communityId, grantId, actor)
+        await revokeAccess(brain.spaceId, grantId, actor)
         return NextResponse.json({ ok: true })
       }
       case 'restrict': {
         const folderPath = typeof body.folderPath === 'string' ? body.folderPath : null
         if (!folderPath) return fail('folderPath is required')
         if (!principalCanManage(p, folderPath)) {
-          return fail('Only someone with full access here (or a community admin) can restrict it', 403)
+          return fail('Only someone with full access here (or a space admin) can restrict it', 403)
         }
         // A non-admin restricting a folder keeps full access ON the boundary —
         // otherwise the cut would sever their own manage rights and nobody
-        // could undo it short of a community admin.
-        if (body.restricted === true && !p.communityAdmin) {
+        // could undo it short of a space admin.
+        if (body.restricted === true && !p.spaceAdmin) {
           await grantAccess(
-            brain.communityId,
+            brain.spaceId,
             { subjectType: 'user', subjectId: p.userId, resourcePath: folderPath, level: LEVEL_FULL },
             actor,
           )
         }
-        await setFolderRestricted(brain.communityId, folderPath, body.restricted === true, actor)
+        await setFolderRestricted(brain.spaceId, folderPath, body.restricted === true, actor)
         return NextResponse.json({ ok: true })
       }
       case 'setLock': {
         const folderPath = typeof body.folderPath === 'string' ? body.folderPath : null
         if (!folderPath) return fail('folderPath is required')
         if (!principalCanManage(p, folderPath)) {
-          return fail('Only someone with full access here (or a community admin) can lock it', 403)
+          return fail('Only someone with full access here (or a space admin) can lock it', 403)
         }
-        await setFolderLocked(brain.communityId, folderPath, body.locked === true, actor)
+        await setFolderLocked(brain.spaceId, folderPath, body.locked === true, actor)
         return NextResponse.json({ ok: true })
       }
       default:

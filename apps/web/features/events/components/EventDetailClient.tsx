@@ -17,7 +17,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { GuestManager } from '@/features/events/components/GuestManager';
@@ -34,7 +34,7 @@ import {
   missingRequiredAnswers, startsInLabel, RESPONSE_LABELS,
 } from '@/lib/eventUtils';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
-import type { CommunityFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
+import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
 import {
   Link2, Trash2, Pencil, MapPin, Video, Users, FileDown,
   CalendarPlus, Check, Loader2, Lock, ClipboardList, Globe2,
@@ -52,7 +52,7 @@ type Tab = 'overview' | 'guests' | 'form';
 
 // The guest-facing view carries the same Event | Context | Raw bar entity
 // profiles get. Context/Raw are the event's context note (events/<slug>.md in
-// the community brain) — the tab IS the editor mode.
+// the space brain) — the tab IS the editor mode.
 const EVENT_TABS: TabConfig[] = [
   { id: 'about', label: 'Event' },
   { id: 'context', label: 'Context' },
@@ -87,7 +87,7 @@ interface GuestPreview {
 
 export default function EventDetailClient({ eventId, manage = false }: { eventId: string; manage?: boolean }) {
   const router = useRouter();
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const { data: session } = useSession();
   const { theme: userTheme } = useTheme();
 
@@ -109,9 +109,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const barEdgeClass = useDockEdgeClass();
 
   const loadEvent = useCallback(async () => {
-    if (!currentCommunity) return;
+    if (!currentSpace) return;
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}?communityId=${currentCommunity.id}`);
+      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}?spaceId=${currentSpace.id}`);
       const data = await response.json();
       setEvent(data.event ?? null);
       setStats(data.stats ?? null);
@@ -123,7 +123,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
     } finally {
       setLoading(false);
     }
-  }, [currentCommunity, eventId]);
+  }, [currentSpace, eventId]);
 
   useEffect(() => { loadEvent(); }, [loadEvent]);
 
@@ -146,15 +146,15 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
     setTimeout(() => setCopyStatus(''), 2000);
   };
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return <CenteredNote text="Please select a space to view this event." />;
   }
 
   // The Context/Raw bar only rides the guest-facing view (the manage view has
   // its own overview/guests/form tabs) and only when the notes tool is on for
-  // this community — the same gate entity profiles use. Known before the event
+  // this space — the same gate entity profiles use. Known before the event
   // fetch resolves, so the bar can be up from the first frame.
-  const featureConfig = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const featureConfig = (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null;
   const showContextTabs = !manage && isFeatureEnabled(featureConfig, 'notes');
 
   // The shared Event | Context | Raw wrapper. The provider spans the bar and
@@ -264,7 +264,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 <>
                   <ToolbarBtn icon={<Link2 className="w-4 h-4" />} label={copyStatus || 'Copy invite link'} onClick={copyInviteLink} />
                   <ToolbarBtn icon={<FileDown className="w-4 h-4" />} label="Export guest CSV"
-                              onClick={() => window.open(`/api/events/${encodeURIComponent(eventId)}/export.csv?communityId=${currentCommunity.id}`, '_blank')} />
+                              onClick={() => window.open(`/api/events/${encodeURIComponent(eventId)}/export.csv?spaceId=${currentSpace.id}`, '_blank')} />
                   <ToolbarBtn icon={<Trash2 className="w-4 h-4" />} label="Delete event" danger
                               onClick={() => setShowDeleteModal(true)} />
                 </>
@@ -350,7 +350,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                     {liveStatus === 'past' && 'This event has ended'}
                   </div>
                 </div>
-                <a href={`/api/events/${encodeURIComponent(eventId)}/ics?communityId=${currentCommunity.id}`} target="_blank" rel="noopener noreferrer"
+                <a href={`/api/events/${encodeURIComponent(eventId)}/ics?spaceId=${currentSpace.id}`} target="_blank" rel="noopener noreferrer"
                    className="flex-none inline-flex items-center gap-1.5 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
                   <CalendarPlus className="w-4 h-4" /> <span className="hidden sm:inline">Add to calendar</span>
                 </a>
@@ -411,7 +411,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
               <RsvpCard
                 event={event}
                 eventId={eventId}
-                communityId={currentCommunity.id}
+                spaceId={currentSpace.id}
                 theme={theme}
                 viewer={viewer}
                 occupied={occupied}
@@ -437,7 +437,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
       )}
 
       {activeTab === 'guests' && manage && (
-        <GuestManager event={event} communityId={currentCommunity.id} />
+        <GuestManager event={event} spaceId={currentSpace.id} />
       )}
 
       {activeTab === 'form' && manage && (
@@ -473,7 +473,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
         onConfirm={async () => {
           setDeleteError(null);
           try {
-            const response = await fetch(`/api/events/${event.id}?communityId=${currentCommunity.id}`, { method: 'DELETE' });
+            const response = await fetch(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
             if (!response.ok) {
               const data = await response.json();
               throw new Error(data.error || 'Failed to delete event');
@@ -504,10 +504,10 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 /* ── RSVP card ────────────────────────────────────────────────────────────── */
 
 function RsvpCard({
-  event, eventId, communityId, theme, viewer, occupied, isPast, isDraft, isFull,
+  event, eventId, spaceId, theme, viewer, occupied, isPast, isDraft, isFull,
   sessionName, sessionEmail, onChanged,
 }: {
-  event: NBEvent; eventId: string; communityId: string; theme: ThemePalette;
+  event: NBEvent; eventId: string; spaceId: string; theme: ThemePalette;
   viewer: ViewerRsvp | null; occupied: number; isPast: boolean; isDraft: boolean; isFull: boolean;
   sessionName?: string; sessionEmail?: string; onChanged: () => Promise<void> | void;
 }) {
@@ -534,7 +534,7 @@ function RsvpCard({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attendees?communityId=${communityId}`, {
+      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attendees?spaceId=${spaceId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -632,7 +632,7 @@ function RsvpCard({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <a href={`/api/events/${encodeURIComponent(eventId)}/ics?communityId=${communityId}`} target="_blank" rel="noopener noreferrer"
+          <a href={`/api/events/${encodeURIComponent(eventId)}/ics?spaceId=${spaceId}`} target="_blank" rel="noopener noreferrer"
              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
             <CalendarPlus className="w-4 h-4" /> Add to calendar
           </a>

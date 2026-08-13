@@ -1,4 +1,4 @@
-// GET /api/notes/tree?communityId=&scope=
+// GET /api/notes/tree?spaceId=&scope=
 // The folder/note tree for the sidebar (note-derived folders + explicit empty
 // folders, sorted folders-first then alphabetically). Shared-brain trees are
 // built over the visibility-filtered vault, and explicitly-created empty

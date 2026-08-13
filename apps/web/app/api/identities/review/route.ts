@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { adminCommunityIds, isAdmin, isSuperAdmin } from '@/lib/auth';
+import { adminSpaceIds, isAdmin, isSuperAdmin } from '@/lib/auth';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { listSuggestions, mergeIdentities, splitNodeToNewIdentity } from '@/lib/identity/steward';
 import { confirmIdentity, rejectIdentityMatch } from '@/lib/identity/resolve';
@@ -12,39 +12,39 @@ async function canStewardNode(
   nodeId: string,
 ): Promise<boolean> {
   if (isSuperAdmin(session.email)) return true;
-  const node = await prisma.node.findUnique({ where: { id: nodeId }, select: { communityId: true } });
-  if (!node?.communityId) return false;
-  return isAdmin(session.userId, node.communityId, session.email);
+  const node = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true } });
+  if (!node?.spaceId) return false;
+  return isAdmin(session.userId, node.spaceId, session.email);
 }
 
 /**
  * GET /api/identities/review — the dedup review queue (pending Tier-C suggestions).
- * Super admins see all; community admins see only suggestions for their communities.
+ * Super admins see all; space admins see only suggestions for their spaces.
  */
 export async function GET() {
   try {
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
 
-    let communityIds: string[] | null = null;
+    let spaceIds: string[] | null = null;
     if (!isSuperAdmin(session.email)) {
-      // The communities this user manages = those where they hold an alias
+      // The spaces this user manages = those where they hold an alias
       // marked `owner` (lib/notes/shared/aliases.ts).
-      const memberships = await prisma.userCommunity.findMany({
+      const memberships = await prisma.spaceMember.findMany({
         where: { userId: session.userId },
-        select: { communityId: true },
+        select: { spaceId: true },
       });
-      communityIds = [
-        ...(await adminCommunityIds(
+      spaceIds = [
+        ...(await adminSpaceIds(
           session.userId,
-          memberships.map((m) => m.communityId),
+          memberships.map((m) => m.spaceId),
           session.email,
         )),
       ];
-      if (communityIds.length === 0) return NextResponse.json({ suggestions: [] });
+      if (spaceIds.length === 0) return NextResponse.json({ suggestions: [] });
     }
 
-    const suggestions = await listSuggestions({ communityIds });
+    const suggestions = await listSuggestions({ spaceIds });
     return NextResponse.json({ suggestions });
   } catch (err) {
     return handleApiError(err, 'api.identities.review.get.failed');

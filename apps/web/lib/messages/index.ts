@@ -13,7 +13,7 @@ export { ensureConversationMember } from './core';
 export {
   listConversationsForUser,
   createChannelConversation,
-  listChannelsForCommunity,
+  listChannelsForSpace,
   listChannelSections,
   createChannelSection,
   updateChannelSection,

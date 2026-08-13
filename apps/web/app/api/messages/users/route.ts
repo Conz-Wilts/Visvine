@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     const { users, directoryPeople } = await searchUsersAndDirectory(user.id, query);
     // Drop email from the wire — the picker only needs id/name/image, and email
-    // is confidential contact data even among shared-community members.
+    // is confidential contact data even among shared-space members.
     const safeUsers = users.map(({ email: _email, ...u }) => u);
     return NextResponse.json({ users: safeUsers, directoryPeople });
   } catch (error) {

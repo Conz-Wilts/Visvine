@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { visibleNodes, visibleGraph } from '../lib/notes/context/featureVisibility';
-import type { CommunityFeatureConfig, NBLink, NBNode } from '../lib/types';
+import type { SpaceFeatureConfig, NBLink, NBNode } from '../lib/types';
 
 const node = (id: string, type: string): NBNode =>
   ({ id, type, name: id }) as NBNode;
@@ -29,7 +29,7 @@ describe('visibleNodes', () => {
   });
 
   it('drops the node types a switched-off tool owns', () => {
-    const config: CommunityFeatureConfig = { enabled: { connectors: false } };
+    const config: SpaceFeatureConfig = { enabled: { connectors: false } };
     assert.deepEqual(
       names(visibleNodes(ALL, config)),
       ['channel:f', 'community:b', 'event:c', 'person:a', 'resource:d', 'space:g'],
@@ -37,7 +37,7 @@ describe('visibleNodes', () => {
   });
 
   it('takes both Channel and Section out with the channels tool', () => {
-    const config: CommunityFeatureConfig = { enabled: { channels: false } };
+    const config: SpaceFeatureConfig = { enabled: { channels: false } };
     const kept = names(visibleNodes(ALL, config));
     assert.equal(kept.includes('channel:f'), false);
     assert.equal(kept.includes('space:g'), false);
@@ -46,7 +46,7 @@ describe('visibleNodes', () => {
 
   it('never hides the types core surfaces own', () => {
     // Every toggleable tool off at once — person, Space and event stay.
-    const config: CommunityFeatureConfig = {
+    const config: SpaceFeatureConfig = {
       enabled: { connectors: false, resources: false, channels: false },
     };
     assert.deepEqual(
@@ -56,7 +56,7 @@ describe('visibleNodes', () => {
   });
 
   it('matches type names case-insensitively, as stored casing drifts', () => {
-    const config: CommunityFeatureConfig = { enabled: { resources: false } };
+    const config: SpaceFeatureConfig = { enabled: { resources: false } };
     const mixed = [node('r:1', 'Resource'), node('r:2', 'resource')];
     assert.deepEqual(visibleNodes(mixed, config), []);
   });
@@ -64,7 +64,7 @@ describe('visibleNodes', () => {
 
 describe('visibleGraph', () => {
   it('drops links whose far end was hidden, and keeps the rest', () => {
-    const config: CommunityFeatureConfig = { enabled: { connectors: false } };
+    const config: SpaceFeatureConfig = { enabled: { connectors: false } };
     const links = [
       link('person:a', 'community:b'), // both survive
       link('person:a', 'connector:e'), // target hidden
@@ -84,7 +84,7 @@ describe('visibleGraph', () => {
 
   it('resolves object-shaped link endpoints, not just id strings', () => {
     // d3 mutates links in place, so source/target can arrive as node objects.
-    const config: CommunityFeatureConfig = { enabled: { connectors: false } };
+    const config: SpaceFeatureConfig = { enabled: { connectors: false } };
     const objectLink = { source: 'person:a', target: 'connector:e', relationship: 'related' };
     assert.equal(visibleGraph(ALL, [objectLink as NBLink], config).links.length, 0);
   });

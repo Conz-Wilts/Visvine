@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { Alert } from '@/components/ui';
-import type { Community } from '@/lib/types';
+import type { Space } from '@/lib/types';
 import AliasesTab from './AliasesTab';
 import MembersTab from './MembersTab';
 import RequestsTab from './RequestsTab';
@@ -19,9 +19,9 @@ import { usePeopleSection } from './PeopleDataContext';
 
 type Tab = 'people' | 'aliases' | 'tools' | 'requests';
 
-export default function MembersPanel({ community, onSaved }: {
-  community: Community;
-  onSaved: (updated: Partial<Community>) => void;
+export default function MembersPanel({ space, onSaved }: {
+  space: Space;
+  onSaved: (updated: Partial<Space>) => void;
 }) {
   const { data, error, setError } = usePeopleSection();
   const [tab, setTab] = useState<Tab>('people');
@@ -60,7 +60,7 @@ export default function MembersPanel({ community, onSaved }: {
         ))}
       </div>
 
-      {/* Tool access is the one tab that reads the community record rather than
+      {/* Tool access is the one tab that reads the space record rather than
           the People snapshot, so it takes the same props the Tools section does. */}
       {data === null && tab !== 'tools' ? (
         <p className="text-sm text-text-muted">Loading…</p>
@@ -69,7 +69,7 @@ export default function MembersPanel({ community, onSaved }: {
       ) : tab === 'aliases' ? (
         <AliasesTab />
       ) : tab === 'tools' ? (
-        <ToolAccessTab community={community} onSaved={onSaved} />
+        <ToolAccessTab space={space} onSaved={onSaved} />
       ) : (
         <RequestsTab />
       )}

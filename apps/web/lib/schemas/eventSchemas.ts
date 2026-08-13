@@ -47,7 +47,7 @@ export const eventCreateInputSchema = z.object({
   // Optional client-generated id so a draft keeps a stable id across autosaves
   // and cover uploads. Must look like an event id; server generates one if absent.
   id: z.string().regex(/^event:.+/).optional(),
-  communityId: z.string().min(1),
+  spaceId: z.string().min(1),
   title: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
   startAt: z.string().datetime(),
@@ -62,7 +62,7 @@ export const eventCreateInputSchema = z.object({
   hosts: z.array(z.string()).default([]),
   organizerEmail: z.union([z.string().email(), z.literal('')]).optional().transform(val => val === '' ? undefined : val),
   capacity: z.number().int().positive().optional(),
-  visibility: z.enum(['public', 'community', 'private']).default('community'),
+  visibility: z.enum(['public', 'space', 'private']).default('space'),
   form: z.object({
     enabled: z.boolean().default(true),
     schema: z.array(formFieldSchema).default([]),
@@ -76,21 +76,21 @@ export const eventCreateInputSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-// Event update input (partial; id/communityId are immutable).
+// Event update input (partial; id/spaceId are immutable).
 //
 // NOTE: `.partial()` makes the create schema's fields optional but does NOT
 // suppress their `.default()`s — Zod still fires the default for an ABSENT key.
 // Left as-is, an empty/sparse PATCH would silently inject hosts:[],
-// visibility:'community' and an empty form, wiping host access and downgrading
+// visibility:'space' and an empty form, wiping host access and downgrading
 // visibility on every edit. So we override the three defaulted fields with
 // plain optionals (no defaults): absent keys stay absent and the PATCH merge
 // only touches what the client actually sent.
 export const eventUpdateInputSchema = eventCreateInputSchema
-  .omit({ communityId: true, id: true })
+  .omit({ spaceId: true, id: true })
   .partial()
   .extend({
     hosts: z.array(z.string()).optional(),
-    visibility: z.enum(['public', 'community', 'private']).optional(),
+    visibility: z.enum(['public', 'space', 'private']).optional(),
     form: z
       .object({
         enabled: z.boolean().optional(),

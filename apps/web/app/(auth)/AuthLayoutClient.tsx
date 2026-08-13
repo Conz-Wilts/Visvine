@@ -5,11 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "@/features/shared/components/layout/Sidebar";
 import { HeaderProvider } from "@/features/shared/contexts/HeaderContext";
 import Navbar from "@/features/shared/components/layout/Navbar";
-import { CommunityProvider, useCommunity } from "@/features/shared/contexts/CommunityContext";
+import { SpaceProvider, useSpace } from "@/features/shared/contexts/SpaceContext";
 import { FEATURES, canAccessFeature, defaultLandingHref } from "@/features/shared/lib/features";
 import { COLLAPSED_W, EXPANDED_W } from "@/features/shared/components/layout/Sidebar";
-import type { CommunityFeatureConfig } from "@/lib/types";
-import { CommunityDesignProvider } from "@/features/shared/contexts/CommunityDesignContext";
+import type { SpaceFeatureConfig } from "@/lib/types";
+import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignContext";
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
 import {
   ThemeProvider,
@@ -22,29 +22,29 @@ import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarC
 import { ContextPanelProvider, useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/features/shared/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
-import type { Community } from "@/lib/types";
+import type { Space } from "@/lib/types";
 import type { Session } from "@/features/auth/lib/auth-client";
-import type { InitialMembership } from "@/features/shared/contexts/CommunityContext";
+import type { InitialMembership } from "@/features/shared/contexts/SpaceContext";
 
 // If this user can't open the feature whose page is currently on screen —
-// either the community removed it, or the tool is admins-only and they're a
+// either the space removed it, or the tool is admins-only and they're a
 // member — bounce to the first feature they can still see. The
 // matching feature must own the path prefix — so /directory/foo is guarded too.
 function useFeatureRouteGuard() {
-  const { currentCommunity, loading, isAdmin } = useCommunity();
+  const { currentSpace, loading, isAdmin } = useSpace();
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading || !currentCommunity) return;
-    const config = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+    if (loading || !currentSpace) return;
+    const config = (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null;
     const onFeature = FEATURES.find(
       (f) => pathname === f.href || pathname.startsWith(f.href + "/")
     );
     if (onFeature && !canAccessFeature(config, onFeature.key, isAdmin)) {
       router.replace(defaultLandingHref(config, isAdmin));
     }
-  }, [currentCommunity, loading, isAdmin, pathname, router]);
+  }, [currentSpace, loading, isAdmin, pathname, router]);
 }
 
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
@@ -153,21 +153,21 @@ interface AuthLayoutClientProps {
   children: React.ReactNode;
   /** Server-hydrated data from the (auth) layout — skips the mount fetch waterfall. */
   initialSession?: Session | null;
-  initialCommunities?: Community[];
+  initialSpaces?: Space[];
   initialMemberships?: InitialMembership[];
 }
 
 export default function AuthLayoutClient({
   children,
   initialSession,
-  initialCommunities,
+  initialSpaces,
   initialMemberships,
 }: AuthLayoutClientProps) {
   return (
     <AuthProvider initialSession={initialSession}>
     <ThemeProvider>
-      <CommunityProvider initialCommunities={initialCommunities} initialMemberships={initialMemberships}>
-        <CommunityDesignProvider>
+      <SpaceProvider initialSpaces={initialSpaces} initialMemberships={initialMemberships}>
+        <SpaceDesignProvider>
         <ProfileProvider>
           <HeaderProvider>
             <FullProfileProvider>
@@ -183,8 +183,8 @@ export default function AuthLayoutClient({
             </FullProfileProvider>
           </HeaderProvider>
         </ProfileProvider>
-        </CommunityDesignProvider>
-      </CommunityProvider>
+        </SpaceDesignProvider>
+      </SpaceProvider>
     </ThemeProvider>
     </AuthProvider>
   );

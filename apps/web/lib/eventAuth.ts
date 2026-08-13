@@ -1,9 +1,9 @@
 /**
  * Authorization helpers for event routes.
  *
- * Events are community-scoped. Two gates:
- *  - requireCommunityMember: any logged-in member (or admin) of the community — for creating events.
- *  - requireEventManager:    a community admin OR a host of the specific event — for editing,
+ * Events are space-scoped. Two gates:
+ *  - requireSpaceMember: any logged-in member (or admin) of the space — for creating events.
+ *  - requireEventManager:    a space admin OR a host of the specific event — for editing,
  *                            deleting, reading the guest list, and managing attendees.
  *
  * Both return the session payload on success, or a JSON `Response` (401/403) to early-return.
@@ -21,30 +21,30 @@ function deny(status: number, error: string): Response {
   });
 }
 
-/** Session + membership (admin or member row) of the community. */
-export async function requireCommunityMember(
-  communityId: string,
+/** Session + membership (admin or member row) of the space. */
+export async function requireSpaceMember(
+  spaceId: string,
 ): Promise<SessionPayload | Response> {
   const session = await getSession();
   if (!session) return deny(401, 'Unauthorized');
-  if (await isAdmin(session.userId, communityId, session.email)) return session;
+  if (await isAdmin(session.userId, spaceId, session.email)) return session;
 
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId } },
+  const membership = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId: session.userId, spaceId } },
     select: { userId: true },
   });
   if (!membership) return deny(403, 'You are not a member of this space');
   return session;
 }
 
-/** Session + (community admin OR a host of `event`). */
+/** Session + (space admin OR a host of `event`). */
 export async function requireEventManager(
-  communityId: string,
+  spaceId: string,
   event: NBEvent | null,
 ): Promise<SessionPayload | Response> {
   const session = await getSession();
   if (!session) return deny(401, 'Unauthorized');
-  if (await isAdmin(session.userId, communityId, session.email)) return session;
+  if (await isAdmin(session.userId, spaceId, session.email)) return session;
 
   const hosts = event?.hosts ?? [];
   if (session.personId && hosts.includes(session.personId)) return session;

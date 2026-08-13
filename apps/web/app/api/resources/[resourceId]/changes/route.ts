@@ -3,10 +3,10 @@ import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
 
 async function assertMember(resourceId: string, userId: string) {
-  const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { communityId: true } });
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { spaceId: true } });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId, communityId: resource.communityId } },
+  const membership = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId, spaceId: resource.spaceId } },
     select: { id: true },
   });
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

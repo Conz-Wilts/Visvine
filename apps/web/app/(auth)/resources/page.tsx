@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useResources } from '@/features/resources/hooks/useResources';
 import ResourceUploadDialog from '@/features/resources/components/ResourceUploadDialog';
 import PDFViewer from '@/features/resources/components/PDFViewer';
@@ -438,8 +438,8 @@ function ShowDropdown({ value, onChange }: { value: ResourceTab; onChange: (v: R
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ResourcesPage() {
-  const { currentCommunity } = useCommunity();
-  const { resources, loading, refetch } = useResources(currentCommunity?.id ?? null);
+  const { currentSpace } = useSpace();
+  const { resources, loading, refetch } = useResources(currentSpace?.id ?? null);
   const [tab, setTab] = useState<ResourceTab>('all');
   const [search, setSearch] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
@@ -467,7 +467,7 @@ export default function ResourcesPage() {
     return true;
   });
 
-  if (!currentCommunity) {
+  if (!currentSpace) {
     return (
       <div className="flex h-[calc(100dvh-56px)] w-full items-center justify-center">
         <p className="text-text-muted">Select a space to view resources.</p>
@@ -557,7 +557,7 @@ export default function ResourcesPage() {
       {/* ── Upload dialog ────────────────────────────────────────────── */}
       {showUpload && (
         <ResourceUploadDialog
-          communityId={currentCommunity.id}
+          spaceId={currentSpace.id}
           onClose={() => setShowUpload(false)}
           onUploaded={refetch}
         />

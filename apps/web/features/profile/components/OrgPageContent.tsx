@@ -3,7 +3,7 @@
 /**
  * The page for a non-person directory node under one of the retired
  * organisation id spellings (`group:`, `org:`, `organization:`, `company:`) or
- * a legacy prefix-less directory row — plus any community-invented type that
+ * a legacy prefix-less directory row — plus any space-invented type that
  * routes here.
  *
  * This is deliberately NOT a profile. It used to be `NodeProfileContent`, a
@@ -16,9 +16,9 @@
  * a buried "Details" row to the rail.
  *
  * Person nodes keep ProfilePageContent, and events have their own dedicated
- * page. `community:` nodes no longer land here at all — every one of them gets
- * a community page, either /communities/<id> for a community that actually runs
- * here or CommunityPageContent for a record. This page survives for the ids
+ * page. `space:` nodes no longer land here at all — every one of them gets
+ * a space page, either /communities/<id> for a space that actually runs
+ * here or SpacePageContent for a record. This page survives for the ids
  * that predate that type.
  */
 
@@ -26,7 +26,7 @@ import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { MapPin, Globe2, Share2, Check, ChevronRight, Users } from 'lucide-react';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, getNodeGlyph, nodeTypeLabel } from '@/lib/types';
 import { fieldsForType, readFields } from '@/lib/create/typeFields';
@@ -54,7 +54,7 @@ interface OrgPageContentProps {
 }
 
 export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageContentProps) {
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const { data, loading, error } = useNodeProfile(nodeId);
   const [copied, setCopied] = useState(false);
 
@@ -62,10 +62,10 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
 
   // Alias colour wins over the base type colour, same derivation as the chips.
   const theme = useMemo(() => {
-    const aliasConfig = findAlias(currentCommunity?.communityAliases, node?.alias, node?.type ?? '');
-    const color = aliasConfig?.color ?? getTypeColor(node?.type ?? 'Community', currentCommunity?.nodeTypes);
+    const aliasConfig = findAlias(currentSpace?.aliases, node?.alias, node?.type ?? '');
+    const color = aliasConfig?.color ?? getTypeColor(node?.type ?? 'Space', currentSpace?.nodeTypes);
     return hexToPalette(color);
-  }, [currentCommunity?.communityAliases, currentCommunity?.nodeTypes, node?.alias, node?.type]);
+  }, [currentSpace?.aliases, currentSpace?.nodeTypes, node?.alias, node?.type]);
 
   const sharePage = () => {
     navigator.clipboard?.writeText(window.location.href)
@@ -117,7 +117,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
           ) : glyph && glyph !== 'person' ? (
             <TypeSilhouette glyph={glyph} color={theme.base} />
           ) : (
-            // Only reachable for a community-invented type with no glyph.
+            // Only reachable for a space-invented type with no glyph.
             <PersonSilhouette color={theme.base} />
           )}
         </div>
@@ -127,7 +127,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
             <div className="min-w-0 flex-1">
               <Chip tone="soft" color={theme.base}>
-                {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
+                {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
               </Chip>
 
               <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>
@@ -191,7 +191,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
                     <span className="w-10 h-10 flex-none rounded-xl overflow-hidden">
                       {person.image_url
                         ? <img src={person.image_url} alt={person.name} className="w-full h-full object-cover" />
-                        : <PersonSilhouette color={getTypeColor(person.type, currentCommunity?.nodeTypes)} />}
+                        : <PersonSilhouette color={getTypeColor(person.type, currentSpace?.nodeTypes)} />}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold text-text-primary truncate">{person.name}</span>
@@ -255,7 +255,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
               <div className="grid grid-cols-4 gap-2">
                 {related.slice(0, 8).map((conn) => {
                   const connGlyph = getNodeGlyph(conn.type);
-                  const color = getTypeColor(conn.type, currentCommunity?.nodeTypes);
+                  const color = getTypeColor(conn.type, currentSpace?.nodeTypes);
                   return (
                     <Link key={conn.id} href={`/directory/${encodeURIComponent(conn.id)}`}
                           title={conn.name} className="block hover:-translate-y-0.5 transition">

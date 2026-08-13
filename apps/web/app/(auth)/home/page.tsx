@@ -3,35 +3,35 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { defaultLandingHref } from '@/features/shared/lib/features';
-import type { CommunityFeatureConfig } from '@/lib/types';
+import type { SpaceFeatureConfig } from '@/lib/types';
 
 /**
  * Landing resolver. Every "enter the app" redirect points here rather than at a
  * hard-coded surface, because the tab a member lands on is whichever one the
  * admin dragged to the top of the console's Features list.
  *
- * This has to be a client route: the current community lives in localStorage
- * (features/shared/contexts/CommunityContext.tsx), so the server-side redirects that send
+ * This has to be a client route: the current space lives in localStorage
+ * (features/shared/contexts/SpaceContext.tsx), so the server-side redirects that send
  * users here (login, OAuth callbacks, invite accept) have no way to
- * know the community — let alone its feature config — at redirect time.
+ * know the space — let alone its feature config — at redirect time.
  */
 export default function HomePage() {
-  const { currentCommunity, loading, isAdmin } = useCommunity();
+  const { currentSpace, loading, isAdmin } = useSpace();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    // No community resolved yet (a user who has joined nothing) — the directory
+    // No space resolved yet (a user who has joined nothing) — the directory
     // is core, so it's the one surface guaranteed to exist.
-    if (!currentCommunity) {
+    if (!currentSpace) {
       router.replace('/directory');
       return;
     }
-    const config = (currentCommunity.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+    const config = (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null;
     router.replace(defaultLandingHref(config, isAdmin));
-  }, [currentCommunity, loading, isAdmin, router]);
+  }, [currentSpace, loading, isAdmin, router]);
 
   return (
     <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-text-muted">

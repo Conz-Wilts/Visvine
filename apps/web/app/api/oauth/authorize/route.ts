@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
   ${provenance}
   <p>It will be able to:</p>
   <ul>${scopes.map((s) => `<li>${esc(SCOPE_DESCRIPTIONS[s])}</li>`).join('')}</ul>
-  <p style="color:#555;font-size:.9rem">Only within the communities you belong to, and only as far as your
+  <p style="color:#555;font-size:.9rem">Only within the spaces you belong to, and only as far as your
      own access in each one allows.</p>
   <form method="post" action="/api/oauth/authorize" style="display:flex;gap:.75rem;margin-top:1.5rem">
     ${hidden('client_id', clientId)}

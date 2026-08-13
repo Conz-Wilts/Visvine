@@ -45,13 +45,13 @@ interface AvatarProps {
   className?: string;
   /**
    * What to render when there's no image: a person silhouette (default) or the
-   * entity's initials on a brand-green tile (used for communities).
+   * entity's initials on a brand-green tile (used for spaces).
    */
   fallback?: 'silhouette' | 'initials';
   /**
    * Fully replaces the built-in size map — supply dimensions, rounding, and
    * (for initials) text-size classes. Lets wrappers with their own size scale
-   * (e.g. CommunityAvatar) reuse this component.
+   * (e.g. SpaceAvatar) reuse this component.
    */
   sizeClassName?: string;
   /**

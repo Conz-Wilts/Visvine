@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { useSession } from '@/features/auth/lib/auth-client';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PDFViewer from '@/features/resources/components/PDFViewer';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
@@ -63,7 +63,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const resourceId = decodeURIComponent(rawResourceId);
   const router = useRouter();
   const { data: session } = useSession();
-  const { isAdmin } = useCommunity();
+  const { isAdmin } = useSpace();
 
   const [detail, setDetail] = useState<ResourceDetail | null>(null);
   const [loading, setLoading] = useState(true);

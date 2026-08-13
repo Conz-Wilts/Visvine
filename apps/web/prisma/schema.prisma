@@ -8,100 +8,100 @@ datasource db {
   extensions = [vector]
 }
 
-model Community {
-  id               String                   @id
-  name             String
-  description      String?
-  location         String?
-  tags             String[]                 @default([])
-  createdAt        DateTime                 @default(now()) @map("created_at")
-  imageUrl         String?                  @map("image_url")
-  nodeTypes        Json?                    @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏘️\", \"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
-  emoji            String?
-  communityAliases Json?                    @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]") @map("community_aliases")
-  linkTypes        Json?                    @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
-  country          String?
-  designConfig     Json                     @default("{}") @map("design_config")
-  featureConfig    Json                     @default("{}") @map("feature_config")
+model Space {
+  id              String               @id
+  name            String
+  description     String?
+  location        String?
+  tags            String[]             @default([])
+  createdAt       DateTime             @default(now()) @map("created_at")
+  imageUrl        String?              @map("image_url")
+  nodeTypes       Json?                @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏘️\", \"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
+  emoji           String?
+  aliases         Json?                @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]")
+  linkTypes       Json?                @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
+  country         String?
+  designConfig    Json                 @default("{}") @map("design_config")
+  featureConfig   Json                 @default("{}") @map("feature_config")
   // Set = a private, single-member "personal space" owned by this user (created on
-  // first use to host their personal context notes). Null = a normal community.
-  // Filtered out of Discover / other users' community lists.
-  personalOwnerId  String?                  @map("personal_owner_id")
+  // first use to host their personal context notes). Null = a normal space.
+  // Filtered out of Discover / other users' space lists.
+  personalOwnerId String?              @map("personal_owner_id")
   // "public" = discoverable & self-joinable from Discover; "private" = hidden from
   // Discover / non-members' lists, joinable only via invite link or admin add.
   // Private by default: a space someone forgot to set visibility on must err
   // toward hidden, never toward discoverable (demo seeds opt into public).
-  visibility       String                   @default("private")
+  visibility      String               @default("private")
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
-  inviteToken      String?                  @unique @map("invite_token")
-  links            Link[]
-  nodes            Node[]
-  userCommunities  UserCommunity[]
-  notes            CommunityNote[]
-  noteFolders      CommunityNoteFolder[]
-  brainFiles       CommunityBrainFile[]
-  secrets          CommunitySecret[]
-  noteEmbeddings   CommunityNoteEmbedding[]
-  contextSources   ContextSource[]
-  userAliases      UserAlias[]
-  brainGrants      BrainGrant[]
-  accessRequests   BrainAccessRequest[]
-  publicationsOut  NotePublication[]        @relation("PublicationSource")
-  publicationsIn   NotePublication[]        @relation("PublicationTarget")
+  inviteToken     String?              @unique @map("invite_token")
+  links           Link[]
+  nodes           Node[]
+  members         SpaceMember[]
+  notes           SpaceNote[]
+  noteFolders     SpaceNoteFolder[]
+  brainFiles      SpaceBrainFile[]
+  secrets         SpaceSecret[]
+  noteEmbeddings  SpaceNoteEmbedding[]
+  contextSources  ContextSource[]
+  userAliases     UserAlias[]
+  brainGrants     BrainGrant[]
+  accessRequests  BrainAccessRequest[]
+  publicationsOut NotePublication[]    @relation("PublicationSource")
+  publicationsIn  NotePublication[]    @relation("PublicationTarget")
 
   // --- restored: messaging ---
-  channels      Conversation[]
+  channels        Conversation[]
   channelSections ChannelSection[]
 
   @@index([personalOwnerId])
-  @@map("communities")
+  @@map("spaces")
 }
 
-/// A markdown note in a community's notes/knowledge surface. Notes live in a
-/// "brain" identified by (communityId, ownerKey): ownerKey "shared" = the
-/// community-wide brain every member sees; any other value is a userId = that
-/// user's personal brain scoped to this community. `path` is the brain-relative
+/// A markdown note in a space's notes/knowledge surface. Notes live in a
+/// "brain" identified by (spaceId, ownerKey): ownerKey "shared" = the
+/// space-wide brain every member sees; any other value is a userId = that
+/// user's personal brain scoped to this space. `path` is the brain-relative
 /// POSIX path ("portfolio/canva.md") and doubles as the link-resolution identity,
 /// so the pure index/context/backlink pipeline (lib/notes/shared) treats a row exactly
 /// like a file on disk. `content` (full markdown incl. YAML frontmatter) is the
 /// source of truth. Soft-deleted notes (deletedAt set) are the trash.
-model CommunityNote {
-  id          String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String                  @map("community_id")
-  ownerKey    String                  @map("owner_key") // 'shared' = community brain; else a userId = personal brain
+model SpaceNote {
+  id          String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId     String              @map("space_id")
+  ownerKey    String              @map("owner_key") // 'shared' = space brain; else a userId = personal brain
   path        String // brain-relative POSIX path, e.g. "portfolio/canva.md"
   content     String // full markdown incl. frontmatter (source of truth)
-  starred     Boolean                 @default(false) // synced from frontmatter `starred:` on every write
-  createdBy   String                  @map("created_by")
-  createdAt   DateTime                @default(now()) @map("created_at")
-  updatedAt   DateTime                @updatedAt @map("updated_at")
-  deletedAt   DateTime?               @map("deleted_at") // soft-delete = trash; null = live
-  deletedPath String?                 @map("deleted_path") // original path while trashed
-  community   Community               @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  revisions   CommunityNoteRevision[]
+  starred     Boolean             @default(false) // synced from frontmatter `starred:` on every write
+  createdBy   String              @map("created_by")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  deletedAt   DateTime?           @map("deleted_at") // soft-delete = trash; null = live
+  deletedPath String?             @map("deleted_path") // original path while trashed
+  space       Space               @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  revisions   SpaceNoteRevision[]
 
-  @@unique([communityId, ownerKey, path], name: "note_identity")
-  @@index([communityId, ownerKey, deletedAt])
-  @@map("community_notes")
+  @@unique([spaceId, ownerKey, path], name: "note_identity")
+  @@index([spaceId, ownerKey, deletedAt])
+  @@map("space_notes")
 }
 
-/// Append-only revision snapshots for a CommunityNote (newest by `at`). Mirrors
+/// Append-only revision snapshots for a SpaceNote (newest by `at`). Mirrors
 /// the .history sidecar of the source app: a baseline is seeded on first edit and
 /// every save records a full snapshot, capped/coalesced in lib/notes/store.ts.
-model CommunityNoteRevision {
-  id          String        @id @default(dbgenerated("(gen_random_uuid())::text"))
-  noteId      String        @map("note_id")
-  at          DateTime      @default(now())
+model SpaceNoteRevision {
+  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  noteId      String    @map("note_id")
+  at          DateTime  @default(now())
   editor      String // display name of who saved it (from the session)
-  editorEmail String?       @map("editor_email")
-  origin      String        @default("edit") // edit | ai-refactor | ai-enrich | agent | maintenance | restore | baseline
+  editorEmail String?   @map("editor_email")
+  origin      String    @default("edit") // edit | ai-refactor | ai-enrich | agent | maintenance | restore | baseline
   model       String? // LLM model (or agent client) name when AI-originated
   content     String // full snapshot (frontmatter + body) at this save
-  note        CommunityNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  note        SpaceNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
 
   @@index([noteId, at])
-  @@map("community_note_revisions")
+  @@map("space_note_revisions")
 }
 
 /// Explicitly-created folders for a brain. Notes already imply their ancestor
@@ -111,19 +111,19 @@ model CommunityNoteRevision {
 /// a restricted folder cuts BrainGrant inheritance at its boundary (only grants on
 /// or inside it reach its notes); a locked folder is frozen for AI maintenance.
 /// Flagging a folder that only exists implicitly upserts its row first.
-model CommunityNoteFolder {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String    @map("community_id")
-  ownerKey    String    @map("owner_key")
-  path        String
-  restricted  Boolean   @default(false)
-  locked      Boolean   @default(false)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+model SpaceNoteFolder {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String   @map("space_id")
+  ownerKey   String   @map("owner_key")
+  path       String
+  restricted Boolean  @default(false)
+  locked     Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at")
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, ownerKey, path], name: "folder_identity")
-  @@index([communityId, ownerKey])
-  @@map("community_note_folders")
+  @@unique([spaceId, ownerKey, path], name: "folder_identity")
+  @@index([spaceId, ownerKey])
+  @@map("space_note_folders")
 }
 
 /// Control-plane sidecar for a brain — the port of blackbird-brain's `.brain/`
@@ -132,86 +132,86 @@ model CommunityNoteFolder {
 /// ("join-requests.jsonl"), and the enrichment ledger ("enrichment-state.json").
 /// Content is text (JSON or JSONL); the domain layer (lib/notes/sidecar.ts)
 /// owns parsing. Keyed like notes so personal brains can also carry state.
-model CommunityBrainFile {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String    @map("community_id")
-  ownerKey    String    @map("owner_key") // 'shared' or a userId, same as CommunityNote
-  name        String // e.g. "folders.json", "audit.jsonl"
-  content     String
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+model SpaceBrainFile {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  ownerKey  String   @map("owner_key") // 'shared' or a userId, same as SpaceNote
+  name      String // e.g. "folders.json", "audit.jsonl"
+  content   String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, ownerKey, name], name: "brain_file_identity")
-  @@map("community_brain_files")
+  @@unique([spaceId, ownerKey, name], name: "brain_file_identity")
+  @@map("space_brain_files")
 }
 
 /// A named secret a connector note can reference as {{secret:NAME}}. The value
 /// is AES-256-GCM encrypted with the server-wide SECRETS_KEY (lib/crypto/secrets.ts)
 /// and only ever decrypted server-side while executing a connector call — the
 /// admin API lists names but never returns plaintext.
-model CommunitySecret {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String    @map("community_id")
-  name        String // ^[A-Z][A-Z0-9_]{0,63}$
-  ciphertext  String // aes256gcm$iv$tag$cipher
-  createdBy   String?   @map("created_by") // admin email, for the audit trail
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+model SpaceSecret {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String   @map("space_id")
+  name       String // ^[A-Z][A-Z0-9_]{0,63}$
+  ciphertext String // aes256gcm$iv$tag$cipher
+  createdBy  String?  @map("created_by") // admin email, for the audit trail
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  space      Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, name], name: "secret_identity")
-  @@map("community_secrets")
+  @@unique([spaceId, name], name: "secret_identity")
+  @@map("space_secrets")
 }
 
-/// Which of its community's PERSON ALIASES a member holds. The aliases
-/// themselves live in `Community.communityAliases` (created on the Types page,
+/// Which of its space's PERSON ALIASES a member holds. The aliases
+/// themselves live in `Space.aliases` (created on the Types page,
 /// lib/types/context.ts#CommunityAlias) — the same vocabulary that colours a
 /// person's chip in the directory IS the permission model, so `aliasName` is a
 /// name from that list, not a foreign key.
 ///
 /// A person holds any number of them, with no restrictions on which. An alias
-/// marked `owner` there means its holders manage the community; the built-in
-/// Owner alias always does. Rows are deleted when the user leaves the community
+/// marked `owner` there means its holders manage the space; the built-in
+/// Owner alias always does. Rows are deleted when the user leaves the space
 /// (lib/notes/access.ts#removeMemberAccess) — grants stop matching instantly.
 model UserAlias {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String    @map("community_id")
-  userId      String    @map("user_id")
-  aliasName   String    @map("alias_name")
-  addedBy     String?   @map("added_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  userId    String   @map("user_id")
+  aliasName String   @map("alias_name")
+  addedBy   String?  @map("added_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, userId, aliasName], name: "user_alias_identity")
+  @@unique([spaceId, userId, aliasName], name: "user_alias_identity")
   @@index([userId])
-  @@index([communityId, aliasName])
+  @@index([spaceId, aliasName])
   @@map("user_aliases")
 }
 
-/// One access grant on a community's SHARED brain: *subject* gets *level* on
+/// One access grant on a space's SHARED brain: *subject* gets *level* on
 /// *resource*. The whole permission model (lib/notes/shared/authz.ts) reduces to
 /// these rows plus the `restricted` folder flags: access flows down the folder
 /// tree from `resourcePath` ('' = brain root, a folder path at any depth, or a
 /// single note path), a restricted folder cuts inheritance at its boundary, and
 /// a member's effective level on a note is the MAX across every grant that
-/// reaches it (community-wide + their aliases' + their own). Grants only ever add.
+/// reaches it (space-wide + their aliases' + their own). Grants only ever add.
 model BrainGrant {
-  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId  String    @map("community_id")
-  subjectType  String    @map("subject_type") // 'community' | 'alias' | 'user'
-  subjectId    String    @default("") @map("subject_id") // '' | Person alias name | userId
-  resourcePath String    @default("") @map("resource_path") // '' = brain root
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId      String   @map("space_id")
+  subjectType  String   @map("subject_type") // 'space' | 'alias' | 'user'
+  subjectId    String   @default("") @map("subject_id") // '' | Person alias name | userId
+  resourcePath String   @default("") @map("resource_path") // '' = brain root
   level        Int // 10 view · 20 comment · 30 edit · 40 full
-  grantedBy    String    @map("granted_by")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  grantedBy    String   @map("granted_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, subjectType, subjectId, resourcePath], name: "grant_identity")
-  @@index([communityId, subjectType, subjectId])
+  @@unique([spaceId, subjectType, subjectId, resourcePath], name: "grant_identity")
+  @@index([spaceId, subjectType, subjectId])
   @@map("brain_grants")
 }
 
-/// A member's request for access to part of a community's SHARED brain, filed
+/// A member's request for access to part of a space's SHARED brain, filed
 /// from whatever surface denied them (`resourcePath` '' = the brain root gate, a
 /// folder, or a single note path — the path is recorded even when it doesn't
 /// exist, so the denial copy never has to admit whether it does). Whoever
@@ -220,7 +220,7 @@ model BrainGrant {
 /// audit trail behind Console → People → Waiting.
 model BrainAccessRequest {
   id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId  String    @map("community_id")
+  spaceId      String    @map("space_id")
   userId       String    @map("user_id")
   resourcePath String    @default("") @map("resource_path") // '' = brain root
   level        Int       @default(10) // the level asked for (10 view · 20 comment · 30 edit · 40 full)
@@ -230,35 +230,35 @@ model BrainAccessRequest {
   resolvedBy   String?   @map("resolved_by")
   resolvedAt   DateTime? @map("resolved_at")
   grantedLevel Int?      @map("granted_level") // what the resolver actually gave
-  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  space        Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@index([communityId, status])
+  @@index([spaceId, status])
   @@index([userId])
   @@map("brain_access_requests")
 }
 
 /// A live publish link between two brains: the source note stays owned by its
-/// brain, and a replica lives as a REAL note row in the target community's
+/// brain, and a replica lives as a REAL note row in the target space's
 /// shared brain, overwritten on every source save (origin 'publish'). No read
-/// path ever crosses a community boundary — the only cross-tenant motion is the
+/// path ever crosses a space boundary — the only cross-tenant motion is the
 /// replicating write (lib/notes/publications.ts). `active: false` (unlink, or a
 /// deleted source/replica) leaves the replica behind as a plain editable copy.
 model NotePublication {
-  id                String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  sourceCommunityId String    @map("source_community_id")
-  sourcePath        String    @map("source_path")
-  targetCommunityId String    @map("target_community_id")
-  targetPath        String    @map("target_path")
-  active            Boolean   @default(true)
-  lastSyncedAt      DateTime? @map("last_synced_at")
-  createdBy         String    @map("created_by")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  sourceCommunity   Community @relation("PublicationSource", fields: [sourceCommunityId], references: [id], onDelete: Cascade)
-  targetCommunity   Community @relation("PublicationTarget", fields: [targetCommunityId], references: [id], onDelete: Cascade)
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sourceSpaceId String    @map("source_space_id")
+  sourcePath    String    @map("source_path")
+  targetSpaceId String    @map("target_space_id")
+  targetPath    String    @map("target_path")
+  active        Boolean   @default(true)
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  sourceSpace   Space     @relation("PublicationSource", fields: [sourceSpaceId], references: [id], onDelete: Cascade)
+  targetSpace   Space     @relation("PublicationTarget", fields: [targetSpaceId], references: [id], onDelete: Cascade)
 
-  @@unique([sourceCommunityId, sourcePath, targetCommunityId], name: "publication_identity")
-  @@index([sourceCommunityId, sourcePath])
-  @@index([targetCommunityId, targetPath])
+  @@unique([sourceSpaceId, sourcePath, targetSpaceId], name: "publication_identity")
+  @@index([sourceSpaceId, sourcePath])
+  @@index([targetSpaceId, targetPath])
   @@map("note_publications")
 }
 
@@ -266,71 +266,71 @@ model NotePublication {
 /// Keyed by the note's brain + path; `mtime` is the note's updatedAt epoch-ms at
 /// embed time, so a stale row (mtime mismatch) is lazily re-embedded on the next
 /// search. `embedding` is written/read via raw SQL (Prisma can't type vector).
-model CommunityNoteEmbedding {
-  id          String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String                      @map("community_id")
-  ownerKey    String                      @map("owner_key")
-  path        String
-  model       String // embedding model name; rows from an old model are ignored
-  mtime       BigInt // note updatedAt (epoch ms) when embedded
-  embedding   Unsupported("vector(768)")?
-  updatedAt   DateTime                    @updatedAt @map("updated_at")
-  community   Community                   @relation(fields: [communityId], references: [id], onDelete: Cascade)
+model SpaceNoteEmbedding {
+  id        String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String                      @map("space_id")
+  ownerKey  String                      @map("owner_key")
+  path      String
+  model     String // embedding model name; rows from an old model are ignored
+  mtime     BigInt // note updatedAt (epoch ms) when embedded
+  embedding Unsupported("vector(768)")?
+  updatedAt DateTime                    @updatedAt @map("updated_at")
+  space     Space                       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, ownerKey, path], name: "embedding_identity")
-  @@map("community_note_embeddings")
+  @@unique([spaceId, ownerKey, path], name: "embedding_identity")
+  @@map("space_note_embeddings")
 }
 
 /// A non-note source (uploaded file/table) attached to a brain. Lives ONLY in
 /// the Context — never a Node, never in the workspace/directory. Keyed
-/// (communityId, ownerKey, path) exactly like CommunityNote so the folder gate
+/// (spaceId, ownerKey, path) exactly like SpaceNote so the folder gate
 /// and visibility lens apply to sources unchanged; `path` must NOT end in .md
 /// (the note namespace stays disjoint). The original file lives in GCS; the
 /// extracted text lives chunked in ContextSourceChunk.
 model ContextSource {
-  id          String               @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String               @map("community_id")
-  ownerKey    String               @map("owner_key") // 'shared' or a userId, same as CommunityNote
-  path        String // brain-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
-  name        String // display filename
-  kind        String // 'csv' | 'markdown' | 'text' (extension point: 'pdf' | 'xlsx')
-  mimeType    String               @map("mime_type")
-  sizeBytes   Int                  @map("size_bytes")
-  gcsPath     String               @map("gcs_path") // object in GCS_RESOURCES_BUCKET
-  status      String               @default("pending") // pending | ready | failed
-  error       String? // failure detail when status = failed
-  truncated   Boolean              @default(false) // extraction hit the text/chunk caps
-  textChars   Int?                 @map("text_chars") // extracted-text length
-  chunkCount  Int                  @default(0) @map("chunk_count")
-  createdBy   String               @map("created_by")
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
-  community   Community            @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  chunks      ContextSourceChunk[]
+  id         String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String               @map("space_id")
+  ownerKey   String               @map("owner_key") // 'shared' or a userId, same as SpaceNote
+  path       String // brain-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
+  name       String // display filename
+  kind       String // 'csv' | 'markdown' | 'text' (extension point: 'pdf' | 'xlsx')
+  mimeType   String               @map("mime_type")
+  sizeBytes  Int                  @map("size_bytes")
+  gcsPath    String               @map("gcs_path") // object in GCS_RESOURCES_BUCKET
+  status     String               @default("pending") // pending | ready | failed
+  error      String? // failure detail when status = failed
+  truncated  Boolean              @default(false) // extraction hit the text/chunk caps
+  textChars  Int?                 @map("text_chars") // extracted-text length
+  chunkCount Int                  @default(0) @map("chunk_count")
+  createdBy  String               @map("created_by")
+  createdAt  DateTime             @default(now()) @map("created_at")
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+  space      Space                @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  chunks     ContextSourceChunk[]
 
-  @@unique([communityId, ownerKey, path], name: "source_identity")
-  @@index([communityId, ownerKey, status])
+  @@unique([spaceId, ownerKey, path], name: "source_identity")
+  @@index([spaceId, ownerKey, status])
   @@map("context_sources")
 }
 
-/// One embedded chunk of a ContextSource. communityId/ownerKey/path are
+/// One embedded chunk of a ContextSource. spaceId/ownerKey/path are
 /// denormalized from the source so the pgvector ranking query filters without a
 /// join (mirrors community_note_embeddings). `text` is the source of truth for
 /// snippets and paged source reads; `embedding` is written/read via raw SQL.
 model ContextSourceChunk {
-  id          String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
-  sourceId    String                      @map("source_id")
-  communityId String                      @map("community_id")
-  ownerKey    String                      @map("owner_key")
-  path        String
-  seq         Int // 0-based order within the source
-  text        String
-  model       String? // embedding model; null = stored without a vector
-  embedding   Unsupported("vector(768)")?
-  source      ContextSource               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  id        String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  sourceId  String                      @map("source_id")
+  spaceId   String                      @map("space_id")
+  ownerKey  String                      @map("owner_key")
+  path      String
+  seq       Int // 0-based order within the source
+  text      String
+  model     String? // embedding model; null = stored without a vector
+  embedding Unsupported("vector(768)")?
+  source    ContextSource               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, seq])
-  @@index([communityId, ownerKey, model])
+  @@index([spaceId, ownerKey, model])
   @@map("context_source_chunks")
 }
 
@@ -344,11 +344,11 @@ model Node {
   tags           String[]   @default([])
   imageUrl       String?    @map("image_url")
   metadata       Json       @default("{}")
-  communityId    String?    @map("community_id")
+  spaceId        String?    @map("space_id")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
   alias          String?
-  // Canonical cross-community identity this node represents (people/orgs). Nullable:
+  // Canonical cross-space identity this node represents (people/orgs). Nullable:
   // legacy rows and non-person/org types may have none. Set by lib/identity/resolve.
   identityId     String?    @map("identity_id")
   identity       Identity?  @relation(fields: [identityId], references: [id], onDelete: SetNull)
@@ -356,40 +356,40 @@ model Node {
   attendeePerson Attendee[] @relation("PersonNode")
   linksAsSource  Link[]     @relation("SourceNode")
   linksAsTarget  Link[]     @relation("TargetNode")
-  community      Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  space          Space?     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@index([communityId])
+  @@index([spaceId])
   @@index([type])
-  @@index([communityId, type])
+  @@index([spaceId, type])
   @@index([identityId])
   @@map("nodes")
 }
 
 model Link {
-  id           Int        @id @default(autoincrement())
-  sourceId     String     @map("source_id")
-  targetId     String     @map("target_id")
+  id           Int      @id @default(autoincrement())
+  sourceId     String   @map("source_id")
+  targetId     String   @map("target_id")
   relationship String
   since        String?
-  metadata     Json       @default("{}")
-  communityId  String?    @map("community_id")
-  createdAt    DateTime   @default(now()) @map("created_at")
+  metadata     Json     @default("{}")
+  spaceId      String?  @map("space_id")
+  createdAt    DateTime @default(now()) @map("created_at")
   // Provenance + dedup. `pairKey` is the
   // normalized "minId|maxId" of the two endpoints so A->B and B->A dedup as one
   // edge; always computed by lib/context/links.ts upsertLink, never raw-written blank.
-  origin       String     @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | context | structure | import
-  originRef    String?    @map("origin_ref") // Attendee.id / IntroRequest.id / event node id / context-note path / contained node id — for symmetric auto-undo
-  createdBy    String?    @map("created_by") // userId for manual links; null for system/auto
-  updatedAt    DateTime   @default(now()) @updatedAt @map("updated_at")
-  pairKey      String     @map("pair_key")
-  community    Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  source       Node       @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
-  target       Node       @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
+  origin       String   @default("manual") @map("origin") // manual | event_attendance | event_hosting | intro | context | structure | import
+  originRef    String?  @map("origin_ref") // Attendee.id / IntroRequest.id / event node id / context-note path / contained node id — for symmetric auto-undo
+  createdBy    String?  @map("created_by") // userId for manual links; null for system/auto
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at")
+  pairKey      String   @map("pair_key")
+  space        Space?   @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  source       Node     @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  target       Node     @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
 
-  @@unique([communityId, pairKey, relationship], name: "link_identity") // dedup; origin deliberately NOT in the key
+  @@unique([spaceId, pairKey, relationship], name: "link_identity") // dedup; origin deliberately NOT in the key
   @@index([sourceId])
   @@index([targetId])
-  @@index([communityId])
+  @@index([spaceId])
   @@index([pairKey])
   @@map("links")
 }
@@ -427,22 +427,22 @@ model Attendee {
 }
 
 model User {
-  id              String          @id @default(dbgenerated("(gen_random_uuid())::text"))
-  name            String
-  email           String          @unique
-  emailVerified   Boolean         @default(false) @map("email_verified")
-  image           String?
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  claimNonce      String?         @unique @map("claim_nonce")
-  googleId        String?         @unique @map("google_id")
-  passwordHash    String?         @map("password_hash")
-  isActive        Boolean         @default(true) @map("is_active")
-  oauthProvider   String?         @map("oauth_provider")
-  publicMeta      Json            @default("{}") @map("public_meta")
-  person          Person?
-  membersAdded    UserCommunity[] @relation("AddedByRelation")
-  userCommunities UserCommunity[] @relation("MemberOf")
+  id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name          String
+  email         String        @unique
+  emailVerified Boolean       @default(false) @map("email_verified")
+  image         String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  claimNonce    String?       @unique @map("claim_nonce")
+  googleId      String?       @unique @map("google_id")
+  passwordHash  String?       @map("password_hash")
+  isActive      Boolean       @default(true) @map("is_active")
+  oauthProvider String?       @map("oauth_provider")
+  publicMeta    Json          @default("{}") @map("public_meta")
+  person        Person?
+  membersAdded  SpaceMember[] @relation("AddedByRelation")
+  memberships   SpaceMember[] @relation("MemberOf")
 
   // --- messaging ---
   conversationMemberships ConversationMember[]
@@ -454,26 +454,26 @@ model User {
   @@map("users")
 }
 
-/// A person's membership of a community. Deliberately carries no role — what
+/// A person's membership of a space. Deliberately carries no role — what
 /// they can do comes entirely from the Aliases they hold.
-model UserCommunity {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::text"))
-  userId      String    @map("user_id")
-  communityId String    @map("community_id")
+model SpaceMember {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId      String   @map("user_id")
+  spaceId     String   @map("space_id")
   // "active" = full member; "pending" = requested to join via invite link, awaiting
-  // admin approval in the community console.
-  status      String    @default("active")
-  joinedAt    DateTime  @default(now()) @map("joined_at")
-  addedBy     String?   @map("added_by")
-  privateMeta Json      @default("{}") @map("private_meta")
-  addedByUser User?     @relation("AddedByRelation", fields: [addedBy], references: [id])
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  user        User      @relation("MemberOf", fields: [userId], references: [id], onDelete: Cascade)
+  // admin approval in the space console.
+  status      String   @default("active")
+  joinedAt    DateTime @default(now()) @map("joined_at")
+  addedBy     String?  @map("added_by")
+  privateMeta Json     @default("{}") @map("private_meta")
+  addedByUser User?    @relation("AddedByRelation", fields: [addedBy], references: [id])
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user        User     @relation("MemberOf", fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, communityId])
+  @@unique([userId, spaceId])
   @@index([userId])
-  @@index([communityId])
-  @@map("user_communities")
+  @@index([spaceId])
+  @@map("space_members")
 }
 
 model Person {
@@ -498,8 +498,8 @@ model Person {
   @@map("people")
 }
 
-/// Canonical, cross-community identity for a real person or organization.
-/// Each community keeps its own private `Node` row; all nodes that represent the
+/// Canonical, cross-space identity for a real person or organization.
+/// Each space keeps its own private `Node` row; all nodes that represent the
 /// same real person/org point to ONE Identity (Node.identityId). Communities never
 /// share their per-node data — only identity-level facts live here (canonical name,
 /// photo, strong identifiers). Resolution (lib/identity/resolve.ts) decides whether
@@ -552,19 +552,19 @@ model IdentityResolution {
 }
 
 model Resource {
-  id          String            @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String            @map("community_id")
-  name        String
-  fileType    String            @map("file_type")
-  fileUrl     String            @map("file_url")
-  fileSize    Int?              @map("file_size")
-  uploadedBy  String            @map("uploaded_by")
-  metadata    Json              @default("{}")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  changes     ResourceChange[]
-  comments    ResourceComment[]
+  id         String            @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String            @map("space_id")
+  name       String
+  fileType   String            @map("file_type")
+  fileUrl    String            @map("file_url")
+  fileSize   Int?              @map("file_size")
+  uploadedBy String            @map("uploaded_by")
+  metadata   Json              @default("{}")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  changes    ResourceChange[]
+  comments   ResourceComment[]
 
-  @@index([communityId])
+  @@index([spaceId])
   @@map("resources")
 }
 
@@ -664,40 +664,43 @@ model Conversation {
   icon        String?
   /// How a CHANNEL renders: classic chat thread or social-feed post cards.
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
-  /// Set for CHANNEL conversations — channels are community-scoped and discoverable by community members.
-  communityId String?              @map("community_id")
+  /// Sorted "userA:userB" pair for a DM, so the same two people can only ever
+  /// have one. Written by the seed; no runtime path creates a DM yet.
+  dmKey       String?              @unique @map("dm_key")
+  /// Set for CHANNEL conversations — channels are space-scoped and discoverable by space members.
+  spaceId     String?              @map("space_id")
   /// Optional grouping of CHANNEL conversations into a named section.
-  sectionId     String?              @map("section_id")
+  sectionId   String?              @map("section_id")
   createdById String               @map("created_by_id")
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
   members     ConversationMember[]
-  community   Community?           @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  space       Space?               @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   section     ChannelSection?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   createdBy   User                 @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Cascade)
   messages    Message[]
 
   @@index([type])
   @@index([updatedAt])
-  @@index([communityId, type])
+  @@index([spaceId, type])
   @@index([sectionId])
   @@map("conversations")
 }
 
-/// A named section grouping a community's channels in the channel rail. Called
+/// A named section grouping a space's channels in the channel rail. Called
 /// a "space" until the 2026-08 vocabulary rename freed that word for the tenant
 /// itself. Deleting a section unfiles its channels (sectionId → null).
 model ChannelSection {
-  id          String         @id @default(dbgenerated("(gen_random_uuid())::text"))
-  communityId String         @map("community_id")
-  name        String
-  emoji       String?
-  position    Int            @default(0)
-  createdAt   DateTime       @default(now()) @map("created_at")
-  community   Community      @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  channels    Conversation[]
+  id        String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String         @map("space_id")
+  name      String
+  emoji     String?
+  position  Int            @default(0)
+  createdAt DateTime       @default(now()) @map("created_at")
+  space     Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  channels  Conversation[]
 
-  @@index([communityId, position])
+  @@index([spaceId, position])
   @@map("channel_sections")
 }
 

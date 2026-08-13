@@ -30,10 +30,10 @@ test('entityKindOf classifies node types liberally', () => {
 });
 
 test('entityKindOf classifies the container kinds', () => {
-  // 'space' (and the retired 'community' spelling) is the ORG kind now; the
+  // 'space' (and the retired 'space' spelling) is the ORG kind now; the
   // channels container is 'section'.
-  assert.equal(entityKindOf('community'), 'space');
-  assert.equal(entityKindOf('Communities'), 'space');
+  assert.equal(entityKindOf('space'), 'space');
+  assert.equal(entityKindOf('Spaces'), 'space');
   assert.equal(entityKindOf('space'), 'space');
   assert.equal(entityKindOf('section'), 'section');
   assert.equal(entityKindOf('Sections'), 'section');
@@ -80,7 +80,7 @@ test('entityDraftContent labels and tags the container kinds', () => {
 
 test('entityNotePath derives people/ and communities/ paths from the node id', () => {
   assert.equal(entityNotePath({ id: 'person:craig-piggott', type: 'person' }), 'people/craig-piggott.md');
-  assert.equal(entityNotePath({ id: 'community:halter', type: 'community' }), 'communities/halter.md');
+  assert.equal(entityNotePath({ id: 'community:halter', type: 'space' }), 'communities/halter.md');
   // …and every retired organisation spelling lands in the same namespace.
   assert.equal(entityNotePath({ id: 'org:halter', type: 'organization' }), 'communities/halter.md');
   assert.equal(entityNotePath({ id: 'group:halter', type: 'Group' }), 'communities/halter.md');
@@ -128,7 +128,7 @@ test('path <-> node id round trips', () => {
 
 test('entityMentionPaths extracts entity-note links from the body only', () => {
   const md =
-    '---\ntitle: Halter\nnode: "community:halter"\ntags: [community]\n---\n\n' +
+    '---\ntitle: Halter\nnode: "community:halter"\ntags: [space]\n---\n\n' +
     'Founded by [Craig Piggott](/people/craig-piggott.md). Backed by ' +
     '[Blackbird](https://blackbird.vc) — see [thesis](/notes/thesis.md) and ' +
     '[Craig Piggott](/people/craig-piggott.md) again.\n';
@@ -174,8 +174,8 @@ test('entityStub covers resource nodes', () => {
 });
 
 test('entityStub escapes tricky names so frontmatter still parses', () => {
-  // A legacy 'community'-typed node stubs with the NEW label and tag.
-  const md = entityStub({ id: 'community:eucalyptus', type: 'community', name: 'Eucalyptus: telehealth & "more"' });
+  // A legacy 'space'-typed node stubs with the NEW label and tag.
+  const md = entityStub({ id: 'community:eucalyptus', type: 'space', name: 'Eucalyptus: telehealth & "more"' });
   const fm = parseFrontmatter(md);
   assert.equal(fm.type, 'Space');
   assert.equal(fm.title, 'Eucalyptus: telehealth & "more"');
@@ -213,7 +213,7 @@ test('resolveEntityNode resolves through the node map, never by string surgery',
   // 'community:halter'), so the same communities/ path can back either id shape
   // — only the map (built by entityNotePath over real nodes) can invert it.
   const legacyOrg = { id: 'org:halter', type: 'organization' };
-  const currentOrg = { id: 'community:halter', type: 'Community' };
+  const currentOrg = { id: 'community:halter', type: 'Space' };
   assert.equal(entityNotePath(legacyOrg), 'communities/halter.md');
   assert.equal(entityNotePath(currentOrg), 'communities/halter.md');
 
@@ -224,7 +224,7 @@ test('resolveEntityNode resolves through the node map, never by string surgery',
 
   const people = new Map([['people/craig-piggott.md', { id: 'person:craig-piggott' }]]);
   assert.equal(resolveEntityNode('people/craig-piggott.md', people), 'person:craig-piggott');
-  // Entity-shaped path with no node in the map (deleted node / other community /
+  // Entity-shaped path with no node in the map (deleted node / other space /
   // map still loading) → null, so callers fall back to opening in place.
   assert.equal(resolveEntityNode('people/unknown.md', people), null);
   // Non-entity paths are never resolved, whatever the map contains.

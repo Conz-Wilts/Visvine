@@ -7,7 +7,7 @@
 //
 // Pure — no Prisma/DOM imports. CREATABLE_TYPES is passed in by the caller
 // because its home module (lib/directory/createEntity.ts) imports Prisma.
-import type { CommunityFeatureConfig } from '@/lib/types'
+import type { SpaceFeatureConfig } from '@/lib/types'
 import { DEFAULT_NODE_TYPES, canonicalNodeType } from '@/lib/types/context'
 import { isNodeTypeEnabled, nodeTypeFeatureKey } from '@/lib/featureAccess'
 import { fieldsForType } from '@/lib/create/typeFields'
@@ -36,7 +36,7 @@ export interface TypeCatalogEntry {
 // via add_context, an index note is not a node at all).
 const GUIDANCE: Record<string, string> = {
   person: 'A human in the directory. Create with add_context; fill email/companyName/linkedinUrl when known — they match the person to their identity across spaces.',
-  space: 'A group, organisation or community recorded in the directory — a card in the space you are working in, never a new workspace. Create with add_context; fill url (website) when known — it drives identity matching.',
+  space: 'A group, organisation or space recorded in the directory — a card in the space you are working in, never a new workspace. Create with add_context; fill url (website) when known — it drives identity matching.',
   event: 'Created through the events surface, not add_context. Reference one by mentioning its note.',
   resource: 'A link or document worth keeping. Create with add_context with url set.',
   section: 'Structural container grouping channels — created from the space\'s admin surfaces, never via add_context.',
@@ -46,7 +46,7 @@ const GUIDANCE: Record<string, string> = {
 }
 
 export function buildTypeCatalog(opts: {
-  featureConfig: CommunityFeatureConfig | null | undefined
+  featureConfig: SpaceFeatureConfig | null | undefined
   isAdmin: boolean
   /** canonical type → live node count, computed by the caller from rows it already fetched. */
   usageByType: Record<string, number>
@@ -62,7 +62,7 @@ export function buildTypeCatalog(opts: {
     return {
       type,
       enabled,
-      disabled_reason: enabled ? null : `the '${feature}' feature is switched off in this community`,
+      disabled_reason: enabled ? null : `the '${feature}' feature is switched off in this space`,
       feature,
       creatable_via_add_context: enabled && opts.creatableTypes.includes(type),
       fields: fieldsForType(type).map((f) => ({ key: f.key, label: f.label, kind: f.kind })),

@@ -16,8 +16,8 @@ import { Textarea } from '@/components/ui'
 
 interface AccessRequestCardProps {
   scope: 'brain' | 'path'
-  communityName: string
-  /** What this community calls its context. Defaults to the generic word —
+  spaceName: string
+  /** What this space calls its context. Defaults to the generic word —
    *  /api/notes/settings is admin-only, so a gated viewer can't know the real one. */
   contextName?: string
   /** Whether this exact resource already has an open request from the viewer. */
@@ -29,7 +29,7 @@ interface AccessRequestCardProps {
 
 export function AccessRequestCard({
   scope,
-  communityName,
+  spaceName,
   contextName = 'context',
   pending,
   requesting,
@@ -40,13 +40,13 @@ export function AccessRequestCard({
   const [message, setMessage] = useState('')
 
   const heading =
-    scope === 'brain' ? `${communityName}'s ${contextName} is private` : 'You can’t open this note'
+    scope === 'brain' ? `${spaceName}'s ${contextName} is private` : 'You can’t open this note'
   // 'path' carries no body: the heading plus the request button already say the
   // whole thing. 'brain' keeps its line — that heading names a gate the viewer
   // has no other way to understand.
   const body =
     scope === 'brain'
-      ? `Access to ${communityName}'s shared notes is limited. Request access and an admin will review it.`
+      ? `Access to ${spaceName}'s shared notes is limited. Request access and an admin will review it.`
       : null
 
   return (

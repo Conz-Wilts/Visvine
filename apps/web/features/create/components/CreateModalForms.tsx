@@ -5,7 +5,7 @@ import { MessageCircle, Newspaper } from 'lucide-react';
 import { Chip, chipClass, chipStyle } from '@/components/ui';
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext';
 import type { CreateSuggestion } from '@/lib/create/suggestedType';
-import type { CommunityAlias } from '@/lib/types';
+import type { SpaceAlias } from '@/lib/types';
 import type { ChannelSectionEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
 import { slugify } from '@/lib/eventUtils';
@@ -536,7 +536,7 @@ export function EventForm({
       <Field label="Description">
         <input
           className={inputClass}
-          placeholder="e.g. Our flagship community event"
+          placeholder="e.g. Our flagship space event"
           value={data.subtitle}
           onChange={(e) => onChange({ ...data, subtitle: e.target.value })}
         />
@@ -1110,7 +1110,7 @@ export function AliasSelector({
   selected,
   onSelect,
 }: {
-  aliases: CommunityAlias[];
+  aliases: SpaceAlias[];
   selected: string | null;
   onSelect: (a: string | null) => void;
 }) {

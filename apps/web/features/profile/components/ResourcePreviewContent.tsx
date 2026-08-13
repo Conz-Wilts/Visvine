@@ -10,7 +10,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Globe2, Link2Off } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
@@ -41,17 +41,17 @@ interface PreviewResponse {
 }
 
 export default function ResourcePreviewContent({ node }: { node: NBNode }) {
-  const { currentCommunity } = useCommunity();
+  const { currentSpace } = useSpace();
   const externalUrl = externalUrlOf(node.url);
   const [unfurl, setUnfurl] = useState<PreviewResponse | null>(null);
   const [unfurlLoading, setUnfurlLoading] = useState(!!externalUrl);
 
   // Same theme derivation as OrgPageContent: alias colour wins over type colour.
   const theme = useMemo(() => {
-    const aliasConfig = findAlias(currentCommunity?.communityAliases, node.alias, node.type);
-    const color = aliasConfig?.color ?? getTypeColor(node.type, currentCommunity?.nodeTypes);
+    const aliasConfig = findAlias(currentSpace?.aliases, node.alias, node.type);
+    const color = aliasConfig?.color ?? getTypeColor(node.type, currentSpace?.nodeTypes);
     return hexToPalette(color);
-  }, [currentCommunity?.communityAliases, currentCommunity?.nodeTypes, node.alias, node.type]);
+  }, [currentSpace?.aliases, currentSpace?.nodeTypes, node.alias, node.type]);
 
   useEffect(() => {
     if (!externalUrl) return;
@@ -78,7 +78,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
             <Chip tone="soft" color={theme.base}>
-              {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
+              {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
             </Chip>
 
             <h1 className="mt-1.5 text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{node.name}</h1>

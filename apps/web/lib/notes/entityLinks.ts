@@ -18,7 +18,7 @@ import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { upsertLink } from '@/lib/notes/context/links'
 import { pairKeyFor } from '@/lib/notes/context/relationships'
-import { communityNodeId, removeEntityNode, syncEntityNode } from '@/lib/notes/context/entityNodes'
+import { spaceNodeId, removeEntityNode, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import {
   mergeContextMeta,
   nextContextMeta,
@@ -38,7 +38,7 @@ const CONTEXT_RELATIONSHIP = 'mentioned'
 export const CONTEXT_ORIGIN = 'context'
 
 interface BrainRef {
-  communityId: string
+  spaceId: string
   ownerKey: string
 }
 
@@ -55,12 +55,12 @@ function bustContextCache(): void {
   }
 }
 
-// Both directions of the node ↔ canonical-note-path mapping for a community.
+// Both directions of the node ↔ canonical-note-path mapping for a space.
 // Paths are NOT reconstructible from ids by string surgery (see entities.ts),
 // so this map — entityNotePath over the real nodes — is the only sound bridge.
-async function loadEntityMaps(communityId: string): Promise<EntityMaps> {
+async function loadEntityMaps(spaceId: string): Promise<EntityMaps> {
   const nodes = await prisma.node.findMany({
-    where: { communityId },
+    where: { spaceId },
     select: { id: true, type: true, metadata: true },
   })
   const idByPath = new Map<string, string>()
@@ -96,12 +96,12 @@ function notePathOfNode(metadata: unknown): string | null {
  * when anything changed.
  */
 async function syncNoteNode(
-  communityId: string,
+  spaceId: string,
   path: string,
   content: string | null,
 ): Promise<boolean> {
   if (isIndexPath(path)) return false
-  if (entityKindOfPath(path) === 'connector') return syncConnectorNode(communityId, path, content)
+  if (entityKindOfPath(path) === 'connector') return syncConnectorNode(spaceId, path, content)
   return false
 }
 
@@ -116,11 +116,11 @@ async function syncNoteNode(
  * column null and the chip falls back to the base "Connector" label.
  */
 async function syncConnectorNode(
-  communityId: string,
+  spaceId: string,
   path: string,
   content: string | null,
 ): Promise<boolean> {
-  if (content === null) return removeEntityNode(communityId, 'connector', path)
+  if (content === null) return removeEntityNode(spaceId, 'connector', path)
 
   const name = path.replace(/\.md$/i, '').split('/').pop() || path
   const fm = parseFrontmatter(content)
@@ -128,7 +128,7 @@ async function syncConnectorNode(
   const description = typeof fm.description === 'string' ? fm.description.trim() : ''
 
   await syncEntityNode({
-    communityId,
+    spaceId,
     type: 'connector',
     name: String(fm.title ?? '').trim() || name,
     alias,
@@ -136,16 +136,16 @@ async function syncConnectorNode(
     recordId: path,
     slugSource: name,
     metadata: { notePath: path },
-    parentNodeId: communityNodeId(communityId),
+    parentNodeId: spaceNodeId(spaceId),
     revalidate: false,
   })
   return true
 }
 
 // The live shared-brain note at `path`, or null.
-function readSharedNote(communityId: string, path: string) {
-  return prisma.communityNote.findFirst({
-    where: { communityId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: null },
+function readSharedNote(spaceId: string, path: string) {
+  return prisma.spaceNote.findFirst({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: null },
     select: { content: true },
   })
 }
@@ -163,7 +163,7 @@ function excerptEntry(text: string | null | undefined) {
 // null means the note is gone (trashed / renamed away) — desired set is empty.
 // Returns true when any link row changed.
 async function syncOne(
-  communityId: string,
+  spaceId: string,
   path: string,
   content: string | null,
   maps: EntityMaps,
@@ -189,13 +189,13 @@ async function syncOne(
   // mentions back, otherwise delete. (Scoped to origin 'context', so a manual or
   // promoted edge between the same pair is never touched.)
   const owned = await prisma.link.findMany({
-    where: { communityId, origin: CONTEXT_ORIGIN, originRef: path },
+    where: { spaceId, origin: CONTEXT_ORIGIN, originRef: path },
   })
   for (const row of owned) {
     if (desiredPairs.has(row.pairKey)) continue
     const otherId = [row.sourceId, row.targetId].find((id) => maps.pathById.get(id) !== path)
     const otherPath = (otherId ? maps.pathById.get(otherId) : null) ?? null
-    const other = otherPath ? await readSharedNote(communityId, otherPath) : null
+    const other = otherPath ? await readSharedNote(spaceId, otherPath) : null
     const mentionedBack =
       other !== null && otherPath !== null && entityMentionPaths(otherPath, other.content).includes(path)
     if (mentionedBack && otherPath && other) {
@@ -230,7 +230,7 @@ async function syncOne(
         (
           await prisma.link.findMany({
             where: {
-              communityId,
+              spaceId,
               relationship: CONTEXT_RELATIONSHIP,
               pairKey: { in: [...desiredPairs] },
             },
@@ -250,7 +250,7 @@ async function syncOne(
       (key) => maps.idByPath.has(key),
     )
     await upsertLink({
-      communityId,
+      spaceId,
       sourceId: selfId,
       targetId: id,
       relationship: CONTEXT_RELATIONSHIP,
@@ -284,14 +284,14 @@ export async function syncContextLinks(
   try {
     // The node must exist before syncOne runs — that's what makes `selfId`
     // resolve, and therefore what lets the note own edges at all.
-    const nodeChanged = await syncNoteNode(brain.communityId, path, content)
-    const maps = await loadEntityMaps(brain.communityId)
-    const changed = await syncOne(brain.communityId, path, content, maps)
+    const nodeChanged = await syncNoteNode(brain.spaceId, path, content)
+    const maps = await loadEntityMaps(brain.spaceId)
+    const changed = await syncOne(brain.spaceId, path, content, maps)
     if (changed || nodeChanged) bustContextCache()
     // AI tier: turn fresh excerpts into reason phrases, off the request path.
-    if (changed) scheduleLinkReasons(brain.communityId)
+    if (changed) scheduleLinkReasons(brain.spaceId)
   } catch (err) {
-    logger.error('notes.contextLinks.sync.failed', { err, path, communityId: brain.communityId })
+    logger.error('notes.contextLinks.sync.failed', { err, path, spaceId: brain.spaceId })
   }
 }
 
@@ -313,47 +313,47 @@ export async function syncContextLinksBulk(
   try {
     let changed = false
     for (const path of removed) {
-      changed = (await syncNoteNode(brain.communityId, path, null)) || changed
+      changed = (await syncNoteNode(brain.spaceId, path, null)) || changed
     }
     for (const [path, content] of added) {
-      changed = (await syncNoteNode(brain.communityId, path, content)) || changed
+      changed = (await syncNoteNode(brain.spaceId, path, content)) || changed
     }
     // Loaded after the node writes so newly added notes resolve to their nodes.
-    const maps = await loadEntityMaps(brain.communityId)
+    const maps = await loadEntityMaps(brain.spaceId)
     for (const path of removed) {
-      changed = (await syncOne(brain.communityId, path, null, maps)) || changed
+      changed = (await syncOne(brain.spaceId, path, null, maps)) || changed
     }
     for (const [path, content] of added) {
-      changed = (await syncOne(brain.communityId, path, content, maps)) || changed
+      changed = (await syncOne(brain.spaceId, path, content, maps)) || changed
     }
     if (changed) {
       bustContextCache()
-      scheduleLinkReasons(brain.communityId)
+      scheduleLinkReasons(brain.spaceId)
     }
   } catch (err) {
-    logger.error('notes.contextLinks.bulkSync.failed', { err, communityId: brain.communityId })
+    logger.error('notes.contextLinks.bulkSync.failed', { err, spaceId: brain.spaceId })
   }
 }
 
 /**
- * Rebuild every context link in a community's shared brain from its notes — the
+ * Rebuild every context link in a space's shared brain from its notes — the
  * backfill for notes written before context-driven links existed. Returns the
  * number of notes processed.
  */
-export async function backfillContextLinks(communityId: string): Promise<number> {
-  const notes = await prisma.communityNote.findMany({
-    where: { communityId, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
+export async function backfillContextLinks(spaceId: string): Promise<number> {
+  const notes = await prisma.spaceNote.findMany({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
     select: { path: true, content: true },
   })
   let changed = false
   // Nodes first, for the whole set: a note can only own an edge once its node
   // exists, and the maps are loaded once afterwards rather than per note.
   for (const note of notes) {
-    changed = (await syncNoteNode(communityId, note.path, note.content)) || changed
+    changed = (await syncNoteNode(spaceId, note.path, note.content)) || changed
   }
-  const maps = await loadEntityMaps(communityId)
+  const maps = await loadEntityMaps(spaceId)
   for (const note of notes) {
-    changed = (await syncOne(communityId, note.path, note.content, maps)) || changed
+    changed = (await syncOne(spaceId, note.path, note.content, maps)) || changed
   }
   if (changed) bustContextCache()
   return notes.length

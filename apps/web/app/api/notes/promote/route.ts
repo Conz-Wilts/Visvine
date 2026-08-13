@@ -1,10 +1,10 @@
 // Promotion — moving a note from the CALLER's personal brain into the shared
 // brain (blackbird-brain "how knowledge moves up").
-//   POST { communityId, fromPath, toPath } → PromoteResult
+//   POST { spaceId, fromPath, toPath } → PromoteResult
 //        { status: 'applied', path } | { status: 'proposed', proposalId } |
 //        { status: 'denied', reason }
-//   GET  ?communityId=                      → { proposals } (own + admined folders')
-//   PUT  { communityId, proposalId, approve } → { proposal } (folder admin resolves)
+//   GET  ?spaceId=                      → { proposals } (own + admined folders')
+//   PUT  { spaceId, proposalId, approve } → { proposal } (folder admin resolves)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
@@ -19,8 +19,8 @@ export async function POST(req: NextRequest) {
   const toPath = typeof body.toPath === 'string' ? body.toPath : null
   if (!fromPath || !toPath) return fail('fromPath and toPath are required')
   const p = await principalOf(brain)
-  // Promotion always reads from the caller's PERSONAL COMMUNITY brain; the
-  // destination is the resolved community's brain (a one-time shared copy).
+  // Promotion always reads from the caller's PERSONAL SPACE brain; the
+  // destination is the resolved space's brain (a one-time shared copy).
   const personal = await resolvePersonalBrain({ userId: p.userId, name: p.name, email: p.email || null })
   try {
     return NextResponse.json(await promoteNote(p, personal, fromPath, toPath))

@@ -1,9 +1,9 @@
 // Cross-brain publish: the source note stays owned by its brain; a live
-// replica exists as a REAL note row in the target community's shared brain,
-// overwritten on every source save. The replica being real community data is
+// replica exists as a REAL note row in the target space's shared brain,
+// overwritten on every source save. The replica being real space data is
 // the whole design — the visibility lens, search, [[mention]] link sync, the
 // context, and mobile all work on it with zero changes, and NO read path ever
-// crosses a community boundary. The only cross-tenant motion is the
+// crosses a space boundary. The only cross-tenant motion is the
 // replicating write below: one choke point that stamps provenance and runs
 // with origin 'publish' (which is also the cascade guard — a replica write
 // never triggers further replication, so publish chains/cycles can't loop).
@@ -22,9 +22,9 @@ import { provenanceRef } from './shared/noteLog'
 
 export interface PublicationInfo {
   id: string
-  sourceCommunityId: string
+  sourceSpaceId: string
   sourcePath: string
-  targetCommunityId: string
+  targetSpaceId: string
   targetPath: string
   active: boolean
   lastSyncedAt: number | null
@@ -34,9 +34,9 @@ export interface PublicationInfo {
 
 function toInfo(row: {
   id: string
-  sourceCommunityId: string
+  sourceSpaceId: string
   sourcePath: string
-  targetCommunityId: string
+  targetSpaceId: string
   targetPath: string
   active: boolean
   lastSyncedAt: Date | null
@@ -45,9 +45,9 @@ function toInfo(row: {
 }): PublicationInfo {
   return {
     id: row.id,
-    sourceCommunityId: row.sourceCommunityId,
+    sourceSpaceId: row.sourceSpaceId,
     sourcePath: row.sourcePath,
-    targetCommunityId: row.targetCommunityId,
+    targetSpaceId: row.targetSpaceId,
     targetPath: row.targetPath,
     active: row.active,
     lastSyncedAt: row.lastSyncedAt ? row.lastSyncedAt.getTime() : null,
@@ -75,8 +75,8 @@ export function replicaContent(sourceContent: string, opts: { ref: string; publi
   )
 }
 
-function sourceRef(sourceCommunityId: string, sourcePath: string): string {
-  return provenanceRef(`${sourceCommunityId}/${sourcePath}`)
+function sourceRef(sourceSpaceId: string, sourcePath: string): string {
+  return provenanceRef(`${sourceSpaceId}/${sourcePath}`)
 }
 
 // publish / unpublish
@@ -92,22 +92,22 @@ export type PublishResult =
  * target path rather than clobbering an existing unrelated note.
  */
 export async function publishNote(
-  sourceCommunityId: string,
+  sourceSpaceId: string,
   sourcePath: string,
-  targetCommunityId: string,
+  targetSpaceId: string,
   targetPath: string,
   actor: Actor,
 ): Promise<PublishResult> {
-  if (sourceCommunityId === targetCommunityId) {
+  if (sourceSpaceId === targetSpaceId) {
     return { status: 'denied', reason: 'A note cannot be published into its own brain' }
   }
-  const source: Brain = { communityId: sourceCommunityId, ownerKey: SHARED_OWNER_KEY }
+  const source: Brain = { spaceId: sourceSpaceId, ownerKey: SHARED_OWNER_KEY }
   const content = await store.readNoteOrNull(source, sourcePath)
   if (content === null) return { status: 'denied', reason: `Note not found: ${sourcePath}` }
 
   const existing = await prisma.notePublication.findUnique({
     where: {
-      publication_identity: { sourceCommunityId, sourcePath, targetCommunityId },
+      publication_identity: { sourceSpaceId, sourcePath, targetSpaceId },
     },
   })
   if (existing?.active) {
@@ -118,7 +118,7 @@ export async function publishNote(
   }
 
   // Never overwrite someone else's note on first publish — suffix instead.
-  const target: Brain = { communityId: targetCommunityId, ownerKey: SHARED_OWNER_KEY }
+  const target: Brain = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
   let dest = targetPath
   let n = 1
   while (await store.readNoteOrNull(target, dest)) {
@@ -131,16 +131,16 @@ export async function publishNote(
         data: { active: true, targetPath: dest, createdBy: actor.id },
       })
     : await prisma.notePublication.create({
-        data: { sourceCommunityId, sourcePath, targetCommunityId, targetPath: dest, createdBy: actor.id },
+        data: { sourceSpaceId, sourcePath, targetSpaceId, targetPath: dest, createdBy: actor.id },
       })
 
-  await writeReplica(row.id, targetCommunityId, dest, content, sourceCommunityId, sourcePath, actor)
-  void logAudit(targetCommunityId, {
+  await writeReplica(row.id, targetSpaceId, dest, content, sourceSpaceId, sourcePath, actor)
+  void logAudit(targetSpaceId, {
     userId: actor.id,
     name: actor.name,
     action: 'publish',
     path: dest,
-    detail: `published from ${sourceCommunityId}/${sourcePath}`,
+    detail: `published from ${sourceSpaceId}/${sourcePath}`,
   })
   return { status: 'applied', publication: toInfo({ ...row, targetPath: dest, active: true, lastSyncedAt: new Date() }) }
 }
@@ -151,12 +151,12 @@ export async function unpublish(id: string, actor: Actor): Promise<PublicationIn
   if (!row) return null
   if (row.active) {
     await prisma.notePublication.update({ where: { id }, data: { active: false } })
-    void logAudit(row.targetCommunityId, {
+    void logAudit(row.targetSpaceId, {
       userId: actor.id,
       name: actor.name,
       action: 'publish',
       path: row.targetPath,
-      detail: `unlinked from ${row.sourceCommunityId}/${row.sourcePath} (kept as a copy)`,
+      detail: `unlinked from ${row.sourceSpaceId}/${row.sourcePath} (kept as a copy)`,
     })
   }
   return toInfo({ ...row, active: false })
@@ -176,18 +176,18 @@ export interface PublicationState {
   asTarget: PublicationInfo | null
 }
 
-/** How a path participates in publishing, from one community's point of view. */
+/** How a path participates in publishing, from one space's point of view. */
 export async function publicationStateFor(
-  communityId: string,
+  spaceId: string,
   path: string,
 ): Promise<PublicationState> {
   const [asSource, asTarget] = await Promise.all([
     prisma.notePublication.findMany({
-      where: { sourceCommunityId: communityId, sourcePath: path },
+      where: { sourceSpaceId: spaceId, sourcePath: path },
       orderBy: { createdAt: 'asc' },
     }),
     prisma.notePublication.findFirst({
-      where: { targetCommunityId: communityId, targetPath: path, active: true },
+      where: { targetSpaceId: spaceId, targetPath: path, active: true },
     }),
   ])
   return {
@@ -201,10 +201,10 @@ export async function publicationStateFor(
  * its destination (edits would be clobbered by the next source save). Returns
  * the denial reason, or null. Deletes are allowed — they deactivate the link.
  */
-export async function replicaDenial(communityId: string, path: string): Promise<string | null> {
+export async function replicaDenial(spaceId: string, path: string): Promise<string | null> {
   const row = await prisma.notePublication.findFirst({
-    where: { targetCommunityId: communityId, targetPath: path, active: true },
-    select: { sourceCommunityId: true },
+    where: { targetSpaceId: spaceId, targetPath: path, active: true },
+    select: { sourceSpaceId: true },
   })
   if (!row) return null
   return 'This note is a published copy and stays in sync with its source — unlink it to edit here.'
@@ -214,16 +214,16 @@ export async function replicaDenial(communityId: string, path: string): Promise<
 
 async function writeReplica(
   publicationId: string,
-  targetCommunityId: string,
+  targetSpaceId: string,
   targetPath: string,
   sourceContent: string,
-  sourceCommunityId: string,
+  sourceSpaceId: string,
   sourcePath: string,
   actor: Actor,
 ): Promise<void> {
-  const target: Brain = { communityId: targetCommunityId, ownerKey: SHARED_OWNER_KEY }
+  const target: Brain = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
   const content = replicaContent(sourceContent, {
-    ref: sourceRef(sourceCommunityId, sourcePath),
+    ref: sourceRef(sourceSpaceId, sourcePath),
     publisher: actor.name,
   })
   await store.writeNote(target, targetPath, content, actor, 'publish')
@@ -247,21 +247,21 @@ export async function syncPublicationsOnWrite(
   if (brain.ownerKey !== SHARED_OWNER_KEY) return
   try {
     const rows = await prisma.notePublication.findMany({
-      where: { sourceCommunityId: brain.communityId, sourcePath: path, active: true },
+      where: { sourceSpaceId: brain.spaceId, sourcePath: path, active: true },
     })
     for (const row of rows) {
       await writeReplica(
         row.id,
-        row.targetCommunityId,
+        row.targetSpaceId,
         row.targetPath,
         content,
-        row.sourceCommunityId,
+        row.sourceSpaceId,
         row.sourcePath,
         actor,
       )
     }
   } catch (err) {
-    logger.error('notes.publications.sync.failed', { err, path, communityId: brain.communityId })
+    logger.error('notes.publications.sync.failed', { err, path, spaceId: brain.spaceId })
   }
 }
 
@@ -274,15 +274,15 @@ export async function syncPublicationsOnRename(
   if (brain.ownerKey !== SHARED_OWNER_KEY) return
   try {
     await prisma.notePublication.updateMany({
-      where: { sourceCommunityId: brain.communityId, sourcePath: from },
+      where: { sourceSpaceId: brain.spaceId, sourcePath: from },
       data: { sourcePath: to },
     })
     await prisma.notePublication.updateMany({
-      where: { targetCommunityId: brain.communityId, targetPath: from },
+      where: { targetSpaceId: brain.spaceId, targetPath: from },
       data: { targetPath: to },
     })
   } catch (err) {
-    logger.error('notes.publications.rename.failed', { err, from, to, communityId: brain.communityId })
+    logger.error('notes.publications.rename.failed', { err, from, to, spaceId: brain.spaceId })
   }
 }
 
@@ -298,13 +298,13 @@ export async function syncPublicationsOnDelete(brain: Brain, paths: string[]): P
       where: {
         active: true,
         OR: [
-          { sourceCommunityId: brain.communityId, sourcePath: { in: paths } },
-          { targetCommunityId: brain.communityId, targetPath: { in: paths } },
+          { sourceSpaceId: brain.spaceId, sourcePath: { in: paths } },
+          { targetSpaceId: brain.spaceId, targetPath: { in: paths } },
         ],
       },
       data: { active: false },
     })
   } catch (err) {
-    logger.error('notes.publications.delete.failed', { err, communityId: brain.communityId })
+    logger.error('notes.publications.delete.failed', { err, spaceId: brain.spaceId })
   }
 }

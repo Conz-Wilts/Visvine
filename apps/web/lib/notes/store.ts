@@ -1,12 +1,12 @@
 // DB-backed note store: the web replacement for blackbird-brain's filesystem
-// src/server/notes.ts + src/server/history.ts. Every note is a `CommunityNote`
-// row keyed by a brain `{ communityId, ownerKey }` and a brain-relative POSIX
+// src/server/notes.ts + src/server/history.ts. Every note is a `SpaceNote`
+// row keyed by a brain `{ spaceId, ownerKey }` and a brain-relative POSIX
 // `path` — the same `{ path, content, mtime }` shape the Electron app read off
 // disk, so the pure index/context/backlink pipeline in ./shared works unchanged.
 //
 // Soft-delete (trash) is a `deletedAt` timestamp; the row's `path` is parked at a
 // `:trash:<id>` sentinel so it frees the real path (kept in `deletedPath`) for a
-// future note and never collides with the (community, ownerKey, path) unique key.
+// future note and never collides with the (space, ownerKey, path) unique key.
 // Revision history mirrors the .history sidecar: a baseline snapshot is seeded on
 // the first edit, consecutive same-author edits coalesce, and history is capped.
 
@@ -53,8 +53,8 @@ function isStarred(content: string): boolean {
 }
 
 export interface Brain {
-  communityId: string
-  ownerKey: string // 'shared' = community brain; else a userId = personal brain
+  spaceId: string
+  ownerKey: string // 'shared' = space brain; else a userId = personal brain
 }
 
 export const SHARED_OWNER_KEY = 'shared'
@@ -109,24 +109,24 @@ function toRaw(row: { path: string; content: string; updatedAt: Date }): RawNote
 
 // A live (non-trashed) note at this exact path, or null.
 function findLive(brain: Brain, path: string) {
-  return prisma.communityNote.findFirst({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, path, deletedAt: null },
+  return prisma.spaceNote.findFirst({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path, deletedAt: null },
   })
 }
 
 // reads
 
 export async function listRaw(brain: Brain): Promise<RawNote[]> {
-  const rows = await prisma.communityNote.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null },
+  const rows = await prisma.spaceNote.findMany({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
     select: { path: true, content: true, updatedAt: true },
   })
   return rows.map(toRaw)
 }
 
 export async function listFolders(brain: Brain): Promise<string[]> {
-  const rows = await prisma.communityNoteFolder.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey },
+  const rows = await prisma.spaceNoteFolder.findMany({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
     select: { path: true },
   })
   // The table doubles as the access-boundary store, and a boundary can sit on a
@@ -137,8 +137,8 @@ export async function listFolders(brain: Brain): Promise<string[]> {
 }
 
 export async function noteCount(brain: Brain): Promise<number> {
-  return prisma.communityNote.count({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null },
+  return prisma.spaceNote.count({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
   })
 }
 
@@ -183,9 +183,9 @@ export async function createNote(
     p = indexPathOf(indexFolderPathOf(requested))
   }
   if (await findLive(brain, p)) throw new Error(`A note already exists at: ${p}`)
-  const row = await prisma.communityNote.create({
+  const row = await prisma.spaceNote.create({
     data: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       path: p,
       content,
@@ -216,9 +216,9 @@ export async function createNote(
  */
 async function directChildrenOf(brain: Brain, folder: string): Promise<IndexChild[]> {
   const prefix = folder ? `${folder}/` : ''
-  const rows = await prisma.communityNote.findMany({
+  const rows = await prisma.spaceNote.findMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       deletedAt: null,
       ...(prefix ? { path: { startsWith: prefix } } : {}),
@@ -260,7 +260,7 @@ export async function refreshFolderIndex(brain: Brain, folder: string): Promise<
   if (!folder && !hasChildrenBlock(row.content)) return
   const next = applyChildrenBlock(row.content, await directChildrenOf(brain, folder))
   if (next === row.content) return
-  await prisma.communityNote.update({ where: { id: row.id }, data: { content: next } })
+  await prisma.spaceNote.update({ where: { id: row.id }, data: { content: next } })
   invalidateVault(brain)
 }
 
@@ -274,14 +274,14 @@ async function refreshIndexesForNote(brain: Brain, notePath: string): Promise<vo
   if (isIndexPath(notePath) && own) await refreshFolderIndex(brain, folderOf(own))
 }
 
-/** The `CommunityNoteFolder` row that makes a folder exist in its own right. */
+/** The `SpaceNoteFolder` row that makes a folder exist in its own right. */
 async function upsertFolderRow(brain: Brain, folder: string): Promise<void> {
   if (!folder) return
-  await prisma.communityNoteFolder.upsert({
+  await prisma.spaceNoteFolder.upsert({
     where: {
-      folder_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: folder },
+      folder_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path: folder },
     },
-    create: { communityId: brain.communityId, ownerKey: brain.ownerKey, path: folder },
+    create: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path: folder },
     update: {},
   })
 }
@@ -303,9 +303,9 @@ export async function ensureAncestorIndexes(
     if (await findLive(brain, idx)) continue
     const children = await directChildrenOf(brain, folder)
     try {
-      await prisma.communityNote.create({
+      await prisma.spaceNote.create({
         data: {
-          communityId: brain.communityId,
+          spaceId: brain.spaceId,
           ownerKey: brain.ownerKey,
           path: idx,
           content: buildIndexStub(folder, children),
@@ -330,7 +330,7 @@ export async function ensureAncestorIndexes(
 // blockless root alone. So a brain gets a root index only if something seeds it.
 //
 // It matters beyond tidiness: the Directory's Context tab routes to the root
-// index — the community's home page (see app/(auth)/directory/page.tsx, which
+// index — the space's home page (see app/(auth)/directory/page.tsx, which
 // also writes one on first open for brains that predate this seeding).
 //
 // Seeded via newIndexContent, whose empty managed child block is what makes the
@@ -384,13 +384,13 @@ export async function writeNote(
   const prev = existing?.content ?? null
 
   const note = existing
-    ? await prisma.communityNote.update({
+    ? await prisma.spaceNote.update({
         where: { id: existing.id },
         data: { content, starred: isStarred(content) },
       })
-    : await prisma.communityNote.create({
+    : await prisma.spaceNote.create({
         data: {
-          communityId: brain.communityId,
+          spaceId: brain.spaceId,
           ownerKey: brain.ownerKey,
           path: p,
           content,
@@ -425,7 +425,7 @@ export async function writeNote(
   // Seed a baseline of the pre-edit content the first time a note is edited, so
   // the oldest revision has a snapshot to diff/restore from.
   if (prev !== null) {
-    const count = await prisma.communityNoteRevision.count({ where: { noteId: note.id } })
+    const count = await prisma.spaceNoteRevision.count({ where: { noteId: note.id } })
     if (count === 0) {
       await recordRevision(
         note.id,
@@ -456,7 +456,7 @@ interface RevisionInput {
 // Append a revision, coalescing consecutive same-author manual edits within the
 // window (latest wins), then prune to MAX_REVISIONS (oldest first).
 async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now()): Promise<void> {
-  const last = await prisma.communityNoteRevision.findFirst({
+  const last = await prisma.spaceNoteRevision.findFirst({
     where: { noteId },
     orderBy: { at: 'desc' },
   })
@@ -468,7 +468,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     at - last.at.getTime() < COALESCE_WINDOW_MS
 
   if (coalesce && last) {
-    await prisma.communityNoteRevision.update({
+    await prisma.spaceNoteRevision.update({
       where: { id: last.id },
       data: {
         content: rev.content,
@@ -478,7 +478,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
       },
     })
   } else {
-    await prisma.communityNoteRevision.create({
+    await prisma.spaceNoteRevision.create({
       data: {
         noteId,
         content: rev.content,
@@ -491,15 +491,15 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     })
   }
 
-  const count = await prisma.communityNoteRevision.count({ where: { noteId } })
+  const count = await prisma.spaceNoteRevision.count({ where: { noteId } })
   if (count > MAX_REVISIONS) {
-    const stale = await prisma.communityNoteRevision.findMany({
+    const stale = await prisma.spaceNoteRevision.findMany({
       where: { noteId },
       orderBy: { at: 'asc' },
       take: count - MAX_REVISIONS,
       select: { id: true },
     })
-    await prisma.communityNoteRevision.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
+    await prisma.spaceNoteRevision.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
   }
 }
 
@@ -510,7 +510,7 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
   const row = await findLive(brain, f)
   if (!row) throw new Error(`Note not found: ${from}`)
   if (t !== f && (await findLive(brain, t))) throw new Error(`A note already exists at: ${to}`)
-  await prisma.communityNote.update({ where: { id: row.id }, data: { path: t } })
+  await prisma.spaceNote.update({ where: { id: row.id }, data: { path: t } })
   // A rename changes which entity (if any) the note is canonical for: drop the
   // old path's context links, derive the new path's. Publications and any
   // note-level grants follow the note to its new path.
@@ -519,7 +519,7 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
     await syncPublicationsOnRename(brain, f, t)
     if (brain.ownerKey === SHARED_OWNER_KEY) {
       await prisma.brainGrant.updateMany({
-        where: { communityId: brain.communityId, resourcePath: f },
+        where: { spaceId: brain.spaceId, resourcePath: f },
         data: { resourcePath: t },
       })
     }
@@ -536,7 +536,7 @@ export async function renameNote(brain: Brain, from: string, to: string): Promis
 export async function deleteNote(brain: Brain, path: string): Promise<void> {
   const row = await findLive(brain, sanitizePath(path))
   if (!row) return
-  await prisma.communityNote.update({
+  await prisma.spaceNote.update({
     where: { id: row.id },
     data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
   })
@@ -553,9 +553,9 @@ export async function deleteNote(brain: Brain, path: string): Promise<void> {
 // it's visible.
 async function purgeExpiredTrash(brain: Brain): Promise<void> {
   const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.communityNote.deleteMany({
+  const { count } = await prisma.spaceNote.deleteMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       deletedAt: { not: null, lt: cutoff },
     },
@@ -565,8 +565,8 @@ async function purgeExpiredTrash(brain: Brain): Promise<void> {
 
 export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
   await purgeExpiredTrash(brain)
-  const rows = await prisma.communityNote.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+  const rows = await prisma.spaceNote.findMany({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
     orderBy: { deletedAt: 'desc' },
     select: { id: true, deletedPath: true, deletedAt: true },
   })
@@ -580,8 +580,8 @@ export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
 
 // Restore a trashed note to its original path, suffixing on collision.
 export async function restoreTrash(brain: Brain, id: string): Promise<string> {
-  const row = await prisma.communityNote.findFirst({
-    where: { id, communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+  const row = await prisma.spaceNote.findFirst({
+    where: { id, spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
   })
   if (!row || !row.deletedPath) throw new Error('Trash entry not found')
   let dest = row.deletedPath
@@ -589,7 +589,7 @@ export async function restoreTrash(brain: Brain, id: string): Promise<string> {
   while (await findLive(brain, dest)) {
     dest = row.deletedPath.replace(/\.md$/i, '') + `-${n++}.md`
   }
-  await prisma.communityNote.update({
+  await prisma.spaceNote.update({
     where: { id: row.id },
     data: { deletedAt: null, deletedPath: null, path: dest },
   })
@@ -601,16 +601,16 @@ export async function restoreTrash(brain: Brain, id: string): Promise<string> {
 
 // Force-delete a single trash entry ahead of its 7 days. Irreversible.
 export async function purgeTrashEntry(brain: Brain, id: string): Promise<void> {
-  const { count } = await prisma.communityNote.deleteMany({
-    where: { id, communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+  const { count } = await prisma.spaceNote.deleteMany({
+    where: { id, spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
   })
   if (count === 0) throw new Error('Trash entry not found')
   invalidateVault(brain)
 }
 
 export async function emptyTrash(brain: Brain): Promise<void> {
-  await prisma.communityNote.deleteMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+  await prisma.spaceNote.deleteMany({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
   })
   invalidateVault(brain)
 }
@@ -695,12 +695,12 @@ async function convertNoteToIndex(
   const folder = indexFolderPathOf(f)
   const dest = indexPathOf(folder)
 
-  await prisma.communityNote.update({ where: { id: row.id }, data: { path: dest } })
+  await prisma.spaceNote.update({ where: { id: row.id }, data: { path: dest } })
   await syncContextLinksBulk(brain, [f], [[dest, row.content]])
   await syncPublicationsOnRename(brain, f, dest)
   if (brain.ownerKey === SHARED_OWNER_KEY) {
     await prisma.brainGrant.updateMany({
-      where: { communityId: brain.communityId, resourcePath: f },
+      where: { spaceId: brain.spaceId, resourcePath: f },
       data: { resourcePath: folder },
     })
   }
@@ -723,9 +723,9 @@ export async function renameFolder(
 ): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
-  const notes = await prisma.communityNote.findMany({
+  const notes = await prisma.spaceNote.findMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       deletedAt: null,
       path: { startsWith: `${f}/` },
@@ -733,7 +733,7 @@ export async function renameFolder(
     select: { id: true, path: true, content: true },
   })
   for (const note of notes) {
-    await prisma.communityNote.update({
+    await prisma.spaceNote.update({
       where: { id: note.id },
       data: { path: t + note.path.slice(f.length) },
     })
@@ -752,11 +752,11 @@ export async function renameFolder(
   // Grants ride the rename too — a moved team subtree keeps its access rows.
   if (brain.ownerKey === SHARED_OWNER_KEY) {
     await prisma.brainGrant.updateMany({
-      where: { communityId: brain.communityId, resourcePath: f },
+      where: { spaceId: brain.spaceId, resourcePath: f },
       data: { resourcePath: t },
     })
     const nested = await prisma.brainGrant.findMany({
-      where: { communityId: brain.communityId, resourcePath: { startsWith: `${f}/` } },
+      where: { spaceId: brain.spaceId, resourcePath: { startsWith: `${f}/` } },
       select: { id: true, resourcePath: true },
     })
     await Promise.all(
@@ -768,16 +768,16 @@ export async function renameFolder(
       ),
     )
   }
-  const folders = await prisma.communityNoteFolder.findMany({
+  const folders = await prisma.spaceNoteFolder.findMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       OR: [{ path: f }, { path: { startsWith: `${f}/` } }],
     },
     select: { id: true, path: true },
   })
   for (const fol of folders) {
-    await prisma.communityNoteFolder.update({
+    await prisma.spaceNoteFolder.update({
       where: { id: fol.id },
       data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
     })
@@ -815,9 +815,9 @@ async function retitleIndexAfterRename(
 // Soft-delete a folder: trash every note under it and drop the folder rows.
 export async function deleteFolder(brain: Brain, path: string): Promise<void> {
   const p = sanitizePath(path)
-  const notes = await prisma.communityNote.findMany({
+  const notes = await prisma.spaceNote.findMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       deletedAt: null,
       path: { startsWith: `${p}/` },
@@ -825,16 +825,16 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
     select: { id: true, path: true },
   })
   for (const note of notes) {
-    await prisma.communityNote.update({
+    await prisma.spaceNote.update({
       where: { id: note.id },
       data: { deletedAt: new Date(), deletedPath: note.path, path: `:trash:${note.id}` },
     })
   }
   await syncContextLinksBulk(brain, notes.map((n) => n.path)) // trashed entity notes drop their links
   await syncPublicationsOnDelete(brain, notes.map((n) => n.path))
-  await prisma.communityNoteFolder.deleteMany({
+  await prisma.spaceNoteFolder.deleteMany({
     where: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       OR: [{ path: p }, { path: { startsWith: `${p}/` } }],
     },
@@ -844,7 +844,7 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
   if (brain.ownerKey === SHARED_OWNER_KEY) {
     await prisma.brainGrant.deleteMany({
       where: {
-        communityId: brain.communityId,
+        spaceId: brain.spaceId,
         OR: [{ resourcePath: p }, { resourcePath: { startsWith: `${p}/` } }],
       },
     })
@@ -859,7 +859,7 @@ export async function deleteFolder(brain: Brain, path: string): Promise<void> {
 export async function listRevisions(brain: Brain, path: string): Promise<NoteRevision[]> {
   const row = await findLive(brain, sanitizePath(path))
   if (!row) return []
-  const revs = await prisma.communityNoteRevision.findMany({
+  const revs = await prisma.spaceNoteRevision.findMany({
     where: { noteId: row.id },
     orderBy: { at: 'desc' },
   })
@@ -883,7 +883,7 @@ export async function applyRevision(
 ): Promise<void> {
   const row = await findLive(brain, sanitizePath(path))
   if (!row) throw new Error(`Note not found: ${path}`)
-  const rev = await prisma.communityNoteRevision.findFirst({
+  const rev = await prisma.spaceNoteRevision.findFirst({
     where: { id: revisionId, noteId: row.id },
   })
   if (!rev) throw new Error('Revision not found')
@@ -918,8 +918,8 @@ export async function setStarred(
 }
 
 export async function listStarred(brain: Brain): Promise<string[]> {
-  const rows = await prisma.communityNote.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey, deletedAt: null, starred: true },
+  const rows = await prisma.spaceNote.findMany({
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null, starred: true },
     select: { path: true },
   })
   // Index notes can no longer be starred; filter any that were starred before

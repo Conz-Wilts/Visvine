@@ -127,11 +127,11 @@ const TOOLS: ToolSpec[] = [
   },
 ]
 
-/** Which of these secret names are stored for the community — names only. */
-async function storedSecretNames(communityId: string, names: string[]): Promise<Set<string>> {
+/** Which of these secret names are stored for the space — names only. */
+async function storedSecretNames(spaceId: string, names: string[]): Promise<Set<string>> {
   if (names.length === 0) return new Set()
-  const rows = await prisma.communitySecret.findMany({
-    where: { communityId, name: { in: names } },
+  const rows = await prisma.spaceSecret.findMany({
+    where: { spaceId, name: { in: names } },
     select: { name: true },
   })
   return new Set(rows.map((r) => r.name))
@@ -140,7 +140,7 @@ async function storedSecretNames(communityId: string, names: string[]): Promise<
 interface AgentContext {
   principal: BrainPrincipal
   brain: Brain
-  communityId: string
+  spaceId: string
 }
 
 async function toolFetchUrl(rawUrl: string): Promise<string> {
@@ -180,7 +180,7 @@ async function toolWriteConnector(ctx: AgentContext, name: string, content: stri
   if (written.status === 'denied') return `error: write denied — ${written.reason}`
 
   const secrets = perimeterSecretRefs(parsed.perimeter)
-  const stored = await storedSecretNames(ctx.communityId, secrets)
+  const stored = await storedSecretNames(ctx.spaceId, secrets)
   const secretLines = secrets.map((s) => `${s}: ${stored.has(s) ? 'stored' : 'NOT STORED'}`)
   return [
     `written to connectors/${name}.md`,
@@ -202,7 +202,7 @@ async function toolRunConnector(ctx: AgentContext, name: string, code: string): 
   try {
     const loaded = await loadConnector(ctx.principal, ctx.brain, name)
     if (!loaded) return 'error: no such connector'
-    const result = await executeConnectorScript(ctx.principal, ctx.brain, ctx.communityId, loaded, code)
+    const result = await executeConnectorScript(ctx.principal, ctx.brain, ctx.spaceId, loaded, code)
     const clip = (s: string) =>
       s.length > RUN_OUTPUT_CAP_CHARS ? s.slice(0, RUN_OUTPUT_CAP_CHARS) + '\n…[truncated]' : s
     const rendered = result.value === undefined ? '' : clip(JSON.stringify(result.value, null, 2) ?? '')

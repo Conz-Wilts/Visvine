@@ -1,19 +1,19 @@
-// A community's PERSON aliases (lib/notes/aliases.ts) — the permission model in
+// A space's PERSON aliases (lib/notes/aliases.ts) — the permission model in
 // one list. An alias is a directory chip, a set of holders, and a set of brain
 // grants, all at once, so the whole of it is managed in one place: Console →
 // Aliases. The Types page shows them read-only.
 //
-// Any member may LIST them (they're organizational, not secret); community
+// Any member may LIST them (they're organizational, not secret); space
 // admins do everything else.
-//   GET  ?communityId=                              → { aliases }
-//   POST { communityId, action, ... }:
+//   GET  ?spaceId=                              → { aliases }
+//   POST { spaceId, action, ... }:
 //        'create'        { name, color }
 //        'update'        { name, newName?, color? }
 //        'delete'        { name }
 //        'setOwner'      { name, owner }
 //        'addHolder'     { name, userId }
 //        'removeHolder'  { name, userId }
-// Any change that would leave nobody owning the community is refused with 400,
+// Any change that would leave nobody owning the space is refused with 400,
 // as is any attempt to rename, recolour, delete or un-own the built-in Owner
 // alias.
 
@@ -32,7 +32,7 @@ import {
 export async function GET(req: NextRequest) {
   const brain = await requireBrain(req)
   if (brain instanceof Response) return brain
-  return NextResponse.json({ aliases: await listAliases(brain.communityId) })
+  return NextResponse.json({ aliases: await listAliases(brain.spaceId) })
 }
 
 export async function POST(req: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   const brain = await requireBrain(req, body)
   if (brain instanceof Response) return brain
   if (brain.isPersonalSpace) return fail('Personal spaces have no aliases')
-  if (!brain.isAdmin) return fail('Only a community admin can manage aliases', 403)
+  if (!brain.isAdmin) return fail('Only a space admin can manage aliases', 403)
   const action = typeof body.action === 'string' ? body.action : null
   const actor = { userId: brain.actor.id, name: brain.actor.name }
 
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     if (action === 'create') {
       const color = typeof body.color === 'string' ? body.color : ''
-      await createAlias(brain.communityId, name, color, actor)
+      await createAlias(brain.spaceId, name, color, actor)
       return NextResponse.json({ ok: true })
     }
 
@@ -60,17 +60,17 @@ export async function POST(req: NextRequest) {
       if (newName === undefined && color === undefined) {
         return fail('Nothing to change — pass newName or color')
       }
-      await updateAlias(brain.communityId, name, { newName, color }, actor)
+      await updateAlias(brain.spaceId, name, { newName, color }, actor)
       return NextResponse.json({ ok: true })
     }
 
     if (action === 'delete') {
-      await deleteAlias(brain.communityId, name, actor)
+      await deleteAlias(brain.spaceId, name, actor)
       return NextResponse.json({ ok: true })
     }
 
     if (action === 'setOwner') {
-      await setAliasOwner(brain.communityId, name, body.owner === true, actor)
+      await setAliasOwner(brain.spaceId, name, body.owner === true, actor)
       return NextResponse.json({ ok: true })
     }
 
@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
       const userId = typeof body.userId === 'string' ? body.userId : null
       if (!userId) return fail('userId is required')
       if (action === 'addHolder') {
-        await addAliasHolder(brain.communityId, name, userId, actor)
+        await addAliasHolder(brain.spaceId, name, userId, actor)
       } else {
-        await removeAliasHolder(brain.communityId, name, userId)
+        await removeAliasHolder(brain.spaceId, name, userId)
       }
       return NextResponse.json({ ok: true })
     }

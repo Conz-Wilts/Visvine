@@ -13,17 +13,17 @@ import AccessRequests from './AccessRequests';
 import { usePeopleSection } from './PeopleDataContext';
 
 export default function RequestsTab() {
-  const { communityId, data, busy, run } = usePeopleSection();
+  const { spaceId, data, busy, run } = usePeopleSection();
   const [deny, setDeny] = useState<{ userId: string; name: string } | null>(null);
 
   const pending = (data?.members ?? []).filter((m) => m.status === 'pending');
   const pendingAccess = (data?.requests ?? []).filter((r) => r.status === 'pending');
 
   const approve = (userId: string) =>
-    run(() => fetchJsonBody(`/api/communities/${communityId}/members/${userId}`, 'PUT', { status: 'active' }));
+    run(() => fetchJsonBody(`/api/communities/${spaceId}/members/${userId}`, 'PUT', { status: 'active' }));
 
   const removePending = (userId: string) =>
-    run(() => fetchJson(`/api/communities/${communityId}/members/${userId}`, { method: 'DELETE' }));
+    run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
 
   return (
     <div className="space-y-5">

@@ -1,6 +1,6 @@
 // Principal-level access predicates: the folder gate expressed over one
 // BrainPrincipal. All real semantics live in ./authz.ts (grants + restricted
-// cuts + max-wins); this layer folds in the community-admin and system escape
+// cuts + max-wins); this layer folds in the space-admin and system escape
 // hatches so the service layer and the UI ask one question the same way.
 // Pure predicates; paths are brain-relative note or folder paths ('' = root).
 
@@ -15,9 +15,9 @@ import {
   type AccessLevelName,
 } from './authz'
 
-/** Community admins and the system principal bypass every brain gate. */
+/** Space admins and the system principal bypass every brain gate. */
 export function principalIsSuperAdmin(p: BrainPrincipal): boolean {
-  return p.system === true || p.communityAdmin === true
+  return p.system === true || p.spaceAdmin === true
 }
 
 /** Whether the principal may READ a shared-brain path (note or source). */

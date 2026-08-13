@@ -6,13 +6,13 @@ import InviteActions from './InviteActions';
 export const dynamic = 'force-dynamic';
 
 /**
- * Community invite landing page (/invite/<token>).
+ * Space invite landing page (/invite/<token>).
  *
  * This route is NOT public: the proxy bounces a logged-out visitor to
  * /signin?callbackUrl=/invite/<token>, so by the time we render, the user is
  * authenticated and returns here after signing in / creating an account. We then
- * resolve the community by its invite token and show a join screen. Accepting
- * creates a pending membership the community's admins approve in the console.
+ * resolve the space by its invite token and show a join screen. Accepting
+ * creates a pending membership the space's admins approve in the console.
  */
 export default async function InvitePage({
   params,
@@ -24,7 +24,7 @@ export default async function InvitePage({
   const session = await getSession();
   if (!session) redirect(`/signin?callbackUrl=/invite/${encodeURIComponent(token)}`);
 
-  const community = await prisma.community.findUnique({
+  const space = await prisma.space.findUnique({
     where: { inviteToken: token },
     select: {
       id: true,
@@ -32,16 +32,16 @@ export default async function InvitePage({
       description: true,
       location: true,
       imageUrl: true,
-      _count: { select: { userCommunities: { where: { status: 'active' } } } },
+      _count: { select: { members: { where: { status: 'active' } } } },
       personalOwnerId: true,
     },
   });
 
-  const invalid = !community || community.personalOwnerId !== null;
+  const invalid = !space || space.personalOwnerId !== null;
 
-  const membership = community
-    ? await prisma.userCommunity.findUnique({
-        where: { userId_communityId: { userId: session.userId, communityId: community.id } },
+  const membership = space
+    ? await prisma.spaceMember.findUnique({
+        where: { userId_spaceId: { userId: session.userId, spaceId: space.id } },
         select: { status: true },
       })
     : null;
@@ -64,10 +64,10 @@ export default async function InvitePage({
           </div>
         ) : (
           <div className="flex flex-col items-center text-center">
-            {community!.imageUrl ? (
+            {space!.imageUrl ? (
               <img
-                src={community!.imageUrl}
-                alt={community!.name}
+                src={space!.imageUrl}
+                alt={space!.name}
                 className="h-16 w-16 rounded-2xl object-cover"
               />
             ) : (
@@ -76,18 +76,18 @@ export default async function InvitePage({
               </div>
             )}
             <p className="mt-4 text-xs uppercase tracking-wide text-text-muted">You&apos;re invited to join</p>
-            <h1 className="mt-1 text-xl font-semibold text-text-primary">{community!.name}</h1>
-            {community!.description && (
-              <p className="mt-2 text-sm text-text-muted">{community!.description}</p>
+            <h1 className="mt-1 text-xl font-semibold text-text-primary">{space!.name}</h1>
+            {space!.description && (
+              <p className="mt-2 text-sm text-text-muted">{space!.description}</p>
             )}
             <p className="mt-3 text-xs text-text-muted">
-              {community!._count.userCommunities} member{community!._count.userCommunities === 1 ? '' : 's'}
-              {community!.location ? ` · ${community!.location}` : ''}
+              {space!._count.members} member{space!._count.members === 1 ? '' : 's'}
+              {space!.location ? ` · ${space!.location}` : ''}
             </p>
 
             <InviteActions
               token={token}
-              communityId={community!.id}
+              spaceId={space!.id}
               initialStatus={(membership?.status as 'active' | 'pending' | undefined) ?? null}
             />
           </div>

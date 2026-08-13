@@ -1,19 +1,19 @@
-// Fills the Blackbird Ventures community with the surfaces the portfolio and
+// Fills the Blackbird Ventures space with the surfaces the portfolio and
 // notes layers don't cover, so every tool in the app has something in it:
 // events (+ attendees, hosting/attended links, a registration form), the
 // resource file library, channel spaces + channels + messages + a DM, and the
-// community feed. Also adds a standalone Resource node so that node type shows
+// space feed. Also adds a standalone Resource node so that node type shows
 // up in the directory alongside the companies and founders.
 //
 //   node apps/web/scripts/add-blackbird-extras.mjs
 //   (or as part of `pnpm db:blackbird:full`)
 //
-// Runs after prisma/seed.ts (which creates the community, the four @local.dev
+// Runs after prisma/seed.ts (which creates the space, the four @local.dev
 // anchors and the aliases) and after add-blackbird-ventures.mjs (the portfolio).
 //
 // Additive & idempotent: explicit ids + ON CONFLICT upserts, or
 // delete-by-seed-marker where rows have generated ids. Never touches another
-// community. Loads apps/web/.env (cwd-independent, via the guard) and refuses
+// space. Loads apps/web/.env (cwd-independent, via the guard) and refuses
 // to run against any non-local host.
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
@@ -65,20 +65,20 @@ function inDays(d, hh, mm = 0) {
 
 async function upsertNode(client, { id, type, name, subtitle = null, location = null, url = null, tags = [], metadata = {}, alias = null, createdDaysAgo = 60 }) {
   await client.query(
-    `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
+    `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, NOW())
      ON CONFLICT (id) DO UPDATE SET type = EXCLUDED.type, name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
        location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags,
-       metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
+       metadata = EXCLUDED.metadata, space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
     [id, type, name, subtitle, location, url, tags, JSON.stringify(metadata), COMM, alias, daysAgo(createdDaysAgo)],
   );
 }
 
 async function upsertLinkRow(client, { sourceId, targetId, relationship, origin, originRef = null, since = null, metadata = {} }) {
   await client.query(
-    `INSERT INTO links (source_id, target_id, relationship, since, metadata, community_id, origin, origin_ref, pair_key, created_at, updated_at)
+    `INSERT INTO links (source_id, target_id, relationship, since, metadata, space_id, origin, origin_ref, pair_key, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, NOW(), NOW())
-     ON CONFLICT (community_id, pair_key, relationship) DO UPDATE SET
+     ON CONFLICT (space_id, pair_key, relationship) DO UPDATE SET
        metadata = EXCLUDED.metadata, origin = EXCLUDED.origin, origin_ref = EXCLUDED.origin_ref, updated_at = NOW()`,
     [sourceId, targetId, relationship, since, JSON.stringify(metadata), COMM, origin, originRef, pairKey(sourceId, targetId)],
   );
@@ -103,14 +103,14 @@ const EVENTS = [
     slug: 'q3-lp-update', name: 'Q3 LP Update', hosts: [NODE_ADMIN],
     start: inDays(-21, 16), end: inDays(-21, 17, 30),
     location: { label: 'Blackbird — Sydney', address: '5 Martin Pl, Sydney NSW', lat: -33.8679, lon: 151.2093 },
-    visibility: 'community', status: 'published', capacity: 60, views: 233,
+    visibility: 'space', status: 'published', capacity: 60, views: 233,
     description: 'Quarterly update for limited partners: fund marks, new positions, and the reserves plan for the next two quarters.',
   },
   {
     slug: 'portfolio-founder-dinner', name: 'Portfolio Founder Dinner', hosts: [NODE_ADMIN, NODE_PARTNER],
     start: inDays(9, 18, 30), end: inDays(9, 22),
     location: { label: 'Bentley Restaurant + Bar', address: '27 O’Connell St, Sydney NSW', lat: -33.8641, lon: 151.2093 },
-    visibility: 'community', status: 'published', capacity: 40, views: 187, allowPlusOnes: 1,
+    visibility: 'space', status: 'published', capacity: 40, views: 187, allowPlusOnes: 1,
     description: 'Twice-yearly dinner for portfolio founders. No panels, no decks — just the people building, in one room.',
   },
   {
@@ -125,7 +125,7 @@ const EVENTS = [
     slug: 'nz-founder-office-hours', name: 'NZ Founder Office Hours (planning)', hosts: [NODE_PARTNER],
     start: inDays(52, 10), end: inDays(52, 13),
     location: { label: 'TBC — Auckland' },
-    visibility: 'community', status: 'draft', capacity: 12, views: 6,
+    visibility: 'space', status: 'draft', capacity: 12, views: 6,
     description: 'Draft: a day of 20-minute slots for New Zealand founders, pre-seed and seed. Venue and date being locked in.',
   },
 ];
@@ -227,18 +227,18 @@ const RESOURCE_NODE = {
   tags: ['Guide', 'Fundraising', 'Playbook'],
 };
 
-// ---- channels / posts / DM ---------------------------------------------------
+// ---- channels / messages ------------------------------------------------------
 
-const SPACES = [
-  { id: 'space_bb_firm', name: 'Firm', emoji: '🐦', position: 0 },
-  { id: 'space_bb_portfolio', name: 'Portfolio', emoji: '📈', position: 1 },
+const SECTIONS = [
+  { id: 'section_bb_firm', name: 'Firm', emoji: '🐦', position: 0 },
+  { id: 'section_bb_portfolio', name: 'Portfolio', emoji: '📈', position: 1 },
 ];
 
 const CHANNELS = [
-  { id: 'chan_bb_general', name: 'general', icon: '👋', space: 'space_bb_firm', description: 'Everything that does not have a better home.' },
-  { id: 'chan_bb_dealflow', name: 'deal-flow', icon: '🔎', space: 'space_bb_firm', description: 'Inbound, intros and what we are looking at this week.' },
-  { id: 'chan_bb_portfolio', name: 'portfolio-news', icon: '📣', space: 'space_bb_portfolio', description: 'Raises, launches, hires and press from the portfolio.' },
-  { id: 'chan_bb_lp', name: 'lp-updates', icon: '📊', space: 'space_bb_portfolio', description: 'Reporting cycles, marks and LP correspondence.' },
+  { id: 'chan_bb_general', name: 'general', icon: '👋', section: 'section_bb_firm', description: 'Everything that does not have a better home.' },
+  { id: 'chan_bb_dealflow', name: 'deal-flow', icon: '🔎', section: 'section_bb_firm', description: 'Inbound, intros and what we are looking at this week.' },
+  { id: 'chan_bb_portfolio', name: 'portfolio-news', icon: '📣', section: 'section_bb_portfolio', description: 'Raises, launches, hires and press from the portfolio.' },
+  { id: 'chan_bb_lp', name: 'lp-updates', icon: '📊', section: 'section_bb_portfolio', description: 'Reporting cycles, marks and LP correspondence.' },
 ];
 
 // hoursAgo counts back from now; keeps ordering stable across runs.
@@ -259,12 +259,6 @@ const MESSAGES = [
   { id: 'msg_bb_032', chan: 'chan_bb_lp', from: ADMIN, hoursAgo: 148, text: 'Moved out by roughly two quarters — the detail is in the reserves section of the roll-up. Happy to walk through it on a call.', replyTo: 'msg_bb_031', reactions: [{ from: LP, emoji: '🙏' }] },
 ];
 
-const POSTS = [
-  { id: 'post_bb_1', from: ADMIN, hoursAgo: 330, content: 'Demo Day is locked in: Carriageworks, ten companies, five minutes each. Applications for pitch slots are open on the event page and close in three weeks. If you are on the fence — the five minutes are terrifying and worth it.', reactions: [{ from: PARTNER, emoji: '🚀' }, { from: MEMBER, emoji: '🔥' }], comments: [{ id: 'pc_bb_1a', from: MEMBER, text: 'Applied 😅' }] },
-  { id: 'post_bb_2', from: PARTNER, hoursAgo: 210, content: 'A pattern from the last twenty first meetings: the founders who describe their customer better than they describe their product are, almost without exception, the ones still going in year three.', reactions: [{ from: ADMIN, emoji: '💡' }, { from: LP, emoji: '👏' }], comments: [{ id: 'pc_bb_2a', from: ADMIN, text: 'This is going in the memo template.' }, { id: 'pc_bb_2b', from: PARTNER, text: 'Steal freely.', parent: 'pc_bb_2a' }] },
-  { id: 'post_bb_3', from: MEMBER, hoursAgo: 120, content: 'Portfolio founders — we have started a shared doc of ANZ-friendly infrastructure vendors that actually answer support tickets. Add yours, it saves the next person a week.', reactions: [{ from: PARTNER, emoji: '🙏' }] },
-  { id: 'post_bb_4', from: ADMIN, hoursAgo: 30, content: 'Q3 close is done. Marks are in the roll-up, the LP update goes out Monday. Thank you to everyone who got their numbers in on time, and a pointed thank you to everyone who did not.', reactions: [{ from: PARTNER, emoji: '😂' }, { from: LP, emoji: '✅' }] },
-];
 
 const DM_MESSAGES = [
   { id: 'msg_bb_dm1', from: ADMIN, hoursAgo: 130, text: 'Got a minute to look at the Demo Day shortlist before it goes to the wider team?' },
@@ -281,9 +275,9 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  const comm = await client.query('SELECT id FROM communities WHERE id = $1', [COMM]);
+  const comm = await client.query('SELECT id FROM spaces WHERE id = $1', [COMM]);
   if (comm.rowCount === 0) {
-    throw new Error(`community "${COMM}" not found — run \`pnpm db:seed\` first`);
+    throw new Error(`space "${COMM}" not found — run \`pnpm db:seed\` first`);
   }
   const users = await client.query(`SELECT id FROM users WHERE id = ANY($1)`, [ANCHORS]);
   if (users.rowCount < ANCHORS.length) {
@@ -294,7 +288,7 @@ try {
   // attendee table isn't only anchors. Absent if the portfolio layer hasn't run.
   const founders = await client.query(
     `SELECT id, name FROM nodes
-      WHERE community_id = $1 AND type = 'person' AND alias = 'Founder'
+      WHERE space_id = $1 AND type = 'person' AND alias = 'Founder'
         AND COALESCE(metadata->>'anchor', 'false') <> 'true'
       ORDER BY name LIMIT 4`,
     [COMM],
@@ -382,13 +376,13 @@ try {
   console.log('\n--- Resource library ---');
   const uploadDir = join(__dirname, '..', 'public', 'uploads', 'seed');
   mkdirSync(uploadDir, { recursive: true });
-  await client.query(`DELETE FROM resources WHERE community_id = $1 AND metadata->>'seeded' = 'true'`, [COMM]);
+  await client.query(`DELETE FROM resources WHERE space_id = $1 AND metadata->>'seeded' = 'true'`, [COMM]);
   const resourceIdByFile = new Map();
   for (const r of FILE_RESOURCES) {
     const path = join(uploadDir, r.file);
     writeFileSync(path, r.body, 'utf8');
     const row = await client.query(
-      `INSERT INTO resources (community_id, name, file_type, file_url, file_size, uploaded_by, metadata, created_at)
+      `INSERT INTO resources (space_id, name, file_type, file_url, file_size, uploaded_by, metadata, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, '{"seeded": "true"}'::jsonb, $7) RETURNING id`,
       [COMM, r.name, r.fileType, `/uploads/seed/${r.file}`, Buffer.byteLength(r.body), r.uploadedBy, daysAgo(r.daysAgo)],
     );
@@ -402,11 +396,11 @@ try {
   );
   console.log(`  ✓ ${FILE_RESOURCES.length} files + 2 comments`);
 
-  // 4. Channel spaces, channels, messages
+  // 4. Channel sections, channels, messages
   console.log('\n--- Channels & messages ---');
-  for (const s of SPACES) {
+  for (const s of SECTIONS) {
     await client.query(
-      `INSERT INTO channel_spaces (id, community_id, name, emoji, position)
+      `INSERT INTO channel_sections (id, space_id, name, emoji, position)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, emoji = EXCLUDED.emoji, position = EXCLUDED.position`,
       [s.id, COMM, s.name, s.emoji, s.position],
@@ -414,11 +408,11 @@ try {
   }
   for (const ch of CHANNELS) {
     await client.query(
-      `INSERT INTO conversations (id, type, name, description, icon, community_id, space_id, created_by_id, created_at, updated_at)
+      `INSERT INTO conversations (id, type, name, description, icon, space_id, section_id, created_by_id, created_at, updated_at)
        VALUES ($1, 'CHANNEL', $2, $3, $4, $5, $6, $7, NOW() - interval '60 days', NOW())
        ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
-         icon = EXCLUDED.icon, space_id = EXCLUDED.space_id, updated_at = NOW()`,
-      [ch.id, ch.name, ch.description, ch.icon, COMM, ch.space, ADMIN],
+         icon = EXCLUDED.icon, space_id = EXCLUDED.space_id, section_id = EXCLUDED.section_id, updated_at = NOW()`,
+      [ch.id, ch.name, ch.description, ch.icon, COMM, ch.section, ADMIN],
     );
     for (const uid of ANCHORS) {
       await client.query(
@@ -444,33 +438,8 @@ try {
       );
     }
   }
-  console.log(`  ✓ ${SPACES.length} spaces, ${CHANNELS.length} channels, ${MESSAGES.length} messages`);
+  console.log(`  ✓ ${SECTIONS.length} sections, ${CHANNELS.length} channels, ${MESSAGES.length} messages`);
 
-  // 5. Feed posts
-  for (const p of POSTS) {
-    await client.query(
-      `INSERT INTO posts (id, community_id, author_id, content, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, created_at = EXCLUDED.created_at, updated_at = NOW()`,
-      [p.id, COMM, p.from, p.content, hoursAgo(p.hoursAgo)],
-    );
-    for (const r of p.reactions ?? []) {
-      await client.query(
-        `INSERT INTO post_reactions (post_id, user_id, emoji) VALUES ($1, $2, $3)
-         ON CONFLICT (post_id, user_id, emoji) DO NOTHING`,
-        [p.id, r.from, r.emoji],
-      );
-    }
-    for (const cm of p.comments ?? []) {
-      await client.query(
-        `INSERT INTO post_comments (id, post_id, author_id, parent_id, content, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())
-         ON CONFLICT (id) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()`,
-        [cm.id, p.id, cm.from, cm.parent ?? null, cm.text, hoursAgo(p.hoursAgo - 2)],
-      );
-    }
-  }
-  console.log(`  ✓ ${POSTS.length} feed posts`);
 
   // 6. Admin ↔ Partner DM
   const dmKey = [ADMIN, PARTNER].sort().join(':');
@@ -501,7 +470,7 @@ try {
   console.log('\n=== Committed ===');
 
   const summary = await client.query(
-    'SELECT type, COUNT(*)::int AS count FROM nodes WHERE community_id = $1 GROUP BY type ORDER BY type',
+    'SELECT type, COUNT(*)::int AS count FROM nodes WHERE space_id = $1 GROUP BY type ORDER BY type',
     [COMM],
   );
   console.table(summary.rows);

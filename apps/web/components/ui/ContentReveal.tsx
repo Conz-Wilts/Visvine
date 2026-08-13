@@ -71,7 +71,7 @@ export default function ContentReveal({ ready, className, style, role, children 
       setSettled(false);
       // Failsafe: whatever is under the curtain gets shown eventually. A hidden
       // body is the right trade for the few hundred ms a note fetch takes, but if
-      // `ready` never arrives (no community resolved, a request that hangs) the
+      // `ready` never arrives (no space resolved, a request that hangs) the
       // page must fall back to showing its skeleton or error rather than nothing.
       const bail = setTimeout(() => setShown(true), STUCK_MS);
       return () => clearTimeout(bail);

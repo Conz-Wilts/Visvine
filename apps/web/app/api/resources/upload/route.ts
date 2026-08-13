@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { uploadResourceFile, RESOURCES_BUCKET, getSignedUrl } from '@/lib/gcs';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
-import { communityMemberForbidden } from '@/lib/auth';
+import { spaceMemberForbidden } from '@/lib/auth';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp', '.tiff', '.heic', '.heif', '.ico']);
 // Cap before buffering the whole body into memory + running sharp — an
@@ -17,12 +17,12 @@ export async function POST(req: NextRequest) {
 
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
-  const communityId = formData.get('communityId') as string | null;
+  const spaceId = formData.get('spaceId') as string | null;
 
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
   if (file.size > MAX_SIZE) return NextResponse.json({ error: 'File must be less than 25MB' }, { status: 400 });
-  // A community-scoped resource may only be uploaded by a member of that community.
-  if (communityId && (await communityMemberForbidden(session.userId, communityId, session.email))) {
+  // A space-scoped resource may only be uploaded by a member of that space.
+  if (spaceId && (await spaceMemberForbidden(session.userId, spaceId, session.email))) {
     return forbiddenResponse();
   }
 
@@ -33,9 +33,9 @@ export async function POST(req: NextRequest) {
   const finalExt = isImage ? '.webp' : ext;
   const filename = `${uuid}${finalExt}`;
 
-  // Resources are scoped by community when communityId is provided
-  const objectPath = communityId
-    ? `resources/${communityId}/${uuid}/${filename}`
+  // Resources are scoped by space when spaceId is provided
+  const objectPath = spaceId
+    ? `resources/${spaceId}/${uuid}/${filename}`
     : `resources/unscoped/${uuid}/${filename}`;
 
   const buf = Buffer.from(await file.arrayBuffer());

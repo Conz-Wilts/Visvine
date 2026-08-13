@@ -37,8 +37,8 @@ const principal = (userId: string, acc: BrainAccess, over: Partial<BrainPrincipa
   userId,
   email: `${userId}@x.test`,
   name: userId,
-  communityId: 'c1',
-  communityAdmin: false,
+  spaceId: 'c1',
+  spaceAdmin: false,
   access: acc,
   ...over,
 })
@@ -101,8 +101,8 @@ test('requestVisibleTo: your own request, plus anything you manage', () => {
   const manager = principal('u-me', access([grant('', LEVEL_FULL)]))
   assert.equal(requestVisibleTo(manager, theirs), true)
 
-  // Community admins manage everything, including the root gate.
-  const admin = principal('u-admin', access([]), { communityAdmin: true })
+  // Space admins manage everything, including the root gate.
+  const admin = principal('u-admin', access([]), { spaceAdmin: true })
   assert.equal(requestVisibleTo(admin, request({ resourcePath: '' })), true)
   assert.equal(requestVisibleTo(admin, request({ resourcePath: 'teams/engineering' })), true)
 })
@@ -147,7 +147,7 @@ test('describeOutcome: an approval reports the level GRANTED, not the one asked 
     'Viewer on meetings/sync',
   )
   // A denial hands out no level, so it names only the resource.
-  assert.equal(describeOutcome(request({ status: 'denied' }), 'Community context'), 'Community context')
+  assert.equal(describeOutcome(request({ status: 'denied' }), 'Space context'), 'Space context')
 })
 
 test('describeRequest: names the level asked for and the target', () => {
@@ -156,8 +156,8 @@ test('describeRequest: names the level asked for and the target', () => {
     'wants Viewer on deals/canva',
   )
   assert.equal(
-    describeRequest(request({ resourcePath: '', level: LEVEL_EDIT }), 'Community context'),
-    'wants Editor on Community context',
+    describeRequest(request({ resourcePath: '', level: LEVEL_EDIT }), 'Space context'),
+    'wants Editor on Space context',
   )
 })
 

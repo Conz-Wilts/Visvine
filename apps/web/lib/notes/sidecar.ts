@@ -1,5 +1,5 @@
 // The brain's control-plane sidecar — the DB port of blackbird-brain's
-// src/server/brainStore.ts (`.brain/` directory). One CommunityBrainFile row per
+// src/server/brainStore.ts (`.brain/` directory). One SpaceBrainFile row per
 // named file per brain: "folders.json" (registry), "audit.jsonl", "join-
 // requests.jsonl", "move-proposals.jsonl", "enrichment-state.json". Content is
 // text; JSON/JSONL parsing lives here, domain meaning in the callers.
@@ -8,9 +8,9 @@ import prisma from '@/lib/prisma'
 import type { Brain } from './store'
 
 async function readText(brain: Brain, name: string): Promise<string | null> {
-  const row = await prisma.communityBrainFile.findUnique({
+  const row = await prisma.spaceBrainFile.findUnique({
     where: {
-      brain_file_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, name },
+      brain_file_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name },
     },
     select: { content: true },
   })
@@ -18,11 +18,11 @@ async function readText(brain: Brain, name: string): Promise<string | null> {
 }
 
 async function writeText(brain: Brain, name: string, content: string): Promise<void> {
-  await prisma.communityBrainFile.upsert({
+  await prisma.spaceBrainFile.upsert({
     where: {
-      brain_file_identity: { communityId: brain.communityId, ownerKey: brain.ownerKey, name },
+      brain_file_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name },
     },
-    create: { communityId: brain.communityId, ownerKey: brain.ownerKey, name, content },
+    create: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name, content },
     update: { content },
   })
 }

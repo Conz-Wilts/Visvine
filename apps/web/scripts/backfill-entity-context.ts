@@ -1,7 +1,7 @@
 /**
  * One-off backfill: give every existing thing its context.
  *
- * Communities, spaces and channels became graph nodes (and gained a canonical
+ * Spaces, spaces and channels became graph nodes (and gained a canonical
  * context note) — but only on the create path. Everything that already existed
  * is invisible in the context graph until this runs. It also fills the gap
  * events have always had: they were nodes from day one but never got their
@@ -11,24 +11,24 @@
  * nothing here creates one for them; the last step rebuilds only the mention
  * edges that entity notes and connectors own.
  *
- * Order matters. The community node goes first because every other node hangs a
+ * Order matters. The space node goes first because every other node hangs a
  * `contains` edge off it, and `Link.sourceId` is a foreign key — a child synced
  * before its parent silently loses its edge (syncEntityNode skips a missing
  * parent rather than failing). Channels come after spaces for the same reason.
  *
  * Idempotent: nodes are found by their record id and updated in place, notes are
- * create-only, and edges dedup on (community, pair, relationship). Re-running
+ * create-only, and edges dedup on (space, pair, relationship). Re-running
  * reports the same counts and changes nothing.
  *
- * Personal spaces (`me:<userId>` communities) are skipped: a personal brain has
- * no context graph to join, so a `community:` node there would be furniture.
+ * Personal spaces (`me:<userId>` spaces) are skipped: a personal brain has
+ * no context graph to join, so a `space:` node there would be furniture.
  *
  * Local-only — guarded exactly like the destructive db:* scripts.
  *
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-entity-context.ts
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-entity-context.ts --dry-run
- *   pnpm --filter @visvine/web exec tsx scripts/backfill-entity-context.ts --community=<id>
+ *   pnpm --filter @visvine/web exec tsx scripts/backfill-entity-context.ts --space=<id>
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -36,7 +36,7 @@ import 'dotenv/config';
 import { ConversationType } from '@prisma/client';
 import prisma from '../lib/prisma';
 import {
-  communityNodeId,
+  spaceNodeId,
   ensureEntityNote,
   syncEntityNode,
 } from '../lib/notes/context/entityNodes';
@@ -44,11 +44,11 @@ import { backfillContextLinks } from '../lib/notes/entityLinks';
 import { SHARED_OWNER_KEY } from '../lib/notes/store';
 
 const dryRun = process.argv.includes('--dry-run');
-const onlyArg = process.argv.find((a) => a.startsWith('--community='));
-const only = onlyArg ? onlyArg.slice('--community='.length) : null;
+const onlyArg = process.argv.find((a) => a.startsWith('--space='));
+const only = onlyArg ? onlyArg.slice('--space='.length) : null;
 
 interface Counts {
-  community: number;
+  space: number;
   spaces: number;
   channels: number;
   notes: number;
@@ -56,55 +56,55 @@ interface Counts {
   entityNotes: number;
 }
 
-async function backfillCommunity(community: { id: string; name: string; description: string | null; location: string | null }): Promise<Counts> {
+async function backfillSpace(space: { id: string; name: string; description: string | null; location: string | null }): Promise<Counts> {
   const counts: Counts = {
-    community: 0,
+    space: 0,
     spaces: 0,
     channels: 0,
     notes: 0,
     eventNotes: 0,
     entityNotes: 0,
   };
-  const communityNode = communityNodeId(community.id);
+  const spaceNode = spaceNodeId(space.id);
 
-  // ── 1. The community itself ────────────────────────────────────────────────
+  // ── 1. The space itself ────────────────────────────────────────────────
   // Refreshed only when the node is already there. Spaces are no longer given a
   // node for themselves at create time (app/api/communities/route.ts) — it would
   // put the space in its own directory and write a `communities/<slug>.md` page
-  // about it — so this backfill must not reintroduce one. Communities that
+  // about it — so this backfill must not reintroduce one. Spaces that
   // predate that keep theirs, and everything below still parents to it; the rest
   // skip the parent edge the same way a freshly created space does.
-  const hasCommunityNode = (await prisma.node.count({ where: { id: communityNode } })) > 0;
-  if (hasCommunityNode) {
+  const hasSpaceNode = (await prisma.node.count({ where: { id: spaceNode } })) > 0;
+  if (hasSpaceNode) {
     if (!dryRun) {
       await syncEntityNode({
-        communityId: community.id,
+        spaceId: space.id,
         type: 'space',
-        nodeId: communityNode,
-        name: community.name,
-        subtitle: community.description,
-        location: community.location,
-        body: community.description ?? '',
+        nodeId: spaceNode,
+        name: space.name,
+        subtitle: space.description,
+        location: space.location,
+        body: space.description ?? '',
         revalidate: false,
       });
     }
-    counts.community = 1;
+    counts.space = 1;
   }
 
   // ── 2. Spaces ──────────────────────────────────────────────────────────────
   const spaces = await prisma.channelSection.findMany({
-    where: { communityId: community.id },
+    where: { spaceId: space.id },
     select: { id: true, name: true, emoji: true },
   });
   for (const space of spaces) {
     if (!dryRun) {
       await syncEntityNode({
-        communityId: community.id,
+        spaceId: space.id,
         type: 'section',
         name: space.name,
         recordId: space.id,
         metadata: { emoji: space.emoji },
-        parentNodeId: communityNode,
+        parentNodeId: spaceNode,
         revalidate: false,
       });
     }
@@ -113,7 +113,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
 
   // ── 3. Channels (after spaces, so their parent edge lands on the space) ─────
   const channels = await prisma.conversation.findMany({
-    where: { communityId: community.id, type: ConversationType.CHANNEL },
+    where: { spaceId: space.id, type: ConversationType.CHANNEL },
     select: { id: true, name: true, description: true, icon: true, viewMode: true, sectionId: true },
   });
   for (const channel of channels) {
@@ -122,16 +122,16 @@ async function backfillCommunity(community: { id: string; name: string; descript
         ? (
             await prisma.node.findFirst({
               where: {
-                communityId: community.id,
+                spaceId: space.id,
                 type: 'section',
                 metadata: { path: ['sectionId'], equals: channel.sectionId },
               },
               select: { id: true },
             })
-          )?.id ?? communityNode
-        : communityNode;
+          )?.id ?? spaceNode
+        : spaceNode;
       await syncEntityNode({
-        communityId: community.id,
+        spaceId: space.id,
         type: 'channel',
         name: channel.name?.trim() || 'Channel',
         recordId: channel.id,
@@ -146,11 +146,11 @@ async function backfillCommunity(community: { id: string; name: string; descript
 
   // ── 4. Existing nodes missing their canonical note (events especially) ──────
   const nodes = await prisma.node.findMany({
-    where: { communityId: community.id },
+    where: { spaceId: space.id },
     select: { id: true, type: true, name: true, subtitle: true, tags: true },
   });
   for (const node of nodes) {
-    // 'space' here is the space's own root node (formerly type 'community');
+    // 'space' here is the space's own root node (formerly type 'space');
     // 'section' is the channel container (formerly type 'space').
     if (node.type === 'space' || node.type === 'section' || node.type === 'channel') continue;
     // A connector's note came first, and any leftover note:/file: row from when
@@ -159,7 +159,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
     // Counts are notes actually written — an entity that already had its note is
     // the common case, and reporting it as work done would hide what changed.
     if (!dryRun) {
-      const { created } = await ensureEntityNote(community.id, node, { tags: node.tags });
+      const { created } = await ensureEntityNote(space.id, node, { tags: node.tags });
       if (!created) continue;
     }
     if (node.type === 'event') counts.eventNotes++;
@@ -168,10 +168,10 @@ async function backfillCommunity(community: { id: string; name: string; descript
 
   // ── 5. Connector nodes + every mention edge, now the rest of the graph exists ─
   if (!dryRun) {
-    counts.notes = await backfillContextLinks(community.id);
+    counts.notes = await backfillContextLinks(space.id);
   } else {
-    counts.notes = await prisma.communityNote.count({
-      where: { communityId: community.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
+    counts.notes = await prisma.spaceNote.count({
+      where: { spaceId: space.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
     });
   }
 
@@ -179,7 +179,7 @@ async function backfillCommunity(community: { id: string; name: string; descript
 }
 
 async function main() {
-  const communities = await prisma.community.findMany({
+  const spaces = await prisma.space.findMany({
     where: {
       // Personal spaces have no context graph of their own — skip them.
       personalOwnerId: null,
@@ -188,15 +188,15 @@ async function main() {
     select: { id: true, name: true, description: true, location: true },
     orderBy: { id: 'asc' },
   });
-  if (only && communities.length === 0) {
-    throw new Error(`Community not found (or it's a personal space): ${only}`);
+  if (only && spaces.length === 0) {
+    throw new Error(`Space not found (or it's a personal space): ${only}`);
   }
 
-  console.log(`${dryRun ? '[dry run] ' : ''}Backfilling context for ${communities.length} communities…`);
-  for (const community of communities) {
-    const c = await backfillCommunity(community);
+  console.log(`${dryRun ? '[dry run] ' : ''}Backfilling context for ${spaces.length} spaces…`);
+  for (const space of spaces) {
+    const c = await backfillSpace(space);
     console.log(
-      `${community.name} (${community.id}): ` +
+      `${space.name} (${space.id}): ` +
         `${c.spaces} spaces, ${c.channels} channels, ${c.notes} notes, ` +
         `${c.eventNotes} event notes, ${c.entityNotes} other entity notes`,
     );

@@ -11,7 +11,7 @@
 //
 // Index notes — the thing a folder actually IS in this product — get their own
 // group, pinned to the top, above the notes that live inside them. The label
-// comes from the community's own type registry, so it reads "Index" by default
+// comes from the space's own type registry, so it reads "Index" by default
 // and follows a rename for free; it is never called a folder here.
 //
 // Each group is painted in its type's configured colour — the same colour the
@@ -23,10 +23,10 @@
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
 import { getTypeColor } from '@/features/directory/components/typeStyles';
-import type { CommunityAlias } from '@/lib/types';
+import type { SpaceAlias } from '@/lib/types';
 import type { ContextItem } from '@/features/notes/lib/contextItems';
 
 type Direction = 'out' | 'in' | 'both' | 'unresolved';
@@ -91,8 +91,8 @@ interface ContextLinksPanelProps {
    */
   keep: Set<string> | null;
   /**
-   * The community alias held by the note's directory node, if any — an entity
-   * note IS a node seen from the notes side, and the community's name for its
+   * The space alias held by the note's directory node, if any — an entity
+   * note IS a node seen from the notes side, and the space's name for its
    * type ("Portfolio Company") is what the directory shows everywhere else.
    * Returns null for a plain note, which has no node behind it.
    */
@@ -103,9 +103,9 @@ interface ContextLinksPanelProps {
 export default function ContextLinksPanel({
   item, items, titleFor, keep, aliasOfPath, onSelectPath,
 }: ContextLinksPanelProps) {
-  const { currentCommunity } = useCommunity();
-  const nodeTypes = currentCommunity?.nodeTypes;
-  const communityAliases = currentCommunity?.communityAliases as CommunityAlias[] | undefined;
+  const { currentSpace } = useSpace();
+  const nodeTypes = currentSpace?.nodeTypes;
+  const aliases = currentSpace?.aliases as SpaceAlias[] | undefined;
   // Collapsed groups only — a type absent from the set is open, so a note that
   // gains a new kind of connection shows it without a click.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -153,17 +153,17 @@ export default function ContextLinksPanel({
       connections.push({ key: `unresolved:${name}`, path: null, title: name, direction: 'unresolved' });
     }
 
-    // The index group's label and colour come from the community's own Index
-    // type, so a community that renames or recolours it is obeyed here too.
+    // The index group's label and colour come from the space's own Index
+    // type, so a space that renames or recolours it is obeyed here too.
     const indexConfig = getNodeTypeConfig('Index', nodeTypes);
 
     const grouped = new Map<string, Group>();
     for (const connection of connections) {
-      // Group by the community's own type names (the console is the registry),
-      // so `company` and `Community` land in one group under one spelling — and
-      // then by the alias that names that type here, so a Community aliased
+      // Group by the space's own type names (the console is the registry),
+      // so `company` and `Space` land in one group under one spelling — and
+      // then by the alias that names that type here, so a Space aliased
       // "Portfolio Company" gets its own band beside "Fund" rather than both
-      // hiding under one "Community". An alias the console doesn't configure
+      // hiding under one "Space". An alias the console doesn't configure
       // for this type isn't one (events reuse the column for their public slug),
       // so those fall back to the plain type group. Only a note with no type at
       // all falls into the untyped bucket.
@@ -185,7 +185,7 @@ export default function ContextLinksPanel({
         color = NEUTRAL;
       } else {
         const typeName = getNodeTypeConfig(rawType, nodeTypes).name;
-        const alias = findAlias(communityAliases, aliasOfPath(connection.path), rawType);
+        const alias = findAlias(aliases, aliasOfPath(connection.path), rawType);
         // NUL joins the pair: it can't occur in a type or an alias name, so two
         // groups collide only when they really are the same type and alias.
         key = alias ? `${typeName}\u0000${alias.name}` : typeName;
@@ -212,7 +212,7 @@ export default function ContextLinksPanel({
         if (b.key === UNRESOLVED) return -1;
         return b.connections.length - a.connections.length || a.label.localeCompare(b.label);
       });
-  }, [item, items, titleFor, nodeTypes, communityAliases, aliasOfPath, survives]);
+  }, [item, items, titleFor, nodeTypes, aliases, aliasOfPath, survives]);
 
   if (!item) {
     return (

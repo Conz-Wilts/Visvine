@@ -7,7 +7,7 @@ import { isAdmin } from '@/lib/auth';
 
 /**
  * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
- * uploader profile, and activity counts. Community members only.
+ * uploader profile, and activity counts. Space members only.
  */
 export async function GET(
   _req: NextRequest,
@@ -23,15 +23,15 @@ export async function GET(
   });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const membership = await prisma.userCommunity.findUnique({
-    where: { userId_communityId: { userId: session.userId, communityId: resource.communityId } },
+  const membership = await prisma.spaceMember.findUnique({
+    where: { userId_spaceId: { userId: session.userId, spaceId: resource.spaceId } },
     select: { id: true },
   });
   const superAdmin = isSuperAdmin(session.email);
   if (!membership && !superAdmin) {
     return forbiddenResponse();
   }
-  const canManage = await isAdmin(session.userId, resource.communityId, session.email);
+  const canManage = await isAdmin(session.userId, resource.spaceId, session.email);
 
   // Signed URLs stored in DB expire after 15 min — regenerate from gcsPath.
   const meta = resource.metadata as Record<string, unknown> | null;

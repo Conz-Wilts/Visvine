@@ -1,5 +1,5 @@
-// Tag colours. A community keeps a tag → base-colour registry in its
-// designConfig (see CommunityDesignConfig.tagColors); a tag chosen without a
+// Tag colours. A space keeps a tag → base-colour registry in its
+// designConfig (see SpaceDesignConfig.tagColors); a tag chosen without a
 // registered colour falls back to a deterministic palette pick, so every tag
 // renders coloured. The picker offers PALETTES as swatches.
 

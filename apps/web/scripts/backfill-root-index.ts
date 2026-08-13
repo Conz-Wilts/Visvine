@@ -1,5 +1,5 @@
 /**
- * Backfill: ensure every community's brain has a ROOT index.md — the brain's
+ * Backfill: ensure every space's brain has a ROOT index.md — the brain's
  * home page.
  *
  * Why this is a separate backfill from backfill-index-notes.ts: that one uses
@@ -9,13 +9,13 @@
  * So the root is the one index nothing creates retroactively.
  *
  * It matters because the Directory's Context tab routes to the root index —
- * the community's home page (see app/(auth)/directory/page.tsx, which also
- * writes one on first open for brains that lack it). New communities get
+ * the space's home page (see app/(auth)/directory/page.tsx, which also
+ * writes one on first open for brains that lack it). New spaces get
  * theirs at creation via ensureRootIndex; this catches the ones made before
  * that, in bulk.
  *
- * Covers every Community row, personal `me:<userId>` spaces included, and reads
- * the title from the community's name. Idempotent: a brain that already has a
+ * Covers every Space row, personal `me:<userId>` spaces included, and reads
+ * the title from the space's name. Idempotent: a brain that already has a
  * root index is skipped, so re-running creates nothing.
  *
  * NOT local-guarded, unlike the db:* scripts — production is exactly where it
@@ -25,7 +25,7 @@
  * Usage:
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-root-index.ts           # dry run
  *   pnpm --filter @visvine/web exec tsx scripts/backfill-root-index.ts --apply   # write
- *   pnpm --filter @visvine/web exec tsx scripts/backfill-root-index.ts --apply <communityId>
+ *   pnpm --filter @visvine/web exec tsx scripts/backfill-root-index.ts --apply <spaceId>
  */
 
 import 'dotenv/config';
@@ -52,28 +52,28 @@ async function main() {
   const apply = args.includes('--apply');
   const only = args.find((a) => !a.startsWith('--'));
 
-  const communities = await prisma.community.findMany({
+  const spaces = await prisma.space.findMany({
     where: only ? { id: only } : {},
     select: { id: true, name: true, personalOwnerId: true },
     orderBy: { id: 'asc' },
   });
-  if (only && communities.length === 0) throw new Error(`No such community: ${only}`);
+  if (only && spaces.length === 0) throw new Error(`No such space: ${only}`);
 
   console.log(`${apply ? 'APPLY' : 'DRY RUN'} → ${targetHost()}`);
-  console.log(`${communities.length} communit${communities.length === 1 ? 'y' : 'ies'}\n`);
+  console.log(`${spaces.length} space${spaces.length === 1 ? '' : 's'}\n`);
 
   let missing = 0;
   let created = 0;
-  for (const c of communities) {
-    const brain = { communityId: c.id, ownerKey: SHARED_OWNER_KEY };
+  for (const c of spaces) {
+    const brain = { spaceId: c.id, ownerKey: SHARED_OWNER_KEY };
     if (await readNoteOrNull(brain, INDEX_BASENAME)) continue;
     missing++;
-    const kind = c.personalOwnerId ? 'personal' : 'community';
+    const kind = c.personalOwnerId ? 'personal' : 'space';
     if (!apply) {
       console.log(`would create  ${c.id} [${kind}] — title ${JSON.stringify(c.name)}`);
       continue;
     }
-    // Best-effort per community: one bad brain must not strand the rest.
+    // Best-effort per space: one bad brain must not strand the rest.
     try {
       if (await ensureRootIndex(brain, c.name, SYSTEM_ACTOR)) {
         created++;

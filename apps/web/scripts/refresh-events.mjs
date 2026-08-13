@@ -214,7 +214,7 @@ const EVENTS = [
       eventType: 'in-person',
       start_at: at(33, 6), end_at: at(33, 8),
       timezone: 'Pacific/Auckland',
-      visibility: 'community',
+      visibility: 'space',
       status: 'published',
       hosts: [HOST],
       capacity: 12,
@@ -245,7 +245,7 @@ const EVENTS = [
       eventType: 'in-person',
       start_at: at(70, 7), end_at: at(70, 11),
       timezone: 'Australia/Sydney',
-      visibility: 'community',
+      visibility: 'space',
       status: 'draft',
       hosts: [HOST],
       capacity: 250,
@@ -263,7 +263,7 @@ const EVENTS = [
   {
     id: 'event:vv-q1-founder-mixer',
     name: 'Q1 Founder Mixer',
-    subtitle: 'Our first-quarter community catch-up — thanks to everyone who came.',
+    subtitle: 'Our first-quarter space catch-up — thanks to everyone who came.',
     location: 'Blackbird HQ, Sydney',
     metadata: {
       slug: 'q1-founder-mixer',
@@ -271,7 +271,7 @@ const EVENTS = [
       eventType: 'in-person',
       start_at: at(-46, 7), end_at: at(-46, 10), // ~6 weeks ago
       timezone: 'Australia/Sydney',
-      visibility: 'community',
+      visibility: 'space',
       status: 'published',
       hosts: [HOST],
       capacity: 120,
@@ -291,9 +291,9 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  // Sanity: confirm the target community exists before we attach events to it.
-  const comm = await client.query('SELECT 1 FROM communities WHERE id = $1', [COMM]);
-  if (comm.rowCount === 0) throw new Error(`Community ${COMM} not found — run the Blackbird seed first.`);
+  // Sanity: confirm the target space exists before we attach events to it.
+  const comm = await client.query('SELECT 1 FROM spaces WHERE id = $1', [COMM]);
+  if (comm.rowCount === 0) throw new Error(`Space ${COMM} not found — run the Blackbird seed first.`);
 
   console.log('--- Shifting existing events to future dates ---');
   for (const s of SHIFTS) {
@@ -319,7 +319,7 @@ try {
   console.log('\n--- Upserting new events ---');
   for (const e of EVENTS) {
     const r = await client.query(`
-      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, community_id, alias, created_at, updated_at)
+      INSERT INTO nodes (id, type, name, subtitle, location, url, tags, metadata, space_id, alias, created_at, updated_at)
       VALUES ($1, 'event', $2, $3, $4, NULL, '{}'::text[], $5::jsonb, $6, $7, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET type = 'event', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
         location = EXCLUDED.location, metadata = EXCLUDED.metadata, alias = EXCLUDED.alias, updated_at = NOW()
@@ -338,7 +338,7 @@ try {
            metadata->>'status'     AS status,
            metadata->>'visibility' AS visibility,
            jsonb_array_length(COALESCE(metadata->'form_schema'->'schema', '[]'::jsonb)) AS form_fields
-    FROM nodes WHERE community_id = $1 AND type = 'event'
+    FROM nodes WHERE space_id = $1 AND type = 'event'
     ORDER BY metadata->>'start_at'`, [COMM]);
   console.table(summary.rows);
 

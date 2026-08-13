@@ -4,7 +4,7 @@ import { BRAND } from "@/lib/brand";
 import { useSignInModal } from "@/features/marketing/components/MarketingShell";
 
 /**
- * Primary calls-to-action on the marketing home: "Join our community" (opens the
+ * Primary calls-to-action on the marketing home: "Join our space" (opens the
  * sign-in popup in signup mode) is primary, with a "Sign in" link
  * beneath it.
  */
@@ -19,7 +19,7 @@ export default function HomeCtas() {
         className="px-8 py-3.5 sm:px-10 sm:py-4 rounded-md font-medium text-base sm:text-lg text-white shadow-sm hover:opacity-90 active:scale-[0.99] transition"
         style={{ backgroundColor: BRAND }}
       >
-        Join our community
+        Join our space
       </button>
 
       <p className="text-sm sm:text-base text-neutral-600">

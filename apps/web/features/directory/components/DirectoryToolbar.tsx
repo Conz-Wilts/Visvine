@@ -19,7 +19,7 @@ import Chip from '@/components/ui/Chip';
 import SearchInput from '@/components/ui/SearchInput';
 import { tagPalette } from '@/lib/tagColors';
 import { getNodeTypeConfig } from '@/lib/types';
-import type { CommunityAlias } from '@/lib/types';
+import type { SpaceAlias } from '@/lib/types';
 import type { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 
 interface DirectoryToolbarProps {
@@ -41,7 +41,7 @@ function FilterChip({ label, color, onRemove }: {
 
 export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
   const {
-    nodes, community,
+    nodes, space,
     searchTerm, setSearchTerm,
     filterTypes, setFilterTypes,
     filterAliases, setFilterAliases,
@@ -97,8 +97,8 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     };
   }, []);
 
-  const aliases = (community?.communityAliases ?? []) as CommunityAlias[];
-  const tagColors = community?.designConfig?.tagColors ?? null;
+  const aliases = (space?.aliases ?? []) as SpaceAlias[];
+  const tagColors = space?.designConfig?.tagColors ?? null;
 
   const activeCount = filterTypes.size + filterAliases.size + filterTags.size;
 
@@ -164,7 +164,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
           onChange={next => { setFilterTypes(next); if (next.size === 0) setFilterAliases(new Set()); }}
           selectedSub={filterAliases}
           onChangeSub={setFilterAliases}
-          getColor={t => getNodeTypeConfig(t, community?.nodeTypes).color}
+          getColor={t => getNodeTypeConfig(t, space?.nodeTypes).color}
         />
 
         <FilterDropdown
@@ -190,7 +190,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
             <FilterChip
               key={`type-${type}`}
               label={type}
-              color={getNodeTypeConfig(type, community?.nodeTypes).color}
+              color={getNodeTypeConfig(type, space?.nodeTypes).color}
               onRemove={() => setFilterTypes(without(filterTypes, type))}
             />
           ))}

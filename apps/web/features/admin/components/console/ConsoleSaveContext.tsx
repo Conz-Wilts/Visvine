@@ -5,7 +5,7 @@ import type { SavePatch, SaveStatus } from '@/lib/autosave';
 import { useAutosave, type UseAutosaveResult } from '@/features/shared/hooks/useAutosave';
 
 /**
- * Single save indicator for the whole Community Console. Every section —
+ * Single save indicator for the whole Space Console. Every section —
  * autosaving forms and row actions alike — reports into this context so the
  * header shows one truthful "Saving… / Saved / Couldn't save" pill.
  */

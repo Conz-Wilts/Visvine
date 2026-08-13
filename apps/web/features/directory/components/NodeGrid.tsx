@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { VirtuosoGrid, type GridComponents } from 'react-virtuoso'
 import NodeCard from './NodeCard'
 import type { DirectoryItem } from './types'
-import type { NodeTypeConfig, CommunityAlias } from '@/lib/types'
+import type { NodeTypeConfig, SpaceAlias } from '@/lib/types'
 import { EmptyState, Skeleton } from '@/components/ui'
 import { prefersReducedMotion } from '@/lib/motion'
 
@@ -137,10 +137,10 @@ interface DirectoryGridProps {
   loading?: boolean
   onCardClick?: (item: DirectoryItem) => void
   nodeTypes?: NodeTypeConfig[]
-  communityAliases?: CommunityAlias[]
+  aliases?: SpaceAlias[]
 }
 
-export default function NodeGrid({ items, loading = false, onCardClick, nodeTypes, communityAliases }: DirectoryGridProps) {
+export default function NodeGrid({ items, loading = false, onCardClick, nodeTypes, aliases }: DirectoryGridProps) {
   // One coordinator per mounted grid, reset whenever the result set changes so a
   // filter/search re-runs the cascade (mirrors the previous id-keyed behaviour).
   const coordinatorRef = useRef<RevealCoordinator | null>(null)
@@ -208,7 +208,7 @@ export default function NodeGrid({ items, loading = false, onCardClick, nodeType
           computeItemKey={(_, item) => item.id}
           itemContent={(_, item) => (
             <RevealCard id={item.id} coordinator={coordinator}>
-              <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} communityAliases={communityAliases} />
+              <NodeCard item={item} onClick={onCardClick} nodeTypes={nodeTypes} aliases={aliases} />
             </RevealCard>
           )}
         />

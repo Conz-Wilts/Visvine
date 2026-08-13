@@ -1,13 +1,13 @@
-// Access requests for a community's shared brain (successor of
+// Access requests for a space's shared brain (successor of
 // /api/notes/join-requests — renamed because "join request" already means a
-// pending community MEMBER in the console).
-//   GET  ?communityId=                                   → { requests, pending }
-//   POST { communityId, resourcePath, message? }          → { request }
-//   POST { communityId, path, referenceToken, message? }  → { request }
+// pending space MEMBER in the console).
+//   GET  ?spaceId=                                   → { requests, pending }
+//   POST { spaceId, resourcePath, message? }          → { request }
+//   POST { spaceId, path, referenceToken, message? }  → { request }
 //     — the locked-stub form: the caller can't know the hidden source note's
 //       path, so it sends the opaque token from a RestrictedReference instead;
 //       the server resolves it back to the real path and files the request there.
-//   PUT  { communityId, requestId, approve, level? }      → { request }
+//   PUT  { spaceId, requestId, approve, level? }      → { request }
 // All semantics live in lib/notes/accessRequests.ts + shared/accessRequests.ts.
 
 import { NextRequest, NextResponse } from 'next/server'

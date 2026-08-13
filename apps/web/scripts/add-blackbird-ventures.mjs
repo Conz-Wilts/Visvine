@@ -1,4 +1,4 @@
-// Seeds the local dev DB with the "Blackbird Ventures" community: every
+// Seeds the local dev DB with the "Blackbird Ventures" space: every
 // portfolio company (organization nodes) + their founders (person nodes),
 // joined by `founded` links, plus a filterable CRM column set.
 //
@@ -39,7 +39,7 @@ const COMM = 'community:blackbird-ventures';
 const COMM_NAME = 'Blackbird Ventures';
 const COMM_DESC =
   'Blackbird Ventures is a leading Australian & New Zealand venture capital firm. ' +
-  'This community maps its portfolio companies and the founders behind them.';
+  'This space maps its portfolio companies and the founders behind them.';
 
 const NODE_TYPES = [
   { icon: '🏘️', name: 'Space', color: '#78d870', shape: 'square' },
@@ -50,11 +50,11 @@ const NODE_TYPES = [
 // everywhere (Types & Aliases console, directory cells, node cards), so we use
 // the canonical capitalized base-type names here.
 // Kept in step with prisma/seed.ts, which owns this list when the full stack is
-// seeded — these values only take effect when the community doesn't exist yet
+// seeded — these values only take effect when the space doesn't exist yet
 // (a standalone `pnpm db:blackbird` run), since the upsert below deliberately
 // leaves aliases alone on conflict rather than clobbering who owns what.
 const OWNER_ALIAS_NAME = 'Owner';
-const COMMUNITY_ALIASES = [
+const SPACE_ALIASES = [
   { name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
   { name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
   { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
@@ -147,7 +147,7 @@ for (const c of RAW) {
     while (orgSlugSeen.has(slug)) { slug = base + '-' + suf + '-' + n; n++; }
   }
   orgSlugSeen.add(slug);
-  const id = 'community:' + slug;
+  const id = 'space:' + slug;
   if (c.foundedYear) foundedYearByOrg.set(id, String(c.foundedYear));
 
   const snappedSector = snapSector(c);
@@ -182,7 +182,7 @@ for (const o of orgs) {
     let base = slugify(f.name) || ('founder-' + personByKey.size);
     let slug = base;
     if (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) {
-      const suf = o.id.replace(/^community:/, '');
+      const suf = o.id.replace(/^space:/, '');
       slug = base + '-' + suf;
       let n = 2;
       while (personSlugSeen.has(slug) && personSlugSeen.get(slug) !== key) { slug = base + '-' + suf + '-' + n; n++; }
@@ -219,24 +219,24 @@ const client = await pool.connect();
 try {
   await client.query('BEGIN');
 
-  // 1. Community
-  console.log('--- Upserting Blackbird Ventures community ---');
+  // 1. Space
+  console.log('--- Upserting Blackbird Ventures space ---');
   await client.query(
-    `INSERT INTO communities (id, name, description, location, tags, node_types, community_aliases, country, emoji, image_url, visibility, created_at)
+    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, emoji, image_url, visibility, created_at)
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, 'public', NOW())
-     -- node_types and community_aliases are NOT updated on conflict: the alias
-     -- list is the permission model (who owns the community, what each alias
+     -- node_types and aliases are NOT updated on conflict: the alias
+     -- list is the permission model (who owns the space, what each alias
      -- reaches), so a data re-import must never overwrite it.
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags,
        country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
     [COMM, COMM_NAME, COMM_DESC, 'Sydney, Australia', ['VC', 'Portfolio', 'Australia', 'New Zealand'],
-      JSON.stringify(NODE_TYPES), JSON.stringify(COMMUNITY_ALIASES)],
+      JSON.stringify(NODE_TYPES), JSON.stringify(SPACE_ALIASES)],
   );
   console.log(`  ✓ ${COMM}`);
 
-  // 1b. Make the community visible to local dev users (admin@local.dev etc.) so
-  // it shows up in their community list and is browsable in the UI.
+  // 1b. Make the space visible to local dev users (admin@local.dev etc.) so
+  // it shows up in their space list and is browsable in the UI.
   //
   // Membership carries no role — what a person can do comes entirely from the
   // aliases they hold (lib/auth.ts#isAdmin), so admin@local.dev also gets a
@@ -245,9 +245,9 @@ try {
   const devUsers = await client.query(`SELECT id, email FROM users WHERE email LIKE '%@local.dev'`);
   for (const u of devUsers.rows) {
     await client.query(
-      `INSERT INTO user_communities (user_id, community_id, status, joined_at, private_meta)
+      `INSERT INTO space_members (user_id, space_id, status, joined_at, private_meta)
        VALUES ($1, $2, 'active', NOW(), '{}'::jsonb)
-       ON CONFLICT (user_id, community_id) DO UPDATE SET status = 'active'`,
+       ON CONFLICT (user_id, space_id) DO UPDATE SET status = 'active'`,
       [u.id, COMM],
     );
   }
@@ -255,9 +255,9 @@ try {
     devUsers.rows.find((u) => u.email === 'admin@local.dev') ?? devUsers.rows[0] ?? null;
   if (owner) {
     await client.query(
-      `INSERT INTO user_aliases (community_id, user_id, alias_name, created_at)
+      `INSERT INTO user_aliases (space_id, user_id, alias_name, created_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (community_id, user_id, alias_name) DO NOTHING`,
+       ON CONFLICT (space_id, user_id, alias_name) DO NOTHING`,
       [COMM, owner.id, OWNER_ALIAS_NAME],
     );
   }
@@ -266,13 +266,13 @@ try {
       (owner ? `, ${owner.email} holds ${OWNER_ALIAS_NAME}` : ''),
   );
 
-  // Clear this community's existing portfolio nodes first so re-runs (and any
+  // Clear this space's existing portfolio nodes first so re-runs (and any
   // id-scheme change) don't leave orphans. Cascades to links +
-  // community_column_values. The `anchor` nodes from prisma/seed.ts are the
+  // space_column_values. The `anchor` nodes from prisma/seed.ts are the
   // dev users' own person nodes and are left alone — they have Person rows
   // pointing at them, so deleting them would strand a profile.
   const cleared = await client.query(
-    `DELETE FROM nodes WHERE community_id = $1 AND COALESCE(metadata->>'anchor', 'false') <> 'true'`,
+    `DELETE FROM nodes WHERE space_id = $1 AND COALESCE(metadata->>'anchor', 'false') <> 'true'`,
     [COMM],
   );
   console.log(`\n--- Cleared ${cleared.rowCount} existing node(s) for a clean rebuild ---`);
@@ -304,11 +304,11 @@ try {
       research: { confidence: c.confidence ?? null, missingFields: c.missingFields || [], sources: c.sources || [], researchedAt: RESEARCHED_AT },
     };
     await client.query(
-      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
+      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, space_id, alias, created_at, updated_at)
        VALUES ($1, 'space', $2, $3, $4, $5, $6, $7, $8::jsonb, $9, 'Portfolio Company', NOW(), NOW())
        ON CONFLICT (id) DO UPDATE SET type = 'space', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, image_url = EXCLUDED.image_url,
-         metadata = EXCLUDED.metadata, community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
+         metadata = EXCLUDED.metadata, space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [o.id, c.name, c.subtitle ?? null, c.hqLocation ?? null, c.website ?? null, tags, null, JSON.stringify(metadata), COMM],
     );
   }
@@ -329,11 +329,11 @@ try {
       research: { researchedAt: RESEARCHED_AT },
     };
     await client.query(
-      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, community_id, alias, created_at, updated_at)
+      `INSERT INTO nodes (id, type, name, subtitle, location, url, tags, image_url, metadata, space_id, alias, created_at, updated_at)
        VALUES ($1, 'person', $2, $3, $4, $5, $6, NULL, $7::jsonb, $8, 'Founder', NOW(), NOW())
        ON CONFLICT (id) DO UPDATE SET type = 'person', name = EXCLUDED.name, subtitle = EXCLUDED.subtitle,
          location = EXCLUDED.location, url = EXCLUDED.url, tags = EXCLUDED.tags, metadata = EXCLUDED.metadata,
-         community_id = EXCLUDED.community_id, alias = EXCLUDED.alias, updated_at = NOW()`,
+         space_id = EXCLUDED.space_id, alias = EXCLUDED.alias, updated_at = NOW()`,
       [p.id, p.name, subtitle, p.location ?? null, p.website ?? null, ['Founder', 'Blackbird Portfolio'], JSON.stringify(metadata), COMM],
     );
   }
@@ -350,18 +350,18 @@ try {
 
   console.log('\n--- Node type breakdown ---');
   console.table((await client.query(
-    'SELECT type, COUNT(*)::int AS count FROM nodes WHERE community_id = $1 GROUP BY type ORDER BY type', [COMM],
+    'SELECT type, COUNT(*)::int AS count FROM nodes WHERE space_id = $1 GROUP BY type ORDER BY type', [COMM],
   )).rows);
 
   console.log('\n--- Company status breakdown ---');
   console.table((await client.query(
     `SELECT metadata->>'status' AS status, COUNT(*)::int AS count FROM nodes
-     WHERE community_id = $1 AND type = 'space' GROUP BY 1 ORDER BY 1`, [COMM],
+     WHERE space_id = $1 AND type = 'space' GROUP BY 1 ORDER BY 1`, [COMM],
   )).rows);
 
   console.log('\n--- Link breakdown ---');
   console.table((await client.query(
-    'SELECT relationship, COUNT(*)::int AS count FROM links WHERE community_id = $1 GROUP BY 1', [COMM],
+    'SELECT relationship, COUNT(*)::int AS count FROM links WHERE space_id = $1 GROUP BY 1', [COMM],
   )).rows);
 
 } catch (e) {

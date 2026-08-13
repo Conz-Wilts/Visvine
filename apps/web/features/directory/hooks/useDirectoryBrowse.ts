@@ -3,12 +3,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDirectoryNodes } from '@/features/directory/hooks/useDirectoryNodes';
-import { clearContextCache } from '@/features/notes/hooks/useCommunityContextData';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { clearContextCache } from '@/features/notes/hooks/useSpaceContextData';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useDashboardSearch } from '@/features/directory/hooks/useDashboardSearch';
 import type { DirectoryItem } from '@/features/directory/components/types';
 import { DEFAULT_NODE_TYPES } from '@/lib/types';
-import { isOwnCommunityNode } from '@/lib/types/context';
+import { isOwnSpaceNode } from '@/lib/types/context';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';
 import type { NBNode } from '@/lib/types';
 
@@ -34,7 +34,7 @@ function toDirectoryItem(node: NBNode): DirectoryItem {
 }
 
 /**
- * Shared search/filter/sort plumbing over the community directory, used by both
+ * Shared search/filter/sort plumbing over the space directory, used by both
  * the Directory grid (/directory) and the Table tool (/table) so the two pages
  * stay behaviourally identical without duplicating the pipeline.
  */
@@ -46,8 +46,8 @@ export function useDirectoryBrowse() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('az');
   const router = useRouter();
 
-  const { nodes: allNodes, loading, error, community, refresh } = useDirectoryNodes();
-  const { isAdmin } = useCommunity();
+  const { nodes: allNodes, loading, error, space, refresh } = useDirectoryNodes();
+  const { isAdmin } = useSpace();
 
   // The space you are IN is never a card in its own directory — it's the
   // container, not an entry. New spaces no longer mint that node at all
@@ -55,13 +55,13 @@ export function useDirectoryBrowse() {
   // one, so it is filtered here rather than only at the source. Dropped up front
   // so it also stays out of the type filters, the search and the count.
   const nodes = useMemo(
-    () => allNodes.filter(n => !isOwnCommunityNode({ id: n.id, communityId: n.community_id })),
+    () => allNodes.filter(n => !isOwnSpaceNode({ id: n.id, spaceId: n.space_id })),
     [allNodes],
   );
 
   // Always show all configured types (even those with zero nodes) — except the
   // ones belonging to a switched-off feature, which shouldn't advertise a filter
-  // for something the community doesn't have.
+  // for something the space doesn't have.
   //
   // Unrecognised types found on real nodes are folded back in, so a legacy or
   // hand-written type never becomes unfilterable. A type belonging to a
@@ -78,8 +78,8 @@ export function useDirectoryBrowse() {
   // ('Person'); canonicalize by lowercase so the two collapse into a single
   // entry (preferring the configured casing) instead of showing duplicates.
   const presentTypes = useMemo(() => {
-    const featureConfig = community?.featureConfig ?? null;
-    const configuredTypes = community?.nodeTypes ?? DEFAULT_NODE_TYPES;
+    const featureConfig = space?.featureConfig ?? null;
+    const configuredTypes = space?.nodeTypes ?? DEFAULT_NODE_TYPES;
     const byLower = new Map<string, string>();
     for (const t of configuredTypes) {
       if (t.scope === 'note') continue;
@@ -91,7 +91,7 @@ export function useDirectoryBrowse() {
       if (!byLower.has(key) && isNodeTypeEnabled(featureConfig, n.type)) byLower.set(key, n.type);
     });
     return Array.from(byLower.values()).sort();
-  }, [nodes, community?.nodeTypes, community?.featureConfig]);
+  }, [nodes, space?.nodeTypes, space?.featureConfig]);
 
   const presentTags = useMemo(() => {
     const tags = new Set<string>();
@@ -134,11 +134,11 @@ export function useDirectoryBrowse() {
   // Admin edits invalidate both the directory list and the (separate) context cache.
   const handleDataChanged = useCallback(() => {
     refresh();
-    clearContextCache(community?.id);
-  }, [refresh, community?.id]);
+    clearContextCache(space?.id);
+  }, [refresh, space?.id]);
 
   return {
-    nodes, loading, error, community, refresh, isAdmin,
+    nodes, loading, error, space, refresh, isAdmin,
     searchTerm, setSearchTerm,
     filterTypes, setFilterTypes,
     filterAliases, setFilterAliases,

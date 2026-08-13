@@ -25,8 +25,8 @@ interface ThreadPanelProps {
   currentUser: { id: string; name: string; image: string | null };
   isMobile: boolean;
   isAdmin: boolean;
-  communityIsAdmin: boolean | undefined;
-  communityId: string | undefined;
+  spaceIsAdmin: boolean | undefined;
+  spaceId: string | undefined;
   /** Whether the channel list has any joined channels (drives the empty-state copy). */
   hasChannelsInList: boolean;
   onShowChannelForm: () => void;
@@ -96,8 +96,8 @@ export default function ThreadPanel({
   currentUser,
   isMobile,
   isAdmin,
-  communityIsAdmin,
-  communityId,
+  spaceIsAdmin,
+  spaceId,
   hasChannelsInList,
   onShowChannelForm,
   onShowAddMembers,
@@ -164,12 +164,12 @@ export default function ThreadPanel({
             <p className="mt-1 text-sm text-text-muted">
               {hasChannelsInList
                 ? 'Pick a channel from the list to open its feed.'
-                : communityIsAdmin
+                : spaceIsAdmin
                   ? 'Create your first channel to start a feed.'
                   : 'Channels created by your section admins will appear here.'}
             </p>
           </div>
-          {communityIsAdmin && (
+          {spaceIsAdmin && (
             <button
               type="button"
               onClick={onShowChannelForm}
@@ -384,7 +384,7 @@ export default function ThreadPanel({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onToggleStar={onToggleStar}
-                communityId={communityId}
+                spaceId={spaceId}
               />
             </div>
           )}
@@ -555,7 +555,7 @@ export default function ThreadPanel({
             onSend={onSendMessage}
             replyTo={replyTo}
             onCancelReply={() => setReplyTo(null)}
-            communityId={communityId}
+            spaceId={spaceId}
             typingLabel={typingLabel}
             onTyping={onComposerTyping}
             conversationId={selectedConversationId}

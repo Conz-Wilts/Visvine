@@ -1,6 +1,6 @@
 // Shared helpers for the notes REST routes. Every handler authenticates with
 // requireSession() then resolves + authorizes the target brain; requireBrain
-// folds both into one call, reading communityId/scope from the JSON body (for
+// folds both into one call, reading spaceId/scope from the JSON body (for
 // mutations) or the query string (for reads), mirroring requireSession's
 // "value-or-Response" return so routes can early-return.
 
@@ -20,9 +20,9 @@ export async function requireBrain(
   const session = await requireSession()
   if (session instanceof Response) return session
   const url = new URL(req.url)
-  const communityId = pick(body, 'communityId') ?? url.searchParams.get('communityId')
+  const spaceId = pick(body, 'spaceId') ?? url.searchParams.get('spaceId')
   const scope = pick(body, 'scope') ?? url.searchParams.get('scope')
-  return resolveBrain(session, communityId, scope)
+  return resolveBrain(session, spaceId, scope)
 }
 
 export function fail(error: string, status = 400): NextResponse {

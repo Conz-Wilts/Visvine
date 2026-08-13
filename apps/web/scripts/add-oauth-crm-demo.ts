@@ -4,15 +4,15 @@
  * which the platform knows anything about. Everything an agent needs to survive
  * it lives in the note's prose.
  *
- * Writes into the community's SHARED brain:
+ * Writes into the space's SHARED brain:
  *   • connectors/crm.md — v2 connector against /api/dev/oauth-crm, with the
  *     client id + secret as env, and a body that teaches the token dance.
  *   • the CRM_CLIENT_ID / CRM_CLIENT_SECRET secrets, encrypted under SECRETS_KEY.
  *
  * Usage:
  *   pnpm db:connectors:oauth                      # community:blackbird-ventures
- *   pnpm db:connectors:oauth <communityId>
- *   pnpm db:connectors:oauth <communityId> --remove
+ *   pnpm db:connectors:oauth <spaceId>
+ *   pnpm db:connectors:oauth <spaceId> --remove
  */
 
 import '../../../scripts/guard-local-db.mjs';
@@ -26,7 +26,7 @@ import { syncContextLinksBulk } from '../lib/notes/entityLinks';
 const CLIENT_ID = process.env.CONNECTOR_OAUTH_CLIENT_ID || 'crm_client_local_dev';
 const CLIENT_SECRET = process.env.CONNECTOR_OAUTH_CLIENT_SECRET || 'sk_crm_secret_local_dev';
 
-const communityId = process.argv[2]?.startsWith('--')
+const spaceId = process.argv[2]?.startsWith('--')
   ? 'community:blackbird-ventures'
   : (process.argv[2] ?? 'community:blackbird-ventures');
 const REMOVE = process.argv.includes('--remove');
@@ -159,50 +159,50 @@ const SECRETS = [
 ];
 
 async function main() {
-  const community = await prisma.community.findUnique({
-    where: { id: communityId },
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
     select: { id: true, name: true },
   });
-  if (!community) throw new Error(`community ${communityId} not found — run \`pnpm db:seed\` first`);
+  if (!space) throw new Error(`space ${spaceId} not found — run \`pnpm db:seed\` first`);
 
   if (REMOVE) {
-    const notes = await prisma.communityNote.deleteMany({
-      where: { communityId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
+    const notes = await prisma.spaceNote.deleteMany({
+      where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.communitySecret.deleteMany({
-      where: { communityId, name: { in: SECRETS.map((s) => s.name) } },
+    const secrets = await prisma.spaceSecret.deleteMany({
+      where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
-    await syncContextLinksBulk({ communityId, ownerKey: SHARED }, NOTES.map((n) => n.path));
-    console.log(`Removed ${notes.count} note(s) and ${secrets.count} secret(s) from ${community.name}`);
+    await syncContextLinksBulk({ spaceId, ownerKey: SHARED }, NOTES.map((n) => n.path));
+    console.log(`Removed ${notes.count} note(s) and ${secrets.count} secret(s) from ${space.name}`);
     return;
   }
 
   const owner =
     (await prisma.userAlias.findFirst({
-      where: { communityId, aliasName: OWNER_ALIAS_NAME },
+      where: { spaceId, aliasName: OWNER_ALIAS_NAME },
       select: { userId: true },
-    })) ?? (await prisma.userCommunity.findFirst({ where: { communityId }, select: { userId: true } }));
-  if (!owner) throw new Error(`community ${communityId} has no members to attribute the note to`);
+    })) ?? (await prisma.spaceMember.findFirst({ where: { spaceId }, select: { userId: true } }));
+  if (!owner) throw new Error(`space ${spaceId} has no members to attribute the note to`);
 
   for (const note of NOTES) {
-    await prisma.communityNote.upsert({
-      where: { note_identity: { communityId, ownerKey: SHARED, path: note.path } },
-      create: { communityId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
+    await prisma.spaceNote.upsert({
+      where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
+      create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
     });
   }
 
   await syncContextLinksBulk(
-    { communityId, ownerKey: SHARED },
+    { spaceId, ownerKey: SHARED },
     [],
     NOTES.map((n) => [n.path, n.content] as [string, string]),
   );
 
   for (const secret of SECRETS) {
-    await prisma.communitySecret.upsert({
-      where: { secret_identity: { communityId, name: secret.name } },
+    await prisma.spaceSecret.upsert({
+      where: { secret_identity: { spaceId, name: secret.name } },
       create: {
-        communityId,
+        spaceId,
         name: secret.name,
         ciphertext: encryptSecret(secret.value),
         createdBy: 'add-oauth-crm-demo',
@@ -211,7 +211,7 @@ async function main() {
     });
   }
 
-  console.log(`=== Seeded OAuth CRM connector into ${community.name} (${communityId}) ===`);
+  console.log(`=== Seeded OAuth CRM connector into ${space.name} (${spaceId}) ===`);
   for (const note of NOTES) console.log(`  note   shared:${note.path}`);
   for (const secret of SECRETS) console.log(`  secret ${secret.name}`);
   console.log(`\n  API: ${apiBase}  (host gate: ${apiHost})`);

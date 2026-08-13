@@ -1,4 +1,4 @@
-// GET /api/notes/export?communityId=&scope=&path=
+// GET /api/notes/export?spaceId=&scope=&path=
 // Download a single note as a .md file (the stored markdown is the source of truth).
 
 import { NextRequest, NextResponse } from 'next/server'

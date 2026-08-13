@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, KeyRound, Plug } from 'lucide-react';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 /**
  * The Connectors tool: one page listing every connectors/<name>.md note in the
- * community, so the gateways agents can call are visible somewhere other than a
+ * space, so the gateways agents can call are visible somewhere other than a
  * folder in Context. The note IS the connector, so each card links to the
  * connector's node page — where the Connector tab renders its config, its
  * secrets and a live test — rather than opening an editor of its own.
@@ -23,7 +23,7 @@ import { fetchJson } from '@/lib/fetchJson';
  * that was never stored, an empty allowlist) and they look identical from a
  * folder listing, so the card names which one it is.
  *
- * Admins-only, and not by community choice — the list route 403s a member and
+ * Admins-only, and not by space choice — the list route 403s a member and
  * brainService.writeDenial gates writes to connectors/. That's declared once in
  * featureAccess.ADMIN_ONLY_FEATURE_KEYS, which keeps the nav row and this route
  * away from members, so nothing here re-states it.
@@ -128,24 +128,24 @@ function ConnectorCard({ connector }: { connector: ConnectorRow }) {
 }
 
 export default function ConnectorsPage() {
-  // The community has to resolve before the fetch: its id is half the URL, and
-  // a switch mid-flight has to re-run this against the community now on screen.
-  const { currentCommunity, loading: communityLoading } = useCommunity();
-  const communityId = currentCommunity?.id;
+  // The space has to resolve before the fetch: its id is half the URL, and
+  // a switch mid-flight has to re-run this against the space now on screen.
+  const { currentSpace, loading: spaceLoading } = useSpace();
+  const spaceId = currentSpace?.id;
 
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (communityLoading) return;
-    if (!communityId) {
+    if (spaceLoading) return;
+    if (!spaceId) {
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetchJson<{ connectors: ConnectorRow[] }>(`/api/communities/${communityId}/connectors`)
+    fetchJson<{ connectors: ConnectorRow[] }>(`/api/communities/${spaceId}/connectors`)
       .then(data => {
         if (cancelled) return;
         setConnectors(data.connectors);
@@ -158,10 +158,10 @@ export default function ConnectorsPage() {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [communityId, communityLoading]);
+  }, [spaceId, spaceLoading]);
 
   const body = () => {
-    if (communityLoading || loading) {
+    if (spaceLoading || loading) {
       return (
         <div className="grid gap-3 sm:grid-cols-2">
           {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}

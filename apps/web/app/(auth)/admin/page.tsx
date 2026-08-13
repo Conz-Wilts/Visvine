@@ -2,16 +2,16 @@
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PeopleDataProvider from '@/features/admin/components/people/PeopleDataContext';
 import MembersPanel from '@/features/admin/components/people/MembersPanel';
 import InvitePanel from '@/features/admin/components/people/InvitePanel';
-import CommunitySettingsPanel from '@/features/admin/components/CommunitySettingsPanel';
+import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
-import CommunityToolsPanel from '@/features/admin/components/CommunityToolsPanel';
+import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
-import { Community } from '@/lib/types';
+import { Space } from '@/lib/types';
 import { Settings2, Puzzle, Users, UserPlus, Shapes } from 'lucide-react';
 
 // Each section owns one job: General is the space's own record, Tools decides
@@ -21,9 +21,9 @@ import { Settings2, Puzzle, Users, UserPlus, Shapes } from 'lucide-react';
 // Members and Invite share a single data load (PeopleDataProvider; Types still
 // reads it for the read-only Person chips), which is also where the Members badge
 // count comes from: one definition of "waiting", not one per component.
-function AdminConsole({ community, onSaved }: {
-  community: Community;
-  onSaved: (updated: Partial<Community>) => void;
+function AdminConsole({ space, onSaved }: {
+  space: Space;
+  onSaved: (updated: Partial<Space>) => void;
 }) {
   const [pending, setPending] = useState({ members: 0, requests: 0 });
   const handlePendingCount = useCallback(
@@ -31,7 +31,7 @@ function AdminConsole({ community, onSaved }: {
     [],
   );
 
-  const configKey = `${community.id}-${JSON.stringify(community.featureConfig ?? {})}`;
+  const configKey = `${space.id}-${JSON.stringify(space.featureConfig ?? {})}`;
 
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
@@ -45,8 +45,8 @@ function AdminConsole({ community, onSaved }: {
 
   return (
     <PeopleDataProvider
-      key={community.id}
-      communityId={community.id}
+      key={space.id}
+      spaceId={space.id}
       onPendingCountChange={handlePendingCount}
     >
       <ConsoleShell
@@ -54,7 +54,7 @@ function AdminConsole({ community, onSaved }: {
         renderSection={(id) => {
           switch (id) {
             case 'general':
-              return <CommunitySettingsPanel community={community} onSaved={onSaved} />;
+              return <SpaceSettingsPanel space={space} onSaved={onSaved} />;
             // Tools seeds `adminOnly` into local state but no longer edits it —
             // Members does — so it is keyed on the config it read: once a lock
             // changes there, onSaved bubbles the new record up and this panel
@@ -62,13 +62,13 @@ function AdminConsole({ community, onSaved }: {
             // Members isn't keyed that way on purpose: remounting it on every
             // toggle would throw you back to its first sub-tab.
             case 'tools':
-              return <CommunityToolsPanel key={configKey} community={community} onSaved={onSaved} />;
+              return <SpaceToolsPanel key={configKey} space={space} onSaved={onSaved} />;
             case 'members':
-              return <MembersPanel key={community.id} community={community} onSaved={onSaved} />;
+              return <MembersPanel key={space.id} space={space} onSaved={onSaved} />;
             case 'invite':
               return <InvitePanel />;
             case 'types':
-              return <TypesPanel key={`${community.id}-${JSON.stringify(community.nodeTypes)}`} />;
+              return <TypesPanel key={`${space.id}-${JSON.stringify(space.nodeTypes)}`} />;
             default:
               return null;
           }
@@ -79,13 +79,13 @@ function AdminConsole({ community, onSaved }: {
 }
 
 export default function AdminPage() {
-  const { currentCommunity, isAdmin, loading, refreshCommunity } = useCommunity();
+  const { currentSpace, isAdmin, loading, refreshSpace } = useSpace();
   const router = useRouter();
-  const [localCommunity, setLocalCommunity] = useState<Community | null>(null);
+  const [localSpace, setLocalSpace] = useState<Space | null>(null);
 
   useEffect(() => {
-    if (currentCommunity) setLocalCommunity(currentCommunity);
-  }, [currentCommunity]);
+    if (currentSpace) setLocalSpace(currentSpace);
+  }, [currentSpace]);
 
   // Redirect non-admins away once we know their status
   useEffect(() => {
@@ -102,7 +102,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!currentCommunity || !isAdmin) {
+  if (!currentSpace || !isAdmin) {
     return (
       <div className="w-full px-6 py-8">
         <Alert variant="info">Select a space you administer to access this page.</Alert>
@@ -110,7 +110,7 @@ export default function AdminPage() {
     );
   }
 
-  const community = localCommunity ?? currentCommunity;
+  const space = localSpace ?? currentSpace;
 
   return (
     <Suspense
@@ -121,10 +121,10 @@ export default function AdminPage() {
       }
     >
       <AdminConsole
-        community={community}
+        space={space}
         onSaved={updated => {
-          setLocalCommunity(prev => prev ? { ...prev, ...updated } : prev);
-          refreshCommunity();
+          setLocalSpace(prev => prev ? { ...prev, ...updated } : prev);
+          refreshSpace();
         }}
       />
     </Suspense>

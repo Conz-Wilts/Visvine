@@ -7,11 +7,11 @@ import DirectoryToolbar from '@/features/directory/components/DirectoryToolbar';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useDirectoryBrowse } from '@/features/directory/hooks/useDirectoryBrowse';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { prefetchNoteContext } from '@/features/notes/lib/contextPrefetch';
 import { ensureRootIndexNote, ROOT_INDEX_PATH } from '@/features/notes/lib/rootIndex';
 import { noteHref } from '@/lib/notes/entities';
-import type { CommunityAlias } from '@/lib/types';
+import type { SpaceAlias } from '@/lib/types';
 
 const DIRECTORY_TABS: PaneTabItem[] = [
   { id: 'grid', label: 'Grid' },
@@ -21,7 +21,7 @@ const DIRECTORY_TABS: PaneTabItem[] = [
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything.
  * The Context tab in the pane bar isn't a view of this page — it navigates to
- * the brain's top-level index note (`index.md`, the community's home page).
+ * the brain's top-level index note (`index.md`, the space's home page).
  * The bar itself lives in the persistent pane shell (directory/layout.tsx) —
  * this page just registers its tabs.
  */
@@ -36,10 +36,10 @@ export default function DashboardPage() {
 
 function DirectoryPane() {
   const router = useRouter();
-  const { currentCommunity, loading: communityLoading } = useCommunity();
-  const noSpace = !communityLoading && !currentCommunity;
-  const communityId = currentCommunity?.id ?? null;
-  const communityName = currentCommunity?.name ?? '';
+  const { currentSpace, loading: spaceLoading } = useSpace();
+  const noSpace = !spaceLoading && !currentSpace;
+  const spaceId = currentSpace?.id ?? null;
+  const spaceName = currentSpace?.name ?? '';
   const { releaseDockNow } = useContextPanel();
 
   // Context navigates to the brain's root index note. New brains are seeded with
@@ -48,20 +48,20 @@ function DirectoryPane() {
   // state is an access-request card, which is the wrong surface for "this note
   // was never written". ensureRootIndexNote is the shared version of that.
   const openContext = useCallback(() => {
-    if (!communityId) return;
-    prefetchNoteContext(communityId, ROOT_INDEX_PATH);
-    void ensureRootIndexNote(communityId, communityName).then(() => router.push(noteHref(ROOT_INDEX_PATH)));
-  }, [communityId, communityName, router]);
+    if (!spaceId) return;
+    prefetchNoteContext(spaceId, ROOT_INDEX_PATH);
+    void ensureRootIndexNote(spaceId, spaceName).then(() => router.push(noteHref(ROOT_INDEX_PATH)));
+  }, [spaceId, spaceName, router]);
 
   // ?view=context used to open the standalone knowledge browser here; that
   // surface is gone, so old links land on the grid and hop to the index note.
   const wantsContext = useSearchParams().get('view') === 'context';
   const redirected = useRef(false);
   useEffect(() => {
-    if (!wantsContext || redirected.current || !communityId) return;
+    if (!wantsContext || redirected.current || !spaceId) return;
     redirected.current = true;
     openContext();
-  }, [wantsContext, communityId, openContext]);
+  }, [wantsContext, spaceId, openContext]);
 
   // Selecting Grid closes any docked tree now, skipping the release grace:
   // the grace exists for navigations where another surface re-claims the dock,
@@ -88,7 +88,7 @@ function DirectoryPane() {
   });
 
   const browse = useDirectoryBrowse();
-  const { community, loading, error, filteredItems, handleItemClick } = browse;
+  const { space, loading, error, filteredItems, handleItemClick } = browse;
 
   // No space selected (zero memberships): the sidebar rail is already empty,
   // so the directory chrome — tab bar, toolbar, grid — hides too. The centre
@@ -117,8 +117,8 @@ function DirectoryPane() {
               items={filteredItems}
               loading={loading}
               onCardClick={handleItemClick}
-              nodeTypes={community?.nodeTypes}
-              communityAliases={community?.communityAliases as CommunityAlias[] | undefined}
+              nodeTypes={space?.nodeTypes}
+              aliases={space?.aliases as SpaceAlias[] | undefined}
             />
           </div>
         </div>

@@ -8,13 +8,13 @@
  * ORDER IS LOAD-BEARING: because 'space' changes meaning, the space->section
  * statements must run BEFORE the community->space ones in every table, or the
  * freshly renamed sections would be re-renamed / two distinct types would merge
- * in the per-community node_types de-dupe. The same four places as the prior
+ * in the per-space node_types de-dupe. The same four places as the prior
  * renames (rename-group-to-community.ts) are rewritten in place:
  *   1. nodes.type                     — old structural values -> 'section',
  *                                       then every org spelling -> 'space'
- *   2. communities.node_types         — the base type names in per-community config
- *   3. communities.community_aliases  — re-points aliases scoped to Space/Community
- *   4. communities.node_types DEFAULT — so new communities seed 'Space'
+ *   2. spaces.node_types  — the base type names in the per-space config
+ *   3. spaces.aliases     — re-points aliases scoped to Space/Community
+ *   4. spaces.node_types DEFAULT — so new spaces seed 'Space'
  *
  * Unlike the prior scripts, nodes.type is written LOWERCASE: today's writers
  * (createEntity, syncEntityNode) store lowercase-canonical, and
@@ -74,7 +74,7 @@ const NEW_DEFAULT =
  * dry run reports nothing for it and it can be fixed by hand.)
  */
 function nodeTypesRewrite(oldNames: string, newName: string, guard?: string): string {
-  return `UPDATE "communities" c
+  return `UPDATE "spaces" c
        SET "node_types" = sub.arr
        FROM (
          SELECT c2."id",
@@ -95,7 +95,7 @@ function nodeTypesRewrite(oldNames: string, newName: string, guard?: string): st
                ORDER BY lower(r.elem->>'name'), r.ord
              ) d
            ) AS arr
-         FROM "communities" c2
+         FROM "spaces" c2
          WHERE c2."node_types" IS NOT NULL
            AND jsonb_typeof(c2."node_types"::jsonb) = 'array'
            AND jsonb_array_length(c2."node_types"::jsonb) > 0
@@ -112,25 +112,25 @@ const NODE_TYPES_ORG_MARKER = `EXISTS (
 )`;
 
 function aliasesRewrite(oldNames: string, newName: string, guard?: string): string {
-  return `UPDATE "communities"
-       SET "community_aliases" = (
+  return `UPDATE "spaces"
+       SET "aliases" = (
          SELECT jsonb_agg(
            CASE WHEN lower(elem->>'nodeType') IN ${oldNames}
                 THEN jsonb_set(elem, '{nodeType}', '"${newName}"')
                 ELSE elem END
          )
-         FROM jsonb_array_elements("community_aliases"::jsonb) AS elem
+         FROM jsonb_array_elements("aliases"::jsonb) AS elem
        )
-       WHERE "community_aliases" IS NOT NULL
-         AND jsonb_typeof("community_aliases"::jsonb) = 'array'
-         AND jsonb_array_length("community_aliases"::jsonb) > 0
+       WHERE "aliases" IS NOT NULL
+         AND jsonb_typeof("aliases"::jsonb) = 'array'
+         AND jsonb_array_length("aliases"::jsonb) > 0
          ${guard ? `AND ${guard}` : ''}`;
 }
 
 /** Same latch for aliases: a 'Space'-scoped alias is only structural while an
  *  un-migrated org-scoped alias is still present in the same array. */
 const ALIASES_ORG_MARKER = `EXISTS (
-  SELECT 1 FROM jsonb_array_elements("community_aliases"::jsonb) g(e2)
+  SELECT 1 FROM jsonb_array_elements("aliases"::jsonb) g(e2)
   WHERE lower(g.e2->>'nodeType') IN ${ORG_SPELLINGS}
 )`;
 
@@ -154,15 +154,15 @@ async function main() {
       `SELECT count(*)::bigint AS count FROM "nodes" WHERE lower("type") IN ${ORG_SPELLINGS}`,
     );
     const [{ count: commCount }] = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-      `SELECT count(*)::bigint AS count FROM "communities"
+      `SELECT count(*)::bigint AS count FROM "spaces"
          WHERE "node_types"::text ILIKE '%"name": "Space"%'
             OR "node_types"::text ILIKE '%"name": "Community"%'
-            OR "community_aliases"::text ILIKE '%"nodeType": "Community"%'
-            OR "community_aliases"::text ILIKE '%"nodeType": "Space"%'`,
+            OR "aliases"::text ILIKE '%"nodeType": "Community"%'
+            OR "aliases"::text ILIKE '%"nodeType": "Space"%'`,
     );
     console.log(`[dry-run] structural nodes -> 'section': ${sectionCount}`);
     console.log(`[dry-run] org nodes        -> 'space':   ${spaceCount}`);
-    console.log(`[dry-run] communities whose config may rewrite: ${commCount}`);
+    console.log(`[dry-run] spaces whose config may rewrite: ${commCount}`);
     return;
   }
 
@@ -185,25 +185,25 @@ async function main() {
   const sectionTypes = await prisma.$executeRawUnsafe(
     nodeTypesRewrite(STRUCTURAL_SPELLINGS, 'Section', NODE_TYPES_ORG_MARKER),
   );
-  console.log(`communities.node_types Space->Section rewritten: ${sectionTypes}`);
+  console.log(`spaces.node_types Space->Section rewritten: ${sectionTypes}`);
   const spaceTypes = await prisma.$executeRawUnsafe(nodeTypesRewrite(ORG_SPELLINGS, 'Space'));
-  console.log(`communities.node_types Community->Space rewritten: ${spaceTypes}`);
+  console.log(`spaces.node_types Community->Space rewritten: ${spaceTypes}`);
 
   // 3. Alias nodeType scopes, same order and same latch.
   const sectionAliases = await prisma.$executeRawUnsafe(
     aliasesRewrite(STRUCTURAL_SPELLINGS, 'Section', ALIASES_ORG_MARKER),
   );
-  console.log(`communities.community_aliases Space->Section rewritten: ${sectionAliases}`);
+  console.log(`spaces.aliases Space->Section rewritten: ${sectionAliases}`);
   const spaceAliases = await prisma.$executeRawUnsafe(aliasesRewrite(ORG_SPELLINGS, 'Space'));
-  console.log(`communities.community_aliases Community->Space rewritten: ${spaceAliases}`);
+  console.log(`spaces.aliases Community->Space rewritten: ${spaceAliases}`);
 
-  // 4. Column default for new communities.
+  // 4. Column default for new spaces.
   await prisma.$executeRawUnsafe(
-    `ALTER TABLE "communities"
+    `ALTER TABLE "spaces"
        ALTER COLUMN "node_types"
        SET DEFAULT '${NEW_DEFAULT}'`,
   );
-  console.log('communities.node_types default updated -> Space');
+  console.log('spaces.node_types default updated -> Space');
 }
 
 main()

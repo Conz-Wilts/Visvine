@@ -1,4 +1,4 @@
-// POST /api/notes/ai/reorganize  { communityId, scope } → { plan }
+// POST /api/notes/ai/reorganize  { spaceId, scope } → { plan }
 // Proposes a folder reorganization for the brain (never applied here — the client
 // reviews the moves and applies accepted ones via PATCH /api/notes/item).
 // In the shared brain this is admin-only (restructuring shared content).
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   if (brain instanceof Response) return brain
   if (!aiConfigured()) return fail('AI is not configured', 404)
   if (brain.scope === 'shared' && !brain.isAdmin) {
-    return fail('Only an admin can reorganize the community brain', 403)
+    return fail('Only an admin can reorganize the space brain', 403)
   }
   try {
     return NextResponse.json({ plan: await reorganizeNotes(brain) })

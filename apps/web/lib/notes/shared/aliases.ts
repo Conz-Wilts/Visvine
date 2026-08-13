@@ -1,22 +1,22 @@
 // Person aliases — one concept doing two jobs, on purpose.
 //
-// A community's aliases are created on the Types page and live in
-// `Community.communityAliases` (lib/types/context.ts#CommunityAlias). The ones
+// A space's aliases are created on the Types page and live in
+// `Space.aliases` (lib/types/context.ts#SpaceAlias). The ones
 // scoped to the PERSON type are also the permission model: everyone who joins a
-// community is a Person, so the same vocabulary that colours their chip in the
+// space is a Person, so the same vocabulary that colours their chip in the
 // directory is what says what they can do. "Engineering" is a directory chip, a
 // set of holders, and a set of BrainGrants — not three separate things.
 //
 // A person holds any number of them, with no restrictions. An alias marked
-// `owner` means its holders manage the community; the built-in Owner alias
+// `owner` means its holders manage the space; the built-in Owner alias
 // always does and can never be removed or un-owned (lib/types/context.ts
-// #OWNER_ALIAS), so a community can never be left with nothing that owns it.
+// #OWNER_ALIAS), so a space can never be left with nothing that owns it.
 // The four mutations that could otherwise break that ask `ownerSurvives` first.
 //
 // Pure — no Prisma/Node/DOM imports; usable from server, client, and tests.
 // The DB side lives in lib/notes/aliases.ts.
 
-import { OWNER_ALIAS_NAME, type CommunityAlias } from '@/lib/types/context'
+import { OWNER_ALIAS_NAME, type SpaceAlias } from '@/lib/types/context'
 
 export { OWNER_ALIAS_NAME } from '@/lib/types/context'
 
@@ -30,17 +30,17 @@ export interface AliasSummary {
   holderIds: string[]
 }
 
-/** A mutation that could leave the community with nobody able to manage it. */
+/** A mutation that could leave the space with nobody able to manage it. */
 export type AliasChange =
   | { kind: 'removeAlias'; name: string }
   | { kind: 'setOwner'; name: string; owner: boolean }
   | { kind: 'removeHolder'; name: string; userId: string }
-  /** People leaving the community entirely — every alias loses them. */
+  /** People leaving the space entirely — every alias loses them. */
   | { kind: 'removeMember'; userIds: string[] }
 
-/** Pair a community's Person aliases with the holders of each. */
+/** Pair a space's Person aliases with the holders of each. */
 export function summarize(
-  aliases: CommunityAlias[],
+  aliases: SpaceAlias[],
   holders: Array<{ aliasName: string; userId: string }>,
 ): AliasSummary[] {
   return aliases.map((a) => ({
@@ -52,12 +52,12 @@ export function summarize(
   }))
 }
 
-/** Whether this person manages the community: holds any alias with `owner`. */
+/** Whether this person manages the space: holds any alias with `owner`. */
 export function holdsOwner(aliases: AliasSummary[], userId: string): boolean {
   return aliases.some((a) => a.owner && a.holderIds.includes(userId))
 }
 
-/** Everyone who manages the community, deduplicated. */
+/** Everyone who manages the space, deduplicated. */
 export function ownerHolderIds(aliases: AliasSummary[]): string[] {
   const ids = new Set<string>()
   for (const a of aliases) if (a.owner) for (const id of a.holderIds) ids.add(id)
@@ -88,7 +88,7 @@ function applyChange(aliases: AliasSummary[], change: AliasChange): AliasSummary
 }
 
 /**
- * Whether at least one person would still manage the community after `change`.
+ * Whether at least one person would still manage the space after `change`.
  * False is a refusal, not an error — the caller turns it into a 400 explaining
  * that somebody has to be able to let the others back in.
  */

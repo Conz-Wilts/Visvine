@@ -7,7 +7,7 @@
 // the shell. Only non-note bodies render here as page children.
 //
 // A node only earns a first tab when there is something behind it that isn't the
-// context note. People get a profile, communities a Community page, the retired
+// context note. People get a profile, spaces a Space page, the retired
 // org spellings an Overview, connectors their configuration, resources a
 // preview, and events a link out to /events/<id>. Everything else — channels,
 // spaces, notes, files, any type we haven't given a page — is nothing but its
@@ -17,19 +17,19 @@ import React, { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
-import { useCommunity } from '@/features/shared/contexts/CommunityContext';
+import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
-import { isOwnCommunityNode } from '@/lib/types/context';
-import type { CommunityFeatureConfig, NBNode } from '@/lib/types';
+import { isOwnSpaceNode } from '@/lib/types/context';
+import type { SpaceFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/features/profile/components/ProfileSkeletonLoader';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import ProfilePageContent from '@/features/profile/components/ProfilePageContent';
 import OrgPageContent from '@/features/profile/components/OrgPageContent';
-import CommunityPageContent from '@/features/profile/components/CommunityPageContent';
+import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 
@@ -44,16 +44,16 @@ function useEntityNotePath(nodeId: string, node: NBNode | null): string | null {
 
 // A profile carries a Context tab when the notes tool is enabled, the node is an
 // entity kind (the types with canonical context-note namespaces), and the node
-// belongs to the current community (its brain owns the note).
+// belongs to the current space (its brain owns the note).
 function useContextTabAvailable(node: NBNode | null): boolean {
-  const { currentCommunity } = useCommunity();
-  const featureConfig = (currentCommunity?.featureConfig as CommunityFeatureConfig | undefined) ?? null;
+  const { currentSpace } = useSpace();
+  const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
   return (
-    !!currentCommunity &&
+    !!currentSpace &&
     isFeatureEnabled(featureConfig, 'notes') &&
     !!node &&
     entityKindOf(node.type) !== null &&
-    (!node.community_id || node.community_id === currentCommunity.id)
+    (!node.space_id || node.space_id === currentSpace.id)
   );
 }
 
@@ -196,8 +196,8 @@ function PersonRoute({ nodeId }: { nodeId: string }) {
  */
 function useResolvedNodeId(personId: string | null) {
   const router = useRouter();
-  const { currentCommunity } = useCommunity();
-  const communityId = currentCommunity?.id ?? null;
+  const { currentSpace } = useSpace();
+  const spaceId = currentSpace?.id ?? null;
   const [state, setState] = useState<{ loading: boolean; nodeId: string | null }>({
     loading: !!personId,
     nodeId: null,
@@ -211,7 +211,7 @@ function useResolvedNodeId(personId: string | null) {
     let cancelled = false;
     setState({ loading: true, nodeId: null });
     const query = new URLSearchParams({ id: personId });
-    if (communityId) query.set('communityId', communityId);
+    if (spaceId) query.set('spaceId', spaceId);
     fetch(`/api/nodes/resolve?${query}`)
       .then((res) => (res.ok ? res.json() : { nodeId: null }))
       .then((json: { nodeId?: string | null }) => {
@@ -224,17 +224,17 @@ function useResolvedNodeId(personId: string | null) {
       })
       .catch(() => { if (!cancelled) setState({ loading: false, nodeId: null }); });
     return () => { cancelled = true; };
-  }, [personId, communityId, router]);
+  }, [personId, spaceId, router]);
 
   return state;
 }
 
 function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // Deduped + cached alongside ProfilePageContent's own fetch; needed here for
-  // the community-membership half of the Context-tab condition.
+  // the space-membership half of the Context-tab condition.
   const { data, loading: nodeLoading } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
-  const { currentCommunity, loading: communityLoading } = useCommunity();
+  const { currentSpace, loading: spaceLoading } = useSpace();
   const contextAvailable = useContextTabAvailable(node);
   const [wantedTab, setTabParam] = useProfileTabParam();
 
@@ -243,10 +243,10 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
   // as the profile knows the tab exists, so clicking over paints immediately.
   usePrefetchEntityContext(nodeId, node, contextAvailable);
-  // Deep link to ?tab=context/raw while community/node data still resolves: keep
+  // Deep link to ?tab=context/raw while space/node data still resolves: keep
   // the predicted bar + docked tree up instead of blinking them out for the
   // length of the fetch.
-  const stillResolving = wantedTab !== null && !contextAvailable && (communityLoading || nodeLoading || !currentCommunity);
+  const stillResolving = wantedTab !== null && !contextAvailable && (spaceLoading || nodeLoading || !currentSpace);
   const noteSurface = stillResolving || (contextAvailable && isNoteTab(activeTab));
   // activeTab falls back to 'about' until contextAvailable resolves, but while
   // resolving the URL's tab is where we're heading — underlining it keeps the
@@ -272,10 +272,10 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // Strip a stale ?tab=context/raw (tool off / non-entity / foreign node) once
   // everything needed to decide has resolved.
   useEffect(() => {
-    if (wantedTab && !contextAvailable && !communityLoading && !nodeLoading && currentCommunity && node) {
+    if (wantedTab && !contextAvailable && !spaceLoading && !nodeLoading && currentSpace && node) {
       setTabParam('about');
     }
-  }, [wantedTab, contextAvailable, communityLoading, nodeLoading, currentCommunity, node, setTabParam]);
+  }, [wantedTab, contextAvailable, spaceLoading, nodeLoading, currentSpace, node, setTabParam]);
 
   // Note surfaces are entirely shell-rendered (PaneSurfaceHost).
   if (noteSurface) return null;
@@ -300,9 +300,9 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
 const ORG_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Overview' };
 // Which ids OrgPageContent is for. Node ids are `<type>:<slug>` (createEntity,
 // syncEntityNode), so the prefix is the type — and organisations have worn four
-// retired spellings before settling on `community:`, all of which now land on
-// communities/<slug>.md. Current data never reaches this list: a `community:`
-// id goes to CommunityRoute, which gives it a Community page either way. An id
+// retired spellings before settling on `space:`, all of which now land on
+// communities/<slug>.md. Current data never reaches this list: a `space:`
+// id goes to SpaceRoute, which gives it a Space page either way. An id
 // with no prefix at all is a legacy directory row: those predate the structural
 // types entirely, so an organisation is the right guess for them too.
 const ORG_ID_PREFIXES = ['group:', 'org:', 'organization:', 'company:'];
@@ -341,7 +341,7 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
   // A tab with no panel behind it falls back to the first tab: ?tab=connections
-  // and ?tab=communities are retired links, and context resolves late (tool off
+  // and ?tab=spaces are retired links, and context resolves late (tool off
   // / non-entity node), so it can only be judged once the node has loaded.
   useEffect(() => {
     const retired = activeTab === 'connections' || activeTab === 'communities';
@@ -442,20 +442,20 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
   // docked tree already stand in for it.
   if (loadingState || contextAvailable) return null;
 
-  // Notes tool off, or the node belongs to another community's brain: there is
+  // Notes tool off, or the node belongs to another space's brain: there is
   // no note to show and nothing else this page could offer.
   return <NotFoundState title="No context for this yet" />;
 }
 
 // ── Nodes owning a page elsewhere → Context/Raw here, the page for the rest ──
 
-// Events and communities have dedicated pages (/events/<id>, /communities/<id>)
+// Events and spaces have dedicated pages (/events/<id>, /communities/<id>)
 // rather than anything profile-shaped, but their context note is a first-class
 // note like any entity's — the tree, backlinks and [[mentions]] all deep-link to
 // /directory/<id>?tab=context. So note tabs render here, and the first tab jumps
 // out to the real page.
 const EVENT_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Event' };
-const COMMUNITY_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Page' };
+const SPACE_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Page' };
 
 function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
   nodeId: string;
@@ -549,7 +549,7 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
   // Anything but preview/available-context falls back to Preview (retired deep
-  // links, or ?tab=context when the notes tool is off for this community).
+  // links, or ?tab=context when the notes tool is off for this space).
   useEffect(() => {
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
     if ((activeTab !== 'preview' && !isNoteTab(activeTab)) || staleContext) {
@@ -604,7 +604,7 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
 const CONNECTOR_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Connector' };
 
 function ConnectorRoute({ nodeId }: { nodeId: string }) {
-  const { isAdmin, loading } = useCommunity();
+  const { isAdmin, loading } = useSpace();
 
   // isAdmin is false until memberships resolve; branching on it early would
   // mount the member view and then swap the whole page a beat later.
@@ -649,52 +649,52 @@ function EventRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
-/** The id of the live community this node stands for, or null if the node is a
- *  record with no community behind it.
+/** The id of the live space this node stands for, or null if the node is a
+ *  record with no space behind it.
  *
  *  Two node shapes have a real workspace:
  *
- *   * The node standing for the community you are IN. `isOwnCommunityNode` spots
- *     it, and the community id comes off the NODE rather than the id string.
- *     `communityNodeId` only prefixes an id that lacks one, so a community
+ *   * The node standing for the space you are IN. `isOwnSpaceNode` spots
+ *     it, and the space id comes off the NODE rather than the id string.
+ *     `spaceNodeId` only prefixes an id that lacks one, so a space
  *     already called `community:blackbird-ventures` has a node id identical to
- *     its community id — stripping `community:` there would 404 — while a
- *     community called `blackbird` gets the node id `community:blackbird` and
- *     does need the prefix gone. The node's own `community_id` is right in both.
- *   * A record carrying `metadata.communityRef` — the field the create flow
+ *     its space id — stripping `space:` there would 404 — while a
+ *     space called `blackbird` gets the node id `community:blackbird` and
+ *     does need the prefix gone. The node's own `space_id` is right in both.
+ *   * A record carrying `metadata.spaceRef` — the field the create flow
  *     writes (createEntity, /api/nodes/search) when the thing you are recording
- *     is a community that actually runs here. Its `community_id` is the graph it
- *     was filed in, NOT the community it names, so the ref is the only honest
+ *     is a space that actually runs here. Its `space_id` is the graph it
+ *     was filed in, NOT the space it names, so the ref is the only honest
  *     answer.
  *
  *  Everything else is a record with nothing to redirect to.
  */
-function liveCommunityId(node: NBNode | null, nodeId: string): string | null {
+function liveSpaceId(node: NBNode | null, nodeId: string): string | null {
   if (!node) return null;
-  const communityId = node.community_id ?? null;
-  if (isOwnCommunityNode({ id: node.id ?? nodeId, communityId })) return communityId;
-  const ref = node.metadata?.communityRef;
+  const spaceId = node.space_id ?? null;
+  if (isOwnSpaceNode({ id: node.id ?? nodeId, spaceId })) return spaceId;
+  const ref = node.metadata?.spaceRef;
   return typeof ref === 'string' && ref.trim() ? ref.trim() : null;
 }
 
-// Every `community:` node gets a community page — the type is the page, whether
-// the community runs here or is only recorded here for CRM. What differs is
+// Every `space:` node gets a space page — the type is the page, whether
+// the space runs here or is only recorded here for CRM. What differs is
 // where the page comes from:
 //
-//  * A live community (its own node, or a record pointing at one via
-//    `communityRef`) has a workspace, members and events, so it redirects to
+//  * A live space (its own node, or a record pointing at one via
+//    `spaceRef`) has a workspace, members and events, so it redirects to
 //    /communities/<id> and that page renders from the overview API.
 //  * A record has none of those, so it renders here from the node itself —
-//    CommunityPageContent, same visual language, minus the parts that need a
-//    membership. Redirecting it would throw the reader out of the community
+//    SpacePageContent, same visual language, minus the parts that need a
+//    membership. Redirecting it would throw the reader out of the space
 //    they were browsing and into a workspace that doesn't exist.
 //
 // Both need the node before they can decide, which is why this waits for it.
-function CommunityRoute({ nodeId }: { nodeId: string }) {
+function SpaceRoute({ nodeId }: { nodeId: string }) {
   const [wantedTab] = useProfileTabParam();
   const { data, error } = useNodeProfile(nodeId);
   const node = data?.node ?? null;
-  const liveId = liveCommunityId(node, nodeId);
+  const liveId = liveSpaceId(node, nodeId);
   const href = liveId ? `/communities/${encodeURIComponent(liveId)}` : null;
 
   // Null while the node is still loading: hold the redirect branch's skeleton
@@ -703,10 +703,10 @@ function CommunityRoute({ nodeId }: { nodeId: string }) {
     return (
       <NodePage
         nodeId={nodeId}
-        firstTab={COMMUNITY_FIRST_TAB}
+        firstTab={SPACE_FIRST_TAB}
         ariaLabel="Space sections"
         notFoundTitle="Space not found"
-        renderBody={(id) => <CommunityPageContent nodeId={id} />}
+        renderBody={(id) => <SpacePageContent nodeId={id} />}
       />
     );
   }
@@ -715,15 +715,15 @@ function CommunityRoute({ nodeId }: { nodeId: string }) {
     return (
       <NoteOnlyPage
         nodeId={nodeId}
-        firstTab={COMMUNITY_FIRST_TAB}
+        firstTab={SPACE_FIRST_TAB}
         href={href ?? '/communities'}
         ariaLabel="Space sections"
         notFoundTitle="Space not found"
       />
     );
   }
-  // A node that can't be read has no community to send us to; the index lists
-  // every community the viewer can reach, which beats a dead end.
+  // A node that can't be read has no space to send us to; the index lists
+  // every space the viewer can reach, which beats a dead end.
   return <PageRedirect href={error ? '/communities' : href} />;
 }
 
@@ -747,8 +747,8 @@ function NodeRoute() {
   if (nodeId.startsWith('event:')) {
     return <EventRoute nodeId={nodeId} />;
   }
-  if (nodeId.startsWith('community:')) {
-    return <CommunityRoute nodeId={nodeId} />;
+  if (nodeId.startsWith('space:')) {
+    return <SpaceRoute nodeId={nodeId} />;
   }
   if (nodeId.startsWith('person:')) {
     return <PersonRoute nodeId={nodeId} />;

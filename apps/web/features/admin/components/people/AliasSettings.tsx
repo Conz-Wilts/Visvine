@@ -9,9 +9,9 @@
 //
 // Owner is built in the way the system link types are: you choose who holds it
 // and what it reaches, but it cannot be renamed, recoloured, deleted, or stop
-// owning the community — so a community can never lose the thing that owns it.
+// owning the space — so a space can never lose the thing that owns it.
 // "Everyone" is the alias every member holds implicitly; it has no membership to
-// edit, only access, which is exactly the community-wide grant
+// edit, only access, which is exactly the space-wide grant
 // (lib/notes/shared/authz.ts).
 
 import { useState } from 'react';
@@ -26,7 +26,7 @@ import { GrantEditor, type PeopleData } from './shared';
 export type Run = (fn: () => Promise<unknown>) => Promise<void>;
 
 interface SettingsProps {
-  communityId: string;
+  spaceId: string;
   data: PeopleData;
   busy: boolean;
   run: Run;
@@ -43,18 +43,18 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
 }
 
 /**
- * The community-wide grant. Editing it is how "everyone in this space can read
+ * The space-wide grant. Editing it is how "everyone in this space can read
  * the handbook" gets said — there is no membership to edit, since nobody can
  * stop being a member and still be here.
  */
-export function EveryoneSettings({ communityId, data, busy, run }: SettingsProps) {
-  const grants = (data.overview?.grants ?? []).filter((g) => g.subjectType === 'community');
+export function EveryoneSettings({ spaceId, data, busy, run }: SettingsProps) {
+  const grants = (data.overview?.grants ?? []).filter((g) => g.subjectType === 'space');
 
   return (
     <Block title="Can access">
       <GrantEditor
-        communityId={communityId}
-        subjectType="community"
+        spaceId={spaceId}
+        subjectType="space"
         subjectId=""
         grants={grants}
         paths={data.paths}
@@ -114,7 +114,7 @@ function NameField({ alias, taken, busy, onRename }: {
  * One alias, wide open: what it's called and coloured, whether holding it owns
  * the space, who holds it, and what it reaches.
  */
-export function AliasSettings({ communityId, alias, data, busy, run }: SettingsProps & { alias: AliasInfo }) {
+export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps & { alias: AliasInfo }) {
   const [adding, setAdding] = useState(false);
   const [picking, setPicking] = useState(false);
   const [color, setColor] = useState(alias.color);
@@ -129,7 +129,7 @@ export function AliasSettings({ communityId, alias, data, busy, run }: SettingsP
   );
 
   const act = (input: Parameters<typeof notesApi.aliasAction>[1]) =>
-    void run(() => notesApi.aliasAction(communityId, input));
+    void run(() => notesApi.aliasAction(spaceId, input));
 
   return (
     <div className="space-y-4">
@@ -250,7 +250,7 @@ export function AliasSettings({ communityId, alias, data, busy, run }: SettingsP
 
       <Block title="Can access">
         <GrantEditor
-          communityId={communityId}
+          spaceId={spaceId}
           subjectType="alias"
           subjectId={alias.name}
           grants={grants}
@@ -295,8 +295,8 @@ export function AliasSettings({ communityId, alias, data, busy, run }: SettingsP
 }
 
 /** Create an alias. It starts empty — no holders, no grants, no ownership. */
-export function NewAliasRow({ communityId, taken, busy, run }: {
-  communityId: string;
+export function NewAliasRow({ spaceId, taken, busy, run }: {
+  spaceId: string;
   taken: string[];
   busy: boolean;
   run: Run;
@@ -319,7 +319,7 @@ export function NewAliasRow({ communityId, taken, busy, run }: {
     if (!name.trim() || problem) return;
     const value = name.trim();
     reset();
-    void run(() => notesApi.aliasAction(communityId, { action: 'create', name: value, color }));
+    void run(() => notesApi.aliasAction(spaceId, { action: 'create', name: value, color }));
   };
 
   if (!open) {

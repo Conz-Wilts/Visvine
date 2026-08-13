@@ -1,5 +1,5 @@
 // DB store for Context Sources — the non-note counterpart of ./store.ts. A
-// source row is keyed by the same brain `{ communityId, ownerKey }` + brain
+// source row is keyed by the same brain `{ spaceId, ownerKey }` + brain
 // path as a note (so gate/lens predicates apply unchanged); its original file
 // lives in GCS and its extracted text lives chunked in context_source_chunks.
 // No trash and no revisions: a source is a mirror of an uploaded file, so
@@ -65,7 +65,7 @@ function toMeta(row: SourceRow): ContextSourceMeta {
 
 export async function listSources(brain: Brain): Promise<ContextSourceMeta[]> {
   const rows = await prisma.contextSource.findMany({
-    where: { communityId: brain.communityId, ownerKey: brain.ownerKey },
+    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
     select: META_SELECT,
     orderBy: { path: 'asc' },
   })
@@ -82,7 +82,7 @@ export async function findSource(brain: Brain, path: string): Promise<SourceRow 
   return prisma.contextSource.findUnique({
     where: {
       source_identity: {
-        communityId: brain.communityId,
+        spaceId: brain.spaceId,
         ownerKey: brain.ownerKey,
         path: sanitizePath(path),
       },
@@ -107,7 +107,7 @@ export async function createSourceRow(brain: Brain, input: CreateSourceInput): P
   if (p.toLowerCase().endsWith('.md')) throw new Error(`Sources must not use the .md note namespace: ${p}`)
   const row = await prisma.contextSource.create({
     data: {
-      communityId: brain.communityId,
+      spaceId: brain.spaceId,
       ownerKey: brain.ownerKey,
       ...input,
       path: p,
@@ -161,7 +161,7 @@ export async function listChunkTexts(sourceId: string): Promise<string[]> {
  * rows that list/read still serve — only the vector stage skips them.
  */
 export async function replaceChunks(
-  source: { id: string; communityId: string; ownerKey: string; path: string },
+  source: { id: string; spaceId: string; ownerKey: string; path: string },
   chunks: string[],
   vectors: (number[] | null)[],
   model: string | null,
@@ -171,13 +171,13 @@ export async function replaceChunks(
     const v = vectors[seq] ?? null
     if (v && model) {
       await prisma.$executeRaw`
-        INSERT INTO context_source_chunks (id, source_id, community_id, owner_key, path, seq, text, model, embedding)
-        VALUES ((gen_random_uuid())::text, ${source.id}, ${source.communityId}, ${source.ownerKey}, ${source.path}, ${seq}, ${chunks[seq]}, ${model}, ${vectorLiteral(v)}::vector)`
+        INSERT INTO context_source_chunks (id, source_id, space_id, owner_key, path, seq, text, model, embedding)
+        VALUES ((gen_random_uuid())::text, ${source.id}, ${source.spaceId}, ${source.ownerKey}, ${source.path}, ${seq}, ${chunks[seq]}, ${model}, ${vectorLiteral(v)}::vector)`
     } else {
       await prisma.contextSourceChunk.create({
         data: {
           sourceId: source.id,
-          communityId: source.communityId,
+          spaceId: source.spaceId,
           ownerKey: source.ownerKey,
           path: source.path,
           seq,

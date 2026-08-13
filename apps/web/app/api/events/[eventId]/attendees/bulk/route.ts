@@ -2,7 +2,7 @@
  * Bulk host actions over the guest list: approve all pending, promote from the
  * waitlist (capacity-aware, FIFO), bulk check-in / decline / no-show / remove.
  * Target either an explicit `attendeeIds` list or a `scope` (status group).
- * Host or community admin only.
+ * Host or space admin only.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -31,15 +31,15 @@ const ACTION_TO_STATUS: Record<string, RSVPStatus> = {
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { eventId } = await context.params;
-    const communityId = new URL(request.url).searchParams.get('communityId');
-    if (!communityId) {
-      return NextResponse.json({ error: 'communityId is required' }, { status: 400 });
+    const spaceId = new URL(request.url).searchParams.get('spaceId');
+    if (!spaceId) {
+      return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
     }
 
-    const event = await getEvent(communityId, eventId);
+    const event = await getEvent(spaceId, eventId);
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
-    const auth = await requireEventManager(communityId, event);
+    const auth = await requireEventManager(spaceId, event);
     if (auth instanceof Response) return auth;
 
     const parsed = bulkSchema.safeParse(await request.json());
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     const { action, attendeeIds, scope } = parsed.data;
 
-    const all = await getAttendees(communityId, eventId);
+    const all = await getAttendees(spaceId, eventId);
     let targets = all;
     if (attendeeIds?.length) {
       const set = new Set(attendeeIds);
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (action === 'remove') {
       let removed = 0;
-      for (const t of targets) if (await removeAttendee(communityId, eventId, t.id)) removed++;
+      for (const t of targets) if (await removeAttendee(spaceId, eventId, t.id)) removed++;
       return NextResponse.json({ removed });
     }
 
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       for (const t of queue) {
         const need = 1 + (t.plusOnes ?? 0);
         if (available < need) continue;
-        await setAttendeeStatus(communityId, eventId, t.id, 'going');
+        await setAttendeeStatus(spaceId, eventId, t.id, 'going');
         available -= need;
         promoted++;
       }
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const status = ACTION_TO_STATUS[action];
     let updated = 0;
     for (const t of targets) {
-      await setAttendeeStatus(communityId, eventId, t.id, status);
+      await setAttendeeStatus(spaceId, eventId, t.id, status);
       updated++;
     }
     return NextResponse.json({ updated });

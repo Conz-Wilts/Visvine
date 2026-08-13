@@ -9,15 +9,15 @@ export async function GET(req: NextRequest) {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
 
-  const community_id = req.nextUrl.searchParams.get('community_id');
-  if (!community_id) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
+  const space_id = req.nextUrl.searchParams.get('space_id');
+  if (!space_id) return NextResponse.json({ error: 'space_id required' }, { status: 400 });
   // A space that has removed Resources, or restricted it to admins, refuses here
   // too — not only in the sidebar that stopped showing the link.
-  if (await featureAccessForbidden(session.userId, community_id, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, space_id, 'resources', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const resources = await prisma.resource.findMany({
-    where: { communityId: community_id },
+    where: { spaceId: space_id },
     orderBy: { createdAt: 'desc' },
   });
 
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 }
 
 const CreateResourceSchema = z.object({
-  communityId: z.string().min(1),
+  spaceId: z.string().min(1),
   name: z.string().min(1).max(255),
   fileType: z.string().min(1).max(50),
   fileUrl: z.string().url(),
@@ -58,12 +58,12 @@ export async function POST(req: NextRequest) {
   const body = await parseBody(req, CreateResourceSchema);
   if (body instanceof NextResponse) return body;
 
-  const { communityId, name, fileType, fileUrl, fileSize, metadata } = body;
-  if (await featureAccessForbidden(session.userId, communityId, 'resources', session.email)) {
+  const { spaceId, name, fileType, fileUrl, fileSize, metadata } = body;
+  if (await featureAccessForbidden(session.userId, spaceId, 'resources', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   const resource = await prisma.resource.create({
-    data: { communityId, name, fileType, fileUrl, fileSize: fileSize ?? 0, uploadedBy: session.userId, metadata: (metadata ?? {}) as Record<string, string> },
+    data: { spaceId, name, fileType, fileUrl, fileSize: fileSize ?? 0, uploadedBy: session.userId, metadata: (metadata ?? {}) as Record<string, string> },
   });
   return NextResponse.json(resource);
 }
@@ -76,7 +76,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
   const resource = await prisma.resource.findUnique({ where: { id } });
   if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  if (await featureAccessForbidden(session.userId, resource.communityId, 'resources', session.email)) {
+  if (await featureAccessForbidden(session.userId, resource.spaceId, 'resources', session.email)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   // Delete file from GCS (gcsPath stored in metadata, fallback to fileUrl for legacy records)

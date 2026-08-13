@@ -1,7 +1,7 @@
 'use client';
 
 // Destination picker shared by the Create modal's Context (note) and File
-// (source) forms: where in the current community's context the new thing lands.
+// (source) forms: where in the current space's context the new thing lands.
 // Notes and sources share one brain-path namespace, so they share one picker —
 // the folder list, the "New folder…" affordance, and the resulting path preview
 // are identical for both.
@@ -48,19 +48,19 @@ function collect(node: TreeNode, folders: FolderOption[], notes: Set<string>): v
  * cache — the tree is usually already warm from the Context tab/sidebar, so the
  * picker paints filled in rather than empty-then-populated.
  */
-export function useBrainTree(communityId: string | null, enabled: boolean): BrainTree {
+export function useBrainTree(spaceId: string | null, enabled: boolean): BrainTree {
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!communityId || !enabled) return;
+    if (!spaceId || !enabled) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     swrFetch(
-      contextKeys.tree(communityId),
-      () => notesApi.tree(communityId),
+      contextKeys.tree(spaceId),
+      () => notesApi.tree(spaceId),
       ({ tree: t }) => {
         if (!cancelled) setTree(t);
       },
@@ -74,7 +74,7 @@ export function useBrainTree(communityId: string | null, enabled: boolean): Brai
     return () => {
       cancelled = true;
     };
-  }, [communityId, enabled]);
+  }, [spaceId, enabled]);
 
   return useMemo(() => {
     const folders: FolderOption[] = [];

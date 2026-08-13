@@ -10,7 +10,7 @@ import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrol
 import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
 
 /**
- * Settings shell for the Community Console: a pane-top tab bar with the active
+ * Settings shell for the Space Console: a pane-top tab bar with the active
  * section's content below it. Section state lives in the URL
  * (`?section=members`) so it deep-links and survives refresh.
  *
@@ -41,7 +41,7 @@ export interface ConsoleSection {
 interface ConsoleShellProps {
   sections: ConsoleSection[];
   renderSection: (id: string) => React.ReactNode;
-  /** Tablist label, for the surfaces that aren't the Community Console. */
+  /** Tablist label, for the surfaces that aren't the Space Console. */
   ariaLabel?: string;
 }
 

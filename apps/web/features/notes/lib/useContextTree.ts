@@ -1,6 +1,6 @@
 'use client'
 
-// The community context tree, loaded once and owned in one place.
+// The space context tree, loaded once and owned in one place.
 //
 // Rendered by the docked ContextSidebar (portalled into the global Sidebar
 // from a note, a source or a profile) — the loading, the trash, the access
@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
 import { entityKindOfPath, isEntityNamespaceDir, noteHref } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
@@ -19,7 +19,7 @@ import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
 
 /** Where a surface sends the user when the note it was showing is deleted:
- *  the brain's root index note, the community's home page. */
+ *  the brain's root index note, the space's home page. */
 const CONTEXT_HOME = '/directory/note/index.md'
 
 /** What a move produces: the item keeps its own name under `destFolder`
@@ -75,16 +75,16 @@ export function canMoveInto(from: string, kind: 'note' | 'folder', destFolder: s
 }
 
 export interface ContextTreeOptions {
-  communityId: string | null
+  spaceId: string | null
   /** False while the notes tool is off — no fetching, empty tree. */
   enabled: boolean
   /** The note the host surface currently has open, if any. Deleting it navigates home. */
   currentPath?: string | null
 }
 
-export function useContextTree({ communityId, enabled, currentPath = null }: ContextTreeOptions) {
+export function useContextTree({ spaceId, enabled, currentPath = null }: ContextTreeOptions) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
+  const { currentSpace } = useSpace()
 
   const [tree, setTree] = useState<TreeNode>(EMPTY_TREE)
   const [notes, setNotes] = useState<NoteMeta[]>([])
@@ -98,23 +98,23 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
   // Bumped after a tree mutation (delete, restore, purge) to re-run the loads.
   const [treeVersion, setTreeVersion] = useState(0)
 
-  const active = enabled && !!communityId
+  const active = enabled && !!spaceId
 
-  // Load the tree + note index whenever the active community changes, through
+  // Load the tree + note index whenever the active space changes, through
   // the shared context cache: a cached value paints synchronously (re-opening
   // the Context tab shows the tree instantly, no spinner) and revalidates in
   // the background; the list fetch is deduped with EntityContextPanel's. A
   // gated or empty brain simply yields an empty tree (no error surfaced).
   useEffect(() => {
-    if (!communityId || !active) return
+    if (!spaceId || !active) return
     let cancelled = false
     setLoading(true)
     setError(null)
     Promise.all([
-      swrFetch(contextKeys.tree(communityId), () => notesApi.tree(communityId), ({ tree }) => {
+      swrFetch(contextKeys.tree(spaceId), () => notesApi.tree(spaceId), ({ tree }) => {
         if (!cancelled) setTree(tree ?? EMPTY_TREE)
       }),
-      swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), ({ notes, starred }) => {
+      swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), ({ notes, starred }) => {
         if (cancelled) return
         setNotes(notes ?? [])
         setStarred(starred ?? [])
@@ -130,17 +130,17 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     return () => {
       cancelled = true
     }
-  }, [communityId, active, treeVersion])
+  }, [spaceId, active, treeVersion])
 
   // The brain's trash, for the folder pinned to the bottom of the tree. Re-runs
   // on treeVersion so a delete lands in the trash row immediately; the GET also
   // purges anything past its retention window, so the list is what the server
   // would keep. A failure just leaves the row empty.
   useEffect(() => {
-    if (!communityId || !active) return
+    if (!spaceId || !active) return
     let cancelled = false
     notesApi
-      .trash(communityId)
+      .trash(spaceId)
       .then(({ trash }) => {
         if (!cancelled) setTrash(trash ?? [])
       })
@@ -150,17 +150,17 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     return () => {
       cancelled = true
     }
-  }, [communityId, active, treeVersion])
+  }, [spaceId, active, treeVersion])
 
   // The context's display name for the header (renameable from the console).
   // Failure just leaves the default label — never blocks the tree.
   useEffect(() => {
     setContextName(null)
-    if (!communityId || !active) return
+    if (!spaceId || !active) return
     let cancelled = false
     swrFetch(
-      contextKeys.settings(communityId),
-      () => notesApi.getBrainSettings(communityId),
+      contextKeys.settings(spaceId),
+      () => notesApi.getBrainSettings(spaceId),
       ({ settings }) => {
         if (!cancelled) setContextName(settings?.contextName ?? null)
       },
@@ -168,20 +168,20 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     return () => {
       cancelled = true
     }
-  }, [communityId, active])
+  }, [spaceId, active])
 
   // Access overview: restricted/locked boundaries (folders AND private notes)
   // for the 🔒 badges. Personal spaces have no boundaries — skip the fetch.
   // shareOpen is a dep so closing the Share panel repaints badges it changed.
   const shareOpen = shareTarget !== null
   useEffect(() => {
-    if (!communityId || !active || communityId.startsWith('me:')) {
+    if (!spaceId || !active || spaceId.startsWith('me:')) {
       setOverview(null)
       return
     }
     let cancelled = false
     notesApi
-      .getAccessOverview(communityId)
+      .getAccessOverview(spaceId)
       .then((o) => {
         if (!cancelled) setOverview(o)
       })
@@ -189,7 +189,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     return () => {
       cancelled = true
     }
-  }, [communityId, active, shareOpen])
+  }, [spaceId, active, shareOpen])
 
   const folderBadges = useMemo(() => {
     if (!overview) return undefined
@@ -201,32 +201,32 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     return map.size ? map : undefined
   }, [overview])
 
-  // The community as the tree's root folder — everything below it is literally
+  // The space as the tree's root folder — everything below it is literally
   // its children, so it renders as a folder row (chevron + name, no glyph)
   // rather than a separate header bar above the list. A renamed context wins
-  // the label; the generic default defers to the community name.
+  // the label; the generic default defers to the space name.
   const rootFolder = useMemo(
-    () => ({ label: contextDisplayName(contextName, currentCommunity?.name) }),
-    [contextName, currentCommunity?.name],
+    () => ({ label: contextDisplayName(contextName, currentSpace?.name) }),
+    [contextName, currentSpace?.name],
   )
 
   const handleToggleStar = useCallback(
     (path: string, next: boolean) => {
-      if (!communityId) return
+      if (!spaceId) return
       // Optimistic: reflect the toggle immediately, revert on failure.
       setStarred((prev) => (next ? [...prev, path] : prev.filter((p) => p !== path)))
       notesApi
-        .star(communityId, path, next)
+        .star(spaceId, path, next)
         .then(() => {
           // The cached list carries `starred` — drop it so the next open
           // doesn't repaint the pre-toggle state.
-          invalidateContextCache(contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.list(spaceId))
         })
         .catch(() => {
           setStarred((prev) => (next ? prev.filter((p) => p !== path) : [...prev, path]))
         })
     },
-    [communityId],
+    [spaceId],
   )
 
   // Delete = move to the brain's trash (restorable from the tree's Trash folder
@@ -235,13 +235,13 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
   // message. Deleting the note that's open navigates back to the browser.
   const handleDeleteNote = useCallback(
     (path: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       const title = notes.find((n) => n.path === path)?.title ?? path
       if (!window.confirm(`Delete “${title}”? It moves to Trash and can be restored for 7 days.`)) return
       notesApi
-        .remove(communityId, path)
+        .remove(spaceId, path)
         .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
           if (path === currentPath) router.push(CONTEXT_HOME)
         })
@@ -249,7 +249,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
           window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
         })
     },
-    [communityId, notes, currentPath, router],
+    [spaceId, notes, currentPath, router],
   )
 
   // Deleting a folder trashes every note inside it, so the confirm spells that
@@ -260,7 +260,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
     // has one. The confirm has to name the folder the user clicked, not the path
     // segment behind it.
     (folderPath: string, label?: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       const name = label?.trim() || folderPath.split('/').pop() || folderPath
       const count = notes.filter((n) => n.path.startsWith(`${folderPath}/`)).length
       const contents =
@@ -269,9 +269,9 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
           : `This will also delete the ${count === 1 ? 'note' : `${count} notes`} inside it (moved to Trash, restorable for 7 days).`
       if (!window.confirm(`Delete the folder “${name}”? ${contents}`)) return
       notesApi
-        .deleteFolder(communityId, folderPath)
+        .deleteFolder(spaceId, folderPath)
         .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
           if (currentPath?.startsWith(`${folderPath}/`)) router.push(CONTEXT_HOME)
         })
@@ -279,7 +279,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
           window.alert(e instanceof Error ? e.message : 'Failed to delete the folder')
         })
     },
-    [communityId, notes, currentPath, router],
+    [spaceId, notes, currentPath, router],
   )
 
   // Moving a note = a rename to the same filename under another folder. The
@@ -287,15 +287,15 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
   // work is the optimistic-free reload + following the note if it was open.
   const handleMoveNote = useCallback(
     (from: string, destFolder: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       const to = movedPath(from, destFolder)
       const denial = moveDenial(from, 'note', destFolder)
       if (denial) return window.alert(denial)
       if (to === from) return
       notesApi
-        .rename(communityId, from, to)
+        .rename(spaceId, from, to)
         .then(({ path }) => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
           // The server may suffix the name if the destination was taken — follow
           // the path it actually wrote, not the one we asked for.
@@ -305,22 +305,22 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
           window.alert(e instanceof Error ? e.message : 'Failed to move the note')
         })
     },
-    [communityId, currentPath, router],
+    [spaceId, currentPath, router],
   )
 
   // Moving a folder takes its whole subtree with it (renameFolder server-side),
   // so an open note inside it follows to the equivalent path.
   const handleMoveFolder = useCallback(
     (from: string, destFolder: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       const to = movedPath(from, destFolder)
       const denial = moveDenial(from, 'folder', destFolder)
       if (denial) return window.alert(denial)
       if (to === from) return
       notesApi
-        .renameFolder(communityId, from, to)
+        .renameFolder(spaceId, from, to)
         .then(({ path }) => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
           if (currentPath?.startsWith(`${from}/`)) {
             router.replace(noteHref(`${path}${currentPath.slice(from.length)}`))
@@ -330,7 +330,7 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
           window.alert(e instanceof Error ? e.message : 'Failed to move the folder')
         })
     },
-    [communityId, currentPath, router],
+    [spaceId, currentPath, router],
   )
 
   // Restoring puts the note back at its original path (suffixed if something
@@ -338,48 +338,48 @@ export function useContextTree({ communityId, enabled, currentPath = null }: Con
   // tree, the note list and the trash together.
   const handleRestoreTrash = useCallback(
     (id: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       notesApi
-        .restoreTrash(communityId, id)
+        .restoreTrash(spaceId, id)
         .then(() => {
-          invalidateContextCache(contextKeys.tree(communityId), contextKeys.list(communityId))
+          invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
           setTreeVersion((v) => v + 1)
         })
         .catch((e: unknown) => {
           window.alert(e instanceof Error ? e.message : 'Failed to restore the note')
         })
     },
-    [communityId],
+    [spaceId],
   )
 
   // Force-delete, ahead of the 7-day retention. Irreversible, hence the confirm
-  // (the server also restricts it to admins in a community brain).
+  // (the server also restricts it to admins in a space brain).
   const handlePurgeTrash = useCallback(
     (id: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       const name = trash.find((t) => t.id === id)?.name ?? 'this note'
       if (!window.confirm(`Permanently delete “${name}”? This cannot be undone.`)) return
       notesApi
-        .purgeTrash(communityId, id)
+        .purgeTrash(spaceId, id)
         .then(() => setTreeVersion((v) => v + 1))
         .catch((e: unknown) => {
           window.alert(e instanceof Error ? e.message : 'Failed to delete the note')
         })
     },
-    [communityId, trash],
+    [spaceId, trash],
   )
 
   const handleEmptyTrash = useCallback(() => {
-    if (!communityId) return
+    if (!spaceId) return
     const count = trash.length
     if (!window.confirm(`Permanently delete ${count === 1 ? 'the note' : `all ${count} notes`} in the trash? This cannot be undone.`)) return
     notesApi
-      .emptyTrash(communityId)
+      .emptyTrash(spaceId)
       .then(() => setTreeVersion((v) => v + 1))
       .catch((e: unknown) => {
         window.alert(e instanceof Error ? e.message : 'Failed to empty the trash')
       })
-  }, [communityId, trash])
+  }, [spaceId, trash])
 
   return {
     tree,

@@ -7,12 +7,12 @@ import { eventCreateInputSchema } from '@/lib/schemas/eventSchemas';
 import { generateEventId, slugify, normalizeStatus } from '@/lib/eventUtils';
 import { getEventsData, upsertEvent } from '@/lib/eventRepo';
 import { upsertLink } from '@/lib/notes/context/links';
-import { requireCommunityMember } from '@/lib/eventAuth';
+import { requireSpaceMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
 import type { NBEvent } from '@/lib/types';
 
 /**
- * POST /api/events - Create a new event (any community member; creator becomes a host)
+ * POST /api/events - Create a new event (any space member; creator becomes a host)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
 
     const input = parsed.data;
 
-    // Must be a member (or admin) of the target community.
-    const auth = await requireCommunityMember(input.communityId);
+    // Must be a member (or admin) of the target space.
+    const auth = await requireSpaceMember(input.spaceId);
     if (auth instanceof Response) return auth;
     const session = auth;
 
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     const now = new Date().toISOString();
     const event: NBEvent = {
       id: eventId,
-      communityId: input.communityId,
+      spaceId: input.spaceId,
       title: input.title,
       description: input.description,
       startAt: input.startAt,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       hosts,
       organizerEmail: input.organizerEmail,
       capacity: input.capacity,
-      visibility: input.visibility || 'community',
+      visibility: input.visibility || 'space',
       coverImageUrl: input.coverImageUrl,
       theme: input.theme,
       status: input.status ?? 'published',
@@ -78,15 +78,15 @@ export async function POST(request: NextRequest) {
       metadata: input.metadata,
     };
 
-    await upsertEvent(input.communityId, event);
+    await upsertEvent(input.spaceId, event);
 
     // Connect each host to the event in the context (idempotent: skip if it exists).
     const prisma = (await import('@/lib/prisma')).default;
     for (const hostId of event.hosts) {
-      const hostExists = await prisma.node.findFirst({ where: { id: hostId, communityId: input.communityId } });
+      const hostExists = await prisma.node.findFirst({ where: { id: hostId, spaceId: input.spaceId } });
       if (!hostExists) continue;
       await upsertLink({
-        communityId: input.communityId,
+        spaceId: input.spaceId,
         sourceId: hostId,
         targetId: eventId,
         relationship: 'hosting',
@@ -104,32 +104,35 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/events?communityId=... - List events for a community
+ * GET /api/events?spaceId=... - List events for a space
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const communityId = searchParams.get('communityId');
+    // `communityId` is the pre-rename spelling. Shipped mobile builds still send
+    // it, so it stays accepted here until they roll over; nothing else in the
+    // codebase uses the word.
+    const spaceId = searchParams.get('spaceId') ?? searchParams.get('communityId');
 
-    if (!communityId) {
+    if (!spaceId) {
       return NextResponse.json(
-        { error: 'communityId is required' },
+        { error: 'spaceId is required' },
         { status: 400 }
       );
     }
 
-    // Events are community-scoped: only members/admins of this community may list them.
-    const auth = await requireCommunityMember(communityId);
+    // Events are space-scoped: only members/admins of this space may list them.
+    const auth = await requireSpaceMember(spaceId);
     if (auth instanceof Response) return auth;
 
-    const eventsData = await getEventsData(communityId);
+    const eventsData = await getEventsData(spaceId);
 
     // Drafts are only visible inside the composer, never in the public list.
     const visibleEvents = eventsData.events.filter((e) => e.status !== 'draft');
 
     // Resolve host node ids (e.g. "person:dev_admin") to display names so
     // clients never have to render raw ids. Matched by id alone (ids are
-    // globally unique) — host person nodes can live in another community,
+    // globally unique) — host person nodes can live in another space,
     // same as the event detail route's hostNodes lookup.
     const hostIds = Array.from(new Set(visibleEvents.flatMap((e) => e.hosts || [])));
     const prisma = (await import('@/lib/prisma')).default;
@@ -150,6 +153,8 @@ export async function GET(request: NextRequest) {
 
       return {
         ...event,
+        // Pre-rename spelling, still decoded by shipped mobile builds.
+        communityId: event.spaceId,
         hostNames: (event.hosts || [])
           .map((id) => hostNameById.get(id))
           .filter((name): name is string => !!name),

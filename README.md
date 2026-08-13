@@ -62,7 +62,7 @@ pnpm db:down            # stop container (data preserved in named volume)
 pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # prisma db push (sync schema)
-pnpm db:seed            # base seed: the community, aliases + anchor users (WIPES the DB)
+pnpm db:seed            # base seed: the space, aliases + anchor users (WIPES the DB)
 pnpm db:blackbird:full  # db:seed + portfolio + brain + extras + connectors
 pnpm db:nz              # load the NZ startup ecosystem demo content
 pnpm db:fresh           # drop tables + push + db:blackbird:full (volume preserved)
@@ -79,12 +79,12 @@ pnpm — see `apps/mobile/README.md`.
 
 ## Seed
 
-The seeded community is **Blackbird Ventures** (`community:blackbird-ventures`),
+The seeded space is **Blackbird Ventures** (`community:blackbird-ventures`),
 built in layers. `pnpm db:blackbird:full` runs all of them:
 
 | step | what it adds |
 |---|---|
-| `db:seed` | the community, its node types and aliases, the four anchor users. **Wipes the whole local DB first.** |
+| `db:seed` | the space, its node types and aliases, the four anchor users. **Wipes the whole local DB first.** |
 | `db:blackbird:ventures` | ~182 portfolio companies + their founders, `founded` links, seven CRM columns |
 | `db:blackbird:notes` | the shared brain (companies, sectors, people, team, deals, data) + the admin's personal brain |
 | `db:blackbird:extras` | events + attendees, the resource library, channels + messages + a DM, feed posts |
@@ -109,7 +109,7 @@ column — what someone can do comes entirely from the aliases they hold:
 
 | email                | aliases          | notes |
 |----------------------|------------------|-------|
-| `admin@local.dev`    | Owner, Partner   | manages the community; also super admin via env |
+| `admin@local.dev`    | Owner, Partner   | manages the space; also super admin via env |
 | `partner@local.dev`  | Partner          | edit on companies/, deals/, data/ |
 | `member@local.dev`   | Founder          | view on companies/ |
 | `lp@local.dev`       | LP               | view on one note — the tightest grant there is |

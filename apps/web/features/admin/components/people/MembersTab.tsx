@@ -12,7 +12,7 @@ import { Trash2 } from 'lucide-react';
 import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { usePeopleSection } from './PeopleDataContext';
-import type { CommunityMember, PeopleData } from './shared';
+import type { SpaceMember, PeopleData } from './shared';
 
 /** "7 Feb 2026" — the day someone joined is all this column needs. */
 function joinedLabel(iso: string): string {
@@ -22,7 +22,7 @@ function joinedLabel(iso: string): string {
 }
 
 export default function MembersTab() {
-  const { communityId, data, busy, run } = usePeopleSection();
+  const { spaceId, data, busy, run } = usePeopleSection();
   const [query, setQuery] = useState('');
   const [confirm, setConfirm] = useState<{ userId: string; name: string } | null>(null);
 
@@ -50,7 +50,7 @@ export default function MembersTab() {
   }, [members, aliases]);
 
   const remove = (userId: string) =>
-    run(() => fetchJson(`/api/communities/${communityId}/members/${userId}`, { method: 'DELETE' }));
+    run(() => fetchJson(`/api/communities/${spaceId}/members/${userId}`, { method: 'DELETE' }));
 
   return (
     <div className="space-y-4">
@@ -114,7 +114,7 @@ export default function MembersTab() {
 
 /** One member: who they are, what they are, when they arrived, and the way out. */
 function MemberRow({ member, held, busy, onRemove }: {
-  member: CommunityMember;
+  member: SpaceMember;
   held: PeopleData['aliases'];
   busy: boolean;
   onRemove: () => void;

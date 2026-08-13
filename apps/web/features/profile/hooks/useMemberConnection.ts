@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '@/features/auth/lib/auth-client'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 
 export interface MemberConnectionInfo {
   userId: string
@@ -33,19 +33,19 @@ export interface MemberOption {
 
 export function useMemberConnection({
   nodeId,
-  communityId,
+  spaceId,
   onChange,
 }: {
   nodeId: string
-  communityId: string | null
+  spaceId: string | null
   onChange?: (userId: string | null) => void
 }) {
   const { data: session } = useSession()
-  const { isAdmin } = useCommunity()
+  const { isAdmin } = useSpace()
   // undefined = still loading; null = definitely unconnected.
   const [connection, setConnection] = useState<MemberConnectionInfo | null | undefined>(undefined)
   // The endpoint could not answer at all — no Node row for this id (a Person-row
-  // id reached directly), a community the viewer can't read, or a transient
+  // id reached directly), a space the viewer can't read, or a transient
   // failure. Distinct from a clean "no member behind this node": callers must
   // not read a failed request as an invitation to connect one.
   const [unavailable, setUnavailable] = useState(false)
@@ -115,8 +115,8 @@ export function useMemberConnection({
 
   const openPicker = useCallback(() => {
     setPicking(true)
-    if (members !== null || !communityId) return
-    fetch(`/api/communities/${encodeURIComponent(communityId)}/members`)
+    if (members !== null || !spaceId) return
+    fetch(`/api/communities/${encodeURIComponent(spaceId)}/members`)
       .then((res) => (res.ok ? res.json() : { members: [] }))
       .then((data: { members?: Array<{ userId: string; status: string; user: { name: string; email: string } }> }) => {
         setMembers(
@@ -126,7 +126,7 @@ export function useMemberConnection({
         )
       })
       .catch(() => setMembers([]))
-  }, [communityId, members])
+  }, [spaceId, members])
 
   const cancelPicking = useCallback(() => setPicking(false), [])
 

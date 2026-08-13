@@ -11,7 +11,7 @@ import { createContext, useContext } from 'react';
  * Contexts that intentionally work outside their provider (i.e. ship a real
  * default value) should keep using `createContext` directly.
  *
- * @param name     Base name, e.g. 'Community' → error mentions CommunityProvider.
+ * @param name     Base name, e.g. 'Space' → error mentions SpaceProvider.
  * @param hookName Name used in the error message; defaults to `use{name}`.
  *                 Pass explicitly when the public hook is named differently
  *                 (e.g. useProfileCache for ProfileProvider).

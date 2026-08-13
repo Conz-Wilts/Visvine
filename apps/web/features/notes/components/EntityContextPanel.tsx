@@ -1,6 +1,6 @@
 'use client'
 
-// The profile "Context" tab: the entity's context note (the community's shared
+// The profile "Context" tab: the entity's context note (the space's shared
 // brain, at its canonical people/<slug>.md / companies/<slug>.md path) in the
 // embedded NoteEditor, with the linked-references rail below — the same note the
 // Context workspace opens. All reads/writes go through the gated /api/notes
@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Radio } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
-import { useCommunity } from '@/features/shared/contexts/CommunityContext'
+import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useNodeProfile, patchCachedNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
@@ -68,9 +68,9 @@ export function EntityContextPanel({
   onReady,
 }: EntityContextPanelProps) {
   const router = useRouter()
-  const { currentCommunity } = useCommunity()
-  const communityId = currentCommunity?.id ?? null
-  const isPersonalSpace = communityId?.startsWith(PERSONAL_ID_PREFIX) ?? false
+  const { currentSpace } = useSpace()
+  const spaceId = currentSpace?.id ?? null
+  const isPersonalSpace = spaceId?.startsWith(PERSONAL_ID_PREFIX) ?? false
 
   const { data: profileData, loading: nodeLoading } = useNodeProfile(nodeId)
   const node = profileData?.node ?? null
@@ -100,9 +100,9 @@ export function EntityContextPanel({
   // Holding the previous note keeps the toolbar mounted, and the new read swaps
   // editor and toolbar together on one commit via `key={shown.path}`. The body is
   // hidden while it lags (ContentReveal), so the outgoing note is never seen.
-  // Scoped by community as well as path: the same path in two brains is two
-  // different notes, so a community switch must not reuse a held read.
-  const [shown, setShown] = useState<{ communityId: string; path: string; read: NoteRead } | null>(null)
+  // Scoped by space as well as path: the same path in two brains is two
+  // different notes, so a space switch must not reuse a held read.
+  const [shown, setShown] = useState<{ spaceId: string; path: string; read: NoteRead } | null>(null)
   const [everPainted, setEverPainted] = useState(false)
   const [noteExists, setNoteExists] = useState(false)
   const [notesIndex, setNotesIndex] = useState<NoteMeta[]>([])
@@ -124,7 +124,7 @@ export function EntityContextPanel({
   const [nameSaving, setNameSaving] = useState(false)
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
-  // Colours registered this session (before the community config refetches).
+  // Colours registered this session (before the space config refetches).
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
 
@@ -148,11 +148,11 @@ export function EntityContextPanel({
   // the toolbar's format controls, so clearing it would blank those buttons even
   // with the editor still mounted — the same flash by another route.
   useEffect(() => {
-    if (!communityId || !path) return
+    if (!spaceId || !path) return
     let stale = false
     swrFetch(
-      contextKeys.access(communityId, path),
-      () => notesApi.getAccess(communityId, path),
+      contextKeys.access(spaceId, path),
+      () => notesApi.getAccess(spaceId, path),
       (a) => {
         if (stale) return
         setAccess(a)
@@ -165,20 +165,20 @@ export function EntityContextPanel({
       }
     })
     return () => { stale = true }
-  }, [communityId, path])
+  }, [spaceId, path])
 
   // Surface the viewer's own open request for whatever denied them: the root
   // gate ('') when the brain is closed to them, else this entity's note path
   // (same flow as the workspace's gated state).
   const requestPath = gatedOut ? '' : (path ?? '')
   useEffect(() => {
-    if (!communityId || isPersonalSpace || !access) {
+    if (!spaceId || isPersonalSpace || !access) {
       setRequestPending(false)
       return
     }
     let stale = false
     notesApi
-      .listAccessRequests(communityId)
+      .listAccessRequests(spaceId)
       .then(({ requests }) => {
         if (stale) return
         setRequestPending(
@@ -191,14 +191,14 @@ export function EntityContextPanel({
         if (!stale) setRequestPending(false)
       })
     return () => { stale = true }
-  }, [communityId, isPersonalSpace, requestPath, access])
+  }, [spaceId, isPersonalSpace, requestPath, access])
 
   const requestAccess = async (message?: string) => {
-    if (!communityId) return
+    if (!spaceId) return
     setRequesting(true)
     setError(null)
     try {
-      await notesApi.requestAccess(communityId, requestPath, message)
+      await notesApi.requestAccess(spaceId, requestPath, message)
       setRequestPending(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to request access')
@@ -210,7 +210,7 @@ export function EntityContextPanel({
   // Load the note + the brain's note index (for [[ ]] linking, link titles, and
   // the open note's meta) + references, best-effort where non-critical.
   useEffect(() => {
-    if (!communityId || !path) return
+    if (!spaceId || !path) return
     const seq = ++loadSeq.current
     // No setShown(null) here — that teardown is what blanks the toolbar. The
     // previous note stays mounted until this read lands. noteExists isn't reset
@@ -223,28 +223,28 @@ export function EntityContextPanel({
     // References fire in parallel with the read (no waterfall — they're
     // below-the-fold UI); their results only apply once the read lands 'ok', so
     // a missing note never shows phantom backlinks.
-    const refsPromise = cachedFetch(contextKeys.references(communityId, path), () =>
-      notesApi.references(communityId, path),
+    const refsPromise = cachedFetch(contextKeys.references(spaceId, path), () =>
+      notesApi.references(spaceId, path),
     )
-    readNote(communityId, path).then((r) => {
+    readNote(spaceId, path).then((r) => {
       if (loadSeq.current !== seq) return
-      setShown({ communityId, path, read: r })
+      setShown({ spaceId, path, read: r })
       setNoteExists(r.status === 'ok')
       if (r.status === 'ok') {
         refsPromise.then(({ references: refs }) => {
           if (loadSeq.current === seq) setReferences(refs)
         }).catch(() => {})
         // Replica banner: is this context note a live published copy?
-        notesApi.getPublications(communityId, path).then((state) => {
+        notesApi.getPublications(spaceId, path).then((state) => {
           if (loadSeq.current === seq) setPubs(state)
         }).catch(() => {})
       }
     })
     refsPromise.catch(() => {}) // avoid unhandled rejection when the read isn't 'ok'
-    swrFetch(contextKeys.list(communityId), () => notesApi.list(communityId), (l) => {
+    swrFetch(contextKeys.list(spaceId), () => notesApi.list(spaceId), (l) => {
       if (loadSeq.current === seq) setNotesIndex(l.notes)
     }).catch(() => {})
-  }, [communityId, path, onModeChange])
+  }, [spaceId, path, onModeChange])
 
   const noteRefs = useMemo(() => notesIndex.map((n) => ({ path: n.path, title: n.title })), [notesIndex])
   // Keyed to the note on screen, not the one being fetched — while `shown` lags,
@@ -272,26 +272,26 @@ export function EntityContextPanel({
 
   const handleSave = useCallback(
     async (p: string, body: string, origin?: string) => {
-      if (!communityId) return
+      if (!spaceId) return
       try {
-        await notesApi.write(communityId, p, body, origin)
+        await notesApi.write(spaceId, p, body, origin)
         // Drop the prefetch cache's view of this note so a remount re-reads the
         // saved content instead of the pre-save snapshot.
         invalidateContextCache(
-          contextKeys.read(communityId, p),
-          contextKeys.references(communityId, p),
-          contextKeys.list(communityId),
-          contextKeys.tree(communityId), // a first save creates the note — the tree gains it
+          contextKeys.read(spaceId, p),
+          contextKeys.references(spaceId, p),
+          contextKeys.list(spaceId),
+          contextKeys.tree(spaceId), // a first save creates the note — the tree gains it
         )
         setNoteExists(true)
         setError(null)
-        cachedFetch(contextKeys.references(communityId, p), () => notesApi.references(communityId, p))
+        cachedFetch(contextKeys.references(spaceId, p), () => notesApi.references(spaceId, p))
           .then(({ references: refs }) => setReferences(refs)).catch(() => {})
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
     },
-    [communityId],
+    [spaceId],
   )
 
   // Turn one unlinked reference into a real link. The write lands on the SOURCE
@@ -299,22 +299,22 @@ export function EntityContextPanel({
   // refreshed references. Errors bubble to the reference's own inline slot.
   const handleLinkMention = useCallback(
     async (ref: UnlinkedReference) => {
-      if (!communityId || !path) return
+      if (!spaceId || !path) return
       const { references: refs } = await notesApi.linkMention(
-        communityId,
+        spaceId,
         path,
         ref.fromPath,
         ref.offset,
       )
       setReferences(refs)
       invalidateContextCache(
-        contextKeys.read(communityId, ref.fromPath),
-        contextKeys.references(communityId, ref.fromPath),
-        contextKeys.references(communityId, path),
-        contextKeys.list(communityId),
+        contextKeys.read(spaceId, ref.fromPath),
+        contextKeys.references(spaceId, ref.fromPath),
+        contextKeys.references(spaceId, path),
+        contextKeys.list(spaceId),
       )
     },
-    [communityId, path],
+    [spaceId, path],
   )
 
   // "Get access" on a locked reference stub: file a request for the hidden
@@ -322,11 +322,11 @@ export function EntityContextPanel({
   // references cache is dropped so a refetch reports the stub as pending.
   const handleRequestReferenceAccess = useCallback(
     async (ref: RestrictedReference) => {
-      if (!communityId || !path) return
-      await notesApi.requestReferenceAccess(communityId, path, ref.token)
-      invalidateContextCache(contextKeys.references(communityId, path))
+      if (!spaceId || !path) return
+      await notesApi.requestReferenceAccess(spaceId, path, ref.token)
+      invalidateContextCache(contextKeys.references(spaceId, path))
     },
-    [communityId, path],
+    [spaceId, path],
   )
 
   // Links inside the note: another entity → that entity's Context tab; a
@@ -348,21 +348,21 @@ export function EntityContextPanel({
     async (entity: PickerEntity): Promise<string> => {
       const p = entityNotePath({ id: entity.id, type: entity.type })
       if (!p) throw new Error('Not a directory entity')
-      if (!communityId) throw new Error('No space')
+      if (!spaceId) throw new Error('No space')
       try {
-        await notesApi.create(communityId, p, entityStub(entity))
+        await notesApi.create(spaceId, p, entityStub(entity))
         // The target entity's note may be cached as "missing" from a prefetch.
         invalidateContextCache(
-          contextKeys.read(communityId, p),
-          contextKeys.list(communityId),
-          contextKeys.tree(communityId),
+          contextKeys.read(spaceId, p),
+          contextKeys.list(spaceId),
+          contextKeys.tree(spaceId),
         )
       } catch (err) {
         if (!(err instanceof Error && /already exists/i.test(err.message))) throw err
       }
       return p
     },
-    [communityId],
+    [spaceId],
   )
 
   // Seed the header tags from the node whenever it (re)loads.
@@ -384,14 +384,14 @@ export function EntityContextPanel({
     async (raw: string, prevName: string) => {
       const next = raw.trim()
       setNameDraft(null)
-      if (!next || next === prevName || !communityId) return
+      if (!next || next === prevName || !spaceId) return
       setNameOverride(next)
       setNameSaving(true)
       try {
         const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ communityId, name: next }),
+          body: JSON.stringify({ spaceId, name: next }),
         })
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to rename')
         patchCachedNodeProfile(nodeId, { name: next })
@@ -402,21 +402,21 @@ export function EntityContextPanel({
         setNameSaving(false)
       }
     },
-    [communityId, nodeId],
+    [spaceId, nodeId],
   )
 
   // Persist a tag change to the entity's context node (shared metadata). Optimistic:
   // the header updates immediately and rolls back if the write is rejected.
   const saveTags = useCallback(
     async (next: string[], prev: string[]) => {
-      if (!communityId) return
+      if (!spaceId) return
       setTags(next)
       setTagSaving(true)
       try {
         const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ communityId, tags: next }),
+          body: JSON.stringify({ spaceId, tags: next }),
         })
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save tags')
         const { tags: saved } = (await res.json()) as { tags: string[] }
@@ -428,7 +428,7 @@ export function EntityContextPanel({
         setTagSaving(false)
       }
     },
-    [communityId, nodeId],
+    [spaceId, nodeId],
   )
 
   const addTag = useCallback((raw: string) => {
@@ -439,18 +439,18 @@ export function EntityContextPanel({
   }, [tags, saveTags])
 
   // Create a brand-new tag with a chosen colour: register the colour on the
-  // community (best-effort — the tag still adds if colour save fails) and add it.
+  // space (best-effort — the tag still adds if colour save fails) and add it.
   const createTag = useCallback((raw: string, color: string) => {
     const tag = raw.trim()
-    if (!tag || !communityId) return
+    if (!tag || !spaceId) return
     setTagColorOverride((m) => ({ ...m, [tagKey(tag)]: color }))
-    void fetch(`/api/communities/${encodeURIComponent(communityId)}/tag-colors`, {
+    void fetch(`/api/communities/${encodeURIComponent(spaceId)}/tag-colors`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tag, color }),
     }).catch(() => {})
     addTag(tag)
-  }, [communityId, addTag])
+  }, [spaceId, addTag])
 
   const removeTag = useCallback(
     (tag: string) => { void saveTags(tags.filter((t) => t !== tag), tags) },
@@ -464,7 +464,7 @@ export function EntityContextPanel({
   // the text, the toolbar and the tags from landing on three different commits.
   // Everything answered FOR THE PATH BEING OPENED. `shown` may still be the note
   // being left when this is false; that lag is what keeps the toolbar up.
-  const shownFresh = shown?.path === path && shown?.communityId === communityId
+  const shownFresh = shown?.path === path && shown?.spaceId === spaceId
   const dataReady = shownFresh && (isPersonalSpace || accessPath === path) && configDone
 
   // "Nothing left to wait for": the note being opened has landed, or we've reached
@@ -472,7 +472,7 @@ export function EntityContextPanel({
   // this panel declines to render at all). The page holds its reveal until this
   // flips, so the animation plays over the note.
   const revealReady =
-    !!communityId &&
+    !!spaceId &&
     !(!node && nodeLoading) &&
     (!node || !path || gatedOut || deniedPath || dataReady)
   useEffect(() => {
@@ -487,22 +487,22 @@ export function EntityContextPanel({
 
   // ── Render states ───────────────────────────────────────────────────────────
 
-  if (!communityId || (!node && nodeLoading)) {
+  if (!spaceId || (!node && nodeLoading)) {
     return <PanelSkeleton />
   }
   if (!node || !path) return null
 
-  // The entity note lives in the node's own community brain; a cross-community
+  // The entity note lives in the node's own space brain; a cross-space
   // profile view would write a misbound note — hide the surface instead. (The
   // pages gate the tab on the same condition; this is the backstop.)
-  if (node.community_id && node.community_id !== communityId) return null
+  if (node.space_id && node.space_id !== spaceId) return null
 
   if (gatedOut || deniedPath) {
     return (
       <div className="flex justify-center py-10">
         <AccessRequestCard
           scope={gatedOut ? 'brain' : 'path'}
-          communityName={currentCommunity?.name ?? 'this space'}
+          spaceName={currentSpace?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
           error={error}
@@ -521,8 +521,8 @@ export function EntityContextPanel({
   const showEditor = !loadingNote && !readFailed && (noteExists || canWrite)
 
   // Alias colour wins over the base type colour (same rule as the profile hero).
-  const aliasColor = findAlias(currentCommunity?.communityAliases, node.alias, node.type)?.color
-  const theme = hexToPalette(aliasColor ?? getTypeColor(node.type, currentCommunity?.nodeTypes))
+  const aliasColor = findAlias(currentSpace?.aliases, node.alias, node.type)?.color
+  const theme = hexToPalette(aliasColor ?? getTypeColor(node.type, currentSpace?.nodeTypes))
   // Tags are node metadata, edited by whoever can write the entity's context.
   // They stay editable during a save (an in-flight PATCH must not yank the row
   // out from under the cursor).
@@ -530,11 +530,11 @@ export function EntityContextPanel({
   // The title actually on screen: a just-saved rename wins over the hook's
   // cached node until the next real fetch.
   const displayName = nameOverride ?? node.name
-  // Community tags not already on this entity power the picker's suggestions.
+  // Space tags not already on this entity power the picker's suggestions.
   const tagsLower = new Set(tags.map((t) => t.toLowerCase()))
   const tagSuggestions = allTags.filter((t) => !tagsLower.has(t.toLowerCase()))
-  // Tag colour registry: community-saved colours + those registered this session.
-  const tagColors = { ...(currentCommunity?.designConfig?.tagColors ?? {}), ...tagColorOverride }
+  // Tag colour registry: space-saved colours + those registered this session.
+  const tagColors = { ...(currentSpace?.designConfig?.tagColors ?? {}), ...tagColorOverride }
 
   // The entity header (avatar, name, type + tag rows). No card chrome — it
   // renders directly on the page so it reads as one surface with the note, and
@@ -591,7 +591,7 @@ export function EntityContextPanel({
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
           <Radio className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
-            Published from <span className="font-medium">{pubs.asTarget.sourceCommunityName}</span> — kept in
+            Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.
           </span>
         </div>
@@ -610,7 +610,7 @@ export function EntityContextPanel({
         accent={theme.dark}
         typeRow={
           <Chip size="lg" color={theme.base}>
-            {nodeTypeLabel(node.type, node.alias, currentCommunity?.communityAliases, currentCommunity?.nodeTypes)}
+            {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
           </Chip>
         }
         tagsRow={(tags.length > 0 || canEditTags) ? (
@@ -710,9 +710,9 @@ export function EntityContextPanel({
         </div>
       )}
       {share.slot}
-      {shareOpen && path && communityId && (
+      {shareOpen && path && spaceId && (
         <SharePanel
-          communityId={communityId}
+          spaceId={spaceId}
           path={path}
           kind="note"
           onClose={() => setShareOpen(false)}
