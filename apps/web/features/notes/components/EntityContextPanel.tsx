@@ -22,7 +22,7 @@ import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
   cachedFetch,
@@ -313,6 +313,18 @@ export function EntityContextPanel({
         contextKeys.references(communityId, path),
         contextKeys.list(communityId),
       )
+    },
+    [communityId, path],
+  )
+
+  // "Get access" on a locked reference stub: file a request for the hidden
+  // source note behind it (the stub's token stands in for its path). The
+  // references cache is dropped so a refetch reports the stub as pending.
+  const handleRequestReferenceAccess = useCallback(
+    async (ref: RestrictedReference) => {
+      if (!communityId || !path) return
+      await notesApi.requestReferenceAccess(communityId, path, ref.token)
+      invalidateContextCache(contextKeys.references(communityId, path))
     },
     [communityId, path],
   )
@@ -688,6 +700,7 @@ export function EntityContextPanel({
             onSave={handleSave}
             onOpenNote={handleOpenNote}
             onLinkMention={handleLinkMention}
+            onRequestReferenceAccess={isPersonalSpace ? undefined : handleRequestReferenceAccess}
           />
         </>
       ) : (

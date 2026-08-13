@@ -12,7 +12,7 @@ import { useRouter } from 'next/navigation'
 import { Radio } from 'lucide-react'
 import { useCommunity } from '@/features/shared/contexts/CommunityContext'
 import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
-import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -260,6 +260,18 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     [communityId, path],
   )
 
+  // "Get access" on a locked reference stub: file a request for the hidden
+  // source note behind it (the stub's token stands in for its path). The
+  // references cache is dropped so a refetch reports the stub as pending.
+  const handleRequestReferenceAccess = useCallback(
+    async (ref: RestrictedReference) => {
+      if (!communityId || !path) return
+      await notesApi.requestReferenceAccess(communityId, path, ref.token)
+      invalidateContextCache(contextKeys.references(communityId, path))
+    },
+    [communityId, path],
+  )
+
   // Links inside the note: entity → its profile Context tab; anything else →
   // its own note view.
   const handleOpenNote = useCallback(
@@ -438,6 +450,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
         onSave={handleSave}
         onOpenNote={handleOpenNote}
         onLinkMention={handleLinkMention}
+        onRequestReferenceAccess={isPersonalSpace ? undefined : handleRequestReferenceAccess}
       />
       {share.slot}
       {shareOpen && (

@@ -1,8 +1,11 @@
 // GET  /api/notes/references?communityId=&scope=&path=
 // Roam-style backlinks for a note: notes that link to it (with the surrounding
 // passage) and notes that mention its title in plain text but haven't linked it.
-// Computed over the visibility-filtered vault, so nothing in a private folder
-// the caller can't read is surfaced as a reference.
+// Computed over the FULL corpus, then run through the access lens
+// (brainService.referencesFor): a reference whose source note the caller can't
+// read comes back as an opaque locked stub — existence only, never the source's
+// path, title, or text. The stub's token is what "Get access" trades in
+// (POST /api/notes/access-requests with referenceToken).
 //
 // POST /api/notes/references
 //   { communityId, scope, path, fromPath, offset? } → { ok, references }
@@ -15,8 +18,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBrain, fail, failFromError } from '@/lib/notes/api'
 import { principalOf } from '@/lib/notes/brain'
-import { visibleVault, readVisible, writeDenialFull } from '@/lib/notes/brainService'
-import { computeReferences, linkMentionAt, linkFirstMention } from '@/lib/notes/shared/references'
+import { visibleVault, readVisible, writeDenialFull, referencesFor } from '@/lib/notes/brainService'
+import { pendingRequestPaths } from '@/lib/notes/accessRequests'
+import { linkMentionAt, linkFirstMention } from '@/lib/notes/shared/references'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { writeNote } from '@/lib/notes/store'
 
@@ -26,8 +30,9 @@ export async function GET(req: NextRequest) {
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
   const p = await principalOf(brain)
-  const { raws, metas } = await visibleVault(p, brain)
-  const references = computeReferences(raws, path, metas)
+  // Personal spaces have no gates and no requests — skip the pending lookup.
+  const pending = brain.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
+  const references = await referencesFor(p, brain, path, pending)
   return NextResponse.json({ references })
 }
 
@@ -78,9 +83,9 @@ export async function POST(req: NextRequest) {
     return failFromError(err)
   }
 
-  const fresh = await visibleVault(p, brain)
+  const pending = brain.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
   return NextResponse.json({
     ok: true,
-    references: computeReferences(fresh.raws, path, fresh.metas),
+    references: await referencesFor(p, brain, path, pending),
   })
 }

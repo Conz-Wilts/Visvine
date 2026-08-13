@@ -46,7 +46,7 @@ import {
 import { notesApi } from '../lib/notesApi'
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext'
 import { TAB_MOTION_MS } from '@/components/ui/tabMotion'
-import type { NoteMeta, References, UnlinkedReference } from '@/lib/notes/shared/types'
+import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 
 const AUTOSAVE_MS = 350
 // How long the tab bar's attached region takes to collapse (TAB_MOTION). The
@@ -86,6 +86,8 @@ interface NoteEditorProps {
   // offered when the viewer can edit; the source note's own gate still applies
   // server-side, so a denial surfaces inline on the reference.
   onLinkMention?: (ref: UnlinkedReference) => Promise<void>
+  // Ask for access to the hidden source note behind a locked reference stub.
+  onRequestReferenceAccess?: (ref: RestrictedReference) => Promise<void>
   // Layout variant:
   //  - 'floating' (default): the /context-era full-bleed layout — the note is
   //    its own scroll surface bleeding up behind the navbar, toolbar pinned at
@@ -166,6 +168,7 @@ export function NoteEditor({
   onOpenNote,
   onOpenTag,
   onLinkMention,
+  onRequestReferenceAccess,
   variant = 'floating',
   headerSlot,
   toolbarTrailSlot,
@@ -693,6 +696,7 @@ export function NoteEditor({
           showUnlinked={showUnlinked}
           onOpenNote={onOpenNote}
           onLinkMention={canEdit ? onLinkMention : undefined}
+          onRequestReferenceAccess={onRequestReferenceAccess}
         />
       )}
     </div>

@@ -24,7 +24,7 @@ const CONTEXT_HOME = '/directory/note/index.md'
 
 /** What a move produces: the item keeps its own name under `destFolder`
  *  ('' = the brain root). */
-export function movedPath(from: string, destFolder: string): string {
+function movedPath(from: string, destFolder: string): string {
   const name = from.split('/').pop() ?? from
   return destFolder ? `${destFolder}/${name}` : name
 }

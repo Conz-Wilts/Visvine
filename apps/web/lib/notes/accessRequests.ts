@@ -146,6 +146,20 @@ export async function createAccessRequest(
 }
 
 /**
+ * The resource paths the caller currently has OPEN requests for. Feeds the
+ * references rail's locked stubs, so a stub whose source note is already
+ * requested shows "pending" instead of offering the button again.
+ */
+export async function pendingRequestPaths(p: BrainPrincipal): Promise<Set<string>> {
+  await ensureRequestsImported(p.communityId)
+  const rows = await prisma.brainAccessRequest.findMany({
+    where: { communityId: p.communityId, userId: p.userId, status: 'pending' },
+    select: { resourcePath: true },
+  })
+  return new Set(rows.map((r) => r.resourcePath))
+}
+
+/**
  * Every request the caller may see — their own plus every request for a path
  * they manage (community admins manage everything). One payload serves both the
  * console queue and a folder manager's SharePanel; each filters what it shows.

@@ -301,6 +301,15 @@ export const notesApi = {
       resourcePath,
       message,
     }),
+  /** Ask for access to the hidden source note behind a locked reference stub on
+   *  `path`. The stub's opaque token stands in for the source's path — the
+   *  server resolves it, so the client never learns which note it is. */
+  requestReferenceAccess: (c: string, path: string, referenceToken: string) =>
+    sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'POST', {
+      communityId: c,
+      path,
+      referenceToken,
+    }),
   /** Approve (granting `level`, default = what was asked for) or deny. */
   resolveAccessRequest: (c: string, requestId: string, approve: boolean, level?: AccessLevelName) =>
     sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'PUT', {

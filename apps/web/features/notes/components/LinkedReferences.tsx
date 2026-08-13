@@ -6,7 +6,13 @@
 // the note. Ported in spirit from blackbird-brain.
 
 import { useState, type ReactNode } from 'react'
-import type { References, LinkedReference, UnlinkedReference } from '@/lib/notes/shared/types'
+import { Lock } from 'lucide-react'
+import type {
+  References,
+  LinkedReference,
+  UnlinkedReference,
+  RestrictedReference,
+} from '@/lib/notes/shared/types'
 import { formatDate } from '@/lib/date'
 
 interface Props {
@@ -21,6 +27,9 @@ interface Props {
   // When given, each unlinked reference gets a "Link it" button that rewrites that
   // mention into a real link to the open note. Omitted when the viewer can't edit.
   onLinkMention?: (ref: UnlinkedReference) => Promise<void>
+  // Files an access request for the hidden source note behind a locked stub.
+  // Omitted in personal spaces (nothing is ever hidden there).
+  onRequestReferenceAccess?: (ref: RestrictedReference) => Promise<void>
 }
 
 // Wrap whole-word, case-insensitive matches of `needle` in `text` so they render
@@ -118,24 +127,110 @@ function Reference({
   )
 }
 
-export function LinkedReferences({ references, title, onOpenNote, onLinkMention, showUnlinked = true }: Props) {
+// A reference from a note the viewer can't read: the excerpt's place is held by
+// blurred inert bars (never real text — the server sent none), a lock marks the
+// corner, and the only action is asking for access to the hidden source note.
+function LockedReference({
+  refItem,
+  onRequest,
+}: {
+  refItem: RestrictedReference
+  onRequest?: () => Promise<void>
+}) {
+  const [state, setState] = useState<'idle' | 'requesting' | 'pending'>(
+    refItem.pending ? 'pending' : 'idle',
+  )
+  const [error, setError] = useState<string | null>(null)
+  const request = async () => {
+    if (!onRequest || state !== 'idle') return
+    setState('requesting')
+    setError(null)
+    try {
+      await onRequest()
+      setState('pending')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not request access')
+      setState('idle')
+    }
+  }
+  const pending = state === 'pending'
+  return (
+    <div className="notes-ref-item">
+      <div className="notes-ref-date-divider">
+        <span>{formatDate(refItem.date)}</span>
+      </div>
+      <div className="notes-ref-row">
+        <div className="notes-ref-block notes-ref-locked" aria-label="A note you don't have access to references this">
+          <Lock className="notes-ref-lock-icon" aria-hidden="true" strokeWidth={1.5} />
+          <div className="notes-ref-locked-lines" aria-hidden="true">
+            <span className="notes-ref-locked-line" style={{ width: '38%' }} />
+            <span className="notes-ref-locked-line" style={{ width: '86%' }} />
+            <span className="notes-ref-locked-line" style={{ width: '64%' }} />
+          </div>
+          <div className="notes-ref-locked-foot">
+            {error && <span className="notes-ref-link-error">{error}</span>}
+            {onRequest &&
+              (pending ? (
+                <span className="notes-ref-locked-pending">Request pending</span>
+              ) : (
+                <button
+                  type="button"
+                  className="notes-ref-get-access"
+                  onClick={request}
+                  disabled={state === 'requesting'}
+                >
+                  {state === 'requesting' ? 'Requesting…' : 'Get access'}
+                </button>
+              ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function LinkedReferences({
+  references,
+  title,
+  onOpenNote,
+  onLinkMention,
+  onRequestReferenceAccess,
+  showUnlinked = true,
+}: Props) {
   // Most recent source note first within each group.
   const linked = [...(references?.linked ?? [])].sort((a, b) => b.date - a.date)
   const unlinked = showUnlinked ? [...(references?.unlinked ?? [])].sort((a, b) => b.date - a.date) : []
-  if (linked.length === 0 && unlinked.length === 0) return null
+  // Locked stubs render under the group their hidden reference belongs to;
+  // unlinked-only stubs follow the same showUnlinked rule as readable ones.
+  const restricted = references?.restricted ?? []
+  const lockedLinked = restricted.filter((r) => r.kind === 'linked').sort((a, b) => b.date - a.date)
+  const lockedUnlinked = showUnlinked
+    ? restricted.filter((r) => r.kind === 'unlinked').sort((a, b) => b.date - a.date)
+    : []
+  if (linked.length + unlinked.length + lockedLinked.length + lockedUnlinked.length === 0) return null
+
+  const locked = (stubs: RestrictedReference[]) =>
+    stubs.map((ref) => (
+      <LockedReference
+        key={ref.token}
+        refItem={ref}
+        onRequest={onRequestReferenceAccess ? () => onRequestReferenceAccess(ref) : undefined}
+      />
+    ))
 
   return (
     <div className="notes-references">
-      {linked.length > 0 && (
+      {linked.length + lockedLinked.length > 0 && (
         <section className="notes-ref-group">
           <h3 className="notes-ref-head">Linked references</h3>
           {linked.map((ref, i) => (
             <Reference key={`l-${i}`} refItem={ref} title={title} onOpenNote={onOpenNote} />
           ))}
+          {locked(lockedLinked)}
         </section>
       )}
 
-      {unlinked.length > 0 && (
+      {unlinked.length + lockedUnlinked.length > 0 && (
         <section className="notes-ref-group">
           <h3 className="notes-ref-head">Unlinked references</h3>
           {unlinked.map((ref) => (
@@ -149,6 +244,7 @@ export function LinkedReferences({ references, title, onOpenNote, onLinkMention,
               onLink={onLinkMention ? () => onLinkMention(ref) : undefined}
             />
           ))}
+          {locked(lockedUnlinked)}
         </section>
       )}
     </div>

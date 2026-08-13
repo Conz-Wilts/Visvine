@@ -3,6 +3,10 @@
 // pending community MEMBER in the console).
 //   GET  ?communityId=                                   → { requests, pending }
 //   POST { communityId, resourcePath, message? }          → { request }
+//   POST { communityId, path, referenceToken, message? }  → { request }
+//     — the locked-stub form: the caller can't know the hidden source note's
+//       path, so it sends the opaque token from a RestrictedReference instead;
+//       the server resolves it back to the real path and files the request there.
 //   PUT  { communityId, requestId, approve, level? }      → { request }
 // All semantics live in lib/notes/accessRequests.ts + shared/accessRequests.ts.
 
@@ -15,6 +19,7 @@ import {
   resolveAccessRequest,
 } from '@/lib/notes/accessRequests'
 import { parseLevel } from '@/lib/notes/shared/authz'
+import { resolveReferenceToken } from '@/lib/notes/brainService'
 
 export async function GET(req: NextRequest) {
   const brain = await requireBrain(req)
@@ -35,10 +40,19 @@ export async function POST(req: NextRequest) {
   if (brain instanceof Response) return brain
   if (brain.isPersonalSpace) return fail('Personal spaces are private — there is nothing to request')
   // '' is the ROOT GATE (a request for brain access) and a valid resourcePath.
-  const resourcePath = typeof body.resourcePath === 'string' ? body.resourcePath : null
-  if (resourcePath === null) return fail('resourcePath is required')
+  let resourcePath = typeof body.resourcePath === 'string' ? body.resourcePath : null
+  const referenceToken = typeof body.referenceToken === 'string' ? body.referenceToken : null
+  const targetPath = typeof body.path === 'string' ? body.path : null
+  if (resourcePath === null && !(referenceToken && targetPath)) {
+    return fail('resourcePath (or path + referenceToken) is required')
+  }
   const message = typeof body.message === 'string' ? body.message : undefined
   const p = await principalOf(brain)
+  if (resourcePath === null && referenceToken && targetPath) {
+    resourcePath = await resolveReferenceToken(p, brain, targetPath, referenceToken)
+    if (resourcePath === null) return fail('That reference is no longer there', 404)
+  }
+  if (resourcePath === null) return fail('resourcePath is required')
   try {
     return NextResponse.json({ request: await createAccessRequest(p, resourcePath, message) })
   } catch (err) {

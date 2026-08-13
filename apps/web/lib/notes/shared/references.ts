@@ -25,9 +25,28 @@ export interface UnlinkedReference {
   offset: number // character offset of the mention within the source note's BODY
 }
 
+// A reference whose SOURCE note the viewer can't read. Deliberately opaque:
+// no path, no title, no excerpt — only an HMAC token the server can resolve
+// back to the source path when the viewer asks for access (the client never
+// learns which note it is, even through devtools). One stub per hidden source
+// note, however many times it references the target.
+export interface RestrictedReference {
+  token: string
+  date: number // the source note's last-modified time (epoch ms)
+  /** Whether the hidden source actually LINKS the target ('linked') or only
+   *  mentions its title in plain text ('unlinked') — decides which group the
+   *  stub renders under, mirroring readable references. */
+  kind: 'linked' | 'unlinked'
+  /** The viewer already has an open access request for this source note. */
+  pending: boolean
+}
+
 export interface References {
   linked: LinkedReference[]
   unlinked: UnlinkedReference[]
+  /** References from notes the viewer can't read, collapsed to locked stubs.
+   *  Absent when computed without an access lens (computeReferences is pure). */
+  restricted?: RestrictedReference[]
 }
 
 // Captures a well-formed markdown link: [text](href) or [text](href "title").
@@ -220,4 +239,47 @@ export function computeReferences(
   }
 
   return { linked, unlinked }
+}
+
+/**
+ * Apply an access lens to full-corpus references: references whose source note
+ * the viewer can read pass through unchanged; the rest collapse to one opaque
+ * RestrictedReference per hidden source note (a link outranks a plain-text
+ * mention when the same note has both). Pure — the caller supplies the access
+ * predicate, the token derivation, and the viewer's pending-request paths, so
+ * this is unit-testable next to computeReferences.
+ */
+export function redactReferences(
+  refs: References,
+  canRead: (path: string) => boolean,
+  tokenFor: (path: string) => string,
+  pendingPaths: ReadonlySet<string>,
+): References {
+  const linked = refs.linked.filter((r) => canRead(r.fromPath))
+  const unlinked = refs.unlinked.filter((r) => canRead(r.fromPath))
+
+  // fromPath -> stub, keyed so N references from one hidden note stay one stub
+  // (a per-reference count would leak how much the hidden note says).
+  const stubs = new Map<string, RestrictedReference>()
+  const collapse = (from: { fromPath: string; date: number }[], kind: 'linked' | 'unlinked') => {
+    for (const r of from) {
+      if (canRead(r.fromPath)) continue
+      const prior = stubs.get(r.fromPath)
+      if (prior) {
+        if (kind === 'linked') prior.kind = 'linked'
+        prior.date = Math.max(prior.date, r.date)
+        continue
+      }
+      stubs.set(r.fromPath, {
+        token: tokenFor(r.fromPath),
+        date: r.date,
+        kind,
+        pending: pendingPaths.has(r.fromPath),
+      })
+    }
+  }
+  collapse(refs.linked, 'linked')
+  collapse(refs.unlinked, 'unlinked')
+
+  return { linked, unlinked, restricted: [...stubs.values()] }
 }

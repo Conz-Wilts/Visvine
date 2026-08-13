@@ -15,7 +15,7 @@ const SEAM_R = 10; // radius of the concave fillet joining the navbar to the sid
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
-  const { isAdmin } = useCommunity();
+  const { isAdmin, currentCommunity } = useCommunity();
   const { expanded, entered, reduced } = useSidebar();
   const { dockRequested, contextOpen, setContextOpen } = useContextPanel();
   const { data: session } = useSession();
@@ -115,8 +115,10 @@ export default function Navbar() {
           {/* Events live here, not in the sidebar rail: they're a shell-level
               surface (like Messages), always reachable and not a per-community
               tool, so public events from other communities stay discoverable. */}
+          {/* With no space selected the community-scoped events page has nothing
+              to show, so the calendar lands on the global discover grid instead. */}
           <Link
-            href="/events?scope=discover"
+            href={currentCommunity ? "/events?scope=discover" : "/events/discover"}
             aria-label="Discover events"
             title="Discover events"
             className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${

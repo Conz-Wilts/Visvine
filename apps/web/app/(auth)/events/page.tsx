@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCommunity } from '@/features/shared/contexts/CommunityContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
@@ -133,9 +134,12 @@ function EventsPageInner() {
     return (
       <div className="min-h-screen w-full py-8">
         <div className="w-full max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-text-muted py-12">
-            Please select a space to view events.
-          </p>
+          <div className="flex flex-col items-center gap-3 py-12">
+            <p className="text-text-muted">Select a space to view its events.</p>
+            <Link href="/events/discover" className="text-sm font-medium text-brand-green hover:underline">
+              Or discover public events everywhere →
+            </Link>
+          </div>
         </div>
       </div>
     );

@@ -4,7 +4,7 @@
 // sync, and Electron `BrainApi` types are intentionally dropped (out of scope).
 // Keep this file free of Node/DOM imports so it runs on the server and the client.
 
-export type { References, LinkedReference, UnlinkedReference } from './references'
+export type { References, LinkedReference, UnlinkedReference, RestrictedReference } from './references'
 
 // The subset of YAML frontmatter the app reasons about. Any other keys are kept
 // verbatim via the index signature. Fields follow the OKF v0.1 convention.

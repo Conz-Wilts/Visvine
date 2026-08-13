@@ -14,7 +14,12 @@ import {
   resolveOkfLink,
 } from '../lib/notes/shared/markdown'
 import { buildNoteIndex, buildTree } from '../lib/notes/shared/context'
-import { computeReferences, linkFirstMention, linkMentionAt } from '../lib/notes/shared/references'
+import {
+  computeReferences,
+  linkFirstMention,
+  linkMentionAt,
+  redactReferences,
+} from '../lib/notes/shared/references'
 import { relatedNotes } from '../lib/notes/shared/related'
 import { searchNotes } from '../lib/notes/shared/search'
 import { decideMerge } from '../lib/notes/shared/merge'
@@ -161,6 +166,52 @@ test('computeReferences excerpts strip markdown and scope list items to their li
   assert.equal(fromHeading.excerpt, 'About Canva and tools')
   const fromQuote = refs.unlinked.find((r) => r.fromPath === 'quote.md')!
   assert.equal(fromQuote.excerpt, 'Canva is great and I have not linked it.')
+})
+
+test('redactReferences collapses hidden sources to opaque stubs, one per note', () => {
+  const notes = [
+    note('canva.md', '---\ntitle: Canva\n---\n\nThe design tool.'),
+    note('open.md', '---\ntitle: Open\n---\n\nI use [Canva](canva.md) daily.'),
+    // Hidden note that both links AND mentions the target: must yield ONE
+    // 'linked' stub, not two, and not leak how often it says the name.
+    note('secret/deal.md', '---\ntitle: Deal\n---\n\nSee [Canva](/canva.md).\n\nCanva again in prose.'),
+    note('secret/memo.md', '---\ntitle: Memo\n---\n\nCanva only as plain text.'),
+  ]
+  const full = computeReferences(notes, 'canva.md', buildNoteIndex(notes))
+  const redacted = redactReferences(
+    full,
+    (path) => !path.startsWith('secret/'),
+    (path) => `token:${path}`,
+    new Set(['secret/memo.md']),
+  )
+  // Readable references pass through untouched.
+  assert.equal(redacted.linked.length, 1)
+  assert.equal(redacted.linked[0].fromPath, 'open.md')
+  assert.equal(redacted.unlinked.length, 0)
+  // Hidden sources collapse to stubs carrying no path, title, or excerpt.
+  const stubs = redacted.restricted!
+  assert.equal(stubs.length, 2)
+  for (const stub of stubs) {
+    assert.deepEqual(Object.keys(stub).sort(), ['date', 'kind', 'pending', 'token'])
+  }
+  const deal = stubs.find((s) => s.token === 'token:secret/deal.md')!
+  assert.equal(deal.kind, 'linked')
+  assert.equal(deal.pending, false)
+  const memo = stubs.find((s) => s.token === 'token:secret/memo.md')!
+  assert.equal(memo.kind, 'unlinked')
+  assert.equal(memo.pending, true)
+})
+
+test('redactReferences with a fully readable corpus yields no stubs', () => {
+  const notes = [
+    note('canva.md', '---\ntitle: Canva\n---\n\nThe design tool.'),
+    note('a.md', '---\ntitle: A\n---\n\nI use [Canva](canva.md) daily.'),
+  ]
+  const full = computeReferences(notes, 'canva.md', buildNoteIndex(notes))
+  const redacted = redactReferences(full, () => true, () => 'unused', new Set())
+  assert.deepEqual(redacted.linked, full.linked)
+  assert.deepEqual(redacted.unlinked, full.unlinked)
+  assert.deepEqual(redacted.restricted, [])
 })
 
 test('linkFirstMention turns a plain mention into a link', () => {
