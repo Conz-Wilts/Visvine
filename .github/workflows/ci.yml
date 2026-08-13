@@ -27,6 +27,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Prisma 7 does not generate on install, and the generated client is what
+      # exports `Prisma`, `PrismaClient` and every model type. Without this a
+      # fresh checkout fails typecheck on the imports and then on ~200 cascaded
+      # implicit-any errors. No database is needed — it reads schema.prisma.
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
       - name: Typecheck
         run: pnpm typecheck
 
