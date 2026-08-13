@@ -12,7 +12,7 @@
  *   3. download dump → tmp/fixtures/restore.dump
  *   4. drop + recreate `visvine` database inside the container
  *   5. pg_restore the dump
- *   6. prisma db push (+ apply-sql-functions) to bring schema forward
+ *   6. baseline if needed + prisma migrate deploy (+ apply-sql-functions)
  *   7. verify with a node count
  */
 
@@ -111,7 +111,7 @@ if (restore.status !== 0) {
   console.error(`db-restore: pg_restore exited ${restore.status} — non-zero is sometimes survivable for benign WARNINGs, continuing schema-forward…`);
 }
 
-console.error("db-restore: bringing schema forward (prisma db push)…");
+console.error("db-restore: bringing schema forward (prisma migrate deploy)…");
 const push = spawnSync(
   process.platform === "win32" ? "pnpm.cmd" : "pnpm",
   ["db:migrate"],

@@ -1,33 +1,31 @@
-// Pre-`prisma db push` schema fixups for prod (run in CI before the push).
+// Data-dependent repairs, run against prod in CI ahead of the migrations.
 //
-// `prisma db push` converges the live DB to schema.prisma, but there are things
-// it CANNOT do, or would do destructively, on a populated database:
+// Two kinds of thing live here, and only two.
 //
-//   1. A RENAME. `db push` diffs by name, so a renamed table or column reads as
-//      "one table dropped, one added" — with --accept-data-loss that silently
-//      empties it. Every rename must therefore land here, BEFORE the push, so
-//      the push sees a schema that already matches and does nothing.
-//   2. Add a NOT NULL column that has no default (it would fail with "column
-//      contains null values"). The schema's `links.pair_key` is exactly this.
-//   3. Create a UNIQUE index when duplicate rows already exist
-//      (links @@unique([space_id, pair_key, relationship])).
+// 1. Repairs that depend on the rows already present, which a migration cannot
+//    express because it must work on any database:
+//      - `links.pair_key` is NOT NULL with no default, so it is added nullable
+//        and backfilled (LEAST|GREATEST of the endpoints — identical to
+//        lib/graph upsertLink) before the schema can tighten it.
+//      - duplicate links would stop @@unique([space_id, pair_key, relationship])
+//        from building, so the earliest row of each group wins.
+//      - duplicate PUBLIC space names would stop the hand-written
+//        spaces_public_name_unique index the same way; the oldest keeps the
+//        name (lib/spaces/publicName.ts).
 //
-// So this script does the minimum, idempotent prep that lets the subsequent
-// `db push` succeed: it applies the renames, backfills `pair_key`
-// (LEAST|GREATEST of the endpoints — identical to the migration + lib/graph
-// upsertLink) and removes any duplicate links that would violate the unique
-// index, keeping the earliest row.
+// 2. The renames that predate the baseline. Prod was converged with `prisma db
+//    push` for its whole life, and a push diffs by name: a renamed table reads
+//    as one dropped and one added, which with --accept-data-loss is a silent
+//    wipe. Those renames were never expressible there, so they are here, and
+//    they run once against a database that has not had them.
 //
-// It also settles pre-existing duplicate PUBLIC space names, which would block
-// the (hand-written, post-push) spaces_public_name_unique index the same
-// way — see lib/spaces/publicName.ts.
+//    Renames from here on belong in a migration instead — `migrate deploy`
+//    replays SQL rather than inferring it. This block is history, not a pattern
+//    to extend.
 //
-// It is additive/idempotent: safe to run on every deploy. Every rename is
-// guarded on the catalogs, so a database already at the target names skips the
-// whole block. When a future schema change renames anything, or adds another
-// NOT-NULL-without-default column on a populated table, add it here — the
-// prisma/migrations/* files are the local-dev record and are never run against
-// prod.
+// Everything is idempotent and safe on every deploy. Each rename is guarded on
+// the catalogs, so a converged database skips the block entirely, and the value
+// fixups have self-extinguishing WHERE clauses.
 //
 // Usage (CI, behind the Cloud SQL proxy with DATABASE_URL pointed at it):
 //   DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
@@ -46,8 +44,9 @@ import pg from 'pg';
 //   ['index', from, to]                also renames a constraint the index backs
 //   ['constraint', table, from, to]
 //
-// Tables and columns that were dropped rather than renamed are absent: `db push`
-// removes anything schema.prisma no longer describes, which is what we want.
+// Tables and columns that were dropped rather than renamed are absent: the final
+// `db push` of the pre-baseline era removed anything schema.prisma no longer
+// described, and 0_init never creates them.
 const RENAME_STEPS = [
   {
     label: 'normalize table names (user -> users, persons -> people)',
@@ -373,12 +372,12 @@ try {
     console.log(`  ✓ ${fix.label} (${res.rowCount} row(s))`);
   }
 
-  // 3. Nothing to do if the links table doesn't exist yet (fresh DB — db push will
-  //    create it cleanly).
+  // 3. Nothing to do if the links table doesn't exist yet (fresh DB — 0_init
+  //    creates it with the constraints already in place).
   if (!(await tableExists('links'))) {
     console.log('  links table absent — skipping link fixups.');
   } else {
-    // pair_key: add nullable (if missing) + backfill, so db push can SET NOT NULL.
+    // pair_key: add nullable (if missing) + backfill, so the schema can SET NOT NULL.
     await client.query(`ALTER TABLE links ADD COLUMN IF NOT EXISTS pair_key TEXT`);
     const bf = await client.query(
       `UPDATE links

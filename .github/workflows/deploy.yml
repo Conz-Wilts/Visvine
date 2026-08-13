@@ -47,16 +47,24 @@ jobs:
           corepack enable && corepack prepare pnpm@10.30.2 --activate
           pnpm install --frozen-lockfile
           cd apps/web
-          # 1. Fixups `prisma db push` can't do, or would do destructively, on a
-          #    populated database: apply renames (a push diffs by name, so a
-          #    rename reads as drop + create and silently empties the table),
-          #    backfill the NOT-NULL `links.pair_key`, dedup so the unique index
-          #    can build. Every future rename belongs in this script.
+          # 1. Repairs a migration can't express, because they depend on the data
+          #    that is already there: backfill the NOT-NULL `links.pair_key`,
+          #    dedup so the unique index can build, settle duplicate public space
+          #    names. Also carries the pre-baseline renames, for a database that
+          #    has not had them yet.
           DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
-          # 2. Converge the live schema to schema.prisma.
-          DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
-          # 3. Apply the hand-written SQL `db push` can't express (partial and
-          #    expression indexes). Must run AFTER the push, which owns every
+          # 2. Baseline, once. A database that predates `prisma migrate` has no
+          #    record of any migration; without this, deploy would try to build a
+          #    schema that is already there. Marks 0_init applied and nothing
+          #    else, and only when the record is empty, so it is a no-op forever
+          #    after. Deleting the tracking table is what would undo it.
+          DATABASE_URL="$DB_URL" node scripts/baseline-migrations.mjs
+          # 3. Replay any migration prod has not run. Unlike `db push` this
+          #    executes SQL that was written and reviewed, so a rename stays a
+          #    rename instead of being inferred as drop + create.
+          DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 migrate deploy
+          # 4. Apply the hand-written SQL Prisma can't express (HNSW, GIN, partial
+          #    expression indexes). Must run AFTER the migrations, which own every
           #    index schema.prisma does describe.
           DATABASE_URL="$DB_URL" node scripts/apply-sql-functions.mjs
           # No seeding: production data is managed in the app, never by deploys.
