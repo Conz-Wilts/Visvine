@@ -7,7 +7,7 @@ import { getCommunityContextData } from '@/lib/eventRepo';
 import { normalizeNode, normalizeLink } from '@/lib/notes/context/normalize';
 import { visibleGraph } from '@/lib/notes/context/featureVisibility';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
-import { communityReadForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
+import { communityMemberForbidden, directoryAccessForbidden, getFeatureConfig } from '@/lib/auth';
 
 type RouteContext = {
   params: Promise<{ communityId: string }>;
@@ -25,7 +25,7 @@ export async function GET(
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
     if (
-      (await communityReadForbidden(session.userId, communityId)) ||
+      (await communityMemberForbidden(session.userId, communityId, session.email)) ||
       (await directoryAccessForbidden(session.userId, communityId, session.email))
     ) {
       return forbiddenResponse();

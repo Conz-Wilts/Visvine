@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
-import { getSession, type SessionPayload } from '@/lib/session';
+import { getSession, sessionUserValid, type SessionPayload } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
@@ -37,6 +37,8 @@ export function forbiddenResponse(message = 'Forbidden') {
 export async function requireApiSession(): Promise<SessionPayload | NextResponse> {
   const session = await getSession();
   if (!session) return unauthorizedResponse();
+  // Reject tokens whose user was deleted or deactivated since the JWT was minted.
+  if (!(await sessionUserValid(session.userId))) return unauthorizedResponse();
   return session;
 }
 
@@ -52,6 +54,7 @@ export async function requireCommunityAdmin(
 ): Promise<SessionPayload | NextResponse> {
   const session = await getSession();
   if (!session) return unauthorizedResponse();
+  if (!(await sessionUserValid(session.userId))) return unauthorizedResponse();
   if (!(await isAdmin(session.userId, communityId, session.email))) {
     return forbiddenResponse('permission_denied');
   }

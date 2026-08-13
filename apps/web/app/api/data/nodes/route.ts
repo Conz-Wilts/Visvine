@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { getSession, isAdmin, communityReadForbidden, directoryAccessForbidden } from '@/lib/auth';
+import { getSession, isAdmin, communityMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
 import type { NBNode } from '@/lib/types';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
@@ -41,12 +41,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'community_id is required' }, { status: 400 });
     }
 
-    // A personal space's directory is private to its owner — don't let any other
-    // authenticated user read it by passing its `me:<userId>` community id.
+    // The whole node directory is community-scoped confidential data: only an
+    // active member (or admin) may pull it, and never across tenants by passing
+    // a foreign `community_id`. `directoryAccessForbidden` additionally honours
+    // the admins-only-directory setting for members.
     const session = await requireApiSession();
     if (session instanceof NextResponse) return session;
     if (
-      (await communityReadForbidden(session.userId, communityId)) ||
+      (await communityMemberForbidden(session.userId, communityId, session.email)) ||
       (await directoryAccessForbidden(session.userId, communityId, session.email))
     ) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

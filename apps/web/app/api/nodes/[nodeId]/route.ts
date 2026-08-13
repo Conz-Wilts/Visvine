@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { communityReadForbidden } from '@/lib/auth';
+import { communityMemberForbidden } from '@/lib/auth';
 import { requireApiSession } from '@/lib/api/route';
 import { logger } from '@/lib/logger';
 import { entityNotePath } from '@/lib/notes/entities';
@@ -110,9 +110,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
-  // A node that lives in another user's personal space is private — treat it as
-  // not-found rather than reveal its profile + connections.
-  if (node.communityId && (await communityReadForbidden(session.userId, node.communityId))) {
+  // The node's profile + full connection graph are community-scoped confidential
+  // data: only an active member (or admin) of its community may read them. A
+  // personal space is likewise private to its owner. Anyone else gets a 404 so
+  // the endpoint reveals nothing — not even that the node exists.
+  if (node.communityId && (await communityMemberForbidden(session.userId, node.communityId, session.email))) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
 
@@ -245,16 +247,10 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   if (node.communityId !== communityId) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });
   }
-  if (await communityReadForbidden(session.userId, communityId)) {
-    return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+  // Active membership (or admin) of the node's own community is the write gate.
+  if (await communityMemberForbidden(session.userId, communityId, session.email)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-
-  // Active membership of the community is the write gate.
-  const membership = await prisma.userCommunity.findFirst({
-    where: { userId: session.userId, communityId, status: 'active' },
-    select: { id: true },
-  });
-  if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const data: Record<string, unknown> = {};
   if (name !== null) data.name = name;

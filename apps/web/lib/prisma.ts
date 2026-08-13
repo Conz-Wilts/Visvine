@@ -47,18 +47,29 @@ declare global {
 
 const prisma = globalThis.prismaGlobal ?? prismaClientSingleton();
 
-// Let requireSession() reject JWTs whose user row no longer exists (a session
-// minted before a DB rebuild, or a deleted account). Registered here rather
-// than imported there because lib/session.ts is in the edge bundle via
-// proxy.ts and must never pull in the DB client. Positive results are cached
-// for the life of the process — one PK lookup per unseen userId, not per
-// request.
-const knownUserIds = new Set<string>();
+// Let the session gates reject JWTs whose user row no longer exists or has been
+// deactivated (a session minted before a DB rebuild, a deleted or suspended
+// account). Registered here rather than imported in lib/session.ts because that
+// module is in the edge bundle via proxy.ts and must never pull in the DB
+// client.
+//
+// Positive results are cached with a short TTL — one PK lookup per unseen user,
+// re-verified at most once per window so a deletion/deactivation stops
+// authenticating within ~60s instead of surviving for the life of the process.
+// Negative results are never cached, so a freshly created user works at once.
+const USER_CHECK_TTL_MS = 60_000;
+const validUserUntil = new Map<string, number>();
 setSessionUserCheck(async (userId) => {
-  if (knownUserIds.has(userId)) return true;
-  const row = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
-  if (row) knownUserIds.add(userId);
-  return row !== null;
+  const cachedUntil = validUserUntil.get(userId);
+  if (cachedUntil !== undefined && cachedUntil > Date.now()) return true;
+  const row = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, isActive: true },
+  });
+  const valid = row !== null && row.isActive !== false;
+  if (valid) validUserUntil.set(userId, Date.now() + USER_CHECK_TTL_MS);
+  else validUserUntil.delete(userId);
+  return valid;
 });
 
 export default prisma;

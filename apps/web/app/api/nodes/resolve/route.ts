@@ -23,7 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
-import { communityReadForbidden } from '@/lib/auth';
+import { communityMemberForbidden } from '@/lib/auth';
 import { findMemberNode } from '@/lib/identity/connection';
 
 export async function GET(request: NextRequest) {
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
   if (communityId) {
     const inCommunity = await findMemberNode(communityId, userId);
-    if (inCommunity && !(await communityReadForbidden(session.userId, communityId))) {
+    if (inCommunity && !(await communityMemberForbidden(session.userId, communityId, session.email))) {
       return NextResponse.json({ nodeId: inCommunity.id });
     }
   }
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     orderBy: { id: 'asc' },
   });
   for (const candidate of candidates) {
-    if (!(await communityReadForbidden(session.userId, candidate.communityId!))) {
+    if (!(await communityMemberForbidden(session.userId, candidate.communityId!, session.email))) {
       return NextResponse.json({ nodeId: candidate.id });
     }
   }

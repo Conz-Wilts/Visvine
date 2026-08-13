@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiSession } from '@/lib/api/route';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { communityMemberForbidden } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 
 type CommunityValueMap = Record<string, Record<string, { value: string | null; contributedBy: { id: string; name: string; image: string | null } | null }>>;
@@ -28,10 +29,8 @@ async function buildCommunityValues(communityId: string, nodeIds: string[]): Pro
 }
 
 // GET /api/crm/community-values?community_id=X&node_ids[]=A
-// Requires an authenticated session (symmetric with POST/PUT and the
-// private-values route). No per-community membership gate: communities are
-// publicly browsable, so the community directory layer is readable by any
-// signed-in user.
+// CRM values are confidential per-community data: only an active member/admin of
+// the community may read them.
 export async function GET(req: NextRequest) {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
@@ -40,6 +39,7 @@ export async function GET(req: NextRequest) {
   const nodeIds = req.nextUrl.searchParams.getAll('node_ids[]');
 
   if (!communityId) return NextResponse.json({ error: 'community_id required' }, { status: 400 });
+  if (await communityMemberForbidden(session.userId, communityId, session.email)) return forbiddenResponse();
 
   return NextResponse.json({ values: await buildCommunityValues(communityId, nodeIds) });
 }
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
   if (typeof communityId !== 'string' || !communityId) {
     return NextResponse.json({ error: 'community_id required' }, { status: 400 });
   }
+  if (await communityMemberForbidden(session.userId, communityId, session.email)) return forbiddenResponse();
 
   return NextResponse.json({ values: await buildCommunityValues(communityId, nodeIds) });
 }
@@ -72,6 +73,15 @@ export async function PUT(req: NextRequest) {
 
   if (!community_id || !node_id || !column_key || !column_id) {
     return NextResponse.json({ error: 'community_id, node_id, column_key, column_id required' }, { status: 400 });
+  }
+
+  // Writing a CRM value is a member action, and the node must belong to the
+  // named community — otherwise any signed-in user could scribble values into a
+  // rival fund's deal CRM by supplying a foreign community_id/node_id.
+  if (await communityMemberForbidden(session.userId, community_id, session.email)) return forbiddenResponse();
+  const node = await prisma.node.findUnique({ where: { id: node_id }, select: { communityId: true } });
+  if (!node || node.communityId !== community_id) {
+    return NextResponse.json({ error: 'node not found in this community' }, { status: 404 });
   }
 
   const result = await prisma.communityColumnValue.upsert({

@@ -93,6 +93,42 @@ export async function communityReadForbidden(
   return community ? isForeignPersonalSpace(community.personalOwnerId, userId) : false;
 }
 
+/** Whether the user holds an active membership row in `communityId`. */
+async function isActiveMember(userId: string, communityId: string): Promise<boolean> {
+  const membership = await prisma.userCommunity.findFirst({
+    where: { userId, communityId, status: 'active' },
+    select: { id: true },
+  });
+  return membership !== null;
+}
+
+/**
+ * Membership-enforcing gate for community-scoped reads/writes: returns true when
+ * this caller has no business touching `communityId` at all — it's another
+ * user's personal space, or it's a normal community they neither actively
+ * belong to nor administer. This is the stronger superset of
+ * `communityReadForbidden` (which only guarded personal spaces and let any
+ * signed-in user read a community they don't belong to). Use it on any endpoint
+ * that returns or mutates a community's records. Unknown communities return
+ * false so the caller's own not-found/empty handling takes over.
+ */
+export async function communityMemberForbidden(
+  userId: string,
+  communityId: string,
+  email?: string | null,
+): Promise<boolean> {
+  const community = await prisma.community.findUnique({
+    where: { id: communityId },
+    select: { personalOwnerId: true },
+  });
+  if (!community) return false;
+  // Personal space: only its owner may read or write it.
+  if (community.personalOwnerId != null) return community.personalOwnerId !== userId;
+  // Normal community: an active member or an admin passes.
+  if (await isActiveMember(userId, communityId)) return false;
+  return !(await isAdmin(userId, communityId, email));
+}
+
 /**
  * DB-backed guard for a tool's API routes: returns true when the community has
  * put `featureKey` out of this caller's reach — either the tool is removed

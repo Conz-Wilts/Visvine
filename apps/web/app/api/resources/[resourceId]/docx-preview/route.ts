@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readFile } from 'fs/promises';
-import { join } from 'path';
+import { join, sep } from 'path';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse, handleApiError } from '@/lib/api/route';
 
-// Mammoth emits well-formed HTML derived from docx, but belt-and-braces:
-// strip anything that could execute JS even if mammoth's behavior changes
-// or the upload vector widens in the future.
+// Mammoth emits well-formed HTML derived from docx. The primary XSS control is
+// the sandboxed (no-scripts) iframe the client renders this in; this scrub is
+// belt-and-braces and now also catches unquoted event handlers and whitespace-
+// obfuscated `javascript:` that the old quoted-only pattern let through.
 function stripExecutable(html: string): string {
   return html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<\s*(iframe|object|embed|link|meta|base)\b[^>]*>/gi, '')
     .replace(/\son[a-z]+\s*=\s*"[^"]*"/gi, '')
     .replace(/\son[a-z]+\s*=\s*'[^']*'/gi, '')
-    .replace(/javascript:/gi, '');
+    .replace(/\son[a-z]+\s*=\s*[^\s>]+/gi, '') // unquoted: onerror=alert(1)
+    .replace(/j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/gi, '');
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ resourceId: string }> }) {
@@ -33,12 +36,28 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ res
     return NextResponse.json({ error: 'Not a docx' }, { status: 400 });
   }
 
+  // `fileUrl` is a DB value that becomes a filesystem path — refuse traversal so
+  // it can never resolve outside the public assets root even if a write path
+  // ever lets a `../` into the column.
+  const publicRoot = join(process.cwd(), 'public');
+  const filePath = join(publicRoot, resource.fileUrl);
+  if (!filePath.startsWith(publicRoot + sep)) {
+    return NextResponse.json({ error: 'Invalid resource path' }, { status: 400 });
+  }
+
   try {
-    const filePath = join(process.cwd(), 'public', resource.fileUrl);
     const buf = await readFile(filePath);
     const mammoth = await import('mammoth');
     const result = await mammoth.convertToHtml({ buffer: buf });
-    return new NextResponse(stripExecutable(result.value), { headers: { 'Content-Type': 'text/html' } });
+    return new NextResponse(stripExecutable(result.value), {
+      headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        // Even though the client sandboxes this, a strict CSP means a direct hit
+        // on the URL can't execute scripts either.
+        'Content-Security-Policy': "default-src 'none'; img-src data: https:; style-src 'unsafe-inline'",
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
   } catch (err) {
     return handleApiError(err, 'api.resources.docxPreview.failed');
   }

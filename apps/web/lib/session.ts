@@ -7,6 +7,12 @@ export const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 function getSecret() {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET environment variable is not set");
+  // HS256 is only as strong as its key. Reject anything short enough to be
+  // brute-forced offline from an issued JWT (e.g. the dev placeholder leaking
+  // into prod). 32+ chars ≈ 256 bits of entropy for a random secret.
+  if (secret.length < 32) {
+    throw new Error("AUTH_SECRET must be at least 32 characters (use `openssl rand -hex 32`)");
+  }
   return new TextEncoder().encode(secret);
 }
 
@@ -28,7 +34,10 @@ export async function createSession(payload: SessionPayload): Promise<string> {
 
 export async function verifySession(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, getSecret());
+    // Pin the algorithm: a symmetric key already makes jose reject `alg:none`
+    // and RSA/EC confusion, but stating HS256 keeps that guarantee explicit
+    // against a future refactor that swaps in an asymmetric key.
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ["HS256"] });
     return payload as unknown as SessionPayload;
   } catch {
     return null;
@@ -57,6 +66,17 @@ let userExistsCheck: ((userId: string) => Promise<boolean>) | null = null;
 
 export function setSessionUserCheck(fn: (userId: string) => Promise<boolean>): void {
   userExistsCheck = fn;
+}
+
+/**
+ * Whether the session's user row still exists and is active. Runs the injected
+ * DB check (or passes when none is registered, e.g. the edge bundle). Exposed so
+ * the API gates in lib/api/route.ts enforce the same liveness check that
+ * requireSession does — otherwise a deleted/deactivated account's still-valid
+ * 30-day JWT keeps authenticating on every requireApiSession route.
+ */
+export async function sessionUserValid(userId: string): Promise<boolean> {
+  return userExistsCheck ? userExistsCheck(userId) : true;
 }
 
 export async function getSession(): Promise<SessionPayload | null> {

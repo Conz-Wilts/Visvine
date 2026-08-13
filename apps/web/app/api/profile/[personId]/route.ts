@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { communityMemberForbidden } from '@/lib/auth';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { resolveNodeConnection } from '@/lib/identity/connection';
 
@@ -42,6 +43,36 @@ async function resolveProfileUserId(personId: string): Promise<string | null> {
   return person?.userId ?? null;
 }
 
+/** Whether `viewerId` shares at least one real (non-personal) community with the
+ *  member `targetUserId` — the visibility test for another member's contact PII. */
+async function sharesCommunity(viewerId: string, targetUserId: string): Promise<boolean> {
+  if (viewerId === targetUserId) return true;
+  const overlap = await prisma.userCommunity.findFirst({
+    where: {
+      userId: targetUserId,
+      status: 'active',
+      community: {
+        personalOwnerId: null,
+        userCommunities: { some: { userId: viewerId, status: 'active' } },
+      },
+    },
+    select: { id: true },
+  });
+  return overlap !== null;
+}
+
+/** Contact fields are visible only to people who share a community with the
+ *  subject. Everyone else gets the profile with email/phone nulled — the profile
+ *  stays a global identity surface without leaking direct contact details across
+ *  tenant boundaries. Mutates and returns the record for call-site brevity. */
+function redactContact<T extends Record<string, unknown>>(record: T, shared: boolean): T {
+  if (!shared) {
+    if ('email' in record) (record as Record<string, unknown>).email = null;
+    if ('phone' in record) (record as Record<string, unknown>).phone = null;
+  }
+  return record;
+}
+
 export async function GET(_req: NextRequest, context: RouteContext) {
   const session = await requireApiSession();
   if (session instanceof NextResponse) return session;
@@ -53,9 +84,10 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     const person = await prisma.person.findUnique({ where: { userId } });
     if (person) {
       person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
+      const shared = await sharesCommunity(session.userId, userId);
       // `id` stays the requested node id so client-side routing keys hold.
       return NextResponse.json(
-        { ...person, id: personId, connected: true },
+        redactContact({ ...person, id: personId, connected: true }, shared),
         { headers: CACHE_HEADERS },
       );
     }
@@ -65,8 +97,9 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   const person = await prisma.person.findUnique({ where: { id: personId } });
   if (person) {
     person.imageUrl = normalizeImageUrl(person.imageUrl) ?? person.imageUrl;
+    const shared = person.userId ? await sharesCommunity(session.userId, person.userId) : false;
     return NextResponse.json(
-      { ...person, connected: !!person.userId },
+      redactContact({ ...person, connected: !!person.userId }, shared),
       { headers: CACHE_HEADERS },
     );
   }
@@ -79,6 +112,11 @@ export async function GET(_req: NextRequest, context: RouteContext) {
     if (node) {
       const meta = (node.metadata ?? {}) as Record<string, unknown>;
       const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+      // Unconnected node: its contact fields belong to the node's community, so
+      // gate phone on membership of that community.
+      const sharedNode = node.communityId
+        ? !(await communityMemberForbidden(session.userId, node.communityId, session.email))
+        : false;
       const synthesized = {
         id: node.id,
         communityId: node.communityId,
@@ -89,7 +127,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         website: str(meta.website) ?? node.url ?? null,
         linkedinUrl: str(meta.linkedinUrl),
         twitterUrl: str(meta.twitterUrl),
-        phone: str(meta.phone),
+        phone: sharedNode ? str(meta.phone) : null,
         pronouns: str(meta.pronouns),
         email: null,
         imageUrl: normalizeImageUrl(node.imageUrl) ?? node.imageUrl ?? null,

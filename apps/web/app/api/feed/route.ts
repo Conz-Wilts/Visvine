@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
-import { featureAccessForbidden } from '@/lib/auth';
+import { featureAccessForbidden, communityMemberForbidden } from '@/lib/auth';
 
 // Caps on nested fan-out per post. No web UI renders comments inline yet (the
 // MCP `list_feed` tool that used to consume this was removed with the rest of
@@ -22,8 +22,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'communityId required' }, { status: 400 });
   }
 
-  // The posts feed is part of the Channels tool, so it answers to the same gate.
-  if (await featureAccessForbidden(session.userId, communityId, 'channels', session.email)) {
+  // The posts feed is community-scoped: an active member (feature check below
+  // also enforces the Channels tool being enabled). Membership stops any
+  // signed-in user from reading a foreign community's feed via its id.
+  if (
+    (await communityMemberForbidden(session.userId, communityId, session.email)) ||
+    (await featureAccessForbidden(session.userId, communityId, 'channels', session.email))
+  ) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

@@ -42,16 +42,19 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Default: search users
-    const users = await prisma.user.findMany({
+    // Default: search users — scoped to people the caller shares a real
+    // (non-personal) community with, and by name only. Querying all users by
+    // email platform-wide was a cross-tenant roster leak + email-existence oracle.
+    const myCommunities = await prisma.userCommunity.findMany({
+      where: { userId: user.id, status: 'active', community: { personalOwnerId: null } },
+      select: { communityId: true },
+    });
+    const communityIds = myCommunities.map((c) => c.communityId);
+    const users = communityIds.length === 0 ? [] : await prisma.user.findMany({
       where: {
         id: { not: user.id },
-        ...(q ? {
-          OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { email: { contains: q, mode: 'insensitive' } },
-          ],
-        } : {}),
+        userCommunities: { some: { communityId: { in: communityIds }, status: 'active' } },
+        ...(q ? { name: { contains: q, mode: 'insensitive' } } : {}),
       },
       select: {
         id: true,

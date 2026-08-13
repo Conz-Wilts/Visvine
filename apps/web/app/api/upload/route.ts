@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadProfileImage, deleteProfileImage, getMediaUrl } from '@/lib/gcs';
-import { requireApiSession, handleApiError } from '@/lib/api/route';
+import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
+import { isAdmin, communityMemberForbidden } from '@/lib/auth';
+import type { SessionPayload } from '@/lib/session';
+import prisma from '@/lib/prisma';
 import type { ImageEntityType } from '@/lib/imageUpload';
 import { logger } from '@/lib/logger';
 
@@ -33,6 +36,30 @@ const ENTITY_PREFIXES: Record<ImageEntityType, string> = {
 
 function buildPrefix(entityType: ImageEntityType, entityId: string): string {
   return `${ENTITY_PREFIXES[entityType]}/${entityId}`;
+}
+
+/**
+ * Whether `session` may write/delete the image for (entityType, entityId).
+ * Without this any signed-in user could overwrite or delete any tenant's logo,
+ * avatar, card or event image — the id becomes the GCS prefix verbatim.
+ *  - community: entityId IS a community id → require admin of it.
+ *  - card | person | event: entityId is a node id → require active membership of
+ *    the node's own community (the same audience that can edit that node).
+ */
+async function uploadForbidden(
+  session: SessionPayload,
+  entityType: ImageEntityType,
+  entityId: string,
+): Promise<boolean> {
+  if (entityType === 'community') {
+    return !(await isAdmin(session.userId, entityId, session.email));
+  }
+  const node = await prisma.node.findUnique({
+    where: { id: entityId },
+    select: { communityId: true },
+  });
+  if (!node?.communityId) return true; // unknown target → deny
+  return communityMemberForbidden(session.userId, node.communityId, session.email);
 }
 
 /**
@@ -69,6 +96,8 @@ export async function POST(request: NextRequest) {
     if (!Object.keys(ENTITY_PREFIXES).includes(entityType)) {
       return NextResponse.json({ error: 'entityType must be card, person, community, or event' }, { status: 400 });
     }
+
+    if (await uploadForbidden(session, entityType, entityId)) return forbiddenResponse();
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
@@ -130,6 +159,12 @@ export async function DELETE(request: NextRequest) {
         return NextResponse.json({ error: 'entityType and entityId are required' }, { status: 400 });
       }
     }
+
+    if (!Object.keys(ENTITY_PREFIXES).includes(entityType)) {
+      return NextResponse.json({ error: 'entityType must be card, person, community, or event' }, { status: 400 });
+    }
+
+    if (await uploadForbidden(session, entityType, entityId)) return forbiddenResponse();
 
     await deleteProfileImage(buildPrefix(entityType, entityId));
     return NextResponse.json({ success: true });

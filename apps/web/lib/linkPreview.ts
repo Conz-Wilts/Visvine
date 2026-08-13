@@ -2,27 +2,51 @@
 // Uses native fetch; no third-party dep required.
 
 import prisma from '@/lib/prisma';
-import net from 'node:net';
+import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf';
 
 const URL_REGEX = /(https?:\/\/[^\s<>"']+)/g;
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 500_000;
+const MAX_REDIRECTS = 4;
 
 function extractUrls(text: string): string[] {
   return Array.from(new Set(text.match(URL_REGEX) ?? []));
 }
 
-function isPrivateHost(hostname: string): boolean {
-  if (hostname === 'localhost' || hostname.endsWith('.local')) return true;
-  if (net.isIP(hostname)) {
-    // Block private IP ranges
-    if (hostname.startsWith('10.') || hostname.startsWith('127.') || hostname === '0.0.0.0') return true;
-    if (hostname.startsWith('192.168.') || hostname.startsWith('169.254.')) return true;
-    const [a, b] = hostname.split('.').map(Number);
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (hostname === '::1' || hostname.startsWith('fc') || hostname.startsWith('fd')) return true;
+/**
+ * Fetch `url` with SSRF protection at every hop. This unfurler runs server-side
+ * on any user-supplied URL, so it must not be steerable at internal services.
+ * The shared `assertPubliclyRoutable` actually resolves the host (unlike the old
+ * literal-string check that a DNS name pointing at 169.254.169.254 walked
+ * straight past), and `redirect: 'manual'` means a public first hop can't 302
+ * us onto an internal target — each redirect Location is re-validated here.
+ */
+async function ssrfSafeFetch(url: string, signal: AbortSignal): Promise<Response | null> {
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let parsed: URL;
+    try { parsed = new URL(current); } catch { return null; }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    try {
+      await assertPubliclyRoutable(parsed.hostname);
+    } catch (err) {
+      if (err instanceof SsrfError) return null;
+      throw err;
+    }
+    const res = await fetch(current, {
+      signal,
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Visvine-LinkPreview/1.0' },
+    });
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      if (!location) return null;
+      current = new URL(location, current).toString(); // resolve relative redirects, re-validate next loop
+      continue;
+    }
+    return res;
   }
-  return false;
+  return null; // too many redirects
 }
 
 function pickMeta(html: string, property: string): string | undefined {
@@ -46,21 +70,12 @@ function isEmbeddable(headers: Headers): boolean {
 }
 
 async function fetchLinkPreview(url: string) {
-  let parsed: URL;
-  try { parsed = new URL(url); } catch { return null; }
-  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
-  if (isPrivateHost(parsed.hostname)) return null;
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const res = await fetch(url, {
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { 'User-Agent': 'Visvine-LinkPreview/1.0' },
-    });
-    if (!res.ok) return null;
+    const res = await ssrfSafeFetch(url, controller.signal);
+    if (!res || !res.ok) return null;
     const reader = res.body?.getReader();
     if (!reader) return null;
     let received = 0;

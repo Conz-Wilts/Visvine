@@ -3,9 +3,13 @@ import { extname } from 'path';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { uploadResourceFile, RESOURCES_BUCKET, getSignedUrl } from '@/lib/gcs';
-import { requireApiSession } from '@/lib/api/route';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { communityMemberForbidden } from '@/lib/auth';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp', '.tiff', '.heic', '.heif', '.ico']);
+// Cap before buffering the whole body into memory + running sharp — an
+// unbounded upload is a memory-DoS on a small Cloud Run instance.
+const MAX_SIZE = 25 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
   const session = await requireApiSession();
@@ -16,6 +20,11 @@ export async function POST(req: NextRequest) {
   const communityId = formData.get('communityId') as string | null;
 
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
+  if (file.size > MAX_SIZE) return NextResponse.json({ error: 'File must be less than 25MB' }, { status: 400 });
+  // A community-scoped resource may only be uploaded by a member of that community.
+  if (communityId && (await communityMemberForbidden(session.userId, communityId, session.email))) {
+    return forbiddenResponse();
+  }
 
   const originalName = file.name;
   const ext = extname(originalName).toLowerCase();

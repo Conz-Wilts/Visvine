@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { requireApiSession } from '@/lib/api/route';
+import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { communityMemberForbidden, featureAccessForbidden } from '@/lib/auth';
 
 // POST /api/feed/[postId]/reactions - toggle emoji reaction
 export async function POST(
@@ -11,6 +12,17 @@ export async function POST(
   if (session instanceof NextResponse) return session;
 
   const { postId } = await params;
+
+  // Reacting is a member action scoped to the post's own community.
+  const post = await prisma.post.findUnique({ where: { id: postId }, select: { communityId: true } });
+  if (!post) return NextResponse.json({ error: 'Post not found' }, { status: 404 });
+  if (
+    (await communityMemberForbidden(session.userId, post.communityId, session.email)) ||
+    (await featureAccessForbidden(session.userId, post.communityId, 'channels', session.email))
+  ) {
+    return forbiddenResponse();
+  }
+
   const { emoji } = await req.json();
 
   if (!emoji || typeof emoji !== 'string' || emoji.length > 8) {

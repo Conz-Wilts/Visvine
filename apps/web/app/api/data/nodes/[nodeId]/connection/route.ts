@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
-import { isAdmin, communityReadForbidden } from '@/lib/auth';
+import { isAdmin, communityMemberForbidden } from '@/lib/auth';
 import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import {
   connectNodeToUser,
@@ -22,13 +22,14 @@ import {
 
 type RouteContext = { params: Promise<{ nodeId: string }> };
 
-async function loadNode(nodeId: string, viewerUserId: string) {
+async function loadNode(nodeId: string, viewerUserId: string, viewerEmail?: string | null) {
   const node = await prisma.node.findUnique({
     where: { id: nodeId },
     select: { id: true, type: true, communityId: true },
   });
   if (!node?.communityId) return null;
-  if (await communityReadForbidden(viewerUserId, node.communityId)) return null;
+  // A node's connection (incl. the connected member's email) is member-scoped.
+  if (await communityMemberForbidden(viewerUserId, node.communityId, viewerEmail)) return null;
   return node as { id: string; type: string; communityId: string };
 }
 
@@ -37,7 +38,7 @@ export async function GET(_req: NextRequest, context: RouteContext) {
   if (session instanceof NextResponse) return session;
 
   const { nodeId } = await context.params;
-  const node = await loadNode(nodeId, session.userId);
+  const node = await loadNode(nodeId, session.userId, session.email);
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
   const connection = await resolveNodeConnection(nodeId);
@@ -57,7 +58,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   const userId = typeof body.userId === 'string' ? body.userId : '';
   if (!userId) return NextResponse.json({ error: 'userId is required' }, { status: 400 });
 
-  const node = await loadNode(nodeId, session.userId);
+  const node = await loadNode(nodeId, session.userId, session.email);
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
   const admin = await isAdmin(session.userId, node.communityId, session.email);
@@ -96,7 +97,7 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
   if (session instanceof NextResponse) return session;
 
   const { nodeId } = await context.params;
-  const node = await loadNode(nodeId, session.userId);
+  const node = await loadNode(nodeId, session.userId, session.email);
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
   const connection = await resolveNodeConnection(nodeId);

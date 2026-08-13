@@ -98,11 +98,24 @@ export async function searchConversationsAndMessages(currentUserId: string, quer
 export async function searchUsers(currentUserId: string, query?: string) {
   const normalized = query?.trim();
 
+  // Only surface people the caller shares a real (non-personal) community with.
+  // Without this, the endpoint returned the entire platform's name+email roster
+  // across every tenant to any signed-in user — a cross-tenant identity leak and
+  // an email-existence oracle. Email stays in the projection for the directory
+  // dedup in searchUsersAndDirectory; the HTTP route strips it from the response.
+  const myCommunities = await prisma.userCommunity.findMany({
+    where: { userId: currentUserId, status: 'active', community: { personalOwnerId: null } },
+    select: { communityId: true },
+  });
+  const communityIds = myCommunities.map((c) => c.communityId);
+  if (communityIds.length === 0) return [];
+
   const users = await prisma.user.findMany({
     where: {
       id: {
         not: currentUserId,
       },
+      userCommunities: { some: { communityId: { in: communityIds }, status: 'active' } },
       ...(normalized ? {
         OR: [
           {

@@ -99,5 +99,20 @@ export function DocxViewer({ resourceId }: { resourceId: string }) {
       Loading preview…
     </div>
   );
-  return <div className="flex-1 overflow-auto p-6 prose max-w-none text-sm" dangerouslySetInnerHTML={{ __html: html }} />;
+  // The preview HTML is derived from an uploaded .docx — untrusted content. It is
+  // rendered inside a sandboxed iframe (no `allow-scripts`), so any embedded
+  // script or inline event handler is inert regardless of server-side scrubbing.
+  // A minimal style block gives it readable typography without the app's CSS.
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8">`
+    + `<style>body{font:14px/1.6 system-ui,sans-serif;color:#111;margin:0;padding:24px}`
+    + `img{max-width:100%}table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:4px 8px}</style>`
+    + `</head><body>${html}</body></html>`;
+  return (
+    <iframe
+      title="Document preview"
+      className="flex-1 w-full border-0"
+      sandbox=""
+      srcDoc={srcDoc}
+    />
+  );
 }

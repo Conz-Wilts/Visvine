@@ -1,0 +1,49 @@
+name: CI
+
+# Quality + security gates. deploy.yml handles release; this runs the checks the
+# AGENTS.md verification section describes (previously convention-only, enforced
+# by nobody) on every PR and push to main so regressions can't merge silently.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject committed .env files
+        run: node scripts/check-no-env-committed.mjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.30.2 --activate
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Knip
+        run: pnpm --filter @visvine/web knip
+
+      # Surfaces vulnerable production dependencies without blocking the merge —
+      # today's remaining highs are transitive dev-tooling (Prisma CLI's hono,
+      # client-side linkify-it) with no reachable path and no direct fix. Review
+      # the output on each run; tighten to a hard gate once the noise floor is
+      # zero. --prod already excludes pure devDependency noise.
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level=high
+        continue-on-error: true

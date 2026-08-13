@@ -421,13 +421,27 @@ export async function addMembersToGroup(
   const uniqueIncoming = [...new Set(memberIds)].filter((memberId) => !existingMembers.has(memberId));
 
   if (uniqueIncoming.length > 0) {
+    // A community channel's members must belong to that community — otherwise an
+    // admin could pull an outsider into the channel and hand them its full
+    // message history. Ad-hoc groups (no communityId) keep the platform-wide add.
+    const channelCommunityId = membership.conversation.communityId;
     const users = await prisma.user.findMany({
-      where: { id: { in: uniqueIncoming } },
+      where: {
+        id: { in: uniqueIncoming },
+        ...(channelCommunityId
+          ? { userCommunities: { some: { communityId: channelCommunityId, status: 'active' } } }
+          : {}),
+      },
       select: { id: true },
     });
 
     if (users.length !== uniqueIncoming.length) {
-      throw new MessagingError(400, 'One or more selected users were not found');
+      throw new MessagingError(
+        400,
+        channelCommunityId
+          ? 'One or more selected users are not members of this community'
+          : 'One or more selected users were not found',
+      );
     }
 
     await prisma.conversationMember.createMany({
