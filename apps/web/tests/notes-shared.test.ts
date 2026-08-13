@@ -1,5 +1,4 @@
-// Unit tests for the reused note pure-logic layer (ported from blackbird-brain
-// into lib/notes/shared). These lock the index/tree/backlink/related/search/
+// Unit tests for the note pure-logic layer (lib/notes/shared). These lock the index/tree/backlink/related/search/
 // merge behavior the whole notes feature is built on. Run with the repo's node
 // test runner: node --import tsx --test tests/notes-shared.test.ts
 import test from 'node:test'
@@ -116,7 +115,7 @@ test('buildTree leaves a folder untitled without an index, or with a blank title
   assert.equal(folderNode(tree, 'team').title, undefined)
 })
 
-test("buildTree does not title the root from the brain's home note", () => {
+test("buildTree does not title the root from the context's home note", () => {
   const tree = buildTree(buildNoteIndex(titledVault()))
   assert.equal(tree.title, undefined)
 })

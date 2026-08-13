@@ -256,7 +256,7 @@ export async function getEventsData(spaceId: string): Promise<EventsData> {
     });
     const eventIds = eventRows.map(e => e.id);
     const attendeeRows = eventIds.length > 0
-      ? await prisma.attendee.findMany({ where: { eventId: { in: eventIds } } })
+      ? await prisma.eventAttendee.findMany({ where: { eventId: { in: eventIds } } })
       : [];
 
     const events = eventRows.map(nodeRowToNBEvent);
@@ -376,7 +376,7 @@ async function updateEventAnalytics(spaceId: string, eventId: string, updates: P
 
 export async function getAttendees(spaceId: string, eventId: string): Promise<NBAttendee[]> {
   try {
-    const rows = await prisma.attendee.findMany({ where: { eventId } });
+    const rows = await prisma.eventAttendee.findMany({ where: { eventId } });
     return rows.map(attendeeRowToNBAttendee);
   } catch (err) {
     logger.error('eventRepo.getAttendees.failed', { err });
@@ -405,7 +405,7 @@ function attendeeToWritable(a: NBAttendee) {
 
 async function upsertAttendee(spaceId: string, attendee: NBAttendee): Promise<void> {
   const writable = attendeeToWritable(attendee);
-  await prisma.attendee.upsert({
+  await prisma.eventAttendee.upsert({
     where: { id: attendee.id },
     create: { id: attendee.id, eventId: attendee.eventId, ...writable },
     update: writable,
@@ -484,7 +484,7 @@ export async function submitRsvp(
     // $queryRaw cannot deserialize ("Failed to deserialize column of type 'void'").
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${eventId})::bigint)::text`;
 
-    const existing = (await tx.attendee.findMany({ where: { eventId } })).map(attendeeRowToNBAttendee);
+    const existing = (await tx.eventAttendee.findMany({ where: { eventId } })).map(attendeeRowToNBAttendee);
 
     // Prefer an email-keyed row over a person-keyed one: writing a submission's
     // email onto a *different* row that already holds it would violate
@@ -531,7 +531,7 @@ export async function submitRsvp(
 
     // Same field mapping as upsertAttendee, but bound to the locked transaction.
     const writable = attendeeToWritable(next);
-    await tx.attendee.upsert({
+    await tx.eventAttendee.upsert({
       where: { id: next.id },
       create: { id: next.id, eventId: next.eventId, ...writable },
       update: writable,
@@ -599,7 +599,7 @@ export async function removeAttendee(spaceId: string, eventId: string, attendeeI
   const attendees = await getAttendees(spaceId, eventId);
   const attendee = attendees.find((a) => a.id === attendeeId);
   if (!attendee) return false;
-  await prisma.attendee.deleteMany({ where: { id: attendeeId, eventId } });
+  await prisma.eventAttendee.deleteMany({ where: { id: attendeeId, eventId } });
   if (attendee.personId) {
     try {
       // Origin-scoped: removes only the auto 'attended' edge for this attendee,

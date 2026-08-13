@@ -50,8 +50,7 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      // The directory's old graph view mode is the standalone Context tool now.
-      // (The old ?view=table mode was removed; the param is simply ignored.)
+      // ?view=graph on the directory belongs to the standalone Context tool.
       {
         source: "/directory",
         has: [{ type: "query", key: "view", value: "graph" }],

@@ -19,7 +19,7 @@ export async function GET(
   const session = await requireAdmin(spaceId);
   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const rows = await prisma.spaceSecret.findMany({
+  const rows = await prisma.connectorSecret.findMany({
     where: { spaceId },
     select: { name: true, createdBy: true, updatedAt: true },
     orderBy: { name: 'asc' },
@@ -58,7 +58,7 @@ export async function PUT(
     );
   }
 
-  await prisma.spaceSecret.upsert({
+  await prisma.connectorSecret.upsert({
     where: { secret_identity: { spaceId, name } },
     create: { spaceId, name, ciphertext, createdBy: session.email },
     update: { ciphertext, createdBy: session.email },
@@ -79,7 +79,7 @@ export async function DELETE(
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
-  await prisma.spaceSecret.deleteMany({ where: { spaceId, name } });
+  await prisma.connectorSecret.deleteMany({ where: { spaceId, name } });
 
   return NextResponse.json({ ok: true });
 }

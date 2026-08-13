@@ -14,11 +14,11 @@
  */
 import prisma from '@/lib/prisma'
 import { aiConfigured, chatWithTools, type AgentMessage, type ToolSpec } from '@/lib/notes/ai'
-import { readVisible, writeGated } from '@/lib/notes/brainService'
+import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
-import type { Brain } from '@/lib/notes/store'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { Context } from '@/lib/notes/store'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { allowPrivateHosts, ConnectorError, parseConnectorPerimeter, perimeterSecretRefs } from './config'
 import { executeConnectorScript, loadConnector } from './service'
 
@@ -130,7 +130,7 @@ const TOOLS: ToolSpec[] = [
 /** Which of these secret names are stored for the space — names only. */
 async function storedSecretNames(spaceId: string, names: string[]): Promise<Set<string>> {
   if (names.length === 0) return new Set()
-  const rows = await prisma.spaceSecret.findMany({
+  const rows = await prisma.connectorSecret.findMany({
     where: { spaceId, name: { in: names } },
     select: { name: true },
   })
@@ -138,8 +138,8 @@ async function storedSecretNames(spaceId: string, names: string[]): Promise<Set<
 }
 
 interface AgentContext {
-  principal: BrainPrincipal
-  brain: Brain
+  principal: ContextPrincipal
+  context: Context
   spaceId: string
 }
 
@@ -176,7 +176,7 @@ async function toolWriteConnector(ctx: AgentContext, name: string, content: stri
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) return `error: ${parsed.error}`
 
-  const written = await writeGated(ctx.principal, ctx.brain, `connectors/${name}.md`, content)
+  const written = await writeGated(ctx.principal, ctx.context, `connectors/${name}.md`, content)
   if (written.status === 'denied') return `error: write denied — ${written.reason}`
 
   const secrets = perimeterSecretRefs(parsed.perimeter)
@@ -192,7 +192,7 @@ async function toolWriteConnector(ctx: AgentContext, name: string, content: stri
 
 async function toolReadConnector(ctx: AgentContext, name: string): Promise<string> {
   if (!NAME_RE.test(name)) return 'error: bad name'
-  const content = await readVisible(ctx.principal, ctx.brain, `connectors/${name}.md`)
+  const content = await readVisible(ctx.principal, ctx.context, `connectors/${name}.md`)
   if (content === null) return 'error: no such connector'
   const parsed = parseConnectorPerimeter(parseFrontmatter(content))
   return `${parsed.ok ? 'parses ok' : `INVALID: ${parsed.error}`}\n---\n${content}`
@@ -200,9 +200,9 @@ async function toolReadConnector(ctx: AgentContext, name: string): Promise<strin
 
 async function toolRunConnector(ctx: AgentContext, name: string, code: string): Promise<string> {
   try {
-    const loaded = await loadConnector(ctx.principal, ctx.brain, name)
+    const loaded = await loadConnector(ctx.principal, ctx.context, name)
     if (!loaded) return 'error: no such connector'
-    const result = await executeConnectorScript(ctx.principal, ctx.brain, ctx.spaceId, loaded, code)
+    const result = await executeConnectorScript(ctx.principal, ctx.context, ctx.spaceId, loaded, code)
     const clip = (s: string) =>
       s.length > RUN_OUTPUT_CAP_CHARS ? s.slice(0, RUN_OUTPUT_CAP_CHARS) + '\n…[truncated]' : s
     const rendered = result.value === undefined ? '' : clip(JSON.stringify(result.value, null, 2) ?? '')

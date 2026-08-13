@@ -2,7 +2,7 @@
  * Seeds an end-to-end connector test case with data a fund space actually
  * cares about: fund metrics.
  *
- * Three things land in the space's SHARED brain:
+ * Three things land in the space's SHARED context:
  *   • connectors/fund-metrics.md — a v2 connector (hosts + env perimeter, prose
  *     body) pointed at /api/dev/fund-metrics, this app's fake fund-admin API.
  *   • funds/fund-portfolio.md — an ordinary CONTEXT note about the funds, which
@@ -185,10 +185,10 @@ async function main() {
   }
 
   if (REMOVE) {
-    const notes = await prisma.spaceNote.deleteMany({
+    const notes = await prisma.contextNote.deleteMany({
       where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.spaceSecret.deleteMany({
+    const secrets = await prisma.connectorSecret.deleteMany({
       where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
     await syncContextLinksBulk({ spaceId, ownerKey: SHARED }, NOTES.map((n) => n.path));
@@ -204,7 +204,7 @@ async function main() {
   if (!owner) throw new Error(`space ${spaceId} has no members to attribute the notes to`);
 
   for (const note of NOTES) {
-    await prisma.spaceNote.upsert({
+    await prisma.contextNote.upsert({
       where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
       create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
@@ -220,7 +220,7 @@ async function main() {
   );
 
   for (const secret of SECRETS) {
-    await prisma.spaceSecret.upsert({
+    await prisma.connectorSecret.upsert({
       where: { secret_identity: { spaceId, name: secret.name } },
       create: {
         spaceId,

@@ -1,7 +1,7 @@
-// Unit tests for the brain retrieval stack: BM25 text ranking and the fused
+// Unit tests for the context retrieval stack: BM25 text ranking and the fused
 // search (filters → BM25 → optional vector stage → context expansion → RRF).
 // Fixtures go through the real index pipeline (buildNoteIndex) rather than
-// hand-rolled metas. Run: node --import tsx --test tests/brain-retrieval.test.ts
+// hand-rolled metas. Run: node --import tsx --test tests/context-retrieval.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 

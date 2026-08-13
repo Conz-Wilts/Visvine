@@ -1,7 +1,7 @@
 // Unit tests for the pure access-request rules (lib/notes/shared/accessRequests.ts):
 // who may file a request, who may see or resolve one in a queue, and how it reads.
 // The DB side (lib/notes/accessRequests.ts) is a thin wrapper over these plus
-// grantAccess, which brain-permissions.test.ts already covers.
+// grantAccess, which context-permissions.test.ts already covers.
 // Run: node --import tsx --test tests/access-requests.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -15,8 +15,8 @@ import {
   requestVisibleTo,
   sortRequests,
 } from '../lib/notes/shared/accessRequests'
-import { LEVEL_EDIT, LEVEL_FULL, LEVEL_VIEW, type AccessGrant, type BrainAccess } from '../lib/notes/shared/authz'
-import type { AccessRequest, BrainPrincipal } from '../lib/notes/shared/brainTypes'
+import { LEVEL_EDIT, LEVEL_FULL, LEVEL_VIEW, type AccessGrant, type ContextAccess } from '../lib/notes/shared/authz'
+import type { AccessRequest, ContextPrincipal } from '../lib/notes/shared/contextTypes'
 
 // fixtures
 
@@ -27,13 +27,13 @@ const grant = (resourcePath: string, level: number, userId = 'u-me'): AccessGran
   level,
 })
 
-const access = (grants: AccessGrant[], restricted: string[] = []): BrainAccess => ({
+const access = (grants: AccessGrant[], restricted: string[] = []): ContextAccess => ({
   grants,
   restricted,
   locked: [],
 })
 
-const principal = (userId: string, acc: BrainAccess, over: Partial<BrainPrincipal> = {}): BrainPrincipal => ({
+const principal = (userId: string, acc: ContextAccess, over: Partial<ContextPrincipal> = {}): ContextPrincipal => ({
   userId,
   email: `${userId}@x.test`,
   name: userId,

@@ -3,7 +3,7 @@
  *
  * Everything a user can create (a space, a space, a channel, a person, an
  * event, a note, an uploaded file) should be reachable in two places: the
- * context graph as a `Node`, and the brain as a markdown note that records what
+ * context graph as a `Node`, and the context as a markdown note that records what
  * we know about it. Before this module every call site hand-wrote
  * `prisma.node.create` + `revalidateTag`, which is exactly why spaces,
  * spaces, channels, notes and files never made it into the graph at all.
@@ -104,7 +104,7 @@ export interface SyncEntityNodeInput {
   body?: string
   /**
    * Skip writing the canonical note. For creates that shouldn't plant the
-   * entity's namespace folder in an otherwise-empty brain — the Context tab
+   * entity's namespace folder in an otherwise-empty context — the Context tab
    * stubs a missing note locally and the first real save creates it.
    */
   skipNote?: boolean
@@ -227,7 +227,7 @@ export async function ensureEntityNote(
  *
  * A note failure is reported, never thrown: the node is real and useful on its
  * own, and the caller's primary write (creating the actual channel) must not
- * fail because the brain rejected a path.
+ * fail because the context rejected a path.
  */
 export async function syncEntityNode(input: SyncEntityNodeInput): Promise<SyncEntityNodeResult> {
   const { spaceId, type } = input
@@ -365,7 +365,7 @@ export async function syncEntityNodeSafe(
  *
  * Note that this does NOT delete the entity's note: a channel can be deleted
  * while what we learned about it stays worth keeping. Trashing the note is the
- * user's call, from the brain.
+ * user's call, from the context.
  */
 export async function removeEntityNode(
   spaceId: string,

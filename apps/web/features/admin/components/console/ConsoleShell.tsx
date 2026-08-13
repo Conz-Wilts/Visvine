@@ -14,8 +14,7 @@ import { ConsoleSaveProvider, useConsoleSave } from './ConsoleSaveContext';
  * section's content below it. Section state lives in the URL
  * (`?section=members`) so it deep-links and survives refresh.
  *
- * The sections used to dock into the global Sidebar as a second column; they
- * now ride the same pane-top tab bar the Directory, notes and profiles use
+ * Sections ride the same pane-top tab bar the Directory, notes and profiles use
  * (same bleed, row height, underline and handoff key), so moving between those
  * surfaces and the console reads as one bar relabelling itself.
  *

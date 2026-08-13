@@ -12,17 +12,17 @@ import { extractMarkdownLinks, parseFrontmatter } from './markdown'
 
 export const INDEX_BASENAME = 'index.md'
 
-// 'people/index.md' → true; 'index.md' (brain root) → true.
+// 'people/index.md' → true; 'index.md' (context root) → true.
 export function isIndexPath(path: string): boolean {
   return path === INDEX_BASENAME || path.endsWith(`/${INDEX_BASENAME}`)
 }
 
-// 'people' → 'people/index.md'; '' (the brain root) → 'index.md'.
+// 'people' → 'people/index.md'; '' (the context root) → 'index.md'.
 export function indexPathOf(folder: string): string {
   return folder ? `${folder}/${INDEX_BASENAME}` : INDEX_BASENAME
 }
 
-// 'people/index.md' → 'people'; the brain root's index → '' (the root folder).
+// 'people/index.md' → 'people'; the context root's index → '' (the root folder).
 export function folderOfIndexPath(indexPath: string): string {
   return indexPath.slice(0, Math.max(0, indexPath.length - INDEX_BASENAME.length - 1))
 }
@@ -40,7 +40,7 @@ export function indexFolderPathOf(notePath: string): string {
   return notePath.replace(/\.md$/i, '')
 }
 
-// Ancestor folders of a note path, shallowest first, excluding the brain root:
+// Ancestor folders of a note path, shallowest first, excluding the context root:
 // 'a/b/c.md' → ['a', 'a/b']; 'welcome.md' → [].
 export function ancestorFolders(notePath: string): string[] {
   const segments = notePath.split('/').slice(0, -1)

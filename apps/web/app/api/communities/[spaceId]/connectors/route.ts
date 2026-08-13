@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
-import { resolveBrain, principalOf } from '@/lib/notes/brain';
+import { resolveContext, principalOf } from '@/lib/notes/resolve';
 import { listConnectors } from '@/lib/connectors/service';
 
 /**
@@ -17,7 +17,7 @@ export async function GET(
   const session = await requireSession();
   if (session instanceof Response) return session;
 
-  const resolved = await resolveBrain(session, spaceId);
+  const resolved = await resolveContext(session, spaceId);
   if (resolved instanceof Response) return resolved;
   if (!resolved.isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -30,7 +30,7 @@ export async function GET(
   // connector from a broken one without it, and one query covers every row.
   const stored = new Set(
     (
-      await prisma.spaceSecret.findMany({
+      await prisma.connectorSecret.findMany({
         where: { spaceId },
         select: { name: true },
       })

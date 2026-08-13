@@ -8,7 +8,7 @@ import { suggestedCreateType } from '@/lib/create/suggestedType';
 export type CreateableType =
   | 'person'
   // A group, organisation or space recorded in the directory (the org node
-  // type, formerly 'space'). A node and a note, in the space you're already
+  // type). A node and a note, in the space you're already
   // in. Provisioning a real space of your own is NOT a create type: it's the
   // one act that takes you somewhere else, and lives on the switcher instead
   // (features/spaces/components/NewSpaceDialog).
@@ -16,9 +16,9 @@ export type CreateableType =
   | 'resource'
   | 'event'
   | 'channel'
-  // The channels-tool container (formerly 'space').
+  // The channels-tool container.
   | 'section'
-  // Brain surfaces: a written note, and an uploaded file ingested as a Context
+  // Context surfaces: a written note, and an uploaded file ingested as a Context
   // Source. Both land at a path in the current space's context.
   | 'context'
   | 'file'

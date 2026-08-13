@@ -619,7 +619,7 @@ function RunOutput({ result }: { result: RunResult }) {
 /**
  * Every run of this connector, whoever made it — an agent through
  * run_connector, or an admin through the console above. Read straight from the
- * brain's audit trail, so it is the compliance record rather than a prettier
+ * context's audit trail, so it is the compliance record rather than a prettier
  * copy of one.
  *
  * "Why" is the code: the audit line records what was asked for, which is the

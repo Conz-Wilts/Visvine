@@ -19,11 +19,11 @@ import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
 
 /** Where a surface sends the user when the note it was showing is deleted:
- *  the brain's root index note, the space's home page. */
+ *  the context's root index note, the space's home page. */
 const CONTEXT_HOME = '/directory/note/index.md'
 
 /** What a move produces: the item keeps its own name under `destFolder`
- *  ('' = the brain root). */
+ *  ('' = the context root). */
 function movedPath(from: string, destFolder: string): string {
   const name = from.split('/').pop() ?? from
   return destFolder ? `${destFolder}/${name}` : name
@@ -104,7 +104,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   // the shared context cache: a cached value paints synchronously (re-opening
   // the Context tab shows the tree instantly, no spinner) and revalidates in
   // the background; the list fetch is deduped with EntityContextPanel's. A
-  // gated or empty brain simply yields an empty tree (no error surfaced).
+  // gated or empty context simply yields an empty tree (no error surfaced).
   useEffect(() => {
     if (!spaceId || !active) return
     let cancelled = false
@@ -132,7 +132,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     }
   }, [spaceId, active, treeVersion])
 
-  // The brain's trash, for the folder pinned to the bottom of the tree. Re-runs
+  // The context's trash, for the folder pinned to the bottom of the tree. Re-runs
   // on treeVersion so a delete lands in the trash row immediately; the GET also
   // purges anything past its retention window, so the list is what the server
   // would keep. A failure just leaves the row empty.
@@ -160,7 +160,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     let cancelled = false
     swrFetch(
       contextKeys.settings(spaceId),
-      () => notesApi.getBrainSettings(spaceId),
+      () => notesApi.getContextSettings(spaceId),
       ({ settings }) => {
         if (!cancelled) setContextName(settings?.contextName ?? null)
       },
@@ -229,7 +229,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     [spaceId],
   )
 
-  // Delete = move to the brain's trash (restorable from the tree's Trash folder
+  // Delete = move to the context's trash (restorable from the tree's Trash folder
   // for 7 days, then purged). Authority is enforced server-side per note — the
   // menu can't know each viewer's level, so a rejected delete just surfaces its
   // message. Deleting the note that's open navigates back to the browser.
@@ -353,7 +353,7 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   )
 
   // Force-delete, ahead of the 7-day retention. Irreversible, hence the confirm
-  // (the server also restricts it to admins in a space brain).
+  // (the server also restricts it to admins in a space context).
   const handlePurgeTrash = useCallback(
     (id: string) => {
       if (!spaceId) return

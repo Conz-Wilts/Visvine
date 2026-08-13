@@ -21,7 +21,7 @@ const DIRECTORY_TABS: PaneTabItem[] = [
 /**
  * The Directory: a searchable, filterable card grid of everyone and everything.
  * The Context tab in the pane bar isn't a view of this page — it navigates to
- * the brain's top-level index note (`index.md`, the space's home page).
+ * the context's top-level index note (`index.md`, the space's home page).
  * The bar itself lives in the persistent pane shell (directory/layout.tsx) —
  * this page just registers its tabs.
  */
@@ -42,8 +42,8 @@ function DirectoryPane() {
   const spaceName = currentSpace?.name ?? '';
   const { releaseDockNow } = useContextPanel();
 
-  // Context navigates to the brain's root index note. New brains are seeded with
-  // one at create time and the create dialog waits for it; an older brain that
+  // Context navigates to the context's root index note. New contexts are seeded with
+  // one at create time and the create dialog waits for it; an older context that
   // never got one has it written here on first open — the note page's missing
   // state is an access-request card, which is the wrong surface for "this note
   // was never written". ensureRootIndexNote is the shared version of that.
@@ -53,8 +53,8 @@ function DirectoryPane() {
     void ensureRootIndexNote(spaceId, spaceName).then(() => router.push(noteHref(ROOT_INDEX_PATH)));
   }, [spaceId, spaceName, router]);
 
-  // ?view=context used to open the standalone knowledge browser here; that
-  // surface is gone, so old links land on the grid and hop to the index note.
+  // ?view=context has no standalone browser behind it: such links land on the
+  // grid and hop straight to the index note.
   const wantsContext = useSearchParams().get('view') === 'context';
   const redirected = useRef(false);
   useEffect(() => {

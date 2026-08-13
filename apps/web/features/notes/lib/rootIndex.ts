@@ -1,6 +1,6 @@
 'use client'
 
-// The brain's root index note (`index.md`) — a space's home page, and where the
+// The context's root index note (`index.md`) — a space's home page, and where the
 // Directory's Context tab lands.
 //
 // The server seeds one at create time (ensureRootIndex in lib/notes/store.ts),

@@ -26,7 +26,7 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
  * in unconditionally and the console renders their switch locked on.
  *
  * Connectors is the only one today: the list route 403s every non-admin, and
- * writing to `connectors/` is admin-gated in brainService.writeDenial.
+ * writing to `connectors/` is admin-gated in contextService.writeDenial.
  */
 export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
@@ -56,7 +56,7 @@ export function isFeatureEnabled(config: SpaceFeatureConfig | null | undefined, 
  * `nodeTypes` name (matched case-insensitively, since stored `node.type` casing
  * drifts — 'section' vs 'Section'), valued by the feature slug that owns them.
  *
- * Person and Space (the org type, formerly Space) belong to the always-on
+ * Person and Space (the org type) belong to the always-on
  * directory and Event to the always-on navbar Events surface — none of them
  * appears here, so they're never hidden. In particular 'space' must NOT be
  * added: it would hide every org record whenever the Channels tool is off.

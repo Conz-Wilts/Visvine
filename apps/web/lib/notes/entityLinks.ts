@@ -1,5 +1,5 @@
 // Context-driven context links: an entity context note (people/<slug>.md or
-// companies/<slug>.md, shared brain only) that mentions another entity via
+// companies/<slug>.md, shared context only) that mentions another entity via
 // `[[Name]]` owns a real directory Link between the two nodes — relationship
 // 'mentioned', origin 'context', originRef = the note's path. Saving a note
 // syncs its mention set; removing a mention (or trashing/renaming the note)
@@ -37,7 +37,7 @@ const SHARED_OWNER_KEY = 'shared'
 const CONTEXT_RELATIONSHIP = 'mentioned'
 export const CONTEXT_ORIGIN = 'context'
 
-interface BrainRef {
+interface ContextRef {
   spaceId: string
   ownerKey: string
 }
@@ -77,7 +77,7 @@ async function loadEntityMaps(spaceId: string): Promise<EntityMaps> {
   return { idByPath, pathById }
 }
 
-/** The brain path a `connector:` node stands for, off its metadata. */
+/** The context path a `connector:` node stands for, off its metadata. */
 function notePathOfNode(metadata: unknown): string | null {
   const value = (metadata as Record<string, unknown> | null)?.notePath
   return typeof value === 'string' && value ? value : null
@@ -88,7 +88,7 @@ function notePathOfNode(metadata: unknown): string | null {
  * the one entity whose note comes first, so this is the one entity namespace
  * the note store owns rather than skips (see entities.ts).
  *
- * Every other note is content in the brain, not a node in the graph — an entity
+ * Every other note is content in the context, not a node in the graph — an entity
  * note (people/craig.md) is already drawn as that entity, and a plain note has
  * no node of its own, so it draws nothing and owns no edges.
  *
@@ -142,9 +142,9 @@ async function syncConnectorNode(
   return true
 }
 
-// The live shared-brain note at `path`, or null.
+// The live shared-context note at `path`, or null.
 function readSharedNote(spaceId: string, path: string) {
-  return prisma.spaceNote.findFirst({
+  return prisma.contextNote.findFirst({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: null },
     select: { content: true },
   })
@@ -268,30 +268,30 @@ async function syncOne(
 /**
  * Best-effort sync of one note's place in the graph: the node it owns (only a
  * connector note owns one), then the context links its `[[mentions]]` own.
- * Every shared-brain note goes through here, but only a note that IS a node —
+ * Every shared-context note goes through here, but only a note that IS a node —
  * an entity note or a connector — can own edges; a plain note has no node, so
  * its mentions draw nothing.
  *
- * No-op for personal brains. Pass `content: null` when the note no longer lives
+ * No-op for personal contexts. Pass `content: null` when the note no longer lives
  * at `path` (trash, rename, folder delete).
  */
 export async function syncContextLinks(
-  brain: BrainRef,
+  context: ContextRef,
   path: string,
   content: string | null,
 ): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY) return
+  if (context.ownerKey !== SHARED_OWNER_KEY) return
   try {
     // The node must exist before syncOne runs — that's what makes `selfId`
     // resolve, and therefore what lets the note own edges at all.
-    const nodeChanged = await syncNoteNode(brain.spaceId, path, content)
-    const maps = await loadEntityMaps(brain.spaceId)
-    const changed = await syncOne(brain.spaceId, path, content, maps)
+    const nodeChanged = await syncNoteNode(context.spaceId, path, content)
+    const maps = await loadEntityMaps(context.spaceId)
+    const changed = await syncOne(context.spaceId, path, content, maps)
     if (changed || nodeChanged) bustContextCache()
     // AI tier: turn fresh excerpts into reason phrases, off the request path.
-    if (changed) scheduleLinkReasons(brain.spaceId)
+    if (changed) scheduleLinkReasons(context.spaceId)
   } catch (err) {
-    logger.error('notes.contextLinks.sync.failed', { err, path, spaceId: brain.spaceId })
+    logger.error('notes.contextLinks.sync.failed', { err, path, spaceId: context.spaceId })
   }
 }
 
@@ -304,44 +304,44 @@ export async function syncContextLinks(
  * node is keyed on the entity, not the path.
  */
 export async function syncContextLinksBulk(
-  brain: BrainRef,
+  context: ContextRef,
   removed: string[],
   added: Array<[path: string, content: string]> = [],
 ): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY) return
+  if (context.ownerKey !== SHARED_OWNER_KEY) return
   if (removed.length === 0 && added.length === 0) return
   try {
     let changed = false
     for (const path of removed) {
-      changed = (await syncNoteNode(brain.spaceId, path, null)) || changed
+      changed = (await syncNoteNode(context.spaceId, path, null)) || changed
     }
     for (const [path, content] of added) {
-      changed = (await syncNoteNode(brain.spaceId, path, content)) || changed
+      changed = (await syncNoteNode(context.spaceId, path, content)) || changed
     }
     // Loaded after the node writes so newly added notes resolve to their nodes.
-    const maps = await loadEntityMaps(brain.spaceId)
+    const maps = await loadEntityMaps(context.spaceId)
     for (const path of removed) {
-      changed = (await syncOne(brain.spaceId, path, null, maps)) || changed
+      changed = (await syncOne(context.spaceId, path, null, maps)) || changed
     }
     for (const [path, content] of added) {
-      changed = (await syncOne(brain.spaceId, path, content, maps)) || changed
+      changed = (await syncOne(context.spaceId, path, content, maps)) || changed
     }
     if (changed) {
       bustContextCache()
-      scheduleLinkReasons(brain.spaceId)
+      scheduleLinkReasons(context.spaceId)
     }
   } catch (err) {
-    logger.error('notes.contextLinks.bulkSync.failed', { err, spaceId: brain.spaceId })
+    logger.error('notes.contextLinks.bulkSync.failed', { err, spaceId: context.spaceId })
   }
 }
 
 /**
- * Rebuild every context link in a space's shared brain from its notes — the
+ * Rebuild every context link in a space's shared context from its notes — the
  * backfill for notes written before context-driven links existed. Returns the
  * number of notes processed.
  */
 export async function backfillContextLinks(spaceId: string): Promise<number> {
-  const notes = await prisma.spaceNote.findMany({
+  const notes = await prisma.contextNote.findMany({
     where: { spaceId, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
     select: { path: true, content: true },
   })

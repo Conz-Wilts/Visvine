@@ -30,14 +30,14 @@ async function syncNoteTitle(
 ): Promise<void> {
   const notePath = entityNotePath(node);
   if (!notePath) return;
-  const brain = { spaceId: node.spaceId, ownerKey: SHARED_OWNER_KEY };
+  const context = { spaceId: node.spaceId, ownerKey: SHARED_OWNER_KEY };
   try {
-    const content = await readNoteOrNull(brain, notePath);
+    const content = await readNoteOrNull(context, notePath);
     if (content === null) return;
     const frontmatter = parseFrontmatter(content);
     if (frontmatter.title === name) return;
     const { body } = splitFrontmatter(content);
-    await writeNote(brain, notePath, joinFrontmatter({ ...frontmatter, title: name }, body), actor);
+    await writeNote(context, notePath, joinFrontmatter({ ...frontmatter, title: name }, body), actor);
   } catch (err) {
     logger.error('nodes.rename.noteTitle.failed', { err, nodeId: node.id, notePath });
   }
@@ -202,7 +202,7 @@ const PATCHABLE_COLUMNS = {
  * display name from its context note. Body: { spaceId, name?, tags?,
  * metadata?, subtitle?, location?, url?, image_url? }. Gated on active
  * membership of the node's own space
- * (the same audience that can read/write the space brain); these are shared
+ * (the same audience that can read/write the space context); these are shared
  * collaborative metadata, so any member with write access may edit them.
  *
  * `metadata` MERGES into the stored blob rather than replacing it — the property
@@ -242,7 +242,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   });
   if (!node) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
 
-  // The note (and thus its tags) live in the node's own space brain; a
+  // The note (and thus its tags) live in the node's own space context; a
   // mismatched space would edit a misbound entity.
   if (node.spaceId !== spaceId) {
     return NextResponse.json({ error: 'Node not found' }, { status: 404 });

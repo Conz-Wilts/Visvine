@@ -5,7 +5,7 @@
 //   - Unlinked references: notes whose body mentions the target's *title* as plain
 //     text (not yet a link), so the user can turn the mention into a real link.
 // Pure — no fs/DOM — so it runs in the main process (local notes) and the renderer
-// (the in-renderer company brain) alike, and is unit-testable.
+// (the in-renderer company context) alike, and is unit-testable.
 
 import { splitFrontmatter, resolveOkfLink } from './markdown'
 import type { RawNote, NoteMeta } from './types'

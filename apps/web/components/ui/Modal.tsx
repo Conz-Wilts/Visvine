@@ -5,8 +5,8 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 
-// Viewport-scaled width presets: never narrower than the old fixed caps, grow
-// as a share of screen width on large monitors, with a sane upper bound.
+// Viewport-scaled width presets: a floor in rem, growth as a share of screen
+// width on large monitors, and a sane upper bound.
 const SIZE_CLASSES: Record<'sm' | 'md' | 'lg', string> = {
   sm: 'max-w-[clamp(24rem,30vw,32rem)]',
   md: 'max-w-[clamp(32rem,42vw,52rem)]',

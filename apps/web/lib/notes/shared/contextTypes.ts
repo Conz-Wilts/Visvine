@@ -1,26 +1,26 @@
-// Types for the brain permission/visibility layer. Access is grant-based (see
-// ./authz.ts): a principal carries the pre-scoped BrainAccess the pure checks
+// Types for the context permission/visibility layer. Access is grant-based (see
+// ./authz.ts): a principal carries the pre-scoped ContextAccess the pure checks
 // run over. The legacy folder-registry shapes (Folder/FoldersConfig, the old
 // `folders.json` sidecar) are kept ONLY so lib/notes/access.ts can parse and
 // migrate pre-grant registries — no live check reads them. Pure — no
 // Node/DOM/Prisma imports; usable from server, client, and tests.
 
-import type { BrainAccess } from './authz'
+import type { ContextAccess } from './authz'
 
 /**
- * The resolved caller identity every brain-service function takes explicitly —
- * identity is never implicit. Built by lib/notes/brain.ts#principalOf from the
+ * The resolved caller identity every context-service function takes explicitly —
+ * identity is never implicit. Built by lib/notes/resolve.ts#principalOf from the
  * session, the space membership, and the caller's grant rows.
  */
-export interface BrainPrincipal {
+export interface ContextPrincipal {
   userId: string
   email: string
   name: string
   spaceId: string
-  /** Admin of this space (incl. super admins) — bypasses every brain gate. */
+  /** Admin of this space (incl. super admins) — bypasses every context gate. */
   spaceAdmin: boolean
-  /** The caller's grants + the brain's restricted/locked folder boundaries. */
-  access: BrainAccess
+  /** The caller's grants + the context's restricted/locked folder boundaries. */
+  access: ContextAccess
   /** True for internal maintenance passes (review/enrichment) — sees/writes all. */
   system?: boolean
 }
@@ -49,8 +49,8 @@ interface FolderMember {
 }
 
 /**
- * A legacy registered top-level folder of a space's SHARED brain (`id` was
- * the top-level path segment; '' the brain-gating root entry). Only read at
+ * A legacy registered top-level folder of a space's SHARED context (`id` was
+ * the top-level path segment; '' the context-gating root entry). Only read at
  * migration time — see authz.migrateLegacyRegistry.
  */
 export interface Folder {
@@ -75,8 +75,8 @@ export const EMPTY_REGISTRY: FoldersConfig = { version: 1, folders: [] }
 // access requests
 
 /**
- * A member's request for access to part of the SHARED brain (table
- * `brain_access_requests`). `resourcePath` is '' for the brain root gate, or a
+ * A member's request for access to part of the SHARED context (table
+ * `context_access_requests`). `resourcePath` is '' for the context root gate, or a
  * folder/note path at any depth — recorded even when nothing exists there, so
  * the denial copy never has to admit whether it does. Whoever MANAGES the path
  * resolves it; see lib/notes/accessRequests.ts.
@@ -106,9 +106,9 @@ export interface AccessRequest {
 /** A queued promotion/publication the requester couldn't apply directly (sidecar "move-proposals.jsonl"). */
 export interface MoveProposalEntry {
   id: string
-  /** Source note path in the proposer's PERSONAL brain. */
+  /** Source note path in the proposer's PERSONAL context. */
   fromPath: string
-  /** Destination path in the SHARED brain. */
+  /** Destination path in the SHARED context. */
   toPath: string
   folderId: string
   content: string // full markdown snapshot at proposal time

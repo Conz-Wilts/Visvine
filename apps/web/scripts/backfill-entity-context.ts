@@ -7,7 +7,7 @@
  * events have always had: they were nodes from day one but never got their
  * events/<slug>.md note.
  *
- * Notes and uploaded files are NOT nodes — they are content in a brain — so
+ * Notes and uploaded files are NOT nodes — they are content in a context — so
  * nothing here creates one for them; the last step rebuilds only the mention
  * edges that entity notes and connectors own.
  *
@@ -20,7 +20,7 @@
  * create-only, and edges dedup on (space, pair, relationship). Re-running
  * reports the same counts and changes nothing.
  *
- * Personal spaces (`me:<userId>` spaces) are skipped: a personal brain has
+ * Personal spaces (`me:<userId>` spaces) are skipped: a personal context has
  * no context graph to join, so a `space:` node there would be furniture.
  *
  * Local-only — guarded exactly like the destructive db:* scripts.
@@ -150,8 +150,8 @@ async function backfillSpace(space: { id: string; name: string; description: str
     select: { id: true, type: true, name: true, subtitle: true, tags: true },
   });
   for (const node of nodes) {
-    // 'space' here is the space's own root node (formerly type 'space');
-    // 'section' is the channel container (formerly type 'space').
+    // 'space' here is the space's own root node; 'section' is the channel
+    // container.
     if (node.type === 'space' || node.type === 'section' || node.type === 'channel') continue;
     // A connector's note came first, and any leftover note:/file: row from when
     // those types existed has no note to write either (scripts/prune-note-file-nodes.ts).
@@ -170,7 +170,7 @@ async function backfillSpace(space: { id: string; name: string; description: str
   if (!dryRun) {
     counts.notes = await backfillContextLinks(space.id);
   } else {
-    counts.notes = await prisma.spaceNote.count({
+    counts.notes = await prisma.contextNote.count({
       where: { spaceId: space.id, ownerKey: SHARED_OWNER_KEY, deletedAt: null },
     });
   }

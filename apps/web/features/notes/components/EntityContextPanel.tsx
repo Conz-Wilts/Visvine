@@ -1,10 +1,10 @@
 'use client'
 
 // The profile "Context" tab: the entity's context note (the space's shared
-// brain, at its canonical people/<slug>.md / companies/<slug>.md path) in the
+// context, at its canonical people/<slug>.md / companies/<slug>.md path) in the
 // embedded NoteEditor, with the linked-references rail below — the same note the
 // Context workspace opens. All reads/writes go through the gated /api/notes
-// surface, so the brain gate, folder visibility, and write denials come free.
+// surface, so the context gate, folder visibility, and write denials come free.
 //
 // Viewing never writes: a missing note seeds the editor locally with the entity
 // stub and the first real save creates it (PUT /api/notes/item upserts). A read
@@ -100,7 +100,7 @@ export function EntityContextPanel({
   // Holding the previous note keeps the toolbar mounted, and the new read swaps
   // editor and toolbar together on one commit via `key={shown.path}`. The body is
   // hidden while it lags (ContentReveal), so the outgoing note is never seen.
-  // Scoped by space as well as path: the same path in two brains is two
+  // Scoped by space as well as path: the same path in two contexts is two
   // different notes, so a space switch must not reuse a held read.
   const [shown, setShown] = useState<{ spaceId: string; path: string; read: NoteRead } | null>(null)
   const [everPainted, setEverPainted] = useState(false)
@@ -129,7 +129,7 @@ export function EntityContextPanel({
   const loadSeq = useRef(0)
 
   const gatedOut = !isPersonalSpace && access !== null && access.gated
-  // Inside the brain but cut off from THIS entity's note (a restricted folder
+  // Inside the context but cut off from THIS entity's note (a restricted folder
   // between them and it). canRead is path-based, not existence-based, so this
   // never fires for an entity that simply has no note yet — that case keeps its
   // "no context yet" empty state.
@@ -168,7 +168,7 @@ export function EntityContextPanel({
   }, [spaceId, path])
 
   // Surface the viewer's own open request for whatever denied them: the root
-  // gate ('') when the brain is closed to them, else this entity's note path
+  // gate ('') when the context is closed to them, else this entity's note path
   // (same flow as the workspace's gated state).
   const requestPath = gatedOut ? '' : (path ?? '')
   useEffect(() => {
@@ -207,7 +207,7 @@ export function EntityContextPanel({
     }
   }
 
-  // Load the note + the brain's note index (for [[ ]] linking, link titles, and
+  // Load the note + the context's note index (for [[ ]] linking, link titles, and
   // the open note's meta) + references, best-effort where non-critical.
   useEffect(() => {
     if (!spaceId || !path) return
@@ -492,7 +492,7 @@ export function EntityContextPanel({
   }
   if (!node || !path) return null
 
-  // The entity note lives in the node's own space brain; a cross-space
+  // The entity note lives in the node's own space context; a cross-space
   // profile view would write a misbound note — hide the surface instead. (The
   // pages gate the tab on the same condition; this is the backstop.)
   if (node.space_id && node.space_id !== spaceId) return null
@@ -501,7 +501,7 @@ export function EntityContextPanel({
     return (
       <div className="flex justify-center py-10">
         <AccessRequestCard
-          scope={gatedOut ? 'brain' : 'path'}
+          scope={gatedOut ? 'context' : 'path'}
           spaceName={currentSpace?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}
@@ -543,7 +543,7 @@ export function EntityContextPanel({
   // NoteEditor's headerSlot), sliding up under the tab bar's attached toolbar;
   // in the other states it renders on the page.
   //
-  // Layout mirrors blackbird-brain's context header: a title with real top
+  // Layout of the context header: a title with real top
   // breathing room, then a labelled "Type" square chip and "Tags" pill row.
   const headerCard = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">

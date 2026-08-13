@@ -1,4 +1,4 @@
-// The brain access surface (successor of the folder-registry route): one
+// The context access surface (successor of the folder-registry route): one
 // endpoint that answers "who can see this and why" and carries every grant
 // mutation. All semantics live in lib/notes/shared/authz.ts + lib/notes/access.ts.
 //
@@ -7,7 +7,7 @@
 //        provenance (when readable), restricted ancestors, and — for managers —
 //        the grantable subjects (members + aliases). `path` may be '' (the root).
 //   GET ?spaceId=            → overview: restricted/locked folders, whether
-//        the caller is gated out of the brain entirely, their readable roots.
+//        the caller is gated out of the context entirely, their readable roots.
 //   POST { spaceId, action, ... }:
 //        'grant'    { subjectType, subjectId?, path, level }   — manage at path
 //        'revoke'   { grantId }                                — manage at the grant's path
@@ -16,8 +16,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/brain'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
+import { principalOf } from '@/lib/notes/resolve'
 import {
   accessListFor,
   grantAccess,
@@ -40,10 +40,10 @@ import {
   readableRoots,
   type GrantSubjectType,
 } from '@/lib/notes/shared/authz'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
 /** Restricted folders that cover or sit inside the caller's view of a path. */
-function visibleRestricted(p: BrainPrincipal, path: string): string[] {
+function visibleRestricted(p: ContextPrincipal, path: string): string[] {
   return p.access.restricted.filter(
     (cut) =>
       path === cut ||
@@ -53,14 +53,14 @@ function visibleRestricted(p: BrainPrincipal, path: string): string[] {
 }
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
-  const p = await principalOf(brain)
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
+  const p = await principalOf(context)
   const url = new URL(req.url)
   const path = url.searchParams.get('path')
 
   const gated =
-    !brain.isPersonalSpace &&
+    !context.isPersonalSpace &&
     !p.spaceAdmin &&
     !p.access.grants.some((g) => g.level > 0)
 
@@ -69,8 +69,8 @@ export async function GET(req: NextRequest) {
     // names — the Access-overview page (forgotten restrictions and grants are
     // the #1 permissions support ticket).
     let grants = null
-    if (p.spaceAdmin && !brain.isPersonalSpace) {
-      const all = await loadSpaceAccess(brain.spaceId)
+    if (p.spaceAdmin && !context.isPersonalSpace) {
+      const all = await loadSpaceAccess(context.spaceId)
       // Alias grants are stored by NAME — no lookup needed.
       const userIds = [...new Set(all.grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId))]
       const users = userIds.length
@@ -97,23 +97,23 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  const canRead = brain.isPersonalSpace || principalCanRead(p, path)
-  const canWrite = brain.isPersonalSpace || principalCanWrite(p, path)
-  const canManage = brain.isPersonalSpace ? brain.isAdmin : principalCanManage(p, path)
+  const canRead = context.isPersonalSpace || principalCanRead(p, path)
+  const canWrite = context.isPersonalSpace || principalCanWrite(p, path)
+  const canManage = context.isPersonalSpace ? context.isAdmin : principalCanManage(p, path)
 
   let entries = null
   let subjects = null
-  if (!brain.isPersonalSpace && canRead) {
-    entries = await accessListFor(brain.spaceId, path)
+  if (!context.isPersonalSpace && canRead) {
+    entries = await accessListFor(context.spaceId, path)
   }
-  if (!brain.isPersonalSpace && canManage) {
+  if (!context.isPersonalSpace && canManage) {
     const [members, aliases] = await Promise.all([
       prisma.spaceMember.findMany({
-        where: { spaceId: brain.spaceId, status: 'active' },
+        where: { spaceId: context.spaceId, status: 'active' },
         select: { userId: true, user: { select: { name: true, email: true, image: true } } },
         orderBy: { joinedAt: 'asc' },
       }),
-      listAliases(brain.spaceId),
+      listAliases(context.spaceId),
     ])
     subjects = {
       members: members.map((m) => ({
@@ -133,9 +133,9 @@ export async function GET(req: NextRequest) {
     canRead,
     canWrite,
     canManage,
-    myLevel: brain.isPersonalSpace ? 'full' : principalLevelName(p, path),
-    restricted: brain.isPersonalSpace ? [] : visibleRestricted(p, path),
-    locked: brain.isPersonalSpace ? [] : p.access.locked,
+    myLevel: context.isPersonalSpace ? 'full' : principalLevelName(p, path),
+    restricted: context.isPersonalSpace ? [] : visibleRestricted(p, path),
+    locked: context.isPersonalSpace ? [] : p.access.locked,
     entries,
     subjects,
   })
@@ -143,12 +143,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
-  if (brain.isPersonalSpace) {
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
+  if (context.isPersonalSpace) {
     return fail('Personal spaces are private — there is nothing to share here')
   }
-  const p = await principalOf(brain)
+  const p = await principalOf(context)
   const action = typeof body.action === 'string' ? body.action : null
   const actor = { userId: p.userId, name: p.name }
 
@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
           return fail('Only someone with full access here (or a space admin) can share it', 403)
         }
         const grant = await grantAccess(
-          brain.spaceId,
+          context.spaceId,
           {
             subjectType,
             subjectId: typeof body.subjectId === 'string' ? body.subjectId : '',
@@ -181,15 +181,15 @@ export async function POST(req: NextRequest) {
       case 'revoke': {
         const grantId = typeof body.grantId === 'string' ? body.grantId : null
         if (!grantId) return fail('grantId is required')
-        const row = await prisma.brainGrant.findFirst({
-          where: { id: grantId, spaceId: brain.spaceId },
+        const row = await prisma.contextGrant.findFirst({
+          where: { id: grantId, spaceId: context.spaceId },
           select: { resourcePath: true },
         })
         if (!row) return fail('Unknown grant', 404)
         if (!principalCanManage(p, row.resourcePath)) {
           return fail('Only someone with full access here (or a space admin) can revoke it', 403)
         }
-        await revokeAccess(brain.spaceId, grantId, actor)
+        await revokeAccess(context.spaceId, grantId, actor)
         return NextResponse.json({ ok: true })
       }
       case 'restrict': {
@@ -203,12 +203,12 @@ export async function POST(req: NextRequest) {
         // could undo it short of a space admin.
         if (body.restricted === true && !p.spaceAdmin) {
           await grantAccess(
-            brain.spaceId,
+            context.spaceId,
             { subjectType: 'user', subjectId: p.userId, resourcePath: folderPath, level: LEVEL_FULL },
             actor,
           )
         }
-        await setFolderRestricted(brain.spaceId, folderPath, body.restricted === true, actor)
+        await setFolderRestricted(context.spaceId, folderPath, body.restricted === true, actor)
         return NextResponse.json({ ok: true })
       }
       case 'setLock': {
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
         if (!principalCanManage(p, folderPath)) {
           return fail('Only someone with full access here (or a space admin) can lock it', 403)
         }
-        await setFolderLocked(brain.spaceId, folderPath, body.locked === true, actor)
+        await setFolderLocked(context.spaceId, folderPath, body.locked === true, actor)
         return NextResponse.json({ ok: true })
       }
       default:

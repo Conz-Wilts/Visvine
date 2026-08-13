@@ -1,7 +1,7 @@
 /**
  * Backfill: derive 'mentioned' directory links (origin 'context') from the
  * [[mentions]] in every existing entity context note (people/… & companies/…,
- * shared brains). New/edited notes sync live via lib/notes/store.ts; this
+ * shared contexts). New/edited notes sync live via lib/notes/store.ts; this
  * catches notes written before context-driven links existed.
  *
  * Idempotent: re-running re-derives the same link set (upsertLink dedups on

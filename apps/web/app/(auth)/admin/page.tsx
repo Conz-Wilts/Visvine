@@ -55,7 +55,7 @@ function AdminConsole({ space, onSaved }: {
           switch (id) {
             case 'general':
               return <SpaceSettingsPanel space={space} onSaved={onSaved} />;
-            // Tools seeds `adminOnly` into local state but no longer edits it —
+            // Tools seeds `adminOnly` into local state but does not edit it —
             // Members does — so it is keyed on the config it read: once a lock
             // changes there, onSaved bubbles the new record up and this panel
             // re-seeds instead of re-sending a stale array on its next save.

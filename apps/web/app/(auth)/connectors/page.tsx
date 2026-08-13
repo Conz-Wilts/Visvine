@@ -24,7 +24,7 @@ import { fetchJson } from '@/lib/fetchJson';
  * folder listing, so the card names which one it is.
  *
  * Admins-only, and not by space choice — the list route 403s a member and
- * brainService.writeDenial gates writes to connectors/. That's declared once in
+ * contextService.writeDenial gates writes to connectors/. That's declared once in
  * featureAccess.ADMIN_ONLY_FEATURE_KEYS, which keeps the nav row and this route
  * away from members, so nothing here re-states it.
  */

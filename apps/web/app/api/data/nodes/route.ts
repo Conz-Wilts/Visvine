@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
 
     // Every node gets its canonical context note, including ones added from the
     // admin Data tab — otherwise the same person exists in the graph but not in
-    // the brain depending on which surface created them.
+    // the context depending on which surface created them.
     await ensureEntityNote(
       space_id,
       { id: row.id, type: row.type, name: row.name, subtitle: row.subtitle },

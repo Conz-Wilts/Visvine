@@ -1,8 +1,7 @@
 // The one gate behind both create entry points (the sidebar's "+" caret menu
-// and the docked panel's type grid). The regression it exists to prevent: the
-// caret menu used to be an unfiltered hardcoded list, so a member — or anyone
-// in a space with channels switched off — was offered Channel and Section and
-// only found out on submit.
+// and the docked panel's type grid). The regression it exists to prevent: a
+// member — or anyone in a space with channels switched off — being offered
+// Channel or Section and only finding out on submit.
 // Run: pnpm --filter @visvine/web exec node --import tsx --test tests/create-permissions.test.ts
 
 import test from 'node:test'
@@ -32,7 +31,7 @@ test('channels and sections need the channels feature AND admin', () => {
   // Nor is an admin once the feature is off.
   assert.equal(canCreateType('channel', off('channels')), false)
   assert.equal(canCreateType('section', off('channels')), false)
-  // The org type 'space' (formerly 'space') is NOT the container — it stays
+  // The org type 'space' is NOT the container — it stays
   // open to everyone whatever the channels toggle says.
   assert.equal(canCreateType('space', MEMBER), true)
   assert.equal(canCreateType('space', off('channels')), true)
@@ -42,14 +41,14 @@ test('an uploaded file follows the notes feature', () => {
   assert.equal(canCreateType('file', ADMIN), true)
   assert.equal(canCreateType('file', MEMBER), true) // uploading is a member capability
   // `notes` is a CORE feature (featureAccess.CORE_FEATURE_KEYS), so it can't
-  // actually be switched off — the check is there to keep the brain tiles tied
+  // actually be switched off — the check is there to keep the context tiles tied
   // to Context if that ever changes, and must not accidentally hide them today.
   assert.equal(canCreateType('file', off('notes')), true)
 })
 
 test('connectors need the connectors tool AND admin', () => {
   assert.equal(canCreateType('connector', ADMIN), true)
-  // connectors/ is admin-write in brainService.writeDenial — don't offer the form.
+  // connectors/ is admin-write in contextService.writeDenial — don't offer the form.
   assert.equal(canCreateType('connector', MEMBER), false)
   // Removing the tool takes the Connector type with it, for an admin too.
   assert.equal(canCreateType('connector', off('connectors')), false)

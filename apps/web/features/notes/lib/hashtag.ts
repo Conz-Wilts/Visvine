@@ -2,7 +2,7 @@
 // plain text in the document (and the serialised markdown) — we only layer a
 // ProseMirror decoration over each match so it renders as a clickable pill,
 // recomputed on every change. The click is handled in NoteEditor via the
-// `.hashtag` span's `data-tag` attribute. Ported verbatim from blackbird-brain.
+// `.hashtag` span's `data-tag` attribute.
 
 import { Extension } from '@tiptap/core'
 import { Plugin } from '@tiptap/pm/state'

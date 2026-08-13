@@ -1,9 +1,8 @@
 // The DB side of the grant-based access model (shared/authz.ts holds the pure
-// checks). Loads the caller's pre-scoped BrainAccess per request, seeds a
-// space's grant rows on first touch (migrating the legacy `folders.json`
-// registry, or grandfathering current members the way the old brain gate did),
-// and owns every grant/boundary mutation so they're validated and audited in
-// one place. Grants apply to SHARED brains only; personal spaces bypass the
+// checks). Loads the caller's pre-scoped ContextAccess per request, seeds a
+// space's grant rows on first touch (from the `folders.json` registry when one
+// exists, otherwise from current membership), and owns every grant/boundary mutation so they're validated and audited in
+// one place. Grants apply to SHARED contexts only; personal spaces bypass the
 // model entirely (lib/notes/principal.ts#OPEN_ACCESS).
 
 import prisma from '@/lib/prisma'
@@ -20,7 +19,7 @@ import {
   grantReaches,
   winningGrant,
   type AccessGrant,
-  type BrainAccess,
+  type ContextAccess,
   type GrantSubjectType,
 } from './shared/authz'
 import { loadAliasSummaries, loadPersonAliases } from './aliases'
@@ -38,11 +37,11 @@ interface AccessState {
 // it at most once ever (racing instances collide on unique keys harmlessly).
 const seeded = new Set<string>()
 
-function sharedBrain(spaceId: string) {
+function sharedContext(spaceId: string) {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
-/** Normalize a grant/boundary resource path ('' = the brain root is valid). */
+/** Normalize a grant/boundary resource path ('' = the context root is valid). */
 export function normalizeResourcePath(input: string): string {
   const norm = input
     .replace(/\\/g, '/')
@@ -61,11 +60,11 @@ export function normalizeResourcePath(input: string): string {
  * Mark a space's access as already established, so ensureAccessSeeded never
  * grandfathers it. Spaces born after the alias model get this at creation:
  * their standing comes entirely from aliases, and grandfathering would hand a
- * root grant to whoever happened to be a member on first brain touch — which
+ * root grant to whoever happened to be a member on first context touch — which
  * would swamp every alias grant with blanket edit-everywhere.
  */
 export async function markAccessSeeded(spaceId: string): Promise<void> {
-  await writeJson(sharedBrain(spaceId), STATE_FILE, {
+  await writeJson(sharedContext(spaceId), STATE_FILE, {
     seededAt: Date.now(),
     seededFrom: 'aliases',
   } satisfies AccessState)
@@ -77,13 +76,13 @@ export async function markAccessSeeded(spaceId: string): Promise<void> {
  * - a legacy `folders.json` registry migrates via authz.migrateLegacyRegistry
  *   (member levels → grants, private folders → restricted, locks carried);
  * - a space with no registry grandfathers its CURRENT active members at the
- *   root (holders of an owner alias full, everyone else edit) — the old ensureBrainGate
+ *   root (holders of an owner alias full, everyone else edit) — the old ensureContextGate
  *   behavior: joining later grants nothing until someone shares.
  * Personal spaces must never call this (they are never gated).
  */
 export async function ensureAccessSeeded(spaceId: string): Promise<void> {
   if (seeded.has(spaceId)) return
-  const state = await readJson<AccessState>(sharedBrain(spaceId), STATE_FILE, {})
+  const state = await readJson<AccessState>(sharedContext(spaceId), STATE_FILE, {})
   if (state.seededAt) {
     seeded.add(spaceId)
     return
@@ -95,7 +94,7 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
     seededFrom = 'registry'
     const migrated = migrateLegacyRegistry(registry)
     if (migrated.grants.length) {
-      await prisma.brainGrant.createMany({
+      await prisma.contextGrant.createMany({
         data: migrated.grants.map((g) => ({
           spaceId,
           subjectType: g.subjectType,
@@ -123,7 +122,7 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
       loadAliasSummaries(spaceId),
     ])
     if (memberships.length) {
-      await prisma.brainGrant.createMany({
+      await prisma.contextGrant.createMany({
         data: memberships.map((m) => ({
           spaceId,
           subjectType: 'user',
@@ -137,7 +136,7 @@ export async function ensureAccessSeeded(spaceId: string): Promise<void> {
     }
   }
 
-  await writeJson(sharedBrain(spaceId), STATE_FILE, {
+  await writeJson(sharedContext(spaceId), STATE_FILE, {
     seededAt: Date.now(),
     seededFrom,
   } satisfies AccessState)
@@ -152,7 +151,7 @@ interface FolderFlags {
 }
 
 async function loadFolderFlags(spaceId: string): Promise<FolderFlags> {
-  const rows = await prisma.spaceNoteFolder.findMany({
+  const rows = await prisma.contextFolder.findMany({
     where: {
       spaceId,
       ownerKey: SHARED_OWNER_KEY,
@@ -176,14 +175,14 @@ async function aliasNamesOf(spaceId: string, userId: string): Promise<string[]> 
 }
 
 /**
- * The pre-scoped BrainAccess for one member: space-wide grants + their
- * aliases' grants + their direct grants, plus the brain's folder boundaries.
+ * The pre-scoped ContextAccess for one member: space-wide grants + their
+ * aliases' grants + their direct grants, plus the context's folder boundaries.
  * A handful of indexed rows — this is the whole per-request cost.
  */
-export async function brainAccessFor(spaceId: string, userId: string): Promise<BrainAccess> {
+export async function contextAccessFor(spaceId: string, userId: string): Promise<ContextAccess> {
   const aliasNames = await aliasNamesOf(spaceId, userId)
   const [rows, flags] = await Promise.all([
-    prisma.brainGrant.findMany({
+    prisma.contextGrant.findMany({
       where: {
         spaceId,
         OR: [
@@ -224,7 +223,7 @@ export interface SpaceAccess extends FolderFlags {
 /** EVERY grant row + folder boundary of a space — overview/Share surfaces. */
 export async function loadSpaceAccess(spaceId: string): Promise<SpaceAccess> {
   const [rows, flags] = await Promise.all([
-    prisma.brainGrant.findMany({
+    prisma.contextGrant.findMany({
       where: { spaceId },
       orderBy: [{ resourcePath: 'asc' }, { createdAt: 'asc' }],
     }),
@@ -256,7 +255,7 @@ export interface AccessListEntry {
   /** Effective level from this subject's own reaching grants (max). */
   level: number
   levelName: string | null
-  /** Provenance: the winning grant's resource path ('' = brain root). */
+  /** Provenance: the winning grant's resource path ('' = context root). */
   via: string
   /** The subject's grant rows that reach the path (for revoke UI). */
   grants: Array<{ id: string; resourcePath: string; level: number }>
@@ -374,7 +373,7 @@ export async function grantAccess(
     }
   }
 
-  const row = await prisma.brainGrant.upsert({
+  const row = await prisma.contextGrant.upsert({
     where: {
       grant_identity: {
         spaceId,
@@ -417,9 +416,9 @@ export async function revokeAccess(
   grantId: string,
   actor: Actor,
 ): Promise<boolean> {
-  const row = await prisma.brainGrant.findFirst({ where: { id: grantId, spaceId } })
+  const row = await prisma.contextGrant.findFirst({ where: { id: grantId, spaceId } })
   if (!row) return false
-  await prisma.brainGrant.delete({ where: { id: row.id } })
+  await prisma.contextGrant.delete({ where: { id: row.id } })
   void logAudit(spaceId, {
     userId: actor.userId,
     name: actor.name,
@@ -435,7 +434,7 @@ async function upsertFolderFlags(
   folderPath: string,
   flags: { restricted?: boolean; locked?: boolean },
 ): Promise<void> {
-  await prisma.spaceNoteFolder.upsert({
+  await prisma.contextFolder.upsert({
     where: {
       folder_identity: { spaceId, ownerKey: SHARED_OWNER_KEY, path: folderPath },
     },
@@ -456,7 +455,7 @@ export async function setFolderRestricted(
   actor: Actor,
 ): Promise<void> {
   const path = normalizeResourcePath(folderPath)
-  if (!path) throw new Error('The brain root cannot be restricted')
+  if (!path) throw new Error('The context root cannot be restricted')
   await upsertFolderFlags(spaceId, path, { restricted })
   void logAudit(spaceId, {
     userId: actor.userId,
@@ -475,7 +474,7 @@ export async function setFolderLocked(
   actor: Actor,
 ): Promise<void> {
   const path = normalizeResourcePath(folderPath)
-  if (!path) throw new Error('The brain root cannot be locked')
+  if (!path) throw new Error('The context root cannot be locked')
   await upsertFolderFlags(spaceId, path, { locked })
   void logAudit(spaceId, {
     userId: actor.userId,
@@ -493,7 +492,7 @@ export async function setFolderLocked(
  * The caller must have already checked `adminSurvives` for the departure.
  */
 export async function removeMemberAccess(spaceId: string, userId: string): Promise<void> {
-  await prisma.brainGrant.deleteMany({
+  await prisma.contextGrant.deleteMany({
     where: { spaceId, subjectType: 'user', subjectId: userId },
   })
   await prisma.userAlias.deleteMany({ where: { userId, spaceId } })

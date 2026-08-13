@@ -1,8 +1,8 @@
-// The grant-based access model for space brains — the pure core of the
-// multiplayer-brains permission system. One
-// mental model: every brain is a folder tree and access flows DOWN it. A grant
+// The grant-based access model for space contexts — the pure core of the
+// multiplayer-contexts permission system. One
+// mental model: every context is a folder tree and access flows DOWN it. A grant
 // gives a subject (the whole space, an alias, or one member) a level on a
-// resource path ('' = the brain root, a folder at any depth, or a single note);
+// resource path ('' = the context root, a folder at any depth, or a single note);
 // a RESTRICTED folder cuts inheritance at its boundary (only grants on or
 // inside it reach past); a member's effective level on a path is the MAX across
 // every grant that reaches it. Grants only ever add — there are no deny rules —
@@ -65,17 +65,17 @@ export interface AccessGrant {
   subjectType: GrantSubjectType
   /** '' for space-wide grants, else an aliasId / userId. */
   subjectId: string
-  /** '' = brain root, a folder path ('teams/engineering'), or a note path. */
+  /** '' = context root, a folder path ('teams/engineering'), or a note path. */
   resourcePath: string
   level: number
 }
 
 /**
- * Everything the pure checks need about ONE principal's standing in a brain:
+ * Everything the pure checks need about ONE principal's standing in a context:
  * the grants that apply to them (space-wide + their aliases' + their own,
- * pre-scoped by the loader) and the brain's folder-boundary flags.
+ * pre-scoped by the loader) and the context's folder-boundary flags.
  */
-export interface BrainAccess {
+export interface ContextAccess {
   grants: AccessGrant[]
   /** Restricted folder paths — inheritance cuts. Never contains '' (the root). */
   restricted: string[]
@@ -84,7 +84,7 @@ export interface BrainAccess {
 }
 
 /** Full access from the root — personal spaces are never folder-gated. */
-export const OPEN_ACCESS: BrainAccess = {
+export const OPEN_ACCESS: ContextAccess = {
   grants: [{ subjectType: 'space', subjectId: '', resourcePath: '', level: LEVEL_FULL }],
   restricted: [],
   locked: [],
@@ -114,7 +114,7 @@ export function grantReaches(grant: AccessGrant, path: string, restricted: strin
 }
 
 /** The principal's effective level on a path: max across everything that reaches (0 = none). */
-export function effectiveLevel(access: BrainAccess, path: string): number {
+export function effectiveLevel(access: ContextAccess, path: string): number {
   let max = 0
   for (const grant of access.grants) {
     if (grant.level > max && grantReaches(grant, path, access.restricted)) max = grant.level
@@ -122,16 +122,16 @@ export function effectiveLevel(access: BrainAccess, path: string): number {
   return max
 }
 
-export function canRead(access: BrainAccess, path: string): boolean {
+export function canRead(access: ContextAccess, path: string): boolean {
   return effectiveLevel(access, path) >= LEVEL_VIEW
 }
 
-export function canWrite(access: BrainAccess, path: string): boolean {
+export function canWrite(access: ContextAccess, path: string): boolean {
   return effectiveLevel(access, path) >= LEVEL_EDIT
 }
 
 /** full = edit + share, restrict, and delete within the subtree. */
-export function canManage(access: BrainAccess, path: string): boolean {
+export function canManage(access: ContextAccess, path: string): boolean {
   return effectiveLevel(access, path) >= LEVEL_FULL
 }
 
@@ -140,7 +140,7 @@ export function canManage(access: BrainAccess, path: string): boolean {
  * folder itself, or some readable grant starts strictly inside it (a deep alias
  * grant must surface its ancestor folders or the subtree is unreachable).
  */
-export function folderVisible(access: BrainAccess, folderPath: string): boolean {
+export function folderVisible(access: ContextAccess, folderPath: string): boolean {
   if (canRead(access, folderPath)) return true
   return access.grants.some(
     (g) =>
@@ -166,7 +166,7 @@ export function isLockedPath(locked: string[], path: string): boolean {
  * resource). Inner restricted folders may still cut deeper reads — per-path
  * checks (canRead) stay the source of truth; this powers overview UIs.
  */
-export function readableRoots(access: BrainAccess): string[] {
+export function readableRoots(access: ContextAccess): string[] {
   const roots = new Set<string>()
   for (const g of access.grants) if (g.level >= LEVEL_VIEW) roots.add(g.resourcePath)
   return [...roots].sort()
@@ -177,10 +177,10 @@ export function readableRoots(access: BrainAccess): string[] {
  * corpus. Two principals with equal signatures see the same filterVisible
  * output, so vault views can be shared (lib/notes/vaultCache.ts). Write levels
  * don't affect visibility, so only readable grant paths participate. JSON
- * encoding keeps every root distinct — '' (the brain root) must never collapse
+ * encoding keeps every root distinct — '' (the context root) must never collapse
  * into "no roots", and paths may contain any delimiter character.
  */
-export function accessSignature(access: BrainAccess): string {
+export function accessSignature(access: ContextAccess): string {
   const reads = JSON.stringify(readableRoots(access))
   const cuts = JSON.stringify([...access.restricted].sort())
   return `r:${reads}|x:${cuts}`
@@ -234,12 +234,12 @@ const LEGACY_LEVELS: Record<string, number> = {
 }
 
 /**
- * Map a legacy `folders.json` registry (lib/notes/shared/brainTypes.ts) onto
+ * Map a legacy `folders.json` registry (lib/notes/shared/contextTypes.ts) onto
  * grant rows — the one-time migration lib/notes/access.ts runs per space.
  * The mapping preserves who could READ what exactly:
  * - every folder member becomes a direct user grant at the folder's path
  *   (read→view, write→edit, admin→full); the ROOT entry's members become
- *   root grants — the brain gate, expressed as rows;
+ *   root grants — the context gate, expressed as rows;
  * - a PRIVATE registered folder becomes a RESTRICTED folder (the cut keeps
  *   non-members out, exactly as the old refines-the-root ACL did);
  * - a PUBLIC folder gains a space-wide view grant (it was readable by every

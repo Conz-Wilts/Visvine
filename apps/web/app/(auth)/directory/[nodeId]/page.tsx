@@ -44,7 +44,7 @@ function useEntityNotePath(nodeId: string, node: NBNode | null): string | null {
 
 // A profile carries a Context tab when the notes tool is enabled, the node is an
 // entity kind (the types with canonical context-note namespaces), and the node
-// belongs to the current space (its brain owns the note).
+// belongs to the current space (its context owns the note).
 function useContextTabAvailable(node: NBNode | null): boolean {
   const { currentSpace } = useSpace();
   const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
@@ -163,8 +163,8 @@ const PERSON_TABS: PaneTabItem[] = [
 // Every person node has a Profile tab, connected to a member or not. A node
 // with no member behind it has no profile to show, so the tab becomes the place
 // you connect one (ProfileConnectPrompt, inside ProfilePageContent) — the link
-// is the most consequential thing about a person context, and it used to hide
-// in a row under the note header.
+// is the most consequential thing about a person context, so it gets the tab
+// rather than a row under the note header.
 //
 // A `person:` id that has no Node row is not necessarily a dead link: it may be
 // a Person-row id (what a session carries as `personId`, and what the avatar
@@ -442,7 +442,7 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
   // docked tree already stand in for it.
   if (loadingState || contextAvailable) return null;
 
-  // Notes tool off, or the node belongs to another space's brain: there is
+  // Notes tool off, or the node belongs to another space's context: there is
   // no note to show and nothing else this page could offer.
   return <NotFoundState title="No context for this yet" />;
 }

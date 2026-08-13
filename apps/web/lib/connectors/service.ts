@@ -2,7 +2,7 @@
  * The connectors service — the only file that touches the notes layer, the
  * secrets table AND the isolate runtime. Deliberately MCP-free: not-found is
  * `null`, everything else is a ConnectorError, and the tool layer maps both
- * onto McpError. All note reads go through the brain visibility lens
+ * onto McpError. All note reads go through the context visibility lens
  * (readVisible/visibleVault), so folder permissions govern who can even see a
  * connector exists.
  *
@@ -12,11 +12,11 @@
  */
 import prisma from '@/lib/prisma'
 import { decryptSecret } from '@/lib/crypto/secrets'
-import { readVisible, visibleVault } from '@/lib/notes/brainService'
+import { readVisible, visibleVault } from '@/lib/notes/contextService'
 import { listAudit, logAudit } from '@/lib/notes/audit'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
-import type { Brain } from '@/lib/notes/store'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { Context } from '@/lib/notes/store'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import {
   allowPrivateHosts,
@@ -90,8 +90,8 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
 }
 
 /** Every valid-or-broken connector note the principal can see. */
-export async function listConnectors(p: BrainPrincipal, brain: Brain): Promise<ConnectorSummary[]> {
-  const { raws } = await visibleVault(p, brain)
+export async function listConnectors(p: ContextPrincipal, context: Context): Promise<ConnectorSummary[]> {
+  const { raws } = await visibleVault(p, context)
   const summaries: ConnectorSummary[] = []
   for (const raw of raws) {
     if (!raw.path.startsWith(CONNECTORS_DIR) || !raw.path.endsWith('.md')) continue
@@ -116,13 +116,13 @@ export interface ConnectorDetail extends ConnectorSummary {
 }
 
 export async function describeConnector(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   name: string,
 ): Promise<ConnectorDetail | null> {
   if (!NAME_RE.test(name)) return null
   const path = `${CONNECTORS_DIR}${name}.md`
-  const content = await readVisible(p, brain, path)
+  const content = await readVisible(p, context, path)
   if (content === null) return null
   const summary = summariseNote(path, content)
   if (!summary) return null
@@ -182,13 +182,13 @@ export interface LoadedConnector {
  * ConnectorError('config') when the note exists but isn't a valid connector.
  */
 export async function loadConnector(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   name: string,
 ): Promise<LoadedConnector | null> {
   if (!NAME_RE.test(name)) return null
   const path = `${CONNECTORS_DIR}${name}.md`
-  const content = await readVisible(p, brain, path)
+  const content = await readVisible(p, context, path)
   if (content === null) return null
   const fm = parseFrontmatter(content)
   if (!isConnectorNote(fm)) {
@@ -205,7 +205,7 @@ async function resolveSecretValues(
   names: readonly string[],
 ): Promise<Map<string, string>> {
   if (names.length === 0) return new Map()
-  const rows = await prisma.spaceSecret.findMany({
+  const rows = await prisma.connectorSecret.findMany({
     where: { spaceId, name: { in: [...names] } },
     select: { name: true, ciphertext: true },
   })
@@ -248,8 +248,8 @@ const AUDIT_CODE_CHARS = 200
  * from everything that comes back, and the run is audited win or lose.
  */
 export async function executeConnectorScript(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   spaceId: string,
   loaded: LoadedConnector,
   code: string,
@@ -294,7 +294,7 @@ export async function executeConnectorScript(
 
 /** One audit line per connector execution, success or denial. */
 function auditConnectorCall(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   path: string,
   detail: string,
 ): void {

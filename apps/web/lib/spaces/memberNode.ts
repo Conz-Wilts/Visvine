@@ -1,9 +1,7 @@
 /**
  * Every ACTIVE member gets a connected person node in the space's
  * directory — the one rule all four member-add paths (space create, admin add,
- * invite approval, public self-join) now share. Before this helper only space
- * creation minted a node, so most members simply never appeared in the
- * directory of spaces they belonged to.
+ * invite approval, public self-join) share.
  *
  * Idempotent and best-effort: `syncEntityNode` re-finds the node by its
  * `metadata.userId` record key, the identity connect no-ops when the pair is

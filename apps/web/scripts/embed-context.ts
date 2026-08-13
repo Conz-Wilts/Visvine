@@ -8,7 +8,7 @@
  * Idempotent — see embedSweep.
  *
  * Usage:
- *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts                 # all brains
+ *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts                 # all contexts
  *   pnpm --filter @visvine/web exec tsx scripts/embed-context.ts <spaceId>   # one space
  */
 

@@ -48,6 +48,12 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
   `lib/date.ts`, `components/ui/Modal.tsx`, `lib/logger.ts`.
 - Zod v4 for all input validation. Prisma client is the singleton in
   `lib/prisma.ts`.
+- **A table is named after the tool that owns it** — `context_*`, `connector_*`,
+  `event_*`, `resource_*`, `message_*`. Only genuinely cross-tool things go
+  unprefixed (`spaces`, `users`, `people`, `identities`, `nodes`, `links`,
+  `oauth_*`). `prisma/TABLES.md` is the plain-English map of all of them.
+  The notes surface is **Context**, everywhere — in the schema, the code and the
+  UI. Don't reintroduce another word for it.
 - Tests: `node --import tsx --test tests/*.test.ts`. Prefer testing the pure
   layer (`lib/notes/shared/*`, `lib/connectors/perimeter.ts`) over routes.
 
@@ -59,12 +65,12 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - **There is no role column.** What someone can do comes from the aliases they
   hold. "Admin" has exactly one definition: a Person alias flagged `owner`
   (`lib/auth.ts#isAdmin`); `SUPER_ADMIN_EMAILS` bypasses per-space checks.
-- Brain access is grant-based (`lib/notes/access.ts` for DB,
+- Context access is grant-based (`lib/notes/access.ts` for DB,
   `lib/notes/shared/authz.ts` for the pure checks). Grants apply to **shared**
-  brains only; personal spaces bypass the model (`lib/notes/principal.ts`).
+  contexts only; personal spaces bypass the model (`lib/notes/principal.ts`).
 - Account deletion (`lib/account/deleteAccount.ts`, `DELETE /api/account`) is the
   one place a person erases themselves. Cascades cover only half of it — the
-  personal-brain tables key `owner_key`, aliases/grants/OAuth tokens key a bare
+  personal-context tables key `owner_key`, aliases/grants/OAuth tokens key a bare
   `user_id`, and `Person.userId` is SET NULL — so anything new keyed that way must
   be added there. `tests/delete-account.test.ts` reads the schema and fails if it
   isn't.
@@ -76,7 +82,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 - An **entity** = a typed `Node` + one canonical context note at a deterministic
   path (`person:craig` → `people/craig.md`).
 - **Links are derived, not authored.** A markdown link to an entity's note,
-  inside another shared-brain note, is what creates a `mentioned` edge. There is
+  inside another shared-context note, is what creates a `mentioned` edge. There is
   no create-link operation anywhere in the system.
 - **An index note IS a folder.** Every folder carries an `index.md` typed
   `Index`; its `title` is the folder's display name, its body is prose plus a
@@ -93,7 +99,7 @@ Import alias `@/*` → `apps/web/*`. An eslint boundary rule enforces that only
 
 ## Search
 
-`brainService.searchBrain` → `lib/notes/shared/retrieval.ts#fusedSearch`. Five
+`contextService.searchContext` → `lib/notes/shared/retrieval.ts#fusedSearch`. Five
 stages fused by weighted RRF: frontmatter filter, BM25 over note text (title ×3,
 tags ×2), pgvector cosine over note embeddings, source-chunk cosine + Postgres
 full-text, and link-context neighbours of the top BM25 hits (recall net, weight
@@ -117,15 +123,15 @@ The identity clients render — name, title, website, logo — is
 because a client fetches it cross-origin and unauthenticated long after that
 build. Keep the two files identical.
 
-Reads default to the **shared** brain, writes to your **personal** one. Notes
-created in a real space's shared brain are private by default (author gets FULL,
+Reads default to the **shared** context, writes to your **personal** one. Notes
+created in a real space's shared context are private by default (author gets FULL,
 then the path is restricted); pass `visibility: 'inherit'` to follow the folder.
 
 Tools call the domain layer directly and **never re-implement authorization** —
-`lib/mcp/context.ts` resolves the brain through the same `resolveBrain` /
+`lib/mcp/context.ts` resolves the context through the same `resolveContext` /
 `principalOf` the web routes use. Adding a tool:
 
-1. Wrap a `brainService.*` function that already takes a `BrainPrincipal`.
+1. Wrap a `contextService.*` function that already takes a `ContextPrincipal`.
 2. Register the name in `TOOL_SCOPES` (`lib/mcp/scopes.ts`) — the single map read
    by both the `insufficient_scope` challenge and `withCtx`.
 3. Update the count assertion in `tests/mcp.test.ts`.
@@ -143,7 +149,7 @@ A connector is a note. Two halves, and the split is the security model:
 
 `alias` is display-only. Secrets live encrypted in `SpaceSecret`, never in
 notes. The `connectors/` folder is admin-only for writes regardless of grants
-(`brainService.writeDenial`).
+(`contextService.writeDenial`).
 
 Runtime: one QuickJS-WASM isolate (`lib/connectors/isolate.ts`) — no filesystem,
 no process, no require/import, no timers, no real fetch. Agents run

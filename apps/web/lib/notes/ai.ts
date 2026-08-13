@@ -1,7 +1,6 @@
 // AI assist for notes: refactor a note/snippet and propose a folder
-// reorganization. Ported from blackbird-brain's src/server/{gemma,refactor,
-// reorganize}.ts, with the OpenAI SDK swapped for plain `fetch` against the same
-// OpenAI-compatible chat endpoint so no new dependency is needed.
+// reorganization. Plain `fetch` against an OpenAI-compatible chat endpoint —
+// no SDK dependency.
 //
 // Configure with GEMINI_API_KEY (Gemini's OpenAI-compatible endpoint); the
 // model can be overridden with GEMINI_MODEL. When the key is unset,
@@ -11,7 +10,7 @@ import { buildNoteIndex } from './shared/context'
 import { splitFrontmatter } from './shared/markdown'
 import { coerceMoves } from './shared/reorganize'
 import type { ReorganizePlan } from './shared/types'
-import { listRaw, type Brain } from './store'
+import { listRaw, type Context } from './store'
 
 export interface ChatMessage {
   role: 'system' | 'user'
@@ -253,12 +252,12 @@ const SYNTH_SYSTEM =
   'path). Only include notes that should move; omit well-placed ones. Keep "reason" to ' +
   'one short sentence. No prose, no code fences.'
 
-/** Analyse a brain's notes and propose a folder reorganization (never applied here). */
-export async function reorganizeNotes(brain: Brain): Promise<ReorganizePlan> {
+/** Analyse a context's notes and propose a folder reorganization (never applied here). */
+export async function reorganizeNotes(context: Context): Promise<ReorganizePlan> {
   if (!aiConfigured()) {
     throw new Error('Reorganize needs an LLM: set GEMINI_API_KEY.')
   }
-  const raw = await listRaw(brain)
+  const raw = await listRaw(context)
   const index = buildNoteIndex(raw)
   const notes: NoteSummary[] = raw.map((n) => {
     const meta = index.find((m) => m.path === n.path)
@@ -270,7 +269,7 @@ export async function reorganizeNotes(brain: Brain): Promise<ReorganizePlan> {
     }
   })
   if (notes.length === 0) {
-    return { summary: 'This brain is empty — nothing to reorganize.', moves: [] }
+    return { summary: 'This context is empty — nothing to reorganize.', moves: [] }
   }
 
   const groups = new Map<string, NoteSummary[]>()

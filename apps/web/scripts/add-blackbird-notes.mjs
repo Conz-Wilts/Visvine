@@ -1,13 +1,13 @@
-// Seeds the "Blackbird Ventures" notes brains with rich, data-driven content.
+// Seeds the "Blackbird Ventures" notes contexts with rich, data-driven content.
 //
-// Builds two brains in the space_notes table:
-//   • the SHARED space brain (owner_key = 'shared') — a portfolio knowledge
+// Builds two contexts in the context_notes table:
+//   • the SHARED space context (owner_key = 'shared') — a portfolio knowledge
 //     base generated from ./data/blackbird-ventures.research.json: a per-company
 //     note for all 182 portfolio companies, one note per lead founder, per-sector
 //     index pages, partner notes, a deals pipeline and fund-data notes — every
 //     internal reference is an absolute `/path.md` link so the notes graph,
 //     backlinks and search all light up.
-//   • a PERSONAL "My Notes" brain (owner_key = <space admin userId>) — a small
+//   • a PERSONAL "My Notes" context (owner_key = <space admin userId>) — a small
 //     self-contained set of working notes (journal, meetings, watchlist, todos,
 //     diligence) cross-linked to each other.
 //
@@ -183,7 +183,7 @@ function note(notes, path, frontmatter, body, pinned = false) {
   notes.push({ path, content: `---\n${fm(frontmatter)}\n---\n\n${stripLeadingHeading(body)}\n`, pinned });
 }
 
-// Internal link → graph edge (absolute brain-root href, must include `.md`).
+// Internal link → graph edge (absolute context-root href, must include `.md`).
 const link = (label, absPath) => `[${label}](${absPath})`;
 // External link → rendered but never a graph edge (http/mailto are dropped).
 const ext = (label, url) => (url ? `[${label}](${url})` : null);
@@ -308,7 +308,7 @@ function coLink(name) {
 const sectorsPresent = SECTOR_OPTIONS.filter((s) => companiesBySector.has(s));
 const cmpName = (a, b) => a.c.name.localeCompare(b.c.name);
 
-// ---- shared brain ------------------------------------------------------------
+// ---- shared context ------------------------------------------------------------
 
 const shared = [];
 
@@ -316,7 +316,7 @@ const shared = [];
 note(shared, 'index.md', { type: 'Index', title: 'Blackbird Ventures', tags: ['firm', 'home'] }, `
 # Blackbird Ventures 🐦
 
-The firm's working brain — the portfolio we've backed, the founders behind it, and
+The firm's working context — the portfolio we've backed, the founders behind it, and
 how we think about the next decade. Backing the most ambitious people in Australia
 and New Zealand.
 
@@ -329,7 +329,7 @@ and New Zealand.
 - ${link('Deals', '/deals/index.md')} — pipeline and process
 - ${link('Data', '/data/index.md')} — marks, dashboards and the fund roll-up
 
-> Every note is plain Markdown — link notes by their brain-root path and explore the
+> Every note is plain Markdown — link notes by their context-root path and explore the
 > connections in the **Graph** tab.
 `, true);
 
@@ -619,16 +619,16 @@ The live views the team checks each week — pipeline throughput, reserves remai
 and sector concentration. All driven off the ${link('fund roll-up', '/data/fund-roll-up.md')}.
 `);
 
-// ---- personal brain (self-contained — links only to other personal notes) ----
+// ---- personal context (self-contained — links only to other personal notes) ----
 
 const personal = [];
 
 // Every folder carries an index note — the index IS the folder (see
-// lib/notes/shared/indexNote.ts). That includes the brain root.
+// lib/notes/shared/indexNote.ts). That includes the context root.
 note(personal, 'index.md', { type: 'Index', title: 'My Context', tags: ['home'] }, `
 # My Context
 
-My own brain — nothing here is shared with the space.
+My own context — nothing here is shared with the space.
 
 - ${link('Journal', '/journal/index.md')} — weekly notes and reflections
 - ${link('Meetings', '/meetings/index.md')} — partner syncs, founder calls, IC prep
@@ -759,7 +759,7 @@ try {
     throw new Error(`space "${COMM}" not found — run \`pnpm db:blackbird\` first`);
   }
 
-  // Whoever manages the space gets the personal brain. There is no role
+  // Whoever manages the space gets the personal context. There is no role
   // column — an admin is someone holding a Person alias flagged `owner` or
   // `system` in spaces.aliases (lib/auth.ts#isAdmin), so ask
   // that list directly and fall back to the earliest member.
@@ -785,14 +785,14 @@ try {
 
   if (RESET) {
     const del = await client.query(
-      `DELETE FROM space_notes
+      `DELETE FROM context_notes
         WHERE space_id = $1 AND owner_key = ANY($2) AND deleted_at IS NULL`,
       [COMM, [SHARED, adminId]],
     );
     console.log(`add-blackbird-notes: --reset removed ${del.rowCount} live note(s) (trash preserved)`);
   }
 
-  const brains = [
+  const contexts = [
     { ownerKey: SHARED, notes: shared },
     { ownerKey: adminId, notes: personal },
   ];
@@ -802,10 +802,10 @@ try {
   const withStar = (content, starred) =>
     starred ? content.replace(/^---\n/, '---\nstarred: true\n') : content;
 
-  for (const { ownerKey, notes } of brains) {
+  for (const { ownerKey, notes } of contexts) {
     for (const n of notes) {
       await client.query(
-        `INSERT INTO space_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
+        `INSERT INTO context_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
          ON CONFLICT (space_id, owner_key, path)
          DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
@@ -816,8 +816,8 @@ try {
 
   await client.query('COMMIT');
   console.log('\n=== Committed ===');
-  console.log(`  shared brain:   ${shared.length} notes (owner_key=shared)`);
-  console.log(`  personal brain: ${personal.length} notes (owner_key=${adminId})`);
+  console.log(`  shared context:   ${shared.length} notes (owner_key=shared)`);
+  console.log(`  personal context: ${personal.length} notes (owner_key=${adminId})`);
 
   const tally = (notes) => {
     const byFolder = {};
@@ -827,9 +827,9 @@ try {
     }
     return Object.entries(byFolder).map(([folder, count]) => ({ folder, count }));
   };
-  console.log('\n--- Shared brain by folder ---');
+  console.log('\n--- Shared context by folder ---');
   console.table(tally(shared));
-  console.log('--- Personal brain by folder ---');
+  console.log('--- Personal context by folder ---');
   console.table(tally(personal));
 } catch (e) {
   await client.query('ROLLBACK');

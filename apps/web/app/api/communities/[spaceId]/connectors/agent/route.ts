@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/session';
-import { resolveBrain, principalOf } from '@/lib/notes/brain';
+import { resolveContext, principalOf } from '@/lib/notes/resolve';
 import { aiConfigured } from '@/lib/notes/ai';
 import { runConnectorAgent } from '@/lib/connectors/agent';
 
@@ -26,7 +26,7 @@ export async function POST(
   const session = await requireSession();
   if (session instanceof Response) return session;
 
-  const resolved = await resolveBrain(session, spaceId);
+  const resolved = await resolveContext(session, spaceId);
   if (resolved instanceof Response) return resolved;
   if (!resolved.isAdmin) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -56,7 +56,7 @@ export async function POST(
     async start(controller) {
       const emit = (event: unknown) => controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
       try {
-        await runConnectorAgent({ principal, brain: resolved, spaceId }, prompt, emit);
+        await runConnectorAgent({ principal, context: resolved, spaceId }, prompt, emit);
       } catch (e) {
         emit({ type: 'error', message: e instanceof Error ? e.message : 'Agent failed' });
       } finally {

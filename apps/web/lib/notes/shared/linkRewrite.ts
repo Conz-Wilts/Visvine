@@ -1,5 +1,4 @@
-// Markdown link rewriting for note moves — ported from the rewriteLinks part of
-// blackbird-brain's src/shared/markdown.ts. When a note moves, every inbound
+// Markdown link rewriting for note moves. When a note moves, every inbound
 // OKF markdown link is rewritten to the new path so nothing breaks. Pure.
 
 import { resolveOkfLink } from './markdown'

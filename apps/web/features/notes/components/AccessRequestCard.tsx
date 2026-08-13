@@ -1,11 +1,11 @@
 'use client'
 
 // The request-access dead end, shared by every surface that denies a read:
-// the notes workspace and profile Context tab when the brain ROOT gate is closed
-// (scope 'brain'), and a single note/folder the viewer can't open (scope 'path').
+// the notes workspace and profile Context tab when the context ROOT gate is closed
+// (scope 'context'), and a single note/folder the viewer can't open (scope 'path').
 //
 // The 'path' heading is deliberately existence-neutral — a hidden note and a
-// deleted one are indistinguishable by design (lib/notes/brainService.ts#readVisible),
+// deleted one are indistinguishable by design (lib/notes/contextService.ts#readVisible),
 // so this must not become the oracle that tells them apart. Keep any copy added
 // here neutral too. Requesting records the path either way; an admin resolving it
 // knows whether anything is there.
@@ -15,7 +15,7 @@ import { Lock } from 'lucide-react'
 import { Textarea } from '@/components/ui'
 
 interface AccessRequestCardProps {
-  scope: 'brain' | 'path'
+  scope: 'context' | 'path'
   spaceName: string
   /** What this space calls its context. Defaults to the generic word —
    *  /api/notes/settings is admin-only, so a gated viewer can't know the real one. */
@@ -40,12 +40,12 @@ export function AccessRequestCard({
   const [message, setMessage] = useState('')
 
   const heading =
-    scope === 'brain' ? `${spaceName}'s ${contextName} is private` : 'You can’t open this note'
+    scope === 'context' ? `${spaceName}'s ${contextName} is private` : 'You can’t open this note'
   // 'path' carries no body: the heading plus the request button already say the
-  // whole thing. 'brain' keeps its line — that heading names a gate the viewer
+  // whole thing. 'context' keeps its line — that heading names a gate the viewer
   // has no other way to understand.
   const body =
-    scope === 'brain'
+    scope === 'context'
       ? `Access to ${spaceName}'s shared notes is limited. Request access and an admin will review it.`
       : null
 

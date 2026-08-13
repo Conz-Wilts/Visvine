@@ -1,5 +1,5 @@
-// Pure validation for the agentic reorganize workflow. Kept here (free of Node/
-// Electron imports) so it can be unit-tested and reused by the main process.
+// Pure validation for the agentic reorganize workflow. Free of Node/DOM imports
+// so it runs on the server and the client, and is unit-testable on its own.
 
 import type { MoveProposal } from './types'
 

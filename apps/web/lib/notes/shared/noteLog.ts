@@ -1,5 +1,4 @@
-// Dated `## Log` stamping + capture-line format, ported from blackbird-brain's
-// src/shared/{contextLog,capture}.ts. Every gated append writes an attributed,
+// Dated `## Log` stamping + capture-line format. Every gated append writes an attributed,
 // newest-first entry into the note's own history; quick captures append dated
 // lines to the personal monthly log. Pure — no fs/DB access.
 
@@ -108,9 +107,9 @@ export function parseCaptureEntries(md: string): ParsedCapture[] {
 
 // provenance
 
-/** A reference back to the originating brain note (access-gated at resolve time). */
+/** A reference back to the originating context note (access-gated at resolve time). */
 export function provenanceRef(sourcePath: string): string {
-  return `brain:${sourcePath.replace(/\.md$/i, '')}`
+  return `context:${sourcePath.replace(/\.md$/i, '')}`
 }
 
 /** Merge provenance sources into frontmatter, deduped. */

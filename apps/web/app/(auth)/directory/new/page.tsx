@@ -1,8 +1,7 @@
 'use client';
 
 // The note-first create surface: /directory/new renders a blank context note
-// you fill in, instead of the sidebar-docked form the "+" used to open. Picking
-// a type commits it — a plain Note lands at /directory/note/<path>, an entity
+// you fill in. Picking a type commits it — a plain Note lands at /directory/note/<path>, an entity
 // lands at /directory/<id>?tab=context with a Profile tab now in the bar.
 //
 // The static `new` segment wins over the sibling /directory/[nodeId] route, the

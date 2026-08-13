@@ -1,10 +1,9 @@
 // Who can create what, in one place.
 //
-// There are two entry points into creation — the "+" caret menu in the sidebar
-// rail and the docked panel's type grid — and they used to disagree: the grid
-// filtered by feature flags and admin, the caret menu offered a hardcoded list
-// to everyone. A member of a space with channels off was shown "Channel"
-// and got an error on submit. This module is the single gate both now ask.
+// Two surfaces offer creation — the "+" caret menu in the sidebar rail and the
+// docked panel's type grid — and both ask this module, so neither can offer a
+// type the caller will be refused on submit (e.g. "Channel" in a space with
+// channels off).
 //
 // It answers "may this person create this here", NOT "does this surface list
 // it" — the note-first types are creatable everywhere but shown only on
@@ -24,13 +23,13 @@ export interface CreatePermissions {
 export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: CreatePermissions): boolean {
   switch (type) {
     // Channels and sections are admin surfaces behind the channels feature.
-    // NOTE: 'space' (the org type, formerly 'space') must NOT appear here —
+    // NOTE: 'space' (the org type) must NOT appear here —
     // it falls through to the default arm, creatable by any member.
     case 'channel':
     case 'section':
       return isFeatureEnabled(featureConfig, 'channels') && isAdmin
 
-    // An uploaded file lands in the space brain, so it follows the notes
+    // An uploaded file lands in the space context, so it follows the notes
     // ("Context") feature.
     case 'file':
       return isFeatureEnabled(featureConfig, 'notes')
@@ -38,7 +37,7 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     // A connector note only exists because the Connectors tool does — same rule
     // the console's Types tab and the directory filters follow. It's
     // additionally admin-only to write: the real gate is server-side in
-    // brainService.writeDenial, this just stops us offering a form that 403s.
+    // contextService.writeDenial, this just stops us offering a form that 403s.
     case 'connector':
       return isFeatureEnabled(featureConfig, 'connectors') && isAdmin
 

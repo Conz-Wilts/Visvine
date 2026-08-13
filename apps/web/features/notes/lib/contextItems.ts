@@ -54,7 +54,7 @@ export function toContextItems(notes: NoteMeta[]): ContextItem[] {
  * Display title for a link target, which may be outside the filtered set.
  *
  * Index notes are folded into their folder everywhere else, so they're looked
- * up in `titleByPath` — every note the brain holds, including the indexes. That
+ * up in `titleByPath` — every note the context holds, including the indexes. That
  * title IS the folder's name, so a link to `communities/index.md` reads
  * "Companies", the same as its tree row.
  */

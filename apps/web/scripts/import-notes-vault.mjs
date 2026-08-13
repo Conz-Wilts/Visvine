@@ -1,30 +1,31 @@
-// Import the blackbird-brain markdown vault into a space's notes brain.
-// Reads blackbird-brain/.data/vault/**/*.md (skipping dotfolders like .trash /
-// .history) and upserts each as a SpaceNote row, preserving the folder
-// layout in the `path`. The vault is the seed source; once imported, notes live
-// in the DB (the source-of-truth markdown is in `content`).
+// Import a markdown vault on disk into a space's context.
+// Reads <vault>/**/*.md (skipping dotfolders like .trash / .history) and upserts
+// each as a ContextNote row, preserving the folder layout in the `path`. Once
+// imported the notes live in the DB (the source-of-truth markdown is `content`).
 //
 // Usage (local only — guarded):
-//   node scripts/import-notes-vault.mjs --space community:blackbird-ventures [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
-//   pnpm db:notes-vault -- --space community:blackbird-ventures
+//   node scripts/import-notes-vault.mjs --space community:blackbird-ventures --vault <dir> [--scope shared|personal] [--owner <userId>] [--created-by <userId>]
+//   pnpm db:notes-vault -- --space community:blackbird-ventures --vault ../vault
 //
-// Defaults: --scope shared. For --scope personal you must pass --owner <userId>
-// (the brain owner). created_by is resolved to a space admin if not given.
+// Defaults: --scope shared, --vault $NOTES_VAULT_DIR. For --scope personal you
+// must pass --owner <userId> (the context owner). created_by is resolved to a
+// space admin if not given.
 
 import '../../../scripts/guard-local-db.mjs'
 import 'dotenv/config'
 import pg from 'pg'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const VAULT_ROOT = join(__dirname, '..', '..', '..', 'blackbird-brain', '.data', 'vault')
+import { join } from 'node:path'
 
 function arg(name, fallback = null) {
   const i = process.argv.indexOf(`--${name}`)
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : fallback
 }
+
+const vaultArg = arg('vault', process.env.NOTES_VAULT_DIR)
+const VAULT_ROOT = vaultArg
+  ? (vaultArg.startsWith('/') ? vaultArg : join(process.cwd(), vaultArg))
+  : null
 
 const spaceId = arg('space')
 const scope = arg('scope', 'shared')
@@ -69,6 +70,10 @@ function collect(dir, baseSegments = []) {
 }
 
 async function main() {
+  if (!VAULT_ROOT) {
+    console.error('import-notes-vault: --vault <dir> (or NOTES_VAULT_DIR) is required')
+    process.exit(1)
+  }
   try {
     statSync(VAULT_ROOT)
   } catch {
@@ -121,7 +126,7 @@ async function main() {
     let imported = 0
     for (const note of notes) {
       await client.query(
-        `INSERT INTO space_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
+        `INSERT INTO context_notes (space_id, owner_key, path, content, created_by, starred, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, now())
          ON CONFLICT (space_id, owner_key, path)
          DO UPDATE SET content = EXCLUDED.content, starred = EXCLUDED.starred, updated_at = now()`,
@@ -131,7 +136,7 @@ async function main() {
     }
 
     console.log(
-      `import-notes-vault: imported ${imported} note(s) into ${spaceId} / ${scope} brain (owner_key=${ownerKey}, created_by=${createdBy}).`,
+      `import-notes-vault: imported ${imported} note(s) into ${spaceId} / ${scope} context (owner_key=${ownerKey}, created_by=${createdBy}).`,
     )
   } finally {
     client.release()

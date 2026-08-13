@@ -1,8 +1,6 @@
 // Adding a type to a space's vocabulary, in one place.
 //
-// A space's `nodeTypes` used to be write-only-by-admin and closed: the
-// console could recolour the built-ins and nothing could create a type. Members
-// can now invent one from the draft-context surface, which means the "is this
+// Members can invent a type from the draft-context surface, so the "is this
 // name already served, and what should it look like" rule is asked from three
 // places — the member endpoint, the console, and the backfill script. This is
 // that rule, kept pure so it can be unit-tested and can't drift between them.
@@ -23,14 +21,14 @@ const MAX_NAME = 32;
  * `Index` is the dangerous one: the notes API relocates a `type: Index` note
  * into a folder of its own (app/api/notes/item/route.ts), so a space that
  * created an "Index" type would silently move its members' notes. `Note` and
- * `File` are the two things that are content in a brain rather than nodes in
+ * `File` are the two things that are content in a context rather than nodes in
  * the graph — the draft menu offers them already and they are not node types.
  */
 const RESERVED = ['note', 'file', 'index'];
 
 /**
  * Is this name one no space may create a type for? Surfaces that OFFER
- * stored types ask this too: a brain seeded with a `Note` or `Index` type (see
+ * stored types ask this too: a context seeded with a `Note` or `Index` type (see
  * prisma/seed.ts) still has one, and it must not reach a picker that would
  * write it into a note's frontmatter.
  */

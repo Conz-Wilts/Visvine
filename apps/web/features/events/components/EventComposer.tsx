@@ -160,10 +160,10 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       allowPlusOnes,
       allowedResponses: ['going', ...(allowMaybe ? ['maybe'] : []), 'declined'],
       // `hosts` has no editor in this composer, so we omit it: the create route
-      // injects the creator as host and the update route preserves it. (Sending
-      // hosts:[] here used to strip the creator's host access on the first save.)
-      // The question schema IS owned by this composer now — state is seeded from
-      // the loaded event on edit, so sending it can't wipe anything.
+      // injects the creator as host and the update route preserves it. Sending
+      // hosts:[] would strip the creator's host access on the first save.
+      // The question schema IS owned by this composer — state is seeded from the
+      // loaded event on edit, so sending it can't wipe anything.
       form: {
         enabled: true,
         requireApproval,

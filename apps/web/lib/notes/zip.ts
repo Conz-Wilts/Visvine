@@ -1,5 +1,5 @@
 // Minimal, dependency-free store-only (no compression) ZIP encoder, used to
-// export a brain's notes as a .zip of .md files. The "store" method keeps the
+// export a context's notes as a .zip of .md files. The "store" method keeps the
 // implementation small and provably correct; note text compresses little and
 // these archives are modest, so skipping DEFLATE is a fair trade.
 

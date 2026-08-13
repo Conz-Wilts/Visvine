@@ -1,11 +1,10 @@
-// The review agent runner — the port of blackbird-brain's src/server/review.ts.
-// Runs the pure checks over a brain, applies the allow-listed reversible
+// The review agent runner. Runs the pure checks over a context, applies the allow-listed reversible
 // auto-fixes through the revision-recording write path (attributed to the
 // maintenance actor), and returns the report for the UI. Locked folders are
 // frozen — their notes are reported but never auto-fixed.
 
 import * as store from './store'
-import { SHARED_OWNER_KEY, type Brain } from './store'
+import { SHARED_OWNER_KEY, type Context } from './store'
 import { buildNoteIndex } from './shared/context'
 import {
   applyAutoFix,
@@ -14,7 +13,7 @@ import {
   type ReviewReport,
 } from './shared/review'
 import { isLockedPath } from './shared/authz'
-import type { BrainPrincipal } from './shared/brainTypes'
+import type { ContextPrincipal } from './shared/contextTypes'
 
 const MAINTENANCE_ACTOR = { id: 'system', name: 'Review agent' }
 
@@ -24,20 +23,20 @@ export interface ReviewRunResult {
 }
 
 /**
- * Run a review pass over the brain. `apply` = also write the auto-fixes (the
- * caller has already checked authority: space admin for the shared brain,
- * the owner for a personal brain).
+ * Run a review pass over the context. `apply` = also write the auto-fixes (the
+ * caller has already checked authority: space admin for the shared context,
+ * the owner for a personal context).
  */
 export async function runReview(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   mode: 'light' | 'full',
   apply: boolean,
 ): Promise<ReviewRunResult> {
-  const raws = await store.listRaw(brain)
+  const raws = await store.listRaw(context)
   const metas = buildNoteIndex(raws)
   const frozen =
-    brain.ownerKey === SHARED_OWNER_KEY
+    context.ownerKey === SHARED_OWNER_KEY
       ? (path: string) => isLockedPath(p.access.locked, path)
       : () => false
 
@@ -58,7 +57,7 @@ export async function runReview(
       if (current === undefined) continue
       const next = applyAutoFix(current, fix)
       if (next === current) continue
-      await store.writeNote(brain, fix.path, next, MAINTENANCE_ACTOR, 'maintenance')
+      await store.writeNote(context, fix.path, next, MAINTENANCE_ACTOR, 'maintenance')
       byPath.set(fix.path, next) // later fixes on the same note compose
       applied++
     }

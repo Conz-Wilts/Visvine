@@ -1,8 +1,8 @@
 // Typed client for the notes REST API. Every call is scoped to a space's
-// single brain (spaceId) — a user's personal context is just the brain of
+// single context (spaceId) — a user's personal context is just the context of
 // their personal-space space (`me:<userId>`), so there is no scope param
 // anymore. Reads use query params; mutations send a JSON body that also carries
-// spaceId (see lib/notes/api.ts:requireBrain). Plain fetch + thrown errors,
+// spaceId (see lib/notes/api.ts:requireContext). Plain fetch + thrown errors,
 // matching Visvine's client conventions (no SWR/react-query).
 
 import type {
@@ -17,7 +17,7 @@ import type {
   AccessRequest,
   MoveProposalEntry,
   AuditEntry,
-} from '@/lib/notes/shared/brainTypes'
+} from '@/lib/notes/shared/contextTypes'
 import type { AccessLevelName, GrantSubjectType } from '@/lib/notes/shared/authz'
 import type { AccessListEntry } from '@/lib/notes/access'
 import type { AliasInfo } from '@/lib/notes/aliases'
@@ -25,14 +25,14 @@ import type { PublicationInfo } from '@/lib/notes/publications'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 
-// brain access types (grant model — lib/notes/shared/authz.ts)
+// context access types (grant model — lib/notes/shared/authz.ts)
 
 /** GET /api/notes/access?path= — the caller's standing at one path, plus the
  *  merged who-has-access list (readable) and grantable subjects (managers). */
 export interface PathAccessResponse {
   path: string
   me: { userId: string; spaceAdmin: boolean }
-  /** No grant reaches the caller ANYWHERE — the brain gate is closed to them. */
+  /** No grant reaches the caller ANYWHERE — the context gate is closed to them. */
   gated: boolean
   canRead: boolean
   canWrite: boolean
@@ -48,7 +48,7 @@ export interface PathAccessResponse {
   } | null
 }
 
-/** GET /api/notes/access (no path) — the brain-wide overview for tree badges
+/** GET /api/notes/access (no path) — the context-wide overview for tree badges
  *  and (for space admins) the full grant dump behind the Access page. */
 export interface AccessOverviewResponse {
   me: { userId: string; spaceAdmin: boolean }
@@ -139,8 +139,8 @@ async function sendJson<T>(url: string, method: string, body: unknown): Promise<
 export const notesApi = {
   config: () => getJson<{ aiConfigured: boolean }>('/api/notes/config'),
 
-  /** Brain display settings — currently the context's display name. */
-  getBrainSettings: (c: string) =>
+  /** Context display settings — currently the context's display name. */
+  getContextSettings: (c: string) =>
     getJson<{ settings: { contextName: string } }>(`/api/notes/settings?${qs(c)}`),
   setContextName: (c: string, contextName: string) =>
     sendJson<{ settings: { contextName: string } }>('/api/notes/settings', 'POST', {
@@ -240,7 +240,7 @@ export const notesApi = {
   exportUrl: (c: string, path: string) => `/api/notes/export?${qs(c, { path })}`,
   exportAllUrl: (c: string) => `/api/notes/export/all?${qs(c)}`,
 
-  // --- brain capabilities: fused search, folder registry, promote, capture,
+  // --- context capabilities: fused search, folder registry, promote, capture,
   // review/enrich maintenance, audit
 
   searchNotes: (c: string, query: string, opts?: { k?: number; filters?: SearchFilters }) =>
@@ -251,10 +251,10 @@ export const notesApi = {
       filters: opts?.filters,
     }),
 
-  /** The caller's standing at one path ('' = brain root) + who-has-access list. */
+  /** The caller's standing at one path ('' = context root) + who-has-access list. */
   getAccess: (c: string, path: string) =>
     getJson<PathAccessResponse>(`/api/notes/access?${qs(c, { path })}`),
-  /** Brain-wide access overview (restricted/locked folders, gate) for badges. */
+  /** Context-wide access overview (restricted/locked folders, gate) for badges. */
   getAccessOverview: (c: string) =>
     getJson<AccessOverviewResponse>(`/api/notes/access?${qs(c)}`),
   accessAction: (c: string, input: AccessActionInput) =>
@@ -275,7 +275,7 @@ export const notesApi = {
   /** How `path` participates in publishing, from space `c`'s point of view. */
   getPublications: (c: string, path: string) =>
     getJson<PublicationStateResponse>(`/api/notes/publications?${qs(c, { path })}`),
-  /** Publish a note the caller can read (default source: their personal brain)
+  /** Publish a note the caller can read (default source: their personal context)
    *  into space `c`. Queues a proposal when they can't write the target. */
   publish: (c: string, input: { fromSpaceId?: string; fromPath: string; toPath: string }) =>
     sendJson<
@@ -294,7 +294,7 @@ export const notesApi = {
     getJson<{ requests: AccessRequest[]; pending: number }>(
       `/api/notes/access-requests?spaceId=${encodeURIComponent(c)}`,
     ),
-  /** Ask for access to `resourcePath` ('' = the brain root gate). Idempotent. */
+  /** Ask for access to `resourcePath` ('' = the context root gate). Idempotent. */
   requestAccess: (c: string, resourcePath: string, message?: string) =>
     sendJson<{ request: AccessRequest }>('/api/notes/access-requests', 'POST', {
       spaceId: c,
@@ -319,8 +319,8 @@ export const notesApi = {
       level,
     }),
 
-  /** One-time share: copies `fromPath` from the CALLER's personal brain into the
-   *  TARGET space's brain (`c`). The personal original stays. */
+  /** One-time share: copies `fromPath` from the CALLER's personal context into the
+   *  TARGET space's context (`c`). The personal original stays. */
   promoteNote: (c: string, fromPath: string, toPath: string) =>
     sendJson<PromoteResult>('/api/notes/promote', 'POST', { spaceId: c, fromPath, toPath }),
   listProposals: (c: string) =>
@@ -350,7 +350,7 @@ export const notesApi = {
       mode,
       apply,
     }),
-  /** Distills the caller's personal brain INTO space `c`'s brain. */
+  /** Distills the caller's personal context INTO space `c`'s context. */
   runEnrich: (c: string, since?: string) =>
     sendJson<{ applied: number; considered: number }>('/api/notes/ai/enrich', 'POST', {
       spaceId: c,
@@ -360,7 +360,7 @@ export const notesApi = {
   getAudit: (c: string) =>
     getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?spaceId=${encodeURIComponent(c)}`),
 
-  // context sources (non-note files/tables attached to the brain)
+  // context sources (non-note files/tables attached to the context)
 
   listSources: (c: string, folderId?: string) =>
     getJson<{ sources: ContextSourceMeta[] }>(

@@ -21,7 +21,7 @@
  * `communities/` is where a portfolio company's note lives — an organisation IS
  * a space, so company notes share the directory with them (lib/notes/entities.ts).
  *
- * The grant paths line up with the brain `add-blackbird-notes.mjs` builds, so
+ * The grant paths line up with the context `add-blackbird-notes.mjs` builds, so
  * the layers on top of this one land on real folders. This seed is only the
  * base: `pnpm db:blackbird:full` runs it and then the directory, notes, extras
  * and connector layers.
@@ -122,7 +122,7 @@ interface SeedAlias {
   nodeType: "Person" | "Space";
   owner: boolean;
   system: boolean;
-  /** [resourcePath, level] — '' is the brain root. */
+  /** [resourcePath, level] — '' is the context root. */
   grants: Array<[string, number]>;
 }
 
@@ -195,7 +195,7 @@ async function wipeData() {
   // spaceId with no FK behind it, which would otherwise orphan.
   await prisma.$transaction([
     prisma.link.deleteMany({}),
-    prisma.attendee.deleteMany({}),
+    prisma.eventAttendee.deleteMany({}),
     prisma.resourceComment.deleteMany({}),
     prisma.resourceChange.deleteMany({}),
     prisma.resource.deleteMany({}),
@@ -229,14 +229,14 @@ async function createSpace() {
 
 /**
  * Record that this space's access is already established. Without it the
- * first brain touch grandfathers every member a root grant (lib/notes/access.ts
+ * first context touch grandfathers every member a root grant (lib/notes/access.ts
  * #ensureAccessSeeded), which would swamp the alias grants above with blanket
  * edit-everywhere and make the seeded permissions meaningless.
  */
 async function markAccessSeeded() {
-  await prisma.spaceBrainFile.upsert({
+  await prisma.contextState.upsert({
     where: {
-      brain_file_identity: { spaceId: SPACE_ID, ownerKey: "shared", name: "access-state.json" },
+      context_state_identity: { spaceId: SPACE_ID, ownerKey: "shared", name: "access-state.json" },
     },
     create: {
       spaceId: SPACE_ID,
@@ -283,7 +283,7 @@ async function createAliases() {
       grantedBy: ANCHORS[0].id,
     })),
   ];
-  if (grants.length) await prisma.brainGrant.createMany({ data: grants });
+  if (grants.length) await prisma.contextGrant.createMany({ data: grants });
 }
 
 async function createAnchorUsers() {
@@ -352,7 +352,7 @@ async function main() {
       : a.grants.map(([p, l]) => `${p || "everything"} ${l === EDIT ? "edit" : "view"}`).join(", ") || "nothing yet";
     console.log(`  ${a.name.padEnd(14)}  →  ${reach}`);
   }
-  console.log("\nNext: `pnpm db:blackbird:full` for the portfolio, brain and extras.");
+  console.log("\nNext: `pnpm db:blackbird:full` for the portfolio, context and extras.");
 }
 
 main()

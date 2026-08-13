@@ -1,11 +1,11 @@
-// Brain resolution + authorization for the notes feature. Every space has
-// exactly ONE brain — its shared brain (ownerKey 'shared'). A user's personal
-// context lives in the shared brain of their personal-space space
+// Context resolution + authorization for the notes feature. Every space has
+// exactly ONE context — its shared context (ownerKey 'shared'). A user's personal
+// context lives in the shared context of their personal-space space
 // (`me:<userId>`, provisioned on first use) — there are no per-space personal
-// brains anymore. Access to a normal space's brain is grant-gated
-// (lib/notes/access.ts): joining the space does not by itself grant brain
-// access until a grant reaches you. Routes call resolveBrain() right after
-// requireSession(); it returns either a ResolvedBrain or a ready-to-return
+// contexts anymore. Access to a normal space's context is grant-gated
+// (lib/notes/access.ts): joining the space does not by itself grant context
+// access until a grant reaches you. Routes call resolveContext() right after
+// requireSession(); it returns either a ResolvedContext or a ready-to-return
 // error Response (mirroring requireSession).
 
 import { NextResponse } from 'next/server'
@@ -13,19 +13,19 @@ import prisma from '@/lib/prisma'
 import { isAdmin } from '@/lib/auth'
 import type { SessionPayload } from '@/lib/session'
 import { provisionPersonalSpace, personalSpaceId } from '@/lib/spaces/personalSpace'
-import { SHARED_OWNER_KEY, type Brain, type Actor } from './store'
-import type { BrainPrincipal } from './shared/brainTypes'
+import { SHARED_OWNER_KEY, type Context, type Actor } from './store'
+import type { ContextPrincipal } from './shared/contextTypes'
 import { OPEN_ACCESS } from './shared/authz'
 import { principalCanManage } from './shared/permissions'
-import { brainAccessFor, ensureAccessSeeded } from './access'
+import { contextAccessFor, ensureAccessSeeded } from './access'
 
-// Kept for route/client compat; every scope now resolves to the shared brain.
+// Kept for route/client compat; every scope now resolves to the shared context.
 type Scope = 'shared' | 'personal'
 
-export interface ResolvedBrain extends Brain {
+export interface ResolvedContext extends Context {
   scope: Scope
   isAdmin: boolean // admin of this space (super admins included)
-  /** Set when this space is a personal space (its owner's private brain). */
+  /** Set when this space is a personal space (its owner's private context). */
   isPersonalSpace: boolean
   actor: Actor
 }
@@ -39,17 +39,17 @@ async function isMember(userId: string, spaceId: string): Promise<boolean> {
 }
 
 /**
- * Resolve and authorize the brain a request targets — always the space's
- * shared brain (the `scope` parameter is accepted for compatibility and
+ * Resolve and authorize the context a request targets — always the space's
+ * shared context (the `scope` parameter is accepted for compatibility and
  * ignored). Returns a 400/403 Response when the space is missing or the
  * caller isn't a member; a foreign personal space is a 403 like any
  * non-membership.
  */
-export async function resolveBrain(
+export async function resolveContext(
   session: SessionPayload,
   spaceId: string | null | undefined,
   scope?: string | null | undefined,
-): Promise<ResolvedBrain | Response> {
+): Promise<ResolvedContext | Response> {
   void scope
   if (!spaceId) {
     return NextResponse.json({ error: 'spaceId is required' }, { status: 400 })
@@ -81,15 +81,15 @@ export async function resolveBrain(
 }
 
 /**
- * The caller's personal brain: the shared brain of their personal-space
+ * The caller's personal context: the shared context of their personal-space
  * space, provisioning it on first use (idempotent). This is the only
  * place personal spaces get created.
  */
-export async function resolvePersonalBrain(identity: {
+export async function resolvePersonalContext(identity: {
   userId: string
   name: string
   email?: string | null
-}): Promise<Brain> {
+}): Promise<Context> {
   const spaceId = personalSpaceId(identity.userId)
   const existing = await prisma.space.findUnique({ where: { id: spaceId }, select: { id: true } })
   if (!existing) {
@@ -99,18 +99,18 @@ export async function resolvePersonalBrain(identity: {
 }
 
 /**
- * The BrainPrincipal for an already-resolved brain — the explicit identity every
- * brainService call takes. Loads the caller's grant rows per call so membership,
+ * The ContextPrincipal for an already-resolved context — the explicit identity every
+ * contextService call takes. Loads the caller's grant rows per call so membership,
  * alias, and grant changes apply immediately; for normal spaces this also
  * seeds the grant rows on first touch (migrating a legacy registry, or
  * grandfathering current members — lib/notes/access.ts). Personal spaces are
  * never gated (OPEN_ACCESS).
  */
-export async function principalOf(resolved: ResolvedBrain): Promise<BrainPrincipal> {
+export async function principalOf(resolved: ResolvedContext): Promise<ContextPrincipal> {
   let access = OPEN_ACCESS
   if (!resolved.isPersonalSpace) {
     await ensureAccessSeeded(resolved.spaceId)
-    access = await brainAccessFor(resolved.spaceId, resolved.actor.id)
+    access = await contextAccessFor(resolved.spaceId, resolved.actor.id)
   }
   return {
     userId: resolved.actor.id,
@@ -130,11 +130,11 @@ export async function principalOf(resolved: ResolvedBrain): Promise<BrainPrincip
  * write-gating applies on top in the routes.
  */
 export function canRemove(
-  brain: ResolvedBrain,
+  context: ResolvedContext,
   noteCreatedBy: string | null,
-  manage?: { principal: BrainPrincipal; path: string },
+  manage?: { principal: ContextPrincipal; path: string },
 ): boolean {
-  if (brain.isPersonalSpace) return true
-  if (brain.isAdmin || noteCreatedBy === brain.actor.id) return true
+  if (context.isPersonalSpace) return true
+  if (context.isAdmin || noteCreatedBy === context.actor.id) return true
   return manage ? principalCanManage(manage.principal, manage.path) : false
 }

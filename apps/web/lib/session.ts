@@ -61,7 +61,7 @@ export function isSuperAdmin(email: string | null | undefined): boolean {
 // foreign-key violations instead of a clean sign-out. The checker is injected
 // by lib/prisma.ts because proxy.ts (edge) imports this module, which
 // therefore can never import the DB client itself; when no checker is
-// registered the gate is skipped, which matches the old behavior.
+// registered the gate is skipped.
 let userExistsCheck: ((userId: string) => Promise<boolean>) | null = null;
 
 export function setSessionUserCheck(fn: (userId: string) => Promise<boolean>): void {

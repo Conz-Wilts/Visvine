@@ -4,7 +4,7 @@
 // profile's Context tab is open — the same mechanism /channels and /admin use
 // (ContextPanelContext's portal host), so the icon rail + tree read as one
 // connected card rather than a panel floating over the page. It shows the
-// space brain's full organised tree — index files, the people/ and
+// space context's full organised tree — index files, the people/ and
 // communities/ namespaces, and every entity note. Clicking a note that maps to
 // a directory entity opens that entity's profile Context tab;
 // index/organisational notes just highlight. `currentPath` (the profile view)

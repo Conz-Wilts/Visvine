@@ -1,9 +1,9 @@
 'use client'
 
-// The standalone note view (/directory/note/<path>): any non-entity brain note —
+// The standalone note view (/directory/note/<path>): any non-entity context note —
 // folder indexes, sectors, deals, journal pages — in the embedded NoteEditor with
 // the linked-references rail below. The slim sibling of EntityContextPanel: same
-// gated /api/notes pipeline (brain gate, grant-based visibility and write denials
+// gated /api/notes pipeline (context gate, grant-based visibility and write denials
 // come free), minus everything entity-specific (node profile, tags header, stub
 // creation). A missing note here is just "not found" — this surface never creates.
 
@@ -71,7 +71,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // replaces editor and toolbar together on a single commit, so there is never an
   // empty frame. The body itself is hidden while it lags (ContentReveal), so the
   // outgoing note is never actually seen under the incoming note's title.
-  // Scoped by space as well as path: the same path in two brains is two
+  // Scoped by space as well as path: the same path in two contexts is two
   // different notes, so a space switch must not be able to reuse a held read.
   const [shown, setShown] = useState<{ spaceId: string; path: string; read: NoteRead } | null>(null)
   const [everPainted, setEverPainted] = useState(false)
@@ -124,7 +124,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   }, [spaceId, path])
 
   // Surface the viewer's own open request for whichever resource denied them —
-  // the root gate ('') when gated out of the brain, else this exact note path.
+  // the root gate ('') when gated out of the context, else this exact note path.
   const requestPath = gatedOut ? '' : path
   useEffect(() => {
     if (!spaceId || isPersonalSpace) {
@@ -162,7 +162,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     }
   }
 
-  // Load the note + the brain's note index + references.
+  // Load the note + the context's note index + references.
   useEffect(() => {
     if (!spaceId || !path) return
     const seq = ++loadSeq.current
@@ -333,7 +333,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     return (
       <div className="flex justify-center py-10">
         <AccessRequestCard
-          scope="brain"
+          scope="context"
           spaceName={currentSpace?.name ?? 'this space'}
           pending={requestPending}
           requesting={requesting}

@@ -1,14 +1,14 @@
 // GET /api/notes/tree?spaceId=&scope=
 // The folder/note tree for the sidebar (note-derived folders + explicit empty
-// folders, sorted folders-first then alphabetically). Shared-brain trees are
+// folders, sorted folders-first then alphabetically). Shared-context trees are
 // built over the visibility-filtered vault, and explicitly-created empty
 // folders are grafted only when the caller may see them (a grant reaches the
 // folder or starts inside it — restricted subtrees stay fully hidden).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/brain'
-import { visibleVault } from '@/lib/notes/brainService'
+import { requireContext } from '@/lib/notes/api'
+import { principalOf } from '@/lib/notes/resolve'
+import { visibleVault } from '@/lib/notes/contextService'
 import { listFolders } from '@/lib/notes/store'
 import { buildTree, sortTree } from '@/lib/notes/shared/context'
 import { principalSeesFolder } from '@/lib/notes/shared/permissions'
@@ -35,15 +35,15 @@ function ensureFolderPath(root: TreeNode, folderPath: string): void {
 }
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
-  const p = await principalOf(brain)
-  const [{ metas }, folders] = await Promise.all([visibleVault(p, brain), listFolders(brain)])
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
+  const p = await principalOf(context)
+  const [{ metas }, folders] = await Promise.all([visibleVault(p, context), listFolders(context)])
   const root = buildTree(metas)
   for (const folder of folders) {
     // Graft only folders the caller may see: readable themselves, or holding a
     // readable grant somewhere inside (restricted subtrees stay invisible).
-    if (brain.scope === 'shared' && !brain.isPersonalSpace && !principalSeesFolder(p, folder)) continue
+    if (context.scope === 'shared' && !context.isPersonalSpace && !principalSeesFolder(p, folder)) continue
     ensureFolderPath(root, folder)
   }
   sortTree(root)

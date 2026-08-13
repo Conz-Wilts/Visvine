@@ -7,7 +7,7 @@
  * especially — that is the folder's display name, shown in the sidebar and the
  * tree) and every line of prose. Only the block between the `index:children`
  * markers is rewritten; an index that has never carried one gets it appended.
- * The brain root is treated like any other folder here — a root index that has
+ * The context root is treated like any other folder here — a root index that has
  * no block is left alone, which keeps a curated home note curated.
  *
  * Writes go through writeNote, so each rewritten index keeps its previous
@@ -16,14 +16,14 @@
  * Local-only — guarded exactly like the destructive db:* scripts.
  *
  * Usage:
- *   pnpm --filter @visvine/web exec tsx scripts/rebuild-index-notes.ts                 # all brains
+ *   pnpm --filter @visvine/web exec tsx scripts/rebuild-index-notes.ts                 # all contexts
  *   pnpm --filter @visvine/web exec tsx scripts/rebuild-index-notes.ts <spaceId>   # one space
  */
 
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { createFolder, refreshFolderIndex, type Actor, type Brain } from '../lib/notes/store';
+import { createFolder, refreshFolderIndex, type Actor, type Context } from '../lib/notes/store';
 import { ancestorFolders, indexPathOf } from '../lib/notes/shared/indexNote';
 
 const INDEX_ACTOR: Actor = { id: 'system', name: 'Index maintenance' };
@@ -32,27 +32,27 @@ async function main() {
   const only = process.argv[2];
   const where = only ? { spaceId: only } : {};
 
-  const noteBrains = await prisma.spaceNote.groupBy({
+  const noteContexts = await prisma.contextNote.groupBy({
     by: ['spaceId', 'ownerKey'],
     where: { ...where, deletedAt: null },
   });
-  const folderBrains = await prisma.spaceNoteFolder.groupBy({
+  const folderContexts = await prisma.contextFolder.groupBy({
     by: ['spaceId', 'ownerKey'],
     where,
   });
-  const brains = new Map<string, Brain>();
-  for (const b of [...noteBrains, ...folderBrains]) {
-    brains.set(`${b.spaceId} ${b.ownerKey}`, { spaceId: b.spaceId, ownerKey: b.ownerKey });
+  const contexts = new Map<string, Context>();
+  for (const b of [...noteContexts, ...folderContexts]) {
+    contexts.set(`${b.spaceId} ${b.ownerKey}`, { spaceId: b.spaceId, ownerKey: b.ownerKey });
   }
-  if (only && brains.size === 0) throw new Error(`No notes found for space: ${only}`);
+  if (only && contexts.size === 0) throw new Error(`No notes found for space: ${only}`);
 
-  for (const brain of brains.values()) {
-    const notes = await prisma.spaceNote.findMany({
-      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
+  for (const context of contexts.values()) {
+    const notes = await prisma.contextNote.findMany({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null },
       select: { path: true, content: true },
     });
-    const explicit = await prisma.spaceNoteFolder.findMany({
-      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
+    const explicit = await prisma.contextFolder.findMany({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey },
       select: { path: true },
     });
     const folders = new Set<string>();
@@ -67,17 +67,17 @@ async function main() {
     for (const folder of ordered) {
       if (live.has(indexPathOf(folder))) continue;
       // createFolder writes the folder row AND the missing index stub.
-      await createFolder(brain, folder, INDEX_ACTOR);
+      await createFolder(context, folder, INDEX_ACTOR);
       created += 1;
       console.log(`  created ${indexPathOf(folder)}`);
     }
     // Then refresh every managed block — including the ones just created, whose
     // children may have arrived out of order above.
-    for (const folder of ordered) await refreshFolderIndex(brain, folder);
-    // '' is the brain root: refreshed only if its index opted in with a block.
-    await refreshFolderIndex(brain, '');
+    for (const folder of ordered) await refreshFolderIndex(context, folder);
+    // '' is the context root: refreshed only if its index opted in with a block.
+    await refreshFolderIndex(context, '');
     console.log(
-      `${brain.spaceId} [${brain.ownerKey}]: ${folders.size} folders, ${created} indexes created`,
+      `${context.spaceId} [${context.ownerKey}]: ${folders.size} folders, ${created} indexes created`,
     );
   }
 }

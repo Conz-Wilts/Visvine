@@ -2,19 +2,19 @@
 //   GET    ?spaceId=&scope=&folderId=            → { sources: ContextSourceMeta[] }
 //   POST   multipart (file, path|folder) ?spaceId= → { source } — upload + ingest
 //   DELETE ?spaceId=&path=                        → { ok } — row + chunks + GCS object
-// Sources are non-note files living at brain paths, so the folder gate and
-// visibility lens (inside brainService) govern them exactly like notes. The
+// Sources are non-note files living at context paths, so the folder gate and
+// visibility lens (inside contextService) govern them exactly like notes. The
 // POST reads spaceId from the query string — multipart has no JSON body,
-// and requireBrain falls back to searchParams.
+// and requireContext falls back to searchParams.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/brain'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
+import { principalOf } from '@/lib/notes/resolve'
 import {
   createSourceGated,
   deleteSourceGated,
   listVisibleSources,
-} from '@/lib/notes/brainService'
+} from '@/lib/notes/contextService'
 import { sanitizePath } from '@/lib/notes/store'
 import {
   MAX_SOURCE_BYTES,
@@ -24,17 +24,17 @@ import {
 } from '@/lib/notes/shared/sourceTypes'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const folderId = new URL(req.url).searchParams.get('folderId') ?? undefined
-  const p = await principalOf(brain)
-  const sources = await listVisibleSources(p, brain, folderId)
+  const p = await principalOf(context)
+  const sources = await listVisibleSources(p, context, folderId)
   return NextResponse.json({ sources })
 }
 
 export async function POST(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
 
   let form: FormData
   try {
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   const kind = sourceKindOf(file.name)
   if (!kind) return fail(`Unsupported file type — ${SOURCE_EXTENSIONS_LABEL} are supported`)
 
-  // Destination: an explicit brain path, or folder + the file's own name.
+  // Destination: an explicit context path, or folder + the file's own name.
   const rawPath = form.get('path')
   const rawFolder = form.get('folder')
   const dest =
@@ -67,15 +67,15 @@ export async function POST(req: NextRequest) {
     return failFromError(err)
   }
 
-  const p = await principalOf(brain)
+  const p = await principalOf(context)
   try {
-    const result = await createSourceGated(p, brain, {
+    const result = await createSourceGated(p, context, {
       path,
       name: file.name,
       kind,
       mimeType: file.type || 'application/octet-stream',
       buffer: Buffer.from(await file.arrayBuffer()),
-      createdBy: brain.actor.id,
+      createdBy: context.actor.id,
     })
     if (result.status === 'denied') return fail(result.reason, 403)
     return NextResponse.json({ source: result.source })
@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  const p = await principalOf(brain)
+  const p = await principalOf(context)
   try {
-    const result = await deleteSourceGated(p, brain, path)
+    const result = await deleteSourceGated(p, context, path)
     if (result.status === 'denied') return fail(result.reason, 403)
     return NextResponse.json({ ok: true })
   } catch (err) {

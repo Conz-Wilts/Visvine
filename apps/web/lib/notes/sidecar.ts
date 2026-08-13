@@ -1,34 +1,33 @@
-// The brain's control-plane sidecar — the DB port of blackbird-brain's
-// src/server/brainStore.ts (`.brain/` directory). One SpaceBrainFile row per
-// named file per brain: "folders.json" (registry), "audit.jsonl", "join-
+// The context's control-plane sidecar. One ContextState row per named file per
+// context: "folders.json" (registry), "audit.jsonl", "join-
 // requests.jsonl", "move-proposals.jsonl", "enrichment-state.json". Content is
 // text; JSON/JSONL parsing lives here, domain meaning in the callers.
 
 import prisma from '@/lib/prisma'
-import type { Brain } from './store'
+import type { Context } from './store'
 
-async function readText(brain: Brain, name: string): Promise<string | null> {
-  const row = await prisma.spaceBrainFile.findUnique({
+async function readText(context: Context, name: string): Promise<string | null> {
+  const row = await prisma.contextState.findUnique({
     where: {
-      brain_file_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name },
+      context_state_identity: { spaceId: context.spaceId, ownerKey: context.ownerKey, name },
     },
     select: { content: true },
   })
   return row?.content ?? null
 }
 
-async function writeText(brain: Brain, name: string, content: string): Promise<void> {
-  await prisma.spaceBrainFile.upsert({
+async function writeText(context: Context, name: string, content: string): Promise<void> {
+  await prisma.contextState.upsert({
     where: {
-      brain_file_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name },
+      context_state_identity: { spaceId: context.spaceId, ownerKey: context.ownerKey, name },
     },
-    create: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, name, content },
+    create: { spaceId: context.spaceId, ownerKey: context.ownerKey, name, content },
     update: { content },
   })
 }
 
-export async function readJson<T>(brain: Brain, name: string, fallback: T): Promise<T> {
-  const raw = await readText(brain, name)
+export async function readJson<T>(context: Context, name: string, fallback: T): Promise<T> {
+  const raw = await readText(context, name)
   if (!raw) return fallback
   try {
     return JSON.parse(raw) as T
@@ -37,13 +36,13 @@ export async function readJson<T>(brain: Brain, name: string, fallback: T): Prom
   }
 }
 
-export async function writeJson(brain: Brain, name: string, value: unknown): Promise<void> {
-  await writeText(brain, name, JSON.stringify(value, null, 2))
+export async function writeJson(context: Context, name: string, value: unknown): Promise<void> {
+  await writeText(context, name, JSON.stringify(value, null, 2))
 }
 
 /** Parse a JSONL file into records (malformed lines skipped). */
-export async function readJsonl<T>(brain: Brain, name: string): Promise<T[]> {
-  const raw = await readText(brain, name)
+export async function readJsonl<T>(context: Context, name: string): Promise<T[]> {
+  const raw = await readText(context, name)
   if (!raw) return []
   const out: T[] = []
   for (const line of raw.split('\n')) {
@@ -58,13 +57,13 @@ export async function readJsonl<T>(brain: Brain, name: string): Promise<T[]> {
   return out
 }
 
-export async function appendJsonl(brain: Brain, name: string, record: unknown): Promise<void> {
-  const raw = (await readText(brain, name)) ?? ''
+export async function appendJsonl(context: Context, name: string, record: unknown): Promise<void> {
+  const raw = (await readText(context, name)) ?? ''
   const line = JSON.stringify(record)
-  await writeText(brain, name, raw ? `${raw.replace(/\n+$/, '')}\n${line}\n` : `${line}\n`)
+  await writeText(context, name, raw ? `${raw.replace(/\n+$/, '')}\n${line}\n` : `${line}\n`)
 }
 
 /** Rewrite a whole JSONL file (used when resolving requests/proposals in place). */
-export async function writeJsonl(brain: Brain, name: string, records: unknown[]): Promise<void> {
-  await writeText(brain, name, records.map((r) => JSON.stringify(r)).join('\n') + (records.length ? '\n' : ''))
+export async function writeJsonl(context: Context, name: string, records: unknown[]): Promise<void> {
+  await writeText(context, name, records.map((r) => JSON.stringify(r)).join('\n') + (records.length ? '\n' : ''))
 }

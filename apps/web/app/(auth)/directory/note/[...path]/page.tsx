@@ -1,7 +1,7 @@
 'use client';
 
 // Standalone note view: /directory/note/<path segments> renders any non-entity
-// brain note (folder indexes, sectors, deals…). The static `note` segment wins
+// context note (folder indexes, sectors, deals…). The static `note` segment wins
 // over the sibling /directory/[nodeId] route, so entity profiles are
 // unaffected. Entity notes still open as profile Context tabs — links route
 // there via resolveEntityNode; this page is everything else.
@@ -25,7 +25,7 @@ const NOTE_TABS: PaneTabItem[] = [
   { id: 'raw', label: 'Raw' },
 ];
 
-// The brain-root index is where the Directory's Context tab lands, so it keeps
+// The context-root index is where the Directory's Context tab lands, so it keeps
 // the Directory's own Grid tab in the bar — Context still reads as a sibling
 // view of the grid rather than a place you left it for. Any other note drops
 // Grid and shows the plain note bar above.

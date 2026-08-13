@@ -1,6 +1,4 @@
-// The review agent's pure checks — ported from blackbird-brain's
-// src/shared/review.ts and adapted to Visvine's note shapes: schema gaps,
-// broken links, orphans, unlinked mentions, staleness, duplicates, oversized
+// The review agent's pure checks: schema gaps, broken links, orphans, unlinked mentions, staleness, duplicates, oversized
 // notes. Produces a report of safe, reversible AUTO-FIXES (allow-listed) plus
 // FINDINGS for a human — the agent never auto-applies a destructive change.
 

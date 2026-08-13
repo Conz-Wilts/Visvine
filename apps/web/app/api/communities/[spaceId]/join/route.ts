@@ -105,7 +105,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       where: { userId: session.userId, spaceId },
     });
 
-    // Brain access leaves with them: direct grants + team memberships here.
+    // Context access leaves with them: direct grants + team memberships here.
     await removeMemberAccess(spaceId, session.userId);
 
     // Note: intentionally leaving the user's node in the space context when they leave.

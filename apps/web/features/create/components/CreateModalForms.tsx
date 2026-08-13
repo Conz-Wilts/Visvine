@@ -930,7 +930,7 @@ type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
 export interface FileEntry {
   file: File;
   status: FileUploadStatus;
-  /** Brain path the source landed at (set once uploaded). */
+  /** Context path the source landed at (set once uploaded). */
   path?: string;
   error?: string;
 }

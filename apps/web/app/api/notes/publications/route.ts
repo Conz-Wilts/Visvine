@@ -1,10 +1,10 @@
-// Cross-brain publishing (lib/notes/publications.ts).
+// Cross-context publishing (lib/notes/publications.ts).
 //   GET ?spaceId=&path=  → { asSource, asTarget } — how this path
 //        participates in publishing, from this space's point of view, with
 //        space names for the banner/panel. Requires read access to the path.
 //   POST { spaceId, action, ... }:
 //        'publish'   { fromSpaceId?, fromPath, toPath } — publish a note the
-//             caller can READ (default source: their personal brain) into THIS
+//             caller can READ (default source: their personal context) into THIS
 //             space. Needs edit at the destination; otherwise the request
 //             queues as a publish proposal for a folder manager to approve.
 //        'unpublish' { id } — deactivate; the replica stays as a plain copy.
@@ -14,11 +14,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { requireSession } from '@/lib/session'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
-import { principalOf, resolveBrain, resolvePersonalBrain } from '@/lib/notes/brain'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
+import { principalOf, resolveContext, resolvePersonalContext } from '@/lib/notes/resolve'
 import { personalPrincipal } from '@/lib/notes/principal'
 import { personalSpaceId } from '@/lib/spaces/personalSpace'
-import { writeDenial } from '@/lib/notes/brainService'
+import { writeDenial } from '@/lib/notes/contextService'
 import { readNoteOrNull } from '@/lib/notes/store'
 import {
   getPublication,
@@ -33,7 +33,7 @@ import {
   principalCanManage,
   principalCanRead,
 } from '@/lib/notes/shared/permissions'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SessionPayload } from '@/lib/session'
 
 /** Attach display names for every space a publication list references. */
@@ -54,15 +54,15 @@ async function withNames(rows: PublicationInfo[]): Promise<Array<PublicationInfo
 }
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  const p = await principalOf(brain)
-  if (!brain.isPersonalSpace && !principalCanRead(p, path)) {
+  const p = await principalOf(context)
+  if (!context.isPersonalSpace && !principalCanRead(p, path)) {
     return fail(`Note not found: ${path}`, 404)
   }
-  const state = await publicationStateFor(brain.spaceId, path)
+  const state = await publicationStateFor(context.spaceId, path)
   const [asSource, asTarget] = await Promise.all([
     withNames(state.asSource),
     state.asTarget ? withNames([state.asTarget]).then((r) => r[0]) : Promise.resolve(null),
@@ -74,21 +74,21 @@ export async function GET(req: NextRequest) {
 async function resolveSourcePrincipal(
   session: SessionPayload,
   fromSpaceId: string,
-): Promise<BrainPrincipal | Response> {
+): Promise<ContextPrincipal | Response> {
   if (fromSpaceId === personalSpaceId(session.userId)) {
     const identity = { userId: session.userId, name: session.name, email: session.email }
-    await resolvePersonalBrain(identity) // provisions on first use
+    await resolvePersonalContext(identity) // provisions on first use
     return personalPrincipal(identity)
   }
-  const resolved = await resolveBrain(session, fromSpaceId)
+  const resolved = await resolveContext(session, fromSpaceId)
   if (resolved instanceof Response) return resolved
   return principalOf(resolved)
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
   const session = await requireSession()
   if (session instanceof Response) return session
   const action = typeof body.action === 'string' ? body.action : null
@@ -98,8 +98,8 @@ export async function POST(req: NextRequest) {
       const fromPath = typeof body.fromPath === 'string' ? body.fromPath : null
       const toPath = typeof body.toPath === 'string' ? body.toPath : null
       if (!fromPath || !toPath) return fail('fromPath and toPath are required')
-      if (brain.isPersonalSpace) {
-        return fail('Publish into a space brain — your personal space is the source')
+      if (context.isPersonalSpace) {
+        return fail('Publish into a space context — your personal space is the source')
       }
       const fromSpaceId =
         typeof body.fromSpaceId === 'string' && body.fromSpaceId
@@ -115,8 +115,8 @@ export async function POST(req: NextRequest) {
 
       // Edit at the destination applies the publication now; anything less
       // queues it for a folder manager — same double door as promote.
-      const targetP = await principalOf(brain)
-      const denial = writeDenial(targetP, { spaceId: brain.spaceId, ownerKey: 'shared' }, toPath)
+      const targetP = await principalOf(context)
+      const denial = writeDenial(targetP, { spaceId: context.spaceId, ownerKey: 'shared' }, toPath)
       if (denial) {
         const snapshot = await readNoteOrNull(
           { spaceId: fromSpaceId, ownerKey: 'shared' },
@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ status: 'proposed', proposalId: proposal.id })
       }
 
-      const result = await publishNote(fromSpaceId, fromPath, brain.spaceId, toPath, {
+      const result = await publishNote(fromSpaceId, fromPath, context.spaceId, toPath, {
         id: session.userId,
         name: session.name,
         email: session.email,
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       if (!id) return fail('id is required')
       const pub = await getPublication(id)
       if (!pub) return fail('Unknown publication', 404)
-      const targetP = pub.targetSpaceId === brain.spaceId ? await principalOf(brain) : null
+      const targetP = pub.targetSpaceId === context.spaceId ? await principalOf(context) : null
       const allowed =
         pub.createdBy === session.userId ||
         (targetP !== null && principalCanManage(targetP, pub.targetPath)) ||

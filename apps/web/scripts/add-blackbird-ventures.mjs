@@ -340,7 +340,7 @@ try {
   console.log(`  ✓ ${persons.length} founders`);
 
   // 4. Directory links are NOT written here anymore. Founder↔company edges are
-  // derived from the shared-brain context notes (origin 'context', relationship
+  // derived from the shared-context context notes (origin 'context', relationship
   // 'mentioned') seeded by add-blackbird-notes.mjs and materialised by
   // scripts/backfill-context-links.ts.
   void links; // computed above for reference only; no longer inserted

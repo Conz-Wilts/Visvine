@@ -62,9 +62,9 @@ const UNRESOLVED = '__unresolved__';
  */
 const NEUTRAL = '#6b7280';
 
-// Direction is carried by the row's tooltip alone. It used to also ride as a
-// glyph on every row, which turned the column into a wall of arrows to read
-// past — the name is what you scan for.
+// Direction is carried by the row's tooltip alone: a glyph on every row turns
+// the column into a wall of arrows to read past, and the name is what you scan
+// for.
 const DIRECTION_TITLE: Record<Direction, string> = {
   out: 'This note links here',
   in: 'Links to this note',

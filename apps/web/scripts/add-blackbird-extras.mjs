@@ -337,7 +337,7 @@ try {
     for (const a of rows) {
       const attendeeId = `attendee:${e.slug}-${a.n}`;
       await client.query(
-        `INSERT INTO attendees (id, event_id, person_id, name, email, company_name, role_title, answers, status, response,
+        `INSERT INTO event_attendees (id, event_id, person_id, name, email, company_name, role_title, answers, status, response,
            plus_ones, plus_one_names, created_at, updated_at, checkin_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, NOW(), $14)
          ON CONFLICT (event_id, email) DO UPDATE SET person_id = EXCLUDED.person_id, name = EXCLUDED.name,

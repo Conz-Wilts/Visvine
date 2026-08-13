@@ -63,7 +63,7 @@ pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
 pnpm db:migrate         # prisma db push (sync schema)
 pnpm db:seed            # base seed: the space, aliases + anchor users (WIPES the DB)
-pnpm db:blackbird:full  # db:seed + portfolio + brain + extras + connectors
+pnpm db:blackbird:full  # db:seed + portfolio + context + extras + connectors
 pnpm db:nz              # load the NZ startup ecosystem demo content
 pnpm db:fresh           # drop tables + push + db:blackbird:full (volume preserved)
 pnpm db:reset           # destroy volume + rebuild + push + db:blackbird:full (prompts)
@@ -86,12 +86,12 @@ built in layers. `pnpm db:blackbird:full` runs all of them:
 |---|---|
 | `db:seed` | the space, its node types and aliases, the four anchor users. **Wipes the whole local DB first.** |
 | `db:blackbird:ventures` | ~182 portfolio companies + their founders, `founded` links, seven CRM columns |
-| `db:blackbird:notes` | the shared brain (companies, sectors, people, team, deals, data) + the admin's personal brain |
+| `db:blackbird:notes` | the shared context (companies, sectors, people, team, deals, data) + the admin's personal context |
 | `db:blackbird:extras` | events + attendees, the resource library, channels + messages + a DM, feed posts |
-| `db:connectors:demo` | two working connectors in the shared brain |
-| `db:context-links` | directory links derived from the shared-brain entity notes |
+| `db:connectors:demo` | two working connectors in the shared context |
+| `db:context-links` | directory links derived from the shared-context entity notes |
 | `db:index-notes:rebuild` | creates any missing folder index and refreshes every index's managed child list |
-| `db:notes:verify` | fails the seed if the brain breaks a structural rule |
+| `db:notes:verify` | fails the seed if the context breaks a structural rule |
 
 Other demo content (the NZ startup ecosystem) loads separately via `pnpm db:nz`.
 

@@ -63,9 +63,8 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
       designConfig: true,
       featureConfig: true,
       visibility: true,
-      // Derived, not stored: `memberCount` used to be a hand-maintained column
-      // that four separate call sites incremented. Counting active memberships
-      // here cannot drift.
+      // Derived, not stored: counting active memberships here cannot drift the
+      // way a maintained column would.
       _count: { select: { members: { where: { status: 'active' } } } },
     },
     orderBy: { name: 'asc' },

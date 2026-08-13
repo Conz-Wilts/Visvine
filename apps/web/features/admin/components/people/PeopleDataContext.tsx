@@ -1,7 +1,7 @@
 'use client';
 
 // One load of everything the People, Aliases and Invite console sections need —
-// members, aliases, the grant overview, the brain tree and open access requests
+// members, aliases, the grant overview, the context tree and open access requests
 // — shared by all three, with every mutation reloading the lot. That is what
 // keeps them from ever disagreeing: they are three views of one snapshot, not
 // three components each fetching their own.
@@ -79,7 +79,7 @@ export default function PeopleDataProvider({
       notesApi.listAliases(spaceId),
       notesApi.getAccessOverview(spaceId).catch(() => null),
       notesApi.tree(spaceId).catch(() => null),
-      notesApi.getBrainSettings(spaceId).catch(() => null),
+      notesApi.getContextSettings(spaceId).catch(() => null),
       notesApi.listAccessRequests(spaceId).catch(() => null),
     ]);
     setData({

@@ -13,7 +13,7 @@ import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui'
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { describeOutcome, requestTargetLabel } from '@/lib/notes/shared/accessRequests';
 import { levelName, type AccessLevelName } from '@/lib/notes/shared/authz';
-import type { AccessRequest } from '@/lib/notes/shared/brainTypes';
+import type { AccessRequest } from '@/lib/notes/shared/contextTypes';
 import { usePeopleSection } from './PeopleDataContext';
 import { LevelSelect } from './shared';
 

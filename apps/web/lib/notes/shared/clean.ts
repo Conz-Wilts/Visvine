@@ -54,7 +54,7 @@ export function scopeIssues(issues: Issue[], scope: CleanScope): Issue[] {
 /**
  * Fixes the CLEAN pass refuses even though the review surface would apply them:
  * `setStale` on entity notes (people/, communities/, …) and index notes.
- * Entity cards are long-lived reference notes — a brain full of people would
+ * Entity cards are long-lived reference notes — a context full of people would
  * otherwise get blanket-staled on its first deep clean; an index note IS a
  * folder and never goes stale. The web review route keeps its own behaviour.
  */

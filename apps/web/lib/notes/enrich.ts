@@ -1,16 +1,15 @@
-// The enrichment runner — the port of blackbird-brain's src/server/enrichment.ts,
-// re-scoped for multi-tenant privacy: it distills the CALLING user's own personal
-// brain (never anyone else's) into the space's shared brain. The LLM ABSTRACTS
+// The enrichment runner, scoped for multi-tenant privacy: it distills the CALLING user's own personal
+// context (never anyone else's) into the space's shared context. The LLM ABSTRACTS
 // reusable insight upward — synthesise, never copy — the output is coerced against
 // guardrails, provenance-stamped, and applied through the gated write path as the
-// caller. A sha256 ledger (per personal brain) makes the pass idempotent.
+// caller. A sha256 ledger (per personal context) makes the pass idempotent.
 
 import { createHash } from 'crypto'
 import * as store from './store'
-import { SHARED_OWNER_KEY, type Brain } from './store'
+import { SHARED_OWNER_KEY, type Context } from './store'
 import { chat, extractJsonObject, aiConfigured, aiModelName } from './ai'
 import { readJson, writeJson } from './sidecar'
-import { visibleVault, writeGated, appendLogGated } from './brainService'
+import { visibleVault, writeGated, appendLogGated } from './contextService'
 import { buildNoteIndex } from './shared/context'
 import { joinFrontmatter, splitFrontmatter } from './shared/markdown'
 import { provenanceRef, stampProvenance } from './shared/noteLog'
@@ -23,9 +22,9 @@ import {
   type EnrichmentSource,
   type SelectOptions,
 } from './shared/enrichment'
-import type { BrainPrincipal, WriteResult } from './shared/brainTypes'
+import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 
-// One ledger per TARGET space (stored on the personal brain), so distilling
+// One ledger per TARGET space (stored on the personal context), so distilling
 // into space A doesn't mark a note "seen" for space B.
 function ledgerName(targetSpaceId: string): string {
   return `enrichment-state.${targetSpaceId.replace(/[^a-zA-Z0-9_-]+/g, '-')}.json`
@@ -60,13 +59,13 @@ function userMsg(c: EnrichmentCandidate, targets: { id: string; title: string }[
 
 /** Apply an abstracted insight through the gated write path, as the caller. */
 async function applyOutput(
-  p: BrainPrincipal,
-  shared: Brain,
-  personalBrain: Brain,
+  p: ContextPrincipal,
+  shared: Context,
+  personalContext: Context,
   out: EnrichmentOutput,
   c: EnrichmentCandidate,
 ): Promise<WriteResult> {
-  const src = provenanceRef(`${personalBrain.spaceId}/${c.sourcePath}`)
+  const src = provenanceRef(`${personalContext.spaceId}/${c.sourcePath}`)
   if (out.action === 'new_note') {
     const fm = stampProvenance(
       {
@@ -102,18 +101,18 @@ export interface EnrichmentRunResult {
 }
 
 /**
- * Distill the caller's personal brain into the space's shared brain.
+ * Distill the caller's personal context into the space's shared context.
  * No-op when AI is unconfigured.
  */
 export async function runEnrichment(
-  p: BrainPrincipal,
-  personalBrain: Brain,
+  p: ContextPrincipal,
+  personalContext: Context,
   opts: SelectOptions,
 ): Promise<EnrichmentRunResult> {
   if (!aiConfigured()) return { applied: 0, considered: 0 }
-  const shared: Brain = { spaceId: p.spaceId, ownerKey: SHARED_OWNER_KEY }
+  const shared: Context = { spaceId: p.spaceId, ownerKey: SHARED_OWNER_KEY }
 
-  const raws = await store.listRaw(personalBrain)
+  const raws = await store.listRaw(personalContext)
   const metas = buildNoteIndex(raws)
   const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
 
@@ -129,10 +128,10 @@ export async function runEnrichment(
     }
   })
 
-  const ledger = await readJson<EnrichmentLedger>(personalBrain, ledgerName(p.spaceId), { seen: {} })
+  const ledger = await readJson<EnrichmentLedger>(personalContext, ledgerName(p.spaceId), { seen: {} })
   const candidates = selectEnrichmentCandidates(sources, ledger, opts)
 
-  // Targets the LLM may append to: what the caller can see in the shared brain.
+  // Targets the LLM may append to: what the caller can see in the shared context.
   const { metas: sharedMetas } = await visibleVault(p, shared)
   const targets = sharedMetas.map((m) => ({ id: m.path.replace(/\.md$/i, ''), title: m.title }))
   const validTargetIds = new Set(targets.map((t) => t.id))
@@ -151,7 +150,7 @@ export async function runEnrichment(
     }
     if (out) {
       try {
-        const r = await applyOutput(p, shared, personalBrain, out, c)
+        const r = await applyOutput(p, shared, personalContext, out, c)
         if (r.status === 'applied') applied++
       } catch {
         /* a failed write skips this candidate; the ledger still marks it seen */
@@ -159,6 +158,6 @@ export async function runEnrichment(
     }
     ledger.seen[c.sourcePath] = c.sha256
   }
-  await writeJson(personalBrain, ledgerName(p.spaceId), ledger)
+  await writeJson(personalContext, ledgerName(p.spaceId), ledger)
   return { applied, considered: candidates.length }
 }

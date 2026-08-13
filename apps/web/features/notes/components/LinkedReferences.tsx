@@ -3,7 +3,7 @@
 // Roam-style backlinks rendered below the note body, inside the editor's scroll
 // column — linked + unlinked references (each with the source title, date, and
 // excerpt). Typographic, not boxed: the references read as a continuation of
-// the note. Ported in spirit from blackbird-brain.
+// the note.
 
 import { useState, type ReactNode } from 'react'
 import { Lock } from 'lucide-react'
@@ -67,7 +67,7 @@ function Reference({
 }) {
   const [linking, setLinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The block navigates (blackbird-brain behavior): hover draws a box around it,
+  // The block navigates: hover draws a box around it,
   // click anywhere opens the source note. The date divider sits above, outside
   // the hover box, so highlighting doesn't swallow the date rule.
   const open = () => onOpenNote(refItem.fromPath)

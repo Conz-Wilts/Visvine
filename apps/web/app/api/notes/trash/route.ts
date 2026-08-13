@@ -1,12 +1,12 @@
 // GET /api/notes/trash?spaceId=&scope=
-// The soft-deleted notes for a brain (newest first), for the trash modal.
+// The soft-deleted notes for a context (newest first), for the trash modal.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain } from '@/lib/notes/api'
+import { requireContext } from '@/lib/notes/api'
 import { listTrash } from '@/lib/notes/store'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
-  return NextResponse.json({ trash: await listTrash(brain) })
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
+  return NextResponse.json({ trash: await listTrash(context) })
 }

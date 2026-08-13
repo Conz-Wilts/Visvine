@@ -6,7 +6,7 @@
 // This lives in personal settings rather than the space console on purpose:
 // the OAuth token an MCP client holds belongs to the *person*, and every tool
 // call names its own space_id, which is then re-checked against live
-// membership and brain grants server-side. So one connection covers every
+// membership and context grants server-side. So one connection covers every
 // space you belong to, and there is nothing here for an admin to configure
 // on someone else's behalf.
 //

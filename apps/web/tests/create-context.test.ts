@@ -1,4 +1,4 @@
-// Unit tests for the "Create new → Context / File" pure layer: title → brain
+// Unit tests for the "Create new → Context / File" pure layer: title → context
 // path slugging, collision suffixing, seed note frontmatter, and the widened
 // source-kind table (docx/xlsx/json) with its real extractors.
 // Run: node --import tsx --test tests/create-context.test.ts
@@ -9,7 +9,7 @@ import {
   availableFolderPath,
   availableNotePath,
   composeNotePath,
-  joinBrainPath,
+  joinContextPath,
   newNoteContent,
   noteFileSlug,
 } from '../lib/notes/shared/newContext'
@@ -31,10 +31,10 @@ test('noteFileSlug kebab-cases titles and drops punctuation', () => {
   assert.equal(noteFileSlug('***'), 'untitled')
 })
 
-test('joinBrainPath tolerates stray slashes and an empty (root) folder', () => {
-  assert.equal(joinBrainPath('', 'a.md'), 'a.md')
-  assert.equal(joinBrainPath('deals', 'a.md'), 'deals/a.md')
-  assert.equal(joinBrainPath('/deals/2026/', 'a.md'), 'deals/2026/a.md')
+test('joinContextPath tolerates stray slashes and an empty (root) folder', () => {
+  assert.equal(joinContextPath('', 'a.md'), 'a.md')
+  assert.equal(joinContextPath('deals', 'a.md'), 'deals/a.md')
+  assert.equal(joinContextPath('/deals/2026/', 'a.md'), 'deals/2026/a.md')
 })
 
 test('composeNotePath puts the slug under the chosen folder as .md', () => {

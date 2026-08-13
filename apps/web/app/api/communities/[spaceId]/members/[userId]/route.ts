@@ -89,7 +89,7 @@ export async function DELETE(
     where: { userId_spaceId: { userId, spaceId } },
   });
 
-  // Brain access leaves with them: direct grants + the aliases they held here.
+  // Context access leaves with them: direct grants + the aliases they held here.
   await removeMemberAccess(spaceId, userId);
 
   return NextResponse.json({ success: true });

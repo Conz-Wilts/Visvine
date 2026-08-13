@@ -14,7 +14,7 @@
 // re-runs are harmless.
 
 import prisma from '@/lib/prisma'
-import type { Brain } from '@/lib/notes/store'
+import type { Context } from '@/lib/notes/store'
 import { getVault } from '@/lib/notes/vaultCache'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { embedTexts, embeddingsConfig } from '@/lib/notes/embeddings'
@@ -40,22 +40,22 @@ export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
   if (!config) return { configured: false, notes: 0, chunks: 0 }
   const where = spaceId ? { spaceId } : {}
 
-  const brainRows = await prisma.spaceNote.groupBy({
+  const contextRows = await prisma.contextNote.groupBy({
     by: ['spaceId', 'ownerKey'],
     where: { ...where, deletedAt: null },
   })
-  const brains: Brain[] = brainRows.map((b) => ({
+  const contexts: Context[] = contextRows.map((b) => ({
     spaceId: b.spaceId,
     ownerKey: b.ownerKey,
   }))
 
   let notes = 0
-  for (const brain of brains) {
-    const { raws, metas } = await getVault(brain)
+  for (const context of contexts) {
+    const { raws, metas } = await getVault(context)
     const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
 
-    const cached = await prisma.spaceNoteEmbedding.findMany({
-      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, model: config.model },
+    const cached = await prisma.contextNoteEmbedding.findMany({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey, model: config.model },
       select: { path: true, mtime: true },
     })
     const cachedMtime = new Map(cached.map((r) => [r.path, Number(r.mtime)]))
@@ -69,8 +69,8 @@ export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
       for (let j = 0; j < batch.length; j++) {
         const literal = vectorLiteral(vectors[j])
         await prisma.$executeRaw`
-          INSERT INTO space_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
-          VALUES ((gen_random_uuid())::text, ${brain.spaceId}, ${brain.ownerKey}, ${batch[j].path}, ${config.model}, ${BigInt(batch[j].mtime)}, ${literal}::vector, now())
+          INSERT INTO context_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
+          VALUES ((gen_random_uuid())::text, ${context.spaceId}, ${context.ownerKey}, ${batch[j].path}, ${config.model}, ${BigInt(batch[j].mtime)}, ${literal}::vector, now())
           ON CONFLICT (space_id, owner_key, path)
           DO UPDATE SET model = ${config.model}, mtime = ${BigInt(batch[j].mtime)}, embedding = ${literal}::vector, updated_at = now()`
       }

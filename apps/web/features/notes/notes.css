@@ -31,7 +31,7 @@
 /* ---------- Centred writing column ----------
  * Body, freshness line, and references share one scroll container and one
  * centred 760px column, so the references read as a continuation of the note
- * rather than a separate boxed panel (matches blackbird-brain's editor). */
+ * rather than a separate boxed panel. */
 .notes-column {
   width: 100%;
   max-width: 760px;

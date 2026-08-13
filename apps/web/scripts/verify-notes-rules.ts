@@ -1,5 +1,5 @@
 /**
- * Verify the brain's structural rules — the ones the seed has to satisfy and the
+ * Verify the context's structural rules — the ones the seed has to satisfy and the
  * app maintains at runtime. An index note IS a folder (see
  * lib/notes/shared/indexNote.ts), which the checks below make concrete:
  *
@@ -16,7 +16,7 @@
  * Read-only — but local-only anyway, guarded like the destructive db:* scripts.
  *
  * Usage:
- *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts                 # all brains
+ *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts                 # all contexts
  *   pnpm --filter @visvine/web exec tsx scripts/verify-notes-rules.ts <spaceId>   # one space
  */
 
@@ -66,31 +66,31 @@ async function main() {
   const only = process.argv[2];
   const where = only ? { spaceId: only } : {};
 
-  const noteBrains = await prisma.spaceNote.groupBy({
+  const noteContexts = await prisma.contextNote.groupBy({
     by: ['spaceId', 'ownerKey'],
     where: { ...where, deletedAt: null },
   });
-  const folderBrains = await prisma.spaceNoteFolder.groupBy({
+  const folderContexts = await prisma.contextFolder.groupBy({
     by: ['spaceId', 'ownerKey'],
     where,
   });
-  const brains = new Map<string, { spaceId: string; ownerKey: string }>();
-  for (const b of [...noteBrains, ...folderBrains]) {
-    brains.set(`${b.spaceId} ${b.ownerKey}`, { spaceId: b.spaceId, ownerKey: b.ownerKey });
+  const contexts = new Map<string, { spaceId: string; ownerKey: string }>();
+  for (const b of [...noteContexts, ...folderContexts]) {
+    contexts.set(`${b.spaceId} ${b.ownerKey}`, { spaceId: b.spaceId, ownerKey: b.ownerKey });
   }
-  if (only && brains.size === 0) throw new Error(`No notes found for space: ${only}`);
+  if (only && contexts.size === 0) throw new Error(`No notes found for space: ${only}`);
 
   const violations: string[] = [];
   let checked = 0;
 
-  for (const brain of brains.values()) {
-    const label = `${brain.spaceId} [${brain.ownerKey}]`;
-    const notes: Note[] = await prisma.spaceNote.findMany({
-      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
+  for (const context of contexts.values()) {
+    const label = `${context.spaceId} [${context.ownerKey}]`;
+    const notes: Note[] = await prisma.contextNote.findMany({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null },
       select: { path: true, content: true },
     });
-    const explicit = await prisma.spaceNoteFolder.findMany({
-      where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
+    const explicit = await prisma.contextFolder.findMany({
+      where: { spaceId: context.spaceId, ownerKey: context.ownerKey },
       select: { path: true },
     });
     const live = new Set(notes.map((n) => n.path));
@@ -151,7 +151,7 @@ async function main() {
   }
 
   if (violations.length === 0) {
-    console.log(`notes rules OK — ${checked} notes across ${brains.size} brains`);
+    console.log(`notes rules OK — ${checked} notes across ${contexts.size} contexts`);
     return;
   }
   console.error(`${violations.length} violation(s):`);

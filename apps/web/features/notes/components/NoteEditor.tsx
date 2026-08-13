@@ -6,7 +6,7 @@
 // and re-attached on save, the body is what's edited, and `[[` opens a note picker
 // that inserts an OKF [title](/path.md) link. Body, references, and the freshness
 // line share one centred scroll column so the references read as a continuation of
-// the note (matches blackbird-brain). Saves are debounced and bubbled up via onSave.
+// the note. Saves are debounced and bubbled up via onSave.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -345,9 +345,9 @@ export function NoteEditor({
           return true
         }
         const resolved = resolveOkfLink(href, pathRef.current)
-        // Open if the note is in this brain's index, OR it's a directory entity
+        // Open if the note is in this context's index, OR it's a directory entity
         // note — those resolve to the canonical shared note even when the current
-        // brain doesn't have them (the workspace handles the cross-brain open).
+        // context doesn't have them (the workspace handles the cross-context open).
         if (resolved && (notesSetRef.current.has(resolved) || parseEntityHref(resolved))) {
           onOpenNote(resolved)
           return true
@@ -544,7 +544,7 @@ export function NoteEditor({
   }, [editor, refactoring, flush])
 
   // The title shown above the body: index meta, else the note's own frontmatter
-  // (parsed from content — so notes outside this brain's index still title).
+  // (parsed from content — so notes outside this context's index still title).
   // Entity context notes normally never open here (the workspace routes them to
   // their profile's Context tab); the rare fallback (unresolvable node) renders
   // the plain title like any other note.
@@ -857,7 +857,7 @@ function ToolbarButton({
   )
 }
 
-// Text-style dropdown (matches blackbird-brain's Apple Notes-style options):
+// Text-style dropdown (Apple Notes-style options):
 // Title/Heading/Subheading map to the three heading levels, Body to paragraph,
 // Monospaced to a code block. Custom popover instead of a native <select> so it
 // matches the app's theme. Reflects the cursor's active block via editor state

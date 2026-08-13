@@ -1,4 +1,4 @@
-// Unit tests for the pure part of cross-brain publishing: the replica content
+// Unit tests for the pure part of cross-context publishing: the replica content
 // builder (lib/notes/publications.ts#replicaContent) — provenance must be
 // stamped, the body preserved, and an existing author never overwritten.
 // Run: node --import tsx --test tests/notes-publications.test.ts

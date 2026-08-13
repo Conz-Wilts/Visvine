@@ -13,10 +13,10 @@
 
 import prisma from '@/lib/prisma'
 import * as store from './store'
-import type { Brain } from './store'
-import { visibleVault, writeDenialFull, writeDenial, lockedDenial } from './brainService'
+import type { Context } from './store'
+import { visibleVault, writeDenialFull, writeDenial, lockedDenial } from './contextService'
 import { logAudit } from './audit'
-import { canRemove, type ResolvedBrain } from './brain'
+import { canRemove, type ResolvedContext } from './resolve'
 import { applyAutoFix, buildReviewReport, DEFAULT_THRESHOLDS, type AutoFix } from './shared/review'
 import {
   buildCleanScope,
@@ -30,7 +30,7 @@ import {
   type WorklistGroup,
 } from './shared/clean'
 import { isLockedPath } from './shared/authz'
-import type { BrainPrincipal } from './shared/brainTypes'
+import type { ContextPrincipal } from './shared/contextTypes'
 
 export interface CleanOptions {
   role: CleanRole
@@ -55,11 +55,11 @@ export interface CleanAnalysis {
 /** Full mode's duplicate check is O(n²)-flavoured — bound it for the 60s route budget. */
 const FULL_MODE_NOTE_CAP = 1500
 
-async function ownedPathSet(p: BrainPrincipal, brain: Brain): Promise<Set<string>> {
-  const rows = await prisma.spaceNote.findMany({
+async function ownedPathSet(p: ContextPrincipal, context: Context): Promise<Set<string>> {
+  const rows = await prisma.contextNote.findMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       deletedAt: null,
       createdBy: p.userId,
     },
@@ -68,12 +68,12 @@ async function ownedPathSet(p: BrainPrincipal, brain: Brain): Promise<Set<string
   return new Set(rows.map((r) => r.path))
 }
 
-async function scopeFor(p: BrainPrincipal, brain: Brain, opts: CleanOptions): Promise<CleanScope> {
+async function scopeFor(p: ContextPrincipal, context: Context, opts: CleanOptions): Promise<CleanScope> {
   return buildCleanScope({
     role: opts.role,
-    ownedPaths: opts.role === 'member' ? await ownedPathSet(p, brain) : undefined,
+    ownedPaths: opts.role === 'member' ? await ownedPathSet(p, context) : undefined,
     targetPath: opts.targetPath,
-    canWrite: (path) => writeDenial(p, brain, path) === null,
+    canWrite: (path) => writeDenial(p, context, path) === null,
   })
 }
 
@@ -84,12 +84,12 @@ interface AnalysisInternals {
 }
 
 async function analyze(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   opts: CleanOptions,
 ): Promise<AnalysisInternals> {
-  const scope = await scopeFor(p, brain, opts)
-  const { raws, metas } = await visibleVault(p, brain)
+  const scope = await scopeFor(p, context, opts)
+  const { raws, metas } = await visibleVault(p, context)
 
   // Full mode gets expensive with the corpus size; cap deterministically and
   // say so, rather than blowing the MCP route's 60s budget.
@@ -139,7 +139,7 @@ async function analyze(
   // Structure data is for whoever can act on the whole target — admins and
   // personal-space owners. The agent reasons over it; nothing is applied here.
   if (opts.role !== 'member') {
-    const folders = (await store.listFolders(brain)).filter(
+    const folders = (await store.listFolders(context)).filter(
       (f) => !opts.targetPath || f === opts.targetPath || f.startsWith(`${opts.targetPath}/`),
     )
     analysis.structure = folderStats(analyzedMetas, folders)
@@ -148,11 +148,11 @@ async function analyze(
 }
 
 export async function runClean(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   opts: CleanOptions,
 ): Promise<CleanAnalysis> {
-  return (await analyze(p, brain, opts)).analysis
+  return (await analyze(p, context, opts)).analysis
 }
 
 export interface ApplyResult {
@@ -167,11 +167,11 @@ export interface ApplyResult {
  * system actor, so history answers "who cleaned this".
  */
 export async function applyCleanFixes(
-  p: BrainPrincipal,
-  brain: Brain,
+  p: ContextPrincipal,
+  context: Context,
   opts: CleanOptions,
 ): Promise<ApplyResult> {
-  const { analysis, fixes, contentByPath } = await analyze(p, brain, opts)
+  const { analysis, fixes, contentByPath } = await analyze(p, context, opts)
   let applied = 0
   const skipped: Array<{ path: string; reason: string }> = []
   for (const fix of fixes) {
@@ -179,7 +179,7 @@ export async function applyCleanFixes(
     if (current === undefined) continue
     // Belt and braces: the frozen callback scoped the fixes already, but the
     // replica block is async-only and cheap to re-check per write.
-    const denial = await writeDenialFull(p, brain, fix.path)
+    const denial = await writeDenialFull(p, context, fix.path)
     if (denial) {
       skipped.push({ path: fix.path, reason: denial })
       continue
@@ -187,7 +187,7 @@ export async function applyCleanFixes(
     const next = applyAutoFix(current, fix)
     if (next === current) continue
     await store.writeNote(
-      brain,
+      context,
       fix.path,
       next,
       { id: p.userId, name: p.name, email: p.email || null },
@@ -195,7 +195,7 @@ export async function applyCleanFixes(
       'mcp',
     )
     contentByPath.set(fix.path, next) // later fixes on the same note compose
-    if (brain.ownerKey === 'shared' && !brain.spaceId.startsWith('me:')) {
+    if (context.ownerKey === 'shared' && !context.spaceId.startsWith('me:')) {
       void logAudit(p.spaceId, {
         userId: p.userId,
         name: p.name,
@@ -223,14 +223,14 @@ export interface TrashResult {
  * ordinary write gate and the "Freeze for AI" lock.
  */
 export async function trashNotes(
-  p: BrainPrincipal,
-  brain: Brain,
-  resolved: ResolvedBrain | null,
+  p: ContextPrincipal,
+  context: Context,
+  resolved: ResolvedContext | null,
   paths: string[],
 ): Promise<TrashResult[]> {
   const out: TrashResult[] = []
   for (const path of paths) {
-    const createdBy = await store.getNoteCreatedBy(brain, path)
+    const createdBy = await store.getNoteCreatedBy(context, path)
     if (createdBy === null) {
       out.push({ path, status: 'denied', reason: 'No such note' })
       continue
@@ -244,12 +244,12 @@ export async function trashNotes(
       out.push({ path, status: 'denied', reason: 'Only the author, an admin, or full access at this path can remove it' })
       continue
     }
-    const denial = writeDenial(p, brain, path) ?? lockedDenial(p, brain, path, 'maintenance')
+    const denial = writeDenial(p, context, path) ?? lockedDenial(p, context, path, 'maintenance')
     if (denial) {
       out.push({ path, status: 'denied', reason: denial })
       continue
     }
-    await store.deleteNote(brain, path)
+    await store.deleteNote(context, path)
     if (resolved && !resolved.isPersonalSpace) {
       void logAudit(p.spaceId, {
         userId: p.userId,

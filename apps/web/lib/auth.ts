@@ -190,7 +190,7 @@ export async function getFeatureConfig(
 /**
  * Session + space-admin gate, as a value (not a Response). Returns the
  * session payload if the caller is a space admin (or super admin),
- * otherwise null — mirrors the gate several admin routes used to inline.
+ * otherwise null.
  *
  *   const session = await getAdminSession(spaceId);
  *   if (!session) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

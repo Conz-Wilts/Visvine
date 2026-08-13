@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
-import { resolveBrain, principalOf } from '@/lib/notes/brain';
-import { readVisible, writeGated } from '@/lib/notes/brainService';
+import { resolveContext, principalOf } from '@/lib/notes/resolve';
+import { readVisible, writeGated } from '@/lib/notes/contextService';
 import {
   joinFrontmatter,
   parseFrontmatter,
@@ -29,11 +29,11 @@ import { describeConnector, listConnectorCalls } from '@/lib/connectors/service'
  * config (hosts, header shapes, secret names), not space content.
  */
 
-/** Session → admin-resolved brain, or the response that says why not. */
+/** Session → admin-resolved context, or the response that says why not. */
 async function requireConnectorAdmin(spaceId: string) {
   const session = await requireSession();
   if (session instanceof Response) return session;
-  const resolved = await resolveBrain(session, spaceId);
+  const resolved = await resolveContext(session, spaceId);
   if (resolved instanceof Response) return resolved;
   if (!resolved.isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return resolved;
@@ -54,7 +54,7 @@ export async function GET(
   }
 
   const stored = connector.secrets.length
-    ? await prisma.spaceSecret.findMany({
+    ? await prisma.connectorSecret.findMany({
         where: { spaceId, name: { in: connector.secrets } },
         select: { name: true, updatedAt: true },
       })

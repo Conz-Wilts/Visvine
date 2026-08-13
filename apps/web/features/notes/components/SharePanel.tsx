@@ -43,7 +43,7 @@ import {
   levelDisplayLabel,
   type AccessLevelName,
 } from '@/lib/notes/shared/authz'
-import type { AccessRequest } from '@/lib/notes/shared/brainTypes'
+import type { AccessRequest } from '@/lib/notes/shared/contextTypes'
 import {
   notesApi,
   type PathAccessResponse,
@@ -376,7 +376,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
   const isPersonalSpace = spaceId.startsWith(PERSONAL_ID_PREFIX)
   const spaceName = joinedSpaces.find((c) => c.id === spaceId)?.name ?? 'the space'
   const displayName =
-    title ?? (path === '' ? 'brain root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
+    title ?? (path === '' ? 'context root' : (path.split('/').pop() ?? path).replace(/\.md$/, ''))
 
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
   const [requests, setRequests] = useState<AccessRequest[]>([])
@@ -778,7 +778,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                     {direct
                       ? entry.email ?? (kind === 'note' ? 'Added on this note' : 'Added on this folder')
                       : entry.via === ''
-                        ? 'Inherited from the brain root'
+                        ? 'Inherited from the context root'
                         : `Inherited from ${entry.via}/`}
                   </div>
                 </div>
@@ -852,7 +852,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                   ? `Anyone in ${spaceName} can ${
                       spaceEntry.levelName === 'view' ? 'view' : 'access'
                     } this`
-                  : `Inherited from ${spaceEntry.via === '' ? 'the brain root' : `${spaceEntry.via}/`}`
+                  : `Inherited from ${spaceEntry.via === '' ? 'the context root' : `${spaceEntry.via}/`}`
                 : 'Only people added above and space admins'}
             </div>
           </div>
@@ -1051,7 +1051,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
 
             {isPersonalSpace ? (
               <p className="text-sm text-text-muted">
-                This note lives in your personal brain — only you can see it. Publish it into a space
+                This note lives in your personal context — only you can see it. Publish it into a space
                 below to share a live copy.
               </p>
             ) : adding ? (

@@ -1,6 +1,5 @@
-// Promotion — how knowledge moves up the tree (blackbird-brain README §"How
-// knowledge moves up"). A member SHARES a note from their personal space's
-// brain into a space brain. With write access to the destination the copy
+// Promotion — how knowledge moves up the tree. A member SHARES a note from their personal space's
+// context into a space context. With write access to the destination the copy
 // applies immediately (provenance-stamped, audited; the personal original stays
 // theirs to keep editing); without it, the promotion is queued as a proposal
 // ("move-proposals.jsonl") for a folder admin to approve. One-time copy, not a
@@ -8,8 +7,8 @@
 
 import { randomUUID } from 'crypto'
 import * as store from './store'
-import { SHARED_OWNER_KEY, type Brain } from './store'
-import { writeDenial } from './brainService'
+import { SHARED_OWNER_KEY, type Context } from './store'
+import { writeDenial } from './contextService'
 import { publishNote } from './publications'
 import { personalSpaceId } from '@/lib/spaces/personalSpace'
 import { logAudit } from './audit'
@@ -18,11 +17,11 @@ import { folderIdOfPath } from './shared/placement'
 import { principalCanManage } from './shared/permissions'
 import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from './shared/markdown'
 import { provenanceRef } from './shared/noteLog'
-import type { BrainPrincipal, MoveProposalEntry } from './shared/brainTypes'
+import type { ContextPrincipal, MoveProposalEntry } from './shared/contextTypes'
 
 const FILE = 'move-proposals.jsonl'
 
-function sharedBrain(spaceId: string): Brain {
+function sharedContext(spaceId: string): Context {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
@@ -32,7 +31,7 @@ export type PromoteResult =
   | { status: 'denied'; reason: string }
 
 /** Stamp provenance + authorship on the shared copy. */
-function promotedContent(content: string, fromRef: string, p: BrainPrincipal): string {
+function promotedContent(content: string, fromRef: string, p: ContextPrincipal): string {
   const fm = parseFrontmatter(content)
   const { body } = splitFrontmatter(content)
   return joinFrontmatter(
@@ -51,12 +50,12 @@ function promotedContent(content: string, fromRef: string, p: BrainPrincipal): s
 }
 
 async function applyPromotion(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   fromRef: string,
   toPath: string,
   content: string,
 ): Promise<string> {
-  const shared = sharedBrain(p.spaceId)
+  const shared = sharedContext(p.spaceId)
   let dest = toPath
   let n = 1
   // Suffix on collision rather than overwriting someone else's note.
@@ -75,23 +74,23 @@ async function applyPromotion(
 }
 
 /**
- * Share (promote) a note from the caller's personal space brain into the
- * target space's brain (`p.spaceId`). Copies — the personal original
+ * Share (promote) a note from the caller's personal space context into the
+ * target space's context (`p.spaceId`). Copies — the personal original
  * stays. Applies directly when the caller can write the destination; otherwise
  * queues a proposal for a folder admin.
  */
 export async function promoteNote(
-  p: BrainPrincipal,
-  personalBrain: Brain,
+  p: ContextPrincipal,
+  personalContext: Context,
   fromPath: string,
   toPath: string,
 ): Promise<PromoteResult> {
-  const raw = await store.readNoteOrNull(personalBrain, fromPath)
+  const raw = await store.readNoteOrNull(personalContext, fromPath)
   if (raw === null) return { status: 'denied', reason: `Note not found: ${fromPath}` }
-  const fromRef = provenanceRef(`${personalBrain.spaceId}/${fromPath}`)
+  const fromRef = provenanceRef(`${personalContext.spaceId}/${fromPath}`)
   const content = promotedContent(raw, fromRef, p)
 
-  const denial = writeDenial(p, sharedBrain(p.spaceId), toPath)
+  const denial = writeDenial(p, sharedContext(p.spaceId), toPath)
   if (!denial) {
     const path = await applyPromotion(p, fromRef, toPath, content)
     return { status: 'applied', path }
@@ -108,7 +107,7 @@ export async function promoteNote(
     proposedAt: Date.now(),
     status: 'pending',
   }
-  await appendJsonl(sharedBrain(p.spaceId), FILE, proposal)
+  await appendJsonl(sharedContext(p.spaceId), FILE, proposal)
   return { status: 'proposed', proposalId: proposal.id }
 }
 
@@ -118,7 +117,7 @@ export async function promoteNote(
  * (lib/notes/publications.ts) instead of a one-time copy.
  */
 export async function queuePublishProposal(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   fromPath: string,
   toPath: string,
   contentSnapshot: string,
@@ -135,13 +134,13 @@ export async function queuePublishProposal(
     proposedAt: Date.now(),
     status: 'pending',
   }
-  await appendJsonl(sharedBrain(p.spaceId), FILE, proposal)
+  await appendJsonl(sharedContext(p.spaceId), FILE, proposal)
   return proposal
 }
 
 /** Proposals the principal may see: their own, plus any folder they manage. */
-export async function listProposals(p: BrainPrincipal): Promise<MoveProposalEntry[]> {
-  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.spaceId), FILE)
+export async function listProposals(p: ContextPrincipal): Promise<MoveProposalEntry[]> {
+  const all = await readJsonl<MoveProposalEntry>(sharedContext(p.spaceId), FILE)
   return all
     .filter((r) => r.proposedBy === p.userId || principalCanManage(p, r.folderId))
     .reverse()
@@ -151,16 +150,16 @@ export async function listProposals(p: BrainPrincipal): Promise<MoveProposalEntr
  * Approve or deny a pending promotion/publication. Requires manage (full) at
  * the destination folder. Approving a copy writes the proposal's snapshot into
  * the shared folder; approving a PUBLISH proposal creates the live publication
- * from the proposer's personal brain (reading its CURRENT content — the
+ * from the proposer's personal context (reading its CURRENT content — the
  * snapshot is only the preview). The personal original is left to its owner —
- * an admin cannot reach into a personal brain.
+ * an admin cannot reach into a personal context.
  */
 export async function resolveProposal(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   proposalId: string,
   approve: boolean,
 ): Promise<MoveProposalEntry> {
-  const all = await readJsonl<MoveProposalEntry>(sharedBrain(p.spaceId), FILE)
+  const all = await readJsonl<MoveProposalEntry>(sharedContext(p.spaceId), FILE)
   const proposal = all.find((r) => r.id === proposalId)
   if (!proposal) throw new Error('Proposal not found')
   if (!principalCanManage(p, proposal.folderId)) {
@@ -184,7 +183,7 @@ export async function resolveProposal(
       detail: `approved publish proposal from ${proposal.proposerName}`,
     })
   } else if (approve) {
-    const shared = sharedBrain(p.spaceId)
+    const shared = sharedContext(p.spaceId)
     let dest = proposal.toPath
     let n = 1
     while (await store.readNoteOrNull(shared, dest)) {
@@ -205,6 +204,6 @@ export async function resolveProposal(
   proposal.status = approve ? 'approved' : 'denied'
   proposal.resolvedBy = p.userId
   proposal.resolvedAt = Date.now()
-  await writeJsonl(sharedBrain(p.spaceId), FILE, all)
+  await writeJsonl(sharedContext(p.spaceId), FILE, all)
   return proposal
 }

@@ -1,6 +1,6 @@
-// Access requests for the brain gate, restricted folders, and individual notes
-// (table `brain_access_requests`, successor of the "join-requests.jsonl"
-// sidecar). A member asks for a resource path ('' = the brain root, i.e. brain
+// Access requests for the context gate, restricted folders, and individual notes
+// (table `context_access_requests`, successor of the "join-requests.jsonl"
+// sidecar). A member asks for a resource path ('' = the context root, i.e. context
 // access); whoever MANAGES that path — full-level grant holders and space
 // admins — approves, which writes a grant at EXACTLY that path, or denies.
 // Resolved rows are kept as the audit trail behind the console queue.
@@ -9,11 +9,11 @@
 // shared/accessRequests.ts so the UI and the API agree.
 
 import prisma from '@/lib/prisma'
-import { SHARED_OWNER_KEY, type Brain } from './store'
+import { SHARED_OWNER_KEY, type Context } from './store'
 import { readJsonl, writeJsonl } from './sidecar'
 import { grantAccess, normalizeResourcePath } from './access'
 import { logAudit } from './audit'
-import type { AccessRequest, BrainPrincipal } from './shared/brainTypes'
+import type { AccessRequest, ContextPrincipal } from './shared/contextTypes'
 import { canRequest, canResolveRequest, requestVisibleTo, sortRequests } from './shared/accessRequests'
 import { LEVEL_VIEW, levelDisplayLabel, levelName } from './shared/authz'
 
@@ -44,7 +44,7 @@ type RequestRow = {
   grantedLevel: number | null
 }
 
-function sharedBrain(spaceId: string): Brain {
+function sharedContext(spaceId: string): Context {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
@@ -75,9 +75,9 @@ const imported = new Set<string>()
 async function ensureRequestsImported(spaceId: string): Promise<void> {
   if (imported.has(spaceId)) return
   imported.add(spaceId)
-  const legacy = await readJsonl<LegacyJoinRequest>(sharedBrain(spaceId), LEGACY_FILE)
+  const legacy = await readJsonl<LegacyJoinRequest>(sharedContext(spaceId), LEGACY_FILE)
   if (!legacy.length) return
-  await prisma.brainAccessRequest.createMany({
+  await prisma.contextAccessRequest.createMany({
     data: legacy
       .filter((r): r is LegacyJoinRequest & { userId: string } => typeof r.userId === 'string')
       .map((r) => ({
@@ -93,7 +93,7 @@ async function ensureRequestsImported(spaceId: string): Promise<void> {
       })),
   })
   // Empty the sidecar so a second process can't import the same records again.
-  await writeJsonl(sharedBrain(spaceId), LEGACY_FILE, [])
+  await writeJsonl(sharedContext(spaceId), LEGACY_FILE, [])
 }
 
 /** Attach requester/resolver display snapshots for the review queue. */
@@ -118,22 +118,22 @@ async function hydrate(requests: AccessRequest[]): Promise<AccessRequest[]> {
 }
 
 /**
- * File a request for `resourcePath` ('' = brain access). Idempotent: an open
+ * File a request for `resourcePath` ('' = context access). Idempotent: an open
  * request for the same path is returned untouched rather than duplicated.
  */
 export async function createAccessRequest(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   resourcePath: string,
   message?: string,
 ): Promise<AccessRequest> {
   const path = normalizeResourcePath(resourcePath)
   if (!canRequest(p, path)) throw new Error('You already have access here')
   await ensureRequestsImported(p.spaceId)
-  const open = await prisma.brainAccessRequest.findFirst({
+  const open = await prisma.contextAccessRequest.findFirst({
     where: { spaceId: p.spaceId, userId: p.userId, resourcePath: path, status: 'pending' },
   })
   if (open) return toRequest(open)
-  const row = await prisma.brainAccessRequest.create({
+  const row = await prisma.contextAccessRequest.create({
     data: {
       spaceId: p.spaceId,
       userId: p.userId,
@@ -150,9 +150,9 @@ export async function createAccessRequest(
  * references rail's locked stubs, so a stub whose source note is already
  * requested shows "pending" instead of offering the button again.
  */
-export async function pendingRequestPaths(p: BrainPrincipal): Promise<Set<string>> {
+export async function pendingRequestPaths(p: ContextPrincipal): Promise<Set<string>> {
   await ensureRequestsImported(p.spaceId)
-  const rows = await prisma.brainAccessRequest.findMany({
+  const rows = await prisma.contextAccessRequest.findMany({
     where: { spaceId: p.spaceId, userId: p.userId, status: 'pending' },
     select: { resourcePath: true },
   })
@@ -164,9 +164,9 @@ export async function pendingRequestPaths(p: BrainPrincipal): Promise<Set<string
  * they manage (space admins manage everything). One payload serves both the
  * console queue and a folder manager's SharePanel; each filters what it shows.
  */
-export async function listVisibleAccessRequests(p: BrainPrincipal): Promise<AccessRequest[]> {
+export async function listVisibleAccessRequests(p: ContextPrincipal): Promise<AccessRequest[]> {
   await ensureRequestsImported(p.spaceId)
-  const rows = await prisma.brainAccessRequest.findMany({
+  const rows = await prisma.contextAccessRequest.findMany({
     where: { spaceId: p.spaceId },
     orderBy: { createdAt: 'desc' },
     take: 200,
@@ -180,12 +180,12 @@ export async function listVisibleAccessRequests(p: BrainPrincipal): Promise<Acce
  * request. Requires manage standing at the requested path.
  */
 export async function resolveAccessRequest(
-  p: BrainPrincipal,
+  p: ContextPrincipal,
   requestId: string,
   approve: boolean,
   level?: number,
 ): Promise<AccessRequest> {
-  const row = await prisma.brainAccessRequest.findFirst({
+  const row = await prisma.contextAccessRequest.findFirst({
     where: { id: requestId, spaceId: p.spaceId },
   })
   if (!row) throw new Error('Access request not found')
@@ -209,7 +209,7 @@ export async function resolveAccessRequest(
       { userId: p.userId, name: p.name },
     )
   }
-  const updated = await prisma.brainAccessRequest.update({
+  const updated = await prisma.contextAccessRequest.update({
     where: { id: request.id },
     data: {
       status: approve ? 'approved' : 'denied',

@@ -5,7 +5,7 @@
  * A note can write any `type:` it likes. A type the console never created is a
  * type nothing can filter, colour or alias — it renders as a grey placeholder
  * chip and stays invisible to the directory. This script closes that gap for
- * brains seeded before the type existed: it reads every live note's frontmatter
+ * contexts seeded before the type existed: it reads every live note's frontmatter
  * type, and adds the missing ones to the space's node types with a colour
  * from the palette below (or a stable fallback).
  *
@@ -56,7 +56,7 @@ async function main() {
   });
 
   for (const space of spaces) {
-    const notes = await prisma.spaceNote.findMany({
+    const notes = await prisma.contextNote.findMany({
       where: { spaceId: space.id, deletedAt: null },
       select: { content: true },
     });

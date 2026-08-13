@@ -2,7 +2,7 @@
 
 // Destination picker shared by the Create modal's Context (note) and File
 // (source) forms: where in the current space's context the new thing lands.
-// Notes and sources share one brain-path namespace, so they share one picker —
+// Notes and sources share one context-path namespace, so they share one picker —
 // the folder list, the "New folder…" affordance, and the resulting path preview
 // are identical for both.
 
@@ -23,8 +23,8 @@ export interface FolderOption {
   label: string;
 }
 
-export interface BrainTree {
-  /** Every folder in the brain, depth-first ('' root excluded). */
+export interface ContextFolderTree {
+  /** Every folder in the context, depth-first ('' root excluded). */
   folders: FolderOption[];
   /** Existing note paths — the modal de-duplicates the destination against these. */
   notePaths: Set<string>;
@@ -44,11 +44,11 @@ function collect(node: TreeNode, folders: FolderOption[], notes: Set<string>): v
 }
 
 /**
- * The current brain's folder list + note paths, through the shared context
+ * The current context's folder list + note paths, through the shared context
  * cache — the tree is usually already warm from the Context tab/sidebar, so the
  * picker paints filled in rather than empty-then-populated.
  */
-export function useBrainTree(spaceId: string | null, enabled: boolean): BrainTree {
+export function useContextFolderTree(spaceId: string | null, enabled: boolean): ContextFolderTree {
   const [tree, setTree] = useState<TreeNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -179,7 +179,7 @@ export function FolderPicker({
 }
 
 /**
- * The destination board: every folder in the brain as a drop target, and the
+ * The destination board: every folder in the context as a drop target, and the
  * draft as a card you drag into one. Dropping IS the create — that's the whole
  * gesture, and it's why this isn't a select. Clicking a row does the same
  * thing, so the board works from the keyboard and on touch, where HTML5 drag
@@ -341,7 +341,7 @@ export function PathPreview({ path, taken }: { path: string; taken?: boolean }) 
  * Where an entity's context note will land, for the forms whose namespace is
  * fixed (people/, events/, spaces/, channels/, communities/…). These get a
  * preview rather than a FolderPicker on purpose: the path→node resolution the
- * brain relies on is only sound while each kind owns its own namespace, so the
+ * context relies on is only sound while each kind owns its own namespace, so the
  * destination is shown, not chosen.
  *
  * Mirrors entityNotePath — the id it derives the filename from is

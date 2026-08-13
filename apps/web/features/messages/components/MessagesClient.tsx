@@ -434,8 +434,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   useEffect(() => {
     if (!selectedConversationId) return;
-    // Only refetch when the search term actually changed — the conversation
-    // switch itself already loads messages (this used to double-fetch).
+    // Only refetch when the search term actually changed: the conversation
+    // switch itself already loads messages.
     if (messageSearch === lastAppliedSearchRef.current) return;
     const t = setTimeout(() => {
       lastAppliedSearchRef.current = messageSearch;

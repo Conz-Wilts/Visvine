@@ -244,7 +244,7 @@ describe('moreFeatureKeys', () => {
 
 describe('isNodeTypeEnabled', () => {
   it('leaves ungated types alone', () => {
-    // 'Space' is the org type (formerly Space) — always on, like Person.
+    // 'Space' is the org type — always on, like Person.
     for (const type of ['Person', 'Space', 'space', 'Event']) {
       assert.equal(nodeTypeFeatureKey(type), null);
       assert.equal(isNodeTypeEnabled({ enabled: { channels: false, resources: false } }, type), true);

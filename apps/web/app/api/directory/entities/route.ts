@@ -8,26 +8,26 @@
 //
 // The work itself lives in lib/directory/createEntity.ts — the MCP
 // `add_context` tool calls the same function directly, so this handler is only
-// the HTTP adapter: parse, resolve the brain (membership check), delegate, map
+// the HTTP adapter: parse, resolve the context (membership check), delegate, map
 // the result union onto status codes.
 //
 // Why this exists alongside POST /api/data/nodes: that route is the admin-only
 // bulk/Data-tab surface. Here the rule is "if you could write people/craig.md by
-// hand, you can create Craig" — active membership plus the brain's own write
+// hand, you can create Craig" — active membership plus the context's own write
 // gate at the target note path.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain } from '@/lib/notes/api'
+import { requireContext } from '@/lib/notes/api'
 import { createEntity } from '@/lib/directory/createEntity'
 import { handleApiError } from '@/lib/api/route'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
-    const brain = await requireBrain(req, body)
-    if (brain instanceof Response) return brain
+    const context = await requireContext(req, body)
+    if (context instanceof Response) return context
 
-    const result = await createEntity(brain, {
+    const result = await createEntity(context, {
       type: typeof body.type === 'string' ? body.type : '',
       name: typeof body.name === 'string' ? body.name : '',
       alias: typeof body.alias === 'string' ? body.alias : null,

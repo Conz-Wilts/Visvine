@@ -12,8 +12,8 @@ import {
   seesUnfiltered,
   visibilitySignature,
 } from '../lib/notes/shared/vaultView'
-import { LEVEL_EDIT, LEVEL_VIEW, type AccessGrant, type BrainAccess } from '../lib/notes/shared/authz'
-import type { BrainPrincipal } from '../lib/notes/shared/brainTypes'
+import { LEVEL_EDIT, LEVEL_VIEW, type AccessGrant, type ContextAccess } from '../lib/notes/shared/authz'
+import type { ContextPrincipal } from '../lib/notes/shared/contextTypes'
 import type { RawNote } from '../lib/notes/shared/types'
 
 const grant = (resourcePath: string, level: number): AccessGrant => ({
@@ -28,8 +28,8 @@ function principal(
   grants: AccessGrant[],
   restricted: string[] = [],
   spaceAdmin = false,
-): BrainPrincipal {
-  const access: BrainAccess = { grants, restricted, locked: [] }
+): ContextPrincipal {
+  const access: ContextAccess = { grants, restricted, locked: [] }
   return { userId, email: `${userId}@x.com`, name: userId, spaceId: 'c1', spaceAdmin, access }
 }
 
@@ -64,8 +64,8 @@ test('a gated-out member and an open member never share a signature', () => {
   assert.notEqual(gated, open)
 })
 
-test('seesUnfiltered: personal brains and super admins only', () => {
-  assert.equal(seesUnfiltered(principal('anyone', MEMBER_GRANTS, RESTRICTED), false), true) // personal brain
+test('seesUnfiltered: personal contexts and super admins only', () => {
+  assert.equal(seesUnfiltered(principal('anyone', MEMBER_GRANTS, RESTRICTED), false), true) // personal context
   assert.equal(seesUnfiltered(principal('admin', MEMBER_GRANTS, RESTRICTED, true), true), true)
   assert.equal(seesUnfiltered(principal('outsider', MEMBER_GRANTS, RESTRICTED), true), false)
 })

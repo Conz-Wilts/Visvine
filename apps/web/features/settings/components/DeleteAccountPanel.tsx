@@ -3,10 +3,10 @@
 // Settings → Account. The one destructive action a person can take on their own
 // behalf: delete the account *and* the profile behind it.
 //
-// The profile is called out explicitly in the copy because the two used to come
-// apart — losing access left the `Person` row standing, so the data outlived the
-// account. `lib/account/deleteAccount.ts` is what closes that, and this panel
-// promises exactly what that service does, no more.
+// The profile is called out explicitly in the copy because the two must not come
+// apart: leaving the `Person` row standing would outlive the account.
+// `lib/account/deleteAccount.ts` erases both, and this panel promises exactly
+// what that service does, no more.
 
 import { useState } from 'react';
 import { Alert, Button, Input, Modal, SettingsSection } from '@/components/ui';
@@ -16,7 +16,7 @@ import { useSession } from '@/features/auth/lib/auth-client';
 const REMOVED = [
   'Your profile — name, photo, bio, contact details and links',
   'Your personal notes and context in every space',
-  'Your space memberships, aliases and brain access',
+  'Your space memberships, aliases and context access',
   'Your messages, posts, comments and reactions',
   'Your entry in every space directory',
 ];

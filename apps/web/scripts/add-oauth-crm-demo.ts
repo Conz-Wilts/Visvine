@@ -4,7 +4,7 @@
  * which the platform knows anything about. Everything an agent needs to survive
  * it lives in the note's prose.
  *
- * Writes into the space's SHARED brain:
+ * Writes into the space's SHARED context:
  *   • connectors/crm.md — v2 connector against /api/dev/oauth-crm, with the
  *     client id + secret as env, and a body that teaches the token dance.
  *   • the CRM_CLIENT_ID / CRM_CLIENT_SECRET secrets, encrypted under SECRETS_KEY.
@@ -166,10 +166,10 @@ async function main() {
   if (!space) throw new Error(`space ${spaceId} not found — run \`pnpm db:seed\` first`);
 
   if (REMOVE) {
-    const notes = await prisma.spaceNote.deleteMany({
+    const notes = await prisma.contextNote.deleteMany({
       where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.spaceSecret.deleteMany({
+    const secrets = await prisma.connectorSecret.deleteMany({
       where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
     await syncContextLinksBulk({ spaceId, ownerKey: SHARED }, NOTES.map((n) => n.path));
@@ -185,7 +185,7 @@ async function main() {
   if (!owner) throw new Error(`space ${spaceId} has no members to attribute the note to`);
 
   for (const note of NOTES) {
-    await prisma.spaceNote.upsert({
+    await prisma.contextNote.upsert({
       where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
       create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
@@ -199,7 +199,7 @@ async function main() {
   );
 
   for (const secret of SECRETS) {
-    await prisma.spaceSecret.upsert({
+    await prisma.connectorSecret.upsert({
       where: { secret_identity: { spaceId, name: secret.name } },
       create: {
         spaceId,

@@ -1,14 +1,13 @@
-// DB-backed note store: the web replacement for blackbird-brain's filesystem
-// src/server/notes.ts + src/server/history.ts. Every note is a `SpaceNote`
-// row keyed by a brain `{ spaceId, ownerKey }` and a brain-relative POSIX
-// `path` — the same `{ path, content, mtime }` shape the Electron app read off
-// disk, so the pure index/context/backlink pipeline in ./shared works unchanged.
+// DB-backed note store. Every note is a `ContextNote` row keyed by a context
+// `{ spaceId, ownerKey }` and a context-relative POSIX `path`, exposed as
+// `{ path, content, mtime }` so the pure index/context/backlink pipeline in
+// ./shared can treat a row exactly like a file on disk.
 //
 // Soft-delete (trash) is a `deletedAt` timestamp; the row's `path` is parked at a
 // `:trash:<id>` sentinel so it frees the real path (kept in `deletedPath`) for a
 // future note and never collides with the (space, ownerKey, path) unique key.
-// Revision history mirrors the .history sidecar: a baseline snapshot is seeded on
-// the first edit, consecutive same-author edits coalesce, and history is capped.
+// Revision history: a baseline snapshot is seeded on the first edit, consecutive
+// same-author edits coalesce, and history is capped.
 
 import prisma from '@/lib/prisma'
 import type {
@@ -52,9 +51,9 @@ function isStarred(content: string): boolean {
   return Boolean(parseFrontmatter(content).starred)
 }
 
-export interface Brain {
+export interface Context {
   spaceId: string
-  ownerKey: string // 'shared' = space brain; else a userId = personal brain
+  ownerKey: string // 'shared' = space context; else a userId = personal context
 }
 
 export const SHARED_OWNER_KEY = 'shared'
@@ -73,7 +72,7 @@ const COALESCE_WINDOW_MS = 5 * 60 * 1000
 
 // path safety
 
-// Normalize an untrusted, client-supplied path to a safe brain-relative POSIX
+// Normalize an untrusted, client-supplied path to a safe context-relative POSIX
 // path. Rejects traversal and NUL (Postgres text can't store NUL anyway).
 // Exported for the context-source store, which shares the note path namespace.
 export function sanitizePath(p: string): string {
@@ -98,7 +97,7 @@ function baseName(p: string): string {
   return p.split('/').pop() ?? p
 }
 
-// The folder holding a path — '' for the brain root.
+// The folder holding a path — '' for the context root.
 function folderOf(p: string): string {
   return p.split('/').slice(0, -1).join('/')
 }
@@ -108,25 +107,25 @@ function toRaw(row: { path: string; content: string; updatedAt: Date }): RawNote
 }
 
 // A live (non-trashed) note at this exact path, or null.
-function findLive(brain: Brain, path: string) {
-  return prisma.spaceNote.findFirst({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path, deletedAt: null },
+function findLive(context: Context, path: string) {
+  return prisma.contextNote.findFirst({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path, deletedAt: null },
   })
 }
 
 // reads
 
-export async function listRaw(brain: Brain): Promise<RawNote[]> {
-  const rows = await prisma.spaceNote.findMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
+export async function listRaw(context: Context): Promise<RawNote[]> {
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null },
     select: { path: true, content: true, updatedAt: true },
   })
   return rows.map(toRaw)
 }
 
-export async function listFolders(brain: Brain): Promise<string[]> {
-  const rows = await prisma.spaceNoteFolder.findMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
+export async function listFolders(context: Context): Promise<string[]> {
+  const rows = await prisma.contextFolder.findMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey },
     select: { path: true },
   })
   // The table doubles as the access-boundary store, and a boundary can sit on a
@@ -136,28 +135,28 @@ export async function listFolders(brain: Brain): Promise<string[]> {
   return rows.map((r) => r.path).filter((p) => !p.endsWith('.md'))
 }
 
-export async function noteCount(brain: Brain): Promise<number> {
-  return prisma.spaceNote.count({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null },
+export async function noteCount(context: Context): Promise<number> {
+  return prisma.contextNote.count({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null },
   })
 }
 
-export async function readNote(brain: Brain, path: string): Promise<string> {
-  const row = await findLive(brain, sanitizePath(path))
+export async function readNote(context: Context, path: string): Promise<string> {
+  const row = await findLive(context, sanitizePath(path))
   if (!row) throw new Error(`Note not found: ${path}`)
   return row.content
 }
 
 /** Like readNote, but absent notes return null instead of throwing. */
-export async function readNoteOrNull(brain: Brain, path: string): Promise<string | null> {
-  const row = await findLive(brain, sanitizePath(path))
+export async function readNoteOrNull(context: Context, path: string): Promise<string | null> {
+  const row = await findLive(context, sanitizePath(path))
   return row?.content ?? null
 }
 
 // The userId that created a live note, or null if it doesn't exist. Used for the
-// shared-brain delete/rename permission check (see brain.ts:canRemove).
-export async function getNoteCreatedBy(brain: Brain, path: string): Promise<string | null> {
-  const row = await findLive(brain, sanitizePath(path))
+// shared-context delete/rename permission check (see context.ts:canRemove).
+export async function getNoteCreatedBy(context: Context, path: string): Promise<string | null> {
+  const row = await findLive(context, sanitizePath(path))
   return row?.createdBy ?? null
 }
 
@@ -167,7 +166,7 @@ export async function getNoteCreatedBy(brain: Brain, path: string): Promise<stri
 // the first revision (baseline + edit) is seeded on the first save, matching the
 // source app where note:create is separate from note:write.
 export async function createNote(
-  brain: Brain,
+  context: Context,
   path: string,
   content: string,
   actor: Actor,
@@ -178,15 +177,15 @@ export async function createNote(
   // folder `a/b` and writes its index, never a loose note that claims the type.
   let p = requested
   if (isIndexContent(content) && !isIndexPath(requested)) {
-    const denial = await indexConversionDenial(brain, requested)
+    const denial = await indexConversionDenial(context, requested)
     if (denial) throw new Error(denial)
     p = indexPathOf(indexFolderPathOf(requested))
   }
-  if (await findLive(brain, p)) throw new Error(`A note already exists at: ${p}`)
-  const row = await prisma.spaceNote.create({
+  if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
+  const row = await prisma.contextNote.create({
     data: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       path: p,
       content,
       starred: isStarred(content),
@@ -194,11 +193,11 @@ export async function createNote(
     },
     select: { path: true, content: true, updatedAt: true },
   })
-  if (isIndexPath(p)) await upsertFolderRow(brain, folderOf(p))
-  await syncContextLinks(brain, p, content)
-  await ensureAncestorIndexes(brain, p, actor)
-  await refreshIndexesForNote(brain, p)
-  invalidateVault(brain)
+  if (isIndexPath(p)) await upsertFolderRow(context, folderOf(p))
+  await syncContextLinks(context, p, content)
+  await ensureAncestorIndexes(context, p, actor)
+  await refreshIndexesForNote(context, p)
+  invalidateVault(context)
   return toRaw(row)
 }
 
@@ -214,12 +213,12 @@ export async function createNote(
  * (its own index excluded) plus its direct subfolders, each linked at its index.
  * Titles come from frontmatter, falling back to the filename / humanized segment.
  */
-async function directChildrenOf(brain: Brain, folder: string): Promise<IndexChild[]> {
+async function directChildrenOf(context: Context, folder: string): Promise<IndexChild[]> {
   const prefix = folder ? `${folder}/` : ''
-  const rows = await prisma.spaceNote.findMany({
+  const rows = await prisma.contextNote.findMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       deletedAt: null,
       ...(prefix ? { path: { startsWith: prefix } } : {}),
     },
@@ -232,7 +231,7 @@ async function directChildrenOf(brain: Brain, folder: string): Promise<IndexChil
     const rel = row.path.slice(prefix.length)
     const declared = String(parseFrontmatter(row.content).title ?? '').trim()
     if (!rel.includes('/')) {
-      // A direct note. The brain root's own index.md is a note like any other
+      // A direct note. The context root's own index.md is a note like any other
       // here only when `folder` is not the root — handled by the `own` skip.
       children.push({ path: row.path, title: declared || rel.replace(/\.md$/i, '') })
     } else if (rel.split('/').length === 2 && isIndexPath(rel)) {
@@ -250,38 +249,38 @@ async function directChildrenOf(brain: Brain, folder: string): Promise<IndexChil
  * direct row update rather than writeNote, because index upkeep is machinery and
  * should not spawn a revision every time a note is added next door.
  *
- * The brain root is only refreshed if its index already opted in by carrying a
+ * The context root is only refreshed if its index already opted in by carrying a
  * block — the root index is a hand-written home page, not a listing.
  */
-export async function refreshFolderIndex(brain: Brain, folder: string): Promise<void> {
+export async function refreshFolderIndex(context: Context, folder: string): Promise<void> {
   const idx = indexPathOf(folder)
-  const row = await findLive(brain, idx)
+  const row = await findLive(context, idx)
   if (!row) return
   if (!folder && !hasChildrenBlock(row.content)) return
-  const next = applyChildrenBlock(row.content, await directChildrenOf(brain, folder))
+  const next = applyChildrenBlock(row.content, await directChildrenOf(context, folder))
   if (next === row.content) return
-  await prisma.spaceNote.update({ where: { id: row.id }, data: { content: next } })
-  invalidateVault(brain)
+  await prisma.contextNote.update({ where: { id: row.id }, data: { content: next } })
+  invalidateVault(context)
 }
 
 /**
  * Refresh the indexes that list `notePath`: the folder it lives in, and — when
  * the note IS a folder's index — the parent folder that lists that folder.
  */
-async function refreshIndexesForNote(brain: Brain, notePath: string): Promise<void> {
+async function refreshIndexesForNote(context: Context, notePath: string): Promise<void> {
   const own = folderOf(notePath)
-  await refreshFolderIndex(brain, own)
-  if (isIndexPath(notePath) && own) await refreshFolderIndex(brain, folderOf(own))
+  await refreshFolderIndex(context, own)
+  if (isIndexPath(notePath) && own) await refreshFolderIndex(context, folderOf(own))
 }
 
 /** The `SpaceNoteFolder` row that makes a folder exist in its own right. */
-async function upsertFolderRow(brain: Brain, folder: string): Promise<void> {
+async function upsertFolderRow(context: Context, folder: string): Promise<void> {
   if (!folder) return
-  await prisma.spaceNoteFolder.upsert({
+  await prisma.contextFolder.upsert({
     where: {
-      folder_identity: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path: folder },
+      folder_identity: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: folder },
     },
-    create: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, path: folder },
+    create: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: folder },
     update: {},
   })
 }
@@ -293,20 +292,20 @@ async function upsertFolderRow(brain: Brain, folder: string): Promise<void> {
 // Rows are inserted directly (not via createNote) — no recursion, no revision.
 // Returns the index paths created.
 export async function ensureAncestorIndexes(
-  brain: Brain,
+  context: Context,
   path: string,
   actor: Actor,
 ): Promise<string[]> {
   const created: string[] = []
   for (const folder of ancestorFolders(sanitizePath(path))) {
     const idx = indexPathOf(folder)
-    if (await findLive(brain, idx)) continue
-    const children = await directChildrenOf(brain, folder)
+    if (await findLive(context, idx)) continue
+    const children = await directChildrenOf(context, folder)
     try {
-      await prisma.spaceNote.create({
+      await prisma.contextNote.create({
         data: {
-          spaceId: brain.spaceId,
-          ownerKey: brain.ownerKey,
+          spaceId: context.spaceId,
+          ownerKey: context.ownerKey,
           path: idx,
           content: buildIndexStub(folder, children),
           starred: false,
@@ -320,32 +319,32 @@ export async function ensureAncestorIndexes(
       if ((e as { code?: string }).code !== 'P2002') throw e
     }
   }
-  if (created.length) invalidateVault(brain)
+  if (created.length) invalidateVault(context)
   return created
 }
 
-// The brain root's own index.md — the one index nothing else creates.
+// The context root's own index.md — the one index nothing else creates.
 // ensureAncestorIndexes can't: ancestorFolders('index.md') is [] by design (the
 // root isn't a folder anyone can nest under), and refreshFolderIndex leaves a
-// blockless root alone. So a brain gets a root index only if something seeds it.
+// blockless root alone. So a context gets a root index only if something seeds it.
 //
 // It matters beyond tidiness: the Directory's Context tab routes to the root
 // index — the space's home page (see app/(auth)/directory/page.tsx, which
-// also writes one on first open for brains that predate this seeding).
+// also writes one on first open for contexts that predate this seeding).
 //
 // Seeded via newIndexContent, whose empty managed child block is what makes the
 // root opt in to auto-listing its folders from here on. Returns true when it
 // created the index, false when one already existed.
 export async function ensureRootIndex(
-  brain: Brain,
+  context: Context,
   title: string,
   actor: Actor,
 ): Promise<boolean> {
   // createNote throws on an existing path, and a curated home page must never be
   // clobbered — so check first.
-  if (await readNoteOrNull(brain, INDEX_BASENAME)) return false
+  if (await readNoteOrNull(context, INDEX_BASENAME)) return false
   try {
-    await createNote(brain, INDEX_BASENAME, newIndexContent({ title }), actor)
+    await createNote(context, INDEX_BASENAME, newIndexContent({ title }), actor)
     return true
   } catch (e) {
     // Same race as ensureAncestorIndexes: the loser of a concurrent seed finds
@@ -363,7 +362,7 @@ export async function ensureRootIndex(
 // save retyped the note to `Index` and so turned it into a folder — callers that
 // hold a path (the editor, the API) redirect to the returned one.
 export async function writeNote(
-  brain: Brain,
+  context: Context,
   path: string,
   content: string,
   actor: Actor,
@@ -374,24 +373,24 @@ export async function writeNote(
   assertMarkdown(p)
   // Retyping a note to `Index` makes it a folder (below). Refuse the whole save
   // when it can't be one, rather than storing a note whose type contradicts
-  // where it lives. Replica writes never restructure their target brain.
+  // where it lives. Replica writes never restructure their target context.
   const converting = origin !== 'publish' && isIndexContent(content) && !isIndexPath(p)
   if (converting) {
-    const denial = await indexConversionDenial(brain, p)
+    const denial = await indexConversionDenial(context, p)
     if (denial) throw new Error(denial)
   }
-  const existing = await findLive(brain, p)
+  const existing = await findLive(context, p)
   const prev = existing?.content ?? null
 
   const note = existing
-    ? await prisma.spaceNote.update({
+    ? await prisma.contextNote.update({
         where: { id: existing.id },
         data: { content, starred: isStarred(content) },
       })
-    : await prisma.spaceNote.create({
+    : await prisma.contextNote.create({
         data: {
-          spaceId: brain.spaceId,
-          ownerKey: brain.ownerKey,
+          spaceId: context.spaceId,
+          ownerKey: context.ownerKey,
           path: p,
           content,
           starred: isStarred(content),
@@ -400,32 +399,32 @@ export async function writeNote(
       })
 
   // Entity notes drive directory links: re-derive this note's 'mentioned' edges
-  // from its [[mentions]]. Best-effort (no-op for personal brains / non-entity
+  // from its [[mentions]]. Best-effort (no-op for personal contexts / non-entity
   // paths); runs even on no-op saves so a missed sync self-heals on next save.
-  await syncContextLinks(brain, p, content)
+  await syncContextLinks(context, p, content)
 
-  // Refresh this note's published replicas in other brains. Origin 'publish'
+  // Refresh this note's published replicas in other contexts. Origin 'publish'
   // IS a replica write — skipping it is what stops replication cascades and
   // publish cycles dead. Best-effort like the link sync; self-heals on no-op
   // saves the same way.
-  if (origin !== 'publish') await syncPublicationsOnWrite(brain, p, content, actor)
+  if (origin !== 'publish') await syncPublicationsOnWrite(context, p, content, actor)
 
   // Upsert-created notes (e.g. an entity note's first save) get folder indexes too.
-  if (existing === null) await ensureAncestorIndexes(brain, p, actor)
-  await refreshIndexesForNote(brain, p)
+  if (existing === null) await ensureAncestorIndexes(context, p, actor)
+  await refreshIndexesForNote(context, p)
 
   // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
-  invalidateVault(brain)
+  invalidateVault(context)
 
   // The type is what makes a note an index, so the path follows it.
-  const finalPath = converting ? await convertNoteToIndex(brain, p, actor) : p
+  const finalPath = converting ? await convertNoteToIndex(context, p, actor) : p
 
   if (prev === content) return finalPath // nothing changed — don't spawn a revision
 
   // Seed a baseline of the pre-edit content the first time a note is edited, so
   // the oldest revision has a snapshot to diff/restore from.
   if (prev !== null) {
-    const count = await prisma.spaceNoteRevision.count({ where: { noteId: note.id } })
+    const count = await prisma.contextNoteRevision.count({ where: { noteId: note.id } })
     if (count === 0) {
       await recordRevision(
         note.id,
@@ -456,7 +455,7 @@ interface RevisionInput {
 // Append a revision, coalescing consecutive same-author manual edits within the
 // window (latest wins), then prune to MAX_REVISIONS (oldest first).
 async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now()): Promise<void> {
-  const last = await prisma.spaceNoteRevision.findFirst({
+  const last = await prisma.contextNoteRevision.findFirst({
     where: { noteId },
     orderBy: { at: 'desc' },
   })
@@ -468,7 +467,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     at - last.at.getTime() < COALESCE_WINDOW_MS
 
   if (coalesce && last) {
-    await prisma.spaceNoteRevision.update({
+    await prisma.contextNoteRevision.update({
       where: { id: last.id },
       data: {
         content: rev.content,
@@ -478,7 +477,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
       },
     })
   } else {
-    await prisma.spaceNoteRevision.create({
+    await prisma.contextNoteRevision.create({
       data: {
         noteId,
         content: rev.content,
@@ -491,82 +490,82 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     })
   }
 
-  const count = await prisma.spaceNoteRevision.count({ where: { noteId } })
+  const count = await prisma.contextNoteRevision.count({ where: { noteId } })
   if (count > MAX_REVISIONS) {
-    const stale = await prisma.spaceNoteRevision.findMany({
+    const stale = await prisma.contextNoteRevision.findMany({
       where: { noteId },
       orderBy: { at: 'asc' },
       take: count - MAX_REVISIONS,
       select: { id: true },
     })
-    await prisma.spaceNoteRevision.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
+    await prisma.contextNoteRevision.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
   }
 }
 
-export async function renameNote(brain: Brain, from: string, to: string): Promise<string> {
+export async function renameNote(context: Context, from: string, to: string): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
   assertMarkdown(t)
-  const row = await findLive(brain, f)
+  const row = await findLive(context, f)
   if (!row) throw new Error(`Note not found: ${from}`)
-  if (t !== f && (await findLive(brain, t))) throw new Error(`A note already exists at: ${to}`)
-  await prisma.spaceNote.update({ where: { id: row.id }, data: { path: t } })
+  if (t !== f && (await findLive(context, t))) throw new Error(`A note already exists at: ${to}`)
+  await prisma.contextNote.update({ where: { id: row.id }, data: { path: t } })
   // A rename changes which entity (if any) the note is canonical for: drop the
   // old path's context links, derive the new path's. Publications and any
   // note-level grants follow the note to its new path.
   if (t !== f) {
-    await syncContextLinksBulk(brain, [f], [[t, row.content]])
-    await syncPublicationsOnRename(brain, f, t)
-    if (brain.ownerKey === SHARED_OWNER_KEY) {
-      await prisma.brainGrant.updateMany({
-        where: { spaceId: brain.spaceId, resourcePath: f },
+    await syncContextLinksBulk(context, [f], [[t, row.content]])
+    await syncPublicationsOnRename(context, f, t)
+    if (context.ownerKey === SHARED_OWNER_KEY) {
+      await prisma.contextGrant.updateMany({
+        where: { spaceId: context.spaceId, resourcePath: f },
         data: { resourcePath: t },
       })
     }
     // Both ends list the note: the folder it left and the folder it landed in.
-    await refreshIndexesForNote(brain, f)
-    await refreshIndexesForNote(brain, t)
+    await refreshIndexesForNote(context, f)
+    await refreshIndexesForNote(context, t)
   }
-  invalidateVault(brain)
+  invalidateVault(context)
   return t // revisions stay attached by noteId
 }
 
 // trash (soft-delete)
 
-export async function deleteNote(brain: Brain, path: string): Promise<void> {
-  const row = await findLive(brain, sanitizePath(path))
+export async function deleteNote(context: Context, path: string): Promise<void> {
+  const row = await findLive(context, sanitizePath(path))
   if (!row) return
-  await prisma.spaceNote.update({
+  await prisma.contextNote.update({
     where: { id: row.id },
     data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
   })
-  await syncContextLinks(brain, row.path, null) // trashed note owns no context links
+  await syncContextLinks(context, row.path, null) // trashed note owns no context links
   // Trashing either end of a publication deactivates it (replica stays a copy).
-  await syncPublicationsOnDelete(brain, [row.path])
-  await refreshIndexesForNote(brain, row.path)
-  invalidateVault(brain)
+  await syncPublicationsOnDelete(context, [row.path])
+  await refreshIndexesForNote(context, row.path)
+  invalidateVault(context)
 }
 
 // Trashed notes are kept for TRASH_RETENTION_DAYS and then purged for good.
 // There is no cron behind this: the trash is only ever observed through
 // listTrash, so expiring on read is enough to make the promise true everywhere
 // it's visible.
-async function purgeExpiredTrash(brain: Brain): Promise<void> {
+async function purgeExpiredTrash(context: Context): Promise<void> {
   const cutoff = new Date(Date.now() - TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000)
-  const { count } = await prisma.spaceNote.deleteMany({
+  const { count } = await prisma.contextNote.deleteMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       deletedAt: { not: null, lt: cutoff },
     },
   })
-  if (count > 0) invalidateVault(brain)
+  if (count > 0) invalidateVault(context)
 }
 
-export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
-  await purgeExpiredTrash(brain)
-  const rows = await prisma.spaceNote.findMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+export async function listTrash(context: Context): Promise<TrashEntry[]> {
+  await purgeExpiredTrash(context)
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
     orderBy: { deletedAt: 'desc' },
     select: { id: true, deletedPath: true, deletedAt: true },
   })
@@ -579,53 +578,53 @@ export async function listTrash(brain: Brain): Promise<TrashEntry[]> {
 }
 
 // Restore a trashed note to its original path, suffixing on collision.
-export async function restoreTrash(brain: Brain, id: string): Promise<string> {
-  const row = await prisma.spaceNote.findFirst({
-    where: { id, spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+export async function restoreTrash(context: Context, id: string): Promise<string> {
+  const row = await prisma.contextNote.findFirst({
+    where: { id, spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
   })
   if (!row || !row.deletedPath) throw new Error('Trash entry not found')
   let dest = row.deletedPath
   let n = 1
-  while (await findLive(brain, dest)) {
+  while (await findLive(context, dest)) {
     dest = row.deletedPath.replace(/\.md$/i, '') + `-${n++}.md`
   }
-  await prisma.spaceNote.update({
+  await prisma.contextNote.update({
     where: { id: row.id },
     data: { deletedAt: null, deletedPath: null, path: dest },
   })
-  await syncContextLinks(brain, dest, row.content) // restored entity note re-owns its links
-  await refreshIndexesForNote(brain, dest)
-  invalidateVault(brain)
+  await syncContextLinks(context, dest, row.content) // restored entity note re-owns its links
+  await refreshIndexesForNote(context, dest)
+  invalidateVault(context)
   return dest
 }
 
 // Force-delete a single trash entry ahead of its 7 days. Irreversible.
-export async function purgeTrashEntry(brain: Brain, id: string): Promise<void> {
-  const { count } = await prisma.spaceNote.deleteMany({
-    where: { id, spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+export async function purgeTrashEntry(context: Context, id: string): Promise<void> {
+  const { count } = await prisma.contextNote.deleteMany({
+    where: { id, spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
   })
   if (count === 0) throw new Error('Trash entry not found')
-  invalidateVault(brain)
+  invalidateVault(context)
 }
 
-export async function emptyTrash(brain: Brain): Promise<void> {
-  await prisma.spaceNote.deleteMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: { not: null } },
+export async function emptyTrash(context: Context): Promise<void> {
+  await prisma.contextNote.deleteMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: { not: null } },
   })
-  invalidateVault(brain)
+  invalidateVault(context)
 }
 
 // folders
 
-export async function createFolder(brain: Brain, path: string, actor?: Actor): Promise<void> {
+export async function createFolder(context: Context, path: string, actor?: Actor): Promise<void> {
   const p = sanitizePath(path)
-  await upsertFolderRow(brain, p)
+  await upsertFolderRow(context, p)
   // The synthetic index path makes ancestorFolders cover this folder AND its parents.
   if (actor) {
-    await ensureAncestorIndexes(brain, indexPathOf(p), actor)
-    await refreshFolderIndex(brain, folderOf(p))
+    await ensureAncestorIndexes(context, indexPathOf(p), actor)
+    await refreshFolderIndex(context, folderOf(p))
   }
-  invalidateVault(brain)
+  invalidateVault(context)
 }
 
 /**
@@ -635,7 +634,7 @@ export async function createFolder(brain: Brain, path: string, actor?: Actor): P
  * index path so the caller can open it.
  */
 export async function createIndexFolder(
-  brain: Brain,
+  context: Context,
   path: string,
   content: string,
   actor: Actor,
@@ -643,11 +642,11 @@ export async function createIndexFolder(
   const p = sanitizePath(path)
   if (p.toLowerCase().endsWith('.md')) throw new Error(`A folder path is not a file: ${path}`)
   const idx = indexPathOf(p)
-  if (await findLive(brain, idx)) throw new Error(`A folder already exists at: ${p}`)
-  await upsertFolderRow(brain, p)
+  if (await findLive(context, idx)) throw new Error(`A folder already exists at: ${p}`)
+  await upsertFolderRow(context, p)
   // createNote does the rest of the invariant: ancestor indexes, the folder rows
   // above it, and the parent index that now lists this folder.
-  await createNote(brain, idx, content, actor)
+  await createNote(context, idx, content, actor)
   return idx
 }
 
@@ -656,7 +655,7 @@ export async function createIndexFolder(
  * is applied so a note that can't convert is refused whole, rather than saved
  * and then stranded at a path that contradicts its own type.
  */
-async function indexConversionDenial(brain: Brain, path: string): Promise<string | null> {
+async function indexConversionDenial(context: Context, path: string): Promise<string | null> {
   const p = sanitizePath(path)
   if (isIndexPath(p)) return null
   // A canonical entity note is a directory record — a person, a company, a
@@ -666,7 +665,7 @@ async function indexConversionDenial(brain: Brain, path: string): Promise<string
     return `"${p}" is a directory record, not a folder — it can't be an index`
   }
   const folder = indexFolderPathOf(p)
-  if (await findLive(brain, indexPathOf(folder))) {
+  if (await findLive(context, indexPathOf(folder))) {
     return `"${folder}" is already a folder — rename this note before making it an index`
   }
   return null
@@ -682,58 +681,58 @@ async function indexConversionDenial(brain: Brain, path: string): Promise<string
  * and silently merging one into the other would be a surprising way to lose a note.
  */
 async function convertNoteToIndex(
-  brain: Brain,
+  context: Context,
   path: string,
   actor: Actor,
 ): Promise<string> {
   const f = sanitizePath(path)
   if (isIndexPath(f)) return f
-  const denial = await indexConversionDenial(brain, f)
+  const denial = await indexConversionDenial(context, f)
   if (denial) throw new Error(denial)
-  const row = await findLive(brain, f)
+  const row = await findLive(context, f)
   if (!row) throw new Error(`Note not found: ${path}`)
   const folder = indexFolderPathOf(f)
   const dest = indexPathOf(folder)
 
-  await prisma.spaceNote.update({ where: { id: row.id }, data: { path: dest } })
-  await syncContextLinksBulk(brain, [f], [[dest, row.content]])
-  await syncPublicationsOnRename(brain, f, dest)
-  if (brain.ownerKey === SHARED_OWNER_KEY) {
-    await prisma.brainGrant.updateMany({
-      where: { spaceId: brain.spaceId, resourcePath: f },
+  await prisma.contextNote.update({ where: { id: row.id }, data: { path: dest } })
+  await syncContextLinksBulk(context, [f], [[dest, row.content]])
+  await syncPublicationsOnRename(context, f, dest)
+  if (context.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.contextGrant.updateMany({
+      where: { spaceId: context.spaceId, resourcePath: f },
       data: { resourcePath: folder },
     })
   }
-  await upsertFolderRow(brain, folder)
+  await upsertFolderRow(context, folder)
   // Notes may already sit under `a/b/` (an index arriving late for a folder that
   // grew from note paths) — the new index lists them, and the parent lists it.
-  await refreshFolderIndex(brain, folder)
-  await refreshFolderIndex(brain, folderOf(folder))
-  await ensureAncestorIndexes(brain, dest, actor)
-  invalidateVault(brain)
+  await refreshFolderIndex(context, folder)
+  await refreshFolderIndex(context, folderOf(folder))
+  await ensureAncestorIndexes(context, dest, actor)
+  invalidateVault(context)
   return dest
 }
 
 // Rename/move a folder and everything under it (notes + nested folder rows).
 export async function renameFolder(
-  brain: Brain,
+  context: Context,
   from: string,
   to: string,
   actor?: Actor,
 ): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
-  const notes = await prisma.spaceNote.findMany({
+  const notes = await prisma.contextNote.findMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       deletedAt: null,
       path: { startsWith: `${f}/` },
     },
     select: { id: true, path: true, content: true },
   })
   for (const note of notes) {
-    await prisma.spaceNote.update({
+    await prisma.contextNote.update({
       where: { id: note.id },
       data: { path: t + note.path.slice(f.length) },
     })
@@ -741,43 +740,43 @@ export async function renameFolder(
   // Moving into/out of the people|companies namespaces changes which notes are
   // canonical entity notes — resync both sides (no-op when neither is involved).
   await syncContextLinksBulk(
-    brain,
+    context,
     notes.map((n) => n.path),
     notes.map((n) => [t + n.path.slice(f.length), n.content]),
   )
   // Publications follow every moved note (independent rows — overlap the round-trips).
   await Promise.all(
-    notes.map((note) => syncPublicationsOnRename(brain, note.path, t + note.path.slice(f.length))),
+    notes.map((note) => syncPublicationsOnRename(context, note.path, t + note.path.slice(f.length))),
   )
   // Grants ride the rename too — a moved team subtree keeps its access rows.
-  if (brain.ownerKey === SHARED_OWNER_KEY) {
-    await prisma.brainGrant.updateMany({
-      where: { spaceId: brain.spaceId, resourcePath: f },
+  if (context.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.contextGrant.updateMany({
+      where: { spaceId: context.spaceId, resourcePath: f },
       data: { resourcePath: t },
     })
-    const nested = await prisma.brainGrant.findMany({
-      where: { spaceId: brain.spaceId, resourcePath: { startsWith: `${f}/` } },
+    const nested = await prisma.contextGrant.findMany({
+      where: { spaceId: context.spaceId, resourcePath: { startsWith: `${f}/` } },
       select: { id: true, resourcePath: true },
     })
     await Promise.all(
       nested.map((grant) =>
-        prisma.brainGrant.update({
+        prisma.contextGrant.update({
           where: { id: grant.id },
           data: { resourcePath: t + grant.resourcePath.slice(f.length) },
         }),
       ),
     )
   }
-  const folders = await prisma.spaceNoteFolder.findMany({
+  const folders = await prisma.contextFolder.findMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       OR: [{ path: f }, { path: { startsWith: `${f}/` } }],
     },
     select: { id: true, path: true },
   })
   for (const fol of folders) {
-    await prisma.spaceNoteFolder.update({
+    await prisma.contextFolder.update({
       where: { id: fol.id },
       data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
     })
@@ -786,22 +785,22 @@ export async function renameFolder(
   // decide what happens to it: follow the new path while nobody has named the
   // folder themselves, and keep out of the way once somebody has (see
   // nextIndexTitle). Renaming the display name is editing that title.
-  if (actor) await retitleIndexAfterRename(brain, f, t, actor)
+  if (actor) await retitleIndexAfterRename(context, f, t, actor)
   // The folder is an entry in its old and new parents' indexes — both move.
-  await refreshFolderIndex(brain, folderOf(f))
-  await refreshFolderIndex(brain, folderOf(t))
-  invalidateVault(brain)
+  await refreshFolderIndex(context, folderOf(f))
+  await refreshFolderIndex(context, folderOf(t))
+  invalidateVault(context)
   return t
 }
 
 async function retitleIndexAfterRename(
-  brain: Brain,
+  context: Context,
   from: string,
   to: string,
   actor: Actor,
 ): Promise<void> {
   const indexPath = indexPathOf(to)
-  const row = await findLive(brain, indexPath)
+  const row = await findLive(context, indexPath)
   if (!row) return
   const { body } = splitFrontmatter(row.content)
   const frontmatter = parseFrontmatter(row.content)
@@ -809,57 +808,57 @@ async function retitleIndexAfterRename(
   const title = nextIndexTitle(from.split('/').pop() ?? from, to.split('/').pop() ?? to, current)
   if (!title || title === current) return
   // Everything else in the frontmatter (type, tags, description) rides through.
-  await writeNote(brain, indexPath, joinFrontmatter({ ...frontmatter, title }, body), actor)
+  await writeNote(context, indexPath, joinFrontmatter({ ...frontmatter, title }, body), actor)
 }
 
 // Soft-delete a folder: trash every note under it and drop the folder rows.
-export async function deleteFolder(brain: Brain, path: string): Promise<void> {
+export async function deleteFolder(context: Context, path: string): Promise<void> {
   const p = sanitizePath(path)
-  const notes = await prisma.spaceNote.findMany({
+  const notes = await prisma.contextNote.findMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       deletedAt: null,
       path: { startsWith: `${p}/` },
     },
     select: { id: true, path: true },
   })
   for (const note of notes) {
-    await prisma.spaceNote.update({
+    await prisma.contextNote.update({
       where: { id: note.id },
       data: { deletedAt: new Date(), deletedPath: note.path, path: `:trash:${note.id}` },
     })
   }
-  await syncContextLinksBulk(brain, notes.map((n) => n.path)) // trashed entity notes drop their links
-  await syncPublicationsOnDelete(brain, notes.map((n) => n.path))
-  await prisma.spaceNoteFolder.deleteMany({
+  await syncContextLinksBulk(context, notes.map((n) => n.path)) // trashed entity notes drop their links
+  await syncPublicationsOnDelete(context, notes.map((n) => n.path))
+  await prisma.contextFolder.deleteMany({
     where: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       OR: [{ path: p }, { path: { startsWith: `${p}/` } }],
     },
   })
   // Grants into a deleted subtree go with it — a future folder reusing the
   // name must not inherit a dead folder's access.
-  if (brain.ownerKey === SHARED_OWNER_KEY) {
-    await prisma.brainGrant.deleteMany({
+  if (context.ownerKey === SHARED_OWNER_KEY) {
+    await prisma.contextGrant.deleteMany({
       where: {
-        spaceId: brain.spaceId,
+        spaceId: context.spaceId,
         OR: [{ resourcePath: p }, { resourcePath: { startsWith: `${p}/` } }],
       },
     })
   }
   // The folder was an entry in its parent's index; it isn't any more.
-  await refreshFolderIndex(brain, folderOf(p))
-  invalidateVault(brain)
+  await refreshFolderIndex(context, folderOf(p))
+  invalidateVault(context)
 }
 
 // revision history
 
-export async function listRevisions(brain: Brain, path: string): Promise<NoteRevision[]> {
-  const row = await findLive(brain, sanitizePath(path))
+export async function listRevisions(context: Context, path: string): Promise<NoteRevision[]> {
+  const row = await findLive(context, sanitizePath(path))
   if (!row) return []
-  const revs = await prisma.spaceNoteRevision.findMany({
+  const revs = await prisma.contextNoteRevision.findMany({
     where: { noteId: row.id },
     orderBy: { at: 'desc' },
   })
@@ -876,18 +875,18 @@ export async function listRevisions(brain: Brain, path: string): Promise<NoteRev
 
 // Restore a past revision's content as the current note (records a 'restore').
 export async function applyRevision(
-  brain: Brain,
+  context: Context,
   path: string,
   revisionId: string,
   actor: Actor,
 ): Promise<void> {
-  const row = await findLive(brain, sanitizePath(path))
+  const row = await findLive(context, sanitizePath(path))
   if (!row) throw new Error(`Note not found: ${path}`)
-  const rev = await prisma.spaceNoteRevision.findFirst({
+  const rev = await prisma.contextNoteRevision.findFirst({
     where: { id: revisionId, noteId: row.id },
   })
   if (!rev) throw new Error('Revision not found')
-  await writeNote(brain, row.path, rev.content, actor, 'restore')
+  await writeNote(context, row.path, rev.content, actor, 'restore')
 }
 
 // Star / unstar a note (sidebar Starred section + editor toolbar star). The
@@ -899,14 +898,14 @@ export async function applyRevision(
 // a shortcut list of notes, not a second folder tree. Rejected here so every
 // caller (API, MCP, scripts) is covered, not just the UI that hides the control.
 export async function setStarred(
-  brain: Brain,
+  context: Context,
   path: string,
   starred: boolean,
   actor: Actor,
 ): Promise<void> {
   const clean = sanitizePath(path)
   if (isIndexPath(clean)) throw new Error('Index notes cannot be starred')
-  const row = await findLive(brain, clean)
+  const row = await findLive(context, clean)
   if (!row) throw new Error(`Note not found: ${path}`)
   const { frontmatter, body } = splitFrontmatter(row.content)
   const lines = (frontmatter ?? '')
@@ -914,12 +913,12 @@ export async function setStarred(
     .filter((l) => l.trim() && !/^starred\s*:/i.test(l.trim()))
   if (starred) lines.push('starred: true')
   const content = lines.length ? `---\n${lines.join('\n')}\n---\n\n${body}` : body
-  await writeNote(brain, row.path, content, actor)
+  await writeNote(context, row.path, content, actor)
 }
 
-export async function listStarred(brain: Brain): Promise<string[]> {
-  const rows = await prisma.spaceNote.findMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey, deletedAt: null, starred: true },
+export async function listStarred(context: Context): Promise<string[]> {
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, deletedAt: null, starred: true },
     select: { path: true },
   })
   // Index notes can no longer be starred; filter any that were starred before

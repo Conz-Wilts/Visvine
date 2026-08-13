@@ -3,26 +3,26 @@
 //   POST { spaceId, scope, path, revisionId }        → { ok }         (restore a version)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import { listRevisions, applyRevision } from '@/lib/notes/store'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  return NextResponse.json({ revisions: await listRevisions(brain, path) })
+  return NextResponse.json({ revisions: await listRevisions(context, path) })
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
   const path = typeof body.path === 'string' ? body.path : null
   const revisionId = typeof body.revisionId === 'string' ? body.revisionId : null
   if (!path || !revisionId) return fail('path and revisionId are required')
   try {
-    await applyRevision(brain, path, revisionId, brain.actor)
+    await applyRevision(context, path, revisionId, context.actor)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return failFromError(err)

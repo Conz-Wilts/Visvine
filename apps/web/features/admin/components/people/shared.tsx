@@ -4,7 +4,7 @@
 // (Members, Aliases, Invite), which read one snapshot from PeopleDataContext.
 // The levels offered here are the SAME pure core the server enforces
 // (lib/notes/shared/authz.ts), so a grant made here means exactly what the
-// brain will honour.
+// context will honour.
 
 import { useMemo, useRef, useState } from 'react';
 import { ChevronDown, Users, FileText, Folder } from 'lucide-react';
@@ -19,7 +19,7 @@ import {
 } from '@/lib/notes/shared/authz';
 import { DEFAULT_CONTEXT_NAME } from '@/lib/notes/shared/contextSettings';
 import { humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote';
-import type { AccessRequest } from '@/lib/notes/shared/brainTypes';
+import type { AccessRequest } from '@/lib/notes/shared/contextTypes';
 import type { TreeNode } from '@/lib/notes/shared/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { Button, chipClass, chipStyle } from '@/components/ui';
@@ -57,9 +57,9 @@ export interface PeopleData {
   paths: PathOption[];
   /** Context access requests — own + everything an admin may resolve. */
   requests: AccessRequest[];
-  /** The brain tree as the server returns it (root node), for hierarchy UIs. */
+  /** The context tree as the server returns it (root node), for hierarchy UIs. */
   tree: TreeNode | null;
-  /** Admin-set display name for the brain root (default "Space context"). */
+  /** Admin-set display name for the context root (default "Space context"). */
   contextName: string;
 }
 
@@ -207,7 +207,7 @@ function PathLabel({ path, contextName, paths }: {
 }
 
 /**
- * Searchable path picker over the brain tree — the whole context + every folder
+ * Searchable path picker over the context tree — the whole context + every folder
  * and note. Type to filter; folders list before notes.
  */
 function PathPicker({
@@ -218,11 +218,11 @@ function PathPicker({
   rootName,
 }: {
   paths: PathOption[];
-  /** null = nothing chosen yet; '' = brain root. */
+  /** null = nothing chosen yet; '' = context root. */
   value: string | null;
   onChange: (path: string) => void;
   placeholder?: string;
-  /** Display name for the '' (brain root) entry. */
+  /** Display name for the '' (context root) entry. */
   rootName?: string;
 }) {
   const [open, setOpen] = useState(false);

@@ -5,8 +5,8 @@
  *
  * Scopes are the COARSE capability gate carried by an access token, enforced
  * per-tool in `withCtx`. They do NOT replace the per-space authorization
- * check: every tool re-derives the caller's membership and brain grants live
- * (via `resolveBrain`/`principalOf`, the same path the web routes use), so a
+ * check: every tool re-derives the caller's membership and context grants live
+ * (via `resolveContext`/`principalOf`, the same path the web routes use), so a
  * token carrying `context:write` is still refused on a space where the
  * caller has no write access.
  */

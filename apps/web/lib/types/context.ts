@@ -102,7 +102,7 @@ export interface ContextData {
 // space. Created on the Types page — and for the Person type they are also
 // the space's PERMISSION model: a member holds any number of their Person
 // aliases (UserAlias rows), `owner` says holders manage the space, and a
-// BrainGrant with subjectType 'alias' targets one by name. So "Engineering" is
+// ContextGrant with subjectType 'alias' targets one by name. So "Engineering" is
 // one thing: a chip in the directory and a set of permissions.
 export interface SpaceAlias {
   name: string;    // e.g. "Founder"
@@ -165,7 +165,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Resource',  color: '#f59e0b', shape: 'rectangle' },
   // Structural types — the container kinds. Colours match the Create panel's
   // tiles so a thing looks the same wherever you meet it. Notes and uploaded
-  // files are deliberately absent: they are content in a brain, not nodes in
+  // files are deliberately absent: they are content in a context, not nodes in
   // the graph, so nothing syncs a `note:`/`file:` node for them. Section was
   // called Space before the rename freed that name for the org type; stored
   // rows are migrated by scripts/rename-community-to-space.ts.
@@ -177,10 +177,10 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
   // An index note IS a folder (lib/notes/shared/indexNote.ts). Listed here so
   // the Type chip on one resolves to a real configured type in every space,
-  // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not the
-  // Resource amber it used to share: two different things painting the same
-  // colour defeats the point of colouring anything by type, and fuchsia is the
-  // one hue the seeded vocabulary (prisma/seed.ts NODE_TYPES) leaves free.
+  // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not
+  // Resource's amber: two types painting the same colour defeats the point of
+  // colouring by type, and fuchsia is the one hue the seeded vocabulary
+  // (prisma/seed.ts NODE_TYPES) leaves free.
   { name: 'Index',     color: '#c026d3', shape: 'square'    },
 ];
 
@@ -196,7 +196,7 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
  * directory grid; the type filter turns them back on. Lowercase — compare
  * against a node's stored `type`, which is canonicalised lowercase on write.
  *
- * `space` (the org type, formerly Space) is deliberately NOT here. It
+ * `space` (the org type) is deliberately NOT here. It
  * carries the organisations that used to be the Group type, which are
  * directory records people expect to see; the cost is that a space's own root
  * node shows up in its grid too, which reads as a "this space" card and links

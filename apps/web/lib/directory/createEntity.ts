@@ -12,9 +12,9 @@
 import { revalidateTag } from 'next/cache'
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import type { ResolvedBrain } from '@/lib/notes/brain'
-import { principalOf } from '@/lib/notes/brain'
-import { writeDenial } from '@/lib/notes/brainService'
+import type { ResolvedContext } from '@/lib/notes/resolve'
+import { principalOf } from '@/lib/notes/resolve'
+import { writeDenial } from '@/lib/notes/contextService'
 import { createNote, readNoteOrNull } from '@/lib/notes/store'
 import { entityDraftContent, entityNotePath } from '@/lib/notes/entities'
 import { applyFields } from '@/lib/create/typeFields'
@@ -116,7 +116,7 @@ function nodeRowToNBNode(row: NodeRow): NBNode {
 
 /**
  * Create a node and its canonical context note. The caller must already have
- * resolved (and thereby authorized) the target brain — membership is checked
+ * resolved (and thereby authorized) the target context — membership is checked
  * there; the folder-level write gate is checked here, because it depends on the
  * note path the type implies.
  *
@@ -125,7 +125,7 @@ function nodeRowToNBNode(row: NodeRow): NBNode {
  * should use.
  */
 export async function createEntity(
-  brain: ResolvedBrain,
+  context: ResolvedContext,
   input: CreateEntityInput,
 ): Promise<CreateEntityResult> {
   const rawType = input.type.trim().toLowerCase()
@@ -155,8 +155,8 @@ export async function createEntity(
     return { ok: false, status: 400, error: `"${rawType}" has no context-note namespace` }
   }
 
-  const principal = await principalOf(brain)
-  const denial = writeDenial(principal, brain, basePath)
+  const principal = await principalOf(context)
+  const denial = writeDenial(principal, context, basePath)
   if (denial) return { ok: false, status: 403, error: denial }
 
   // Collision check against the NOTE, not just the node id. `entityNotePath` is
@@ -169,9 +169,9 @@ export async function createEntity(
   // The id lookup is a best-effort hint by name: the path→node direction isn't
   // expressible in SQL (entityNotePath is applied in JS over real nodes), and a
   // null just means the caller offers the note rather than the profile.
-  if (await readNoteOrNull(brain, basePath)) {
+  if (await readNoteOrNull(context, basePath)) {
     const existing = await prisma.node.findFirst({
-      where: { spaceId: brain.spaceId, name: { equals: name, mode: 'insensitive' } },
+      where: { spaceId: context.spaceId, name: { equals: name, mode: 'insensitive' } },
       select: { id: true },
     })
     return {
@@ -203,7 +203,7 @@ export async function createEntity(
           imageUrl: columns.image_url ?? null,
           tags,
           metadata: metadata as Prisma.InputJsonObject,
-          spaceId: brain.spaceId,
+          spaceId: context.spaceId,
         },
         select: NODE_SELECT,
       })
@@ -226,7 +226,7 @@ export async function createEntity(
   // race, not the one we hoped for.
   const { identityId, resolution } = await attachIdentity(nodeRowToNBNode(row), {
     identityId: input.identityId ?? null,
-    actorUserId: brain.actor.id,
+    actorUserId: context.actor.id,
   })
   if (identityId) {
     await prisma.node.update({ where: { id: row.id }, data: { identityId } })
@@ -256,7 +256,7 @@ export async function createEntity(
 
   let noteError: string | null = null
   try {
-    await createNote(brain, notePath, content, brain.actor)
+    await createNote(context, notePath, content, context.actor)
   } catch (err) {
     // "already exists" is benign (a concurrent create won). Anything else is
     // reported but NOT fatal — the node is real, and the context tab seeds the

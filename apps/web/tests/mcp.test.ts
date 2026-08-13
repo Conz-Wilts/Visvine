@@ -452,8 +452,8 @@ test('switching a feature off disables its node types, with the feature named', 
     assert.match(e.disabled_reason!, /'channels'/)
     assert.equal(e.creatable_via_add_context, false)
   }
-  // Always-on types are untouched by any config — 'space' (the org type,
-  // formerly Space) must never be gated behind channels.
+  // Always-on types are untouched by any config — 'space' (the org type)
+  // must never be gated behind channels.
   for (const type of ['person', 'space', 'event', 'index']) {
     const e = entries.find((x) => x.type === type)!
     assert.equal(e.enabled, true)

@@ -3,11 +3,10 @@
  * "Scope Challenge Handling").
  *
  * The point is the step-up flow. A token minted with only `context:read` that
- * hits `edit_context` used to get a text error inside a successful HTTP 200 —
- * invisible to the OAuth layer, so the client had no way to know it should ask
- * for more and would fail identically forever. Now the same call gets a real
- * `403 insufficient_scope` naming the scope it needs, which is the signal a
- * spec-compliant client re-authorizes on.
+ * hits `edit_context` gets a real `403 insufficient_scope` naming the scope it
+ * needs — the signal a spec-compliant client re-authorizes on. A text error
+ * inside a successful HTTP 200 would be invisible to the OAuth layer, and the
+ * client would fail identically forever.
  *
  * Two wrappers, applied either side of `withMcpAuth`:
  *

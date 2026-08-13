@@ -1,5 +1,4 @@
-// Pure BM25 full-text ranking over note bodies, ported from blackbird-brain's
-// src/shared/search.ts. Field boosts (title 3×, tags/aliases 2×), light plural
+// Pure BM25 full-text ranking over note bodies. Field boosts (title 3×, tags/aliases 2×), light plural
 // stemming, and AND semantics that relax to OR when the strict pass matches
 // nothing. This is the text stage of the fused retrieval stack (./retrieval.ts);
 // the simpler ./search.ts remains for the client-side quick search.

@@ -5,7 +5,7 @@
 // past event for the "Past" tab.
 //
 // Events are stored as `nodes` rows (type='event') with everything in `metadata`
-// (see apps/web/lib/eventRepo.ts). RSVPs live in `attendees` keyed by event_id, so
+// (see apps/web/lib/eventRepo.ts). RSVPs live in `event_attendees` keyed by event_id, so
 // shifting an event's dates leaves its existing guests intact.
 //
 // Same env resolution + local-only guard as the other db scripts. Idempotent.

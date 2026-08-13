@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Seed the brain's root index — the space's home page, which the
+    // Seed the context's root index — the space's home page, which the
     // Directory's Context tab routes to. Best-effort: never fail the create
     // over it.
     try {

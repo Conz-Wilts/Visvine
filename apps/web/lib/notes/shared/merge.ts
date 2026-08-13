@@ -1,6 +1,6 @@
-// Pure 3-way merge decision for pulling a shared-brain note back into the owner's personal copy.
+// Pure 3-way merge decision for pulling a shared-context note back into the owner's personal copy.
 // Three inputs: `base` (the content at the owner's last push/pull — the common ancestor),
-// `ours` (the owner's current personal note), and `theirs` (the shared-brain instance, possibly
+// `ours` (the owner's current personal note), and `theirs` (the shared-context instance, possibly
 // edited by a member). No Node/DOM imports so both the main process and the renderer (and the
 // hermetic unit tests) can use it.
 //
@@ -8,7 +8,7 @@
 
 type MergeStatus =
   | 'in-sync' // ours === theirs already — nothing to do
-  | 'up-to-date' // the brain copy is unchanged since base — nothing to pull
+  | 'up-to-date' // the context copy is unchanged since base — nothing to pull
   | 'fast-forward' // only the member changed; accept theirs wholesale
   | 'conflict' // both sides changed — reconcile (AI) and let the owner confirm
 

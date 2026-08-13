@@ -2,7 +2,7 @@
  * One-off cleanup: delete the `note:` and `file:` graph nodes left over from
  * when Note and File were node types.
  *
- * A note is content in a space brain and an uploaded file is a ContextSource
+ * A note is content in a space context and an uploaded file is a ContextSource
  * — neither is a thing in the context graph any more, so nothing syncs a node
  * for them. The rows already written keep drawing on the canvas until this runs.
  *

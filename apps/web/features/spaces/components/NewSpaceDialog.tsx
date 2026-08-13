@@ -1,7 +1,7 @@
 'use client';
 
 // Starting a space of your own — provisioning a real Space row, its
-// membership and a brain.
+// membership and a context.
 //
 // Name and nothing else. Description, location and visibility are all optional
 // server-side and all editable straight afterwards in Console → Settings, so

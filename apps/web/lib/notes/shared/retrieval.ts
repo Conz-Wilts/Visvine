@@ -1,5 +1,4 @@
-// The fused search stack, ported from blackbird-brain's src/shared/retrieval.ts:
-// frontmatter/tag filter → BM25 over notes → optional note-vector stage → source
+// The fused search stack: frontmatter/tag filter → BM25 over notes → optional note-vector stage → source
 // chunks (semantic + keyword) → link-context neighborhood expansion, combined with
 // WEIGHTED Reciprocal-Rank Fusion (see STAGE_WEIGHTS). Pure — the visibility lens
 // (shared/visibility.ts) is applied by the caller BEFORE candidates are assembled,
@@ -13,7 +12,7 @@ import { folderIdOfPath } from './placement'
 export interface SearchFilters {
   /** Frontmatter `type`. */
   type?: string
-  /** Top-level folder id ('' = shared-brain root). */
+  /** Top-level folder id ('' = shared-context root). */
   folderId?: string
   /** Every tag must be present (case-insensitive). */
   tags?: string[]
@@ -32,7 +31,7 @@ export interface FusedResult {
   title: string
   score: number
   snippet?: string
-  /** What the hit is: a brain note (default) or a context-source chunk. */
+  /** What the hit is: a context note (default) or a context-source chunk. */
   kind: 'note' | 'source'
   /** Chunk index within the source — set only when kind is 'source'. */
   seq?: number

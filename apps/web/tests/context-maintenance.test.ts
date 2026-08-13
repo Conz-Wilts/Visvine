@@ -1,8 +1,8 @@
-// Unit tests for the brain maintenance layer: ## Log stamping + capture lines
+// Unit tests for the context maintenance layer: ## Log stamping + capture lines
 // (noteLog), link rewriting on moves (linkRewrite), the review agent's pure
 // checks/auto-fixes (review), and enrichment candidate selection + LLM output
 // coercion (enrichment). Fixtures go through the real index pipeline
-// (buildNoteIndex). Run: node --import tsx --test tests/brain-maintenance.test.ts
+// (buildNoteIndex). Run: node --import tsx --test tests/context-maintenance.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -74,7 +74,7 @@ test('formatCaptureEntry/parseCaptureEntries round-trip including refs and tags'
     at,
     author: 'Ana',
     text: 'Met  with\nBob about pricing', // whitespace collapses on format
-    refs: ['brain:deals/canva', 'brain:people/bob'],
+    refs: ['context:deals/canva', 'context:people/bob'],
     tags: ['sales', 'q3'],
   }
   const md = `# July\n\n${formatCaptureEntry(entry)}\n${formatCaptureEntry({ at, author: 'Bob', text: 'Plain line' })}\n`
@@ -84,7 +84,7 @@ test('formatCaptureEntry/parseCaptureEntries round-trip including refs and tags'
     when: toDateTimeString(at),
     author: 'Ana',
     text: 'Met with Bob about pricing',
-    refs: ['brain:deals/canva', 'brain:people/bob'],
+    refs: ['context:deals/canva', 'context:people/bob'],
     tags: ['sales', 'q3'],
   })
   assert.deepEqual(parsed[1].refs, [])
@@ -94,13 +94,13 @@ test('formatCaptureEntry/parseCaptureEntries round-trip including refs and tags'
 // noteLog: provenance
 
 test('provenanceRef strips .md and stampProvenance merges sources deduped', () => {
-  assert.equal(provenanceRef('deals/canva.md'), 'brain:deals/canva')
-  assert.equal(provenanceRef('deals/canva'), 'brain:deals/canva')
+  assert.equal(provenanceRef('deals/canva.md'), 'context:deals/canva')
+  assert.equal(provenanceRef('deals/canva'), 'context:deals/canva')
   const fm = stampProvenance(
-    { title: 'X', sources: ['brain:a'] },
-    { source: 'brain:a', sources: ['brain:b', 'brain:a'] },
+    { title: 'X', sources: ['context:a'] },
+    { source: 'context:a', sources: ['context:b', 'context:a'] },
   )
-  assert.deepEqual(fm.sources, ['brain:a', 'brain:b'])
+  assert.deepEqual(fm.sources, ['context:a', 'context:b'])
   assert.equal(fm.title, 'X') // rest of frontmatter untouched
 })
 

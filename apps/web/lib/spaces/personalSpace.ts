@@ -1,12 +1,12 @@
 // Provision a brand-new user's "personal space": a private, single-member
 // Space (named after them) that hosts their personal context notes. Called
-// lazily from resolvePersonalBrain() the first time they touch their own notes.
+// lazily from resolvePersonalContext() the first time they touch their own notes.
 // Everything here is idempotent — keyed by the user's id — so re-running on
 // retry or re-login never duplicates rows.
 //
 // Why a whole Space per user: the notes engine scopes a private "personal
-// brain" by (spaceId, ownerKey=userId). Giving each user their own space
-// gives them a clean, private home for that brain plus a directory/context of their
+// context" by (spaceId, ownerKey=userId). Giving each user their own space
+// gives them a clean, private home for that context plus a directory/context of their
 // own — without polluting any shared space. The space is flagged
 // `personalOwnerId` so it's hidden from Discover and other users' lists.
 
@@ -55,7 +55,7 @@ export interface ProvisionResult {
 /**
  * Create (or return) the signed-in user's personal space, make them its
  * admin, place their person node in it, and seed a welcome note in their
- * personal brain. Safe to call repeatedly.
+ * personal context. Safe to call repeatedly.
  */
 export async function provisionPersonalSpace(user: {
   userId: string
@@ -90,7 +90,7 @@ export async function provisionPersonalSpace(user: {
   })
 
   // 2. Membership. No alias needed: a personal space's owner administers it by
-  //    definition (lib/notes/brain.ts#resolveBrain) and grants never apply here.
+  //    definition (lib/notes/resolve.ts#resolveContext) and grants never apply here.
   await prisma.spaceMember.upsert({
     where: { userId_spaceId: { userId: user.userId, spaceId } },
     create: { userId: user.userId, spaceId },
@@ -120,23 +120,23 @@ export async function provisionPersonalSpace(user: {
     await connectNodeToUserSafe(person.id, user.userId, { reason: 'personal space owner' })
   }
 
-  // 4. Seed a welcome note in the personal space's brain (its shared brain —
+  // 4. Seed a welcome note in the personal space's context (its shared context —
   //    the user is the only member). Best-effort: a failed note write must never
   //    block the user from reaching their notes.
   try {
-    const brain = { spaceId, ownerKey: 'shared' }
+    const context = { spaceId, ownerKey: 'shared' }
     const actor = {
       id: user.userId,
       name: displayName,
       email: user.email ?? null,
     }
-    if ((await noteCount(brain)) === 0) {
-      await createNote(brain, WELCOME_PATH, welcomeNote(displayName), actor)
+    if ((await noteCount(context)) === 0) {
+      await createNote(context, WELCOME_PATH, welcomeNote(displayName), actor)
     }
     // The root index is the space's home page — the Context tab routes to it.
     // Seeded outside the noteCount check so spaces provisioned before this
     // existed (which already hold a welcome note) still get one.
-    await ensureRootIndex(brain, displayName, actor)
+    await ensureRootIndex(context, displayName, actor)
   } catch (err) {
     logger.warn('personalSpace.seed_failed', { spaceId, err })
   }

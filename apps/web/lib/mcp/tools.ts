@@ -13,12 +13,12 @@
  *     deterministic path (person:craig → people/craig.md).
  *   • The TYPE decides what you can create and which fields it has.
  *   • Links are DERIVED, not authored. A markdown link to an entity's note,
- *     inside another shared-brain note, is what creates a `mentioned` edge —
+ *     inside another shared-context note, is what creates a `mentioned` edge —
  *     so there is no create_link tool, because there is no such operation.
  *
- * Tools call the domain layer directly (brainService / store / createEntity)
+ * Tools call the domain layer directly (contextService / store / createEntity)
  * rather than the app's own HTTP routes. Authorization is never re-implemented:
- * lib/mcp/context.ts resolves the brain through `resolveBrain`/`principalOf`,
+ * lib/mcp/context.ts resolves the context through `resolveContext`/`principalOf`,
  * the same functions the web routes use, and every read goes through the
  * visibility lens while every write goes through the folder gate.
  */
@@ -29,11 +29,11 @@ import { withCtx, McpError } from '@/lib/mcp/auth'
 import {
   listMySpaces,
   resolveTarget,
-  requireSpaceBrain,
-  type BrainScope,
+  requireSpaceContext,
+  type ContextScope,
 } from '@/lib/mcp/context'
 import {
-  searchBrain,
+  searchContext,
   readVisible,
   visibleVault,
   writeGated,
@@ -41,13 +41,13 @@ import {
   moveGated,
   listVisibleSources,
   readSourceVisible,
-} from '@/lib/notes/brainService'
+} from '@/lib/notes/contextService'
 import { readableRoots, LEVEL_FULL } from '@/lib/notes/shared/authz'
 import { audienceSummary } from '@/lib/notes/shared/audience'
 import { loadSpaceAccess, grantAccess, setFolderRestricted } from '@/lib/notes/access'
 import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permissions'
-import type { WriteResult } from '@/lib/notes/shared/brainTypes'
+import type { WriteResult } from '@/lib/notes/shared/contextTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
 import { entityNotePath } from '@/lib/notes/entities'
 import { firstExcerpt, readLinkContextMeta } from '@/lib/notes/context/linkReason'
@@ -57,17 +57,17 @@ import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, listConnectors, loadConnector } from '@/lib/connectors/service'
-import { readNoteOrNull, type Brain } from '@/lib/notes/store'
+import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { SpaceFeatureConfig } from '@/lib/types'
 
 const scopeArg = z
   .enum(['shared', 'personal'])
   .optional()
   .describe(
-    "Which brain: 'shared' = the space's context (the default for reads), 'personal' = your own private personal space",
+    "Which context: 'shared' = the space's context (the default for reads), 'personal' = your own private personal space",
   )
 
 /**
@@ -84,7 +84,7 @@ const scopeArg = z
  */
 const MENTION_RULE =
   'Links between entities are never created directly — they are a side effect of mentions. ' +
-  "A markdown link to an entity's context note inside a SHARED-brain note body creates a " +
+  "A markdown link to an entity's context note inside a SHARED-context note body creates a " +
   '`mentioned` edge between the two entities, e.g. `[Craig Piggott](/people/craig-piggott.md)`. ' +
   'Deleting that link from the text removes the edge on the next write. ' +
   'ALWAYS write the path with a leading slash — it is resolved from the context root, whereas a ' +
@@ -111,7 +111,7 @@ const visibilityArg = z
   .enum(['private', 'inherit'])
   .optional()
   .describe(
-    "For a NEW shared-brain note only: 'private' (the default) restricts it so only space " +
+    "For a NEW shared-context note only: 'private' (the default) restricts it so only space " +
       "admins and you can see it until someone shares it; 'inherit' leaves it visible to whoever " +
       'can see its folder. Ignored for personal-space writes and for edits of existing notes.',
   )
@@ -147,10 +147,10 @@ async function makeNotePrivate(
 }
 
 /** Load a connector or throw a 404 that doesn't reveal whether it exists. */
-async function loadConnectorOr404(principal: BrainPrincipal, brain: Brain, name: string) {
+async function loadConnectorOr404(principal: ContextPrincipal, context: Context, name: string) {
   let loaded
   try {
-    loaded = await loadConnector(principal, brain, name)
+    loaded = await loadConnector(principal, context, name)
   } catch (e) {
     throw mapConnectorError(e)
   }
@@ -255,17 +255,17 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'list_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'shared'
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const limit = args.limit ?? 100
 
         // Notes (visibility lens applied inside visibleVault).
-        const { metas } = await visibleVault(principal, brain)
+        const { metas } = await visibleVault(principal, context)
         let notes = [...metas].sort((a, b) => a.path.localeCompare(b.path))
         if (args.path_prefix) notes = notes.filter((m) => m.path.startsWith(args.path_prefix!))
 
         // Grant-derived context — only meaningful for a real space's shared
-        // brain (personal spaces are never gated, and the personal scope has no
+        // context (personal spaces are never gated, and the personal scope has no
         // directory). One indexed query per piece; the grant table is bounded by
         // alias/folder rows, not by member count, so this stays cheap however
         // large the space is.
@@ -323,7 +323,7 @@ export function registerTools(server: McpServer): void {
           (path) => principalCanWrite(principal, path),
         )
         const describeWritable = (path: string) => ({
-          path: path || '(brain root)',
+          path: path || '(context root)',
           your_level: principalLevelName(principal, path),
           // One line, computed from grant rows only — it can name aliases but
           // never individual members, however many grants exist.
@@ -391,7 +391,7 @@ export function registerTools(server: McpServer): void {
         folder: z
           .string()
           .optional()
-          .describe("Only this top-level folder, e.g. 'people' ('' = the brain root)"),
+          .describe("Only this top-level folder, e.g. 'people' ('' = the context root)"),
         updated_after: z.number().optional().describe('Only notes modified at/after this epoch-ms timestamp'),
         updated_before: z.number().optional().describe('Only notes modified at/before this epoch-ms timestamp'),
       },
@@ -399,13 +399,13 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'search_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'shared'
+        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const k = args.k ?? 10
 
-        const { hits, semantic } = await searchBrain(
+        const { hits, semantic } = await searchContext(
           principal,
-          brain,
+          context,
           args.query,
           {
             type: args.type,
@@ -489,7 +489,7 @@ export function registerTools(server: McpServer): void {
         if (!args.node_id && !args.note_path) {
           throw new McpError(400, 'Pass either node_id or note_path')
         }
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
 
         // node_id resolves directly; note_path has to go through the node list,
         // because entityNotePath is lossy and only invertible over real nodes.
@@ -523,13 +523,13 @@ export function registerTools(server: McpServer): void {
         if (!row) {
           const path = args.note_path ?? structuralPath
           if (!path) throw new McpError(404, `No entity '${args.node_id}' in this space`)
-          const content = await readVisible(principal, brain, path)
+          const content = await readVisible(principal, context, path)
           if (!content) throw new McpError(404, `No accessible note or entity at '${path}'`)
           return { entity: null, note_path: path, note: content, links: [], mentioned_by: [] }
         }
 
         const notePath = entityNotePath({ id: row.id, type: row.type })
-        const note = notePath ? await readVisible(principal, brain, notePath) : null
+        const note = notePath ? await readVisible(principal, context, notePath) : null
 
         const linkRows = await prisma.link.findMany({
           where: {
@@ -548,7 +548,7 @@ export function registerTools(server: McpServer): void {
           ).map((n) => [n.id, n]),
         )
 
-        const { metas } = await visibleVault(principal, brain)
+        const { metas } = await visibleVault(principal, context)
         const mentionedBy = notePath
           ? metas
               .filter((m) => m.path !== notePath && m.linkTargets.includes(notePath))
@@ -565,7 +565,7 @@ export function registerTools(server: McpServer): void {
             const other = others.get(otherId)
             // The link-reason payload written by the note-save sync: the prose
             // around the mention, plus the AI phrase when one has been generated.
-            const context = readLinkContextMeta(l.metadata)
+            const linkContext = readLinkContextMeta(l.metadata)
             return {
               relationship: l.relationship,
               other_node_id: otherId,
@@ -576,8 +576,8 @@ export function registerTools(server: McpServer): void {
               // owned by the app. 'manual' came from the admin API.
               origin: l.origin,
               origin_ref: l.originRef,
-              reason: context?.reason ?? null,
-              excerpt: firstExcerpt(context),
+              reason: linkContext?.reason ?? null,
+              excerpt: firstExcerpt(linkContext),
             }
           }),
           mentioned_by: mentionedBy,
@@ -595,15 +595,15 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         space_id: z.string(),
         scope: scopeArg,
-        folder: z.string().optional().describe("Only sources in this top-level folder ('' = the brain root)"),
+        folder: z.string().optional().describe("Only sources in this top-level folder ('' = the context root)"),
       },
       annotations: { readOnlyHint: true },
     },
     (args, extra) =>
       withCtx(extra, 'list_files', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
-        const sources = await listVisibleSources(principal, brain, args.folder)
+        const scope: ContextScope = args.scope ?? 'shared'
+        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const sources = await listVisibleSources(principal, context, args.folder)
         return {
           scope,
           sources: sources.map((s) => ({
@@ -647,11 +647,11 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'read_file', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'shared'
+        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         // A '#<seq>' suffix is how search used to report a chunk; accept it.
         const path = args.path.replace(/#\d+$/, '')
-        const result = await readSourceVisible(principal, brain, path, {
+        const result = await readSourceVisible(principal, context, path, {
           offsetChars: args.offset_chars,
           maxChars: args.max_chars,
         })
@@ -716,8 +716,8 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'add_context', async (ctx) => {
-        const brain = await requireSpaceBrain(ctx, args.space_id)
-        const result = await createEntity(brain, {
+        const context = await requireSpaceContext(ctx, args.space_id)
+        const result = await createEntity(context, {
           type: args.type,
           name: args.name,
           fields: args.fields,
@@ -738,7 +738,7 @@ export function registerTools(server: McpServer): void {
         // BODY is restricted. Skipped in personal spaces (private already) and
         // when the note itself failed to write.
         const wantPrivate =
-          !brain.isPersonalSpace && args.visibility !== 'inherit' && result.notePath !== null && !result.noteError
+          !context.isPersonalSpace && args.visibility !== 'inherit' && result.notePath !== null && !result.noteError
         const visibilityError = wantPrivate
           ? await makeNotePrivate(args.space_id, result.notePath!, { userId: ctx.userId, name: ctx.name })
           : null
@@ -751,7 +751,7 @@ export function registerTools(server: McpServer): void {
           mention: mentionFor(result.node.name, result.notePath),
           identity_resolution: result.resolution,
           note_error: result.noteError,
-          ...(brain.isPersonalSpace
+          ...(context.isPersonalSpace
             ? {}
             : {
                 visibility: wantPrivate && !visibilityError ? 'private' : 'inherit',
@@ -774,27 +774,27 @@ export function registerTools(server: McpServer): void {
         `clobber it; use append_context when you only want to add. ${MENTION_RULE}`,
       inputSchema: {
         space_id: z.string(),
-        path: z.string().describe("Brain-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
+        path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
         content: z.string().describe('The full markdown content of the note, including frontmatter'),
         scope: scopeArg.describe(
-          "Target brain — defaults to 'personal'; pass 'shared' explicitly to write the space's shared context",
+          "Target context — defaults to 'personal'; pass 'shared' explicitly to write the space's shared context",
         ),
         visibility: visibilityArg,
       },
     },
     (args, extra) =>
       withCtx(extra, 'edit_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'personal'
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         // Private-by-default applies only to a note this call CREATES in a real
-        // space's shared brain — checked before the write, since afterwards
+        // space's shared context — checked before the write, since afterwards
         // the note always exists. Personal spaces are private already.
         const isGatedShared = scope === 'shared' && resolved !== null && !resolved.isPersonalSpace
-        const existed = isGatedShared ? (await readNoteOrNull(brain, args.path)) !== null : true
+        const existed = isGatedShared ? (await readNoteOrNull(context, args.path)) !== null : true
         // Stamped as an agent revision so human and agent edits stay
         // distinguishable in the note's history.
         const result = unwrapWrite(
-          await writeGated(principal, brain, args.path, args.content, 'agent', 'mcp'),
+          await writeGated(principal, context, args.path, args.content, 'agent', 'mcp'),
         )
         const wantPrivate = !existed && args.visibility !== 'inherit'
         const visibilityError = wantPrivate
@@ -804,7 +804,7 @@ export function registerTools(server: McpServer): void {
           status: 'applied',
           scope,
           path: result.path,
-          // Every shared-brain write re-syncs that note's mention set, so the
+          // Every shared-context write re-syncs that note's mention set, so the
           // edges it draws are already up to date by the time this returns.
           links_synced: scope === 'shared',
           ...(isGatedShared
@@ -831,15 +831,15 @@ export function registerTools(server: McpServer): void {
         space_id: z.string(),
         path: z.string().describe('Path of the existing note to append to'),
         entry: z.string().describe('The entry text — one update. The date and your name are added for you.'),
-        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the space's shared context"),
+        scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
     },
     (args, extra) =>
       withCtx(extra, 'append_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'personal'
+        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
         const result = unwrapWrite(
-          await appendLogGated(principal, brain, args.path, args.entry, 'agent', 'mcp'),
+          await appendLogGated(principal, context, args.path, args.entry, 'agent', 'mcp'),
         )
         return { status: 'applied', scope, path: result.path }
       }),
@@ -849,7 +849,7 @@ export function registerTools(server: McpServer): void {
     'move_context',
     {
       description:
-        'Move or rename one note. Links pointing AT it are rewritten across the brain, so the mentions that ' +
+        'Move or rename one note. Links pointing AT it are rewritten across the context, so the mentions that ' +
         'make up the graph survive the move — which is why this exists instead of write-then-delete. ' +
         'Needs write access at BOTH the old and the new path. Moving an entity note away from the path its ' +
         'type implies (people/<slug>.md and so on) detaches it from that entity, so do not. Moving a note ' +
@@ -864,14 +864,14 @@ export function registerTools(server: McpServer): void {
             'New path, ending in .md. Folders are implicit in the path, so none need creating first; ' +
               'a note already at that path is an error rather than an overwrite.',
           ),
-        scope: scopeArg.describe("Target brain — defaults to 'personal'; pass 'shared' for the space's shared context"),
+        scope: scopeArg.describe("Target context — defaults to 'personal'; pass 'shared' for the space's shared context"),
       },
     },
     (args, extra) =>
       withCtx(extra, 'move_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'personal'
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, scope)
-        const result = unwrapWrite(await moveGated(principal, brain, args.from, args.to, 'agent'))
+        const scope: ContextScope = args.scope ?? 'personal'
+        const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
+        const result = unwrapWrite(await moveGated(principal, context, args.from, args.to, 'agent'))
         return { status: 'applied', scope, from: args.from, path: result.path, links_rewritten: true }
       }),
   )
@@ -897,7 +897,7 @@ export function registerTools(server: McpServer): void {
       inputSchema: {
         space_id: z.string(),
         scope: scopeArg.describe(
-          "Which brain to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
+          "Which context to clean — defaults to 'shared' (the space's context); 'personal' cleans your own space",
         ),
         action: z
           .enum(['analyze', 'apply_fixes', 'trash'])
@@ -920,8 +920,8 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'clean_context', async (ctx) => {
-        const scope: BrainScope = args.scope ?? 'shared'
-        const { principal, brain, resolved } = await resolveTarget(ctx, args.space_id, scope)
+        const scope: ContextScope = args.scope ?? 'shared'
+        const { principal, context, resolved } = await resolveTarget(ctx, args.space_id, scope)
         const role: CleanRole =
           scope === 'personal' || resolved?.isPersonalSpace
             ? 'owner'
@@ -937,14 +937,14 @@ export function registerTools(server: McpServer): void {
         const action = args.action ?? 'analyze'
         if (action === 'trash') {
           if (!args.paths?.length) throw new McpError(400, "action:'trash' needs `paths`")
-          const results = await trashNotes(principal, brain, resolved, args.paths)
+          const results = await trashNotes(principal, context, resolved, args.paths)
           return { action, results, restorable_days: 7 }
         }
         if (action === 'apply_fixes') {
-          const result = await applyCleanFixes(principal, brain, opts)
+          const result = await applyCleanFixes(principal, context, opts)
           return { action, ...result }
         }
-        return { action, scope, ...(await runClean(principal, brain, opts)) }
+        return { action, scope, ...(await runClean(principal, context, opts)) }
       }),
   )
 
@@ -969,8 +969,8 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'list_connectors', async (ctx) => {
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
-        return { connectors: await listConnectors(principal, brain) }
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        return { connectors: await listConnectors(principal, context) }
       }),
   )
 
@@ -1001,10 +1001,10 @@ export function registerTools(server: McpServer): void {
     },
     (args, extra) =>
       withCtx(extra, 'run_connector', async (ctx) => {
-        const { principal, brain } = await resolveTarget(ctx, args.space_id, 'shared')
-        const loaded = await loadConnectorOr404(principal, brain, args.connector)
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const loaded = await loadConnectorOr404(principal, context, args.connector)
         try {
-          const result = await executeConnectorScript(principal, brain, args.space_id, loaded, args.code)
+          const result = await executeConnectorScript(principal, context, args.space_id, loaded, args.code)
           return {
             ok: result.ok,
             value: result.value,

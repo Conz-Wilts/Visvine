@@ -1,5 +1,5 @@
-// Pure constants for the brain's display settings — importable from both the
-// server side (lib/notes/brainSettings.ts) and client components, so the
+// Pure constants for the context's display settings — importable from both the
+// server side (lib/notes/contextSettings.ts) and client components, so the
 // default name and length cap live in exactly one place.
 
 export const DEFAULT_CONTEXT_NAME = 'Space context'

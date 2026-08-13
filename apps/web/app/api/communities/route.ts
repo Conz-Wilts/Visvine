@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Access here is decided by aliases from the start, so there is nothing to
-    // grandfather — without this, the first brain touch would hand a root grant
+    // grandfather — without this, the first context touch would hand a root grant
     // to every member and swamp the alias grants (lib/notes/access.ts).
     await markAccessSeeded(id);
 
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     const actor = { id: session.userId, name: session.name, email: session.email };
     await ensureMemberNode(id, session.userId, actor, OWNER_ALIAS_NAME);
 
-    // Seed the brain's root index — the space's home page, which the
+    // Seed the context's root index — the space's home page, which the
     // Directory's Context tab routes to. Best-effort for the same reason as
     // the context node above.
     try {

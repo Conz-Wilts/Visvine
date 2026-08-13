@@ -198,7 +198,7 @@ test('parseChildrenBlock reads back exactly what renderChildrenBlock wrote', () 
   )
 })
 
-// The BRAIN ROOT's index — the space home page the Directory's Context tab
+// The CONTEXT ROOT's index — the space home page the Directory's Context tab
 // routes to. Seeded by ensureRootIndex (lib/notes/store.ts) at space
 // creation; these pin the contract that helper leans on.
 test('the root index path is the bare basename, and declares itself an Index', () => {
@@ -216,7 +216,7 @@ test('the root index path is the bare basename, and declares itself an Index', (
 })
 
 test('no ancestor walk can create the root index — hence ensureRootIndex', () => {
-  // ancestorFolders excludes the brain root, so ensureAncestorIndexes (which
+  // ancestorFolders excludes the context root, so ensureAncestorIndexes (which
   // iterates exactly this list) can never seed 'index.md'. That gap is the
   // whole reason ensureRootIndex exists; if this ever returns [''], the root
   // would be created twice by two different paths.

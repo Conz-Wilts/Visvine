@@ -1,27 +1,27 @@
-// Folder operations within a brain.
+// Folder operations within a context.
 //   POST   { spaceId, scope, path, content? }   → { ok, indexPath? }  (create folder)
 //   PATCH  { spaceId, scope, from, to }         → { path }  (rename/move subtree)
 //   DELETE ?spaceId=&scope=&path=               → { ok }    (soft-delete subtree)
 //
-// Shared-brain rules (grant model — lib/notes/shared/authz.ts): creating a
+// Shared-context rules (grant model — lib/notes/shared/authz.ts): creating a
 // folder needs EDIT at its path (you can shape where you can write); renaming
 // or deleting a subtree needs FULL at the source (full = manage the subtree,
 // space admins included) plus EDIT at a move's destination. Personal
-// brains: always the owner.
+// contexts: always the owner.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
-import { principalOf, type ResolvedBrain } from '@/lib/notes/brain'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
+import { principalOf, type ResolvedContext } from '@/lib/notes/resolve'
 import { createFolder, createIndexFolder, renameFolder, deleteFolder } from '@/lib/notes/store'
 import { indexPathOf } from '@/lib/notes/shared/indexNote'
 import { principalCanManage, principalCanWrite } from '@/lib/notes/shared/permissions'
-import type { BrainPrincipal } from '@/lib/notes/shared/brainTypes'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 
-function gated(brain: ResolvedBrain): boolean {
-  return !brain.isPersonalSpace
+function gated(context: ResolvedContext): boolean {
+  return !context.isPersonalSpace
 }
 
-function manageDenial(p: BrainPrincipal, folderPath: string): string | null {
+function manageDenial(p: ContextPrincipal, folderPath: string): string | null {
   return principalCanManage(p, folderPath)
     ? null
     : `Only someone with full access to "${folderPath}" (or a space admin) can reorganize it`
@@ -29,12 +29,12 @@ function manageDenial(p: BrainPrincipal, folderPath: string): string | null {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
   const path = typeof body.path === 'string' ? body.path : null
   if (!path) return fail('path is required')
-  const p = await principalOf(brain)
-  if (gated(brain) && !principalCanWrite(p, path)) {
+  const p = await principalOf(context)
+  if (gated(context) && !principalCanWrite(p, path)) {
     return fail(`You need edit access at "${path}" to create a folder there`, 403)
   }
   try {
@@ -45,10 +45,10 @@ export async function POST(req: NextRequest) {
     if (content) {
       return NextResponse.json({
         ok: true,
-        indexPath: await createIndexFolder(brain, path, content, brain.actor),
+        indexPath: await createIndexFolder(context, path, content, context.actor),
       })
     }
-    await createFolder(brain, path, brain.actor)
+    await createFolder(context, path, context.actor)
     return NextResponse.json({ ok: true, indexPath: indexPathOf(path) })
   } catch (err) {
     return failFromError(err)
@@ -57,13 +57,13 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
   const from = typeof body.from === 'string' ? body.from : null
   const to = typeof body.to === 'string' ? body.to : null
   if (!from || !to) return fail('from and to are required')
-  const p = await principalOf(brain)
-  if (gated(brain)) {
+  const p = await principalOf(context)
+  if (gated(context)) {
     const denial = manageDenial(p, from)
     if (denial) return fail(denial, 403)
     if (!principalCanWrite(p, to)) {
@@ -71,24 +71,24 @@ export async function PATCH(req: NextRequest) {
     }
   }
   try {
-    return NextResponse.json({ path: await renameFolder(brain, from, to, brain.actor) })
+    return NextResponse.json({ path: await renameFolder(context, from, to, context.actor) })
   } catch (err) {
     return failFromError(err)
   }
 }
 
 export async function DELETE(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  const p = await principalOf(brain)
-  if (gated(brain)) {
+  const p = await principalOf(context)
+  if (gated(context)) {
     const denial = manageDenial(p, path)
     if (denial) return fail(denial, 403)
   }
   try {
-    await deleteFolder(brain, path)
+    await deleteFolder(context, path)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return failFromError(err)

@@ -130,14 +130,14 @@ test('unknown issue kinds get the default edit_context guidance', () => {
 
 // ── lockedDenial: the "Freeze for AI" write gate ──
 
-import { lockedDenial } from '../lib/notes/brainService'
+import { lockedDenial } from '../lib/notes/contextService'
 import { OPEN_ACCESS, LEVEL_FULL } from '../lib/notes/shared/authz'
-import type { BrainPrincipal } from '../lib/notes/shared/brainTypes'
+import type { ContextPrincipal } from '../lib/notes/shared/contextTypes'
 
 const SHARED = { spaceId: 'c1', ownerKey: 'shared' }
 const PERSONAL = { spaceId: 'me:u1', ownerKey: 'shared' }
 
-const principal = (locked: string[]): BrainPrincipal => ({
+const principal = (locked: string[]): ContextPrincipal => ({
   userId: 'u1',
   email: 'u1@x.dev',
   name: 'U One',
@@ -165,7 +165,7 @@ test('human origins pass through locked folders', () => {
   }
 })
 
-test('personal brains are never lock-gated', () => {
-  const p: BrainPrincipal = { ...principal([]), access: OPEN_ACCESS }
+test('personal contexts are never lock-gated', () => {
+  const p: ContextPrincipal = { ...principal([]), access: OPEN_ACCESS }
   assert.equal(lockedDenial(p, PERSONAL, 'anything.md', 'agent'), null)
 })

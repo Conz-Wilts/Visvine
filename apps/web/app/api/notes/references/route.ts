@@ -2,7 +2,7 @@
 // Roam-style backlinks for a note: notes that link to it (with the surrounding
 // passage) and notes that mention its title in plain text but haven't linked it.
 // Computed over the FULL corpus, then run through the access lens
-// (brainService.referencesFor): a reference whose source note the caller can't
+// (contextService.referencesFor): a reference whose source note the caller can't
 // read comes back as an opaque locked stub — existence only, never the source's
 // path, title, or text. The stub's token is what "Get access" trades in
 // (POST /api/notes/access-requests with referenceToken).
@@ -16,38 +16,38 @@
 // refreshed references so the caller can swap state without a second request.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/brain'
-import { visibleVault, readVisible, writeDenialFull, referencesFor } from '@/lib/notes/brainService'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
+import { principalOf } from '@/lib/notes/resolve'
+import { visibleVault, readVisible, writeDenialFull, referencesFor } from '@/lib/notes/contextService'
 import { pendingRequestPaths } from '@/lib/notes/accessRequests'
 import { linkMentionAt, linkFirstMention } from '@/lib/notes/shared/references'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import { writeNote } from '@/lib/notes/store'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
-  const p = await principalOf(brain)
+  const p = await principalOf(context)
   // Personal spaces have no gates and no requests — skip the pending lookup.
-  const pending = brain.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
-  const references = await referencesFor(p, brain, path, pending)
+  const pending = context.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
+  const references = await referencesFor(p, context, path, pending)
   return NextResponse.json({ references })
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
   const path = typeof body.path === 'string' ? body.path : null
   const fromPath = typeof body.fromPath === 'string' ? body.fromPath : null
   if (!path || !fromPath) return fail('path and fromPath are required')
   if (path === fromPath) return fail('A note cannot link a mention of itself')
   const offset = typeof body.offset === 'number' ? body.offset : null
 
-  const p = await principalOf(brain)
-  const { metas } = await visibleVault(p, brain)
+  const p = await principalOf(context)
+  const { metas } = await visibleVault(p, context)
   // Resolve the link text from the vault, never from the client: the title the
   // mention was found by is the target note's own title (falling back to the
   // filename, as computeReferences does).
@@ -55,10 +55,10 @@ export async function POST(req: NextRequest) {
   const title = (target?.title ?? path.replace(/\.md$/i, '').split('/').pop() ?? '').trim()
   if (!title) return fail(`Note not found: ${path}`, 404)
 
-  const content = await readVisible(p, brain, fromPath)
+  const content = await readVisible(p, context, fromPath)
   if (content === null) return fail(`Note not found: ${fromPath}`, 404)
   // The write lands on the SOURCE note, so its folder gate and replica block apply.
-  const denial = await writeDenialFull(p, brain, fromPath)
+  const denial = await writeDenialFull(p, context, fromPath)
   if (denial) return fail(denial, 403)
 
   const { frontmatter, body: noteBody } = splitFrontmatter(content)
@@ -73,19 +73,19 @@ export async function POST(req: NextRequest) {
 
   try {
     await writeNote(
-      brain,
+      context,
       fromPath,
       frontmatter != null ? `---\n${frontmatter}\n---\n\n${linked}` : linked,
-      brain.actor,
+      context.actor,
       'edit',
     )
   } catch (err) {
     return failFromError(err)
   }
 
-  const pending = brain.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
+  const pending = context.isPersonalSpace ? new Set<string>() : await pendingRequestPaths(p)
   return NextResponse.json({
     ok: true,
-    references: await referencesFor(p, brain, path, pending),
+    references: await referencesFor(p, context, path, pending),
   })
 }

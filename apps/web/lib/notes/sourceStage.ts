@@ -12,7 +12,7 @@
 
 import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
-import type { Brain } from './store'
+import type { Context } from './store'
 import type { SourceStage, SourceStageHit } from './shared/retrieval'
 import { embeddingsConfig } from './embeddings'
 import { aboveFloors, vectorLiteral, type SemanticReport } from './vectorStage'
@@ -21,7 +21,7 @@ const TOP_K = 20
 const SNIPPET_CHARS = 240
 
 export function createSourceStage(
-  brain: Brain,
+  context: Context,
   visiblePaths: string[],
   queryVector: number[] | null,
   report: SemanticReport = {},
@@ -37,8 +37,8 @@ export function createSourceStage(
         >`
           SELECT path, seq, text, 1 - (embedding <=> ${vectorLiteral(queryVector)}::vector) AS score
           FROM context_source_chunks
-          WHERE space_id = ${brain.spaceId}
-            AND owner_key = ${brain.ownerKey}
+          WHERE space_id = ${context.spaceId}
+            AND owner_key = ${context.ownerKey}
             AND model = ${config.model}
             AND embedding IS NOT NULL
             AND path IN (${Prisma.join(visiblePaths)})
@@ -67,8 +67,8 @@ export function createSourceStage(
           SELECT path, seq, text,
                  ts_rank(to_tsvector('english', text), websearch_to_tsquery('english', ${query})) AS score
           FROM context_source_chunks
-          WHERE space_id = ${brain.spaceId}
-            AND owner_key = ${brain.ownerKey}
+          WHERE space_id = ${context.spaceId}
+            AND owner_key = ${context.ownerKey}
             AND path IN (${Prisma.join(visiblePaths)})
             AND to_tsvector('english', text) @@ websearch_to_tsquery('english', ${query})
           ORDER BY score DESC

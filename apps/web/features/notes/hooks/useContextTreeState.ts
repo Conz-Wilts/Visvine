@@ -12,7 +12,7 @@
 //                     reveal: openPaths has nothing to remove, so the collapse
 //                     is recorded here and dropped when the reveal moves on.
 //
-// The tree opens fully COLLAPSED except the root: a real brain has hundreds of
+// The tree opens fully COLLAPSED except the root: a real context has hundreds of
 // entity notes, and an all-open tree buries the top-level structure under them.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,7 +21,7 @@ import { ancestorFolders } from '@/lib/notes/shared/indexNote'
 const ROOT_PATH = ''
 const OPEN_STORE_PREFIX = 'visvine:notes-tree-open:'
 
-/** The Trash row's expansion key. Not a real brain path (a note can never live
+/** The Trash row's expansion key. Not a real context path (a note can never live
  *  at a `:` prefix — sanitizePath strips it), so it shares openPaths without
  *  ever colliding with a folder. */
 export const TRASH_PATH = ':trash:'

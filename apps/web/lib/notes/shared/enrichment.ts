@@ -1,9 +1,8 @@
 // Enrichment — abstract reusable insight from personal notes into the shared
-// brain: synthesise, never copy. Ported from blackbird-brain's
-// src/shared/enrichment.ts. Pure candidate-selection + untrusted-LLM-output
+// context: synthesise, never copy. Pure candidate-selection + untrusted-LLM-output
 // coercion; the server pass (lib/notes/enrich.ts) runs the LLM and applies the
-// writes. In Visvine the sources are the CALLER's own personal brain (never
-// another user's), preserving the personal-space privacy contract.
+// writes. The sources are the CALLER's own personal context (never another
+// user's), preserving the personal-space privacy contract.
 
 export interface EnrichmentSource {
   path: string
@@ -52,7 +51,7 @@ export function selectEnrichmentCandidates(
 export interface EnrichmentOutput {
   action: 'new_note' | 'append_log'
   insight: string
-  /** Required for append_log — a shared-brain note path (without .md). */
+  /** Required for append_log — a shared-context note path (without .md). */
   targetId?: string
   /** Required for new_note. */
   newNote?: { type: string; title: string }

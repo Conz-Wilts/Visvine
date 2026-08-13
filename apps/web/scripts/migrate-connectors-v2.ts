@@ -154,7 +154,7 @@ function v2Frontmatter(fm: NoteFrontmatter, perimeter: ConnectorPerimeter): Note
 }
 
 async function main() {
-  const notes = await prisma.spaceNote.findMany({
+  const notes = await prisma.contextNote.findMany({
     where: {
       ...(spaceArg ? { spaceId: spaceArg } : {}),
       path: { startsWith: 'connectors/' },
@@ -186,7 +186,7 @@ async function main() {
     if (parsed.config.alias === 'postgres' || parsed.config.alias === 'mysql') {
       // The one thing the pure shim can't know: the DB host hides in the secret.
       dsnName = Object.keys(perimeter.env)[0]
-      const row = await prisma.spaceSecret.findUnique({
+      const row = await prisma.connectorSecret.findUnique({
         where: { secret_identity: { spaceId: note.spaceId, name: dsnName } },
         select: { ciphertext: true },
       })
@@ -225,7 +225,7 @@ async function main() {
     for (const [key, group] of byBrain) {
       const [spaceId, ownerKey] = key.split(' ')
       for (const note of group) {
-        await prisma.spaceNote.update({
+        await prisma.contextNote.update({
           where: { note_identity: { spaceId, ownerKey, path: note.path } },
           data: { content: note.content },
         })

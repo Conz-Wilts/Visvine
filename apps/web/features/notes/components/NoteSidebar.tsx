@@ -52,7 +52,7 @@ function noteGlyph(type: string | undefined): NodeGlyph | null {
   return getNodeGlyph(type) ?? (entityKindOf(type) === 'space' ? 'group' : null)
 }
 
-/** Access adornments for a folder row at ANY depth (shared brain only):
+/** Access adornments for a folder row at ANY depth (shared context only):
  *  restricted = a grant boundary (ðŸ”’), plus the viewer's own level chip. */
 interface FolderBadge {
   restricted: boolean
@@ -73,7 +73,7 @@ interface MovableItem {
  *  host surface passed no move handlers — rows then aren't draggable at all. */
 interface TreeDragValue {
   dragging: MovableItem | null
-  /** Folder currently under the pointer ('' = the brain root, null = none). */
+  /** Folder currently under the pointer ('' = the context root, null = none). */
   dropFolder: string | null
   begin: (item: MovableItem) => void
   end: () => void
@@ -110,7 +110,7 @@ interface NoteSidebarProps {
   onShareNote?: (path: string) => void
   /** â‹¯ menu action on folder rows: delete the folder (and the notes inside). */
   onDeleteFolder?: (folderPath: string, label?: string) => void
-  /** File a note into another folder ('' = the brain root). Passing both move
+  /** File a note into another folder ('' = the context root). Passing both move
    *  handlers turns on dragging and the rows' "Move to..." action; omit them for
    *  a read-only tree. Authority stays server-side - a rejected move surfaces
    *  its message. */
@@ -120,7 +120,7 @@ interface NoteSidebarProps {
   /** Render without card chrome (bg/border/shadow) â€” used when the sidebar sits on
    *  the shared dock backdrop, which already supplies the background and shadow. */
   bare?: boolean
-  /** Show the brain root as a real (collapsible) folder row at the top of the
+  /** Show the context root as a real (collapsible) folder row at the top of the
    *  tree instead of a separate header bar, so the space reads as the parent
    *  folder of everything below it. `icon` replaces the folder glyph; the root
    *  row shows no glyph at all when it's omitted. */
@@ -128,7 +128,7 @@ interface NoteSidebarProps {
   /** Scopes the persisted expand/collapse state (pass the space id). Omit to
    *  keep the state in memory only. */
   storageKey?: string | null
-  /** Soft-deleted notes for this brain, shown as a Trash folder pinned to the
+  /** Soft-deleted notes for this context, shown as a Trash folder pinned to the
    *  bottom of the tree. Omit (or pass null) to hide the row entirely. */
   trash?: TrashEntry[] | null
   /** Trash row actions. Restore puts the note back at its original path;
@@ -310,7 +310,7 @@ export function NoteSidebar({
           )}
 
           {root ? (
-            // The brain root as the tree's own top-level folder â€” same row
+            // The context root as the tree's own top-level folder â€” same row
             // chrome as any other folder, so nesting reads uniformly from the
             // space down.
             <FolderRow
@@ -350,7 +350,7 @@ export function NoteSidebar({
             />
           )}
 
-          {/* Trash sits at the very bottom of every brain, below the whole tree
+          {/* Trash sits at the very bottom of every context, below the whole tree
               â€” a folder-shaped row rather than a modal, so restoring reads as
               moving a note back rather than a separate admin surface. */}
           {trash && (
@@ -532,7 +532,7 @@ function Tree({
   onDeleteFolder?: (folderPath: string, label?: string) => void
 }) {
   // A folder's own index.md never renders as a child row â€” the folder row IS
-  // the index (clicking the folder name opens it; see FolderRow). The brain
+  // the index (clicking the folder name opens it; see FolderRow). The context
   // root included: its index.md folds into the root folder row, so the
   // space reads as the parent folder of everything below it.
   const ownIndex = node.path ? `${node.path}/index.md` : 'index.md'
@@ -583,7 +583,7 @@ function Tree({
 
 function FolderRow(props: {
   node: TreeNode
-  /** Overrides the folder's own name (used for the brain-root row). */
+  /** Overrides the folder's own name (used for the context-root row). */
   label?: string
   /** Overrides the folder glyph; explicit null renders no glyph (the root row). */
   icon?: React.ReactNode | null
@@ -612,9 +612,9 @@ function FolderRow(props: {
   // Folder-note behaviour: when the folder has an index.md (hidden as a child
   // row by Tree), the folder row IS that note â€” clicking the name opens it and
   // selection highlights here. The chevron keeps expand/collapse to itself.
-  // The brain root works the same way over its own index.md, so the space
+  // The context root works the same way over its own index.md, so the space
   // row opens the space's home note.
-  // The folder's display name: an explicit label (the brain root's), else the
+  // The folder's display name: an explicit label (the context root's), else the
   // title its index note declares, else the path segment.
   const folderLabel = props.label ?? props.node.title ?? props.node.name
   const indexPath = props.node.path ? `${props.node.path}/index.md` : 'index.md'
@@ -623,7 +623,7 @@ function FolderRow(props: {
 
   // Moving: a folder row is both a drag source (its whole subtree travels with
   // it) and the tree's only drop target - notes and folders are filed INTO
-  // folders, never next to a note. The brain root row is the target for "top
+  // folders, never next to a note. The context root row is the target for "top
   // level"; it is never a source.
   const drag = useContext(TreeDrag)
   const item: MovableItem = { path: props.node.path, kind: 'folder', label: folderLabel }
@@ -691,9 +691,9 @@ function FolderRow(props: {
       >
         {/* self-stretch, not py-*: the row is as tall as the label button's
             15px line-box (~35px) while the chevron's own content is 16px, so
-            items-center used to leave a ~3px dead strip above and below it —
-            clicks landed on the row div and nothing expanded. Stretching makes
-            the target the full row height. */}
+            items-center leaves a ~3px dead strip above and below it where clicks
+            land on the row div and nothing expands. Stretching makes the target
+            the full row height. */}
         <button
           type="button"
           aria-label={open ? 'Collapse folder' : 'Expand folder'}
@@ -742,7 +742,7 @@ function FolderRow(props: {
             ...(draggable
               ? [{ label: 'Move to...', icon: <MoveIcon />, onClick: () => drag!.requestMove(item) }]
               : []),
-            // The root row is the brain itself â€” not deletable from the tree.
+            // The root row is the context itself â€” not deletable from the tree.
             ...(props.onDeleteFolder && props.node.path !== ''
               ? [
                   {

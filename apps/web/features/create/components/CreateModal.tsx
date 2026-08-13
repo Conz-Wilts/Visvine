@@ -29,7 +29,7 @@ import {
   AliasSelector,
   SuccessScreen,
 } from './CreateModalForms';
-import { useBrainTree } from './ContextDestination';
+import { useContextFolderTree } from './ContextDestination';
 import type { ChannelSectionEntry } from '@/lib/messages/types';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
@@ -116,18 +116,18 @@ export default function CreateModal() {
   // the Channel form opens.
   const [sections, setSections] = useState<ChannelSectionEntry[]>([]);
 
-  // Folder list + existing note paths for the brain forms, loaded (from the
+  // Folder list + existing note paths for the context forms, loaded (from the
   // shared context cache) only while one of them is open.
-  const brainForm = selectedType === 'context' || selectedType === 'file';
-  const brainTree = useBrainTree(currentSpace?.id ?? null, isOpen && brainForm);
+  const contextForm = selectedType === 'context' || selectedType === 'file';
+  const contextFolderTree = useContextFolderTree(currentSpace?.id ?? null, isOpen && contextForm);
   const contextName = currentSpace?.name ?? 'Context';
 
   // The note's real destination: the title's slug in the chosen folder, suffixed
   // when that path is already taken, so the preview matches what gets written.
   const contextTitle = contextData.title.trim();
   const contextDestination = useMemo(
-    () => availableNotePath(contextData.folder, contextTitle || 'untitled', brainTree.notePaths),
-    [contextData.folder, contextTitle, brainTree.notePaths],
+    () => availableNotePath(contextData.folder, contextTitle || 'untitled', contextFolderTree.notePaths),
+    [contextData.folder, contextTitle, contextFolderTree.notePaths],
   );
   const contextRenamed =
     contextDestination !== composeNotePath(contextData.folder, contextTitle || 'untitled');
@@ -757,11 +757,11 @@ export default function CreateModal() {
                 data={contextData}
                 onChange={setContextData}
                 nameRef={nameRef}
-                folders={brainTree.folders}
+                folders={contextFolderTree.folders}
                 contextName={contextName}
                 destination={contextDestination}
                 renamed={contextRenamed}
-                loading={brainTree.loading}
+                loading={contextFolderTree.loading}
               />
             )}
             {step === 1 && selectedType === 'connector' && (
@@ -771,9 +771,9 @@ export default function CreateModal() {
               <FileForm
                 data={fileData}
                 onChange={setFileData}
-                folders={brainTree.folders}
+                folders={contextFolderTree.folders}
                 contextName={contextName}
-                loading={brainTree.loading}
+                loading={contextFolderTree.loading}
               />
             )}
 

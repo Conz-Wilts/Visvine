@@ -50,7 +50,7 @@ const all = models()
 test('every ownerKey-scoped model is cleared by deleteAccount', () => {
   const owned = all.filter((m) => fieldLines(m.body).some((l) => /^ownerKey\s/.test(l)))
 
-  // Sanity: the personal-brain tables exist and the regex found them.
+  // Sanity: the personal-context tables exist and the regex found them.
   assert.ok(owned.length >= 5, `expected several ownerKey models, found ${owned.length}`)
 
   for (const m of owned) {

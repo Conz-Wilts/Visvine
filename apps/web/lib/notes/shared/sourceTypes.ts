@@ -1,6 +1,6 @@
-// Types for Context Sources — non-note files/tables attached to a brain that
+// Types for Context Sources — non-note files/tables attached to a context that
 // feed the fused retrieval but never become context Nodes. A source is addressed
-// by the same brain-relative POSIX `path` as a note (so the folder gate and
+// by the same context-relative POSIX `path` as a note (so the folder gate and
 // visibility lens govern it unchanged), but never with a `.md` extension — the
 // note namespace stays disjoint. Pure — no Node/DOM/Prisma imports.
 
@@ -12,7 +12,7 @@ export type SourceStatus = 'pending' | 'ready' | 'failed'
 /** The metadata shape the routes and UI exchange (no content, no GCS internals). */
 export interface ContextSourceMeta {
   id: string
-  path: string // brain-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
+  path: string // context-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
   name: string // display filename
   kind: SourceKind
   mimeType: string

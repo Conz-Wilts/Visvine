@@ -52,7 +52,7 @@ type Tab = 'overview' | 'guests' | 'form';
 
 // The guest-facing view carries the same Event | Context | Raw bar entity
 // profiles get. Context/Raw are the event's context note (events/<slug>.md in
-// the space brain) — the tab IS the editor mode.
+// the space context) — the tab IS the editor mode.
 const EVENT_TABS: TabConfig[] = [
   { id: 'about', label: 'Event' },
   { id: 'context', label: 'Context' },

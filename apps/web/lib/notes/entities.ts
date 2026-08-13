@@ -17,7 +17,7 @@ export type EntityKind =
   | 'connector'
 
 // `space` is the org kind (a group, organisation or community recorded in the
-// directory — formerly the Community type); there is no separate `company`
+// directory); there is no separate `company`
 // kind, so a company, group or org note lives in communities/ beside the note
 // for the space it sits in. Only section/channel are pure structure, hidden by
 // default in the context view and the directory grid (see
@@ -30,7 +30,7 @@ export type EntityKind =
 // [[mentions]] resolving to it — see lib/notes/entityLinks.ts. Creating one from
 // the directory is deliberately NOT possible: connector is absent from
 // CREATABLE_TYPES in lib/directory/createEntity.ts, so the admin-only write
-// gate on connectors/ in brainService.writeDenial remains the only door.
+// gate on connectors/ in contextService.writeDenial remains the only door.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -128,7 +128,7 @@ export function noteHref(path: string): string {
 }
 
 // The app route previewing an uploaded Context Source (csv/xlsx/docx/md/txt…).
-// Sources live in the same brain-path namespace as notes but are never .md, so
+// Sources live in the same context-path namespace as notes but are never .md, so
 // they get their own viewer — same encoding rule as noteHref.
 export function sourceHref(path: string): string {
   return `/directory/source/${path.split('/').map(encodeURIComponent).join('/')}`

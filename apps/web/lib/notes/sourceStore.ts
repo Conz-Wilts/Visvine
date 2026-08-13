@@ -1,5 +1,5 @@
 // DB store for Context Sources — the non-note counterpart of ./store.ts. A
-// source row is keyed by the same brain `{ spaceId, ownerKey }` + brain
+// source row is keyed by the same context `{ spaceId, ownerKey }` + context
 // path as a note (so gate/lens predicates apply unchanged); its original file
 // lives in GCS and its extracted text lives chunked in context_source_chunks.
 // No trash and no revisions: a source is a mirror of an uploaded file, so
@@ -7,7 +7,7 @@
 
 import prisma from '@/lib/prisma'
 import { deleteResourceFile } from '@/lib/gcs'
-import { sanitizePath, type Brain } from './store'
+import { sanitizePath, type Context } from './store'
 import { vectorLiteral } from './vectorStage'
 import type { ContextSourceMeta, SourceKind, SourceStatus } from './shared/sourceTypes'
 
@@ -63,27 +63,27 @@ function toMeta(row: SourceRow): ContextSourceMeta {
   }
 }
 
-export async function listSources(brain: Brain): Promise<ContextSourceMeta[]> {
+export async function listSources(context: Context): Promise<ContextSourceMeta[]> {
   const rows = await prisma.contextSource.findMany({
-    where: { spaceId: brain.spaceId, ownerKey: brain.ownerKey },
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey },
     select: META_SELECT,
     orderBy: { path: 'asc' },
   })
   return rows.map(toMeta)
 }
 
-export async function getSource(brain: Brain, path: string): Promise<ContextSourceMeta | null> {
-  const row = await findSource(brain, path)
+export async function getSource(context: Context, path: string): Promise<ContextSourceMeta | null> {
+  const row = await findSource(context, path)
   return row ? toMeta(row) : null
 }
 
 /** The full row (incl. gcsPath) — internal to the ingest/read/delete paths. */
-export async function findSource(brain: Brain, path: string): Promise<SourceRow | null> {
+export async function findSource(context: Context, path: string): Promise<SourceRow | null> {
   return prisma.contextSource.findUnique({
     where: {
       source_identity: {
-        spaceId: brain.spaceId,
-        ownerKey: brain.ownerKey,
+        spaceId: context.spaceId,
+        ownerKey: context.ownerKey,
         path: sanitizePath(path),
       },
     },
@@ -102,13 +102,13 @@ export interface CreateSourceInput {
 }
 
 /** Insert the pending row; refuses to overwrite an existing source at the path. */
-export async function createSourceRow(brain: Brain, input: CreateSourceInput): Promise<ContextSourceMeta> {
+export async function createSourceRow(context: Context, input: CreateSourceInput): Promise<ContextSourceMeta> {
   const p = sanitizePath(input.path)
   if (p.toLowerCase().endsWith('.md')) throw new Error(`Sources must not use the .md note namespace: ${p}`)
   const row = await prisma.contextSource.create({
     data: {
-      spaceId: brain.spaceId,
-      ownerKey: brain.ownerKey,
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
       ...input,
       path: p,
       status: 'pending',
@@ -136,8 +136,8 @@ export async function updateSourceStatus(
 }
 
 /** Hard-delete a source: chunk rows cascade, then the GCS object goes. */
-export async function deleteSource(brain: Brain, path: string): Promise<boolean> {
-  const row = await findSource(brain, path)
+export async function deleteSource(context: Context, path: string): Promise<boolean> {
+  const row = await findSource(context, path)
   if (!row) return false
   await prisma.contextSource.delete({ where: { id: row.id } })
   // gcsPath '' = the original was never stored (storage unconfigured at upload).

@@ -1,11 +1,11 @@
-// Pure rules for brain access requests — who may file one, who may see it, and
+// Pure rules for context access requests — who may file one, who may see it, and
 // how it reads in a queue. Kept free of Prisma/DOM so both the API layer
 // (lib/notes/accessRequests.ts) and the console UI run the SAME logic, and so
 // the rules are unit-testable (tests/access-requests.test.ts).
 
 import { levelDisplayLabel, levelName } from './authz'
 import { principalCanManage, principalCanRead } from './permissions'
-import type { AccessRequest, BrainPrincipal } from './brainTypes'
+import type { AccessRequest, ContextPrincipal } from './contextTypes'
 
 /**
  * Whether a principal may file a request for `path`. Only "you already have
@@ -13,7 +13,7 @@ import type { AccessRequest, BrainPrincipal } from './brainTypes'
  * path that doesn't exist is exactly what a hidden note looks like from outside,
  * and refusing it would confirm the note's absence.
  */
-export function canRequest(p: BrainPrincipal, path: string): boolean {
+export function canRequest(p: ContextPrincipal, path: string): boolean {
   return !principalCanRead(p, path)
 }
 
@@ -21,12 +21,12 @@ export function canRequest(p: BrainPrincipal, path: string): boolean {
  * Whether a principal may see a request in a queue: their own, or any request
  * for a path they manage (space admins manage everything).
  */
-export function requestVisibleTo(p: BrainPrincipal, request: AccessRequest): boolean {
+export function requestVisibleTo(p: ContextPrincipal, request: AccessRequest): boolean {
   return request.userId === p.userId || principalCanManage(p, request.resourcePath)
 }
 
 /** Whether a principal may approve/deny a request. Filing your own doesn't count. */
-export function canResolveRequest(p: BrainPrincipal, request: AccessRequest): boolean {
+export function canResolveRequest(p: ContextPrincipal, request: AccessRequest): boolean {
   return principalCanManage(p, request.resourcePath)
 }
 

@@ -1,5 +1,5 @@
 // A space's PERSON aliases (lib/notes/aliases.ts) — the permission model in
-// one list. An alias is a directory chip, a set of holders, and a set of brain
+// one list. An alias is a directory chip, a set of holders, and a set of context
 // grants, all at once, so the whole of it is managed in one place: Console →
 // Aliases. The Types page shows them read-only.
 //
@@ -18,7 +18,7 @@
 // alias.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain, fail, failFromError } from '@/lib/notes/api'
+import { requireContext, fail, failFromError } from '@/lib/notes/api'
 import {
   addAliasHolder,
   createAlias,
@@ -30,19 +30,19 @@ import {
 } from '@/lib/notes/aliases'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
-  return NextResponse.json({ aliases: await listAliases(brain.spaceId) })
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
+  return NextResponse.json({ aliases: await listAliases(context.spaceId) })
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const brain = await requireBrain(req, body)
-  if (brain instanceof Response) return brain
-  if (brain.isPersonalSpace) return fail('Personal spaces have no aliases')
-  if (!brain.isAdmin) return fail('Only a space admin can manage aliases', 403)
+  const context = await requireContext(req, body)
+  if (context instanceof Response) return context
+  if (context.isPersonalSpace) return fail('Personal spaces have no aliases')
+  if (!context.isAdmin) return fail('Only a space admin can manage aliases', 403)
   const action = typeof body.action === 'string' ? body.action : null
-  const actor = { userId: brain.actor.id, name: brain.actor.name }
+  const actor = { userId: context.actor.id, name: context.actor.name }
 
   const name = typeof body.name === 'string' ? body.name : null
   if (!name) return fail('name is required')
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   try {
     if (action === 'create') {
       const color = typeof body.color === 'string' ? body.color : ''
-      await createAlias(brain.spaceId, name, color, actor)
+      await createAlias(context.spaceId, name, color, actor)
       return NextResponse.json({ ok: true })
     }
 
@@ -60,17 +60,17 @@ export async function POST(req: NextRequest) {
       if (newName === undefined && color === undefined) {
         return fail('Nothing to change — pass newName or color')
       }
-      await updateAlias(brain.spaceId, name, { newName, color }, actor)
+      await updateAlias(context.spaceId, name, { newName, color }, actor)
       return NextResponse.json({ ok: true })
     }
 
     if (action === 'delete') {
-      await deleteAlias(brain.spaceId, name, actor)
+      await deleteAlias(context.spaceId, name, actor)
       return NextResponse.json({ ok: true })
     }
 
     if (action === 'setOwner') {
-      await setAliasOwner(brain.spaceId, name, body.owner === true, actor)
+      await setAliasOwner(context.spaceId, name, body.owner === true, actor)
       return NextResponse.json({ ok: true })
     }
 
@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
       const userId = typeof body.userId === 'string' ? body.userId : null
       if (!userId) return fail('userId is required')
       if (action === 'addHolder') {
-        await addAliasHolder(brain.spaceId, name, userId, actor)
+        await addAliasHolder(context.spaceId, name, userId, actor)
       } else {
-        await removeAliasHolder(brain.spaceId, name, userId)
+        await removeAliasHolder(context.spaceId, name, userId)
       }
       return NextResponse.json({ ok: true })
     }

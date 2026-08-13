@@ -3,8 +3,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 /** Reveal duration. Deliberately long — this is the whole transition from the
- *  context canvas to an open note, and the old 0.4s CSS entrance was over before
- *  the note it was supposed to introduce had even loaded. */
+ *  context canvas to an open note, and a shorter one finishes before the note it
+ *  is introducing has loaded. */
 const REVEAL_MS = 620;
 
 /** Ease-out cubic: quick to commit, long gentle settle. No overshoot — a spring
@@ -32,12 +32,10 @@ interface ContentRevealProps {
  * Holds an incoming view hidden until it reports itself loaded, then fades and
  * lifts it in.
  *
- * This exists because the old approach — a `profile-enter` CSS animation on
- * mount — animated the wrong thing at the wrong time. The note panels gate their
- * real content behind their own fetches, so the 0.4s entrance played out on an
- * empty container and the note then appeared abruptly with no animation at all:
- * "I can hardly see the transition". Worse, whatever DID animate was animating
- * while Tiptap mounted underneath it, so the frames it managed to draw dropped.
+ * Animating on mount instead would animate the wrong thing at the wrong time:
+ * the note panels gate their real content behind their own fetches, so the
+ * entrance plays out on an empty container, the note then appears abruptly, and
+ * whatever does animate is competing with Tiptap mounting underneath it.
  *
  * Two rules make it smooth:
  *  - Reveal is driven by `ready`, not by mount, so the animation always has real

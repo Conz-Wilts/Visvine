@@ -104,7 +104,7 @@ test("isStructuralNodeType covers the container kinds", () => {
   assert.equal(isStructuralNodeType("file"), true);
 });
 
-// `space` (the org type, formerly `space`) belongs here, not above: it
+// `space` (the org type) belongs here, not above: it
 // carries the organisations that used to be the Group type, which are
 // directory records people expect to see.
 test("isStructuralNodeType leaves the directory kinds alone", () => {

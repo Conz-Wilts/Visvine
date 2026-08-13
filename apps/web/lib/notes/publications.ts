@@ -1,5 +1,5 @@
-// Cross-brain publish: the source note stays owned by its brain; a live
-// replica exists as a REAL note row in the target space's shared brain,
+// Cross-context publish: the source note stays owned by its context; a live
+// replica exists as a REAL note row in the target space's shared context,
 // overwritten on every source save. The replica being real space data is
 // the whole design — the visibility lens, search, [[mention]] link sync, the
 // context, and mobile all work on it with zero changes, and NO read path ever
@@ -15,7 +15,7 @@
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import * as store from './store'
-import { SHARED_OWNER_KEY, type Actor, type Brain } from './store'
+import { SHARED_OWNER_KEY, type Actor, type Context } from './store'
 import { logAudit } from './audit'
 import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from './shared/markdown'
 import { provenanceRef } from './shared/noteLog'
@@ -99,13 +99,13 @@ export async function publishNote(
   actor: Actor,
 ): Promise<PublishResult> {
   if (sourceSpaceId === targetSpaceId) {
-    return { status: 'denied', reason: 'A note cannot be published into its own brain' }
+    return { status: 'denied', reason: 'A note cannot be published into its own context' }
   }
-  const source: Brain = { spaceId: sourceSpaceId, ownerKey: SHARED_OWNER_KEY }
+  const source: Context = { spaceId: sourceSpaceId, ownerKey: SHARED_OWNER_KEY }
   const content = await store.readNoteOrNull(source, sourcePath)
   if (content === null) return { status: 'denied', reason: `Note not found: ${sourcePath}` }
 
-  const existing = await prisma.notePublication.findUnique({
+  const existing = await prisma.contextPublication.findUnique({
     where: {
       publication_identity: { sourceSpaceId, sourcePath, targetSpaceId },
     },
@@ -118,7 +118,7 @@ export async function publishNote(
   }
 
   // Never overwrite someone else's note on first publish — suffix instead.
-  const target: Brain = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
+  const target: Context = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
   let dest = targetPath
   let n = 1
   while (await store.readNoteOrNull(target, dest)) {
@@ -126,11 +126,11 @@ export async function publishNote(
   }
 
   const row = existing
-    ? await prisma.notePublication.update({
+    ? await prisma.contextPublication.update({
         where: { id: existing.id },
         data: { active: true, targetPath: dest, createdBy: actor.id },
       })
-    : await prisma.notePublication.create({
+    : await prisma.contextPublication.create({
         data: { sourceSpaceId, sourcePath, targetSpaceId, targetPath: dest, createdBy: actor.id },
       })
 
@@ -147,10 +147,10 @@ export async function publishNote(
 
 /** Deactivate a publication — the replica stays behind as a plain editable copy. */
 export async function unpublish(id: string, actor: Actor): Promise<PublicationInfo | null> {
-  const row = await prisma.notePublication.findUnique({ where: { id } })
+  const row = await prisma.contextPublication.findUnique({ where: { id } })
   if (!row) return null
   if (row.active) {
-    await prisma.notePublication.update({ where: { id }, data: { active: false } })
+    await prisma.contextPublication.update({ where: { id }, data: { active: false } })
     void logAudit(row.targetSpaceId, {
       userId: actor.id,
       name: actor.name,
@@ -163,7 +163,7 @@ export async function unpublish(id: string, actor: Actor): Promise<PublicationIn
 }
 
 export async function getPublication(id: string): Promise<PublicationInfo | null> {
-  const row = await prisma.notePublication.findUnique({ where: { id } })
+  const row = await prisma.contextPublication.findUnique({ where: { id } })
   return row ? toInfo(row) : null
 }
 
@@ -182,11 +182,11 @@ export async function publicationStateFor(
   path: string,
 ): Promise<PublicationState> {
   const [asSource, asTarget] = await Promise.all([
-    prisma.notePublication.findMany({
+    prisma.contextPublication.findMany({
       where: { sourceSpaceId: spaceId, sourcePath: path },
       orderBy: { createdAt: 'asc' },
     }),
-    prisma.notePublication.findFirst({
+    prisma.contextPublication.findFirst({
       where: { targetSpaceId: spaceId, targetPath: path, active: true },
     }),
   ])
@@ -202,7 +202,7 @@ export async function publicationStateFor(
  * the denial reason, or null. Deletes are allowed — they deactivate the link.
  */
 export async function replicaDenial(spaceId: string, path: string): Promise<string | null> {
-  const row = await prisma.notePublication.findFirst({
+  const row = await prisma.contextPublication.findFirst({
     where: { targetSpaceId: spaceId, targetPath: path, active: true },
     select: { sourceSpaceId: true },
   })
@@ -221,13 +221,13 @@ async function writeReplica(
   sourcePath: string,
   actor: Actor,
 ): Promise<void> {
-  const target: Brain = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
+  const target: Context = { spaceId: targetSpaceId, ownerKey: SHARED_OWNER_KEY }
   const content = replicaContent(sourceContent, {
     ref: sourceRef(sourceSpaceId, sourcePath),
     publisher: actor.name,
   })
   await store.writeNote(target, targetPath, content, actor, 'publish')
-  await prisma.notePublication.update({
+  await prisma.contextPublication.update({
     where: { id: publicationId },
     data: { lastSyncedAt: new Date() },
   })
@@ -239,15 +239,15 @@ async function writeReplica(
  * cascade guard). Failures log and never fail the save itself.
  */
 export async function syncPublicationsOnWrite(
-  brain: Brain,
+  context: Context,
   path: string,
   content: string,
   actor: Actor,
 ): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY) return
+  if (context.ownerKey !== SHARED_OWNER_KEY) return
   try {
-    const rows = await prisma.notePublication.findMany({
-      where: { sourceSpaceId: brain.spaceId, sourcePath: path, active: true },
+    const rows = await prisma.contextPublication.findMany({
+      where: { sourceSpaceId: context.spaceId, sourcePath: path, active: true },
     })
     for (const row of rows) {
       await writeReplica(
@@ -261,28 +261,28 @@ export async function syncPublicationsOnWrite(
       )
     }
   } catch (err) {
-    logger.error('notes.publications.sync.failed', { err, path, spaceId: brain.spaceId })
+    logger.error('notes.publications.sync.failed', { err, path, spaceId: context.spaceId })
   }
 }
 
 /** A rename on either end follows the note — the link itself stays alive. */
 export async function syncPublicationsOnRename(
-  brain: Brain,
+  context: Context,
   from: string,
   to: string,
 ): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY) return
+  if (context.ownerKey !== SHARED_OWNER_KEY) return
   try {
-    await prisma.notePublication.updateMany({
-      where: { sourceSpaceId: brain.spaceId, sourcePath: from },
+    await prisma.contextPublication.updateMany({
+      where: { sourceSpaceId: context.spaceId, sourcePath: from },
       data: { sourcePath: to },
     })
-    await prisma.notePublication.updateMany({
-      where: { targetSpaceId: brain.spaceId, targetPath: from },
+    await prisma.contextPublication.updateMany({
+      where: { targetSpaceId: context.spaceId, targetPath: from },
       data: { targetPath: to },
     })
   } catch (err) {
-    logger.error('notes.publications.rename.failed', { err, from, to, spaceId: brain.spaceId })
+    logger.error('notes.publications.rename.failed', { err, from, to, spaceId: context.spaceId })
   }
 }
 
@@ -291,20 +291,20 @@ export async function syncPublicationsOnRename(
  * the replica behind as a stale copy; a deleted replica stops resurrecting on
  * the next source save.
  */
-export async function syncPublicationsOnDelete(brain: Brain, paths: string[]): Promise<void> {
-  if (brain.ownerKey !== SHARED_OWNER_KEY || paths.length === 0) return
+export async function syncPublicationsOnDelete(context: Context, paths: string[]): Promise<void> {
+  if (context.ownerKey !== SHARED_OWNER_KEY || paths.length === 0) return
   try {
-    await prisma.notePublication.updateMany({
+    await prisma.contextPublication.updateMany({
       where: {
         active: true,
         OR: [
-          { sourceSpaceId: brain.spaceId, sourcePath: { in: paths } },
-          { targetSpaceId: brain.spaceId, targetPath: { in: paths } },
+          { sourceSpaceId: context.spaceId, sourcePath: { in: paths } },
+          { targetSpaceId: context.spaceId, targetPath: { in: paths } },
         ],
       },
       data: { active: false },
     })
   } catch (err) {
-    logger.error('notes.publications.delete.failed', { err, spaceId: brain.spaceId })
+    logger.error('notes.publications.delete.failed', { err, spaceId: context.spaceId })
   }
 }

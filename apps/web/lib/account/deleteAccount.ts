@@ -9,8 +9,8 @@ import { logger } from '@/lib/logger'
  *
  * Deleting the `User` row alone is not enough, and that is the whole reason this
  * service exists. Half of what belongs to a person is keyed by a plain scalar
- * rather than a foreign key — `owner_key` on the personal-brain tables,
- * `user_id` on `user_aliases`, `subject_id` on `brain_grants` — so Postgres
+ * rather than a foreign key — `owner_key` on the personal-context tables,
+ * `user_id` on `user_aliases`, `subject_id` on `context_grants` — so Postgres
  * cascades cannot see it, and `Person.userId` is a nullable FK that would be
  * SET NULL, leaving the profile itself behind with nobody attached. Signing up
  * again with the same email would then land next to that orphan.
@@ -19,13 +19,13 @@ import { logger } from '@/lib/logger'
  *  - the profile (`Person`) and the cross-space `Identity` it was claimed by
  *  - the member node representing them in every space directory, and with it
  *    (via cascade) their links there
- *  - every personal brain: notes, folders, files, embeddings, sources, chunks
- *  - brain grants, aliases held, and outstanding access requests
+ *  - every personal context: notes, folders, files, embeddings, sources, chunks
+ *  - context grants, aliases held, and outstanding access requests
  *  - the `User` row, which cascades memberships, messages, reactions, stars,
  *    and the conversations they created
  *
  * What stays, deliberately: notes other people wrote in a space's SHARED
- * brain, even when the subject is the departing member — that text is the
+ * context, even when the subject is the departing member — that text is the
  * space's, not theirs, and index notes point at it.
  *
  * Refused when they are the last person who can manage a space — the same
@@ -38,7 +38,7 @@ export interface DeleteAccountResult {
   spaces: number
   /** Directory nodes removed (one per space that had one). */
   nodes: number
-  /** Personal-brain notes removed across all spaces. */
+  /** Personal-context notes removed across all spaces. */
   notes: number
 }
 
@@ -67,20 +67,20 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // Personal brains (`ownerKey` = userId). Chunks cascade from their source,
+    // Personal contexts (`ownerKey` = userId). Chunks cascade from their source,
     // but the delete is spelled out so a source-less chunk cannot be stranded.
-    const notes = await tx.spaceNote.deleteMany({ where: { ownerKey: userId } })
-    await tx.spaceNoteFolder.deleteMany({ where: { ownerKey: userId } })
-    await tx.spaceBrainFile.deleteMany({ where: { ownerKey: userId } })
-    await tx.spaceNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
+    const notes = await tx.contextNote.deleteMany({ where: { ownerKey: userId } })
+    await tx.contextFolder.deleteMany({ where: { ownerKey: userId } })
+    await tx.contextState.deleteMany({ where: { ownerKey: userId } })
+    await tx.contextNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSourceChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSource.deleteMany({ where: { ownerKey: userId } })
 
     // Access, in every space at once — what `removeMemberAccess` does per
     // space, plus the requests that outlive a denial.
-    await tx.brainGrant.deleteMany({ where: { subjectType: 'user', subjectId: userId } })
+    await tx.contextGrant.deleteMany({ where: { subjectType: 'user', subjectId: userId } })
     await tx.userAlias.deleteMany({ where: { userId } })
-    await tx.brainAccessRequest.deleteMany({ where: { userId } })
+    await tx.contextAccessRequest.deleteMany({ where: { userId } })
 
     // MCP/OAuth credentials issued to them. Nothing cascades these, and an
     // outstanding refresh token would otherwise still be exchangeable.

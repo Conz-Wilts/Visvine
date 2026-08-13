@@ -360,7 +360,7 @@ export default function TypesPanel() {
   }, [currentSpace]);
 
   // Types and non-Person aliases ride on the space record. Person aliases do
-  // NOT go through here: a rename has to carry UserAlias, BrainGrant and Node
+  // NOT go through here: a rename has to carry UserAlias, ContextGrant and Node
   // rows with it, which only /api/aliases does (lib/notes/aliases.ts).
   const saveSpace = async (nextTypes: NodeTypeConfig[], nextAliases: SpaceAlias[]) => {
     if (!currentSpace) return;

@@ -6,20 +6,16 @@
  * a legacy prefix-less directory row — plus any space-invented type that
  * routes here.
  *
- * This is deliberately NOT a profile. It used to be `NodeProfileContent`, a
- * near-copy of the person profile: a silhouette avatar card, a "Connections"
- * stat, "Skills & interests" chips, a Connect CTA and a "Member since" line —
- * all of which describe a person and read as nonsense on a company. Only people
- * have profiles; an organisation has a page. So the hero shows a logo, the stat
- * strip counts people and years, the connection grid became a People section,
- * and the type-specific fields (founded, HQ, members, website) are promoted from
- * a buried "Details" row to the rail.
+ * This is deliberately NOT a profile. Only people have profiles; an
+ * organisation has a page — so the hero shows a logo, the stat strip counts
+ * people and years, connections render as a People section, and the
+ * type-specific fields (founded, HQ, members, website) sit in the rail rather
+ * than a buried "Details" row.
  *
- * Person nodes keep ProfilePageContent, and events have their own dedicated
- * page. `space:` nodes no longer land here at all — every one of them gets
- * a space page, either /communities/<id> for a space that actually runs
- * here or SpacePageContent for a record. This page survives for the ids
- * that predate that type.
+ * Person nodes go to ProfilePageContent and events to their own page. `space:`
+ * nodes get a space page (/communities/<id> when the space runs here,
+ * SpacePageContent when it is only a record); this page serves the older
+ * organisation id spellings.
  */
 
 import React, { useMemo, useState } from 'react';

@@ -8,7 +8,7 @@
 // is driven from Console → Aliases.
 //
 // Because an alias is stored by NAME in three other places — UserAlias.aliasName,
-// BrainGrant.subjectId and Node.alias — a rename must carry all three with it and
+// ContextGrant.subjectId and Node.alias — a rename must carry all three with it and
 // a delete must clean all three up. updateAlias and cascadeAliasRemoval are the
 // only paths that do so; nothing else should write those columns.
 //
@@ -168,7 +168,7 @@ export async function createAlias(
  * Rename and/or recolour a Person alias.
  *
  * A name is not an id here: holders (`UserAlias.aliasName`), grants
- * (`BrainGrant.subjectId`) and directory chips (`Node.alias`) all store it by
+ * (`ContextGrant.subjectId`) and directory chips (`Node.alias`) all store it by
  * value, so a rename has to carry all three with it or the alias silently loses
  * its people and its access. One transaction, so it can't half-happen.
  */
@@ -218,7 +218,7 @@ export async function updateAlias(
         where: { spaceId, aliasName: name },
         data: { aliasName: nextName },
       })
-      await tx.brainGrant.updateMany({
+      await tx.contextGrant.updateMany({
         where: { spaceId, subjectType: 'alias', subjectId: name },
         data: { subjectId: nextName },
       })
@@ -271,7 +271,7 @@ export async function deleteAlias(
 async function cascadeAliasRemoval(spaceId: string, names: string[]): Promise<void> {
   if (!names.length) return
   await prisma.userAlias.deleteMany({ where: { spaceId, aliasName: { in: names } } })
-  await prisma.brainGrant.deleteMany({
+  await prisma.contextGrant.deleteMany({
     where: { spaceId, subjectType: 'alias', subjectId: { in: names } },
   })
 }

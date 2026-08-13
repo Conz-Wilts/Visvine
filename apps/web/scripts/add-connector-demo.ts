@@ -1,5 +1,5 @@
 /**
- * Seeds a space's SHARED brain with working connectors, so the MCP tools
+ * Seeds a space's SHARED context with working connectors, so the MCP tools
  * `list_connectors` / `run_connector` have something real
  * to talk to in local dev.
  *
@@ -9,7 +9,7 @@
  *   • connectors/appdb.md    (postgres) → the local dev Postgres itself, via
  *     the APPDB_DSN secret. Read-only is enforced by the sql() capability.
  *
- * Both secrets are written to space_secrets encrypted under SECRETS_KEY,
+ * Both secrets are written to connector_secrets encrypted under SECRETS_KEY,
  * the same way the admin console writes them.
  *
  * Usage:
@@ -169,7 +169,7 @@ explicit about columns rather than relying on the cap.
 | \`user_aliases\` | who holds what; \`owner\` = its holders manage the space |
 | \`nodes\` | \`id\`, \`space_id\`, \`type\` (\`person\`/\`group\`/\`resource\`/\`event\`…), \`name\`, \`slug\` |
 | \`links\` | \`source_id\`, \`target_id\`, \`relationship\`, \`origin\` (\`context\`/\`manual\`/\`structure\`…) |
-| \`space_notes\` | \`space_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
+| \`context_notes\` | \`space_id\`, \`owner_key\` (\`shared\` or a user id), \`path\`, \`deleted_at\` |
 
 ### Example
 
@@ -185,7 +185,7 @@ return await sql(
 
 ## What not to read
 
-\`space_secrets\` holds connector secret ciphertext and \`users.password_hash\`
+\`connector_secrets\` holds connector secret ciphertext and \`users.password_hash\`
 holds password hashes. Neither is useful to you and both are off limits — the
 read-only transaction does not make them any less sensitive.
 `;
@@ -233,10 +233,10 @@ async function main() {
   }
 
   if (REMOVE) {
-    const notes = await prisma.spaceNote.deleteMany({
+    const notes = await prisma.contextNote.deleteMany({
       where: { spaceId, ownerKey: SHARED, path: { in: NOTES.map((n) => n.path) } },
     });
-    const secrets = await prisma.spaceSecret.deleteMany({
+    const secrets = await prisma.connectorSecret.deleteMany({
       where: { spaceId, name: { in: SECRETS.map((s) => s.name) } },
     });
     // Writing notes straight to the table bypasses the note store, so the
@@ -255,7 +255,7 @@ async function main() {
   if (!owner) throw new Error(`space ${spaceId} has no members to attribute the notes to`);
 
   for (const note of NOTES) {
-    await prisma.spaceNote.upsert({
+    await prisma.contextNote.upsert({
       where: { note_identity: { spaceId, ownerKey: SHARED, path: note.path } },
       create: { spaceId, ownerKey: SHARED, path: note.path, content: note.content, createdBy: owner.userId },
       update: { content: note.content, deletedAt: null, deletedPath: null },
@@ -273,7 +273,7 @@ async function main() {
   );
 
   for (const secret of SECRETS) {
-    await prisma.spaceSecret.upsert({
+    await prisma.connectorSecret.upsert({
       where: { secret_identity: { spaceId, name: secret.name } },
       create: {
         spaceId,

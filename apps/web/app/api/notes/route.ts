@@ -1,22 +1,22 @@
 // GET /api/notes?spaceId=&scope=shared|personal
-// The note index for a brain: enriched NoteMeta[] (titles, tags, resolved links,
+// The note index for a context: enriched NoteMeta[] (titles, tags, resolved links,
 // broken links) plus the starred paths. Reads only — see /item for mutations.
-// Shared-brain reads go through the visibility lens, so private folders the
-// caller doesn't belong to never appear (personal brains pass through unfiltered).
+// Shared-context reads go through the visibility lens, so private folders the
+// caller doesn't belong to never appear (personal contexts pass through unfiltered).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireBrain } from '@/lib/notes/api'
-import { principalOf } from '@/lib/notes/brain'
-import { visibleVault, canReadPath } from '@/lib/notes/brainService'
+import { requireContext } from '@/lib/notes/api'
+import { principalOf } from '@/lib/notes/resolve'
+import { visibleVault, canReadPath } from '@/lib/notes/contextService'
 import { listStarred } from '@/lib/notes/store'
 
 export async function GET(req: NextRequest) {
-  const brain = await requireBrain(req)
-  if (brain instanceof Response) return brain
-  const p = await principalOf(brain)
-  const [{ metas }, starred] = await Promise.all([visibleVault(p, brain), listStarred(brain)])
+  const context = await requireContext(req)
+  if (context instanceof Response) return context
+  const p = await principalOf(context)
+  const [{ metas }, starred] = await Promise.all([visibleVault(p, context), listStarred(context)])
   return NextResponse.json({
     notes: metas,
-    starred: starred.filter((path) => canReadPath(p, brain, path)),
+    starred: starred.filter((path) => canReadPath(p, context, path)),
   })
 }

@@ -5,7 +5,7 @@
 // scoped to the PERSON type are also the permission model: everyone who joins a
 // space is a Person, so the same vocabulary that colours their chip in the
 // directory is what says what they can do. "Engineering" is a directory chip, a
-// set of holders, and a set of BrainGrants — not three separate things.
+// set of holders, and a set of ContextGrants — not three separate things.
 //
 // A person holds any number of them, with no restrictions. An alias marked
 // `owner` means its holders manage the space; the built-in Owner alias

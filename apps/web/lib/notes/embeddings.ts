@@ -1,5 +1,4 @@
-// Embeddings access for the retrieval layer — the port of blackbird-brain's
-// src/server/embeddings.ts. OpenAI's /embeddings endpoint, configured
+// Embeddings access for the retrieval layer. OpenAI's /embeddings endpoint, configured
 // independently of the chat client (./ai.ts, still Gemini); resolved per call so
 // a changed key takes effect immediately. Unconfigured → null and the vector
 // stage silently drops out of the fused search.

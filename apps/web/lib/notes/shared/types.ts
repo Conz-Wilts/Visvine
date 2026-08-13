@@ -1,8 +1,5 @@
 // Types shared by the notes pure-logic layer (index/tree/context/backlinks/related)
-// and the server store + API. Ported from blackbird-brain's src/shared/types.ts,
-// trimmed to the core note-taking surface — the knowledge-brain, shared-brain
-// sync, and Electron `BrainApi` types are intentionally dropped (out of scope).
-// Keep this file free of Node/DOM imports so it runs on the server and the client.
+// and the server store + API. Keep this file free of Node/DOM imports so it runs on the server and the client.
 
 export type { References, LinkedReference, UnlinkedReference, RestrictedReference } from './references'
 
@@ -19,7 +16,7 @@ export interface NoteFrontmatter {
   [key: string]: unknown
 }
 
-// A note as read straight from the store: its brain-relative POSIX path, raw
+// A note as read straight from the store: its context-relative POSIX path, raw
 // markdown, and last-modified time (epoch ms).
 export interface RawNote {
   path: string
@@ -30,9 +27,9 @@ export interface RawNote {
 // A note enriched with everything the UI and context need, computed from the raw
 // markdown plus knowledge of every other note (to resolve OKF markdown links).
 export interface NoteMeta {
-  path: string // brain-relative POSIX path, e.g. "projects/acme.md"
+  path: string // context-relative POSIX path, e.g. "projects/acme.md"
   title: string // frontmatter.title, else the filename without extension
-  folder: string // parent folder POSIX path, "" for the brain root
+  folder: string // parent folder POSIX path, "" for the context root
   frontmatter: NoteFrontmatter
   tags: string[] // frontmatter tags + inline #hashtags from the body (not context edges)
   linkTargets: string[] // resolved paths of notes this note links to
@@ -43,7 +40,7 @@ export interface NoteMeta {
 // A node in the folder/note tree shown in the sidebar.
 export interface TreeNode {
   name: string // the path segment (folder or file name)
-  path: string // brain-relative POSIX path
+  path: string // context-relative POSIX path
   kind: 'folder' | 'note'
   title?: string // display title for notes
   children?: TreeNode[]
@@ -57,7 +54,7 @@ export const TRASH_RETENTION_DAYS = 7
 export interface TrashEntry {
   id: string // the note row id
   name: string // the note's original base filename
-  path: string // the note's original brain-relative path
+  path: string // the note's original context-relative path
   deletedAt: number // epoch ms
 }
 
@@ -65,10 +62,10 @@ export interface TrashEntry {
 
 // How a note revision came to be. 'baseline' is the pre-edit snapshot seeded on
 // the first edit; 'ai-refactor' is an LLM rewrite; 'ai-enrich' is an insight
-// distilled from a personal brain by the enrichment pass; 'agent' is an external
+// distilled from a personal context by the enrichment pass; 'agent' is an external
 // agent writing through MCP; 'maintenance' is a rule-based review auto-fix;
 // 'restore' is reverting to an earlier version; 'publish' is a replica refresh
-// written by a cross-brain publication (lib/notes/publications.ts — the origin
+// written by a cross-context publication (lib/notes/publications.ts — the origin
 // also guards against replication cascades); 'edit' is an ordinary manual save.
 export type NoteRevisionOrigin =
   | 'edit'
@@ -102,7 +99,7 @@ export interface MoveProposal {
 }
 
 // The output of the reorganize workflow: a human-readable summary and the moves
-// to review. Empty `moves` means the brain already looks well organised.
+// to review. Empty `moves` means the context already looks well organised.
 export interface ReorganizePlan {
   summary: string
   moves: MoveProposal[]

@@ -1,5 +1,5 @@
 // Pure helpers behind the "Create new → Context / File" flows: turning a typed
-// title into a brain path, and composing the seed note body. Kept out of the
+// title into a context path, and composing the seed note body. Kept out of the
 // modal so both the client (path preview, optimistic routing) and the tests use
 // one implementation. Pure — no Node/DOM/Prisma imports.
 
@@ -20,15 +20,15 @@ export function noteFileSlug(title: string): string {
   return slug || 'untitled'
 }
 
-/** Join a folder ('' = brain root) and a filename into a brain-relative path. */
-export function joinBrainPath(folder: string, filename: string): string {
+/** Join a folder ('' = context root) and a filename into a context-relative path. */
+export function joinContextPath(folder: string, filename: string): string {
   const dir = folder.replace(/^\/+|\/+$/g, '')
   return dir ? `${dir}/${filename}` : filename
 }
 
 /** Destination path for a new note: `<folder>/<slug>.md`. */
 export function composeNotePath(folder: string, title: string): string {
-  return joinBrainPath(folder, `${noteFileSlug(title)}.md`)
+  return joinContextPath(folder, `${noteFileSlug(title)}.md`)
 }
 
 /**
@@ -39,9 +39,9 @@ export function composeNotePath(folder: string, title: string): string {
  */
 export function availableNotePath(folder: string, title: string, taken: Set<string>): string {
   const base = noteFileSlug(title)
-  let candidate = joinBrainPath(folder, `${base}.md`)
+  let candidate = joinContextPath(folder, `${base}.md`)
   let n = 2
-  while (taken.has(candidate)) candidate = joinBrainPath(folder, `${base}-${n++}.md`)
+  while (taken.has(candidate)) candidate = joinContextPath(folder, `${base}-${n++}.md`)
   return candidate
 }
 
@@ -54,9 +54,9 @@ export function availableNotePath(folder: string, title: string, taken: Set<stri
  */
 export function availableFolderPath(parent: string, title: string, taken: Set<string>): string {
   const base = noteFileSlug(title)
-  let candidate = joinBrainPath(parent, base)
+  let candidate = joinContextPath(parent, base)
   let n = 2
-  while (taken.has(candidate)) candidate = joinBrainPath(parent, `${base}-${n++}`)
+  while (taken.has(candidate)) candidate = joinContextPath(parent, `${base}-${n++}`)
   return candidate
 }
 

@@ -71,7 +71,7 @@ export function EveryoneSettings({ spaceId, data, busy, run }: SettingsProps) {
 
 /**
  * The alias's name, edited the way every other name in the console is: a field
- * that saves itself when you leave it. A rename carries UserAlias, BrainGrant
+ * that saves itself when you leave it. A rename carries UserAlias, ContextGrant
  * and Node rows with it, so it only fires when the name actually changed and
  * only when it's a name the server will take.
  */

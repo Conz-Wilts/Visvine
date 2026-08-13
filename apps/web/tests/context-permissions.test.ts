@@ -1,8 +1,8 @@
-// Unit tests for the grant-based brain access model (lib/notes/shared/authz.ts)
+// Unit tests for the grant-based context access model (lib/notes/shared/authz.ts)
 // and the principal predicates over it, including a behavior-parity section
 // that runs the OLD folder-registry scenarios through migrateLegacyRegistry and
 // asserts the same read/write outcomes. Run with the repo's node test runner:
-// node --import tsx --test tests/brain-permissions.test.ts
+// node --import tsx --test tests/context-permissions.test.ts
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
@@ -28,7 +28,7 @@ import {
   readableRoots,
   winningGrant,
   type AccessGrant,
-  type BrainAccess,
+  type ContextAccess,
   type MigratedRegistry,
 } from '../lib/notes/shared/authz'
 import { audienceSummary } from '../lib/notes/shared/audience'
@@ -40,7 +40,7 @@ import {
   principalSeesFolder,
 } from '../lib/notes/shared/permissions'
 import { filterVisible, pathVisibleTo } from '../lib/notes/shared/visibility'
-import type { BrainPrincipal, Folder, FolderLevel, FoldersConfig } from '../lib/notes/shared/brainTypes'
+import type { ContextPrincipal, Folder, FolderLevel, FoldersConfig } from '../lib/notes/shared/contextTypes'
 
 // fixtures
 
@@ -59,9 +59,9 @@ const access = (
   grants: AccessGrant[],
   restricted: string[] = [],
   locked: string[] = [],
-): BrainAccess => ({ grants, restricted, locked })
+): ContextAccess => ({ grants, restricted, locked })
 
-const principal = (userId: string, acc: BrainAccess, over: Partial<BrainPrincipal> = {}): BrainPrincipal => ({
+const principal = (userId: string, acc: ContextAccess, over: Partial<ContextPrincipal> = {}): ContextPrincipal => ({
   userId,
   email: `${userId}@x.test`,
   name: userId,
@@ -294,8 +294,8 @@ const legacyFolder = (
   ...(locked ? { locked: true } : {}),
 })
 
-/** Mimic lib/notes/access.ts#brainAccessFor's scoping over migrated rows. */
-function scopeFor(migrated: MigratedRegistry, userId: string): BrainAccess {
+/** Mimic lib/notes/access.ts#contextAccessFor's scoping over migrated rows. */
+function scopeFor(migrated: MigratedRegistry, userId: string): ContextAccess {
   return {
     grants: migrated.grants.filter(
       (g) => g.subjectType === 'space' || (g.subjectType === 'user' && g.subjectId === userId),
@@ -318,7 +318,7 @@ const gatedLegacy = (): FoldersConfig => ({
   ],
 })
 
-test('parity: the brain gate — grandfathered members keep root access, new joiners get nothing', () => {
+test('parity: the context gate — grandfathered members keep root access, new joiners get nothing', () => {
   const migrated = migrateLegacyRegistry(gatedLegacy())
   const grand = principal('u-grand', scopeFor(migrated, 'u-grand'))
   const joiner = principal('u-new', scopeFor(migrated, 'u-new'))

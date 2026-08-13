@@ -15,7 +15,7 @@
 import 'dotenv/config';
 import prisma from '../lib/prisma';
 import { OWNER_ALIAS_NAME } from '../lib/types/context';
-import { resolveBrain, principalOf } from '../lib/notes/brain';
+import { resolveContext, principalOf } from '../lib/notes/resolve';
 import { executeConnectorScript, listConnectors, loadConnector } from '../lib/connectors/service';
 
 const SPACE = process.argv[2] ?? 'community:blackbird-ventures';
@@ -41,13 +41,13 @@ async function main() {
   if (!admin) throw new Error(`alias holder ${holder.userId} has no user row`);
   const session = { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' };
 
-  const resolved = await resolveBrain(session, SPACE);
-  if (resolved instanceof Response) throw new Error(`resolveBrain: ${resolved.status}`);
+  const resolved = await resolveContext(session, SPACE);
+  if (resolved instanceof Response) throw new Error(`resolveContext: ${resolved.status}`);
   const principal = await principalOf(resolved);
-  const brain = resolved; // ResolvedBrain extends Brain
+  const context = resolved; // ResolvedContext extends Context
 
   // discovery
-  const connectors = await listConnectors(principal, brain);
+  const connectors = await listConnectors(principal, context);
   check(
     'list_connectors sees both seeded connectors, parsed as v2',
     connectors.some((c) => c.name === 'sandbox' && c.invalid === null && c.hosts.length > 0) &&
@@ -57,9 +57,9 @@ async function main() {
       .join(', '),
   );
 
-  const sandbox = await loadConnector(principal, brain, 'sandbox');
+  const sandbox = await loadConnector(principal, context, 'sandbox');
   if (!sandbox) throw new Error('sandbox connector did not load');
-  const run = (code: string) => executeConnectorScript(principal, brain, SPACE, sandbox, code);
+  const run = (code: string) => executeConnectorScript(principal, context, SPACE, sandbox, code);
   const shown = (r: { value?: unknown }) => JSON.stringify(r.value ?? null);
 
   // a real call, secret resolved server-side
@@ -114,11 +114,11 @@ async function main() {
   );
 
   // appdb: sql() through the isolate, read-only
-  const appdb = await loadConnector(principal, brain, 'appdb');
+  const appdb = await loadConnector(principal, context, 'appdb');
   if (!appdb) throw new Error('appdb connector did not load');
   const query = await executeConnectorScript(
     principal,
-    brain,
+    context,
     SPACE,
     appdb,
     `return await sql(env.APPDB_DSN, 'SELECT count(*) FROM spaces')`,
@@ -130,7 +130,7 @@ async function main() {
   );
   const write = await executeConnectorScript(
     principal,
-    brain,
+    context,
     SPACE,
     appdb,
     `try { await sql(env.APPDB_DSN, 'CREATE TABLE should_not_exist (id int)') } catch (e) { return e.message }`,

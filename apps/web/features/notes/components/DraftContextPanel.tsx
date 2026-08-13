@@ -45,7 +45,7 @@ import {
 } from '@/lib/notes/shared/newContext'
 import { indexPathOf, newIndexContent } from '@/lib/notes/shared/indexNote'
 import { noteHref, sourceHref } from '@/lib/notes/entities'
-import { useBrainTree, FolderDropBoard, PathPreview } from '@/features/create/components/ContextDestination'
+import { useContextFolderTree, FolderDropBoard, PathPreview } from '@/features/create/components/ContextDestination'
 import {
   FileForm,
   connectorSlug,
@@ -86,7 +86,7 @@ export type DraftType =
   // (lib/notes/shared/indexNote.ts). The title names the folder everywhere.
   | 'index'
   | 'person'
-  // The org type (formerly 'space', 'group' before that) — a node and a
+  // The org type — a node and a
   // note recording that a group/organisation exists. Provisioning a real space
   // of your own isn't a draft type; it's on the switcher.
   | 'space'
@@ -96,7 +96,7 @@ export type DraftType =
   | 'resource'
   | 'connector'
   | 'channel'
-  // The channels-tool container (formerly 'space').
+  // The channels-tool container.
   | 'section'
   | 'file'
 
@@ -116,7 +116,7 @@ interface DraftTypeOption {
 
 const NOTE_COLOR = '#64748b'
 
-/** Note and File aren't node types — they're content in the brain, so the
+/** Note and File aren't node types — they're content in the context, so the
  *  console's Types tab doesn't list them. They bookend the menu; everything
  *  between comes from DEFAULT_NODE_TYPES in the console's own order, so the
  *  menu and the Types tab always say the same thing (colours included).
@@ -256,7 +256,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const committedRef = useRef(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  const brainTree = useBrainTree(spaceId, type !== null && FOLDERED_TYPES.has(type))
+  const contextFolderTree = useContextFolderTree(spaceId, type !== null && FOLDERED_TYPES.has(type))
 
   // The sections a new channel can be filed into. Loaded only while the Channel
   // type is selected — every other draft has no use for the list.
@@ -362,7 +362,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // are EXACTLY the console's Types tab — same source (DEFAULT_NODE_TYPES),
   // same feature filter (isNodeTypeEnabled), same order — then narrowed to
   // what this person may create (lib/create/creatable.ts). Note and File
-  // bookend the list: they're brain content, not node types, so the console
+  // bookend the list: they're context content, not node types, so the console
   // doesn't list them but this surface can't do without them.
   const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
   const availableTypes = useMemo(() => {
@@ -380,8 +380,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   // Existing folder paths, for the index destination's collision suffixing.
   const folderPaths = useMemo(
-    () => new Set(brainTree.folders.map((f) => f.path).filter(Boolean)),
-    [brainTree.folders],
+    () => new Set(contextFolderTree.folders.map((f) => f.path).filter(Boolean)),
+    [contextFolderTree.folders],
   )
 
   // The destination shown before anything is written. An index's destination is
@@ -392,11 +392,11 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const pathIn = useCallback(
     (dest: string) => {
       if (!titleUsable) return ''
-      if (type === 'note') return availableNotePath(dest, title, brainTree.notePaths)
+      if (type === 'note') return availableNotePath(dest, title, contextFolderTree.notePaths)
       if (type === 'index') return indexPathOf(availableFolderPath(dest, title, folderPaths))
       return ''
     },
-    [type, titleUsable, title, brainTree.notePaths, folderPaths],
+    [type, titleUsable, title, contextFolderTree.notePaths, folderPaths],
   )
 
   const addTag = useCallback((raw: string) => {
@@ -450,7 +450,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   // tick — a setFolder followed by commit() would commit the previous folder.
   const commitNote = useCallback(async (dest: string) => {
     if (!spaceId) return
-    const path = availableNotePath(dest, title, brainTree.notePaths)
+    const path = availableNotePath(dest, title, contextFolderTree.notePaths)
     const content = newNoteContent({
       title: title.trim(),
       tags,
@@ -466,7 +466,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     primeContextCache(contextKeys.read(spaceId, path), { status: 'ok', content })
     sessionStorage.removeItem(STASH_KEY)
     router.replace(noteHref(path))
-  }, [spaceId, title, tags, brainTree.notePaths, router, customType, customConfig])
+  }, [spaceId, title, tags, contextFolderTree.notePaths, router, customType, customConfig])
 
   // An index IS a folder: this creates the folder and writes the note that names
   // it, in one call. `dest` is the PARENT it was dropped into.
@@ -851,9 +851,9 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
           <FileForm
             data={{ files, folder }}
             onChange={(d: FileFormData) => { setFiles(d.files); setFolder(d.folder) }}
-            folders={brainTree.folders}
+            folders={contextFolderTree.folders}
             contextName={currentSpace?.name ?? 'Context'}
-            loading={brainTree.loading}
+            loading={contextFolderTree.loading}
           />
         </div>
       )}
@@ -962,12 +962,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         }
       >
         <FolderDropBoard
-          folders={brainTree.folders}
+          folders={contextFolderTree.folders}
           contextName={currentSpace?.name ?? 'Context'}
           cardLabel={title.trim() || 'Untitled'}
           accent={theme.base}
           busy={committing}
-          loading={brainTree.loading}
+          loading={contextFolderTree.loading}
           pathFor={pathIn}
           onPick={(dest) => {
             // Remember it (the stash survives a reload) and create in the same
