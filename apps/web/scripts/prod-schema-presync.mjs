@@ -172,6 +172,10 @@ const RENAME_STEPS = [
       // the shorter columns free enough room for the full generated name.
       ['index', 'brain_grants_space_id_subject_type_subject_id_resource__key', 'brain_grants_space_id_subject_type_subject_id_resource_path_key'],
       ['index', 'note_publications_source_space_id_source_path_target_co_key', 'note_publications_source_space_id_source_path_target_space__key'],
+
+      // Hand-written, so it is not in schema.prisma and the push never sees it —
+      // apply-sql-functions.mjs would otherwise build a second copy alongside.
+      ['index', 'communities_public_name_unique', 'spaces_public_name_unique'],
     ],
   },
   {
@@ -233,6 +237,10 @@ const RENAME_STEPS = [
       ['constraint', 'connector_secrets', 'space_secrets_space_id_fkey', 'connector_secrets_space_id_fkey'],
       ['constraint', 'event_attendees', 'attendees_event_id_fkey', 'event_attendees_event_id_fkey'],
       ['constraint', 'event_attendees', 'attendees_person_id_fkey', 'event_attendees_person_id_fkey'],
+
+      // Also hand-written. Renaming beats rebuilding: this is an HNSW index over
+      // every note embedding.
+      ['index', 'community_note_embeddings_embedding_hnsw', 'context_note_embeddings_embedding_hnsw'],
     ],
   },
 ];

@@ -19,14 +19,17 @@ if (!url) {
 }
 
 // Hand-written SQL to apply against the DB AFTER `prisma db push` — paths are
-// relative to apps/web. Everything here MUST be idempotent: db:migrate re-runs
-// the whole list every time.
+// relative to apps/web. Everything here MUST be idempotent: it re-runs in full
+// on every deploy.
 //
 // The retrieval indexes (HNSW for the two pgvector cosine rankings, GIN for the
 // chunk keyword stage) live here because `db push` only syncs what
 // schema.prisma can express, and Prisma cannot express either index type.
 // The public-space-name index is partial + expression-based, which Prisma also
-// cannot express; it backs the uniqueness rule in lib/communities/publicName.ts.
+// cannot express; it backs the uniqueness rule in lib/spaces/publicName.ts.
+//
+// The table names here must track the schema. prod-schema-presync renames the
+// live objects; these statements create them on a database that never had them.
 const files = [
   "prisma/migrations/20260810_add_retrieval_indexes/migration.sql",
   "prisma/migrations/20260811_add_public_space_name_unique/migration.sql",
@@ -42,10 +45,10 @@ await client.connect();
 try {
   for (const f of files) {
     const path = join(__dirname, "..", f);
-    if (!existsSync(path)) {
-      console.warn(`skip (not found): ${f}`);
-      continue;
-    }
+    // A missing file is fatal. These indexes are invisible when absent — search
+    // degrades to sequential scans and the uniqueness rule stops being enforced,
+    // with nothing failing — so a moved or renamed file must stop the deploy.
+    if (!existsSync(path)) throw new Error(`apply-sql-functions: missing ${f}`);
     const sql = readFileSync(path, "utf8");
     await client.query(sql);
     console.log(`applied: ${f}`);

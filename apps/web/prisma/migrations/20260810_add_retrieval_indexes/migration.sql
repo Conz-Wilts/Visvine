@@ -1,7 +1,7 @@
 -- Retrieval indexes for the fused search stack.
 --
 -- Both cosine rankings (lib/notes/vectorStage.ts, lib/notes/sourceStage.ts) were
--- sequential scans over every row for the brain: correct, but linear in corpus
+-- sequential scans over every row of the context: correct, but linear in corpus
 -- size on the hot path of every search. HNSW with vector_cosine_ops matches the
 -- `<=>` operator those queries use.
 --
@@ -13,8 +13,8 @@
 -- alone because they are not expressible in schema.prisma — hence the raw
 -- migration, applied by scripts/apply-sql-functions.mjs on db:migrate.
 
-CREATE INDEX IF NOT EXISTS "community_note_embeddings_embedding_hnsw"
-    ON "community_note_embeddings" USING hnsw ("embedding" vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS "context_note_embeddings_embedding_hnsw"
+    ON "context_note_embeddings" USING hnsw ("embedding" vector_cosine_ops);
 
 CREATE INDEX IF NOT EXISTS "context_source_chunks_embedding_hnsw"
     ON "context_source_chunks" USING hnsw ("embedding" vector_cosine_ops);
