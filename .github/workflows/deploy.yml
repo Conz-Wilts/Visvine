@@ -47,8 +47,11 @@ jobs:
           corepack enable && corepack prepare pnpm@10.30.2 --activate
           pnpm install --frozen-lockfile
           cd apps/web
-          # 1. Fixups `prisma db push` can't do on a populated table: backfill the
-          #    NOT-NULL `links.pair_key` + dedup so the unique index can build.
+          # 1. Fixups `prisma db push` can't do, or would do destructively, on a
+          #    populated database: apply renames (a push diffs by name, so a
+          #    rename reads as drop + create and silently empties the table),
+          #    backfill the NOT-NULL `links.pair_key`, dedup so the unique index
+          #    can build. Every future rename belongs in this script.
           DATABASE_URL="$DB_URL" node scripts/prod-schema-presync.mjs
           # 2. Converge the live schema to schema.prisma.
           DATABASE_URL="$DB_URL" pnpm dlx prisma@7.4.0 db push --accept-data-loss
