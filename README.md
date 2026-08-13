@@ -61,12 +61,13 @@ pnpm db:up              # start Postgres container (idempotent)
 pnpm db:down            # stop container (data preserved in named volume)
 pnpm db:logs            # tail Postgres logs
 pnpm db:psql            # open psql in the container
-pnpm db:migrate         # prisma db push (sync schema)
+pnpm db:migrate         # apply pending migrations + hand-written SQL
+pnpm db:migrate:new     # author a migration from a schema.prisma change
 pnpm db:seed            # base seed: the space, aliases + anchor users (WIPES the DB)
 pnpm db:blackbird:full  # db:seed + portfolio + context + extras + connectors
 pnpm db:nz              # load the NZ startup ecosystem demo content
-pnpm db:fresh           # drop tables + push + db:blackbird:full (volume preserved)
-pnpm db:reset           # destroy volume + rebuild + push + db:blackbird:full (prompts)
+pnpm db:fresh           # rebuild from migrations + db:blackbird:full (volume preserved)
+pnpm db:reset           # destroy volume + rebuild + db:blackbird:full (prompts)
 
 pnpm prisma:studio      # open Prisma Studio
 pnpm prisma:generate    # regenerate Prisma client

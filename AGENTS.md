@@ -21,6 +21,12 @@ seed layers. This file is the parts an agent needs before editing code.
 - Nothing you create by clicking through the UI survives to another machine. If
   it matters, codify it in the seed (`apps/web/prisma/seed.ts` + the
   `db:blackbird:*` layers).
+- **A schema change is a migration.** Edit `schema.prisma`, then
+  `pnpm db:migrate:new` to write the SQL, and read what it wrote — a rename it
+  guessed as drop + create is a wipe. `prisma/migrations/0_init` is the baseline
+  (the whole schema as one migration); everything before it is in
+  `prisma/migrations-archive`, kept to read, never to run. Deploy replays
+  migrations; it does not diff. Never `prisma db push` against prod.
 
 ## Layout
 
