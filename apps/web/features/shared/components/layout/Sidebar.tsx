@@ -334,14 +334,14 @@ export default function Sidebar() {
             column is closing, so a gate would slide it up into the bar's band
             mid-close. Animated like the width, since docked surfaces with
             different top bars must glide rather than teleport. */}
-        {/* The colour frame insets <main> into a rounded card that starts
+        {/* The shell insets <main> into a rounded card that starts
             SHELL_FRAME_GAP below the navbar and stops the same gap above the
             viewport bottom (AuthLayoutClient). The docked panel reads as part of
             that card, so it takes the same top/bottom insets, lines its left edge
             up with the card's (marginLeft closes the rail's railW → card's
             railW+SHELL_FRAME_GAP difference so the vertical band runs unbroken),
             and rounds its outer corners — otherwise its square edges poke past
-            the card's frame. */}
+            the card. */}
         <div
           className="relative shrink-0 overflow-hidden"
           style={{
@@ -361,9 +361,9 @@ export default function Sidebar() {
               the bar band too). Lives inside the offset column so it starts below
               the bar and rides the clipping width; faded when closed so no stray
               hairline lingers off-dock. Card-content grey, NOT --shell-border:
-              the frame theme sets that to transparent to drop the SHELL's seams,
-              but this line divides panel from note INSIDE the card — it must
-              stay visible or the tree bleeds into the note body. */}
+              --shell-border is transparent so the rail carries no seam of its
+              own, but this line divides panel from note INSIDE the card — it
+              must stay visible or the tree bleeds into the note body. */}
           <div
             className="absolute right-0 top-0 z-20 h-full w-px"
             style={{ background: "var(--border-subtle, #e5e7eb)", opacity: docked || createOpen ? 1 : 0, transition: `opacity ${dur} ${ease}` }}

@@ -68,12 +68,12 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // bounce down while the fixed navbar stays put — the bar visibly unsticks.
   // Killing the bounce keeps every page's sticky top bar welded to the navbar.
 
-  // Colour frame: the shell stays white and an accent-coloured rounded box
-  // sits in the content region (below the navbar, right of the rail, inset from
-  // the viewport right/bottom by SHELL_FRAME_MARGIN of white — mirroring the
-  // white the navbar/rail provide on the other two sides). <main> becomes a
-  // white rounded card INSIDE that box (its padding), so the colour is a
-  // background the body floats on, not margins the body can rubber-band out of.
+  // Colour frame: the shell stays white and a grey rounded box sits in the
+  // content region (below the navbar, right of the rail, inset from the
+  // viewport right/bottom by SHELL_FRAME_MARGIN of white — mirroring the white
+  // the navbar/rail provide on the other two sides). <main> becomes a white
+  // rounded card INSIDE that box (its padding), so the grey is a background the
+  // body floats on, not margins the body can rubber-band out of.
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
 
   const mainInner = fullBleed ? (
@@ -111,8 +111,8 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
       >
         {/* The clip wrapper owns the radius: <main>'s scrollbar paints a
             square track inside <main>'s own border box, so a radius on
-            <main> itself leaves the track's corners poking white notches
-            into the frame band. A rounded overflow-hidden parent clips the
+            <main> itself leaves the track's corners poking square notches
+            past the card. A rounded overflow-hidden parent clips the
             scrollbar along with the content. */}
         <div className="h-full overflow-hidden" style={{ borderRadius: SHELL_FRAME_RADIUS }}>
           <main

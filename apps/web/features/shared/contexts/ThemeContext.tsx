@@ -101,13 +101,14 @@ export const COLOR_THEMES: ColorTheme[] = [
 
 const THEME_STORAGE_KEY = 'nb_color_theme';
 
-// Colour-frame geometry. The frame is a rounded accent-coloured box sitting on
-// the white shell (below the navbar, right of the rail, inset from the
-// viewport's right/bottom edges by MARGIN of white); the content card floats
-// inside it with GAP of colour showing on every side. Shared by
-// AuthLayoutClient (the box + card), Sidebar (the docked panel aligns to the
-// card) and PaneTopScrollbarMask (sits over the card's top-right corner).
-export const SHELL_FRAME_GAP = 3;      // colour visible between box edge and card
+// Colour-frame geometry. The frame is a rounded grey box sitting on the white
+// shell (below the navbar, right of the rail, inset from the viewport's
+// right/bottom edges by MARGIN of white); the content card floats inside it
+// with GAP of grey showing on every side, reading as a thin rounded border
+// around the content. Shared by AuthLayoutClient (the box + card), Sidebar (the
+// docked panel aligns to the card) and PaneTopScrollbarMask (sits over the
+// card's top-right corner).
+export const SHELL_FRAME_GAP = 1;      // frame visible between box edge and card
 export const SHELL_FRAME_MARGIN = 8;   // white between the box and the viewport right/bottom
 export const SHELL_FRAME_RADIUS = 12;  // card corner radius (box outer radius = RADIUS + GAP)
 
@@ -142,10 +143,10 @@ function applyAll(theme: ColorTheme) {
   root.style.setProperty('--theme-picker-filter-hover', theme.pickerFilterHover);
   root.style.setProperty('--theme-accent-color', theme.accent);
 
-  // Shell chrome. The navbar/rail keep the plain white design; the colour
-  // frame paints the band around the content card (--shell-frame), and
+  // Shell chrome. The navbar/rail keep the plain white design; the frame paints
+  // the thin grey border around the content card (--shell-frame), and
   // --shell-border goes transparent so the rail's own seam is dropped and the
-  // white chrome meets the band without a hairline between them.
+  // white chrome meets the frame without a second hairline between them.
   const shell: Record<(typeof SHELL_VARS)[number], string> = {
     '--shell-bg': '#ffffff',
     '--shell-fg': '#374151',
@@ -159,7 +160,7 @@ function applyAll(theme: ColorTheme) {
     '--shell-pill-fg': '#ffffff',
     '--shell-create-bg': theme.accent,
     '--shell-create-fg': '#ffffff',
-    '--shell-frame': theme.accent,
+    '--shell-frame': '#e5e7eb',
   };
   SHELL_VARS.forEach(v => root.style.setProperty(v, shell[v]));
 
