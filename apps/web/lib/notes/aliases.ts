@@ -15,7 +15,12 @@
 // Space admins manage all of it; there is no per-alias manager role.
 
 import prisma from '@/lib/prisma'
-import { personAliases, OWNER_ALIAS_NAME, type SpaceAlias } from '@/lib/types/context'
+import {
+  personAliases,
+  nodeTypeSpellings,
+  OWNER_ALIAS_NAME,
+  type SpaceAlias,
+} from '@/lib/types/context'
 import { logAudit } from './audit'
 import {
   LAST_OWNER_MESSAGE,
@@ -273,6 +278,12 @@ async function cascadeAliasRemoval(spaceId: string, names: string[]): Promise<vo
   await prisma.userAlias.deleteMany({ where: { spaceId, aliasName: { in: names } } })
   await prisma.contextGrant.deleteMany({
     where: { spaceId, subjectType: 'alias', subjectId: { in: names } },
+  })
+  // The directory chip is stored by value too, so a card would otherwise keep
+  // wearing an alias the space no longer has.
+  await prisma.node.updateMany({
+    where: { spaceId, alias: { in: names }, type: { in: nodeTypeSpellings('person') } },
+    data: { alias: null },
   })
 }
 

@@ -210,7 +210,7 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 13)
+  assert.equal(tools.length, 14)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
@@ -224,6 +224,8 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   // The clean pass mutates in its apply/trash actions, so the whole tool
   // rides the write scope even though analysis is read-only.
   assert.equal(scopeForTool('clean_context'), 'context:write')
+  // Editing the alias vocabulary is a write, and its list action rides along.
+  assert.equal(scopeForTool('manage_alias'), 'context:write')
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')

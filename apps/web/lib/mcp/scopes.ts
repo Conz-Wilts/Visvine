@@ -47,6 +47,9 @@ export const TOOL_SCOPES = {
   // mutate — one scope for the whole tool keeps step-up simple, and analysis
   // without write intent is what list_context/search_context are for anyway.
   clean_context: 'context:write',
+  // Listing the vocabulary rides the same tool as editing it, and editing is
+  // admin-only anyway — one scope keeps step-up simple.
+  manage_alias: 'context:write',
   // Listing rides context:read — search already surfaces connector note bodies
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',

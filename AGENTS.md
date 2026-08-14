@@ -119,7 +119,7 @@ itself is fuzzy/keyword only — the old semantic directory search was removed.
 
 ## MCP surface
 
-Thirteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
+Fourteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
 `lib/mcp/tools.ts`), on `mcp-handler` 2 + the official TS SDK v2. FastMCP was
 evaluated and rejected.
 

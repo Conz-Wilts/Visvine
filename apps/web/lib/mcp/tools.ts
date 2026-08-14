@@ -1,10 +1,10 @@
 /**
- * The MCP tool surface: thirteen tools over the context layer.
+ * The MCP tool surface: fourteen tools over the context layer.
  *
  *   read     list_spaces, list_context, search_context, read_context,
  *            list_files, read_file
  *   write    add_context, edit_context, append_context, move_context
- *   maintain clean_context
+ *   maintain clean_context, manage_alias
  *   connect  list_connectors, run_connector
  *
  * The shape of this surface follows the shape of the model, deliberately:
@@ -51,7 +51,20 @@ import type { WriteResult } from '@/lib/notes/shared/contextTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
 import { entityNotePath } from '@/lib/notes/entities'
 import { firstExcerpt, readLinkContextMeta } from '@/lib/notes/context/linkReason'
-import { isStructuralNodeType, canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
+import {
+  isStructuralNodeType,
+  canonicalNodeType,
+  nodeTypeSpellings,
+  aliasesForType,
+  personAliases,
+  type SpaceAlias,
+} from '@/lib/types/context'
+import {
+  createTypeAlias,
+  deleteTypeAlias,
+  listAliasesByType,
+  updateTypeAlias,
+} from '@/lib/notes/typeAliases'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -99,6 +112,26 @@ const MENTION_RULE =
  */
 export function mentionFor(name: string, notePath: string | null): string | null {
   return notePath ? `[${name}](/${notePath})` : null
+}
+
+/**
+ * Refuse an alias the space has not defined for this type. `Node.alias` is a
+ * chip drawn from the type's vocabulary, not free text: a name nothing matches
+ * renders as a colourless label and matches no filter, so it is a 400 naming
+ * what the type does have.
+ */
+async function assertAliasExists(spaceId: string, type: string, alias: string): Promise<void> {
+  const space = await prisma.space.findUnique({ where: { id: spaceId }, select: { aliases: true } })
+  const all = (space?.aliases ?? []) as unknown as SpaceAlias[]
+  const available =
+    canonicalNodeType(type) === 'person' ? personAliases(all) : aliasesForType(all, type)
+  if (available.some((a) => a.name.toLowerCase() === alias.trim().toLowerCase())) return
+  throw new McpError(
+    400,
+    available.length
+      ? `"${alias}" is not a ${type} alias in this space — use one of: ${available.map((a) => a.name).join(', ')}, or create it with manage_alias`
+      : `This space has no ${type} aliases — create one with manage_alias, or omit alias`,
+  )
 }
 
 /** Map an apply-or-deny WriteResult into a clean tool error on denial. */
@@ -274,7 +307,7 @@ export function registerTools(server: McpServer): void {
           ? await Promise.all([
               prisma.space.findUnique({
                 where: { id: args.space_id },
-                select: { name: true, featureConfig: true },
+                select: { name: true, featureConfig: true, aliases: true },
               }),
               prisma.userAlias.findMany({
                 where: { spaceId: args.space_id, userId: ctx.userId },
@@ -356,6 +389,7 @@ export function registerTools(server: McpServer): void {
                   isAdmin: principal.spaceAdmin === true,
                   usageByType,
                   creatableTypes: CREATABLE_TYPES,
+                  aliases: (space?.aliases ?? []) as unknown as SpaceAlias[],
                 }),
               }
             : {}),
@@ -710,13 +744,21 @@ export function registerTools(server: McpServer): void {
           .string()
           .optional()
           .describe("Markdown for the context note body (frontmatter is generated for you). Mentions here create links."),
-        alias: z.string().optional().describe('Alternative name this entity is also known by'),
+        alias: z
+          .string()
+          .optional()
+          .describe(
+            "One of this type's aliases — the chip that narrows what it is here (list_context's " +
+              '`types` catalog lists them per type). Must already exist in the space; create one with ' +
+              'manage_alias first.',
+          ),
         visibility: visibilityArg,
       },
     },
     (args, extra) =>
       withCtx(extra, 'add_context', async (ctx) => {
         const context = await requireSpaceContext(ctx, args.space_id)
+        if (args.alias) await assertAliasExists(args.space_id, args.type, args.alias)
         const result = await createEntity(context, {
           type: args.type,
           name: args.name,
@@ -945,6 +987,88 @@ export function registerTools(server: McpServer): void {
           return { action, ...result }
         }
         return { action, scope, ...(await runClean(principal, context, opts)) }
+      }),
+  )
+
+  server.registerTool(
+    'manage_alias',
+    {
+      description:
+        "Curate a node type's ALIASES — the space's own vocabulary for what a thing is: 'Founder' or " +
+        "'Investor' on a Person, 'Portfolio' on a Space. An alias is a coloured chip on the directory card " +
+        'and a filter, not a tag: it comes from a list the space defines, so tag anything you like but alias ' +
+        'only with a name that exists here. list_context\'s `types` catalog shows each type\'s current list; ' +
+        'add_context takes one of those names in `alias`.\n' +
+        'Actions: create (name + optional #rrggbb colour, defaulting to the type\'s colour), update (rename ' +
+        'via new_name and/or recolour — the cards wearing the chip follow the rename), delete (removes the ' +
+        'chip from every card of that type).\n' +
+        'Space admins only, and only in a real space (a personal space has no vocabulary). PERSON aliases are ' +
+        'also the permission model — an alias flagged `owner` is what makes its holders admins — so who holds ' +
+        'one, and what it reaches, stay in the app; this tool edits the vocabulary itself. The built-in Owner ' +
+        "alias cannot be renamed, recoloured or removed, and a change that would leave the space with nobody " +
+        'owning it is refused.',
+      inputSchema: {
+        space_id: z.string(),
+        action: z.enum(['list', 'create', 'update', 'delete']),
+        node_type: z
+          .string()
+          .optional()
+          .describe("The type the alias narrows, e.g. 'person', 'space', 'resource'. Required except for 'list'"),
+        name: z.string().optional().describe("The alias name. Required except for 'list'"),
+        new_name: z.string().optional().describe("action:'update' — rename it to this"),
+        color: z.string().optional().describe("#rrggbb chip colour, e.g. '#2563eb'"),
+        owner: z
+          .boolean()
+          .optional()
+          .describe(
+            "action:'update' on a PERSON alias only — whether holding it means managing the space (admin)",
+          ),
+      },
+    },
+    (args, extra) =>
+      withCtx(extra, 'manage_alias', async (ctx) => {
+        const { principal, resolved } = await resolveTarget(ctx, args.space_id, 'shared')
+        if (resolved === null || resolved.isPersonalSpace) {
+          throw new McpError(400, 'A personal space has no aliases')
+        }
+        if (args.action === 'list') {
+          return { action: 'list', aliases_by_type: await listAliasesByType(args.space_id) }
+        }
+        if (!principal.spaceAdmin) {
+          throw new McpError(403, 'Only a space admin can manage this space\'s aliases')
+        }
+        if (!args.node_type) throw new McpError(400, 'node_type is required')
+        if (!args.name) throw new McpError(400, 'name is required')
+        const actor = { userId: ctx.userId, name: ctx.name }
+
+        try {
+          if (args.action === 'create') {
+            const alias = await createTypeAlias(
+              args.space_id,
+              args.node_type,
+              args.name,
+              args.color,
+              actor,
+            )
+            return { action: args.action, alias }
+          }
+          if (args.action === 'update') {
+            const alias = await updateTypeAlias(
+              args.space_id,
+              args.node_type,
+              args.name,
+              { newName: args.new_name, color: args.color, owner: args.owner },
+              actor,
+            )
+            return { action: args.action, alias }
+          }
+          await deleteTypeAlias(args.space_id, args.node_type, args.name, actor)
+          return { action: args.action, deleted: args.name }
+        } catch (e) {
+          // The alias layer refuses with plain sentences meant for a person —
+          // hand them straight back rather than flattening them into a 500.
+          throw new McpError(400, e instanceof Error ? e.message : 'Alias change refused')
+        }
       }),
   )
 

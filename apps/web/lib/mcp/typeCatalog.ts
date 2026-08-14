@@ -8,7 +8,13 @@
 // Pure — no Prisma/DOM imports. CREATABLE_TYPES is passed in by the caller
 // because its home module (lib/directory/createEntity.ts) imports Prisma.
 import type { SpaceFeatureConfig } from '@/lib/types'
-import { DEFAULT_NODE_TYPES, canonicalNodeType } from '@/lib/types/context'
+import {
+  DEFAULT_NODE_TYPES,
+  aliasesForType,
+  canonicalNodeType,
+  personAliases,
+  type SpaceAlias,
+} from '@/lib/types/context'
 import { isNodeTypeEnabled, nodeTypeFeatureKey } from '@/lib/featureAccess'
 import { fieldsForType } from '@/lib/create/typeFields'
 import { entityDirOf } from '@/lib/notes/entities'
@@ -27,6 +33,11 @@ export interface TypeCatalogEntry {
   note_dir: string | null
   /** Live count of directory nodes of this type. */
   usage_count: number
+  /**
+   * The alias vocabulary of this type — the only values `add_context`'s
+   * `alias` accepts. Managed with `manage_alias`.
+   */
+  aliases: Array<{ name: string; color: string; owner?: boolean }>
   /** How this type is meant to be used and created. */
   guidance: string
 }
@@ -52,9 +63,20 @@ export function buildTypeCatalog(opts: {
   usageByType: Record<string, number>
   /** CREATABLE_TYPES from lib/directory/createEntity.ts. */
   creatableTypes: readonly string[]
+  /** The space's whole alias list (`Space.aliases`), scoped per type here. */
+  aliases?: SpaceAlias[]
 }): TypeCatalogEntry[] {
   return DEFAULT_NODE_TYPES.map((config) => {
     const type = canonicalNodeType(config.name)
+    // Person's list is grafted with the built-in Owner alias, which is stored
+    // implicitly — omitting it would tell an agent it can create one.
+    const aliases = (
+      type === 'person' ? personAliases(opts.aliases) : aliasesForType(opts.aliases, config.name)
+    ).map((a) => ({
+      name: a.name,
+      color: a.color,
+      ...(type === 'person' ? { owner: a.owner === true || a.system === true } : {}),
+    }))
     const feature = nodeTypeFeatureKey(config.name)
     const enabled = isNodeTypeEnabled(opts.featureConfig, config.name)
     let guidance = GUIDANCE[type] ?? ''
@@ -68,6 +90,7 @@ export function buildTypeCatalog(opts: {
       fields: fieldsForType(type).map((f) => ({ key: f.key, label: f.label, kind: f.kind })),
       note_dir: entityDirOf(type),
       usage_count: opts.usageByType[type] ?? 0,
+      aliases,
       guidance,
     }
   })
