@@ -21,29 +21,52 @@ const nextConfig: NextConfig = {
     // origins beyond 'self', no framing of this app (clickjacking), no plugin
     // objects, a pinned <base>, and same-origin form posts. `img-src`/`connect-src`
     // stay broad (https:) so GCS/Google avatars and API calls keep working.
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https:",
-      "font-src 'self' data:",
-      "connect-src 'self' https:",
-      "frame-ancestors 'none'",
-      "frame-src 'self'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-    ].join('; ');
+    const directives = (formAction: string) =>
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https:",
+        "frame-ancestors 'none'",
+        "frame-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        `form-action ${formAction}`,
+      ].join('; ');
+
+    const otherHeaders = [
+      { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+    ];
+
+    // form-action governs the whole redirect chain a form submission takes, not
+    // just the action URL. The OAuth consent form posts same-origin, but the
+    // approve response is a 303 to the MCP client's callback on another origin —
+    // under `form-action 'self'` the browser blocks that hop and the flow dies
+    // before a code is delivered. The endpoint has already checked the target
+    // against the client's registered redirect_uris, so widening it to https
+    // here costs nothing; the rest of the app keeps the strict policy. The
+    // negative lookahead is what keeps the two from stacking into an
+    // intersection, since duplicate CSP headers are enforced as both.
+    const AUTHORIZE = '/api/oauth/authorize';
     return [
       {
-        source: '/:path*',
+        source: AUTHORIZE,
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
-          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+          { key: 'Content-Security-Policy', value: directives("'self' https:") },
+          ...otherHeaders,
+        ],
+      },
+      {
+        source: '/:path((?!api/oauth/authorize).*)',
+        headers: [
+          { key: 'Content-Security-Policy', value: directives("'self'") },
+          ...otherHeaders,
         ],
       },
     ];
