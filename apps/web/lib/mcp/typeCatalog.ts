@@ -35,7 +35,8 @@ export interface TypeCatalogEntry {
   usage_count: number
   /**
    * The alias vocabulary of this type — the only values `add_context`'s
-   * `alias` accepts. Managed with `manage_alias`.
+   * `alias` accepts. Managed with `manage_alias`, which also assigns one to an
+   * entity that already exists (action 'assign').
    */
   aliases: Array<{ name: string; color: string; owner?: boolean }>
   /** How this type is meant to be used and created. */

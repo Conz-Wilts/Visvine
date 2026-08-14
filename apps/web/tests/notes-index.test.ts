@@ -11,6 +11,7 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
+  enforceIndexFrontmatter,
   folderOfIndexPath,
   hasChildrenBlock,
   humanizeFolderName,
@@ -68,6 +69,37 @@ test('buildIndexStub for an empty folder has an empty managed block', () => {
   const stub = buildIndexStub('deals/2026', [])
   assert.equal(parseFrontmatter(stub).title, '2026')
   assert.equal(splitFrontmatter(stub).body.trim(), `${CHILDREN_OPEN}\n${CHILDREN_CLOSE}`)
+})
+
+// The reverse guard: a write AT an index path keeps the index contract.
+test('enforceIndexFrontmatter restores a dropped type, keeping the rest', () => {
+  const written =
+    '---\ntitle: Blackbird Portfolio Companies\ndescription: Master index\n---\n\n# Portfolio\n\nprose\n'
+  const fixed = enforceIndexFrontmatter(written, 'communities')
+  const fm = parseFrontmatter(fixed)
+  assert.equal(fm.type, 'Index')
+  assert.equal(fm.title, 'Blackbird Portfolio Companies')
+  assert.equal(fm.description, 'Master index')
+  assert.ok(splitFrontmatter(fixed).body.includes('# Portfolio'))
+})
+
+test('enforceIndexFrontmatter falls back to the folder display name for a missing title', () => {
+  const fixed = enforceIndexFrontmatter('just a body, no frontmatter\n', 'deal-flow')
+  const fm = parseFrontmatter(fixed)
+  assert.equal(fm.type, 'Index')
+  assert.equal(fm.title, 'Deal Flow')
+  assert.ok(splitFrontmatter(fixed).body.includes('just a body'))
+})
+
+test('enforceIndexFrontmatter is a byte no-op on conforming content', () => {
+  const ok = '---\ntype: Index\ntitle: People\n---\n\nbody\n'
+  assert.equal(enforceIndexFrontmatter(ok, 'people'), ok)
+})
+
+test('enforceIndexFrontmatter overrides a wrong declared type', () => {
+  const fixed = enforceIndexFrontmatter('---\ntype: Note\ntitle: People\n---\n\nbody\n', 'people')
+  assert.equal(parseFrontmatter(fixed).type, 'Index')
+  assert.equal(parseFrontmatter(fixed).title, 'People')
 })
 
 // The type is what makes a note an index — the path follows it, not the reverse.

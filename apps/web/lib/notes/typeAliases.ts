@@ -269,6 +269,68 @@ export async function updateTypeAlias(
 }
 
 /**
+ * Put one of a type's aliases on a directory card — or take it off (`name`
+ * null). The vocabulary side (create/rename/delete) is admin-only; wearing a
+ * chip is collaborative card metadata like tags, gated on membership by the
+ * caller. Person is refused here: a person's aliases are held through
+ * membership (they are the permission model), not worn on the card.
+ */
+export async function assignNodeAlias(
+  spaceId: string,
+  nodeId: string,
+  name: string | null,
+  actor: Actor,
+): Promise<{ nodeId: string; alias: string | null }> {
+  const node = await prisma.node.findFirst({
+    where: { id: nodeId, spaceId },
+    select: { id: true, type: true, name: true },
+  })
+  if (!node) throw new Error(`No entity "${nodeId}" in this space`)
+
+  const state = await loadState(spaceId)
+  const type = resolveAliasType(state, node.type)
+  if (type.isPerson) {
+    throw new Error(
+      'A person holds aliases through membership, not on the card — grant them in the app',
+    )
+  }
+
+  const trimmed = name?.trim() || null
+  if (trimmed) {
+    const available = aliasesOfType(state, type)
+    const match = available.find((a) => a.name.toLowerCase() === trimmed.toLowerCase())
+    if (!match) {
+      throw new Error(
+        available.length
+          ? `"${trimmed}" is not a ${type.name} alias here — use one of: ${available.map((a) => a.name).join(', ')}, or create it first`
+          : `This space has no ${type.name} aliases — create one first`,
+      )
+    }
+    await prisma.node.update({ where: { id: node.id }, data: { alias: match.name } })
+    revalidateTag('context-data-v2', { expire: 0 })
+    void logAudit(spaceId, {
+      userId: actor.userId,
+      name: actor.name,
+      action: 'folder',
+      path: '',
+      detail: `${type.name} "${node.name}" aliased "${match.name}"`,
+    })
+    return { nodeId: node.id, alias: match.name }
+  }
+
+  await prisma.node.update({ where: { id: node.id }, data: { alias: null } })
+  revalidateTag('context-data-v2', { expire: 0 })
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.name,
+    action: 'folder',
+    path: '',
+    detail: `${type.name} "${node.name}" alias cleared`,
+  })
+  return { nodeId: node.id, alias: null }
+}
+
+/**
  * Remove an alias from a type's vocabulary, taking the chips with it. The
  * Person path additionally drops its holders and grants, and refuses to leave
  * the space with nobody owning it.

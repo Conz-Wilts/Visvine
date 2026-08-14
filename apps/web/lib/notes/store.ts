@@ -34,6 +34,8 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
+  enforceIndexFrontmatter,
+  folderOfIndexPath,
   hasChildrenBlock,
   indexFolderPathOf,
   indexPathOf,
@@ -181,6 +183,9 @@ export async function createNote(
     if (denial) throw new Error(denial)
     p = indexPathOf(indexFolderPathOf(requested))
   }
+  // The reverse guard: a note AT an index path is a folder whatever its
+  // frontmatter says, so the Index type is enforced rather than trusted.
+  if (isIndexPath(p)) content = enforceIndexFrontmatter(content, folderOfIndexPath(p))
   if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
   const row = await prisma.contextNote.create({
     data: {
@@ -379,8 +384,19 @@ export async function writeNote(
     const denial = await indexConversionDenial(context, p)
     if (denial) throw new Error(denial)
   }
+  // The reverse guard: a save at an index path keeps `type: Index` (and a
+  // title) whatever the incoming frontmatter says — dropping the type would
+  // silently turn the folder into a loose note.
+  if (isIndexPath(p)) content = enforceIndexFrontmatter(content, folderOfIndexPath(p))
   const existing = await findLive(context, p)
   const prev = existing?.content ?? null
+
+  // An index that carried the managed child block keeps it: a raw write that
+  // drops the markers would end the auto-listing (the root index opts in by
+  // carrying one). Re-seed it empty; refreshIndexesForNote below refills it.
+  if (isIndexPath(p) && prev !== null && hasChildrenBlock(prev) && !hasChildrenBlock(content)) {
+    content = applyChildrenBlock(content, [])
+  }
 
   const note = existing
     ? await prisma.contextNote.update({

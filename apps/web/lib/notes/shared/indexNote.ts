@@ -8,7 +8,12 @@
 // lib/notes/store.ts. No fs/DOM access, unit-testable like the rest of
 // lib/notes/shared/*.
 
-import { extractMarkdownLinks, parseFrontmatter } from './markdown'
+import {
+  extractMarkdownLinks,
+  joinFrontmatter,
+  parseFrontmatter,
+  splitFrontmatter,
+} from './markdown'
 
 export const INDEX_BASENAME = 'index.md'
 
@@ -76,6 +81,30 @@ export function nextIndexTitle(
   const current = (currentTitle ?? '').trim()
   const untouched = !current || current === humanizeFolderName(oldSegment) || current === oldSegment
   return untouched ? humanizeFolderName(newSegment) : null
+}
+
+/**
+ * Hold a write to an index path to the index contract: the frontmatter carries
+ * `type: Index` and a title. An index note IS its folder, so a save that drops
+ * the type would silently turn the folder into a loose note — instead the type
+ * is put back and the rest of the frontmatter (description, tags…) rides
+ * through untouched. The title falls back to the folder's display name only
+ * when the write carries none; a title the writer chose is kept.
+ *
+ * Returns `content` unchanged when it already conforms, so callers can apply
+ * this unconditionally on every index-path write.
+ */
+export function enforceIndexFrontmatter(content: string, folderPath: string): string {
+  const fm = parseFrontmatter(content)
+  const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
+  if (isIndexContent(content) && declaredTitle) return content
+  const { body } = splitFrontmatter(content)
+  const segment = folderPath.split('/').pop() ?? folderPath
+  const title = declaredTitle || humanizeFolderName(segment)
+  return joinFrontmatter(
+    { ...fm, type: 'Index', ...(title ? { title } : {}) },
+    body,
+  )
 }
 
 // the managed child list

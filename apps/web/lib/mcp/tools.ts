@@ -60,11 +60,13 @@ import {
   type SpaceAlias,
 } from '@/lib/types/context'
 import {
+  assignNodeAlias,
   createTypeAlias,
   deleteTypeAlias,
   listAliasesByType,
   updateTypeAlias,
 } from '@/lib/notes/typeAliases'
+import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -104,6 +106,19 @@ const MENTION_RULE =
   "path without one is resolved from the mentioning note's own folder and will silently link to " +
   'nothing. Every tool that returns an entity also returns a ready-to-paste `mention` string; ' +
   'use it verbatim. Mentions in your personal space do not create edges.'
+
+/**
+ * The index-note contract, told to the write tools. Like MENTION_RULE this
+ * lives in tool descriptions because that is the only place an agent reads it.
+ */
+const INDEX_RULE =
+  'INDEX NOTES: every folder IS its index.md — created automatically the moment a note lands in the ' +
+  "folder, with fixed frontmatter (`type: Index`, `title:` = the folder's display name) and a " +
+  'machine-maintained child list between `<!-- index:children -->` markers. When you add notes to a ' +
+  "folder, ENRICH its existing index (prose ABOVE the markers — a description of what the folder holds " +
+  'is what makes it findable in search) rather than creating or replacing one. Never hand-write the ' +
+  'child list; the markers are refreshed for you on every change in the folder. Writes to an index ' +
+  'path keep `type: Index` and the markers even if your content drops them.'
 
 /**
  * The exact markdown an agent should paste to mention this entity. Exported so
@@ -730,6 +745,7 @@ export function registerTools(server: McpServer): void {
         'The new context note is PRIVATE by default — the directory card (name, fields, mention) stays visible ' +
         "to everyone, but the note's content is readable only by space admins and you until someone shares " +
         "it; pass visibility:'inherit' to let it follow its folder's visibility instead. " +
+        `${INDEX_RULE}\n` +
         `To connect it to others, write mentions: ${MENTION_RULE}`,
       inputSchema: {
         space_id: z.string(),
@@ -813,7 +829,7 @@ export function registerTools(server: McpServer): void {
         "space admins and you can see it — pass visibility:'inherit' to make it visible to whoever can see " +
         'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
-        `clobber it; use append_context when you only want to add. ${MENTION_RULE}`,
+        `clobber it; use append_context when you only want to add. ${INDEX_RULE} ${MENTION_RULE}`,
       inputSchema: {
         space_id: z.string(),
         path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
@@ -849,6 +865,16 @@ export function registerTools(server: McpServer): void {
           // Every shared-context write re-syncs that note's mention set, so the
           // edges it draws are already up to date by the time this returns.
           links_synced: scope === 'shared',
+          // Index paths are folders: the store holds them to the index contract
+          // (`type: Index`, managed child markers) whatever the write carried.
+          ...(isIndexPath(result.path)
+            ? {
+                index_note: true,
+                index_contract:
+                  '`type: Index` and the <!-- index:children --> block are enforced on this path — ' +
+                  'read the note back if you need the exact stored content',
+              }
+            : {}),
           ...(isGatedShared
             ? {
                 visibility: existed ? 'unchanged' : wantPrivate && !visibilityError ? 'private' : 'inherit',
@@ -1001,20 +1027,29 @@ export function registerTools(server: McpServer): void {
         'add_context takes one of those names in `alias`.\n' +
         'Actions: create (name + optional #rrggbb colour, defaulting to the type\'s colour), update (rename ' +
         'via new_name and/or recolour — the cards wearing the chip follow the rename), delete (removes the ' +
-        'chip from every card of that type).\n' +
-        'Space admins only, and only in a real space (a personal space has no vocabulary). PERSON aliases are ' +
+        'chip from every card of that type), assign (put an existing alias on ONE entity: node_id + name — ' +
+        'this is how you alias an entity that already exists; add_context only covers creation), and clear ' +
+        "(node_id — take the entity's chip off).\n" +
+        'Vocabulary edits (create/update/delete) are space-admin only; assign/clear are open to members, like ' +
+        'editing tags. All of it works only in a real space (a personal space has no vocabulary). PERSON aliases are ' +
         'also the permission model — an alias flagged `owner` is what makes its holders admins — so who holds ' +
         'one, and what it reaches, stay in the app; this tool edits the vocabulary itself. The built-in Owner ' +
         "alias cannot be renamed, recoloured or removed, and a change that would leave the space with nobody " +
         'owning it is refused.',
       inputSchema: {
         space_id: z.string(),
-        action: z.enum(['list', 'create', 'update', 'delete']),
+        action: z.enum(['list', 'create', 'update', 'delete', 'assign', 'clear']),
         node_type: z
           .string()
           .optional()
-          .describe("The type the alias narrows, e.g. 'person', 'space', 'resource'. Required except for 'list'"),
-        name: z.string().optional().describe("The alias name. Required except for 'list'"),
+          .describe(
+            "The type the alias narrows, e.g. 'person', 'space', 'resource'. Required for create/update/delete",
+          ),
+        name: z.string().optional().describe('The alias name. Required except for list and clear'),
+        node_id: z
+          .string()
+          .optional()
+          .describe("assign/clear — the entity wearing the chip, e.g. 'space:canva'"),
         new_name: z.string().optional().describe("action:'update' — rename it to this"),
         color: z.string().optional().describe("#rrggbb chip colour, e.g. '#2563eb'"),
         owner: z
@@ -1034,12 +1069,31 @@ export function registerTools(server: McpServer): void {
         if (args.action === 'list') {
           return { action: 'list', aliases_by_type: await listAliasesByType(args.space_id) }
         }
+        const actor = { userId: ctx.userId, name: ctx.name }
+        // Wearing a chip is collaborative card metadata (like tags): any member
+        // may assign or clear one; only the vocabulary itself is admin-gated.
+        if (args.action === 'assign' || args.action === 'clear') {
+          if (!args.node_id) throw new McpError(400, 'node_id is required')
+          if (args.action === 'assign' && !args.name) {
+            throw new McpError(400, "name is required for 'assign' — use 'clear' to remove the chip")
+          }
+          try {
+            const result = await assignNodeAlias(
+              args.space_id,
+              args.node_id,
+              args.action === 'assign' ? args.name! : null,
+              actor,
+            )
+            return { action: args.action, node_id: result.nodeId, alias: result.alias }
+          } catch (e) {
+            throw new McpError(400, e instanceof Error ? e.message : 'Alias change refused')
+          }
+        }
         if (!principal.spaceAdmin) {
           throw new McpError(403, 'Only a space admin can manage this space\'s aliases')
         }
         if (!args.node_type) throw new McpError(400, 'node_type is required')
         if (!args.name) throw new McpError(400, 'name is required')
-        const actor = { userId: ctx.userId, name: ctx.name }
 
         try {
           if (args.action === 'create') {
