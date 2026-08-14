@@ -68,7 +68,7 @@ export function McpServerUrlRow({ url }: { url: string | null }) {
         aria-label="MCP server address"
         className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 font-mono text-xs text-text-secondary"
       />
-      <Button variant="pill-secondary" onClick={copy} disabled={!url}>
+      <Button variant="brand" onClick={copy} disabled={!url}>
         {copied ? 'Copied' : 'Copy'}
       </Button>
     </div>
