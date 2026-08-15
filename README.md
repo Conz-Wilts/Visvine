@@ -139,6 +139,21 @@ OAuth, also set `NEXT_PUBLIC_APP_URL` (web) to the tunnel and register
 `<tunnel>/api/auth/callback/google-mobile` + the `visvine://` scheme with the
 OAuth client. See `apps/mobile/README.md`.
 
+## Desktop
+
+`apps/desktop` is the Electron desktop app: a hardened Chromium shell that loads
+the web app (dev: `http://localhost:3000`, packaged: `https://visvine.com`;
+override with `--url=` or `VISVINE_DESKTOP_URL`). Sign-in is the normal web
+session — including `/dev/login` locally.
+
+```bash
+pnpm dev:desktop     # Postgres + Next.js dev + the Electron window
+pnpm desktop:test    # unit tests;  pnpm desktop:e2e = Playwright electron smoke run (needs pnpm dev)
+pnpm desktop:pack    # unpacked build in apps/desktop/release/;  pnpm desktop:dist = installers
+```
+
+See `apps/desktop/README.md` and `docs/desktop-electron-plan.md`.
+
 ## Production debugging escape hatch
 
 `pnpm db:proxy:cloud` still starts the Cloud SQL Auth Proxy if you need to inspect prod data. Connect with a read-only IAM identity and a separate SQL client — do not point the local app at production.

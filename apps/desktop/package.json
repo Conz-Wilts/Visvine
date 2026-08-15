@@ -1,0 +1,31 @@
+{
+  "name": "@visvine/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Visvine desktop app — Electron shell around the Visvine web app",
+  "main": "dist/main.js",
+  "author": "Visvine",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-resources.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "electron .",
+    "dev": "pnpm build && cross-env-shell VISVINE_DESKTOP_DEV=1 electron .",
+    "dev:watch": "concurrently -k -n tsc,electron -c blue,green \"tsc -p tsconfig.json --watch --preserveWatchOutput\" \"wait-on dist/main.js && cross-env VISVINE_DESKTOP_DEV=1 electron .\"",
+    "test": "pnpm build && node --test tests/*.test.mjs",
+    "e2e": "pnpm build && node e2e/run.mjs",
+    "pack:dir": "pnpm build && electron-builder --dir",
+    "dist": "pnpm build && electron-builder",
+    "clean": "rm -rf dist release"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "playwright-core": "^1.50.0",
+    "typescript": "^5",
+    "wait-on": "^8.0.0"
+  }
+}

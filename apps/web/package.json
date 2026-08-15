@@ -18,7 +18,7 @@
     "db:migrate": "node scripts/baseline-migrations.mjs && pnpm dlx prisma@7.4.0 migrate deploy && node scripts/apply-sql-functions.mjs",
     "db:migrate:new": "pnpm dlx prisma@7.4.0 migrate dev",
     "db:inspect:prod": "node scripts/inspect-prod-schema.mjs",
-    "db:fresh:schema": "node ../../scripts/guard-local-db.mjs && pnpm dlx prisma@7.4.0 migrate reset --force --skip-seed && node scripts/apply-sql-functions.mjs",
+    "db:fresh:schema": "node ../../scripts/guard-local-db.mjs && pnpm dlx prisma@7.4.0 migrate reset --force && node scripts/apply-sql-functions.mjs",
     "db:seed": "tsx prisma/seed.ts",
     "db:blackbird:ventures": "node scripts/add-blackbird-ventures.mjs",
     "db:context-links": "tsx scripts/backfill-context-links.ts community:blackbird-ventures",

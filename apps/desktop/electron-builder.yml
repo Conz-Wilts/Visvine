@@ -1,0 +1,46 @@
+appId: com.visvine.desktop
+productName: Visvine
+copyright: Copyright © 2026 Visvine
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**
+  - resources/**
+  - assets/icon.png
+  - package.json
+asar: true
+npmRebuild: false
+protocols:
+  - name: Visvine
+    schemes:
+      - visvine-desktop
+win:
+  target:
+    - nsis
+  icon: assets/icon.png
+  # Embedding the icon/version into the .exe (rcedit) and signing both pull the
+  # winCodeSign toolchain, whose archive contains symlinks that 7-Zip cannot
+  # create on Windows without Developer Mode / admin rights. Unsigned local
+  # builds therefore skip that step; flip this to true (or delete it) once a
+  # code-signing cert is wired up in CI, which runs with the needed privilege.
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+  icon: assets/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
+  icon: assets/icon.png
+publish: null
