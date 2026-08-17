@@ -6,7 +6,7 @@ import { useDirectoryNodes } from '@/features/directory/hooks/useDirectoryNodes'
 import { clearContextCache } from '@/features/notes/hooks/useSpaceContextData';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useDashboardSearch } from '@/features/directory/hooks/useDashboardSearch';
-import type { DirectoryItem } from '@/features/directory/components/types';
+import type { DirectoryItem } from '@/lib/types';
 import { DEFAULT_NODE_TYPES } from '@/lib/types';
 import { isOwnSpaceNode } from '@/lib/types/context';
 import { isNodeTypeEnabled } from '@/lib/featureAccess';

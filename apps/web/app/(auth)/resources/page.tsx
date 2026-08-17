@@ -9,8 +9,9 @@ import PDFViewer from '@/features/resources/components/PDFViewer';
 import CommentsPanel from '@/features/resources/components/CommentsPanel';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
-  FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
+  FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, getPinned, togglePin, DocxViewer,
 } from '@/features/resources/components/resourceUi';
+import { formatBytes } from '@/lib/utils';
 import type { Resource } from '@/lib/types';
 import { PageTitle } from '@/components/ui';
 

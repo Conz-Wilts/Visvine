@@ -3,6 +3,7 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin, spaceMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
 import type { NBNode } from '@/lib/types';
+import { findAliasByRef, type SpaceAlias } from '@/lib/types/context';
 import { normalizeImageUrl } from '@/lib/mediaUrl';
 import { handleApiError, requireApiSession } from '@/lib/api/route';
 import { attachIdentity } from '@/lib/identity/attachIdentity';
@@ -108,6 +109,23 @@ export async function POST(request: NextRequest) {
       actorUserId: session?.userId ?? null,
     });
 
+    // The alias the caller picked. This used to be dropped on the floor —
+    // CreateModal sent one and the row was written without it — so the chip a
+    // user chose never appeared. Resolved against the space's vocabulary so an
+    // unknown or mis-cased value can't be stored verbatim.
+    const alias = node.alias?.trim()
+      ? findAliasByRef(
+          (
+            await prisma.space.findUnique({
+              where: { id: space_id },
+              select: { aliases: true },
+            })
+          )?.aliases as unknown as SpaceAlias[],
+          node.alias,
+          node.type,
+        )
+      : undefined;
+
     const row = await prisma.node.create({
       data: {
         id: node.id,
@@ -116,6 +134,8 @@ export async function POST(request: NextRequest) {
         // case-insensitively via getNodeTypeConfig.
         type: node.type.toLowerCase(),
         name: node.name,
+        alias: alias?.name ?? null,
+        aliasId: alias?.id ?? null,
         subtitle: node.subtitle ?? null,
         location: node.location ?? null,
         url: node.url ?? null,

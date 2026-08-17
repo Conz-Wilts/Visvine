@@ -11,6 +11,7 @@ import { useState } from 'react';
 import { FileText, Folder, Users } from 'lucide-react';
 import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui';
 import { notesApi } from '@/features/notes/lib/notesApi';
+import { timeAgo } from '@/lib/date';
 import { describeOutcome, requestTargetLabel } from '@/lib/notes/shared/accessRequests';
 import { levelName, type AccessLevelName } from '@/lib/notes/shared/authz';
 import type { AccessRequest } from '@/lib/notes/shared/contextTypes';
@@ -18,16 +19,6 @@ import { usePeopleSection } from './PeopleDataContext';
 import { LevelSelect } from './shared';
 
 /** "3 hours ago" without pulling in a date library. */
-function relativeTime(epochMs: number): string {
-  const mins = Math.round((Date.now() - epochMs) / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'yesterday' : `${days}d ago`;
-}
-
 function TargetChip({ path, contextName }: { path: string; contextName: string }) {
   const Icon = path === '' ? Users : path.endsWith('.md') ? FileText : Folder;
   return (
@@ -78,7 +69,7 @@ export default function AccessRequests() {
                     <span className="font-medium text-text-primary">{request.requesterName ?? 'Member'}</span>
                     <span className="text-text-muted">wants access to</span>
                     <TargetChip path={request.resourcePath} contextName={contextName} />
-                    <span className="text-xs text-text-muted">· {relativeTime(request.requestedAt)}</span>
+                    <span className="text-xs text-text-muted">· {timeAgo(request.requestedAt, { style: 'short' })}</span>
                   </div>
                   {request.message && (
                     <p className="mt-1 border-l-2 border-border-default pl-2 text-xs italic text-text-secondary">
@@ -135,7 +126,7 @@ export default function AccessRequests() {
                   <span className="font-medium text-text-secondary">{request.requesterName ?? 'Member'}</span>
                   {' · '}
                   {describeOutcome(request, contextName)}
-                  {request.resolvedAt && <> · {relativeTime(request.resolvedAt)}</>}
+                  {request.resolvedAt && <> · {timeAgo(request.resolvedAt, { style: 'short' })}</>}
                 </span>
               </div>
             ))}

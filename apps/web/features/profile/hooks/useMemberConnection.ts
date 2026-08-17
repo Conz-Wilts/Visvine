@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useSession } from '@/features/auth/lib/auth-client'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 
 export interface MemberConnectionInfo {
   userId: string
@@ -77,13 +78,7 @@ export function useMemberConnection({
       setBusy(true)
       setError(null)
       try {
-        const res = await fetch(endpoint, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.error || 'Failed to connect')
+        const data = await fetchJsonBody<{ connected?: MemberConnectionInfo | null }>(endpoint, 'PUT', { userId })
         setConnection(data.connected ?? null)
         setUnavailable(false)
         setPicking(false)
@@ -101,8 +96,7 @@ export function useMemberConnection({
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch(endpoint, { method: 'DELETE' })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to disconnect')
+      await fetchJson(endpoint, { method: 'DELETE' })
       setConnection(null)
       setUnavailable(false)
       onChange?.(null)

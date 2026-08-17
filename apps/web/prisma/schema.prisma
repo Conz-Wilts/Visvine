@@ -35,6 +35,12 @@ model Space {
   // Reusable, revocable invite token. Regenerating overwrites it, invalidating the
   // previously shared link. Null until first generated.
   inviteToken     String?                @unique @map("invite_token")
+  // IANA zone the space's scheduled agents run in when an agent doesn't name
+  // its own (lib/agents/config.ts). Null = UTC.
+  timezone        String?
+  // Space-wide agent settings that are admin-only by nature and never note
+  // fields: { customEndpoint?: { baseURL } } (lib/agents/providers.ts).
+  agentConfig     Json                   @default("{}") @map("agent_config")
   links           Link[]
   nodes           Node[]
   members         SpaceMember[]
@@ -49,6 +55,8 @@ model Space {
   accessRequests  ContextAccessRequest[]
   publicationsOut ContextPublication[]   @relation("PublicationSource")
   publicationsIn  ContextPublication[]   @relation("PublicationTarget")
+  agentStates     AgentState[]
+  agentRuns       AgentRun[]
 
   channels        Conversation[]
   channelSections ChannelSection[]
@@ -161,28 +169,110 @@ model ConnectorSecret {
   @@map("connector_secrets")
 }
 
-/// Which of its space's PERSON ALIASES a member holds. The aliases
-/// themselves live in `Space.aliases` (created on the Types page,
-/// lib/types/context.ts#CommunityAlias) — the same vocabulary that colours a
-/// person's chip in the directory IS the permission model, so `aliasName` is a
-/// name from that list, not a foreign key.
+/// The scheduler's index of one Space agent (lib/agents). The NOTES stay
+/// authoritative — `agents/<name>.md` is the brief, `agents/live/<name>.md`
+/// holds `active` and the schedule — and this row is derived from them on
+/// every write (`scheduleHash` lets a tick notice a note that changed under
+/// it and re-derive). It exists so "who is due" is one indexed query instead
+/// of parsing every live agent note every five minutes, and so overlap
+/// suppression is an atomic compare-and-swap on `status` that survives ten
+/// Cloud Run instances. `budgetMonthlyCents` is the one agent fact that is
+/// deliberately NOT in a note: money is admin-read, notes are member-read.
+model AgentState {
+  id                  String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId             String    @map("space_id")
+  name                String // agent name = basename of agents/<name>.md
+  runAsUserId         String?   @map("run_as_user_id") // the brief's author; the principal a run acts as
+  active              Boolean   @default(false)
+  status              String    @default("idle") // idle | running
+  nextRunAt           DateTime? @map("next_run_at")
+  lastRunAt           DateTime? @map("last_run_at")
+  runningSince        DateTime? @map("running_since")
+  scheduleHash        String?   @map("schedule_hash")
+  budgetMonthlyCents  Int?      @map("budget_monthly_cents") // null = uncapped
+  deactivatedReason   String?   @map("deactivated_reason") // brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin
+  deactivatedDetail   String?   @map("deactivated_detail") // e.g. who edited the brief
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  space               Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  runs                AgentRun[]
+
+  @@unique([spaceId, name], name: "agent_identity")
+  @@index([active, nextRunAt])
+  @@map("agent_state")
+}
+
+/// One execution of a Space agent — the run record and its transcript. Written
+/// first-hand by the executor (lib/agents/runner.ts): usage, cost, terminal
+/// reason and the `AgentEvent` trace (tool results clipped, secrets already
+/// redacted by the isolate). Monthly spend is SUM(costMicros) by startedAt.
+model AgentRun {
+  id               String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  stateId          String    @map("state_id")
+  spaceId          String    @map("space_id")
+  name             String
+  trigger          String // scheduled | manual
+  status           String    @default("running") // running | succeeded | failed
+  startedAt        DateTime  @default(now()) @map("started_at")
+  endedAt          DateTime? @map("ended_at")
+  startedBy        String?   @map("started_by") // userId for manual runs
+  model            String?
+  promptTokens     Int       @default(0) @map("prompt_tokens")
+  completionTokens Int       @default(0) @map("completion_tokens")
+  costMicros       BigInt?   @map("cost_micros") // USD micro-dollars; null = pricing unknown
+  turns            Int       @default(0)
+  terminalReason   String?   @map("terminal_reason") // finished | max_turns | budget | timeout | crashed | error | auth | quota | upstream | config | author_gone
+  summary          String? // the model's final answer, capped
+  errorMessage     String?   @map("error_message") // redacted
+  events           Json      @default("[]") // AgentEvent[] trace
+  state            AgentState @relation(fields: [stateId], references: [id], onDelete: Cascade)
+  space            Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([stateId, startedAt(sort: Desc)])
+  @@index([spaceId, startedAt])
+  @@map("agent_runs")
+}
+
+/// Single-row liveness record for the agent scheduler tick. If it stops
+/// moving, every agent in every space goes quiet with nothing failing — this
+/// is how the panel tells a Space that the watcher itself is down.
+model AgentHeartbeat {
+  id         Int      @id @default(1)
+  lastTickAt DateTime @map("last_tick_at")
+
+  @@map("agent_heartbeat")
+}
+
+/// Which of its space's PERSON ALIASES a member holds. The aliases themselves
+/// live in `Space.aliases` (lib/types/context.ts#SpaceAlias) — the same
+/// vocabulary that colours a person's chip in the directory IS the permission
+/// model, so this points into a JSON array rather than at another table.
+///
+/// It points at `SpaceAlias.id`, NOT the name. Holding an alias is what makes
+/// someone an admin (lib/auth.ts#isAdmin), and a name is editable: keying on it
+/// meant every rename had to rewrite this table, `ContextGrant.subjectId` and
+/// `Node.alias` in step, and any drift — a casing mismatch, a half-applied
+/// cascade — silently revoked people's access. An id is not editable, so a
+/// rename is now one write to `Space.aliases` and nothing here moves.
 ///
 /// A person holds any number of them, with no restrictions on which. An alias
 /// marked `owner` there means its holders manage the space; the built-in
-/// Owner alias always does. Rows are deleted when the user leaves the space
-/// (lib/notes/access.ts#removeMemberAccess) — grants stop matching instantly.
+/// Owner alias (id `owner`) always does. Rows are deleted when the user leaves
+/// the space (lib/notes/access.ts#removeMemberAccess) — grants stop matching
+/// instantly.
 model UserAlias {
   id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId   String   @map("space_id")
   userId    String   @map("user_id")
-  aliasName String   @map("alias_name")
+  aliasId   String   @map("alias_id")
   addedBy   String?  @map("added_by")
   createdAt DateTime @default(now()) @map("created_at")
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
-  @@unique([spaceId, userId, aliasName], name: "user_alias_identity")
+  @@unique([spaceId, userId, aliasId], name: "user_alias_identity")
   @@index([userId])
-  @@index([spaceId, aliasName])
+  @@index([spaceId, aliasId])
   @@map("user_aliases")
 }
 
@@ -197,7 +287,9 @@ model ContextGrant {
   id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId      String   @map("space_id")
   subjectType  String   @map("subject_type") // 'space' | 'alias' | 'user'
-  subjectId    String   @default("") @map("subject_id") // '' | Person alias name | userId
+  // '' for the space itself | SpaceAlias.id | userId. Alias grants hold the
+  // alias's stable id, never its name — see the note on UserAlias.
+  subjectId    String   @default("") @map("subject_id")
   resourcePath String   @default("") @map("resource_path") // '' = context root
   level        Int // 10 view · 20 comment · 30 edit · 40 full
   grantedBy    String   @map("granted_by")
@@ -345,7 +437,15 @@ model Node {
   spaceId        String?         @map("space_id")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
+  // The alias chip this card wears, as a NAME. Overloaded: for an event it is
+  // the public /e/<slug> slug, for a connector the executor kind — neither of
+  // which is vocabulary. Read through lib/types/context.ts#findAlias, which only
+  // treats it as an alias when the space actually defines one by that name for
+  // this node's type. Display and search only; `aliasId` is the truth.
   alias          String?
+  // The space alias this card wears (`SpaceAlias.id`). Survives renames, which
+  // the name copy above does not — see the note on UserAlias.
+  aliasId        String?         @map("alias_id")
   // Canonical cross-space identity this node represents (people/orgs). Nullable:
   // legacy rows and non-person/org types may have none. Set by lib/identity/resolve.
   identityId     String?         @map("identity_id")
@@ -360,6 +460,7 @@ model Node {
   @@index([type])
   @@index([spaceId, type])
   @@index([identityId])
+  @@index([spaceId, aliasId])
   @@map("nodes")
 }
 

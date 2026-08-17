@@ -120,8 +120,9 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
   const [color, setColor] = useState(alias.color);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Grants point at the alias's stable id, so a rename does not orphan them.
   const grants = (data.overview?.grants ?? []).filter(
-    (g) => g.subjectType === 'alias' && g.subjectId === alias.name,
+    (g) => g.subjectType === 'alias' && g.subjectId === alias.id,
   );
   const holderIds = new Set(alias.holders.map((h) => h.userId));
   const candidates = data.members.filter(
@@ -252,7 +253,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
         <GrantEditor
           spaceId={spaceId}
           subjectType="alias"
-          subjectId={alias.name}
+          subjectId={alias.id}
           grants={grants}
           paths={data.paths}
           contextName={data.contextName}

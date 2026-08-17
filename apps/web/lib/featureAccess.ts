@@ -17,7 +17,7 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
  * with features/shared/lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
  * reject unknown keys from a client-submitted `order`.
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'agents'];
 
 /**
  * Feature keys that are admins-only by nature rather than by choice — their
@@ -27,6 +27,9 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
  *
  * Connectors is the only one today: the list route 403s every non-admin, and
  * writing to `connectors/` is admin-gated in contextService.writeDenial.
+ * Agents deliberately is NOT here: any member may author an agent brief; only
+ * activation (`agents/live/`) is admin-gated. A space may still restrict the
+ * tool to admins with the ordinary per-space switch.
  */
 export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
@@ -66,6 +69,7 @@ const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   section: 'channels',
   channel: 'channels',
   connector: 'connectors',
+  agent: 'agents',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
@@ -207,15 +211,32 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
  * featureConfig is written by more than one console panel — Tools owns which
  * tools the space has (`enabled`) and how the sidebar reads (`order`, `more`),
  * Members owns which of them members may open (`adminOnly`) — so a save
- * carries only the keys its panel owns and inherits the rest. Merging at
- * top-level key granularity is enough because each panel always sends a COMPLETE
- * array for the keys it does own; a partial array would still overwrite.
+ * carries only the keys its panel owns and inherits the rest.
+ *
+ * `enabled` merges one tool at a time, because it is a map rather than a list:
+ * two panels (or two tabs) each toggling a different tool would otherwise
+ * clobber each other, the whole tool vocabulary riding on whichever save landed
+ * second. Turning a tool off still works — that writes `false` for its key,
+ * which the merge keeps.
+ *
+ * The arrays (`adminOnly`, `order`, `more`) stay whole-value: each is owned by
+ * exactly one panel, which always sends it complete, and there is no meaningful
+ * element-wise merge of an ordering.
  */
 export function mergeFeatureConfig(
   stored: SpaceFeatureConfig | null | undefined,
   patch: Parameters<typeof sanitizeFeatureConfig>[0],
 ): SpaceFeatureConfig {
-  return sanitizeFeatureConfig({ ...(stored ?? {}), ...patch });
+  const base = stored ?? {};
+  const enabled =
+    patch.enabled || base.enabled
+      ? { ...(base.enabled ?? {}), ...(patch.enabled ?? {}) }
+      : undefined;
+  return sanitizeFeatureConfig({
+    ...base,
+    ...patch,
+    ...(enabled ? { enabled } : {}),
+  });
 }
 
 /**

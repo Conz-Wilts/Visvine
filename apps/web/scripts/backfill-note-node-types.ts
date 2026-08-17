@@ -25,7 +25,8 @@
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
 import prisma from '../lib/prisma';
-import { mergeNodeType, type NodeTypeConfig } from '../lib/types';
+import { mergeNodeType, mergeNodeTypeList, type NodeTypeConfig } from '../lib/types';
+import { updateSpaceConfig } from '../lib/spaces/spaceConfig';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
 
 /** Presentation for the note vocabulary, matching prisma/seed.ts NODE_TYPES.
@@ -99,11 +100,12 @@ async function main() {
         .join(', ')}`,
     );
     if (!dryRun) {
-      await prisma.space.update({
-        where: { id: space.id },
-        // Prisma types JSON columns structurally; the array is plain JSON data.
-        data: { nodeTypes: working as unknown as object[] },
-      });
+      // Through the space lock like every other writer: this can run against a
+      // live database, where a member naming a type on a draft would otherwise
+      // land between this script's read and its write.
+      await updateSpaceConfig(space.id, (stored) => ({
+        nodeTypes: mergeNodeTypeList(stored.nodeTypes, working),
+      }));
     }
   }
 }

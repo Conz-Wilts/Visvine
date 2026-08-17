@@ -94,3 +94,18 @@ test('redactDeep is a no-op with no secrets, and tolerates an empty value', () =
   assert.equal(redactDeep(input, []), input)
   assert.deepEqual(redactDeep({ a: 'b' }, ['']), { a: 'b' })
 })
+
+// ── redaction happens before the string cap ──
+
+test('marshalValue redacts a secret that straddles the string cap', () => {
+  const secret = 'sk-live-SECRET-VALUE-0123456789'
+  const head = 'x'.repeat(MARSHAL_LIMITS.maxStringChars - 5)
+  const report = { truncated: false }
+  const out = marshalValue(head + secret + 'tail', report, [secret]) as string
+  // Without redact-before-cap, the cap would slice mid-secret and leak
+  // "sk-live-SECRET-VALUE-01" as the string's tail.
+  assert.ok(!out.includes('SECRET'), 'no fragment of the secret survives the cap')
+  assert.ok(!out.includes('sk-live'), 'not even the prefix')
+  assert.equal(out.length, MARSHAL_LIMITS.maxStringChars)
+  assert.equal(report.truncated, true)
+})

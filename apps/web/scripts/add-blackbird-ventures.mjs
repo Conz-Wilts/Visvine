@@ -54,15 +54,20 @@ const NODE_TYPES = [
 // (a standalone `pnpm db:blackbird` run), since the upsert below deliberately
 // leaves aliases alone on conflict rather than clobbering who owns what.
 const OWNER_ALIAS_NAME = 'Owner';
+// Mirrors OWNER_ALIAS_ID in lib/types/context.ts — the reserved id of the
+// built-in alias, which is what user_aliases rows point at.
+const OWNER_ALIAS_ID = 'owner';
+// Ids are spelled out rather than generated so re-running this seed lands on
+// the same aliases the holder rows below already reference.
 const SPACE_ALIASES = [
-  { name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
-  { name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
-  { name: 'Founder', color: '#16a34a', nodeType: 'Person' },
-  { name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
-  { name: 'Employee', color: '#db2777', nodeType: 'Person' },
-  { name: 'LP', color: '#d97706', nodeType: 'Person' },
-  { name: 'Portfolio Company', color: '#0891b2', nodeType: 'Space' },
-  { name: 'Fund', color: '#0f766e', nodeType: 'Space' },
+  { id: OWNER_ALIAS_ID, name: OWNER_ALIAS_NAME, color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { id: 'al_seed_partner', name: 'Partner', color: '#7c3aed', nodeType: 'Person' },
+  { id: 'al_seed_founder', name: 'Founder', color: '#16a34a', nodeType: 'Person' },
+  { id: 'al_seed_investor', name: 'Investor', color: '#0ea5e9', nodeType: 'Person' },
+  { id: 'al_seed_employee', name: 'Employee', color: '#db2777', nodeType: 'Person' },
+  { id: 'al_seed_lp', name: 'LP', color: '#d97706', nodeType: 'Person' },
+  { id: 'al_seed_portfolio-company', name: 'Portfolio Company', color: '#0891b2', nodeType: 'Space' },
+  { id: 'al_seed_fund', name: 'Fund', color: '#0f766e', nodeType: 'Space' },
 ];
 
 
@@ -255,10 +260,10 @@ try {
     devUsers.rows.find((u) => u.email === 'admin@local.dev') ?? devUsers.rows[0] ?? null;
   if (owner) {
     await client.query(
-      `INSERT INTO user_aliases (space_id, user_id, alias_name, created_at)
+      `INSERT INTO user_aliases (space_id, user_id, alias_id, created_at)
        VALUES ($1, $2, $3, NOW())
-       ON CONFLICT (space_id, user_id, alias_name) DO NOTHING`,
-      [COMM, owner.id, OWNER_ALIAS_NAME],
+       ON CONFLICT (space_id, user_id, alias_id) DO NOTHING`,
+      [COMM, owner.id, OWNER_ALIAS_ID],
     );
   }
   console.log(

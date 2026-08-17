@@ -28,7 +28,7 @@ import { toContextItems, titleOfPath } from '@/features/notes/lib/contextItems';
 import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
 import { contextKeys, prefetchNoteContext, swrFetch } from '@/features/notes/lib/contextPrefetch';
 import { notesApi } from '@/features/notes/lib/notesApi';
-import { noteHref, resolveEntityNode } from '@/lib/notes/entities';
+import { hrefForNotePath } from '@/lib/notes/entities';
 import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
 import { FilterDropdown } from '@/features/directory/components/FilterDropdown';
 import { findNodeTypeConfig, getNodeTypeConfig } from '@/lib/types';
@@ -142,9 +142,7 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     (p: string) => {
       if (p === path) return;
       if (spaceId) prefetchNoteContext(spaceId, p);
-      const targetId = resolveEntityNode(p, entityByPath);
-      if (targetId) router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`);
-      else router.push(noteHref(p));
+      router.push(hrefForNotePath(p, entityByPath));
     },
     [spaceId, entityByPath, path, router],
   );

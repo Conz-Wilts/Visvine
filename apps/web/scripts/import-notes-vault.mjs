@@ -103,7 +103,7 @@ async function main() {
               CROSS JOIN LATERAL jsonb_array_elements(COALESCE(c.aliases, '[]'::jsonb)) AS a
              WHERE ua.space_id = uc.space_id
                AND ua.user_id = uc.user_id
-               AND ua.alias_name = a->>'name'
+               AND ua.alias_id = a->>'id'
                AND (a->>'owner' = 'true' OR a->>'system' = 'true')
           ) DESC, uc.joined_at ASC
           LIMIT 1`,

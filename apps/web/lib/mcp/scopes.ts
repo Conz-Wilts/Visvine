@@ -11,7 +11,7 @@
  * caller has no write access.
  */
 
-export const MCP_SCOPES = ['context:read', 'context:write', 'connectors:use'] as const
+export const MCP_SCOPES = ['context:read', 'context:write', 'connectors:use', 'agents:run'] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
 
@@ -23,6 +23,8 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Create entities and write notes in spaces where you already have write access',
   'connectors:use':
     'Call external APIs and databases through connectors configured by space admins',
+  'agents:run':
+    'Trigger a run of an agent you authored or administer — it runs on the space\'s model key with the reach its brief declares',
 }
 
 /**
@@ -54,6 +56,11 @@ export const TOOL_SCOPES = {
   // to read tokens, so discovery isn't the secret; execution is.
   list_connectors: 'context:read',
   run_connector: 'connectors:use',
+  // Same split as connectors: the roster is member-visible, execution is the
+  // privilege. Authoring a brief is NOT an MCP tool — agents/ is frozen for
+  // AI origins (agents are written by people).
+  list_agents: 'context:read',
+  run_agent: 'agents:run',
 } as const satisfies Record<string, McpScope>
 
 export type McpToolName = keyof typeof TOOL_SCOPES

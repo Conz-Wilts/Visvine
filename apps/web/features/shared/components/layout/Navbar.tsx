@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SpaceSelector } from "@/features/spaces";
+import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import UserMenu from "@/features/auth/components/UserMenu";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";

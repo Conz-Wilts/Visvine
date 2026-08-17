@@ -17,7 +17,13 @@ export interface ChatMessage {
   content: string
 }
 
-interface ChatConfig {
+/**
+ * One chat endpoint: an OpenAI-compatible base URL, the bearer key, the model
+ * id. Every AI pass in the product resolves one of these — interactive passes
+ * from the environment (below), unattended agent runs from the Space's own
+ * key (lib/agents/providers.ts).
+ */
+export interface ChatConfig {
   apiKey: string
   baseURL: string
   model: string
@@ -25,6 +31,48 @@ interface ChatConfig {
 
 const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const DEFAULT_GEMINI_MODEL = 'gemma-4-31b-it'
+
+/** Token usage as the endpoint reports it (`usage` on the completion). */
+export interface ChatUsage {
+  promptTokens: number
+  completionTokens: number
+}
+
+export type ModelErrorKind = 'auth' | 'quota' | 'upstream' | 'config'
+
+/**
+ * A model request that failed, classified so callers can decide what to do:
+ * `auth` (401/403 — the key is wrong), `quota` (402/429 — billing or rate
+ * limit), `upstream` (5xx / network), `config` (unconfigured, empty reply).
+ * The message never contains the key: provider bodies are redacted first.
+ */
+export class ModelError extends Error {
+  readonly kind: ModelErrorKind
+  readonly status: number | null
+  constructor(kind: ModelErrorKind, message: string, status: number | null = null) {
+    super(message)
+    this.name = 'ModelError'
+    this.kind = kind
+    this.status = status
+  }
+}
+
+/**
+ * Which kind of failure a provider status is. Exported for the key probe so
+ * activation and runs agree. Gemini answers a bad key with 400 "Please pass a
+ * valid API key" (INVALID_ARGUMENT) rather than 401, hence the body sniff.
+ */
+export function classifyModelStatus(status: number, body = ''): ModelErrorKind {
+  if (status === 401 || status === 403) return 'auth'
+  if (status === 400 && /api[ _-]?key/i.test(body)) return 'auth'
+  if (status === 402 || status === 429) return 'quota'
+  return 'upstream'
+}
+
+/** Strip a key from provider text before it lands anywhere persistent. */
+function scrub(text: string, apiKey: string): string {
+  return apiKey ? text.split(apiKey).join('[redacted]') : text
+}
 
 function resolveConfig(): ChatConfig | null {
   const apiKey = process.env.GEMINI_API_KEY
@@ -80,7 +128,7 @@ export interface ToolSpec {
   parameters: Record<string, unknown>
 }
 
-export interface ToolCall {
+interface ToolCall {
   id: string
   name: string
   /** Raw JSON string as the model produced it — the caller parses and validates. */
@@ -96,34 +144,61 @@ export type AgentMessage =
     }
   | { role: 'tool'; tool_call_id: string; content: string }
 
+export interface ChatWithToolsOptions {
+  /** Endpoint to use; defaults to the server's environment config. */
+  config?: ChatConfig
+  signal?: AbortSignal
+}
+
+export interface ChatWithToolsResult {
+  content: string | null
+  toolCalls: ToolCall[]
+  /** Null when the endpoint didn't report usage. */
+  usage: ChatUsage | null
+}
+
 /**
- * One completion turn that may answer in text, tool calls, or both. Throws if
- * unconfigured — callers gate on {@link aiConfigured} first.
+ * One completion turn that may answer in text, tool calls, or both. Throws a
+ * {@link ModelError} on failure; with no `config` it uses the environment and
+ * callers gate on {@link aiConfigured} first.
  */
 export async function chatWithTools(
   messages: AgentMessage[],
   tools: ToolSpec[],
-): Promise<{ content: string | null; toolCalls: ToolCall[] }> {
-  const config = resolveConfig()
+  opts: ChatWithToolsOptions = {},
+): Promise<ChatWithToolsResult> {
+  const config = opts.config ?? resolveConfig()
   if (!config) {
-    throw new Error('AI is not configured: set GEMINI_API_KEY.')
+    throw new ModelError('config', 'AI is not configured: set GEMINI_API_KEY.')
   }
   const base = config.baseURL.endsWith('/') ? config.baseURL : `${config.baseURL}/`
-  const res = await fetch(`${base}chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      tools: tools.map((t) => ({
-        type: 'function',
-        function: { name: t.name, description: t.description, parameters: t.parameters },
-      })),
-    }),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${base}chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        tools: tools.map((t) => ({
+          type: 'function',
+          function: { name: t.name, description: t.description, parameters: t.parameters },
+        })),
+      }),
+      signal: opts.signal,
+      cache: 'no-store',
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'network error'
+    throw new ModelError('upstream', `AI request failed: ${scrub(msg, config.apiKey)}`)
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    throw new Error(`AI request failed (${res.status}): ${text.slice(0, 300)}`)
+    throw new ModelError(
+      classifyModelStatus(res.status, text),
+      `AI request failed (${res.status}): ${scrub(text, config.apiKey).slice(0, 300)}`,
+      res.status,
+    )
   }
   const data = (await res.json()) as {
     choices?: {
@@ -132,9 +207,10 @@ export async function chatWithTools(
         tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[]
       }
     }[]
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
   }
   const message = data.choices?.[0]?.message
-  if (!message) throw new Error('The model returned an empty response.')
+  if (!message) throw new ModelError('config', 'The model returned an empty response.')
   const toolCalls = (message.tool_calls ?? [])
     .filter((c) => c.function?.name)
     .map((c, i) => ({
@@ -143,7 +219,11 @@ export async function chatWithTools(
       arguments: c.function!.arguments ?? '{}',
     }))
   const content = typeof message.content === 'string' ? stripReasoning(message.content) : null
-  return { content, toolCalls }
+  const usage =
+    typeof data.usage?.prompt_tokens === 'number' && typeof data.usage?.completion_tokens === 'number'
+      ? { promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens }
+      : null
+  return { content, toolCalls, usage }
 }
 
 // Gemma instruction-tuned models prepend a <thought>…</thought> reasoning trace.

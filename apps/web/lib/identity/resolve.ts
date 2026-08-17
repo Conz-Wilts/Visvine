@@ -217,26 +217,6 @@ export async function confirmIdentity(
   return true;
 }
 
-/**
- * Record that a node is NOT the same entity as a suggested identity ("different
- * person, same name"). Future resolution will never re-suggest or auto-merge them.
- */
-export async function rejectIdentityMatch(
-  nodeId: string,
-  identityId: string,
-  opts: { actorUserId?: string | null; reason?: string } = {},
-): Promise<void> {
-  await prisma.identityResolution.create({
-    data: {
-      nodeId,
-      identityId,
-      decision: 'rejected',
-      confidence: 0,
-      reason: opts.reason ?? 'user rejected',
-      actorUserId: opts.actorUserId ?? null,
-    },
-  });
-}
 
 /** Best-effort resolve that never throws into a node-creation path. */
 export async function tryResolveIdentity(

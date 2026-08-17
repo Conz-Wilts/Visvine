@@ -340,20 +340,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     return () => window.removeEventListener('resize', update);
   }, []);
 
-  // Presence heartbeat every 30s while the tab is visible; a hidden tab stays
-  // quiet and beats once immediately when it becomes visible again.
-  useEffect(() => {
-    const beat = () => { void fetch('/api/presence/heartbeat', { method: 'POST' }).catch(() => {}); };
-    beat();
-    const iv = setInterval(() => {
-      if (document.visibilityState === 'hidden') return;
-      beat();
-    }, 30_000);
-    const onVis = () => { if (document.visibilityState === 'visible') beat(); };
-    document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
-  }, []);
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -603,9 +589,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
     setPanelItems([]);
     setPanelLoading(true);
     try {
-      const res = await fetch('/api/messages/starred', { cache: 'no-store' });
-      if (!res.ok) throw new Error('Failed to load messages');
-      const payload = await res.json();
+      const payload = await fetchJson<{ messages?: SavedMessageEntry[] }>('/api/messages/starred', { cache: 'no-store' });
       setPanelItems(payload.messages ?? []);
     } catch {
       setPanelItems([]);

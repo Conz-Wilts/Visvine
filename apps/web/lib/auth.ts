@@ -6,11 +6,15 @@ import { personAliases, type SpaceAlias } from '@/lib/types/context';
 import type { SpaceFeatureConfig } from '@/lib/types';
 
 /**
- * The names of a space's Person aliases whose holders own (manage) it.
+ * The ids of a space's Person aliases whose holders own (manage) it.
  * Aliases live in `Space.aliases`, created on the Types page — the
  * same list that colours a person's chip in the directory.
+ *
+ * Ids, not names: this is the query that decides admin, and matching on a name
+ * meant a rename had to rewrite `user_aliases` in the same breath or everybody
+ * holding the alias lost their access in between.
  */
-async function owningAliasNames(spaceIds: string[]): Promise<Map<string, Set<string>>> {
+async function owningAliasIds(spaceIds: string[]): Promise<Map<string, Set<string>>> {
   const spaces = await prisma.space.findMany({
     where: { id: { in: spaceIds } },
     select: { id: true, aliases: true },
@@ -19,7 +23,8 @@ async function owningAliasNames(spaceIds: string[]): Promise<Map<string, Set<str
   for (const c of spaces) {
     const owning = personAliases((c.aliases ?? []) as unknown as SpaceAlias[])
       .filter((a) => a.owner === true || a.system === true)
-      .map((a) => a.name);
+      .map((a) => a.id)
+      .filter((id): id is string => Boolean(id));
     out.set(c.id, new Set(owning));
   }
   return out;
@@ -37,10 +42,10 @@ export async function isAdmin(
   email?: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
-  const owning = (await owningAliasNames([spaceId])).get(spaceId);
+  const owning = (await owningAliasIds([spaceId])).get(spaceId);
   if (!owning || owning.size === 0) return false;
   const held = await prisma.userAlias.findFirst({
-    where: { userId, spaceId, aliasName: { in: [...owning] } },
+    where: { userId, spaceId, aliasId: { in: [...owning] } },
     select: { id: true },
   });
   return held !== null;
@@ -58,14 +63,14 @@ export async function adminSpaceIds(
 ): Promise<Set<string>> {
   if (isSuperAdmin(email)) return new Set(spaceIds);
   if (spaceIds.length === 0) return new Set();
-  const owning = await owningAliasNames(spaceIds);
+  const owning = await owningAliasIds(spaceIds);
   const held = await prisma.userAlias.findMany({
     where: { userId, spaceId: { in: spaceIds } },
-    select: { spaceId: true, aliasName: true },
+    select: { spaceId: true, aliasId: true },
   });
   const out = new Set<string>();
   for (const h of held) {
-    if (owning.get(h.spaceId)?.has(h.aliasName)) out.add(h.spaceId);
+    if (owning.get(h.spaceId)?.has(h.aliasId)) out.add(h.spaceId);
   }
   return out;
 }
@@ -205,4 +210,4 @@ export async function getAdminSession(spaceId: string): Promise<SessionPayload |
  * Returns the current session or null. Convenience re-export so routes
  * only need to import from one auth module.
  */
-export { getSession, isSuperAdmin, type SessionPayload } from '@/lib/session';
+export { getSession, type SessionPayload } from '@/lib/session';

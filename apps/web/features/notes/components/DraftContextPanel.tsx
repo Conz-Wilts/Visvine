@@ -63,6 +63,7 @@ import { scoreText } from '@/lib/fuzzy'
 import { primeNodeProfile } from '@/features/shared/hooks/useNodeProfile'
 import { clearContextCache } from '@/features/notes/hooks/useSpaceContextData'
 import type { NBNode } from '@/lib/types'
+import { fetchJsonBody } from '@/lib/fetchJson'
 import { notesApi } from '../lib/notesApi'
 import { contextKeys, invalidateContextCache, primeContextCache } from '../lib/contextPrefetch'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
@@ -301,6 +302,10 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
   const connectorDraft: ConnectorFormData = {
     name: title,
     description: '',
+    // The draft panel builds service connectors only; model connectors come
+    // from the Create panel (or a hand-written `kind: model` note).
+    kind: 'http',
+    provider: '',
     hosts: extras.hosts,
     secretName: extras.secretName,
   }
@@ -564,37 +569,25 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
 
   const commitChannel = useCallback(async () => {
     if (!spaceId) return
-    const res = await fetch('/api/messages/conversations/channel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spaceId,
-        name: title.trim(),
-        viewMode: extras.viewMode,
-        sectionId: extras.sectionId || undefined,
-        context: bodyRef.current.trim() || undefined,
-      }),
+    const data = await fetchJsonBody<{ conversation: { id: string } }>('/api/messages/conversations/channel', 'POST', {
+      spaceId,
+      name: title.trim(),
+      viewMode: extras.viewMode,
+      sectionId: extras.sectionId || undefined,
+      context: bodyRef.current.trim() || undefined,
     })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create channel')
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     sessionStorage.removeItem(STASH_KEY)
-    router.replace(`/channels/${encodeURIComponent(data.conversation.id as string)}`)
+    router.replace(`/channels/${encodeURIComponent(data.conversation.id)}`)
   }, [spaceId, title, extras, router])
 
   const commitSpace = useCallback(async () => {
     if (!spaceId) return
-    const res = await fetch('/api/messages/sections', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spaceId,
-        name: title.trim(),
-        context: bodyRef.current.trim() || undefined,
-      }),
+    await fetchJsonBody('/api/messages/sections', 'POST', {
+      spaceId,
+      name: title.trim(),
+      context: bodyRef.current.trim() || undefined,
     })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || 'Failed to create section')
     invalidateContextCache(contextKeys.tree(spaceId), contextKeys.list(spaceId))
     sessionStorage.removeItem(STASH_KEY)
     router.replace('/channels')
@@ -826,7 +819,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
         }}
         placeholder="Untitled"
         aria-label="Title"
-        className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
+        className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
       />
 
       {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows

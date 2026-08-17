@@ -33,7 +33,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { OWNER_ALIAS, OWNER_ALIAS_NAME } from "../lib/types/context";
+import { OWNER_ALIAS, OWNER_ALIAS_ID, OWNER_ALIAS_NAME } from "../lib/types/context";
 
 assertLocalTarget();
 
@@ -113,6 +113,16 @@ const NODE_TYPES = [
   { icon: "📓", name: "Journal", color: "#ec4899", shape: "rectangle" },
   { icon: "🤝", name: "Meeting", color: "#14b8a6", shape: "rectangle" },
 ];
+
+/**
+ * A seeded alias's stable id. Derived from the name so re-seeding is
+ * reproducible — everywhere else ids are random, but a seed that produced a
+ * different id each run would make holder and grant rows unfixable by hand.
+ * The built-in Owner keeps its reserved id.
+ */
+function seedAliasId(name: string): string {
+  return name === OWNER_ALIAS_NAME ? OWNER_ALIAS_ID : `al_seed_${name.toLowerCase().replace(/\W+/g, "-")}`;
+}
 
 interface SeedAlias {
   name: string;
@@ -255,6 +265,7 @@ async function createAliases() {
     where: { id: SPACE_ID },
     data: {
       aliases: ALIASES.map((a) => ({
+        id: seedAliasId(a.name),
         name: a.name,
         color: a.color,
         nodeType: a.nodeType,
@@ -268,7 +279,7 @@ async function createAliases() {
       a.grants.map(([resourcePath, level]) => ({
         spaceId: SPACE_ID,
         subjectType: "alias",
-        subjectId: a.name, // alias grants are keyed by NAME
+        subjectId: seedAliasId(a.name), // alias grants are keyed by the alias ID
         resourcePath,
         level,
         grantedBy: ANCHORS[0].id,
@@ -309,7 +320,12 @@ async function createAnchorUsers() {
         throw new Error(`seed: anchor ${a.email} wants unknown Person alias "${aliasName}"`);
       }
       await prisma.userAlias.create({
-        data: { spaceId: SPACE_ID, userId: a.id, aliasName, addedBy: ANCHORS[0].id },
+        data: {
+          spaceId: SPACE_ID,
+          userId: a.id,
+          aliasId: seedAliasId(aliasName),
+          addedBy: ANCHORS[0].id,
+        },
       });
     }
     await prisma.node.create({

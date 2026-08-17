@@ -45,8 +45,12 @@ export interface MarshalReport {
  * stops it, and the seen-set catches the common self-referential case first so
  * the usual shapes report cleanly rather than exhausting the node budget.
  */
-export function marshalValue(value: unknown, report: MarshalReport = { truncated: false }): unknown {
-  return walk(value, 0, report, new WeakSet(), { count: 0 })
+export function marshalValue(
+  value: unknown,
+  report: MarshalReport = { truncated: false },
+  redact: readonly string[] = [],
+): unknown {
+  return walk(value, 0, report, new WeakSet(), { count: 0 }, redact)
 }
 
 function walk(
@@ -55,6 +59,7 @@ function walk(
   report: MarshalReport,
   seen: WeakSet<object>,
   nodes: { count: number },
+  redact: readonly string[],
 ): unknown {
   if (++nodes.count > MARSHAL_LIMITS.maxNodes) {
     report.truncated = true
@@ -70,12 +75,16 @@ function walk(
       return Number.isFinite(value) ? value : null
     case 'bigint':
       return value.toString()
-    case 'string':
-      if (value.length > MARSHAL_LIMITS.maxStringChars) {
+    case 'string': {
+      // Redact BEFORE capping: a secret straddling the cap boundary would
+      // otherwise leave its prefix in the truncated string.
+      const text = redactSecrets(value, redact)
+      if (text.length > MARSHAL_LIMITS.maxStringChars) {
         report.truncated = true
-        return value.slice(0, MARSHAL_LIMITS.maxStringChars)
+        return text.slice(0, MARSHAL_LIMITS.maxStringChars)
       }
-      return value
+      return text
+    }
     case 'undefined':
     case 'function':
     case 'symbol':
@@ -96,11 +105,11 @@ function walk(
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.toISOString()
     if (Array.isArray(value)) {
       // Array holes and unserialisable entries both become null so indices hold.
-      return value.map((v) => walk(v, depth + 1, report, seen, nodes) ?? null)
+      return value.map((v) => walk(v, depth + 1, report, seen, nodes, redact) ?? null)
     }
     const out: Record<string, unknown> = {}
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      const marshalled = walk(v, depth + 1, report, seen, nodes)
+      const marshalled = walk(v, depth + 1, report, seen, nodes, redact)
       if (marshalled !== undefined) out[key] = marshalled
     }
     return out

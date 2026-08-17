@@ -5,11 +5,15 @@
 // space record, which is what keeps it out of the admin-only PUT.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
 import { spaceReadForbidden } from '@/lib/auth';
-import { mergeNodeType, type NodeTypeConfig } from '@/lib/types';
+import { mergeNodeType, type MergeNodeTypeResult } from '@/lib/types';
+import {
+  updateSpaceConfig,
+  bustSpaceConfigCache,
+  UnknownSpaceError,
+} from '@/lib/spaces/spaceConfig';
 
 /**
  * PATCH: add a node type, or resolve the one already serving that name.
@@ -37,25 +41,30 @@ export async function PATCH(
   });
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { nodeTypes: true },
-  });
-  if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const merged = mergeNodeType(space.nodeTypes as NodeTypeConfig[] | null, { name, color });
-  if (!merged.ok) return NextResponse.json({ error: merged.error }, { status: 400 });
-
-  // Nothing to write when the name was already served — including the case
-  // where mergeNodeType only seeded the defaults it would have written anyway.
-  if (merged.created) {
-    await prisma.space.update({
-      where: { id: spaceId },
-      // Prisma types JSON columns structurally; the array is plain JSON data.
-      data: { nodeTypes: merged.types as unknown as object[] },
-    });
-    revalidateTag('context-data-v2', { expire: 0 });
+  // "First writer wins" only means anything if the read that decides it and the
+  // write that acts on it can't be interleaved — two members naming the same
+  // type at once used to both see it missing and both create it.
+  let merged: MergeNodeTypeResult;
+  try {
+    await updateSpaceConfig(
+      spaceId,
+      (stored) => {
+        merged = mergeNodeType(stored.nodeTypes, { name, color });
+        // Nothing to write when the name was already served — including the case
+        // where mergeNodeType only seeded the defaults it would have written anyway.
+        return merged.ok && merged.created ? { nodeTypes: merged.types } : {};
+      },
+      { skipRevalidate: true },
+    );
+  } catch (err) {
+    if (err instanceof UnknownSpaceError) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    throw err;
   }
 
-  return NextResponse.json({ type: merged.type, created: merged.created });
+  if (!merged!.ok) return NextResponse.json({ error: merged!.error }, { status: 400 });
+  if (merged!.created) bustSpaceConfigCache();
+
+  return NextResponse.json({ type: merged!.type, created: merged!.created });
 }

@@ -16,7 +16,7 @@ import type { ResolvedContext } from '@/lib/notes/resolve'
 import { principalOf } from '@/lib/notes/resolve'
 import { writeDenial } from '@/lib/notes/contextService'
 import { createNote, readNoteOrNull } from '@/lib/notes/store'
-import { entityDraftContent, entityNotePath } from '@/lib/notes/entities'
+import { entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
 import { applyFields } from '@/lib/create/typeFields'
 import { attachIdentity } from '@/lib/identity/attachIdentity'
 import type { ResolveResult } from '@/lib/identity/resolve'
@@ -24,6 +24,7 @@ import { slugify } from '@/lib/eventUtils'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { logger } from '@/lib/logger'
 import type { NBNode } from '@/lib/types'
+import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
 
 /**
  * The types the context layer can create. The node TYPE is what decides
@@ -147,6 +148,24 @@ export async function createEntity(
   const tags = (input.tags ?? []).filter((t) => typeof t === 'string' && t.trim() !== '')
   const { node: columns, metadata } = applyFields(rawType, input.fields ?? {})
 
+  // An alias must be one this space actually defines for this type. Writing the
+  // caller's string verbatim is how `founder` ended up stored against a
+  // `Founder` vocabulary, matching nothing thereafter; resolving it here stores
+  // the canonical name and the id it belongs to. An unknown alias is dropped
+  // rather than refused — the entity is still worth creating.
+  const alias = input.alias?.trim()
+    ? findAliasByRef(
+        (
+          await prisma.space.findUnique({
+            where: { id: context.spaceId },
+            select: { aliases: true },
+          })
+        )?.aliases as unknown as SpaceAlias[],
+        input.alias,
+        rawType,
+      )
+    : undefined
+
   // The note path depends only on the entity KIND, not on the id suffix we may
   // end up with, so it's known before the insert — which is what lets the write
   // gate and the collision check run first.
@@ -169,7 +188,12 @@ export async function createEntity(
   // The id lookup is a best-effort hint by name: the path→node direction isn't
   // expressible in SQL (entityNotePath is applied in JS over real nodes), and a
   // null just means the caller offers the note rather than the profile.
-  if (await readNoteOrNull(context, basePath)) {
+  // Either form of the note counts — the entity may already have become a folder.
+  const indexPath = entityIndexPathOf({ id: `${rawType}:${slug}`, type: rawType })
+  if (
+    (await readNoteOrNull(context, basePath)) ||
+    (indexPath && (await readNoteOrNull(context, indexPath)))
+  ) {
     const existing = await prisma.node.findFirst({
       where: { spaceId: context.spaceId, name: { equals: name, mode: 'insensitive' } },
       select: { id: true },
@@ -196,7 +220,8 @@ export async function createEntity(
           // exact lowercase; rendering resolves case-insensitively.
           type: rawType,
           name,
-          alias: input.alias?.trim() ? input.alias.trim() : null,
+          alias: alias?.name ?? null,
+          aliasId: alias?.id ?? null,
           subtitle: columns.subtitle ?? null,
           location: columns.location ?? null,
           url: columns.url ?? null,

@@ -13,17 +13,14 @@ import type {
   TrashEntry,
   ReorganizePlan,
 } from '@/lib/notes/shared/types'
-import type {
-  AccessRequest,
-  MoveProposalEntry,
-  AuditEntry,
-} from '@/lib/notes/shared/contextTypes'
+import type { AccessRequest } from '@/lib/notes/shared/contextTypes'
 import type { AccessLevelName, GrantSubjectType } from '@/lib/notes/shared/authz'
 import type { AccessListEntry } from '@/lib/notes/access'
 import type { AliasInfo } from '@/lib/notes/aliases'
 import type { PublicationInfo } from '@/lib/notes/publications'
 import type { FusedResult, SearchFilters } from '@/lib/notes/shared/retrieval'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 
 // context access types (grant model — lib/notes/shared/authz.ts)
 
@@ -44,7 +41,7 @@ export interface PathAccessResponse {
   entries: AccessListEntry[] | null
   subjects: {
     members: Array<{ userId: string; name: string; email: string | null; image: string | null }>
-    aliases: Array<{ name: string; color: string; owner: boolean; system: boolean; holderCount: number }>
+    aliases: Array<{ id: string; name: string; color: string; owner: boolean; system: boolean; holderCount: number }>
   } | null
 }
 
@@ -84,57 +81,16 @@ export interface PublicationStateResponse {
   asTarget: PublicationWithNames | null
 }
 
-export type PromoteResult =
-  | { status: 'applied'; path: string }
-  | { status: 'proposed'; proposalId: string }
-  | { status: 'denied'; reason: string }
-
-interface ReviewIssue {
-  path: string
-  kind: string
-  detail: string
-}
-
-interface ReviewAutoFix {
-  kind: string
-  path: string
-  [key: string]: unknown
-}
-
-export interface ReviewReport {
-  generatedAt: string | number
-  mode: 'light' | 'full'
-  autoFixes: ReviewAutoFix[]
-  issues: ReviewIssue[]
-  counts: Record<string, number>
-}
-
 function qs(spaceId: string, extra?: Record<string, string>): string {
   const params = new URLSearchParams({ spaceId, ...(extra ?? {}) })
   return params.toString()
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
-  }
-  return res.json() as Promise<T>
-}
-
-async function sendJson<T>(url: string, method: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
-  }
-  return res.json() as Promise<T>
-}
+// All calls go through lib/fetchJson so a 401 (expired session) kicks the page
+// to sign-in instead of surfacing as a cryptic error.
+const getJson = <T,>(url: string) => fetchJson<T>(url)
+const sendJson = <T,>(url: string, method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', body: unknown) =>
+  fetchJsonBody<T>(url, method, body)
 
 export const notesApi = {
   config: () => getJson<{ aiConfigured: boolean }>('/api/notes/config'),
@@ -171,12 +127,7 @@ export const notesApi = {
   rename: (c: string, from: string, to: string) =>
     sendJson<{ path: string }>('/api/notes/item', 'PATCH', { spaceId: c, from, to }),
   remove: async (c: string, path: string) => {
-    const res = await fetch(`/api/notes/item?${qs(c, { path })}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
-    }
-    return res.json() as Promise<{ ok: true }>
+    return fetchJson<{ ok: true }>(`/api/notes/item?${qs(c, { path })}`, { method: 'DELETE' })
   },
 
   references: (c: string, path: string) =>
@@ -211,12 +162,7 @@ export const notesApi = {
   renameFolder: (c: string, from: string, to: string) =>
     sendJson<{ path: string }>('/api/notes/folders', 'PATCH', { spaceId: c, from, to }),
   deleteFolder: async (c: string, path: string) => {
-    const res = await fetch(`/api/notes/folders?${qs(c, { path })}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
-    }
-    return res.json() as Promise<{ ok: true }>
+    return fetchJson<{ ok: true }>(`/api/notes/folders?${qs(c, { path })}`, { method: 'DELETE' })
   },
 
   trash: (c: string) => getJson<{ trash: TrashEntry[] }>(`/api/notes/trash?${qs(c)}`),
@@ -237,11 +183,7 @@ export const notesApi = {
       spaceId: c,
     }),
 
-  exportUrl: (c: string, path: string) => `/api/notes/export?${qs(c, { path })}`,
-  exportAllUrl: (c: string) => `/api/notes/export/all?${qs(c)}`,
-
-  // --- context capabilities: fused search, folder registry, promote, capture,
-  // review/enrich maintenance, audit
+  // --- context capabilities: fused search, folder registry, access, publishing
 
   searchNotes: (c: string, query: string, opts?: { k?: number; filters?: SearchFilters }) =>
     sendJson<{ results: FusedResult[] }>('/api/notes/search', 'POST', {
@@ -319,47 +261,6 @@ export const notesApi = {
       level,
     }),
 
-  /** One-time share: copies `fromPath` from the CALLER's personal context into the
-   *  TARGET space's context (`c`). The personal original stays. */
-  promoteNote: (c: string, fromPath: string, toPath: string) =>
-    sendJson<PromoteResult>('/api/notes/promote', 'POST', { spaceId: c, fromPath, toPath }),
-  listProposals: (c: string) =>
-    getJson<{ proposals: MoveProposalEntry[] }>(
-      `/api/notes/promote?spaceId=${encodeURIComponent(c)}`,
-    ),
-  resolveProposal: (c: string, proposalId: string, approve: boolean) =>
-    sendJson<{ proposal: MoveProposalEntry }>('/api/notes/promote', 'PUT', {
-      spaceId: c,
-      proposalId,
-      approve,
-    }),
-
-  /** Always writes to the CALLER's personal space log, whichever space
-   *  the request names. */
-  capture: (c: string, text: string, refs?: string[], tags?: string[]) =>
-    sendJson<{ path: string }>('/api/notes/capture', 'POST', {
-      spaceId: c,
-      text,
-      refs,
-      tags,
-    }),
-
-  runReview: (c: string, mode: 'light' | 'full', apply?: boolean) =>
-    sendJson<{ report: ReviewReport; applied: number }>('/api/notes/review', 'POST', {
-      spaceId: c,
-      mode,
-      apply,
-    }),
-  /** Distills the caller's personal context INTO space `c`'s context. */
-  runEnrich: (c: string, since?: string) =>
-    sendJson<{ applied: number; considered: number }>('/api/notes/ai/enrich', 'POST', {
-      spaceId: c,
-      since,
-    }),
-
-  getAudit: (c: string) =>
-    getJson<{ entries: AuditEntry[] }>(`/api/notes/audit?spaceId=${encodeURIComponent(c)}`),
-
   // context sources (non-note files/tables attached to the context)
 
   listSources: (c: string, folderId?: string) =>
@@ -371,12 +272,7 @@ export const notesApi = {
     const form = new FormData()
     form.append('file', file)
     if (folder) form.append('folder', folder)
-    const res = await fetch(`/api/notes/sources?${qs(c)}`, { method: 'POST', body: form })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error((data as { error?: string }).error || `Upload failed (${res.status})`)
-    }
-    return res.json() as Promise<{ source: ContextSourceMeta }>
+    return fetchJson<{ source: ContextSourceMeta }>(`/api/notes/sources?${qs(c)}`, { method: 'POST', body: form })
   },
   readSource: (c: string, path: string, opts?: { offset?: number; maxChars?: number }) =>
     getJson<{ source: ContextSourceMeta; text: string; totalChars: number; downloadUrl: string | null }>(
@@ -393,11 +289,6 @@ export const notesApi = {
       action: 'reingest',
     }),
   deleteSource: async (c: string, path: string) => {
-    const res = await fetch(`/api/notes/sources?${qs(c, { path })}`, { method: 'DELETE' })
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error((data as { error?: string }).error || `Request failed (${res.status})`)
-    }
-    return res.json() as Promise<{ ok: true }>
+    return fetchJson<{ ok: true }>(`/api/notes/sources?${qs(c, { path })}`, { method: 'DELETE' })
   },
 }

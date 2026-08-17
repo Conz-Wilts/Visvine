@@ -21,10 +21,11 @@ const MAX_NAME_LEN = 120;
 const RESERVED_METADATA_KEYS = ['userId'];
 
 /** Best-effort: keep the entity note's frontmatter `title:` in step with a node
- *  rename. The note path is id-derived and never moves; a missing note is fine
- *  (the Context tab stubs it from node.name anyway). */
+ *  rename. The note path is id-derived (flat, or the folder index once the node's
+ *  `metadata.notePath` says it converted); a missing note is fine (the Context
+ *  tab stubs it from node.name anyway). */
 async function syncNoteTitle(
-  node: { id: string; type: string; spaceId: string },
+  node: { id: string; type: string; spaceId: string; metadata?: Record<string, unknown> | null },
   name: string,
   actor: { id: string; name: string; email: string | null },
 ): Promise<void> {
@@ -288,7 +289,12 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
   if (name !== null && node.spaceId) {
     await syncNoteTitle(
-      { id: nodeId, type: node.type, spaceId: node.spaceId },
+      {
+        id: nodeId,
+        type: node.type,
+        spaceId: node.spaceId,
+        metadata: (node.metadata as Record<string, unknown> | null) ?? null,
+      },
       name,
       { id: session.userId, name: session.name, email: session.email ?? null },
     );

@@ -28,7 +28,13 @@ import { scheduleLinkReasons } from '@/lib/notes/linkReasons'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { excerptsForTargets } from './shared/references'
 import { isIndexPath } from './shared/indexNote'
-import { entityKindOfPath, entityMentionPaths, entityNotePath } from './entities'
+import {
+  entityKindOfPath,
+  entityMentionPaths,
+  entityNotePath,
+  entityNotePaths,
+  entityOwnerPathOf,
+} from './entities'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
 // store can call into this module without a circular import.
@@ -55,9 +61,14 @@ function bustContextCache(): void {
   }
 }
 
-// Both directions of the node ↔ canonical-note-path mapping for a space.
-// Paths are NOT reconstructible from ids by string surgery (see entities.ts),
-// so this map — entityNotePath over the real nodes — is the only sound bridge.
+// Both directions of the node ↔ note-path mapping for a space. Paths are NOT
+// reconstructible from ids by string surgery (see entities.ts), so this map —
+// entityNotePath over the real nodes — is the only sound bridge.
+//
+// `idByPath` holds BOTH forms of every entity path (people/x.md and
+// people/x/index.md): a link written before the entity's note became a folder
+// and one written after both resolve to the node. `pathById` holds the one
+// canonical (metadata-aware) path — where the note actually lives.
 async function loadEntityMaps(spaceId: string): Promise<EntityMaps> {
   const nodes = await prisma.node.findMany({
     where: { spaceId },
@@ -68,13 +79,76 @@ async function loadEntityMaps(spaceId: string): Promise<EntityMaps> {
   for (const node of nodes) {
     // A connector's id slugifies the filename (`my_api` → `connector:my-api`),
     // which is lossy, so its metadata is the only exact path back to the note.
-    const path =
-      node.type === 'connector' ? notePathOfNode(node.metadata) : entityNotePath(node)
-    if (!path) continue
-    idByPath.set(path, node.id)
-    pathById.set(node.id, path)
+    if (node.type === 'connector' || node.type === 'agent') {
+      const path = notePathOfNode(node.metadata)
+      if (!path) continue
+      idByPath.set(path, node.id)
+      pathById.set(node.id, path)
+      continue
+    }
+    const entity = { ...node, metadata: (node.metadata as Record<string, unknown> | null) ?? null }
+    const canonical = entityNotePath(entity)
+    if (!canonical) continue
+    for (const path of entityNotePaths(entity)) idByPath.set(path, node.id)
+    pathById.set(node.id, canonical)
   }
   return { idByPath, pathById }
+}
+
+/**
+ * The node a note at `path` speaks for: an entity note (either form) → its
+ * node; a sub-note inside an entity folder (people/x/notes.md) → the folder's
+ * node — a sub-note's mentions are the entity's mentions, so they draw the
+ * entity's edges. Null for a plain note (no node, so no edges).
+ */
+function ownerIdOf(path: string, maps: EntityMaps): string | null {
+  const direct = maps.idByPath.get(path)
+  if (direct) return direct
+  const owner = entityOwnerPathOf(path)
+  return owner ? (maps.idByPath.get(`${owner}/index.md`) ?? null) : null
+}
+
+/**
+ * The live shared notes that speak for `nodeId` other than `except`: its
+ * entity note (either form) plus every sub-note in its folder. Used to keep an
+ * edge alive when the note that owned it stops mentioning the counterpart but
+ * a sibling still does.
+ */
+async function siblingNotesOf(spaceId: string, nodeId: string, maps: EntityMaps, except: string) {
+  const canonical = maps.pathById.get(nodeId)
+  if (!canonical) return []
+  const folder = canonical.replace(/\/index\.md$/i, '').replace(/\.md$/i, '')
+  const rows = await prisma.contextNote.findMany({
+    where: {
+      spaceId,
+      ownerKey: SHARED_OWNER_KEY,
+      deletedAt: null,
+      OR: [{ path: canonical }, { path: { startsWith: `${folder}/` } }],
+    },
+    select: { path: true, content: true },
+  })
+  return rows.filter((r) => r.path !== except && ownerIdOf(r.path, maps) === nodeId)
+}
+
+/**
+ * A live note speaking for `speakerId` (other than `except`) that still
+ * mentions `targetId` — the note an orphaned edge can be re-pointed to — with
+ * the mention path it used, or null.
+ */
+async function heirFor(
+  spaceId: string,
+  speakerId: string,
+  targetId: string,
+  maps: EntityMaps,
+  except: string,
+): Promise<{ path: string; content: string; target: string } | null> {
+  for (const note of await siblingNotesOf(spaceId, speakerId, maps, except)) {
+    const target = entityMentionPaths(note.path, note.content).find(
+      (m) => maps.idByPath.get(m) === targetId,
+    )
+    if (target) return { path: note.path, content: note.content, target }
+  }
+  return null
 }
 
 /** The context path a `connector:` node stands for, off its metadata. */
@@ -101,8 +175,38 @@ async function syncNoteNode(
   content: string | null,
 ): Promise<boolean> {
   if (isIndexPath(path)) return false
-  if (entityKindOfPath(path) === 'connector') return syncConnectorNode(spaceId, path, content)
+  const kind = entityKindOfPath(path)
+  if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
+  if (kind === 'agent') return syncAgentNode(spaceId, path, content)
   return false
+}
+
+/**
+ * The `agent:` node standing for an `agents/<name>.md` brief — same shape as
+ * the connector node: id `agent:<name>`, description as subtitle, `notePath`
+ * in metadata as the exact way back. `agents/live/…` never reaches here
+ * (entityKindOfPath returns null for it).
+ */
+async function syncAgentNode(spaceId: string, path: string, content: string | null): Promise<boolean> {
+  if (content === null) return removeEntityNode(spaceId, 'agent', path)
+
+  const name = path.replace(/\.md$/i, '').split('/').pop() || path
+  const fm = parseFrontmatter(content)
+  const description = typeof fm.description === 'string' ? fm.description.trim() : ''
+
+  await syncEntityNode({
+    spaceId,
+    type: 'agent',
+    name: String(fm.title ?? '').trim() || name,
+    alias: null,
+    subtitle: description || null,
+    recordId: path,
+    slugSource: name,
+    metadata: { notePath: path },
+    parentNodeId: spaceNodeId(spaceId),
+    revalidate: false,
+  })
+  return true
 }
 
 /**
@@ -142,14 +246,6 @@ async function syncConnectorNode(
   return true
 }
 
-// The live shared-context note at `path`, or null.
-function readSharedNote(spaceId: string, path: string) {
-  return prisma.contextNote.findFirst({
-    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path, deletedAt: null },
-    select: { content: true },
-  })
-}
-
 function sha256(s: string): string {
   return createHash('sha256').update(s).digest('hex')
 }
@@ -168,7 +264,8 @@ async function syncOne(
   content: string | null,
   maps: EntityMaps,
 ): Promise<boolean> {
-  const selfId = maps.idByPath.get(path) ?? null
+  const selfId = ownerIdOf(path, maps)
+  const keepKey = (key: string) => ownerIdOf(key, maps) !== null
   const desired =
     content !== null && selfId
       ? entityMentionPaths(path, content)
@@ -193,26 +290,27 @@ async function syncOne(
   })
   for (const row of owned) {
     if (desiredPairs.has(row.pairKey)) continue
-    const otherId = [row.sourceId, row.targetId].find((id) => maps.pathById.get(id) !== path)
-    const otherPath = (otherId ? maps.pathById.get(otherId) : null) ?? null
-    const other = otherPath ? await readSharedNote(spaceId, otherPath) : null
-    const mentionedBack =
-      other !== null && otherPath !== null && entityMentionPaths(otherPath, other.content).includes(path)
-    if (mentionedBack && otherPath && other) {
-      // Ownership moves to the counterpart, so the edge's excerpt does too:
-      // this note's key is dropped and the counterpart's block around its
-      // mention of `path` takes over as the "why".
-      const keepKey = (key: string) => maps.idByPath.has(key)
-      const otherExcerpt = excerptEntry(
-        excerptsForTargets(otherPath, splitFrontmatter(other.content).body).get(path),
+    const otherId = [row.sourceId, row.targetId].find((id) => id !== selfId) ?? null
+    // Two ways the edge survives this note dropping it: the counterpart's own
+    // note (or one of ITS sub-notes) still mentions us back, or a sibling note
+    // of the same node still mentions the counterpart. Either way ownership —
+    // and the "why" excerpt — moves to the surviving note.
+    const heir =
+      selfId && otherId
+        ? ((await heirFor(spaceId, otherId, selfId, maps, path)) ??
+          (await heirFor(spaceId, selfId, otherId, maps, path)))
+        : null
+    if (heir) {
+      const heirExcerpt = excerptEntry(
+        excerptsForTargets(heir.path, splitFrontmatter(heir.content).body).get(heir.target),
       )
       const prior = readLinkContextMeta(row.metadata)
       const dropped = nextContextMeta(prior, path, null, keepKey) ?? prior
-      const repointed = nextContextMeta(dropped, otherPath, otherExcerpt, keepKey) ?? dropped
+      const repointed = nextContextMeta(dropped, heir.path, heirExcerpt, keepKey) ?? dropped
       await prisma.link.update({
         where: { id: row.id },
         data: {
-          originRef: otherPath,
+          originRef: heir.path,
           ...(repointed ? { metadata: mergeContextMeta(row.metadata, repointed) as object } : {}),
         },
       })
@@ -247,7 +345,7 @@ async function syncOne(
       readLinkContextMeta(rowMetadata),
       path,
       excerptEntry(excerptByTarget.get(targetPath)),
-      (key) => maps.idByPath.has(key),
+      keepKey,
     )
     await upsertLink({
       spaceId,

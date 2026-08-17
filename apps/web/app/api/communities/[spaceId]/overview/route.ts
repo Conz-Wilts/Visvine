@@ -37,15 +37,15 @@ export async function GET(
         select: { id: true },
       }),
       // Who "organizes" this space = who holds a Person alias that owns it.
-      prisma.userAlias.findMany({ where: { spaceId }, select: { userId: true, aliasName: true } }),
+      prisma.userAlias.findMany({ where: { spaceId }, select: { userId: true, aliasId: true } }),
     ]);
     const owning = new Set(
       personAliases((space.aliases ?? []) as unknown as SpaceAlias[])
         .filter((a) => a.owner === true || a.system === true)
-        .map((a) => a.name),
+        .map((a) => a.id),
     );
     const organizerIds = new Set(
-      adminIds.filter((a) => owning.has(a.aliasName)).map((a) => a.userId),
+      adminIds.filter((a) => owning.has(a.aliasId)).map((a) => a.userId),
     );
     const isMember = membership !== null || isSuperAdmin(session.email);
 

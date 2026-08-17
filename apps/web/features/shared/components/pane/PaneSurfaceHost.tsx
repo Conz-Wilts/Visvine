@@ -25,6 +25,7 @@ import {
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { TabBarSlotGate } from '@/features/shared/contexts/TabBarSlotContext';
+import { entityOwnerPathOf } from '@/lib/notes/entities';
 import {
   paneSurfaceKey,
   usePaneChromeState,
@@ -58,11 +59,16 @@ const isPanel = (s: PaneSurface): s is PanelSurface =>
   s?.kind === 'note' || s?.kind === 'entity';
 
 /** Which note/entity is open, ignoring mode — Context⇄Raw on the same note is
- *  not "a different thing opened". */
+ *  not "a different thing opened". An entity's sub-notes are different things
+ *  (each is its own note under the same chrome); the entity's own note is
+ *  identified by the node alone, so its path resolving after the node fetch
+ *  doesn't read as a switch. */
 function identityOf(s: PaneSurface): string {
   if (!s) return 'none';
   if (s.kind === 'tree-only') return 'tree';
-  return s.kind === 'note' ? `note:${s.path}` : `entity:${s.nodeId}`;
+  if (s.kind === 'note') return `note:${s.path}`;
+  const sub = s.notePath && entityOwnerPathOf(s.notePath) ? `#${s.notePath}` : '';
+  return `entity:${s.nodeId}${sub}`;
 }
 
 /** Inset for the note content while the tree is docked and open, so the panel
@@ -224,6 +230,7 @@ export default function PaneSurfaceHost() {
           <TabBarSlotGate suppressed={active.kind !== 'entity'}>
             <EntityContextPanel
               nodeId={entitySurface.nodeId}
+              notePath={entitySurface.notePath}
               mode={entitySurface.mode}
               onReady={handleEntityReady}
             />

@@ -3,7 +3,13 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
-import { mergeNodeTypeList, type Space, type SpaceAlias, type NodeTypeConfig } from '@/lib/types';
+import {
+  mergeNodeTypeList,
+  type Space,
+  type SpaceAlias,
+  type NodeTypeConfig,
+  type LinkTypeConfig,
+} from '@/lib/types';
 import { handleApiError } from '@/lib/api/route';
 import { listVisibleSpaces } from '@/lib/spaces/queries';
 import {
@@ -12,7 +18,8 @@ import {
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
-import { reconcilePersonAliases } from '@/lib/notes/aliases';
+import { updateSpaceConfig } from '@/lib/spaces/spaceConfig';
+import { mergeAliasList, mergeLinkTypeList } from '@/lib/spaces/configMerge';
 import { ensureRootIndex, SHARED_OWNER_KEY } from '@/lib/notes/store';
 import { logger } from '@/lib/logger';
 
@@ -160,7 +167,7 @@ export async function PUT(request: NextRequest) {
     // to land on a free name (lib/spaces/publicName.ts).
     const current = await prisma.space.findUnique({
       where: { id: space.id },
-      select: { name: true, visibility: true, personalOwnerId: true, nodeTypes: true },
+      select: { name: true, visibility: true, personalOwnerId: true },
     });
     if (!current) {
       return NextResponse.json({ error: 'Space not found' }, { status: 404 });
@@ -176,43 +183,32 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    // Person aliases ARE the permission model, so a save here can strip one
-    // that people hold and grants point at. Reconcile first: it refuses if the
-    // space would be left with nobody owning it, drops the holders and
-    // grants of every alias that disappeared, and returns the list to store —
-    // with the `owner` flags carried over, since this page cannot edit them.
-    let personAliasesToStore: SpaceAlias[];
-    try {
-      personAliasesToStore = await reconcilePersonAliases(
-        space.id,
-        ((space.aliases ?? []) as unknown as SpaceAlias[]),
-      );
-    } catch (e) {
-      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
-    }
-    const otherAliases = ((space.aliases ?? []) as unknown as SpaceAlias[])
-      .filter((a) => a.nodeType?.toLowerCase() !== 'person');
-
-    const updated = await prisma.space.update({
-      where: { id: space.id },
-      data: {
-        name: space.name,
-        description: space.description,
-        location: space.location ?? null,
-        tags: space.tags,
-        imageUrl: space.imageUrl ?? null,
-        // Additive: this is a whole-record save from a client snapshot that can
-        // be minutes old, and any member may add a type in the meantime
-        // (api/communities/[spaceId]/node-types). Overwriting verbatim is
-        // how an admin recolouring Person silently deletes somebody's type.
-        nodeTypes: mergeNodeTypeList(
-          current.nodeTypes as NodeTypeConfig[] | null,
-          space.nodeTypes as NodeTypeConfig[] | null,
-        ) as unknown as object,
-        aliases: [...otherAliases, ...personAliasesToStore] as unknown as object,
-        linkTypes: space.linkTypes as object ?? null,
+    // Every vocabulary column here is additive, and all three are merged under
+    // the space lock. This is a whole-record save from a client snapshot that
+    // can be minutes old: a member may have added a node type
+    // (api/communities/[spaceId]/node-types), an admin may have created an alias
+    // on Members, MCP may have added one through manage_alias. Writing the
+    // snapshot verbatim is how any of those silently disappear — and for
+    // aliases, disappearing used to take their holders and grants with them.
+    // Removing something is a deliberate act with its own endpoint.
+    const { space: updated } = await updateSpaceConfig(
+      space.id,
+      (stored) => ({
+        nodeTypes: mergeNodeTypeList(stored.nodeTypes, space.nodeTypes as NodeTypeConfig[] | null),
+        aliases: mergeAliasList(stored.aliases, space.aliases as SpaceAlias[] | null),
+        linkTypes: mergeLinkTypeList(stored.linkTypes, space.linkTypes as LinkTypeConfig[] | null),
+      }),
+      {
+        also: {
+          name: space.name,
+          description: space.description,
+          location: space.location ?? null,
+          tags: space.tags,
+          imageUrl: space.imageUrl ?? null,
+        },
+        skipRevalidate: true,
       },
-    });
+    );
 
     const updatedSpace: Space = {
       id: updated.id,

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { NBNode } from '@/lib/types';
+import { fetchJson } from '@/lib/fetchJson';
 
 interface ProfileConnection {
   id: string;
@@ -31,11 +32,7 @@ function fetchNodeProfile(nodeId: string): Promise<NodeProfileData> {
   const existing = inFlightRequests.get(nodeId);
   if (existing) return existing;
 
-  const promise = fetch(`/api/nodes/${encodeURIComponent(nodeId)}`)
-    .then((res) => {
-      if (!res.ok) throw new Error('Node not found');
-      return res.json();
-    })
+  const promise = fetchJson<NodeProfileData>(`/api/nodes/${encodeURIComponent(nodeId)}`)
     .finally(() => {
       inFlightRequests.delete(nodeId);
     });

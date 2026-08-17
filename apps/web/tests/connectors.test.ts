@@ -21,6 +21,7 @@ import {
   perimeterSecretRefs,
   type AllowRule,
 } from '@/lib/connectors/config'
+import { connectorKind, modelConnectorInfo, newModelConnectorNote, parseModelConnector } from '@/lib/connectors/model'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { isPrivateAddress } from '@/lib/net/ssrf'
 import { assertSingleReadOnlyStatement } from '@/lib/connectors/postgres'
@@ -481,4 +482,64 @@ test('a note that is neither v2 nor a valid legacy config reads as a hosts probl
   const parsed = parseConnectorPerimeter({ type: 'connector', description: 'just words' })
   assert.ok(!parsed.ok)
   assert.match(parsed.error, /needs `hosts:`/)
+})
+
+// ── model connectors (kind: model) ──
+
+test('a model connector parses to its registry provider and never a perimeter', () => {
+  const fm = parseFrontmatter(`---
+type: connector
+kind: model
+provider: OpenAI
+description: our account
+---`)
+  assert.equal(connectorKind(fm), 'model')
+  const parsed = parseModelConnector(fm)
+  assert.ok(parsed.ok)
+  assert.equal(parsed.config.provider.id, 'openai')
+  const info = modelConnectorInfo(parsed.config)
+  assert.equal(info.keySecret, 'MODEL_KEY_OPENAI')
+  assert.equal(info.baseURL, 'https://api.openai.com/v1/')
+  assert.ok(info.models.some((m) => m.id === 'gpt-4.1'))
+  // No `kind:` (or any other kind) is an ordinary perimeter connector.
+  assert.equal(connectorKind({ type: 'connector', hosts: [] }), 'http')
+  assert.equal(connectorKind({ type: 'connector', kind: 'http' }), 'http')
+})
+
+test('a model connector refuses unknown providers and any perimeter field', () => {
+  const noProvider = parseModelConnector({ type: 'connector', kind: 'model' })
+  assert.ok(!noProvider.ok)
+  assert.match(noProvider.error, /provider:/)
+
+  const unknown = parseModelConnector({ type: 'connector', kind: 'model', provider: 'mistral' })
+  assert.ok(!unknown.ok)
+  assert.match(unknown.error, /unknown model provider "mistral"/)
+
+  // A model connector binding MODEL_KEY_* into an isolate env would let any
+  // member with connectors:use read the key — hosts/env/allow are refused.
+  for (const key of ['hosts', 'env', 'allow', 'base_url']) {
+    const withPerimeter = parseModelConnector({ type: 'connector', kind: 'model', provider: 'gemini', [key]: [] })
+    assert.ok(!withPerimeter.ok, key)
+    assert.match(withPerimeter.error, new RegExp(`\`${key}:\``))
+  }
+})
+
+test('newModelConnectorNote round-trips through parseModelConnector', () => {
+  const note = newModelConnectorNote({ name: 'anthropic', provider: 'anthropic', description: 'Claude, billed to ops' })
+  const fm = parseFrontmatter(note)
+  assert.equal(fm.type, 'connector')
+  assert.equal(fm.kind, 'model')
+  assert.equal(fm.alias, 'model')
+  assert.equal(fm.description, 'Claude, billed to ops')
+  const parsed = parseModelConnector(fm)
+  assert.ok(parsed.ok)
+  assert.equal(parsed.config.provider.id, 'anthropic')
+  assert.match(note, /MODEL_KEY_ANTHROPIC/)
+  assert.match(note, /model: anthropic\/claude-opus-5/)
+  assert.doesNotMatch(note, /hosts:/)
+
+  const custom = newModelConnectorNote({ name: 'ollama', provider: 'custom' })
+  assert.match(custom, /custom endpoint/)
+  assert.match(custom, /model: custom\/<model-id>/)
+  assert.throws(() => newModelConnectorNote({ name: 'x', provider: 'nope' }), /unknown model provider/)
 })

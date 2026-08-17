@@ -40,12 +40,13 @@ export type EntityNodeType =
   | 'section'
   | 'channel'
   | 'connector'
+  | 'agent'
 
 /** Document kinds: their own artifact is the context, so no `.md` is written. */
 // A connector counts as a document even though it lives in an entity namespace:
 // the admin authored connectors/<name>.md first and the node follows it, so
-// there is nothing left to write.
-const DOCUMENT_TYPES = new Set<EntityNodeType>(['connector'])
+// there is nothing left to write. An agent is note-first in exactly the same way.
+const DOCUMENT_TYPES = new Set<EntityNodeType>(['connector', 'agent'])
 
 /** The containment relationship every structural edge uses. */
 const CONTAINS_RELATIONSHIP = 'contains'
@@ -93,8 +94,12 @@ export interface SyncEntityNodeInput {
   url?: string | null
   imageUrl?: string | null
   /**
-   * The node's alias — the type-scoped label (see SpaceAlias). Omit to
-   * leave the column alone: events reuse `alias` for their public /e/<slug>
+   * Free text written straight to `Node.alias`, NOT a space alias: the only
+   * caller is the connector sync, where it carries the executor kind from the
+   * note's frontmatter. `aliasId` is deliberately never set from here — that
+   * column means "an alias in this space's vocabulary", which this is not.
+   *
+   * Omit to leave the column alone: events reuse `alias` for their public /e/<slug>
    * slug, so blindly writing null here would break their share links.
    */
   alias?: string | null

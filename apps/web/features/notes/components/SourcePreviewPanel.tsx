@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import type { ContextSourceMeta } from '@/lib/notes/shared/sourceTypes'
 import { notesApi } from '../lib/notesApi'
+import { formatBytes } from '@/lib/utils'
 
 const PAGE_CHARS = 20_000
 
@@ -114,7 +115,9 @@ export function SourcePreviewPanel({ path }: { path: string }) {
 
   return (
     <div className="mx-auto w-full max-w-[760px] px-7 pb-10 pt-10">
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
+      {/* leading-[1.25]: `truncate` hides overflow, so a tighter line box would
+          shave the font's descenders off the title. */}
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce">
         {source.name}
       </h2>
 
@@ -214,8 +217,3 @@ function StatusBadge({ status }: { status: ContextSourceMeta['status'] }) {
   )
 }
 
-function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`
-}

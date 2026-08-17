@@ -26,7 +26,8 @@ import {
   setFolderLocked,
   setFolderRestricted,
 } from '@/lib/notes/access'
-import { listAliases } from '@/lib/notes/aliases'
+import { listAliases, loadPersonAliases } from '@/lib/notes/aliases'
+import { findAliasByRef } from '@/lib/types/context'
 import {
   principalCanManage,
   principalCanRead,
@@ -71,11 +72,15 @@ export async function GET(req: NextRequest) {
     let grants = null
     if (p.spaceAdmin && !context.isPersonalSpace) {
       const all = await loadSpaceAccess(context.spaceId)
-      // Alias grants are stored by NAME — no lookup needed.
+      // Alias grants store the alias ID, so the display name comes from the
+      // space's own vocabulary.
       const userIds = [...new Set(all.grants.filter((g) => g.subjectType === 'user').map((g) => g.subjectId))]
-      const users = userIds.length
-        ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
-        : []
+      const [users, vocabulary] = await Promise.all([
+        userIds.length
+          ? prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+          : Promise.resolve([]),
+        loadPersonAliases(context.spaceId),
+      ])
       const userName = new Map(users.map((u) => [u.id, u.name]))
       grants = all.grants.map((g) => ({
         ...g,
@@ -83,7 +88,7 @@ export async function GET(req: NextRequest) {
           g.subjectType === 'space'
             ? 'Everyone'
             : g.subjectType === 'alias'
-              ? g.subjectId
+              ? (findAliasByRef(vocabulary, g.subjectId, 'Person')?.name ?? g.subjectId)
               : (userName.get(g.subjectId) ?? 'Former member'),
       }))
     }
@@ -122,7 +127,9 @@ export async function GET(req: NextRequest) {
         email: m.user?.email ?? null,
         image: m.user?.image ?? null,
       })),
-      aliases: aliases.map((a) => ({ name: a.name, color: a.color, owner: a.owner, system: a.system, holderCount: a.holders.length })),
+      // `id` rides along so the picker can tell an alias already granted from
+      // one that isn't — grant rows are keyed by id, not by name.
+      aliases: aliases.map((a) => ({ id: a.id, name: a.name, color: a.color, owner: a.owner, system: a.system, holderCount: a.holders.length })),
     }
   }
 

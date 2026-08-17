@@ -92,8 +92,19 @@ try {
 
 if (action === 'none') process.exit(0);
 
+// Windows resolves the launcher as pnpm.cmd, which execFileSync does not find via
+// PATHEXT — and since the CVE-2024-27980 fix Node refuses to spawn a .cmd without
+// a shell (EINVAL). Both arguments are fixed strings, so there is nothing to quote.
+const WIN = process.platform === 'win32';
+const PNPM = WIN ? 'pnpm.cmd' : 'pnpm';
+
 const run = (args, opts = {}) =>
-  execFileSync('pnpm', [...PRISMA, ...args], { stdio: 'pipe', encoding: 'utf8', ...opts });
+  execFileSync(PNPM, [...PRISMA, ...args], {
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: WIN,
+    ...opts,
+  });
 
 console.log(`baseline-migrations: untracked database — checking it matches schema.prisma before stamping ${BASELINE}.`);
 // --from-config-datasource reads the live database through prisma.config.ts,

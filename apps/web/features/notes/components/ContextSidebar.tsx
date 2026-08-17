@@ -20,7 +20,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import type { SpaceFeatureConfig } from '@/lib/types'
-import { noteHref, parseEntityHref } from '@/lib/notes/entities'
+import { entityContextHref, noteHref, resolveEntityOwner } from '@/lib/notes/entities'
 import { prefetchNoteContext } from '../lib/contextPrefetch'
 import { useContextTree } from '../lib/useContextTree'
 import { useDirectoryEntities } from '../lib/useDirectoryEntities'
@@ -88,19 +88,19 @@ export function ContextSidebar({
     (path: string) => {
       setSelectedPath(path)
       if (path === currentPath) return
-      const href = parseEntityHref(path)
-      const entity = entityByPath.get(path) ?? (href ? entityByPath.get(href) : undefined)
+      // An entity note (either form) or a sub-note in an entity folder opens
+      // under the entity's chrome; everything else is a plain note.
+      const owner = resolveEntityOwner(path, entityByPath)
       // Start the destination's data (and its JS chunk) NOW, in parallel with the
       // route change — both surfaces read the same note path through the same
       // cache, so by the time the panel mounts swrFetch paints it on the first
       // frame instead of holding a skeleton.
       if (spaceId) {
         prefetchNoteContext(spaceId, path)
-        if (entity) void import('./EntityContextPanel').catch(() => {})
+        if (owner) void import('./EntityContextPanel').catch(() => {})
         else void import('./NoteContextPanel').catch(() => {})
       }
-      if (entity) router.push(`/directory/${encodeURIComponent(entity.id)}?tab=context`)
-      else router.push(noteHref(path))
+      router.push(owner ? entityContextHref(owner.id, owner.subPath) : noteHref(path))
     },
     [entityByPath, router, currentPath, spaceId],
   )

@@ -22,6 +22,8 @@ export { OWNER_ALIAS_NAME } from '@/lib/types/context'
 
 /** A Person alias plus who holds it — what the owner invariant reasons over. */
 export interface AliasSummary {
+  /** The alias's stable id, which is what holder rows point at. */
+  id?: string
   name: string
   color: string
   owner: boolean
@@ -38,17 +40,24 @@ export type AliasChange =
   /** People leaving the space entirely — every alias loses them. */
   | { kind: 'removeMember'; userIds: string[] }
 
-/** Pair a space's Person aliases with the holders of each. */
+/**
+ * Pair a space's Person aliases with the holders of each.
+ *
+ * Holders are matched on the alias's id, which is what `UserAlias` stores. Once
+ * paired, the rest of this module reasons over names — but only within this one
+ * in-memory snapshot, where `aliasNameError` guarantees they are unique.
+ */
 export function summarize(
   aliases: SpaceAlias[],
-  holders: Array<{ aliasName: string; userId: string }>,
+  holders: Array<{ aliasId: string; userId: string }>,
 ): AliasSummary[] {
   return aliases.map((a) => ({
+    id: a.id,
     name: a.name,
     color: a.color,
     owner: a.owner === true || a.system === true,
     system: a.system === true,
-    holderIds: holders.filter((h) => h.aliasName === a.name).map((h) => h.userId),
+    holderIds: holders.filter((h) => h.aliasId === a.id).map((h) => h.userId),
   }))
 }
 

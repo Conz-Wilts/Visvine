@@ -36,7 +36,7 @@ apps/web/features/<domain>/{components,hooks,lib}   domain UI
 apps/web/components/ui/                             the ONLY shared UI
 apps/web/lib/          domain + server logic (the real code lives here)
 apps/web/tests/        node:test + tsx, one file per concern
-apps/web/prisma/       schema.prisma (37 models), seed, migrations
+apps/web/prisma/       schema.prisma (40 models), seed, migrations
 scripts/               repo-level db/env tooling (dump, restore, proxy, guards)
 ```
 
@@ -119,7 +119,7 @@ itself is fuzzy/keyword only — the old semantic directory search was removed.
 
 ## MCP surface
 
-Fourteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
+Sixteen tools at `/api/mcp` (`app/api/mcp/route.ts`, registered in
 `lib/mcp/tools.ts`), on `mcp-handler` 2 + the official TS SDK v2. FastMCP was
 evaluated and rejected.
 
@@ -153,9 +153,18 @@ A connector is a note. Two halves, and the split is the security model:
 - **Body = behavior.** Free prose teaching an agent how to call the service.
   No platform code per vendor.
 
-`alias` is display-only. Secrets live encrypted in `SpaceSecret`, never in
+`alias` is display-only. Secrets live encrypted in `ConnectorSecret`, never in
 notes. The `connectors/` folder is admin-only for writes regardless of grants
 (`contextService.writeDenial`).
+
+**Model connectors** (`kind: model`, `provider: gemini|openai|anthropic|custom`;
+`lib/connectors/model.ts`) are the one non-perimeter kind: they represent the
+LLM provider a Space's agents run on, keyed by the reserved `MODEL_KEY_<PROVIDER>`
+secret, with the base URL from `lib/agents/registry.ts` (never the note). They
+list beside HTTP connectors and may appear in a brief's `connectors:`, but
+`loadConnector` refuses them — `run_connector` hands caller-authored JS the
+plaintext of every secret its env binds, so a runnable model connector would let
+any `connectors:use` member exfiltrate or spend the key. Keep it that way.
 
 Runtime: one QuickJS-WASM isolate (`lib/connectors/isolate.ts`) — no filesystem,
 no process, no require/import, no timers, no real fetch. Agents run

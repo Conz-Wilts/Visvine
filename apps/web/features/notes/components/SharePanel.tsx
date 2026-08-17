@@ -593,11 +593,13 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
       ...peopleEntries.map((e) => `${e.subjectType}:${e.subjectId}`),
     ])
     const aliases = access.subjects.aliases
-      .filter((a) => !taken.has(`alias:${a.name}`) && (!q || a.name.toLowerCase().includes(q)))
+      .filter((a) => !taken.has(`alias:${a.id}`) && (!q || a.name.toLowerCase().includes(q)))
       .map((a) => ({
-        key: `alias:${a.name}`,
+        // Keyed by id, matching the grant rows — a rename must not make an
+        // already-granted alias look un-granted.
+        key: `alias:${a.id}`,
         type: 'alias' as const,
-        id: a.name,
+        id: a.id,
         name: a.name,
         sub: a.owner
           ? 'Alias · owns the space'

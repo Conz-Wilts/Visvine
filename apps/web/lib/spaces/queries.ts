@@ -63,6 +63,8 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
       designConfig: true,
       featureConfig: true,
       visibility: true,
+      timezone: true,
+      agentConfig: true,
       // Derived, not stored: counting active memberships here cannot drift the
       // way a maintained column would.
       _count: { select: { members: { where: { status: 'active' } } } },
@@ -87,6 +89,8 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     designConfig: (c.designConfig as unknown as Space['designConfig']) ?? undefined,
     featureConfig: (c.featureConfig as unknown as Space['featureConfig']) ?? undefined,
     visibility: (c.visibility as 'public' | 'private') ?? 'public',
+    timezone: c.timezone ?? null,
+    agentConfig: (c.agentConfig as unknown as Space['agentConfig']) ?? undefined,
   }));
 }
 

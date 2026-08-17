@@ -1,114 +1,23 @@
-// Promotion — how knowledge moves up the tree. A member SHARES a note from their personal space's
-// context into a space context. With write access to the destination the copy
-// applies immediately (provenance-stamped, audited; the personal original stays
-// theirs to keep editing); without it, the promotion is queued as a proposal
-// ("move-proposals.jsonl") for a folder admin to approve. One-time copy, not a
-// live sync — the shared copy evolves in the space from then on.
+// Publish proposals — how knowledge moves up the tree when the proposer lacks
+// write access at the destination. POST /api/notes/publications queues a
+// proposal ("move-proposals.jsonl") and a folder admin approves it here, which
+// creates the live publication (lib/notes/publications.ts).
 
 import { randomUUID } from 'crypto'
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Context } from './store'
-import { writeDenial } from './contextService'
 import { publishNote } from './publications'
 import { personalSpaceId } from '@/lib/spaces/personalSpace'
 import { logAudit } from './audit'
 import { appendJsonl, readJsonl, writeJsonl } from './sidecar'
 import { folderIdOfPath } from './shared/placement'
 import { principalCanManage } from './shared/permissions'
-import { parseFrontmatter, splitFrontmatter, joinFrontmatter } from './shared/markdown'
-import { provenanceRef } from './shared/noteLog'
 import type { ContextPrincipal, MoveProposalEntry } from './shared/contextTypes'
 
 const FILE = 'move-proposals.jsonl'
 
 function sharedContext(spaceId: string): Context {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
-}
-
-export type PromoteResult =
-  | { status: 'applied'; path: string }
-  | { status: 'proposed'; proposalId: string }
-  | { status: 'denied'; reason: string }
-
-/** Stamp provenance + authorship on the shared copy. */
-function promotedContent(content: string, fromRef: string, p: ContextPrincipal): string {
-  const fm = parseFrontmatter(content)
-  const { body } = splitFrontmatter(content)
-  return joinFrontmatter(
-    {
-      ...fm,
-      author: p.name,
-      sources: Array.from(
-        new Set([
-          ...(Array.isArray(fm.sources) ? (fm.sources as unknown[]).map(String) : []),
-          fromRef,
-        ]),
-      ),
-    },
-    body,
-  )
-}
-
-async function applyPromotion(
-  p: ContextPrincipal,
-  fromRef: string,
-  toPath: string,
-  content: string,
-): Promise<string> {
-  const shared = sharedContext(p.spaceId)
-  let dest = toPath
-  let n = 1
-  // Suffix on collision rather than overwriting someone else's note.
-  while (await store.readNoteOrNull(shared, dest)) {
-    dest = toPath.replace(/\.md$/i, '') + `-${n++}.md`
-  }
-  await store.writeNote(shared, dest, content, { id: p.userId, name: p.name, email: p.email || null })
-  void logAudit(p.spaceId, {
-    userId: p.userId,
-    name: p.name,
-    action: 'promote',
-    path: dest,
-    detail: `from ${fromRef}`,
-  })
-  return dest
-}
-
-/**
- * Share (promote) a note from the caller's personal space context into the
- * target space's context (`p.spaceId`). Copies — the personal original
- * stays. Applies directly when the caller can write the destination; otherwise
- * queues a proposal for a folder admin.
- */
-export async function promoteNote(
-  p: ContextPrincipal,
-  personalContext: Context,
-  fromPath: string,
-  toPath: string,
-): Promise<PromoteResult> {
-  const raw = await store.readNoteOrNull(personalContext, fromPath)
-  if (raw === null) return { status: 'denied', reason: `Note not found: ${fromPath}` }
-  const fromRef = provenanceRef(`${personalContext.spaceId}/${fromPath}`)
-  const content = promotedContent(raw, fromRef, p)
-
-  const denial = writeDenial(p, sharedContext(p.spaceId), toPath)
-  if (!denial) {
-    const path = await applyPromotion(p, fromRef, toPath, content)
-    return { status: 'applied', path }
-  }
-
-  const proposal: MoveProposalEntry = {
-    id: randomUUID(),
-    fromPath,
-    toPath,
-    folderId: folderIdOfPath(toPath),
-    content,
-    proposedBy: p.userId,
-    proposerName: p.name,
-    proposedAt: Date.now(),
-    status: 'pending',
-  }
-  await appendJsonl(sharedContext(p.spaceId), FILE, proposal)
-  return { status: 'proposed', proposalId: proposal.id }
 }
 
 /**

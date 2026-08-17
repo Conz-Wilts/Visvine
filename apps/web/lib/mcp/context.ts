@@ -17,6 +17,7 @@ import {
   principalOf,
   type ResolvedContext,
 } from '@/lib/notes/resolve'
+import { findAliasByRef, personAliases, type SpaceAlias } from '@/lib/types/context'
 import { personalPrincipal } from '@/lib/notes/principal'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
@@ -103,20 +104,28 @@ export async function listMySpaces(ctx: McpContext) {
   const rows = await prisma.spaceMember.findMany({
     where: { userId: ctx.userId, status: 'active' },
     select: {
-      space: { select: { id: true, name: true, personalOwnerId: true } },
+      space: { select: { id: true, name: true, personalOwnerId: true, aliases: true } },
     },
   })
   const spaceIds = rows.map((r) => r.space.id)
   const [held, owns] = await Promise.all([
     prisma.userAlias.findMany({
       where: { userId: ctx.userId, spaceId: { in: spaceIds } },
-      select: { spaceId: true, aliasName: true },
+      select: { spaceId: true, aliasId: true },
     }),
     adminSpaceIds(ctx.userId, spaceIds),
   ])
+  // The agent is told alias NAMES — that is the vocabulary every other tool
+  // takes — so the ids on the holder rows are resolved against each space's own
+  // list. An unresolvable one is dropped rather than shown as an opaque id.
+  const vocabularyBySpace = new Map(
+    rows.map((r) => [r.space.id, personAliases((r.space.aliases ?? []) as unknown as SpaceAlias[])]),
+  )
   const aliasesBySpace = new Map<string, string[]>()
   for (const h of held) {
-    aliasesBySpace.set(h.spaceId, [...(aliasesBySpace.get(h.spaceId) ?? []), h.aliasName])
+    const name = findAliasByRef(vocabularyBySpace.get(h.spaceId), h.aliasId, 'Person')?.name
+    if (!name) continue
+    aliasesBySpace.set(h.spaceId, [...(aliasesBySpace.get(h.spaceId) ?? []), name])
   }
   return rows.map((r) => ({
     id: r.space.id,

@@ -7,9 +7,15 @@
  *      the type;
  *   2. every folder (note-derived or an explicit folder row) has an index;
  *   3. every `index.md` declares `type: Index` and a title — the title is the
- *      folder's display name everywhere it is shown;
+ *      folder's display name everywhere it is shown. The one exception is an
+ *      ENTITY FOLDER's index (people/<slug>/index.md — an entity note that has
+ *      become a folder, see lib/notes/entities.ts): it must instead declare the
+ *      entity's own type and a `node:` naming a real node of this space;
  *   4. an index's managed child block is present and current;
- *   5. a `/…​.md` link in an index body points at a note that exists.
+ *   5. a `/…​.md` link in an index body points at a note that exists;
+ *   6. a node's `metadata.notePath` pointer and the entity-folder index agree:
+ *      the pointer names the live index (shared context), and a live entity-
+ *      folder index has a node pointing at it — drift either way is reported.
  *
  * Exits non-zero listing every violation, so it can sit at the end of the seed
  * pipeline (`pnpm db:notes:verify`) and fail a reseed that produced bad data.
@@ -34,6 +40,15 @@ import {
   type IndexChild,
 } from '../lib/notes/shared/indexNote';
 import { extractMarkdownLinks, parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown';
+import {
+  entityFlatPath,
+  entityIndexPathOf,
+  entityTypeLabelOf,
+  isEntityFolderIndex,
+  parseEntityHref,
+} from '../lib/notes/entities';
+
+const SHARED_OWNER_KEY = 'shared';
 
 interface Note {
   path: string;
@@ -95,6 +110,20 @@ async function main() {
     });
     const live = new Set(notes.map((n) => n.path));
 
+    // The space's nodes, for the entity-folder checks (3 + 6): which index paths
+    // are entity folders' and where each node says its note lives.
+    const nodes = await prisma.node.findMany({
+      where: { spaceId: context.spaceId },
+      select: { id: true, type: true, metadata: true },
+    });
+    const nodeByIndexPath = new Map<string, { id: string; type: string; pointer: string | null }>();
+    for (const n of nodes) {
+      const idx = entityIndexPathOf({ id: n.id, type: n.type });
+      if (!idx) continue;
+      const pointer = (n.metadata as Record<string, unknown> | null)?.notePath;
+      nodeByIndexPath.set(idx, { id: n.id, type: n.type, pointer: typeof pointer === 'string' ? pointer : null });
+    }
+
     const folders = new Set<string>();
     for (const n of notes) for (const f of ancestorFolders(n.path)) folders.add(f);
     // Folder rows double as access boundaries, and a boundary can sit on a note
@@ -111,7 +140,21 @@ async function main() {
         violations.push(`${label} ${note.path}: type Index but not a folder's index.md`);
       }
       if (isIndexPath(note.path)) {
-        if (!isIndexContent(note.content)) {
+        const owner = isEntityFolderIndex(note.path) ? nodeByIndexPath.get(note.path) : undefined;
+        if (owner) {
+          // An entity folder's index IS the entity note: entity type + node:.
+          const fm = parseFrontmatter(note.content);
+          const wantType = entityTypeLabelOf(owner.type) ?? '';
+          const gotType = typeof fm.type === 'string' ? fm.type.trim() : '';
+          if (gotType.toLowerCase() !== wantType.toLowerCase()) {
+            violations.push(
+              `${label} ${note.path}: an entity folder's index must keep the entity type "${wantType}" (found "${gotType || 'nothing'}")`,
+            );
+          }
+          if (fm.node !== owner.id) {
+            violations.push(`${label} ${note.path}: node: must name its entity (${owner.id}; found "${fm.node ?? 'nothing'}")`);
+          }
+        } else if (!isIndexContent(note.content)) {
           violations.push(
             `${label} ${note.path}: an index.md must declare type: Index (found "${parseFrontmatter(note.content).type ?? 'nothing'}")`,
           );
@@ -139,13 +182,42 @@ async function main() {
       }
     }
 
+    // 6: the node pointer and the entity-folder index agree (shared context only —
+    // the pointer is node state, and there is one node).
+    if (context.ownerKey === SHARED_OWNER_KEY) {
+      for (const [idx, owner] of nodeByIndexPath) {
+        const indexLive = live.has(idx);
+        const flat = entityFlatPath({ id: owner.id, type: owner.type });
+        if (owner.pointer === idx && !indexLive) {
+          violations.push(`${label} ${owner.id}: metadata.notePath → ${idx} but no such note is live`);
+        }
+        if (indexLive && owner.pointer !== idx) {
+          violations.push(
+            `${label} ${owner.id}: ${idx} is live but metadata.notePath is ${owner.pointer ? `"${owner.pointer}"` : 'unset'}`,
+          );
+        }
+        if (indexLive && flat && live.has(flat)) {
+          violations.push(`${label} ${owner.id}: both ${flat} and ${idx} are live — one entity, one note`);
+        }
+      }
+    }
+
     // 5: index bodies are navigation — a dead link in one is a dead end.
     for (const note of notes) {
       if (!isIndexPath(note.path)) continue;
       for (const href of extractMarkdownLinks(splitFrontmatter(note.content).body)) {
         if (!href.startsWith('/') || !href.toLowerCase().endsWith('.md')) continue;
         const target = href.slice(1);
-        if (!live.has(target)) violations.push(`${label} ${note.path}: dead link → ${href}`);
+        if (live.has(target)) continue;
+        // An entity link is good in either form — the note may have become
+        // its folder's index since the link was written (or the reverse).
+        if (parseEntityHref(target)) {
+          const other = isIndexPath(target)
+            ? target.replace(/\/index\.md$/i, '.md')
+            : target.replace(/\.md$/i, '/index.md');
+          if (live.has(other)) continue;
+        }
+        violations.push(`${label} ${note.path}: dead link → ${href}`);
       }
     }
   }

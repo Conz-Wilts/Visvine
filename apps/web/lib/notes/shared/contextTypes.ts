@@ -127,7 +127,18 @@ export interface AuditEntry {
   at: number
   userId: string
   name: string
-  action: 'read' | 'write' | 'move' | 'delete' | 'folder' | 'promote' | 'grant' | 'publish' | 'connector'
+  action:
+    | 'read'
+    | 'write'
+    | 'move'
+    | 'delete'
+    | 'folder'
+    | 'promote'
+    | 'grant'
+    | 'publish'
+    | 'connector'
+    | 'agent' // activation / deactivation / run of a space agent (lib/agents)
+    | 'secret' // a ConnectorSecret set or deleted (name only, never the value)
   path: string
   detail?: string
 }

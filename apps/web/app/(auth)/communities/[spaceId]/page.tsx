@@ -23,7 +23,8 @@ import { getInitials } from '@/lib/avatarUtils';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import { Chip, chipClass, chipStyle } from '@/components/ui';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
-import { FileTypeIcon, FILE_LABEL, formatBytes } from '@/features/resources/components/resourceUi';
+import { FileTypeIcon, FILE_LABEL } from '@/features/resources/components/resourceUi';
+import { formatBytes } from '@/lib/utils';
 
 /* ── API payload types ────────────────────────────────────────────────────── */
 

@@ -1,33 +1,13 @@
-// Promotion — moving a note from the CALLER's personal context into the shared
-// context — how knowledge moves up the tree.
-//   POST { spaceId, fromPath, toPath } → PromoteResult
-//        { status: 'applied', path } | { status: 'proposed', proposalId } |
-//        { status: 'denied', reason }
+// Publish proposals — queued by POST /api/notes/publications when the caller
+// lacks edit access at the destination (lib/notes/promote.ts). Folder managers
+// list and resolve them here.
 //   GET  ?spaceId=                      → { proposals } (own + admined folders')
 //   PUT  { spaceId, proposalId, approve } → { proposal } (folder admin resolves)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireContext, fail, failFromError } from '@/lib/notes/api'
-import { principalOf, resolvePersonalContext } from '@/lib/notes/resolve'
-import { promoteNote, listProposals, resolveProposal } from '@/lib/notes/promote'
-
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}))
-  const context = await requireContext(req, body)
-  if (context instanceof Response) return context
-  const fromPath = typeof body.fromPath === 'string' ? body.fromPath : null
-  const toPath = typeof body.toPath === 'string' ? body.toPath : null
-  if (!fromPath || !toPath) return fail('fromPath and toPath are required')
-  const p = await principalOf(context)
-  // Promotion always reads from the caller's PERSONAL SPACE context; the
-  // destination is the resolved space's context (a one-time shared copy).
-  const personal = await resolvePersonalContext({ userId: p.userId, name: p.name, email: p.email || null })
-  try {
-    return NextResponse.json(await promoteNote(p, personal, fromPath, toPath))
-  } catch (err) {
-    return failFromError(err)
-  }
-}
+import { principalOf } from '@/lib/notes/resolve'
+import { listProposals, resolveProposal } from '@/lib/notes/promote'
 
 export async function GET(req: NextRequest) {
   const context = await requireContext(req)

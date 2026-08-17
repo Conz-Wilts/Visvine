@@ -48,8 +48,8 @@ process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 
 const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev', personId: null }
 
-test('the catalogue is the two context scopes plus connectors:use', () => {
-  assert.deepEqual([...MCP_SCOPES], ['context:read', 'context:write', 'connectors:use'])
+test('the catalogue is the two context scopes plus connectors:use and agents:run', () => {
+  assert.deepEqual([...MCP_SCOPES], ['context:read', 'context:write', 'connectors:use', 'agents:run'])
   assert.deepEqual(DEFAULT_SCOPES, ['context:read'])
 })
 
@@ -210,7 +210,7 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 14)
+  assert.equal(tools.length, 16)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }
@@ -229,6 +229,9 @@ test('every tool maps to a scope in the catalogue, and reads outnumber writes', 
   // Connector discovery is a read; execution needs the dedicated scope.
   assert.equal(scopeForTool('list_connectors'), 'context:read')
   assert.equal(scopeForTool('run_connector'), 'connectors:use')
+  // Same split for agents: the roster is a read; triggering a run needs its own scope.
+  assert.equal(scopeForTool('list_agents'), 'context:read')
+  assert.equal(scopeForTool('run_agent'), 'agents:run')
   assert.equal(scopeForTool('no_such_tool'), null)
 })
 
@@ -423,7 +426,7 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   const entries = catalog({ usageByType: { person: 3, connector: 1 } })
   assert.deepEqual(
     entries.map((e) => e.type),
-    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'index'],
+    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'index'],
   )
   const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
   // Catalog order, not CREATABLE_TYPES order: an event is creatable now (it
@@ -437,6 +440,13 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   assert.equal(connector.creatable_via_add_context, false)
   assert.match(connector.guidance, /run_connector/)
   assert.equal(connector.usage_count, 1)
+  // Agent is note-first like connector and never creatable from add_context
+  // (agents/ is frozen for AI origins) — but member-writable, not admin-only.
+  const agent = entries.find((e) => e.type === 'agent')!
+  assert.equal(agent.enabled, true)
+  assert.equal(agent.creatable_via_add_context, false)
+  assert.match(agent.guidance, /run_agent/)
+  assert.equal(agent.note_dir, 'agents')
   // Person carries the identity-matching field keys an agent must spell exactly.
   const person = entries.find((e) => e.type === 'person')!
   const keys = person.fields.map((f) => f.key)

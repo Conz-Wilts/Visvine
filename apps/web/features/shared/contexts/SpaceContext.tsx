@@ -127,8 +127,7 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   }, []);
 
   const leaveSpace = useCallback(async (spaceId: string) => {
-    const res = await fetch(`/api/communities/${spaceId}/join`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to leave space');
+    await fetchJson(`/api/communities/${spaceId}/join`, { method: 'DELETE' });
     setMemberships(prev => {
       const next = new Map(prev);
       next.delete(spaceId);

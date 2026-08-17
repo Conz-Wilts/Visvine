@@ -4,7 +4,8 @@
 // context note (folder indexes, sectors, deals…). The static `note` segment wins
 // over the sibling /directory/[nodeId] route, so entity profiles are
 // unaffected. Entity notes still open as profile Context tabs — links route
-// there via resolveEntityNode; this page is everything else.
+// there via resolveEntityOwner, and a hand-typed (or stale) entity/sub-note URL
+// landing here is redirected the same way; this page is everything else.
 //
 // Thin on purpose: the tab bar, docked tree and NoteContextPanel live in the
 // persistent pane shell (directory/layout.tsx). This page owns only the note
@@ -16,6 +17,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePaneChrome, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
+import { useDirectoryEntities } from '@/features/notes/lib/useDirectoryEntities';
+import { useSpaceContextData } from '@/features/notes/hooks/useSpaceContextData';
+import {
+  entityContextHref,
+  entityOwnerPathOf,
+  parseEntityHref,
+  resolveEntityOwner,
+} from '@/lib/notes/entities';
 import { INDEX_BASENAME } from '@/lib/notes/shared/indexNote';
 
 // A non-entity note is still a Context note — same "Context / Raw" top nav an
@@ -41,6 +50,21 @@ function NoteViewerRoute() {
   const isRootIndex = notePath === INDEX_BASENAME;
   const [mode, setMode] = useState<NoteMode>('wysiwyg');
 
+  // An entity note (either form) or a sub-note in an entity folder belongs
+  // under the entity's chrome: send it to the profile Context tab. Until the
+  // directory has loaded we can't tell whose it is, so an entity-shaped path
+  // holds the tree-only chrome rather than flashing the plain note bar first.
+  const { entityByPath } = useDirectoryEntities();
+  const { loading: entitiesLoading } = useSpaceContextData();
+  const owner = resolveEntityOwner(notePath, entityByPath);
+  const ownerId = owner?.id ?? null;
+  const ownerSub = owner?.subPath ?? null;
+  const entityShaped = parseEntityHref(notePath) !== null || entityOwnerPathOf(notePath) !== null;
+  const redirecting = ownerId !== null || (entityShaped && entitiesLoading);
+  useEffect(() => {
+    if (ownerId) router.replace(entityContextHref(ownerId, ownerSub));
+  }, [ownerId, ownerSub, router]);
+
   // Switching notes resets to the Context (wysiwyg) tab — the profile Context
   // tab does the same across entities.
   useEffect(() => {
@@ -64,14 +88,14 @@ function NoteViewerRoute() {
   );
 
   usePaneChrome({
-    tabs: isRootIndex ? ROOT_INDEX_TABS : NOTE_TABS,
-    activeId: activeTab,
+    tabs: redirecting ? null : isRootIndex ? ROOT_INDEX_TABS : NOTE_TABS,
+    activeId: redirecting ? null : activeTab,
     onSelect: handleSelect,
     // Only the wysiwyg editor portals a toolbar into the bar's attached region —
     // Raw is a plain textarea with nothing to put there.
-    attachedOpen: activeTab === 'context',
+    attachedOpen: !redirecting && activeTab === 'context',
     ariaLabel: 'Note sections',
-    surface: { kind: 'note', path: notePath, mode },
+    surface: redirecting ? { kind: 'tree-only', notePath } : { kind: 'note', path: notePath, mode },
   });
 
   // Body is entirely shell-rendered (PaneSurfaceHost).

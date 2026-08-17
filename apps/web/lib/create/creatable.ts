@@ -41,6 +41,11 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'connector':
       return isFeatureEnabled(featureConfig, 'connectors') && isAdmin
 
+    // An agent brief is member-writable by design (lib/agents): only activating
+    // it is admin-gated, and that gate is on a different path (agents/live/).
+    case 'agent':
+      return isFeatureEnabled(featureConfig, 'agents')
+
     // A resource node only exists because the Resources tool does — same rule
     // the console's Types tab and the directory filters follow.
     case 'resource':

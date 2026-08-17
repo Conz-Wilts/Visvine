@@ -9,6 +9,7 @@ import {
   splitFrontmatter,
 } from '@/lib/notes/shared/markdown';
 import { parseConnectorPerimeter, SANDBOX_LIMITS } from '@/lib/connectors/config';
+import { connectorKind, parseModelConnector } from '@/lib/connectors/model';
 import { describeConnector, listConnectorCalls } from '@/lib/connectors/service';
 
 /**
@@ -83,6 +84,8 @@ interface PatchBody {
   allow?: unknown;
   env?: unknown;
   timeoutMs?: unknown;
+  /** Model connectors only: which registry provider this note stands for. */
+  provider?: unknown;
 }
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
@@ -115,6 +118,25 @@ export async function PATCH(
     if (description) fm.description = description;
     else delete fm.description;
   }
+
+  // A model connector has no perimeter: the only thing to edit besides the
+  // description is which provider it names. Perimeter fields are refused so
+  // the note can't quietly become a runnable one that binds MODEL_KEY_*.
+  if (connectorKind(fm) === 'model') {
+    if (body.hosts !== undefined || body.allow !== undefined || body.env !== undefined || body.timeoutMs !== undefined) {
+      return bad('A model connector has no hosts, allow, env or timeout — its endpoint is the provider’s');
+    }
+    if (body.provider !== undefined) {
+      if (typeof body.provider !== 'string') return bad('Provider must be a string');
+      fm.provider = body.provider.trim().toLowerCase();
+    }
+    const parsedModel = parseModelConnector(fm);
+    if (!parsedModel.ok) return bad(parsedModel.error);
+    const written = await writeGated(principal, resolved, path, joinFrontmatter(fm, splitFrontmatter(content).body));
+    if (written.status === 'denied') return NextResponse.json({ error: written.reason }, { status: 403 });
+    return NextResponse.json({ ok: true });
+  }
+  if (body.provider !== undefined) return bad('Only a model connector (kind: model) has a provider');
 
   if (body.timeoutMs !== undefined) {
     if (typeof body.timeoutMs !== 'number' || !Number.isFinite(body.timeoutMs)) {

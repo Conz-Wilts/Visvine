@@ -169,3 +169,29 @@ test('personal contexts are never lock-gated', () => {
   const p: ContextPrincipal = { ...principal([]), access: OPEN_ACCESS }
   assert.equal(lockedDenial(p, PERSONAL, 'anything.md', 'agent'), null)
 })
+
+// ── agents/: structurally frozen for AI, activation admin-only ──
+
+import { writeDenial } from '../lib/notes/contextService'
+
+test('agents/ refuses AI origins with no lock at all', () => {
+  const p = principal([])
+  for (const origin of ['agent', 'ai-enrich', 'maintenance'] as const) {
+    assert.match(lockedDenial(p, SHARED, 'agents/digest.md', origin)!, /Agent briefs are frozen/, origin)
+    assert.match(lockedDenial(p, SHARED, 'agents/live/digest.md', origin)!, /Agent briefs are frozen/, origin)
+  }
+  // Humans author briefs normally.
+  assert.equal(lockedDenial(p, SHARED, 'agents/digest.md', 'edit'), null)
+  assert.equal(lockedDenial(p, SHARED, 'agents/digest.md', 'restore'), null)
+})
+
+test('agents/live/ is admin-write even for a member holding a full grant on agents/', () => {
+  const member: ContextPrincipal = { ...principal([]), spaceAdmin: false }
+  const admin: ContextPrincipal = { ...principal([]), spaceAdmin: true }
+  const system: ContextPrincipal = { ...member, system: true }
+  assert.equal(writeDenial(member, SHARED, 'agents/digest.md'), null, 'the brief is member-writable')
+  assert.match(writeDenial(member, SHARED, 'agents/live/digest.md')!, /Only space admins can activate/)
+  assert.match(writeDenial(member, SHARED, 'agents/live')!, /Only space admins can activate/)
+  assert.equal(writeDenial(admin, SHARED, 'agents/live/digest.md'), null)
+  assert.equal(writeDenial(system, SHARED, 'agents/live/digest.md'), null, 'the auto-deactivate write')
+})

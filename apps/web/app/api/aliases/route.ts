@@ -7,9 +7,9 @@
 // admins do everything else.
 //   GET  ?spaceId=                              → { aliases }
 //   POST { spaceId, action, ... }:
-//        'create'        { name, color }
-//        'update'        { name, newName?, color? }
-//        'delete'        { name }
+//        'create'        { name, color, nodeType? }
+//        'update'        { name, newName?, color?, nodeType? }
+//        'delete'        { name, nodeType? }
 //        'setOwner'      { name, owner }
 //        'addHolder'     { name, userId }
 //        'removeHolder'  { name, userId }
@@ -28,6 +28,11 @@ import {
   setAliasOwner,
   updateAlias,
 } from '@/lib/notes/aliases'
+import {
+  createTypeAlias,
+  deleteTypeAlias,
+  updateTypeAlias,
+} from '@/lib/notes/typeAliases'
 
 export async function GET(req: NextRequest) {
   const context = await requireContext(req)
@@ -47,10 +52,20 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === 'string' ? body.name : null
   if (!name) return fail('name is required')
 
+  // `nodeType` opts into the whole vocabulary rather than just Person's, through
+  // lib/notes/typeAliases.ts — the same door the MCP manage_alias tool uses, and
+  // the one that clears directory chips when an alias goes. Absent, this stays
+  // the Person-only surface it has always been.
+  const nodeType = typeof body.nodeType === 'string' ? body.nodeType : null
+
   try {
     if (action === 'create') {
       const color = typeof body.color === 'string' ? body.color : ''
-      await createAlias(context.spaceId, name, color, actor)
+      if (nodeType) {
+        await createTypeAlias(context.spaceId, nodeType, name, color, actor)
+      } else {
+        await createAlias(context.spaceId, name, color, actor)
+      }
       return NextResponse.json({ ok: true })
     }
 
@@ -60,12 +75,20 @@ export async function POST(req: NextRequest) {
       if (newName === undefined && color === undefined) {
         return fail('Nothing to change — pass newName or color')
       }
-      await updateAlias(context.spaceId, name, { newName, color }, actor)
+      if (nodeType) {
+        await updateTypeAlias(context.spaceId, nodeType, name, { newName, color }, actor)
+      } else {
+        await updateAlias(context.spaceId, name, { newName, color }, actor)
+      }
       return NextResponse.json({ ok: true })
     }
 
     if (action === 'delete') {
-      await deleteAlias(context.spaceId, name, actor)
+      if (nodeType) {
+        await deleteTypeAlias(context.spaceId, nodeType, name, actor)
+      } else {
+        await deleteAlias(context.spaceId, name, actor)
+      }
       return NextResponse.json({ ok: true })
     }
 

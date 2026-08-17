@@ -14,6 +14,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DEFAULT_NODE_TYPES, aliasesForType, mergeNodeTypeList } from '@/lib/types';
 import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
 import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
+import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
 import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
@@ -359,23 +360,14 @@ export default function TypesPanel() {
     if (currentSpace?.aliases) setAliases(currentSpace.aliases as SpaceAlias[]);
   }, [currentSpace]);
 
-  // Types and non-Person aliases ride on the space record. Person aliases do
-  // NOT go through here: a rename has to carry UserAlias, ContextGrant and Node
-  // rows with it, which only /api/aliases does (lib/notes/aliases.ts).
-  const saveSpace = async (nextTypes: NodeTypeConfig[], nextAliases: SpaceAlias[]) => {
+  /** Shared save shell: status reporting, error surface, refresh. */
+  const save = async (run: () => Promise<unknown>) => {
     if (!currentSpace) return;
     setSaving(true);
     setError(null);
     report('saving');
     try {
-      const res = await fetch('/api/data/communities', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          space: { ...currentSpace, nodeTypes: nextTypes, aliases: nextAliases } satisfies Space,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to save');
+      await run();
       await refreshSpace();
       report('saved');
     } catch (e) {
@@ -386,15 +378,31 @@ export default function TypesPanel() {
     }
   };
 
-  const handleAddAlias = (alias: SpaceAlias) => saveSpace(types, [...aliases, alias]);
+  // Types ride on the space record, which merges additively — this page's
+  // snapshot can be minutes old and must not delete a type a member added since.
+  const saveTypes = (nextTypes: NodeTypeConfig[]) => {
+    if (!currentSpace) return;
+    const space: Space = { ...currentSpace, nodeTypes: nextTypes };
+    return save(() => fetchJsonBody('/api/data/communities', 'PUT', { space }));
+  };
+
+  // Aliases do NOT ride on that save. Creating one needs an id, removing one has
+  // to clear the chips off every card wearing it, and for Person it has to carry
+  // holders and grants — none of which a whole-record PUT can express. All of it
+  // lives behind /api/aliases (lib/notes/typeAliases.ts), one alias at a time.
+  const aliasAction = (body: Record<string, unknown>) =>
+    save(() => fetchJsonBody('/api/aliases', 'POST', { spaceId: currentSpace?.id, ...body }));
+
+  const handleAddAlias = (alias: SpaceAlias) =>
+    aliasAction({ action: 'create', nodeType: alias.nodeType, name: alias.name, color: alias.color });
   const handleRemoveAlias = (name: string, nodeType: string) =>
-    saveSpace(types, aliases.filter(a => !(a.name === name && a.nodeType === nodeType)));
+    aliasAction({ action: 'delete', nodeType, name });
   const handleUpdateAliasColor = (name: string, nodeType: string, color: string) =>
-    saveSpace(types, aliases.map(a => a.name === name && a.nodeType === nodeType ? { ...a, color } : a));
+    aliasAction({ action: 'update', nodeType, name, color });
   // A built-in the space never stored has nothing to map over, so recolour
   // by merging the edited entry in — mapping alone would silently no-op.
   const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
-    saveSpace(mergeNodeTypeList(types, [{ ...type, color }]), aliases);
+    saveTypes(mergeNodeTypeList(types, [{ ...type, color }]));
 
   if (!currentSpace) {
     return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;

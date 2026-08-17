@@ -38,7 +38,4 @@ export {
   getConversationMemberIds,
 } from './messageService';
 
-export {
-  searchConversationsAndMessages,
-  searchUsersAndDirectory,
-} from './searchService';
+export { searchUsersAndDirectory } from './searchService';

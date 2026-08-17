@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
 import { safeRelativePath } from "@/lib/redirects";
 import prisma from "@/lib/prisma";
+import { findAliasByRef, personAliases, type SpaceAlias } from "@/lib/types/context";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,22 @@ export default async function DevLoginPage({
   // User model), so the aliases come back in a second query.
   const held = await prisma.userAlias.findMany({
     where: { userId: { in: users.map((u) => u.id) } },
-    select: { userId: true, aliasName: true },
+    select: { userId: true, spaceId: true, aliasId: true },
   });
+  // Holder rows point at an alias id, and the vocabulary lives in each space's
+  // JSON — so this listing resolves names per space. Anything unresolvable falls
+  // back to the id; this is a dev-only debug screen, so showing it beats hiding it.
+  const spaces = await prisma.space.findMany({
+    where: { id: { in: [...new Set(held.map((h) => h.spaceId))] } },
+    select: { id: true, aliases: true },
+  });
+  const vocabularyBySpace = new Map(
+    spaces.map((s) => [s.id, personAliases((s.aliases ?? []) as unknown as SpaceAlias[])]),
+  );
   const aliasNames = new Map<string, string[]>();
   for (const h of held) {
-    aliasNames.set(h.userId, [...(aliasNames.get(h.userId) ?? []), h.aliasName]);
+    const name = findAliasByRef(vocabularyBySpace.get(h.spaceId), h.aliasId, "Person")?.name;
+    aliasNames.set(h.userId, [...(aliasNames.get(h.userId) ?? []), name ?? h.aliasId]);
   }
 
   return (

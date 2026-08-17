@@ -40,7 +40,9 @@
     "db:connectors:funds": "tsx scripts/add-fund-metrics-demo.ts",
     "connectors:verify:funds": "tsx scripts/verify-fund-metrics-mcp.ts",
     "db:connectors:oauth": "tsx scripts/add-oauth-crm-demo.ts",
-    "connectors:verify:oauth": "tsx scripts/verify-oauth-crm-mcp.ts"
+    "connectors:verify:oauth": "tsx scripts/verify-oauth-crm-mcp.ts",
+    "verify:alias-identity": "tsx scripts/verify-alias-identity.ts",
+    "verify:space-concurrency": "tsx scripts/verify-space-concurrency.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",

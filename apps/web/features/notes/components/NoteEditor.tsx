@@ -101,6 +101,10 @@ interface NoteEditorProps {
   // Embedded only: content rendered directly below the sticky toolbar and above
   // the note body (the entity header card), so it scrolls up behind the toolbar.
   headerSlot?: React.ReactNode
+  /** Embedded only: render the note's own title heading above the body. Off by
+   *  default there (the profile header IS the identity); on for a sub-note in
+   *  an entity folder, whose title is its own. */
+  showTitle?: boolean
   // Embedded only: rendered at the far right of the toolbar row, after the
   // Editor/Raw toggle (the entity panel's Share button). Renders in raw mode too.
   toolbarTrailSlot?: React.ReactNode
@@ -171,6 +175,7 @@ export function NoteEditor({
   onRequestReferenceAccess,
   variant = 'floating',
   headerSlot,
+  showTitle = false,
   toolbarTrailSlot,
 }: NoteEditorProps) {
   const embedded = variant === 'embedded'
@@ -652,7 +657,7 @@ export function NoteEditor({
         {/* The note title — rendered as the page heading from frontmatter, so
             every note opens with a styled title and the body carries none.
             (Embedded/profile tab: the profile above IS the identity.) */}
-        {mode === 'wysiwyg' && !embedded && <h1 className="notes-title">{noteTitle}</h1>}
+        {mode === 'wysiwyg' && (!embedded || showTitle) && <h1 className="notes-title">{noteTitle}</h1>}
         {mode === 'wysiwyg' ? (
           <>
             <EditorContent editor={editor} />

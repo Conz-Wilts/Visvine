@@ -1,5 +1,5 @@
 // The single-note CRUD endpoint.
-//   GET    /api/notes/item?spaceId=&scope=&path=        → { content }
+//   GET    /api/notes/item?spaceId=&scope=&path=        → { content, path }
 //   POST   { spaceId, scope, path, content? }            → { note, movedTo? }  (create)
 //   PUT    { spaceId, scope, path, content, origin? }    → { ok, movedTo? }    (write + revision)
 //   PATCH  { spaceId, scope, from, to }                  → { path }   (rename/move)
@@ -19,6 +19,7 @@ import { canRemove, principalOf } from '@/lib/notes/resolve'
 import { readVisible, writeDenial, writeDenialFull, moveGated } from '@/lib/notes/contextService'
 import {
   writeNote,
+  canonicalEntityWritePath,
   createNote,
   deleteNote,
   getNoteCreatedBy,
@@ -39,9 +40,14 @@ export async function GET(req: NextRequest) {
   const path = new URL(req.url).searchParams.get('path')
   if (!path) return fail('path is required')
   const p = await principalOf(context)
-  const content = await readVisible(p, context, path)
+  // An entity's flat path keeps answering after its note has become the folder
+  // index (people/x.md → people/x/index.md): a client holding the old path (a
+  // stale profile cache, an old link) reads the live note, and `path` says
+  // where it really is. Writes redirect the same way (store.writeNote).
+  const canonical = await canonicalEntityWritePath(context, path)
+  const content = await readVisible(p, context, canonical)
   if (content === null) return fail(`Note not found: ${path}`, 404)
-  return NextResponse.json({ content })
+  return NextResponse.json({ content, path: canonical })
 }
 
 export async function POST(req: NextRequest) {

@@ -138,7 +138,7 @@ function maskLinks(body: string): string {
 }
 
 // Escape a string for literal use inside a RegExp.
-function escapeRegExp(value: string): string {
+export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 

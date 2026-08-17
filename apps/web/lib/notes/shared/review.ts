@@ -4,7 +4,7 @@
 
 import type { NoteFrontmatter, NoteMeta, RawNote } from './types'
 import { joinFrontmatter, normalizeKey, parseFrontmatter, splitFrontmatter } from './markdown'
-import { computeReferences, linkFirstMention } from './references'
+import { computeReferences, escapeRegExp, linkFirstMention } from './references'
 import { relatedNotes } from './related'
 
 export interface ReviewThresholds {
@@ -58,10 +58,6 @@ function isEmpty(v: unknown): boolean {
 function aliasesOf(m: NoteMeta): string[] {
   const a = Array.isArray(m.frontmatter.aliases) ? (m.frontmatter.aliases as unknown[]).map(String) : []
   return [m.title, ...a]
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function baseName(p: string): string {

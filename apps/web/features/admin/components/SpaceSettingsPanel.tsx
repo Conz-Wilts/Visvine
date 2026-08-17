@@ -169,6 +169,16 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
   const [visibility, setVisibility] = useState<'public' | 'private'>(
     space.visibility === 'private' ? 'private' : 'public'
   );
+  const [timezone, setTimezone] = useState(space.timezone ?? '');
+  const [customEndpoint, setCustomEndpoint] = useState(space.agentConfig?.customEndpoint?.baseURL ?? '');
+  const [endpointError, setEndpointError] = useState('');
+  const timeZones = (() => {
+    try {
+      return (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf('timeZone');
+    } catch {
+      return ['UTC'];
+    }
+  })();
 
   const [confirmPublic, setConfirmPublic] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -332,6 +342,58 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
               </Field>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Agents: the two space-level facts the agent notes must not carry — the
+          timezone "daily at 07:00" means, and where a custom model endpoint
+          points (the brief is member-writable; an open URL there would let any
+          member POST the whole context to a host of their choosing). */}
+      <section>
+        <h3 className="mb-1 text-base font-semibold text-text-primary">Agents</h3>
+        <p className="mb-4 text-sm text-text-muted">
+          Defaults for scheduled agents. Model keys are managed on the Agents page.
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Timezone" hint="What an agent's “daily at 07:00” means, unless the agent names its own.">
+            <select
+              className={inputBaseClass}
+              value={timezone}
+              onChange={e => {
+                setTimezone(e.target.value);
+                queue({ timezone: e.target.value || null });
+              }}
+            >
+              <option value="">UTC (default)</option>
+              {timeZones.map(z => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="Custom model endpoint"
+            hint="Optional. An OpenAI-compatible base URL (https) for agents that use model: custom/<id>. Where your notes are sent is an admin decision."
+            error={endpointError}
+          >
+            <Input
+              type="url"
+              value={customEndpoint}
+              placeholder="https://llm.example.com/v1/"
+              onChange={e => {
+                setCustomEndpoint(e.target.value);
+                setEndpointError('');
+              }}
+              onBlur={async () => {
+                const value = customEndpoint.trim();
+                if (value === (space.agentConfig?.customEndpoint?.baseURL ?? '')) return;
+                try {
+                  await runAction(() => saveSettings({ agentConfig: { customEndpoint: value ? { baseURL: value } : null } }));
+                } catch (err) {
+                  setEndpointError(err instanceof Error ? err.message : 'Could not save the endpoint');
+                }
+              }}
+            />
+          </Field>
         </div>
       </section>
 

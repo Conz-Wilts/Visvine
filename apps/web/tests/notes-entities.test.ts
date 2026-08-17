@@ -8,7 +8,18 @@ import {
   entityDraftContent,
   entityStub,
   resolveEntityNode,
+  resolveEntityOwner,
   entityMentionPaths,
+  entityFlatPath,
+  entityFolderPathOf,
+  entityIndexPathOf,
+  entityNotePaths,
+  entityOwnerPathOf,
+  isEntityFolderIndex,
+  entityKindOfDir,
+  entityContextHref,
+  hrefForNotePath,
+  noteHref,
 } from '../lib/notes/entities';
 import { isCreatableType } from '../lib/directory/createEntity';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
@@ -102,13 +113,106 @@ test('parseEntityHref normalizes only valid entity hrefs', () => {
   assert.equal(parseEntityHref(''), null);
 });
 
-test('parseEntityHref excludes folder index notes', () => {
+test('parseEntityHref excludes the namespace root indexes', () => {
   assert.equal(parseEntityHref('/people/index.md'), null);
   assert.equal(parseEntityHref('communities/index.md'), null);
   assert.equal(parseEntityHref('resources/index.md'), null);
-  assert.equal(parseEntityHref('people/sub/index.md'), null);
   // Only the exact index.md basename is excluded — slugs merely containing it stay entities.
   assert.equal(parseEntityHref('people/index-fund.md'), 'people/index-fund.md');
+});
+
+test('parseEntityHref accepts the entity-folder form and rejects sub-notes', () => {
+  // people/connor/index.md IS the person's note once it has become a folder.
+  assert.equal(parseEntityHref('/people/connor/index.md'), 'people/connor/index.md');
+  assert.equal(parseEntityHref('communities/halter/index.md'), 'communities/halter/index.md');
+  // Notes inside the folder belong to the entity but are not entity notes.
+  assert.equal(parseEntityHref('people/connor/sams-comms.md'), null);
+  assert.equal(parseEntityHref('people/connor/2026/q1.md'), null);
+  assert.equal(parseEntityHref('people/connor/deeper/index.md'), null);
+  assert.equal(entityKindOfPath('people/connor/index.md'), 'person');
+  assert.equal(entityKindOfPath('people/connor/sams-comms.md'), null);
+  assert.equal(entityKindOfDir('people/connor/sams-comms.md'), 'person');
+  assert.equal(entityKindOfDir('people/index.md'), 'person');
+  assert.equal(isEntityFolderIndex('people/connor/index.md'), true);
+  assert.equal(isEntityFolderIndex('people/connor.md'), false);
+  assert.equal(isEntityFolderIndex('people/index.md'), false);
+});
+
+test('entityOwnerPathOf names the entity folder a sub-note sits in', () => {
+  assert.equal(entityOwnerPathOf('people/connor/sams-comms.md'), 'people/connor');
+  assert.equal(entityOwnerPathOf('/people/connor/2026/q1.md'), 'people/connor');
+  assert.equal(entityOwnerPathOf('communities/halter/board.md'), 'communities/halter');
+  assert.equal(entityOwnerPathOf('people/connor/index.md'), null); // the entity note itself
+  assert.equal(entityOwnerPathOf('people/connor.md'), null);
+  assert.equal(entityOwnerPathOf('people/index.md'), null);
+  assert.equal(entityOwnerPathOf('notes/connor/x.md'), null);
+});
+
+test('entityNotePath honours a node-recorded entity folder', () => {
+  const node = { id: 'person:connor', type: 'person' };
+  assert.equal(entityFlatPath(node), 'people/connor.md');
+  assert.equal(entityFolderPathOf(node), 'people/connor');
+  assert.equal(entityIndexPathOf(node), 'people/connor/index.md');
+  assert.deepEqual(entityNotePaths(node), ['people/connor.md', 'people/connor/index.md']);
+  assert.equal(entityNotePath(node), 'people/connor.md');
+  assert.equal(
+    entityNotePath({ ...node, metadata: { notePath: 'people/connor/index.md' } }),
+    'people/connor/index.md',
+  );
+  // A pointer at some other note is ignored — it can only name this node's own index.
+  assert.equal(entityNotePath({ ...node, metadata: { notePath: 'people/other/index.md' } }), 'people/connor.md');
+  assert.equal(entityNotePath({ ...node, metadata: { notePath: 42 } }), 'people/connor.md');
+  assert.deepEqual(entityNotePaths({ id: 'note:x', type: 'note' }), []);
+});
+
+test('resolveEntityOwner maps entity notes and sub-notes to their node', () => {
+  const map = new Map([
+    ['people/connor.md', { id: 'person:connor' }],
+    ['people/connor/index.md', { id: 'person:connor' }],
+  ]);
+  assert.deepEqual(resolveEntityOwner('people/connor.md', map), { id: 'person:connor', subPath: null });
+  assert.deepEqual(resolveEntityOwner('people/connor/index.md', map), { id: 'person:connor', subPath: null });
+  assert.deepEqual(resolveEntityOwner('people/connor/sams-comms.md', map), {
+    id: 'person:connor',
+    subPath: 'sams-comms.md',
+  });
+  assert.deepEqual(resolveEntityOwner('people/connor/2026/q1.md', map), {
+    id: 'person:connor',
+    subPath: '2026/q1.md',
+  });
+  assert.equal(resolveEntityOwner('people/nobody/x.md', map), null);
+  assert.equal(resolveEntityOwner('notes/x.md', map), null);
+});
+
+test('entityContextHref addresses a node Context tab, with or without a sub-note', () => {
+  assert.equal(entityContextHref('person:connor'), '/directory/person%3Aconnor?tab=context');
+  assert.equal(
+    entityContextHref('person:connor', 'sams-comms.md'),
+    '/directory/person%3Aconnor?tab=context&note=sams-comms.md',
+  );
+  // Nested sub-notes and reserved characters survive the URL.
+  assert.equal(
+    entityContextHref('person:connor', '2026/q1 & q2.md'),
+    '/directory/person%3Aconnor?tab=context&note=2026%2Fq1%20%26%20q2.md',
+  );
+});
+
+test('hrefForNotePath routes entity notes and sub-notes to the profile, everything else to the note view', () => {
+  const map = new Map([
+    ['people/connor.md', { id: 'person:connor' }],
+    ['people/connor/index.md', { id: 'person:connor' }],
+  ]);
+  assert.equal(hrefForNotePath('people/connor.md', map), entityContextHref('person:connor'));
+  assert.equal(hrefForNotePath('people/connor/index.md', map), entityContextHref('person:connor'));
+  assert.equal(
+    hrefForNotePath('people/connor/sams-comms.md', map),
+    entityContextHref('person:connor', 'sams-comms.md'),
+  );
+  // Not in the map (other space, deleted, still loading) → the plain note view.
+  assert.equal(hrefForNotePath('people/nobody.md', map), noteHref('people/nobody.md'));
+  assert.equal(hrefForNotePath('people/nobody/x.md', map), noteHref('people/nobody/x.md'));
+  assert.equal(hrefForNotePath('sectors/fintech.md', map), noteHref('sectors/fintech.md'));
+  assert.equal(hrefForNotePath('people/index.md', map), noteHref('people/index.md'));
 });
 
 test('entityMentionPaths ignores links to folder indexes', () => {

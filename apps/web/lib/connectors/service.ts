@@ -27,6 +27,7 @@ import {
   type ConnectorPerimeter,
 } from './config'
 import { runInIsolate, type IsolateRunResult } from './isolate'
+import { connectorKind, modelConnectorInfo, parseModelConnector, type ConnectorKind, type ModelConnectorInfo } from './model'
 
 const CONNECTORS_DIR = 'connectors/'
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i
@@ -35,6 +36,10 @@ const DOCS_CAP_CHARS = 4_000
 export interface ConnectorSummary {
   name: string
   path: string
+  /** `http` = a perimeter connector agents can run; `model` = an LLM provider (never runnable). */
+  kind: ConnectorKind
+  /** Set for `kind: model` — provider, pinned base URL, key secret NAME, known models. */
+  model: ModelConnectorInfo | null
   /** Raw frontmatter `alias` — display metadata only (chip colour), any string. */
   alias: string | null
   description: string | null
@@ -73,19 +78,43 @@ function formatAllowRule(rule: { method: string; path: string; prefix: boolean }
 function summariseNote(path: string, content: string): ConnectorSummary | null {
   const fm = parseFrontmatter(content)
   if (!isConnectorNote(fm)) return null
-  const parsed = parseConnectorPerimeter(fm)
   const body = splitFrontmatter(content).body.trim()
-  return {
+  const docs = body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body
+  const base = {
     name: connectorName(path),
     path,
     alias: typeof fm.alias === 'string' ? fm.alias : null,
+    description: typeof fm.description === 'string' ? fm.description : null,
+    docs,
+  }
+  if (connectorKind(fm) === 'model') {
+    // No perimeter: the endpoint is the provider's, the key is the provider's
+    // reserved secret. `secrets` names it so the console's missing-secret
+    // check works unchanged.
+    const parsed = parseModelConnector(fm)
+    const info = parsed.ok ? modelConnectorInfo(parsed.config) : null
+    return {
+      ...base,
+      kind: 'model',
+      model: info,
+      hosts: [],
+      allow: [],
+      invalid: parsed.ok ? null : parsed.error,
+      warnings: [],
+      secrets: info ? [info.keySecret] : [],
+    }
+  }
+  const parsed = parseConnectorPerimeter(fm)
+  return {
+    ...base,
+    kind: 'http',
+    model: null,
     description: typeof fm.description === 'string' ? fm.description : null,
     hosts: parsed.ok ? [...parsed.perimeter.hosts] : [],
     allow: parsed.ok ? parsed.perimeter.allow.map(formatAllowRule) : [],
     invalid: parsed.ok ? null : parsed.error,
     warnings: parsed.ok ? parsed.warnings : [],
     secrets: parsed.ok ? perimeterSecretRefs(parsed.perimeter) : [],
-    docs: body.length > DOCS_CAP_CHARS ? body.slice(0, DOCS_CAP_CHARS) + '…' : body,
   }
 }
 
@@ -126,6 +155,7 @@ export async function describeConnector(
   if (content === null) return null
   const summary = summariseNote(path, content)
   if (!summary) return null
+  if (summary.kind === 'model') return { ...summary, perimeter: null }
   const parsed = parseConnectorPerimeter(parseFrontmatter(content))
   return { ...summary, perimeter: parsed.ok ? parsed.perimeter : null }
 }
@@ -179,7 +209,10 @@ export interface LoadedConnector {
 /**
  * Load one connector through the visibility lens. Null when the note is absent
  * OR not visible (indistinguishable, matching readVisible semantics); throws
- * ConnectorError('config') when the note exists but isn't a valid connector.
+ * ConnectorError('config') when the note exists but isn't a valid connector —
+ * including every `kind: model` connector, which is deliberately not runnable
+ * (see lib/connectors/model.ts). Every executor (MCP run_connector, the agent
+ * tool, the console terminal) loads through here, so that refusal is one line.
  */
 export async function loadConnector(
   p: ContextPrincipal,
@@ -194,9 +227,38 @@ export async function loadConnector(
   if (!isConnectorNote(fm)) {
     throw new ConnectorError('config', `The note at ${path} is not a connector (missing \`type: connector\`)`)
   }
+  if (connectorKind(fm) === 'model') {
+    throw new ConnectorError(
+      'config',
+      `${name} is a model connector — it names the provider agents run on and is not runnable. Set an agent's \`model:\` to use it.`,
+    )
+  }
   const parsed = parseConnectorPerimeter(fm)
   if (!parsed.ok) throw new ConnectorError('config', parsed.error)
   return { perimeter: parsed.perimeter, path, warnings: parsed.warnings }
+}
+
+/**
+ * Which of these declared connector names an agent may actually be offered a
+ * `run_connector` tool for: everything except `kind: model` notes. Absent or
+ * invisible names stay in the list — the tool then reports not-found at call
+ * time, which is the honest answer; only model connectors are silently
+ * unofferable, because offering them would advertise something that always
+ * refuses.
+ */
+export async function runnableConnectorNames(
+  p: ContextPrincipal,
+  context: Context,
+  names: readonly string[],
+): Promise<string[]> {
+  const out: string[] = []
+  for (const name of names) {
+    if (!NAME_RE.test(name)) continue
+    const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
+    if (content !== null && connectorKind(parseFrontmatter(content)) === 'model') continue
+    out.push(name)
+  }
+  return out
 }
 
 /** Decrypt the named secrets for a space; every name must exist. */

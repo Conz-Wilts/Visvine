@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Alert, SearchInput, Chip, Modal } from '@/components/ui';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -77,9 +77,10 @@ export default function AddMembersModal({
         setLoading(true);
         const params = new URLSearchParams();
         if (query.trim()) params.set('query', query.trim());
-        const res = await fetch(`/api/messages/users?${params.toString()}`, { signal: controller.signal });
-        if (!res.ok) throw new Error('Failed to fetch users');
-        const payload = await res.json();
+        const payload = await fetchJson<{ users?: UserOption[]; directoryPeople?: DirectoryPerson[] }>(
+          `/api/messages/users?${params.toString()}`,
+          { signal: controller.signal },
+        );
         setUsers(payload.users ?? []);
         setDirectoryPeople(payload.directoryPeople ?? []);
       } catch (e) {

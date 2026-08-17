@@ -24,6 +24,7 @@ const ROUTE_SUGGESTIONS: Array<{ prefix: string; suggestion: CreateSuggestion }>
   { prefix: '/resources', suggestion: { types: ['resource'], reason: "You're on Resources" } },
   { prefix: '/channels', suggestion: { types: ['channel', 'section'], reason: "You're on Channels" } },
   { prefix: '/connectors', suggestion: { types: ['connector'], reason: "You're on Connectors" } },
+  { prefix: '/agents', suggestion: { types: ['agent'], reason: "You're on Agents" } },
 ];
 
 /**

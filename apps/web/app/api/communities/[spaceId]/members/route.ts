@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { loadPersonAliases } from '@/lib/notes/aliases';
+import { findAliasByRef } from '@/lib/types/context';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 
 /**
@@ -16,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const [memberships, held] = await Promise.all([
+  const [memberships, held, vocabulary] = await Promise.all([
     prisma.spaceMember.findMany({
       where: { spaceId },
       include: { user: { select: { id: true, name: true, email: true, image: true, createdAt: true } } },
@@ -24,13 +25,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ spa
     }),
     prisma.userAlias.findMany({
       where: { spaceId },
-      select: { userId: true, aliasName: true },
+      select: { userId: true, aliasId: true },
     }),
+    loadPersonAliases(spaceId),
   ]);
 
+  // Holder rows carry alias ids; the client keys off names, so they are resolved
+  // here. A row whose alias is gone is skipped rather than shown as a raw id —
+  // the delete cascade should have removed it, so it is stale either way.
+  const nameById = new Map(vocabulary.filter((a) => a.id).map((a) => [a.id!, a.name]));
   const aliasesByUser = new Map<string, string[]>();
   for (const h of held) {
-    aliasesByUser.set(h.userId, [...(aliasesByUser.get(h.userId) ?? []), h.aliasName]);
+    const name = nameById.get(h.aliasId);
+    if (!name) continue;
+    aliasesByUser.set(h.userId, [...(aliasesByUser.get(h.userId) ?? []), name]);
   }
 
   const members = memberships.map(m => ({
@@ -88,13 +96,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     include: { user: { select: { id: true, name: true, email: true, image: true, createdAt: true } } },
   });
 
-  // Only Person aliases this space actually defines — anything else is
-  // silently ignored rather than creating a holder of a name that doesn't exist.
-  const known = new Set((await loadPersonAliases(spaceId)).map(a => a.name));
-  const granted = aliases.filter(a => known.has(a));
-  if (granted.length) {
+  // Only Person aliases this space actually defines — anything else is silently
+  // ignored rather than creating a holder of an alias that doesn't exist. The
+  // invite carries names, so each is resolved to its id (case-insensitively,
+  // via findAliasByRef) before the holder row is written.
+  const vocabulary = await loadPersonAliases(spaceId);
+  const resolved = aliases
+    .map(a => findAliasByRef(vocabulary, a, 'Person'))
+    .filter(a => Boolean(a?.id));
+  const granted = [...new Set(resolved.map(a => a!.name))];
+  const grantedIds = [...new Set(resolved.map(a => a!.id!))];
+  if (grantedIds.length) {
     await prisma.userAlias.createMany({
-      data: granted.map(aliasName => ({ spaceId, aliasName, userId: user.id, addedBy: session.userId })),
+      data: grantedIds.map(aliasId => ({ spaceId, aliasId, userId: user.id, addedBy: session.userId })),
       skipDuplicates: true,
     });
   }

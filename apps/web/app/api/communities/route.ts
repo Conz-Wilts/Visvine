@@ -4,7 +4,7 @@ import prisma from '@/lib/prisma';
 import { requireSession } from '@/lib/session';
 import { slugify } from '@/lib/eventUtils';
 import { handleApiError } from '@/lib/api/route';
-import { OWNER_ALIAS_NAME } from '@/lib/types/context';
+import { OWNER_ALIAS_ID, OWNER_ALIAS_NAME } from '@/lib/types/context';
 import { ALL_FEATURE_KEYS, CORE_FEATURE_KEYS } from '@/lib/featureAccess';
 import { markAccessSeeded } from '@/lib/notes/access';
 import { findPublicNameConflict, publicNameTakenMessage } from '@/lib/spaces/publicName';
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
         data: {
           spaceId: id,
           userId: session.userId,
-          aliasName: OWNER_ALIAS_NAME,
+          aliasId: OWNER_ALIAS_ID,
           addedBy: session.userId,
         },
       });

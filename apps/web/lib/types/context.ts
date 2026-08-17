@@ -105,6 +105,12 @@ export interface ContextData {
 // ContextGrant with subjectType 'alias' targets one by name. So "Engineering" is
 // one thing: a chip in the directory and a set of permissions.
 export interface SpaceAlias {
+  /** Stable identity, independent of the name. Everything that stores a
+   *  reference to an alias — holders, grants, directory chips — points at this,
+   *  so renaming is a single write to this array and nothing else can desync.
+   *  Optional only for entries seeded before ids existed; `aliasKey` in
+   *  lib/spaces/configMerge.ts is the one place that falls back to the name. */
+  id?: string;
   name: string;    // e.g. "Founder"
   color: string;   // Hex color e.g. "#16a34a"
   nodeType: string; // e.g. "Person", "Space"
@@ -118,7 +124,15 @@ export interface SpaceAlias {
 
 /** The built-in Person alias every space has. Gold, fixed, always owns. */
 export const OWNER_ALIAS_NAME = 'Owner';
+/**
+ * Owner's id is a reserved constant rather than a generated one, because most
+ * spaces never store the alias at all — `personAliases` grafts it in. A
+ * generated id would differ per space and per graft, so the one alias every
+ * space is guaranteed to have would be the one nothing could point at.
+ */
+export const OWNER_ALIAS_ID = 'owner';
 export const OWNER_ALIAS: SpaceAlias = {
+  id: OWNER_ALIAS_ID,
   name: OWNER_ALIAS_NAME,
   color: '#b4881b',
   nodeType: 'Person',
@@ -134,7 +148,39 @@ export const OWNER_ALIAS: SpaceAlias = {
 export function personAliases(aliases: SpaceAlias[] | undefined): SpaceAlias[] {
   const stored = aliasesForType(aliases, 'Person').filter((a) => a.name !== OWNER_ALIAS_NAME);
   const owner = aliasesForType(aliases, 'Person').find((a) => a.name === OWNER_ALIAS_NAME);
-  return [{ ...OWNER_ALIAS, ...owner, owner: true, system: true }, ...stored];
+  // Owner's id is fixed even if a stored entry somehow carries another one:
+  // holders and grants recorded against `owner` must never stop resolving.
+  return [{ ...OWNER_ALIAS, ...owner, id: OWNER_ALIAS_ID, owner: true, system: true }, ...stored];
+}
+
+/**
+ * Resolve an alias from whatever a caller has: its id, or its name.
+ *
+ * Storage keys on the id, but the id is internal — the console, the API and the
+ * MCP tools all speak names, because a name is what a person (or an agent
+ * reading a directory card) actually knows. This is the one place that
+ * translation happens, so every entry point gets the same rules: an exact id
+ * match first, then a name match that ignores case and surrounding space. That
+ * casing tolerance is deliberate — `alias: "founder"` against a vocabulary
+ * holding `"Founder"` used to be stored verbatim and then matched nothing.
+ *
+ * `type` narrows to one node type's vocabulary; omit it to search all of them.
+ */
+export function findAliasByRef(
+  aliases: SpaceAlias[] | undefined,
+  ref: string | null | undefined,
+  type?: string,
+): SpaceAlias | undefined {
+  if (!ref) return undefined;
+  const pool = type
+    ? canonicalNodeType(type) === 'person'
+      ? personAliases(aliases)
+      : aliasesForType(aliases, type)
+    : (aliases ?? []);
+  const byId = pool.find((a) => a.id === ref);
+  if (byId) return byId;
+  const key = ref.trim().toLowerCase();
+  return pool.find((a) => a.name?.trim().toLowerCase() === key);
 }
 
 // A space-configurable relationship (edge) type — mirrors NodeTypeConfig.
@@ -175,6 +221,9 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // as a note under connectors/. Rectangle like the other document types — the
   // indigo tint and the plug glyph are what set it apart.
   { name: 'Connector', color: '#6366f1', shape: 'rectangle' },
+  // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
+  // Teal, the one saturated hue no other document type uses.
+  { name: 'Agent',     color: '#0d9488', shape: 'rectangle' },
   // An index note IS a folder (lib/notes/shared/indexNote.ts). Listed here so
   // the Type chip on one resolves to a real configured type in every space,
   // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not
@@ -213,6 +262,7 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'file',
   'index',
   'connector',
+  'agent',
 ];
 
 /**

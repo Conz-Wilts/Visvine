@@ -243,6 +243,6 @@ export async function hostFetch(
     truncated,
   }
   const location = res.headers.get('location')
-  if (location) result.location = location
+  if (location) result.location = redactSecrets(location, ctx.redact)
   return result
 }

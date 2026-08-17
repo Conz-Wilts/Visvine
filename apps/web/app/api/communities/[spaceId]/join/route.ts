@@ -5,7 +5,7 @@ import { isForeignPersonalSpace } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { removeMemberAccess } from '@/lib/notes/access';
-import { aliasesForType, type SpaceAlias } from '@/lib/types';
+import { aliasesForType, findAliasByRef, type SpaceAlias } from '@/lib/types';
 import { ensureMemberNode } from '@/lib/spaces/memberNode';
 
 /**
@@ -53,13 +53,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
     // A user joins as a Person node, so they may only identify with a
     // Person-type alias. Anything else (an Organization alias, or an unknown
     // string) is ignored rather than trusted from the client.
-    const personAliases = aliasesForType(
-      (space.aliases ?? []) as unknown as SpaceAlias[],
-      'Person',
+    const resolvedAlias = findAliasByRef(
+      aliasesForType((space.aliases ?? []) as unknown as SpaceAlias[], 'Person'),
+      requestedAlias,
     );
-    const resolvedAlias = personAliases.find(
-      (a) => a.name.toLowerCase() === requestedAlias.toLowerCase(),
-    )?.name;
 
     const membership = await prisma.spaceMember.upsert({
       where: { userId_spaceId: { userId: session.userId, spaceId } },
@@ -78,7 +75,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ spa
       email: session.email ?? null,
     });
     if (nodeId && resolvedAlias) {
-      await prisma.node.update({ where: { id: nodeId }, data: { alias: resolvedAlias } });
+      // The canonical name, not what the client typed, plus the id it belongs to.
+      await prisma.node.update({
+        where: { id: nodeId },
+        data: { alias: resolvedAlias.name, aliasId: resolvedAlias.id ?? null },
+      });
     }
 
     // Bust the context cache so the node appears immediately

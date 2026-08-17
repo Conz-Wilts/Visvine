@@ -83,21 +83,6 @@
   margin: 2rem 0 0.65rem;
 }
 
-.notes-author-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 5px;
-  border-radius: 5px;
-  background: var(--color-brand-light-bg, #eaf9ec);
-  color: var(--color-brand-dark-green, #2f7a3e);
-  font-size: 8px;
-  font-weight: 700;
-  vertical-align: middle;
-}
-
 /* ---------- Linked / unlinked references (Roam-style backlinks) ----------
  * Typographic, not boxed: each reference is a quoted block carrying the source
  * note's title, date, and the passage it appeared in — no cards, no borders at
@@ -154,13 +139,16 @@
   padding: 0;
   border: none;
   background: transparent;
-  font-size: 14px;
+  /* The source note's title leads each reference — sized up from the excerpt so
+   * the eye lands on "which note" before "what it said". */
+  font-size: 17px;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
   font-weight: 600;
-  color: var(--color-brand-dark-green, #2f7a3e);
-  cursor: pointer;
-}
-.notes-ref-from:hover {
+  color: var(--color-text-primary, #111827);
   text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 /* "Link it" action on an unlinked reference — turns that mention into a real
  * link. Hangs off the block's right edge (absolute, so the block keeps its full

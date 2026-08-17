@@ -27,7 +27,10 @@ export type CreateableType =
   | 'index'
   // A gateway to an external API or database, written as connectors/<name>.md.
   // Admin-only, and the note IS the config — see lib/connectors/config.ts.
-  | 'connector';
+  | 'connector'
+  // A scheduled agent, written as agents/<name>.md — any member may author one;
+  // an admin activates it (lib/agents/config.ts).
+  | 'agent';
 
 /**
  * Types that are created on the note-first surface (/directory/new) rather than
@@ -49,6 +52,7 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   space: 'space',
   resource: 'resource',
   connector: 'connector',
+  agent: 'agent',
   channel: 'channel',
   section: 'section',
   file: 'file',

@@ -17,8 +17,10 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PDFViewer from '@/features/resources/components/PDFViewer';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
-  FileTypeIcon, FILE_BADGE, FILE_LABEL, formatBytes, getPinned, togglePin, DocxViewer,
+  FileTypeIcon, FILE_BADGE, FILE_LABEL, getPinned, togglePin, DocxViewer,
 } from '@/features/resources/components/resourceUi';
+import { formatBytes } from '@/lib/utils';
+import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import Chip from '@/components/ui/Chip';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
@@ -46,16 +48,10 @@ interface ResourceDetail {
   viewer: { role: string | null };
 }
 
+/** Relative within a month, absolute beyond it. */
 function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(ms / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  const days = (Date.now() - new Date(iso).getTime()) / 86_400_000;
+  return days < 30 ? relativeTimeAgo(iso, { style: 'short' }) : formatDate(iso);
 }
 
 export default function ResourceDetailPage({ params }: { params: Promise<{ resourceId: string }> }) {

@@ -3,6 +3,7 @@
 import React, { useRef, useState } from 'react';
 import { validateImageFile, uploadImage, deleteImage } from '@/lib/imageUpload';
 import type { Space } from '@/lib/types';
+import { fetchJsonBody } from '@/lib/fetchJson';
 import SpaceAvatar from './SpaceAvatar';
 
 interface SpaceImageUploadProps {
@@ -62,16 +63,7 @@ export default function SpaceImageUpload({
       const url = await uploadImage('space', space.id, pendingFile);
 
       // Persist imageUrl to the space record
-      const res = await fetch('/api/data/communities', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ space: { ...space, imageUrl: url } }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to save image URL');
-      }
+      await fetchJsonBody('/api/data/communities', 'PUT', { space: { ...space, imageUrl: url } });
 
       if (preview) URL.revokeObjectURL(preview);
       setPreview(null);

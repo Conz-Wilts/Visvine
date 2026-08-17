@@ -3,12 +3,16 @@ import { revalidateTag } from 'next/cache';
 import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { mergeFeatureConfig } from '@/lib/featureAccess';
-import type { SpaceFeatureConfig } from '@/lib/types';
+import type { SpaceDesignConfig } from '@/lib/types';
 import {
   effectiveNameAndVisibility,
   findPublicNameConflict,
   publicNameTakenMessage,
 } from '@/lib/spaces/publicName';
+import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
+import { mergeDesignConfig } from '@/lib/spaces/configMerge';
+import { isValidTimeZone } from '@/lib/agents/config';
+import { validateCustomEndpoint } from '@/lib/agents/providers';
 
 /**
  * PUT: Update space settings (admin only)
@@ -25,7 +29,7 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { name, description, country, location, tags, designConfig, featureConfig, visibility } = body as {
+  const { name, description, country, location, tags, designConfig, featureConfig, visibility, timezone, agentConfig } = body as {
     name?: string;
     description?: string;
     country?: string | null;
@@ -34,10 +38,41 @@ export async function PUT(
     designConfig?: Record<string, unknown>;
     featureConfig?: { enabled?: Record<string, boolean>; directoryPrivate?: boolean; adminOnly?: string[]; order?: string[]; more?: string[] };
     visibility?: string;
+    /** IANA zone the space's scheduled agents run in; null clears it (UTC). */
+    timezone?: string | null;
+    /** Admin-only agent settings; `customEndpoint: null` clears it. */
+    agentConfig?: { customEndpoint?: { baseURL: string } | null };
   };
 
   if (name !== undefined && !name.trim()) {
     return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 });
+  }
+
+  if (timezone !== undefined && timezone !== null) {
+    if (typeof timezone !== 'string' || !isValidTimeZone(timezone)) {
+      return NextResponse.json({ error: 'timezone must be an IANA zone name (e.g. Pacific/Auckland)' }, { status: 400 });
+    }
+  }
+
+  // Where the space's agents send their whole context is an admin decision,
+  // never a note field: validate here (https, public host) and store as JSON.
+  let nextAgentConfig: { customEndpoint: { baseURL: string } | null } | undefined;
+  if (agentConfig !== undefined) {
+    if (agentConfig === null || typeof agentConfig !== 'object') {
+      return NextResponse.json({ error: 'agentConfig must be an object' }, { status: 400 });
+    }
+    const ce = agentConfig.customEndpoint;
+    if (ce === null || ce === undefined) {
+      nextAgentConfig = { customEndpoint: null };
+    } else if (typeof ce === 'object' && typeof ce.baseURL === 'string') {
+      try {
+        nextAgentConfig = { customEndpoint: { baseURL: await validateCustomEndpoint(ce.baseURL) } };
+      } catch (e) {
+        return NextResponse.json({ error: e instanceof Error ? e.message : 'invalid custom endpoint' }, { status: 400 });
+      }
+    } else {
+      return NextResponse.json({ error: 'agentConfig.customEndpoint must be { baseURL } or null' }, { status: 400 });
+    }
   }
 
   if (country !== undefined && country !== null && typeof country !== 'string') {
@@ -123,50 +158,46 @@ export async function PUT(
     }
   }
 
-  // The tag-colour registry lives in designConfig but is written by members via
-  // the tag-colors route; preserve it when a design-settings save omits it so an
-  // admin saving the design panel can't wipe every tag's colour.
-  let designConfigToWrite = designConfig;
-  if (designConfig !== undefined && (designConfig as Record<string, unknown>).tagColors === undefined) {
-    const existing = await prisma.space.findUnique({
-      where: { id: spaceId },
-      select: { designConfig: true },
-    });
-    const existingTagColors = (existing?.designConfig as Record<string, unknown> | null)?.tagColors;
-    if (existingTagColors !== undefined) {
-      designConfigToWrite = { ...(designConfig as Record<string, unknown>), tagColors: existingTagColors };
-    }
-  }
-
-  // A featureConfig save carries only the keys its console panel owns and is
-  // merged over what's stored rather than replacing the column — see
-  // mergeFeatureConfig. `directoryPrivate` is re-derived when the patch carries
-  // `adminOnly` and inherited untouched when it doesn't.
-  let featureConfigToWrite: SpaceFeatureConfig | undefined;
-  if (featureConfig !== undefined) {
-    const existing = await prisma.space.findUnique({
-      where: { id: spaceId },
-      select: { featureConfig: true },
-    });
-    featureConfigToWrite = mergeFeatureConfig(
-      (existing?.featureConfig ?? {}) as SpaceFeatureConfig,
-      featureConfig,
+  // Both JSON columns here are shared with writers this route can't see — the
+  // tag-colour registry inside designConfig belongs to any member through the
+  // tag-colors route, and featureConfig is split across two console panels. So
+  // the merge happens against what is stored, under the space lock, rather than
+  // against a snapshot the client read minutes ago.
+  let updated: Awaited<ReturnType<typeof updateSpaceConfig>>['space'];
+  try {
+    const result = await updateSpaceConfig(
+      spaceId,
+      (stored) => ({
+        ...(designConfig !== undefined && {
+          designConfig: mergeDesignConfig(stored.designConfig, designConfig as SpaceDesignConfig),
+        }),
+        // `directoryPrivate` is re-derived when the patch carries `adminOnly`
+        // and inherited untouched when it doesn't — see mergeFeatureConfig.
+        ...(featureConfig !== undefined && {
+          featureConfig: mergeFeatureConfig(stored.featureConfig, featureConfig),
+        }),
+      }),
+      {
+        also: {
+          ...(name !== undefined && { name: name.trim() }),
+          ...(description !== undefined && { description }),
+          ...(country !== undefined && { country: country || null }),
+          ...(location !== undefined && { location: location || null }),
+          ...(tags !== undefined && { tags }),
+          ...(visibility !== undefined && { visibility }),
+          ...(timezone !== undefined && { timezone: timezone || null }),
+          ...(nextAgentConfig !== undefined && { agentConfig: nextAgentConfig }),
+        },
+        skipRevalidate: true,
+      },
     );
+    updated = result.space;
+  } catch (err) {
+    if (err instanceof UnknownSpaceError) {
+      return NextResponse.json({ error: 'Space not found' }, { status: 404 });
+    }
+    throw err;
   }
-
-  const updated = await prisma.space.update({
-    where: { id: spaceId },
-    data: {
-      ...(name !== undefined && { name: name.trim() }),
-      ...(description !== undefined && { description }),
-      ...(country !== undefined && { country: country || null }),
-      ...(location !== undefined && { location: location || null }),
-      ...(tags !== undefined && { tags }),
-      ...(designConfig !== undefined && { designConfig: designConfigToWrite as object }),
-      ...(featureConfigToWrite !== undefined && { featureConfig: featureConfigToWrite as object }),
-      ...(visibility !== undefined && { visibility }),
-    },
-  });
 
   revalidateTag('context-data-v2', { expire: 0 });
 
@@ -181,6 +212,8 @@ export async function PUT(
       designConfig: updated.designConfig,
       featureConfig: updated.featureConfig,
       visibility: updated.visibility,
+      timezone: updated.timezone,
+      agentConfig: updated.agentConfig,
     },
   });
 }

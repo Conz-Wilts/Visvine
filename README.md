@@ -22,7 +22,7 @@ cd Visvine
 # Copy env template (Windows PowerShell: Copy-Item)
 cp apps/web/.env.example apps/web/.env
 
-# Brings up the docker Postgres, pushes schema, generates client, seeds data.
+# Brings up the docker Postgres, applies migrations, generates client, seeds data.
 pnpm setup
 ```
 
@@ -160,6 +160,6 @@ See `apps/desktop/README.md` and `docs/desktop-electron-plan.md`.
 
 ## Notes
 
-- Directory search is fuzzy/keyword only (client-side relevance matching + server-side ILIKE pickers). The former OpenAI/pgvector semantic search was removed.
+- Directory search is fuzzy/keyword only (client-side relevance matching + server-side ILIKE pickers). The former *directory* semantic search was removed; context/notes search still uses pgvector embeddings when `OPENAI_API_KEY` is set.
 - Cookie name `auth_session`. Mobile sends `Authorization: Bearer <jwt>`. Same JWT system, two transports — see `apps/web/lib/session.ts`.
 - The dev auth bypass routes (`/dev/login`, `/api/dev/*`) return 404 unless both `NODE_ENV=development` and `ENABLE_DEV_AUTH=true`. Production builds compile `NODE_ENV=production` so the guard cannot be opened by env vars alone.

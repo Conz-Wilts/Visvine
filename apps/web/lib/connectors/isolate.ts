@@ -386,7 +386,9 @@ export async function runInIsolate(
                 report.truncated = true
                 return ctx.undefined
               }
-              const text = line.length > remaining ? line.slice(0, remaining) : line
+              // Redact before the cap so a secret cut by it can't leak its head.
+              const safe = redactSecrets(line, redact)
+              const text = safe.length > remaining ? safe.slice(0, remaining) : safe
               if (text.length < line.length) report.truncated = true
               logs.push(text)
               logBytes += text.length + 1
@@ -466,7 +468,7 @@ export async function runInIsolate(
               resolved.error.dispose()
               error = toRunError(dumped)
             } else {
-              value = marshalValue(ctx.dump(resolved.value), report)
+              value = marshalValue(ctx.dump(resolved.value), report, redact)
               resolved.value.dispose()
             }
           }
@@ -493,7 +495,7 @@ export async function runInIsolate(
         logs: redactSecrets(logs.join('\n'), redact),
         error: error
           ? {
-              name: error.name,
+              name: redactSecrets(error.name, redact),
               message: redactSecrets(error.message, redact),
               stack: error.stack ? redactSecrets(error.stack, redact) : null,
             }

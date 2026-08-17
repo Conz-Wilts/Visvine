@@ -24,6 +24,7 @@ import {
 } from './shared/authz'
 import { loadAliasSummaries, loadPersonAliases } from './aliases'
 import { holdsOwner } from './shared/aliases'
+import { findAliasByRef, type SpaceAlias } from '@/lib/types/context'
 
 const STATE_FILE = 'access-state.json'
 
@@ -165,13 +166,13 @@ async function loadFolderFlags(spaceId: string): Promise<FolderFlags> {
   }
 }
 
-/** The Person alias names the user holds inside this space. */
-async function aliasNamesOf(spaceId: string, userId: string): Promise<string[]> {
+/** The Person alias ids the user holds inside this space. */
+async function aliasIdsOf(spaceId: string, userId: string): Promise<string[]> {
   const rows = await prisma.userAlias.findMany({
     where: { userId, spaceId },
-    select: { aliasName: true },
+    select: { aliasId: true },
   })
-  return rows.map((r) => r.aliasName)
+  return rows.map((r) => r.aliasId)
 }
 
 /**
@@ -180,7 +181,7 @@ async function aliasNamesOf(spaceId: string, userId: string): Promise<string[]> 
  * A handful of indexed rows — this is the whole per-request cost.
  */
 export async function contextAccessFor(spaceId: string, userId: string): Promise<ContextAccess> {
-  const aliasNames = await aliasNamesOf(spaceId, userId)
+  const aliasIds = await aliasIdsOf(spaceId, userId)
   const [rows, flags] = await Promise.all([
     prisma.contextGrant.findMany({
       where: {
@@ -188,8 +189,8 @@ export async function contextAccessFor(spaceId: string, userId: string): Promise
         OR: [
           { subjectType: 'space' },
           { subjectType: 'user', subjectId: userId },
-          ...(aliasNames.length
-            ? [{ subjectType: 'alias' as const, subjectId: { in: aliasNames } }]
+          ...(aliasIds.length
+            ? [{ subjectType: 'alias' as const, subjectId: { in: aliasIds } }]
             : []),
         ],
       },
@@ -278,14 +279,13 @@ export async function accessListFor(spaceId: string, path: string): Promise<Acce
     bySubject.set(key, list)
   }
 
-  // Alias subjects are stored by NAME (they live in the space's Types
-  // config, not a table), so they need no lookup at all.
-
+  // Alias subjects hold an alias ID, so the display name comes from the
+  // space's own vocabulary — one read, not a join.
   const userIds = [...bySubject.keys()]
     .filter((k) => k.startsWith('user:'))
     .map((k) => k.slice('user:'.length))
   const [space, users] = await Promise.all([
-    prisma.space.findUnique({ where: { id: spaceId }, select: { name: true } }),
+    prisma.space.findUnique({ where: { id: spaceId }, select: { name: true, aliases: true } }),
     userIds.length
       ? prisma.user.findMany({
           where: { id: { in: userIds } },
@@ -294,6 +294,7 @@ export async function accessListFor(spaceId: string, path: string): Promise<Acce
       : Promise.resolve([]),
   ])
   const userById = new Map(users.map((u) => [u.id, u]))
+  const spaceAliases = (space?.aliases ?? []) as unknown as SpaceAlias[]
 
   const entries: AccessListEntry[] = []
   for (const rows of bySubject.values()) {
@@ -304,7 +305,9 @@ export async function accessListFor(spaceId: string, path: string): Promise<Acce
       subjectType === 'space'
         ? `Everyone in ${space?.name ?? 'this space'}`
         : subjectType === 'alias'
-          ? subjectId
+          ? // A grant outlives the alias it names only if the delete cascade
+            // failed, so falling back to the id is a diagnostic, not a label.
+            (findAliasByRef(spaceAliases, subjectId, 'Person')?.name ?? subjectId)
           : (userById.get(subjectId)?.name ?? 'Former member')
     entries.push({
       subjectType,
@@ -353,7 +356,7 @@ export async function grantAccess(
     throw new Error(`Unknown subject type: ${input.subjectType}`)
   }
   const resourcePath = normalizeResourcePath(input.resourcePath)
-  const subjectId = input.subjectType === 'space' ? '' : input.subjectId
+  let subjectId = input.subjectType === 'space' ? '' : input.subjectId
   if (input.subjectType !== 'space' && !subjectId) {
     throw new Error('subjectId is required')
   }
@@ -367,10 +370,13 @@ export async function grantAccess(
     }
   }
   if (input.subjectType === 'alias') {
-    const known = await loadPersonAliases(spaceId)
-    if (!known.some((a) => a.name === subjectId)) {
+    // The caller may name the alias or pass its id; the row always stores the
+    // id, so the grant survives a rename.
+    const alias = findAliasByRef(await loadPersonAliases(spaceId), subjectId, 'Person')
+    if (!alias?.id) {
       throw new Error(`Unknown alias "${subjectId}" — add it on the Types page first`)
     }
+    subjectId = alias.id
   }
 
   const row = await prisma.contextGrant.upsert({

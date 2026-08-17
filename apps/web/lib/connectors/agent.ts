@@ -13,7 +13,8 @@
  * sense once secrets are stored, and the loop is told which are.
  */
 import prisma from '@/lib/prisma'
-import { aiConfigured, chatWithTools, type AgentMessage, type ToolSpec } from '@/lib/notes/ai'
+import { aiConfigured, chatWithTools, type ToolSpec } from '@/lib/notes/ai'
+import { runToolLoop, type ChatFn, type ToolHandler } from '@/lib/notes/toolLoop'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
@@ -30,7 +31,7 @@ export type AgentEvent =
 
 const MAX_TURNS = 16
 const FETCH_CAP_CHARS = 60_000
-const RUN_OUTPUT_CAP_CHARS = 12_000
+export const RUN_OUTPUT_CAP_CHARS = 12_000
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
 const SYSTEM_PROMPT = `You build "connectors" — notes that let AI agents call an external service by writing JavaScript in a sandboxed isolate. You are given a description of what to connect; produce a working connector note.
@@ -143,7 +144,11 @@ interface AgentContext {
   spaceId: string
 }
 
-async function toolFetchUrl(rawUrl: string): Promise<string> {
+/**
+ * Fetch a public https page for an agent — SSRF-gated, capped. Shared with
+ * Space agents' `fetch_url` tool (lib/agents/tools.ts).
+ */
+export async function toolFetchUrl(rawUrl: string): Promise<string> {
   let url: URL
   try {
     url = new URL(rawUrl)
@@ -220,19 +225,36 @@ async function toolRunConnector(ctx: AgentContext, name: string, code: string): 
   }
 }
 
-/** One-line description of a tool call, for the progress stream. */
-function describeCall(tool: string, args: Record<string, unknown>): string {
-  switch (tool) {
-    case 'fetch_url':
-      return String(args.url ?? '')
-    case 'run_connector':
-      return `${args.name}: ${String(args.code ?? '').slice(0, 120)}`
-    default:
-      return String(args.name ?? '')
-  }
+/** Bind the four tools to a context; `onWritten` tracks the last note written. */
+function toolHandlers(ctx: AgentContext, onWritten: (name: string) => void): ToolHandler[] {
+  const spec = (name: string) => TOOLS.find((t) => t.name === name)!
+  return [
+    {
+      spec: spec('fetch_url'),
+      describe: (args) => String(args.url ?? ''),
+      run: (args) => toolFetchUrl(String(args.url ?? '')),
+    },
+    {
+      spec: spec('write_connector'),
+      describe: (args) => String(args.name ?? ''),
+      run: async (args) => {
+        const result = await toolWriteConnector(ctx, String(args.name ?? ''), String(args.content ?? ''))
+        if (result.startsWith('written')) onWritten(String(args.name))
+        return result
+      },
+    },
+    {
+      spec: spec('read_connector'),
+      describe: (args) => String(args.name ?? ''),
+      run: (args) => toolReadConnector(ctx, String(args.name ?? '')),
+    },
+    {
+      spec: spec('run_connector'),
+      describe: (args) => `${args.name}: ${String(args.code ?? '').slice(0, 120)}`,
+      run: (args) => toolRunConnector(ctx, String(args.name ?? ''), String(args.code ?? '')),
+    },
+  ]
 }
-
-type ChatFn = typeof chatWithTools
 
 /**
  * Run the creation loop, emitting progress events as it goes. Resolves when
@@ -251,76 +273,39 @@ export async function runConnectorAgent(
     return
   }
 
-  const messages: AgentMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: prompt },
-  ]
   let lastWritten: string | null = null
+  const result = await runToolLoop({
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: prompt },
+    ],
+    tools: toolHandlers(ctx, (name) => {
+      lastWritten = name
+    }),
+    maxTurns: MAX_TURNS,
+    chatFn,
+    onEvent: (event) => {
+      if (event.type === 'assistant') onEvent({ type: 'assistant', text: event.text })
+      else if (event.type === 'tool') onEvent({ type: 'tool', tool: event.tool, detail: event.detail })
+    },
+  })
 
-  for (let turn = 0; turn < MAX_TURNS; turn++) {
-    let reply
-    try {
-      reply = await chatFn(messages, TOOLS)
-    } catch (e) {
-      onEvent({ type: 'error', message: e instanceof Error ? e.message : 'AI request failed' })
+  switch (result.reason) {
+    case 'error':
+      onEvent({ type: 'error', message: result.error?.message ?? 'AI request failed' })
       return
-    }
-
-    if (reply.toolCalls.length === 0) {
+    case 'finished':
       onEvent({
         type: 'done',
-        summary: reply.content?.trim() || 'Finished, but the model gave no summary.',
+        summary: result.finalText ?? 'Finished, but the model gave no summary.',
         connector: lastWritten,
       })
       return
-    }
-
-    if (reply.content?.trim()) onEvent({ type: 'assistant', text: reply.content.trim() })
-    messages.push({
-      role: 'assistant',
-      content: reply.content,
-      tool_calls: reply.toolCalls.map((c) => ({
-        id: c.id,
-        type: 'function',
-        function: { name: c.name, arguments: c.arguments },
-      })),
-    })
-
-    for (const call of reply.toolCalls) {
-      let args: Record<string, unknown>
-      try {
-        args = JSON.parse(call.arguments) as Record<string, unknown>
-      } catch {
-        messages.push({ role: 'tool', tool_call_id: call.id, content: 'error: arguments were not valid JSON' })
-        continue
-      }
-      onEvent({ type: 'tool', tool: call.name, detail: describeCall(call.name, args) })
-
-      let result: string
-      switch (call.name) {
-        case 'fetch_url':
-          result = await toolFetchUrl(String(args.url ?? ''))
-          break
-        case 'write_connector':
-          result = await toolWriteConnector(ctx, String(args.name ?? ''), String(args.content ?? ''))
-          if (result.startsWith('written')) lastWritten = String(args.name)
-          break
-        case 'read_connector':
-          result = await toolReadConnector(ctx, String(args.name ?? ''))
-          break
-        case 'run_connector':
-          result = await toolRunConnector(ctx, String(args.name ?? ''), String(args.code ?? ''))
-          break
-        default:
-          result = `error: unknown tool ${call.name}`
-      }
-      messages.push({ role: 'tool', tool_call_id: call.id, content: result })
-    }
+    default:
+      onEvent({
+        type: 'done',
+        summary: 'Ran out of turns. The last written note (if any) is saved — check its page.',
+        connector: lastWritten,
+      })
   }
-
-  onEvent({
-    type: 'done',
-    summary: 'Ran out of turns. The last written note (if any) is saved — check its page.',
-    connector: lastWritten,
-  })
 }

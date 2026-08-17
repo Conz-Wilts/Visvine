@@ -1,3 +1,5 @@
+import { fetchJson } from './fetchJson';
+
 export type ImageEntityType = 'card' | 'person' | 'space' | 'event';
 
 /**
@@ -14,20 +16,14 @@ export async function uploadImage(
   formData.append('entityType', entityType);
   formData.append('entityId', entityId);
 
-  const res = await fetch('/api/upload', { method: 'POST', body: formData });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to upload image');
-  }
-
-  const { url } = await res.json();
+  const { url } = await fetchJson<{ url: string }>('/api/upload', { method: 'POST', body: formData });
   return url;
 }
 
 /**
  * Upload a cropped image blob.
  */
-async function uploadCroppedImage(
+export async function uploadCroppedImage(
   entityType: ImageEntityType,
   entityId: string,
   blob: Blob,
@@ -43,20 +39,7 @@ async function uploadCroppedImage(
  */
 export async function deleteImage(entityType: ImageEntityType, entityId: string): Promise<void> {
   const params = new URLSearchParams({ entityType, entityId });
-  const res = await fetch(`/api/upload?${params}`, { method: 'DELETE' });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to delete image');
-  }
-}
-
-// Legacy shims — callers that haven't been updated yet pass nodeId for cards
-export async function uploadCroppedNodeImage(
-  nodeId: string,
-  blob: Blob,
-  originalFileName?: string
-): Promise<string> {
-  return uploadCroppedImage('card', nodeId, blob, originalFileName);
+  await fetchJson(`/api/upload?${params}`, { method: 'DELETE' });
 }
 
 /**

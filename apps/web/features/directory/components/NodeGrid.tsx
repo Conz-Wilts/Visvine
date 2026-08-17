@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { VirtuosoGrid, type GridComponents } from 'react-virtuoso'
 import NodeCard from './NodeCard'
-import type { DirectoryItem } from './types'
+import type { DirectoryItem } from '@/lib/types'
 import type { NodeTypeConfig, SpaceAlias } from '@/lib/types'
 import { EmptyState, Skeleton } from '@/components/ui'
 import { prefersReducedMotion } from '@/lib/motion'

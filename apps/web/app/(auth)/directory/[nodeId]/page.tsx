@@ -20,7 +20,7 @@ import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
 import { isFeatureEnabled } from '@/lib/featureAccess';
-import { entityKindOf, entityNotePath } from '@/lib/notes/entities';
+import { entityFolderPathOf, entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnSpaceNode } from '@/lib/types/context';
 import type { SpaceFeatureConfig, NBNode } from '@/lib/types';
 import ProfileSkeletonLoader from '@/features/profile/components/ProfileSkeletonLoader';
@@ -32,14 +32,26 @@ import OrgPageContent from '@/features/profile/components/OrgPageContent';
 import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
+import AgentPageContent from '@/features/profile/components/AgentPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
  *  takes plain string ids via the shell registration. */
 type ProfileTab = 'about' | 'context' | 'raw' | 'preview' | 'connections' | 'communities';
 
-/** The entity's canonical note path — what the tree highlights. */
+/** The note the Context tab shows — what the tree highlights: the entity's own
+ *  note (flat, or its folder index once converted), or, when the URL carries
+ *  `?note=<sub>` (relative to the entity folder), that sub-note. A `note`
+ *  that isn't a plain relative .md path is ignored. */
 function useEntityNotePath(nodeId: string, node: NBNode | null): string | null {
-  return node ? entityNotePath({ id: nodeId, type: node.type }) : null;
+  const searchParams = useSearchParams();
+  const sub = searchParams.get('note');
+  if (!node) return null;
+  const own = entityNotePath({ id: nodeId, type: node.type, metadata: node.metadata ?? null });
+  if (!sub || !/^[^/\\.][^\\]*\.md$/i.test(sub) || sub.split('/').some((s) => s === '' || s === '.' || s === '..')) {
+    return own;
+  }
+  const folder = entityFolderPathOf({ id: nodeId, type: node.type });
+  return folder ? `${folder}/${sub}` : own;
 }
 
 // A profile carries a Context tab when the notes tool is enabled, the node is an
@@ -627,6 +639,26 @@ function ConnectorRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
+// ── Agent nodes → Agent + Context/Raw ─────────────────────────────────────────
+
+// The note IS the brief (Context/Raw), but whether the agent is on, when it
+// next fires and what its runs did live outside the note. Unlike connectors,
+// every member gets the tab: the roster is member-visible by design and the
+// API strips the money for non-admins.
+const AGENT_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Agent' };
+
+function AgentRoute({ nodeId }: { nodeId: string }) {
+  return (
+    <NodePage
+      nodeId={nodeId}
+      firstTab={AGENT_FIRST_TAB}
+      ariaLabel="Agent sections"
+      notFoundTitle="Agent not found"
+      renderBody={(id) => <AgentPageContent nodeId={id} />}
+    />
+  );
+}
+
 // ── Route entry ───────────────────────────────────────────────────────────────
 
 const noop = () => {};
@@ -758,6 +790,9 @@ function NodeRoute() {
   }
   if (nodeId.startsWith('connector:')) {
     return <ConnectorRoute nodeId={nodeId} />;
+  }
+  if (nodeId.startsWith('agent:')) {
+    return <AgentRoute nodeId={nodeId} />;
   }
   if (isOrgId(nodeId)) {
     return (

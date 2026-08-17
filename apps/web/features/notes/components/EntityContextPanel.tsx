@@ -21,7 +21,19 @@ import { findAlias, nodeTypeLabel } from '@/lib/types'
 import { getTypeColor } from '@/features/directory/components/typeStyles'
 import { hexToPalette } from '@/lib/profileTheme'
 import { tagKey, tagPalette } from '@/lib/tagColors'
-import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
+import { fetchJsonBody } from '@/lib/fetchJson'
+import {
+  entityContextHref,
+  entityFolderPathOf,
+  entityIndexPathOf,
+  entityNotePath,
+  entityOwnerPathOf,
+  entityStub,
+  noteHref,
+  resolveEntityOwner,
+} from '@/lib/notes/entities'
+import { availableNotePath, newNoteContent } from '@/lib/notes/shared/newContext'
+import { clearContextCache } from '../hooks/useSpaceContextData'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
 import {
@@ -51,6 +63,10 @@ const PERSONAL_ID_PREFIX = 'me:'
 
 interface EntityContextPanelProps {
   nodeId: string
+  /** The note this tab shows: the entity's own note (default), or a sub-note in
+   *  its entity folder (people/<slug>/<note>.md) when the URL's `?note=` says
+   *  so. Anything outside the folder falls back to the entity's own note. */
+  notePath?: string | null
   // Editor view mode is lifted to the profile page (reset there across tab
   // switches); the editor's own toolbar hosts the Editor/Raw toggle.
   mode?: NoteMode
@@ -63,6 +79,7 @@ interface EntityContextPanelProps {
 
 export function EntityContextPanel({
   nodeId,
+  notePath = null,
   mode = 'wysiwyg',
   onModeChange,
   onReady,
@@ -76,7 +93,27 @@ export function EntityContextPanel({
   const node = profileData?.node ?? null
   const { entities, entityByPath, allTags } = useDirectoryEntities()
 
-  const path = node ? entityNotePath({ id: nodeId, type: node.type }) : null
+  // The entity's own note (flat, or the folder index once it has converted), its
+  // folder, and the note actually on this tab — a sub-note when asked for one.
+  // A conversion this panel just caused: the profile hook's cached node won't
+  // carry the new pointer until its next fetch, so it is held here as well.
+  const [pointerOverride, setPointerOverride] = useState<{ nodeId: string; notePath: string } | null>(null)
+  const entityPath = node
+    ? entityNotePath({
+        id: nodeId,
+        type: node.type,
+        metadata:
+          pointerOverride?.nodeId === nodeId
+            ? { ...(node.metadata ?? {}), notePath: pointerOverride.notePath }
+            : (node.metadata ?? null),
+      })
+    : null
+  const folder = node ? entityFolderPathOf({ id: nodeId, type: node.type }) : null
+  const indexPath = node ? entityIndexPathOf({ id: nodeId, type: node.type }) : null
+  const path =
+    notePath && folder && entityOwnerPathOf(notePath) === folder ? notePath : entityPath
+  // Relative to the folder ('sams-comms.md'); null on the entity's own note.
+  const subPath = path && folder && path !== entityPath ? path.slice(folder.length + 1) : null
 
   const [aiConfigured, setAiConfigured] = useState(false)
   const [access, setAccess] = useState<PathAccessResponse | null>(null)
@@ -124,6 +161,10 @@ export function EntityContextPanel({
   const [nameSaving, setNameSaving] = useState(false)
   const [addingTag, setAddingTag] = useState(false)
   const [tagSaving, setTagSaving] = useState(false)
+  // "+ New note" in the notes strip: the title being typed (null = closed) and
+  // the in-flight create.
+  const [newNoteTitle, setNewNoteTitle] = useState<string | null>(null)
+  const [creatingNote, setCreatingNote] = useState(false)
   // Colours registered this session (before the space config refetches).
   const [tagColorOverride, setTagColorOverride] = useState<Record<string, string>>({})
   const loadSeq = useRef(0)
@@ -255,13 +296,13 @@ export function EntityContextPanel({
     [notesIndex, shownPath],
   )
 
-  const stubContent = useMemo(
-    () =>
-      node
-        ? entityStub({ id: nodeId, type: node.type, name: node.name, subtitle: node.subtitle ?? null })
-        : '',
-    [node, nodeId],
-  )
+  const stubContent = useMemo(() => {
+    if (!node) return ''
+    // A sub-note reached by URL before it exists is a plain note titled from
+    // its filename; only the entity's own note is seeded from the entity.
+    if (subPath) return newNoteContent({ title: subPath.replace(/\.md$/i, '').split('/').pop() ?? subPath })
+    return entityStub({ id: nodeId, type: node.type, name: node.name, subtitle: node.subtitle ?? null })
+  }, [node, nodeId, subPath])
 
   // Editor editability: server-computed per-path access (any-depth grants and
   // restricted cuts included) — writeDenial stays the enforcement; a 403
@@ -274,7 +315,7 @@ export function EntityContextPanel({
     async (p: string, body: string, origin?: string) => {
       if (!spaceId) return
       try {
-        await notesApi.write(spaceId, p, body, origin)
+        const { movedTo } = await notesApi.write(spaceId, p, body, origin)
         // Drop the prefetch cache's view of this note so a remount re-reads the
         // saved content instead of the pre-save snapshot.
         invalidateContextCache(
@@ -282,7 +323,16 @@ export function EntityContextPanel({
           contextKeys.references(spaceId, p),
           contextKeys.list(spaceId),
           contextKeys.tree(spaceId), // a first save creates the note — the tree gains it
+          ...(movedTo ? [contextKeys.read(spaceId, movedTo), contextKeys.access(spaceId, movedTo)] : []),
         )
+        // The write landed at the entity's folder index (the note converted, or
+        // had already): record the pointer locally so the tab re-points without
+        // waiting on the profile refetch, and the directory sees the new path.
+        if (movedTo && node && movedTo === indexPath) {
+          patchCachedNodeProfile(nodeId, { metadata: { ...(node.metadata ?? {}), notePath: movedTo } })
+          setPointerOverride({ nodeId, notePath: movedTo })
+          clearContextCache(spaceId)
+        }
         setNoteExists(true)
         setError(null)
         cachedFetch(contextKeys.references(spaceId, p), () => notesApi.references(spaceId, p))
@@ -291,7 +341,7 @@ export function EntityContextPanel({
         setError(err instanceof Error ? err.message : 'Failed to save')
       }
     },
-    [spaceId],
+    [spaceId, node, nodeId, indexPath],
   )
 
   // Turn one unlinked reference into a real link. The write lands on the SOURCE
@@ -329,16 +379,65 @@ export function EntityContextPanel({
     [spaceId, path],
   )
 
-  // Links inside the note: another entity → that entity's Context tab; a
-  // non-entity note (folder index, sector, deal…) → the standalone note view.
+  // Links inside the note: another entity (or one of its sub-notes) → that
+  // entity's Context tab; this entity's other notes → the same tab, re-pointed;
+  // a non-entity note (folder index, sector, deal…) → the standalone note view.
   const handleOpenNote = useCallback(
     (p: string) => {
-      const targetId = resolveEntityNode(p, entityByPath)
-      if (targetId === nodeId) return
-      if (targetId) router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
+      const owner = resolveEntityOwner(p, entityByPath)
+      if (owner?.id === nodeId && owner.subPath === subPath) return
+      if (owner) router.push(entityContextHref(owner.id, owner.subPath))
       else router.push(noteHref(p))
     },
-    [entityByPath, nodeId, router],
+    [entityByPath, nodeId, subPath, router],
+  )
+
+  // The entity folder's notes, for the strip under the header: the entity's own
+  // note first ("Context"), then its sub-notes from the loaded index. Nested
+  // sub-folders show as their index note.
+  const folderNotes = useMemo(() => {
+    if (!folder || !entityPath) return []
+    const prefix = `${folder}/`
+    return notesIndex
+      .filter((n) => n.path.startsWith(prefix) && n.path !== entityPath && n.path !== indexPath)
+      .map((n) => ({ path: n.path, title: n.title || n.path.slice(prefix.length) }))
+      .sort((a, b) => a.title.localeCompare(b.title))
+  }, [notesIndex, folder, entityPath, indexPath])
+
+  // Create a sub-note. The first one converts the entity note into the folder
+  // (people/<slug>.md → people/<slug>/index.md, server-side) — so every cache
+  // that named the old path is dropped, the profile's node is patched with the
+  // new pointer, and the tab re-points to the new note.
+  const createSubNote = useCallback(
+    async (rawTitle: string) => {
+      const title = rawTitle.trim()
+      if (!title || !spaceId || !folder || !node) return
+      setCreatingNote(true)
+      setError(null)
+      try {
+        const taken = new Set(notesIndex.map((n) => n.path))
+        const target = availableNotePath(folder, title, taken)
+        await notesApi.create(spaceId, target, newNoteContent({ title }))
+        invalidateContextCache(
+          contextKeys.list(spaceId),
+          contextKeys.tree(spaceId),
+          ...(entityPath ? [contextKeys.read(spaceId, entityPath), contextKeys.references(spaceId, entityPath)] : []),
+          ...(indexPath ? [contextKeys.read(spaceId, indexPath), contextKeys.access(spaceId, indexPath)] : []),
+        )
+        if (indexPath && entityPath !== indexPath) {
+          patchCachedNodeProfile(nodeId, { metadata: { ...(node.metadata ?? {}), notePath: indexPath } })
+          setPointerOverride({ nodeId, notePath: indexPath })
+          clearContextCache(spaceId)
+        }
+        setNewNoteTitle(null)
+        router.replace(entityContextHref(nodeId, target.slice(folder.length + 1)), { scroll: false })
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create the note')
+      } finally {
+        setCreatingNote(false)
+      }
+    },
+    [spaceId, folder, node, nodeId, notesIndex, entityPath, indexPath, router],
   )
 
   // `[[ ]]` mention picked inside the tab editor: make sure the target entity's
@@ -346,7 +445,7 @@ export function EntityContextPanel({
   // post-create personal-copy prompt).
   const ensureEntityNote = useCallback(
     async (entity: PickerEntity): Promise<string> => {
-      const p = entityNotePath({ id: entity.id, type: entity.type })
+      const p = entityNotePath(entity)
       if (!p) throw new Error('Not a directory entity')
       if (!spaceId) throw new Error('No space')
       try {
@@ -388,12 +487,7 @@ export function EntityContextPanel({
       setNameOverride(next)
       setNameSaving(true)
       try {
-        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spaceId, name: next }),
-        })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to rename')
+        await fetchJsonBody(`/api/nodes/${encodeURIComponent(nodeId)}`, 'PATCH', { spaceId, name: next })
         patchCachedNodeProfile(nodeId, { name: next })
       } catch (err) {
         setNameOverride(null)
@@ -413,13 +507,7 @@ export function EntityContextPanel({
       setTags(next)
       setTagSaving(true)
       try {
-        const res = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spaceId, tags: next }),
-        })
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to save tags')
-        const { tags: saved } = (await res.json()) as { tags: string[] }
+        const { tags: saved } = await fetchJsonBody<{ tags: string[] }>(`/api/nodes/${encodeURIComponent(nodeId)}`, 'PATCH', { spaceId, tags: next })
         setTags(saved)
       } catch (err) {
         setTags(prev)
@@ -557,9 +645,10 @@ export function EntityContextPanel({
         )}
         {/* The name IS the note title here (embedded NoteEditor hides its own
             .notes-title), so it matches that scale: 2.5rem / 600 / tight.
-            `truncate` clips overflow, and leading-[1.1] makes the line box
-            shorter than the font's ascent+descent — without the pb the p/g/y
-            descenders get shaved off. Anyone who can write the note can rename
+            `truncate` clips overflow, so the line box has to be tall enough for
+            the font itself: leading-[1.25] leaves room for the p/g/y descenders
+            (at 1.1 the box is shorter than ascent+descent and shaves them off).
+            Anyone who can write the note can rename
             the entity — the id and note path are minted once, so the title is
             pure display metadata (server: PATCH /api/nodes name). */}
         {nameDraft !== null ? (
@@ -573,13 +662,13 @@ export function EntityContextPanel({
               if (e.key === 'Escape') setNameDraft(null)
             }}
             aria-label="Entity name"
-            className="min-w-0 flex-1 rounded-md bg-transparent pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary outline-none ring-1 ring-border-default font-open-sauce"
+            className="min-w-0 flex-1 rounded-md bg-transparent text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary outline-none ring-1 ring-border-default font-open-sauce"
           />
         ) : (
           <h2
             onClick={canEditTags && !nameSaving ? () => setNameDraft(displayName) : undefined}
             title={canEditTags ? 'Click to rename' : undefined}
-            className={`min-w-0 flex-1 truncate pb-1 text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce${canEditTags ? ' cursor-text rounded-md transition hover:bg-surface-2' : ''}`}
+            className={`min-w-0 flex-1 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce${canEditTags ? ' cursor-text rounded-md transition hover:bg-surface-2' : ''}`}
           >
             {displayName}
           </h2>
@@ -645,6 +734,65 @@ export function EntityContextPanel({
         ) : null}
       />
 
+      {/* Notes about this entity. One note is the default; the strip appears
+          once there is (or can be) more than one — the entity's own note reads
+          as "Context", every other note in its folder sits beside it, and
+          "+ New note" files a new one under the entity (which is what turns the
+          note into a folder the first time). */}
+      {(folderNotes.length > 0 || subPath !== null || canEditTags) && (
+        <nav aria-label={`Notes about ${displayName}`} className="mt-4 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => subPath !== null && router.replace(entityContextHref(nodeId), { scroll: false })}
+            aria-current={subPath === null ? 'page' : undefined}
+            className={chipClass({ tone: subPath === null ? 'solid' : 'soft', size: 'lg', className: subPath === null ? '' : CHIP_ACCENT_HOVER })}
+            style={{ ['--accent' as string]: theme.dark, ...(subPath === null ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
+          >
+            Context
+          </button>
+          {folderNotes.map((n) => {
+            const active = n.path === path
+            return (
+              <button
+                key={n.path}
+                type="button"
+                onClick={() => !active && folder && router.replace(entityContextHref(nodeId, n.path.slice(folder.length + 1)), { scroll: false })}
+                aria-current={active ? 'page' : undefined}
+                className={chipClass({ tone: active ? 'solid' : 'soft', size: 'lg', className: active ? '' : CHIP_ACCENT_HOVER })}
+                style={{ ['--accent' as string]: theme.dark, ...(active ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
+              >
+                {n.title}
+              </button>
+            )
+          })}
+          {canEditTags && (newNoteTitle !== null ? (
+            <input
+              autoFocus
+              value={newNoteTitle}
+              disabled={creatingNote}
+              placeholder="Note title"
+              aria-label="New note title"
+              onChange={(e) => setNewNoteTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void createSubNote(newNoteTitle)
+                if (e.key === 'Escape') setNewNoteTitle(null)
+              }}
+              onBlur={() => { if (!creatingNote && !newNoteTitle.trim()) setNewNoteTitle(null) }}
+              className="h-8 min-w-[12rem] rounded-full border border-border-default bg-surface-1 px-3 text-sm text-text-primary outline-none focus:ring-1 focus:ring-border-default"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNewNoteTitle('')}
+              className={chipClass({ tone: 'dashed', size: 'lg', className: CHIP_ACCENT_HOVER })}
+              style={{ ['--accent' as string]: theme.dark }}
+            >
+              + New note
+            </button>
+          ))}
+        </nav>
+      )}
+
       {/* The member link a person context can carry lives on its Profile tab,
           not here — it's a relation, not node metadata. */}
     </div>
@@ -672,7 +820,9 @@ export function EntityContextPanel({
         <>
           {!noteExists && (
             <p className="mx-auto mb-4 max-w-3xl text-center text-sm text-text-muted">
-              No shared context for {displayName} yet — start typing below to create it.
+              {subPath
+                ? 'This note does not exist yet — start typing below to create it.'
+                : `No shared context for ${displayName} yet — start typing below to create it.`}
             </p>
           )}
           {/* Keyed and fed from `shown`, never from the in-flight `path`: the editor
@@ -682,6 +832,7 @@ export function EntityContextPanel({
           <NoteEditor
             key={shown?.path ?? path}
             variant="embedded"
+            showTitle={subPath !== null}
             headerSlot={headerCard}
             toolbarTrailSlot={share.fallback}
             path={shown?.path ?? path}

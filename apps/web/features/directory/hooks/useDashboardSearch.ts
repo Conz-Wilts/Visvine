@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { DirectoryItem } from '@/features/directory/components/types';
+import type { DirectoryItem } from '@/lib/types';
 
 /**
  * Hook for filtering directory items based on search term

@@ -1,7 +1,7 @@
 /**
  * Rewrite legacy connector notes (alias: http | postgres | mysql | mcp with
  * per-alias fields) into the v2 perimeter shape (hosts / env / allow /
- * timeout_ms — docs/connectors-v2.md), and append a "Calling this connector"
+ * timeout_ms — see AGENTS.md#connectors), and append a "Calling this connector"
  * section teaching the agent the commands the old executor used to imply.
  *
  * `alias` is kept verbatim: in v2 it is display metadata (the chip colour),
@@ -219,11 +219,11 @@ async function main() {
   if (WRITE) {
     const byBrain = new Map<string, typeof rewritten>()
     for (const note of rewritten) {
-      const key = `${note.spaceId} ${note.ownerKey}`
+      const key = `${note.spaceId}\0${note.ownerKey}`
       byBrain.set(key, [...(byBrain.get(key) ?? []), note])
     }
     for (const [key, group] of byBrain) {
-      const [spaceId, ownerKey] = key.split(' ')
+      const [spaceId, ownerKey] = key.split('\0')
       for (const note of group) {
         await prisma.contextNote.update({
           where: { note_identity: { spaceId, ownerKey, path: note.path } },

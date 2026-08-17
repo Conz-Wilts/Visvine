@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Radio } from 'lucide-react'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
-import { entityNotePath, entityStub, noteHref, resolveEntityNode } from '@/lib/notes/entities'
+import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { notesApi, type PathAccessResponse, type PublicationStateResponse } from '../lib/notesApi'
@@ -272,14 +272,12 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
     [spaceId, path],
   )
 
-  // Links inside the note: entity → its profile Context tab; anything else →
-  // its own note view.
+  // Links inside the note: entity (or one of its sub-notes) → its profile
+  // Context tab; anything else → its own note view.
   const handleOpenNote = useCallback(
     (p: string) => {
       if (p === path) return
-      const targetId = resolveEntityNode(p, entityByPath)
-      if (targetId) router.push(`/directory/${encodeURIComponent(targetId)}?tab=context`)
-      else router.push(noteHref(p))
+      router.push(hrefForNotePath(p, entityByPath))
     },
     [entityByPath, path, router],
   )
@@ -288,7 +286,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // exists before the link lands (same contract as EntityContextPanel).
   const ensureEntityNote = useCallback(
     async (entity: PickerEntity): Promise<string> => {
-      const p = entityNotePath({ id: entity.id, type: entity.type })
+      const p = entityNotePath(entity)
       if (!p) throw new Error('Not a directory entity')
       if (!spaceId) throw new Error('No space')
       try {
@@ -391,7 +389,9 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
   // what counts as a type (see NoteMetaRows — console types only).
   const headerCard = (
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
-      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.1] tracking-[-0.02em] text-text-primary font-open-sauce">
+      {/* leading-[1.25], not tighter: `truncate` hides overflow, so a line box
+          shorter than the font's ascent+descent shaves the p/g/y descenders. */}
+      <h2 className="min-w-0 truncate text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary font-open-sauce">
         {title}
       </h2>
       <NoteMetaRows

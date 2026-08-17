@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Resource } from '@/lib/types';
+import { fetchJson } from '@/lib/fetchJson';
 
 export function useResources(spaceId: string | null) {
   const [resources, setResources] = useState<Resource[]>([]);
@@ -16,9 +17,7 @@ export function useResources(spaceId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/resources?space_id=${spaceId}`);
-      if (!res.ok) throw new Error('Failed to fetch resources');
-      const data = await res.json();
+      const data = await fetchJson<Resource[]>(`/api/resources?space_id=${spaceId}`);
       if (myReq === reqId.current) setResources(data);
     } catch (e: unknown) {
       if (myReq === reqId.current) setError(e instanceof Error ? e.message : 'Unknown error');

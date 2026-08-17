@@ -40,6 +40,7 @@ import {
   CalendarPlus, Check, Loader2, Lock, ClipboardList, Globe2,
 } from 'lucide-react';
 import Select from '@/components/ui/Select';
+import { fetchJsonBody } from '@/lib/fetchJson';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a note
 // tab renders (same rationale as the directory profile's deferred panel).
@@ -534,19 +535,13 @@ function RsvpCard({
     }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/events/${encodeURIComponent(eventId)}/attendees?spaceId=${spaceId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: sessionName,
-          email: sessionEmail || undefined,
-          response,
-          plusOnes: response === 'going' ? plusOnes : 0,
-          answers: Object.keys(answers).length ? answers : undefined,
-        }),
+      await fetchJsonBody(`/api/events/${encodeURIComponent(eventId)}/attendees?spaceId=${spaceId}`, 'POST', {
+        name: sessionName,
+        email: sessionEmail || undefined,
+        response,
+        plusOnes: response === 'going' ? plusOnes : 0,
+        answers: Object.keys(answers).length ? answers : undefined,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not submit your RSVP');
       setEditing(false);
       await onChanged();
     } catch (err) {

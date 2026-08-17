@@ -6,16 +6,11 @@
     "node": ">=20.9.0",
     "pnpm": ">=9.0.0"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
     "setup": "pnpm install && docker compose up -d --wait && pnpm prisma:generate && pnpm db:migrate && pnpm db:seed",
     "dev": "docker compose up -d --wait && pnpm --filter @visvine/web dev",
     "dev:cloud": "concurrently -k -n proxy,web -c blue,green \"pnpm db:proxy:cloud\" \"node scripts/with-prod-env.mjs pnpm --filter @visvine/web dev\"",
     "dev:desktop": "docker compose up -d --wait && concurrently -k -n web,desktop -c green,magenta \"pnpm --filter @visvine/web dev\" \"pnpm --filter @visvine/desktop dev\"",
-    "proxy": "bash scripts/start-cloud-sql-proxy.sh",
     "build": "pnpm --filter @visvine/web build",
     "start": "pnpm --filter @visvine/web start",
     "lint": "pnpm --filter @visvine/web lint",

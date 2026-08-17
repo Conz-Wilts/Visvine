@@ -22,7 +22,9 @@ const pool = new pg.Pool({ connectionString });
 // The seeded /dev/login users (see prisma/seed.ts). Membership carries no role;
 // `owner` marks who also gets the Owner alias here, which is what makes someone
 // an admin (lib/auth.ts#isAdmin).
-const OWNER_ALIAS_NAME = 'Owner';
+// Mirrors OWNER_ALIAS_ID in lib/types/context.ts — the reserved id of the
+// built-in Owner alias, which is what a user_aliases row points at.
+const OWNER_ALIAS_ID = 'owner';
 const ANCHORS = [
   { id: 'user_dev_admin', owner: true },
   { id: 'user_dev_member', owner: false },
@@ -69,11 +71,11 @@ try {
         // Owner alias, so holding it here is enough to manage the space.
         await client.query(
           `
-          INSERT INTO user_aliases (space_id, user_id, alias_name, created_at)
+          INSERT INTO user_aliases (space_id, user_id, alias_id, created_at)
           VALUES ($1, $2, $3, NOW())
-          ON CONFLICT (space_id, user_id, alias_name) DO NOTHING
+          ON CONFLICT (space_id, user_id, alias_id) DO NOTHING
           `,
-          [c.id, a.id, OWNER_ALIAS_NAME],
+          [c.id, a.id, OWNER_ALIAS_ID],
         );
       }
     }

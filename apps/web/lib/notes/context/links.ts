@@ -93,26 +93,3 @@ export async function removeAutoLink(
   if (res.count > 0) bustContextCache();
   return res.count;
 }
-
-/**
- * Remove an edge by its (undirected) endpoints + optional relationship. Backs the
- * manual delete path; admins may remove any edge regardless of origin. Omitting
- * `relationship` removes every edge between the pair.
- */
-export async function removeLink(
-  spaceId: string,
-  sourceId: string,
-  targetId: string,
-  relationship?: string,
-): Promise<number> {
-  const pairKey = pairKeyFor(sourceId, targetId);
-  const res = await prisma.link.deleteMany({
-    where: {
-      spaceId,
-      pairKey,
-      ...(relationship ? { relationship: normalizeRelationship(relationship) } : {}),
-    },
-  });
-  if (res.count > 0) bustContextCache();
-  return res.count;
-}

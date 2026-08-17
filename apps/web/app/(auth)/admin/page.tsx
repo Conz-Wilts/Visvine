@@ -12,7 +12,6 @@ import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
 import { LoadingText, Alert } from '@/components/ui';
 import { Space } from '@/lib/types';
-import { Settings2, Puzzle, Users, UserPlus, Shapes } from 'lucide-react';
 
 // Each section owns one job: General is the space's own record, Tools decides
 // which surfaces exist and how the sidebar is ordered, Types describes what kinds
@@ -34,13 +33,13 @@ function AdminConsole({ space, onSaved }: {
   const configKey = `${space.id}-${JSON.stringify(space.featureConfig ?? {})}`;
 
   const sections: ConsoleSection[] = [
-    { id: 'general', label: 'General', group: 'Settings', width: 'form', icon: <Settings2 size={18} /> },
-    { id: 'tools', label: 'Tools', group: 'Settings', width: 'form', icon: <Puzzle size={18} /> },
-    { id: 'types', label: 'Types', group: 'Content', width: 'form', icon: <Shapes size={18} /> },
+    { id: 'general', label: 'General', width: 'form' },
+    { id: 'tools', label: 'Tools', width: 'form' },
+    { id: 'types', label: 'Types', width: 'form' },
     // Both queues a person can be waiting in — to join, and for context access —
     // are resolved here, so one badge counts them both.
-    { id: 'members', label: 'Members', group: 'Members', width: 'wide', badge: pending.members + pending.requests, icon: <Users size={18} /> },
-    { id: 'invite', label: 'Invite', group: 'Members', width: 'form', icon: <UserPlus size={18} /> },
+    { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
+    { id: 'invite', label: 'Invite', width: 'form' },
   ];
 
   return (

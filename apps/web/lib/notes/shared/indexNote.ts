@@ -107,6 +107,40 @@ export function enforceIndexFrontmatter(content: string, folderPath: string): st
   )
 }
 
+/**
+ * The entity-folder variant of the contract: an index at 'people/<slug>/index.md'
+ * IS the person's note, so it keeps the entity's own type (`Person`, …) and its
+ * `node:` back-pointer rather than `type: Index` — index-ness is the path. A
+ * write that swapped the type for `Index` (an agent following the plain index
+ * rule) or dropped it is put back; a title the writer chose is kept, falling
+ * back to the entity's name. Everything else in the frontmatter rides through.
+ *
+ * `entity` is the type label and node id the note must carry (see
+ * lib/notes/entities.ts ENTITY_TYPE_LABEL / entityDraftContent). Returns
+ * `content` unchanged when it already conforms.
+ */
+export function enforceEntityIndexFrontmatter(
+  content: string,
+  entity: { typeLabel: string; nodeId: string; name: string },
+): string {
+  const fm = parseFrontmatter(content)
+  const declaredType = typeof fm.type === 'string' ? fm.type.trim() : ''
+  const declaredTitle = typeof fm.title === 'string' ? fm.title.trim() : ''
+  const declaredNode = typeof fm.node === 'string' ? fm.node.trim() : ''
+  const typeOk = declaredType.toLowerCase() === entity.typeLabel.toLowerCase()
+  if (typeOk && declaredTitle && declaredNode === entity.nodeId) return content
+  const { body } = splitFrontmatter(content)
+  return joinFrontmatter(
+    {
+      ...fm,
+      type: typeOk ? declaredType : entity.typeLabel,
+      title: declaredTitle || entity.name,
+      node: entity.nodeId,
+    },
+    body,
+  )
+}
+
 // the managed child list
 //
 // An index body is curated prose PLUS a machine-maintained list of the folder's

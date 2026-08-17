@@ -13,6 +13,7 @@ import { useState } from 'react';
 import type { RSVPResponse, FormField } from '@/lib/types';
 import { Check, Loader2, CalendarPlus } from 'lucide-react';
 import Select from '@/components/ui/Select';
+import { fetchJsonBody } from '@/lib/fetchJson';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import { missingRequiredAnswers, RESPONSE_LABELS } from '@/lib/eventUtils';
 
@@ -62,20 +63,14 @@ export function PublicRsvpForm({
     if (missing.length > 0) { setError(`Please answer: ${missing.join(', ')}`); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/public/events/${encodeURIComponent(slug)}/rsvp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim() || undefined,
-          response,
-          plusOnes: response === 'going' ? plusOnes : 0,
-          answers: response === 'going' && Object.keys(answers).length ? answers : undefined,
-        }),
+      const data = await fetchJsonBody<{ message?: string }>(`/api/public/events/${encodeURIComponent(slug)}/rsvp`, 'POST', {
+        name: name.trim(),
+        email: email.trim() || undefined,
+        response,
+        plusOnes: response === 'going' ? plusOnes : 0,
+        answers: response === 'going' && Object.keys(answers).length ? answers : undefined,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Could not submit your RSVP');
-      setDone({ message: data.message || "You're in!" });
+      setDone({ message: data?.message || "You're in!" });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {

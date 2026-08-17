@@ -11,7 +11,7 @@
 import 'dotenv/config';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import prisma from '../lib/prisma';
-import { OWNER_ALIAS_NAME } from '../lib/types/context';
+import { OWNER_ALIAS_ID } from '../lib/types/context';
 import { mintAccessToken } from '../lib/mcp/tokens';
 import { MCP_SCOPES } from '../lib/mcp/scopes';
 
@@ -85,7 +85,7 @@ const settle = () => new Promise((r) => setTimeout(r, RATE_WINDOW_MS));
 
 async function main() {
   const holder = await prisma.userAlias.findFirst({
-    where: { spaceId: SPACE, aliasName: OWNER_ALIAS_NAME },
+    where: { spaceId: SPACE, aliasId: OWNER_ALIAS_ID },
     select: { userId: true },
   });
   if (!holder) throw new Error(`nobody manages ${SPACE}`);

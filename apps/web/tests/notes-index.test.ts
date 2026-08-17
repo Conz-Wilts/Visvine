@@ -11,6 +11,7 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
+  enforceEntityIndexFrontmatter,
   enforceIndexFrontmatter,
   folderOfIndexPath,
   hasChildrenBlock,
@@ -274,4 +275,36 @@ test('nextIndexTitle keeps a curated folder name across a rename', () => {
 
 test('INDEX_BASENAME is the canonical filename', () => {
   assert.equal(INDEX_BASENAME, 'index.md')
+})
+
+// The entity-folder variant: 'people/<slug>/index.md' keeps the entity's type.
+const CONNOR = { typeLabel: 'Person', nodeId: 'person:connor', name: 'Connor' }
+
+test('enforceEntityIndexFrontmatter puts an entity type back over Index', () => {
+  const fixed = enforceEntityIndexFrontmatter(
+    '---\ntype: Index\ntitle: Connor\ntags: [person]\n---\n\nbody\n',
+    CONNOR,
+  )
+  const fm = parseFrontmatter(fixed)
+  assert.equal(fm.type, 'Person')
+  assert.equal(fm.title, 'Connor')
+  assert.equal(fm.node, 'person:connor')
+  assert.deepEqual(fm.tags, ['person'])
+  assert.ok(splitFrontmatter(fixed).body.includes('body'))
+})
+
+test('enforceEntityIndexFrontmatter is a byte no-op on conforming content', () => {
+  const ok = '---\ntype: Person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
+  assert.equal(enforceEntityIndexFrontmatter(ok, CONNOR), ok)
+  // Case of the type label is the writer's; only the meaning is enforced.
+  const lower = '---\ntype: person\ntitle: Connor W\nnode: person:connor\n---\n\nbody\n'
+  assert.equal(enforceEntityIndexFrontmatter(lower, CONNOR), lower)
+})
+
+test('enforceEntityIndexFrontmatter fills a missing title and node from the entity', () => {
+  const fixed = enforceEntityIndexFrontmatter('no frontmatter at all\n', CONNOR)
+  const fm = parseFrontmatter(fixed)
+  assert.equal(fm.type, 'Person')
+  assert.equal(fm.title, 'Connor')
+  assert.equal(fm.node, 'person:connor')
 })

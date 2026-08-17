@@ -4,11 +4,12 @@
 // one entry into designConfig.tagColors — it never touches other design config.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireApiSession } from '@/lib/api/route';
 import { spaceReadForbidden } from '@/lib/auth';
 import { isHexColor, tagKey } from '@/lib/tagColors';
+import { updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig';
+import { mergeDesignConfig } from '@/lib/spaces/configMerge';
 
 /**
  * PATCH: register (or update) a single tag's base colour.
@@ -37,22 +38,19 @@ export async function PATCH(
   });
   if (!membership) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { designConfig: true },
-  });
-  if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-  const design = (space.designConfig ?? {}) as Record<string, unknown>;
-  const tagColors = { ...((design.tagColors as Record<string, string>) ?? {}) };
-  // First writer wins — don't let a later create silently recolour an existing tag.
-  if (!tagColors[key]) tagColors[key] = color;
-
-  await prisma.space.update({
-    where: { id: spaceId },
-    data: { designConfig: { ...design, tagColors } },
-  });
-
-  revalidateTag('context-data-v2', { expire: 0 });
-  return NextResponse.json({ tag: key, color: tagColors[key] });
+  // Under the lock, so "first writer wins" is decided against what is really
+  // stored — two members creating the same tag at once used to be able to read
+  // the same empty registry and both write their own colour.
+  try {
+    const { config } = await updateSpaceConfig(spaceId, (stored) => {
+      if (stored.designConfig.tagColors?.[key]) return {};
+      return { designConfig: mergeDesignConfig(stored.designConfig, { tagColors: { [key]: color } }) };
+    });
+    return NextResponse.json({ tag: key, color: config.designConfig.tagColors?.[key] ?? color });
+  } catch (err) {
+    if (err instanceof UnknownSpaceError) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    throw err;
+  }
 }

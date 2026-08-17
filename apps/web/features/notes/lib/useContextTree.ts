@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { contextDisplayName } from '@/lib/notes/shared/contextSettings'
-import { entityKindOfPath, isEntityNamespaceDir, noteHref } from '@/lib/notes/entities'
+import { entityKindOfPath, entityOwnerPathOf, isEntityNamespaceDir, noteHref } from '@/lib/notes/entities'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
@@ -45,9 +45,13 @@ export function parentFolderOf(path: string): string {
  * server's message instead of being predicted here.
  */
 export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: string): string | null {
-  if (destFolder && (isEntityNamespaceDir(destFolder) || entityKindOfPath(`${destFolder}/x.md`))) {
+  // Into an entity's OWN folder (people/<slug>) is fine — that files the note
+  // under the entity (and converts its note to the folder if needed). Into the
+  // namespace root, or beside it as a would-be entity, is not.
+  const intoEntityFolder = destFolder !== '' && entityOwnerPathOf(`${destFolder}/x.md`) !== null
+  if (destFolder && !intoEntityFolder && (isEntityNamespaceDir(destFolder) || entityKindOfPath(`${destFolder}/x.md`))) {
     const ns = destFolder.split('/')[0]
-    return `“${ns}” holds the notes for directory entities — those paths are managed, so nothing else can be filed there.`
+    return `“${ns}” holds the notes for directory entities — those paths are managed. Drop onto a person or organisation to file a note under them.`
   }
   if (kind === 'note') {
     const ns = entityKindOfPath(from)
@@ -62,6 +66,12 @@ export function moveDenial(from: string, kind: 'note' | 'folder', destFolder: st
   if (!from) return 'The context root can’t be moved.'
   if (isEntityNamespaceDir(from)) {
     return `“${from}” is a managed folder of entity notes — it can’t be moved.`
+  }
+  if (entityOwnerPathOf(`${from}/x.md`) !== null && entityKindOfPath(`${from}/index.md`)) {
+    return 'This folder is a directory entity’s context — its name is the entity, so it stays where it is.'
+  }
+  if (intoEntityFolder) {
+    return 'Only notes can be filed under an entity — move the folder’s notes across one at a time.'
   }
   if (destFolder === from || destFolder.startsWith(`${from}/`)) {
     return 'A folder can’t be moved inside itself.'

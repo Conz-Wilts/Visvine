@@ -63,4 +63,6 @@ export interface Space {
   designConfig?: SpaceDesignConfig;
   featureConfig?: SpaceFeatureConfig; // Which optional surfaces are enabled
   visibility?: 'public' | 'private'; // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
+  timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
+  agentConfig?: { customEndpoint?: { baseURL: string } | null }; // admin-only agent settings (lib/agents)
 }

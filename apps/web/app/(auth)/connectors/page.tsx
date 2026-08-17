@@ -32,6 +32,9 @@ import { fetchJson } from '@/lib/fetchJson';
 interface ConnectorRow {
   name: string;
   path: string;
+  /** `model` = an LLM provider the space's agents run on; never runnable, keyed by MODEL_KEY_*. */
+  kind: 'http' | 'model';
+  model: { provider: string; providerLabel: string; baseURL: string | null; keySecret: string } | null;
   alias: string | null;
   description: string | null;
   hosts: string[];
@@ -55,6 +58,13 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
     return { label: 'Invalid', detail: connector.invalid, tone: 'bad' };
   }
   if (connector.missingSecrets.length > 0) {
+    if (connector.kind === 'model') {
+      return {
+        label: 'No key',
+        detail: `Add the ${connector.model?.providerLabel ?? 'provider'} API key on the connector's page`,
+        tone: 'warn',
+      };
+    }
     const names = connector.missingSecrets.join(', ');
     return {
       label: 'Missing secrets',
@@ -64,6 +74,14 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
   }
   if (connector.warnings.length > 0) {
     return { label: 'Needs migration', detail: connector.warnings[0], tone: 'warn' };
+  }
+  if (connector.kind === 'model') {
+    // A model connector has no perimeter to be empty: with its key stored it
+    // is ready, and its "hosts" are the provider's pinned endpoint.
+    const detail = connector.model?.baseURL
+      ? new URL(connector.model.baseURL).host
+      : 'custom endpoint (agent settings)';
+    return { label: 'Ready', detail: `${connector.model?.providerLabel ?? 'Model'} · ${detail}`, tone: 'ok' };
   }
   if (connector.hosts.length === 0) {
     return { label: 'No network', detail: 'No hosts declared yet', tone: 'warn' };

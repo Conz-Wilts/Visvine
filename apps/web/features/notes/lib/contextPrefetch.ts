@@ -190,12 +190,18 @@ export function usePrefetchEntityContext(nodeId: string, node: NBNode | null, en
   const { currentSpace } = useSpace()
   const spaceId = currentSpace?.id ?? null
   const nodeType = node?.type ?? null
+  // Where the note lives — flat, or the folder index once the node converted.
+  const notePointer = typeof node?.metadata?.notePath === 'string' ? node.metadata.notePath : null
 
   useEffect(() => {
     if (!enabled || !nodeType || !spaceId) return
     // Warm the code-split chunk (Tiptap + toolbar icons) alongside the data.
     void import('../components/EntityContextPanel').catch(() => {})
-    const path = entityNotePath({ id: nodeId, type: nodeType })
+    const path = entityNotePath({
+      id: nodeId,
+      type: nodeType,
+      metadata: notePointer ? { notePath: notePointer } : null,
+    })
     if (path) prefetchNoteContext(spaceId, path)
-  }, [enabled, nodeId, nodeType, spaceId])
+  }, [enabled, nodeId, nodeType, notePointer, spaceId])
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
+import { fetchJson, FetchJsonError } from '@/lib/fetchJson';
 
 // Simple in-memory cache shared across every resource, keyed by
 // `${resourceKey}:${spaceId}` so distinct resources never collide.
@@ -117,15 +118,11 @@ export function useCachedSpaceResource<T>({
 
         abortControllerRef.current = new AbortController();
 
-        const res = await fetch(path(currentSpace.id), {
+        const json: unknown = await fetchJson(path(currentSpace.id), {
           signal: abortControllerRef.current.signal,
+        }).catch((err: unknown) => {
+          throw err instanceof FetchJsonError ? new Error(`Failed to load ${errorLabel}: ${err.message}`) : err;
         });
-
-        if (!res.ok) {
-          throw new Error(`Failed to load ${errorLabel}: ${res.statusText}`);
-        }
-
-        const json: unknown = await res.json();
         const parsed = parse(json);
         setData(parsed);
 

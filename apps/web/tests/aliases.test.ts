@@ -17,8 +17,15 @@ import {
   MAX_ALIAS_NAME,
   OWNER_ALIAS_NAME,
   SYSTEM_ALIAS_MESSAGE,
+  summarize,
   type AliasSummary,
 } from '../lib/notes/shared/aliases'
+import {
+  findAliasByRef,
+  personAliases,
+  OWNER_ALIAS_ID,
+  type SpaceAlias,
+} from '../lib/types/context'
 
 const alias = (
   name: string,
@@ -206,4 +213,83 @@ test('describeAliases lists up to max names, then counts the rest', () => {
   assert.equal(describeAliases(['Admin', 'Eng', 'Board']), 'Admin, Eng, Board')
   assert.equal(describeAliases(['Admin', 'Eng', 'Board', 'GTM']), 'Admin, Eng, Board +1')
   assert.equal(describeAliases(['Admin', 'Eng', 'Board', 'GTM'], 2), 'Admin, Eng +2')
+})
+
+// identity — an alias is its id, not its name
+
+test('summarize pairs holders by alias id, not by name', () => {
+  const aliases: SpaceAlias[] = [
+    { id: 'al_1', name: 'Founder', color: '#000', nodeType: 'Person' },
+    { id: 'al_2', name: 'Investor', color: '#000', nodeType: 'Person' },
+  ]
+  const holders = [
+    { aliasId: 'al_1', userId: 'u-1' },
+    { aliasId: 'al_2', userId: 'u-2' },
+  ]
+  const summaries = summarize(aliases, holders)
+  assert.deepEqual(summaries.map((s) => s.holderIds), [['u-1'], ['u-2']])
+})
+
+test('a rename does not move holders — the id they hold has not changed', () => {
+  const holders = [{ aliasId: 'al_1', userId: 'u-1' }]
+  const before = summarize([{ id: 'al_1', name: 'Founder', color: '#000', nodeType: 'Person' }], holders)
+  const after = summarize([{ id: 'al_1', name: 'Operator', color: '#000', nodeType: 'Person' }], holders)
+  assert.deepEqual(before[0].holderIds, ['u-1'])
+  assert.deepEqual(after[0].holderIds, ['u-1'])
+})
+
+test('a holder row pointing at a deleted alias attaches to nothing', () => {
+  const summaries = summarize(
+    [{ id: 'al_1', name: 'Founder', color: '#000', nodeType: 'Person' }],
+    [{ aliasId: 'al_gone', userId: 'u-1' }],
+  )
+  assert.deepEqual(summaries[0].holderIds, [])
+})
+
+const VOCABULARY: SpaceAlias[] = [
+  { id: 'owner', name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  { id: 'al_1', name: 'Founder', color: '#16a34a', nodeType: 'Person' },
+  { id: 'al_2', name: 'Portfolio', color: '#0891b2', nodeType: 'Space' },
+]
+
+test('findAliasByRef resolves by id', () => {
+  assert.equal(findAliasByRef(VOCABULARY, 'al_1')?.name, 'Founder')
+})
+
+test('findAliasByRef resolves by name, ignoring case and padding', () => {
+  // The MCP add_context bug: `founder` was validated case-insensitively and then
+  // stored verbatim, so every exact-match read afterwards missed it.
+  assert.equal(findAliasByRef(VOCABULARY, 'founder')?.id, 'al_1')
+  assert.equal(findAliasByRef(VOCABULARY, '  FOUNDER  ')?.id, 'al_1')
+})
+
+test('findAliasByRef returns the CANONICAL name, whatever casing came in', () => {
+  assert.equal(findAliasByRef(VOCABULARY, 'fOuNdEr')?.name, 'Founder')
+})
+
+test('findAliasByRef scopes to a node type when asked', () => {
+  assert.equal(findAliasByRef(VOCABULARY, 'Portfolio', 'Space')?.id, 'al_2')
+  assert.equal(findAliasByRef(VOCABULARY, 'Portfolio', 'Person'), undefined)
+  assert.equal(findAliasByRef(VOCABULARY, 'Founder', 'Space'), undefined)
+})
+
+test('findAliasByRef finds the built-in Owner, stored or not', () => {
+  assert.equal(findAliasByRef(VOCABULARY, OWNER_ALIAS_ID, 'Person')?.name, 'Owner')
+  // A space that never stored Owner still resolves it — personAliases grafts it.
+  assert.equal(findAliasByRef(personAliases([]), OWNER_ALIAS_ID, 'Person')?.id, OWNER_ALIAS_ID)
+  assert.equal(findAliasByRef(personAliases([]), 'owner', 'Person')?.name, 'Owner')
+})
+
+test('findAliasByRef is empty-safe', () => {
+  assert.equal(findAliasByRef(VOCABULARY, null), undefined)
+  assert.equal(findAliasByRef(VOCABULARY, ''), undefined)
+  assert.equal(findAliasByRef(undefined, 'Founder'), undefined)
+  assert.equal(findAliasByRef(VOCABULARY, 'Nope'), undefined)
+})
+
+test('personAliases pins Owner to its reserved id even if storage says otherwise', () => {
+  const grafted = personAliases([
+    { id: 'al_wrong', name: 'Owner', color: '#b4881b', nodeType: 'Person', owner: true, system: true },
+  ])
+  assert.equal(grafted[0].id, OWNER_ALIAS_ID)
 })

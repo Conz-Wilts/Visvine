@@ -8,7 +8,9 @@ import type { CreateSuggestion } from '@/lib/create/suggestedType';
 import type { SpaceAlias } from '@/lib/types';
 import type { ChannelSectionEntry, ChannelViewMode } from '@/lib/messages/types';
 import { validateImageFile } from '@/lib/imageUpload';
+import { formatBytes } from '@/lib/utils';
 import { slugify } from '@/lib/eventUtils';
+import { PROVIDERS } from '@/lib/agents/registry';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, EmojiIconPicker } from '@/features/messages/components/ChannelIcon';
 import {
@@ -163,6 +165,19 @@ export const TYPE_OPTIONS: TypeOption[] = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-5 5 5 5 0 01-5-5V8zM12 17v4" />
+      </svg>
+    ),
+  },
+  {
+    id: 'agent',
+    label: 'Agent',
+    description: 'A scheduled agent that runs from your context',
+    color: '#0d9488',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="4" y="8" width="16" height="11" rx="2" strokeWidth={1.8} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v5M9 13h.01M15 13h.01M9 17h6" />
       </svg>
     ),
   },
@@ -809,6 +824,10 @@ export function ContextForm({
 export interface ConnectorFormData {
   name: string;
   description: string;
+  /** `http` = a perimeter connector agents run code in; `model` = an LLM provider agents run ON. */
+  kind: 'http' | 'model';
+  /** Model connectors only: a registry provider id (gemini, openai, anthropic, custom). */
+  provider: string;
   /** One `host` or `host:port` per line — what the sandbox may reach. Empty = no network yet. */
   hosts: string;
   /** Optional NAME of a stored secret, exposed to commands as $NAME. */
@@ -836,6 +855,9 @@ function connectorFormError(data: ConnectorFormData): string | null {
   const name = data.name.trim();
   if (!name) return null; // not an error yet — just nothing typed
   if (!connectorSlug(name)) return 'Use letters and numbers — that name has none.';
+  if (data.kind === 'model') {
+    return PROVIDERS.some((p) => p.id === data.provider) ? null : 'Pick a model provider.';
+  }
   for (const line of data.hosts.split('\n').map((l) => l.trim()).filter(Boolean)) {
     if (!HOST_LINE_RE.test(line)) {
       return `Bad host "${line}" — a bare hostname like api.stripe.com or db.internal:5432, no scheme or path.`;
@@ -878,46 +900,230 @@ export function ConnectorForm({
         />
       </Field>
 
+      <Field label="Kind">
+        <div className="flex gap-1.5">
+          {(
+            [
+              { id: 'http', label: 'Service', hint: 'an API agents run code against' },
+              { id: 'model', label: 'Model provider', hint: 'an LLM agents run on' },
+            ] as const
+          ).map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              onClick={() => onChange({ ...data, kind: k.id })}
+              title={k.hint}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                data.kind === k.id
+                  ? 'border-brand-green bg-brand-light-bg text-brand-dark-green'
+                  : 'border-border-default text-text-secondary hover:bg-surface-2'
+              }`}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
       <Field label="Description">
         <input
           className={inputClass}
-          placeholder="What this system is — agents read this to decide when to use it."
+          placeholder={
+            data.kind === 'model'
+              ? 'Optional — e.g. "Our OpenAI account, billed to ops."'
+              : 'What this system is — agents read this to decide when to use it.'
+          }
           value={data.description}
           onChange={(e) => onChange({ ...data, description: e.target.value })}
         />
       </Field>
 
-      <Field label="Hosts">
-        <textarea
-          className={`${inputClass} font-mono resize-none`}
-          rows={2}
-          placeholder={'api.stripe.com'}
-          value={data.hosts}
-          onChange={(e) => onChange({ ...data, hosts: e.target.value })}
-        />
-      </Field>
+      {data.kind === 'model' ? (
+        <>
+          <Field label="Provider" required>
+            <select
+              className={inputClass}
+              value={data.provider}
+              onChange={(e) => onChange({ ...data, provider: e.target.value })}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="text-xs text-text-muted">
+            The endpoint is the provider&apos;s own — pinned by Visvine, not by the note. Its API key
+            ({PROVIDERS.find((p) => p.id === data.provider)?.keySecret ?? 'MODEL_KEY_…'}) is set on the
+            connector&apos;s page afterwards. Agents pick a model with{' '}
+            <span className="font-mono">model: {data.provider || 'provider'}/…</span> in their brief.
+            Not runnable: no note or agent can read or spend the key.
+          </p>
+        </>
+      ) : (
+        <>
+          <Field label="Hosts">
+            <textarea
+              className={`${inputClass} font-mono resize-none`}
+              rows={2}
+              placeholder={'api.stripe.com'}
+              value={data.hosts}
+              onChange={(e) => onChange({ ...data, hosts: e.target.value })}
+            />
+          </Field>
 
-      <Field label="Secret">
-        <input
-          className={`${inputClass} font-mono`}
-          placeholder="STRIPE_KEY"
-          value={data.secretName}
-          onChange={(e) => onChange({ ...data, secretName: e.target.value })}
-        />
-      </Field>
+          <Field label="Secret">
+            <input
+              className={`${inputClass} font-mono`}
+              placeholder="STRIPE_KEY"
+              value={data.secretName}
+              onChange={(e) => onChange({ ...data, secretName: e.target.value })}
+            />
+          </Field>
 
-      <p className="text-xs text-text-muted">
-        Agents run JavaScript in an isolate that can only reach the hosts above. The secret&apos;s
-        value is set on the connector&apos;s page afterwards and reaches the code as{' '}
-        <span className="font-mono">env.{data.secretName.trim().toUpperCase() || 'NAME'}</span> — it never
-        lives in the note.
-      </p>
+          <p className="text-xs text-text-muted">
+            Agents run JavaScript in an isolate that can only reach the hosts above. The secret&apos;s
+            value is set on the connector&apos;s page afterwards and reaches the code as{' '}
+            <span className="font-mono">env.{data.secretName.trim().toUpperCase() || 'NAME'}</span> — it never
+            lives in the note.
+          </p>
+        </>
+      )}
 
       {slug && <EntityNotePreview dir="connectors" name={slug} />}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-text-muted">
         Only space admins can create or edit connectors. Refine the note afterwards — its body is
         the documentation agents read.
+      </p>
+    </div>
+  );
+}
+
+// ─── Agent Form ─────────────────────────────────────────────────────────────
+
+export interface AgentFormData {
+  name: string;
+  description: string;
+  /** `<provider>/<model-id>` from the registry. */
+  model: string;
+  /** Connector names, one per line or comma-separated. */
+  connectors: string;
+  web: boolean;
+  /** The brief — the agent's instructions. */
+  brief: string;
+}
+
+/** Same slug rule as connectors: the name IS the filename and the handle. */
+export function agentSlug(name: string): string {
+  return slugify(name).slice(0, 64);
+}
+
+const CONNECTOR_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/i;
+
+function agentFormError(data: AgentFormData): string | null {
+  const name = data.name.trim();
+  if (!name) return null;
+  if (!agentSlug(name)) return 'Use letters and numbers — that name has none.';
+  if (!/^[a-z0-9]+\/[A-Za-z0-9._:-]+$/.test(data.model.trim())) return 'Model must be <provider>/<model-id>, e.g. gemini/gemma-4-31b-it.';
+  for (const c of data.connectors.split(/[\n,]/).map((l) => l.trim()).filter(Boolean)) {
+    if (!CONNECTOR_NAME_RE.test(c)) return `Bad connector name "${c}".`;
+  }
+  return null;
+}
+
+export function agentFormReady(data: AgentFormData): boolean {
+  return !!agentSlug(data.name) && data.brief.trim().length > 0 && !agentFormError(data);
+}
+
+export function agentConnectorList(data: AgentFormData): string[] {
+  return [...new Set(data.connectors.split(/[\n,]/).map((l) => l.trim()).filter(Boolean))];
+}
+
+export function AgentForm({
+  data,
+  onChange,
+  nameRef,
+  models,
+}: {
+  data: AgentFormData;
+  onChange: (d: AgentFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+  /** `provider/model` options from the registry; the input stays free-text for unknown ids. */
+  models: { value: string; label: string }[];
+}) {
+  const error = agentFormError(data);
+  const slug = agentSlug(data.name);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Name" required>
+        <input
+          ref={nameRef as React.RefObject<HTMLInputElement>}
+          className={`${inputClass} font-mono`}
+          placeholder="e.g. weekly-digest"
+          maxLength={64}
+          value={data.name}
+          onChange={(e) => onChange({ ...data, name: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Description">
+        <input
+          className={inputClass}
+          placeholder="One line — shown on the Agents roster."
+          value={data.description}
+          onChange={(e) => onChange({ ...data, description: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Model" required>
+        <input
+          className={`${inputClass} font-mono`}
+          list="agent-model-options"
+          placeholder="gemini/gemma-4-31b-it"
+          value={data.model}
+          onChange={(e) => onChange({ ...data, model: e.target.value })}
+        />
+        <datalist id="agent-model-options">
+          {models.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </datalist>
+      </Field>
+
+      <Field label="Connectors">
+        <input
+          className={`${inputClass} font-mono`}
+          placeholder="hubspot, stripe — the connectors this agent may call"
+          value={data.connectors}
+          onChange={(e) => onChange({ ...data, connectors: e.target.value })}
+        />
+      </Field>
+
+      <label className="flex items-center gap-2 text-sm text-text-secondary">
+        <input type="checkbox" checked={data.web} onChange={(e) => onChange({ ...data, web: e.target.checked })} />
+        May fetch public web pages
+      </label>
+
+      <Field label="Brief" required>
+        <textarea
+          className={`${inputClass} resize-y`}
+          rows={6}
+          placeholder="What should this agent do on each run? What to read, what to produce, where to write it."
+          value={data.brief}
+          onChange={(e) => onChange({ ...data, brief: e.target.value })}
+        />
+      </Field>
+
+      {slug && <EntityNotePreview dir="agents" name={slug} />}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <p className="text-xs text-text-muted">
+        Anyone in the space can write an agent. It only runs once a space admin activates it — on the space&apos;s own model
+        key, with exactly the connectors listed here.
       </p>
     </div>
   );
@@ -938,12 +1144,6 @@ export interface FileEntry {
 export interface FileFormData {
   files: FileEntry[];
   folder: string;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /** Reject unsupported/oversized files at pick time, before any round-trip. */

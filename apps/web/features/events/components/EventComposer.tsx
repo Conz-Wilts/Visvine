@@ -15,6 +15,7 @@ import { copyToClipboard } from '@/lib/utils';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import Select from '@/components/ui/Select';
+import { fetchJsonBody } from '@/lib/fetchJson';
 import {
   Loader2, ImagePlus, MapPin, Video, Globe, Users, Lock, ChevronDown, ChevronUp,
   Check, Link2, CalendarPlus, ExternalLink, ArrowLeft, X, Sparkles, Trash2, Plus,
@@ -202,24 +203,18 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       const body = buildBody(overrides);
       if (!createdRef.current) {
         createdRef.current = true; // optimistic: prevents a double-create race
-        const res = await fetch('/api/events', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
+        try {
+          return await fetchJsonBody<NBEvent>('/api/events', 'POST', body);
+        } catch (err) {
           createdRef.current = false;
-          throw new Error((await res.json().catch(() => ({}))).error || 'Could not save event');
+          throw err;
         }
-        return res.json();
       }
-      const res = await fetch(`/api/events/${draftIdRef.current}?spaceId=${encodeURIComponent(spaceId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not save event');
-      return res.json();
+      return fetchJsonBody<NBEvent>(
+        `/api/events/${draftIdRef.current}?spaceId=${encodeURIComponent(spaceId)}`,
+        'PATCH',
+        body,
+      );
     },
     [buildBody, spaceId],
   );

@@ -1,5 +1,5 @@
 /**
- * At-rest encryption for space connector secrets (the SpaceSecret
+ * At-rest encryption for space connector secrets (the ConnectorSecret
  * table). AES-256-GCM under a single server key, stored as
  * `aes256gcm$<ivHex>$<tagHex>$<cipherHex>` — same self-describing string style
  * as lib/auth/password.ts, so a future scheme can live alongside this one.

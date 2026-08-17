@@ -10,7 +10,7 @@ import { canCreateType } from '@/lib/create/creatable';
 import { slugify } from '@/lib/eventUtils';
 import type { SpaceAlias, SpaceFeatureConfig } from '@/lib/types';
 import { aliasesForType } from '@/lib/types';
-import { uploadCroppedNodeImage } from '@/lib/imageUpload';
+import { uploadCroppedImage } from '@/lib/imageUpload';
 import ImageCropper from '@/features/directory/components/data/ImageCropper';
 import { useSidebar, DOCK_MS, DOCK_EASE } from '@/features/shared/contexts/SidebarContext';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
@@ -25,6 +25,7 @@ import {
   SpaceForm, type SpaceFormData,
   ContextForm, type ContextFormData,
   ConnectorForm, type ConnectorFormData, connectorSlug, connectorFormReady,
+  AgentForm, type AgentFormData, agentSlug, agentFormReady, agentConnectorList,
   FileForm, type FileFormData, type FileEntry,
   AliasSelector,
   SuccessScreen,
@@ -35,6 +36,10 @@ import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contextPrefetch';
 import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
 import { newConnectorNote } from '@/lib/connectors/config';
+import { newModelConnectorNote } from '@/lib/connectors/model';
+import { newAgentNote } from '@/lib/agents/config';
+import { fetchJsonBody } from '@/lib/fetchJson';
+import { PROVIDERS } from '@/lib/agents/registry';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -106,7 +111,8 @@ export default function CreateModal() {
   const [channelData, setChannelData] = useState<ChannelFormData>({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
-  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', hosts: '', secretName: '' });
+  const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
+  const [agentData, setAgentData] = useState<AgentFormData>({ name: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
   // Where the just-created note/file lives, so the success screen can offer to
   // open it (null for types that have no viewer to jump to).
@@ -206,7 +212,7 @@ export default function CreateModal() {
     setChannelData({ name: '', description: '', icon: null, viewMode: 'CHAT', sectionId: '', context: '' });
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
-    setConnectorData({ name: '', description: '', hosts: '', secretName: '' });
+    setConnectorData({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
     setFileData({ files: [], folder: '' });
     setCreatedHref(null);
     setCreatedDetail(null);
@@ -285,6 +291,7 @@ export default function CreateModal() {
       // Mirrors the server's perimeter validation, so Create can't write a note
       // the connectors layer would immediately call invalid.
       if (selectedType === 'connector') return connectorFormReady(connectorData);
+      if (selectedType === 'agent') return agentFormReady(agentData);
       // Only files that passed the pick-time check can be uploaded.
       if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
     }
@@ -321,6 +328,9 @@ export default function CreateModal() {
       } else if (selectedType === 'connector') {
         await createConnectorNote();
         setStep(3);
+      } else if (selectedType === 'agent') {
+        await createAgentNote();
+        setStep(3);
       } else if (selectedType === 'file') {
         await uploadFiles();
         setStep(3);
@@ -337,10 +347,10 @@ export default function CreateModal() {
 
   const createChannel = async (): Promise<string> => {
     if (!currentSpace) throw new Error('Select a space first');
-    const res = await fetch('/api/messages/conversations/channel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const { conversation } = await fetchJsonBody<{ conversation: { id: string } }>(
+      '/api/messages/conversations/channel',
+      'POST',
+      {
         spaceId: currentSpace.id,
         name: channelData.name.trim(),
         description: channelData.description.trim() || undefined,
@@ -348,31 +358,18 @@ export default function CreateModal() {
         sectionId: channelData.sectionId || undefined,
         viewMode: channelData.viewMode,
         context: channelData.context.trim() || undefined,
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to create channel');
-    }
-    const { conversation } = await res.json();
-    return conversation.id as string;
+      },
+    );
+    return conversation.id;
   };
 
   const createSpace = async () => {
     if (!currentSpace) throw new Error('Select a space first');
-    const res = await fetch('/api/messages/sections', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        spaceId: currentSpace.id,
-        name: spaceData.name.trim(),
-        context: spaceData.context.trim() || undefined,
-      }),
+    await fetchJsonBody('/api/messages/sections', 'POST', {
+      spaceId: currentSpace.id,
+      name: spaceData.name.trim(),
+      context: spaceData.context.trim() || undefined,
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to create section');
-    }
   };
 
   // ── Context note ──────────────────────────────────────────────────────────
@@ -408,15 +405,22 @@ export default function CreateModal() {
     if (!currentSpace) throw new Error('Select a space first');
     const name = connectorSlug(connectorData.name);
     const path = `connectors/${name}.md`;
+    const isModel = connectorData.kind === 'model';
     await notesApi.create(
       currentSpace.id,
       path,
-      newConnectorNote({
-        name,
-        description: connectorData.description.trim(),
-        hosts: connectorData.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
-        secretName: connectorData.secretName.trim().toUpperCase(),
-      }),
+      isModel
+        ? newModelConnectorNote({
+            name,
+            provider: connectorData.provider,
+            description: connectorData.description.trim(),
+          })
+        : newConnectorNote({
+            name,
+            description: connectorData.description.trim(),
+            hosts: connectorData.hosts.split('\n').map((l) => l.trim()).filter(Boolean),
+            secretName: connectorData.secretName.trim().toUpperCase(),
+          }),
     );
     invalidateContextCache(
       contextKeys.tree(currentSpace.id),
@@ -424,11 +428,40 @@ export default function CreateModal() {
       contextKeys.read(currentSpace.id, path),
     );
     setCreatedHref(`/directory/${encodeURIComponent(`connector:${name}`)}`);
-    setCreatedDetail(
-      connectorData.secretName.trim()
-        ? `Saved to ${path} — set ${connectorData.secretName.trim().toUpperCase()} on its page to finish.`
-        : `Saved to ${path}`,
+    const pendingSecret = isModel
+      ? `MODEL_KEY_${connectorData.provider.toUpperCase()}`
+      : connectorData.secretName.trim().toUpperCase();
+    setCreatedDetail(pendingSecret ? `Saved to ${path} — set ${pendingSecret} on its page to finish.` : `Saved to ${path}`);
+  };
+
+  // ── Agent ─────────────────────────────────────────────────────────────────
+  // An agent is a note whose frontmatter names its model and reach and whose
+  // body is the brief; any member may write it. It does nothing until an
+  // admin activates it from /agents — which is where the success screen points.
+  const createAgentNote = async () => {
+    if (!currentSpace) throw new Error('Select a space first');
+    const name = agentSlug(agentData.name);
+    const path = `agents/${name}.md`;
+    await notesApi.create(
+      currentSpace.id,
+      path,
+      newAgentNote({
+        name,
+        title: agentData.name.trim(),
+        description: agentData.description.trim(),
+        model: agentData.model.trim(),
+        connectors: agentConnectorList(agentData),
+        tools: agentData.web ? ['web'] : [],
+        body: agentData.brief.trim(),
+      }),
     );
+    invalidateContextCache(
+      contextKeys.tree(currentSpace.id),
+      contextKeys.list(currentSpace.id),
+      contextKeys.read(currentSpace.id, path),
+    );
+    setCreatedHref(`/directory/${encodeURIComponent(`agent:${name}`)}`);
+    setCreatedDetail(`Saved to ${path} — a space admin activates it from Agents.`);
   };
 
   // ── Files (context sources) ───────────────────────────────────────────────
@@ -514,38 +547,29 @@ export default function CreateModal() {
     let counter = 2;
     while (ids.has(id)) id = `${baseId}-${counter++}`;
 
-    const res = await fetch('/api/data/nodes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        space_id: currentSpace.id,
-        // When the user picked an existing person from the finder, tell the server
-        // to attach this node to that canonical identity instead of resolving anew.
-        identity_id: selectedType === 'person' ? (selectedIdentityId ?? undefined) : undefined,
-        node: {
-          id,
-          type,
-          name,
-          subtitle: subtitle || undefined,
-          location: location || undefined,
-          tags,
-          url: `/${slugify(name)}`,
-          alias: selectedAlias || undefined,
-          metadata: selectedType === 'person' && personData.email.trim()
-            ? { email: personData.email.trim() }
-            : undefined,
-        },
-      }),
+    await fetchJsonBody('/api/data/nodes', 'POST', {
+      space_id: currentSpace.id,
+      // When the user picked an existing person from the finder, tell the server
+      // to attach this node to that canonical identity instead of resolving anew.
+      identity_id: selectedType === 'person' ? (selectedIdentityId ?? undefined) : undefined,
+      node: {
+        id,
+        type,
+        name,
+        subtitle: subtitle || undefined,
+        location: location || undefined,
+        tags,
+        url: `/${slugify(name)}`,
+        alias: selectedAlias || undefined,
+        metadata: selectedType === 'person' && personData.email.trim()
+          ? { email: personData.email.trim() }
+          : undefined,
+      },
     });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error ?? 'Failed to create');
-    }
 
     if (selectedType === 'person') {
       const imageUrl = personData.imageBlob
-        ? await uploadCroppedNodeImage(id, personData.imageBlob).catch(() => null)
+        ? await uploadCroppedImage('card', id, personData.imageBlob).catch(() => null)
         : personData.imagePreview && !personData.imagePreview.startsWith('blob:')
           ? personData.imagePreview  // auto-filled URL from matched person
           : null;
@@ -591,6 +615,8 @@ export default function CreateModal() {
       ? contextTitle || 'Note'
       : selectedType === 'connector'
       ? connectorSlug(connectorData.name) || 'Connector'
+      : selectedType === 'agent'
+      ? agentSlug(agentData.name) || 'Agent'
       : selectedType === 'file'
       ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : typeOpt.label
@@ -767,6 +793,14 @@ export default function CreateModal() {
             {step === 1 && selectedType === 'connector' && (
               <ConnectorForm data={connectorData} onChange={setConnectorData} nameRef={nameRef} />
             )}
+            {step === 1 && selectedType === 'agent' && (
+              <AgentForm
+                data={agentData}
+                onChange={setAgentData}
+                nameRef={nameRef}
+                models={PROVIDERS.flatMap((p) => p.models.map((m) => ({ value: `${p.id}/${m.id}`, label: `${p.label} — ${m.label}` })))}
+              />
+            )}
             {step === 1 && selectedType === 'file' && (
               <FileForm
                 data={fileData}
@@ -797,6 +831,8 @@ export default function CreateModal() {
                       ? 'Open'
                       : selectedType === 'connector'
                       ? 'Open connector'
+                      : selectedType === 'agent'
+                      ? 'Open agent'
                       : 'Open note'
                     : undefined
                 }

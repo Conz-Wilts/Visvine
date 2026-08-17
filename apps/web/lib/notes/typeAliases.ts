@@ -11,14 +11,20 @@
 // ./aliases.ts so the permission rules can never be bypassed by coming in
 // through the generic path; the rest are written here.
 //
-// A name is not an id: `Node.alias` stores it by value, so a rename carries the
-// chips with it and a delete clears them.
+// An alias has a stable `id` (lib/spaces/configMerge.ts#newAliasId), and that is
+// what everything referencing one points at. `Node.alias` additionally caches
+// the NAME, because it is the label a directory card renders and the text entity
+// search matches — so a rename refreshes that cache, matched by id.
 
 import { revalidateTag } from 'next/cache'
+import type { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
+import { updateSpaceConfig } from '@/lib/spaces/spaceConfig'
+import { newAliasId } from '@/lib/spaces/configMerge'
 import {
   aliasesForType,
   canonicalNodeType,
+  findAliasByRef,
   findNodeTypeConfig,
   nodeTypeSpellings,
   personAliases,
@@ -98,24 +104,51 @@ function othersOfType(state: SpaceAliasState, type: ResolvedType): SpaceAlias[] 
   return state.all.filter((a) => !mine.has(a))
 }
 
-async function writeAliases(spaceId: string, next: SpaceAlias[]): Promise<void> {
-  await prisma.space.update({
-    where: { id: spaceId },
-    data: { aliases: next as unknown as object },
+/**
+ * Run a non-Person alias write under the space lock.
+ *
+ * The state is rebuilt from what is really stored at the moment of the write,
+ * not from a read taken before it, so a concurrent create on another type can't
+ * be erased by this one writing back a whole array it assembled earlier. The
+ * callback returns the array to store (or null to write nothing) and gets the
+ * transaction client, so the `Node.alias` chip sweep commits with it.
+ */
+async function updateAliases(
+  spaceId: string,
+  apply: (
+    state: SpaceAliasState,
+    tx: Prisma.TransactionClient,
+  ) => Promise<SpaceAlias[] | null> | SpaceAlias[] | null,
+): Promise<void> {
+  await updateSpaceConfig(spaceId, async (stored, tx) => {
+    const next = await apply(
+      { all: stored.aliases ?? [], types: stored.nodeTypes, featureConfig: stored.featureConfig },
+      tx,
+    )
+    return next ? { aliases: next } : {}
   })
-  revalidateTag('context-data-v2', { expire: 0 })
 }
 
-/** The chips on directory cards of this type, renamed or cleared. */
+/**
+ * The chips on directory cards of this type, renamed or cleared.
+ *
+ * Matched on the alias id, so the rows swept are exactly the cards wearing THIS
+ * alias — `Node.alias` is shared with event slugs and connector kinds, and
+ * matching on the name could catch one of those. The name is what gets written,
+ * because that column is the label the card renders and search matches; the id
+ * is cleared alongside it on a delete.
+ */
 async function recolourNodes(
+  tx: Prisma.TransactionClient,
   spaceId: string,
   type: ResolvedType,
-  name: string,
+  aliasId: string | undefined,
   nextName: string | null,
 ): Promise<void> {
-  await prisma.node.updateMany({
-    where: { spaceId, alias: name, type: { in: nodeTypeSpellings(type.name) } },
-    data: { alias: nextName },
+  if (!aliasId) return
+  await tx.node.updateMany({
+    where: { spaceId, aliasId, type: { in: nodeTypeSpellings(type.name) } },
+    data: nextName === null ? { alias: null, aliasId: null } : { alias: nextName },
   })
 }
 
@@ -170,8 +203,7 @@ export async function createTypeAlias(
   color: string | undefined,
   actor: Actor,
 ): Promise<TypeAliasInfo> {
-  const state = await loadState(spaceId)
-  const type = resolveAliasType(state, nodeType)
+  const type = resolveAliasType(await loadState(spaceId), nodeType)
   // A colour is required by the Person path and by every chip that renders one;
   // defaulting to the type's own colour is what the console's add row does.
   const hex = normalizeAliasColor(color ?? type.color)
@@ -182,12 +214,16 @@ export async function createTypeAlias(
     return { name: name.trim(), color: hex, node_type: type.name, owner: false, system: false }
   }
 
-  const existing = aliasesOfType(state, type)
-  const problem = aliasNameError(name, existing.map((a) => a.name))
-  if (problem) throw new Error(problem)
+  const created: SpaceAlias = { id: newAliasId(), name: name.trim(), color: hex, nodeType: type.name }
+  await updateAliases(spaceId, (state) => {
+    // Re-resolved under the lock: the type could have been renamed or its tool
+    // switched off between the read above and this write.
+    const locked = resolveAliasType(state, nodeType)
+    const problem = aliasNameError(name, aliasesOfType(state, locked).map((a) => a.name))
+    if (problem) throw new Error(problem)
+    return [...state.all, created]
+  })
 
-  const created: SpaceAlias = { name: name.trim(), color: hex, nodeType: type.name }
-  await writeAliases(spaceId, [...state.all, created])
   void logAudit(spaceId, {
     userId: actor.userId,
     name: actor.name,
@@ -209,8 +245,7 @@ export async function updateTypeAlias(
   changes: { newName?: string; color?: string; owner?: boolean },
   actor: Actor,
 ): Promise<TypeAliasInfo> {
-  const state = await loadState(spaceId)
-  const type = resolveAliasType(state, nodeType)
+  const type = resolveAliasType(await loadState(spaceId), nodeType)
 
   if (type.isPerson) {
     if (changes.newName !== undefined || changes.color !== undefined) {
@@ -226,35 +261,39 @@ export async function updateTypeAlias(
   if (changes.owner !== undefined) {
     throw new Error('Only a Person alias can own the space — owner does not apply here.')
   }
-  const existing = aliasesOfType(state, type)
-  const alias = existing.find((a) => a.name === name)
-  if (!alias) throw new Error(`Unknown alias "${name}" for ${type.name}`)
 
   let hex: string | null = null
   if (changes.color !== undefined) {
     hex = normalizeAliasColor(changes.color)
     if (!hex) throw new Error('That is not a valid colour.')
   }
-
   const nextName = changes.newName?.trim()
   const renaming = nextName !== undefined && nextName !== name
-  if (renaming) {
-    const problem = aliasNameError(nextName, existing.map((a) => a.name), name)
-    if (problem) throw new Error(problem)
-  }
   if (!renaming && !hex) throw new Error('Nothing to change — pass new_name or color.')
 
-  const updated: SpaceAlias = {
-    ...alias,
-    ...(renaming ? { name: nextName } : {}),
-    ...(hex ? { color: hex } : {}),
-  }
-  const next = [
-    ...othersOfType(state, type),
-    ...existing.map((a) => (a.name === name ? updated : a)),
-  ]
-  await writeAliases(spaceId, next)
-  if (renaming) await recolourNodes(spaceId, type, name, nextName)
+  let updated!: SpaceAlias
+  await updateAliases(spaceId, async (state, tx) => {
+    const locked = resolveAliasType(state, nodeType)
+    const existing = aliasesOfType(state, locked)
+    const alias = existing.find((a) => a.name === name)
+    if (!alias) throw new Error(`Unknown alias "${name}" for ${locked.name}`)
+    if (renaming) {
+      const problem = aliasNameError(nextName, existing.map((a) => a.name), name)
+      if (problem) throw new Error(problem)
+      // The chip is a copy of the name, so it moves with the rename — under the
+      // same lock and the same commit, filtered to this type's own cards.
+      await recolourNodes(tx, spaceId, locked, alias.id, nextName)
+    }
+    updated = {
+      ...alias,
+      ...(renaming ? { name: nextName } : {}),
+      ...(hex ? { color: hex } : {}),
+    }
+    return [
+      ...othersOfType(state, locked),
+      ...existing.map((a) => (a.name === name ? updated : a)),
+    ]
+  })
 
   void logAudit(spaceId, {
     userId: actor.userId,
@@ -298,7 +337,7 @@ export async function assignNodeAlias(
   const trimmed = name?.trim() || null
   if (trimmed) {
     const available = aliasesOfType(state, type)
-    const match = available.find((a) => a.name.toLowerCase() === trimmed.toLowerCase())
+    const match = findAliasByRef(available, trimmed)
     if (!match) {
       throw new Error(
         available.length
@@ -306,7 +345,12 @@ export async function assignNodeAlias(
           : `This space has no ${type.name} aliases — create one first`,
       )
     }
-    await prisma.node.update({ where: { id: node.id }, data: { alias: match.name } })
+    // The id is what survives a rename; the name rides along as the cached
+    // label the card renders and search matches.
+    await prisma.node.update({
+      where: { id: node.id },
+      data: { alias: match.name, aliasId: match.id ?? null },
+    })
     revalidateTag('context-data-v2', { expire: 0 })
     void logAudit(spaceId, {
       userId: actor.userId,
@@ -318,7 +362,7 @@ export async function assignNodeAlias(
     return { nodeId: node.id, alias: match.name }
   }
 
-  await prisma.node.update({ where: { id: node.id }, data: { alias: null } })
+  await prisma.node.update({ where: { id: node.id }, data: { alias: null, aliasId: null } })
   revalidateTag('context-data-v2', { expire: 0 })
   void logAudit(spaceId, {
     userId: actor.userId,
@@ -341,23 +385,24 @@ export async function deleteTypeAlias(
   name: string,
   actor: Actor,
 ): Promise<void> {
-  const state = await loadState(spaceId)
-  const type = resolveAliasType(state, nodeType)
+  const type = resolveAliasType(await loadState(spaceId), nodeType)
 
   if (type.isPerson) {
     await deleteAlias(spaceId, name, actor)
     return
   }
 
-  const existing = aliasesOfType(state, type)
-  if (!existing.some((a) => a.name === name)) {
-    throw new Error(`Unknown alias "${name}" for ${type.name}`)
-  }
-  await writeAliases(spaceId, [
-    ...othersOfType(state, type),
-    ...existing.filter((a) => a.name !== name),
-  ])
-  await recolourNodes(spaceId, type, name, null)
+  await updateAliases(spaceId, async (state, tx) => {
+    const locked = resolveAliasType(state, nodeType)
+    const existing = aliasesOfType(state, locked)
+    if (!existing.some((a) => a.name === name)) {
+      throw new Error(`Unknown alias "${name}" for ${locked.name}`)
+    }
+    // Clearing the chips commits with the removal, so a card can never be left
+    // wearing an alias the space no longer has.
+    await recolourNodes(tx, spaceId, locked, existing.find((a) => a.name === name)?.id, null)
+    return [...othersOfType(state, locked), ...existing.filter((a) => a.name !== name)]
+  })
 
   void logAudit(spaceId, {
     userId: actor.userId,

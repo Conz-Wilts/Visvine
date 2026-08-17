@@ -53,7 +53,8 @@ const GUIDANCE: Record<string, string> = {
   resource: 'A link or document worth keeping. Create with add_context with url set.',
   section: 'Structural container grouping channels — created from the space\'s admin surfaces, never via add_context.',
   channel: 'A conversation channel — created from the space\'s admin surfaces, never via add_context.',
-  connector: 'A gateway to an external API or database, note-first and admin-only: an admin authors connectors/<name>.md (frontmatter declares alias/hosts/limits). Never creatable via add_context; execute one with run_connector.',
+  connector: 'A gateway to an external API or database, note-first and admin-only: an admin authors connectors/<name>.md (frontmatter declares alias/hosts/limits). Never creatable via add_context; execute one with run_connector. A `kind: model` connector is the LLM provider agents run on (its key is the space\'s) — listed, never runnable.',
+  agent: 'A scheduled agent, note-first: a member authors agents/<name>.md (frontmatter: model, connectors, tools; body = the brief) and an admin activates it in agents/live/<name>.md. Never creatable via add_context (agents/ is frozen for AI — a human writes briefs); list with list_agents, trigger with run_agent.',
   index: 'An index note IS a folder. Write <folder>/index.md with edit_context rather than creating a node.',
 }
 

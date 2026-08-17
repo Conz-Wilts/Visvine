@@ -80,7 +80,7 @@ supabase_data_dump.sql
 /blackbird-brain/
 
 # Local dev fixtures (pg_dump output before/after GCS round-trip).
-tmp/fixtures/
+tmp/
 *.dump
 
 # stray root screenshots

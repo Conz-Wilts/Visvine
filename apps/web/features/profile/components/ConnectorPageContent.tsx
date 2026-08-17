@@ -33,6 +33,7 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
+import { PROVIDERS } from '@/lib/agents/registry';
 import { Skeleton } from '@/components/ui';
 
 interface SecretStatus {
@@ -41,9 +42,21 @@ interface SecretStatus {
   updatedAt: string | null;
 }
 
+/** A `kind: model` connector's provider facts (server: modelConnectorInfo). Never the key. */
+interface ModelInfo {
+  provider: string;
+  providerLabel: string;
+  baseURL: string | null;
+  keySecret: string;
+  models: { id: string; label: string }[];
+}
+
 interface ConnectorDetail {
   name: string;
   path: string;
+  /** `model` = an LLM provider the space's agents run on — no perimeter, never runnable. */
+  kind: 'http' | 'model';
+  model: ModelInfo | null;
   alias: string | null;
   hosts: string[];
   allow: string[];
@@ -477,6 +490,136 @@ function SecretEditor({
   );
 }
 
+// ── Model connector ──────────────────────────────────────────────────────────
+
+/**
+ * The whole page for a `kind: model` connector, in place of perimeter, env and
+ * console: which provider this note names (base URL pinned by the registry —
+ * shown, not editable), the known model ids an agent's `model:` can pick, and
+ * the one secret behind it, MODEL_KEY_<PROVIDER>. Same write-only SecretEditor
+ * as an env secret; there is deliberately no way to run anything here.
+ */
+function ModelSection({
+  connector,
+  model,
+  spaceId,
+  editing,
+  onEdit,
+  onDone,
+  save,
+  saving,
+  saveError,
+  reload,
+}: {
+  connector: ConnectorDetail;
+  model: ModelInfo;
+  spaceId: string;
+  editing: boolean;
+  onEdit: () => void;
+  onDone: () => void;
+  save: (patch: Record<string, unknown>) => Promise<boolean>;
+  saving: boolean;
+  saveError: string | null;
+  reload: () => Promise<void>;
+}) {
+  const [provider, setProvider] = useState(model.provider);
+  const [keyOpen, setKeyOpen] = useState(false);
+  const key = connector.secrets.find((s) => s.name === model.keySecret) ?? {
+    name: model.keySecret,
+    set: false,
+    updatedAt: null,
+  };
+
+  return (
+    <>
+      <Section
+        title="Provider"
+        meta={model.baseURL ? new URL(model.baseURL).host : 'custom endpoint'}
+        action={editing ? undefined : <EditButton onClick={onEdit} label="Change provider" />}
+      >
+        {editing ? (
+          <form
+            className="flex flex-col gap-3"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (await save({ provider })) onDone();
+            }}
+          >
+            <select value={provider} onChange={(e) => setProvider(e.target.value)} className={FIELD}>
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-text-muted">
+              Changing the provider changes which key this connector stands for — the endpoint is always the
+              provider&apos;s own.
+            </p>
+            <FormError message={saveError} />
+            <EditActions saving={saving} onCancel={onDone} />
+          </form>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-text-primary">
+              {model.providerLabel}
+              <span className="ml-2 font-mono text-[12px] text-text-muted">
+                {model.baseURL ?? 'endpoint set in agent settings (admin)'}
+              </span>
+            </p>
+            {model.models.length > 0 ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {model.models.map((m) => (
+                  <li
+                    key={m.id}
+                    title={m.label}
+                    className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-[12px] text-text-primary"
+                  >
+                    {model.provider}/{m.id}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-text-muted">
+                Any model id: <code className="font-mono text-[12px]">{model.provider}/&lt;model-id&gt;</code>
+              </p>
+            )}
+            <p className="text-xs text-text-muted">
+              An agent uses this by naming one of these in its brief&apos;s <code className="font-mono">model:</code>.
+              Not runnable — <code className="font-mono">run_connector</code> refuses model connectors, so no note or
+              agent can read or spend the key directly.
+            </p>
+          </div>
+        )}
+      </Section>
+
+      <Section title="Key" meta={key.set ? 'set' : 'not set'}>
+        <button
+          type="button"
+          onClick={() => setKeyOpen((o) => !o)}
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[12px] transition-colors ${
+            key.set
+              ? 'border-border-default text-text-primary hover:bg-surface-2'
+              : 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+          }`}
+          title={key.set ? `Set ${key.updatedAt ? timeAgo(new Date(key.updatedAt).getTime()) : ''} — click to replace or clear` : 'Not stored — click to add'}
+        >
+          <KeyRound className="h-3 w-3" />
+          {key.name}
+          {!key.set && <span className="text-[10px] font-semibold uppercase">missing</span>}
+        </button>
+        {keyOpen && (
+          <SecretEditor key={key.name} secret={key} spaceId={spaceId} onChanged={reload} onClose={() => setKeyOpen(false)} />
+        )}
+        <p className="mt-2 text-xs text-text-muted">
+          One key per provider, shared by every agent in this space. Encrypted on save, never shown again — the same
+          store as every other connector secret.
+        </p>
+      </Section>
+    </>
+  );
+}
+
 // ── Console ──────────────────────────────────────────────────────────────────
 
 /**
@@ -664,6 +807,20 @@ function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'wa
     return { label: 'Not usable', tone: 'bad', hint: 'The frontmatter does not parse, so every run is refused.' };
   }
   const unset = connector.secrets.filter((s) => !s.set);
+  if (connector.kind === 'model') {
+    if (unset.length > 0) {
+      return {
+        label: 'No key',
+        tone: 'warn',
+        hint: `Agents on ${connector.model?.providerLabel ?? 'this provider'} fail until its API key is stored below.`,
+      };
+    }
+    return {
+      label: 'Ready',
+      tone: 'ok',
+      hint: `Agents whose brief names a ${connector.model?.provider ?? ''}/… model run on this key.`,
+    };
+  }
   if (unset.length > 0) {
     return {
       label: 'Missing secrets',
@@ -705,7 +862,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   // Which card is in edit mode. One at a time: two open forms over the same
   // frontmatter would race, and the second save would be written against a
   // reloaded connector the form no longer matches.
-  const [editing, setEditing] = useState<'perimeter' | 'env' | null>(null);
+  const [editing, setEditing] = useState<'perimeter' | 'env' | 'provider' | null>(null);
   // The secret chip that was clicked, if any — its write-only form opens below
   // the env list. Cleared on reload so a stored secret doesn't reopen.
   const [pickedSecret, setPickedSecret] = useState<string | null>(null);
@@ -830,16 +987,20 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             {status.label}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={runTest}
-          disabled={testing || !runnable}
-          title={runnable ? undefined : status.hint}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
-        >
-          <Play className="h-3.5 w-3.5" />
-          {testing ? 'Testing…' : 'Test'}
-        </button>
+        {/* A model connector has no isolate to test — the key is proven at
+            agent activation (probeModelKey), not here. */}
+        {connector.kind !== 'model' && (
+          <button
+            type="button"
+            onClick={runTest}
+            disabled={testing || !runnable}
+            title={runnable ? undefined : status.hint}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+          >
+            <Play className="h-3.5 w-3.5" />
+            {testing ? 'Testing…' : 'Test'}
+          </button>
+        )}
       </div>
 
       {/* The status hint, or the last Test verdict — one line, never both. */}
@@ -877,6 +1038,22 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* ══ MODEL — for a `kind: model` connector: the provider, and its key ══ */}
+      {connector.kind === 'model' && !connector.invalid && connector.model && spaceId && (
+        <ModelSection
+          connector={connector}
+          model={connector.model}
+          spaceId={spaceId}
+          editing={editing === 'provider'}
+          onEdit={() => openEditor('provider')}
+          onDone={() => openEditor(null)}
+          save={save}
+          saving={saving}
+          saveError={saveError}
+          reload={reload}
+        />
       )}
 
       {/* ══ PERIMETER — what the sandbox enforces ══ */}

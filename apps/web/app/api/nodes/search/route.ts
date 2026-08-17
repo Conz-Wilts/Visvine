@@ -167,14 +167,16 @@ export async function GET(req: NextRequest) {
       ? Prisma.empty
       : Prisma.sql` AND (c.id IS NULL OR c.feature_config->>'directoryPrivate' IS DISTINCT FROM 'true' OR EXISTS (
           -- Owns the space = holds a Person alias flagged owner (or the
-          -- built-in "Owner") in spaces.aliases.
+          -- built-in "Owner") in spaces.aliases. Joined on the alias ID, which
+          -- is what user_aliases stores — see lib/auth.ts#owningAliasIds, the
+          -- non-SQL form of this same question.
           SELECT 1 FROM user_aliases ua
           WHERE ua.space_id = c.id AND ua.user_id = ${session.userId}
-            AND (ua.alias_name = 'Owner' OR EXISTS (
+            AND (ua.alias_id = 'owner' OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(c.aliases::jsonb) al
-              WHERE al->>'name' = ua.alias_name
+              WHERE al->>'id' = ua.alias_id
                 AND lower(al->>'nodeType') = 'person'
-                AND (al->>'owner')::boolean IS TRUE
+                AND ((al->>'owner')::boolean IS TRUE OR (al->>'system')::boolean IS TRUE)
             ))
         ))`;
     // A PRIVATE space is hidden from everyone who isn't in it — and that has

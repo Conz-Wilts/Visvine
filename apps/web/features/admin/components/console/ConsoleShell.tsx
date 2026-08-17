@@ -31,10 +31,6 @@ export interface ConsoleSection {
   badge?: number;
   /** 'form' constrains the pane to a comfortable form width; 'wide' uses the full pane. */
   width: 'form' | 'wide';
-  /** Legacy nav-list fields, no longer rendered by the tab bar. Kept optional so
-   *  callers that still pass them keep type-checking. */
-  group?: string;
-  icon?: React.ReactNode;
 }
 
 interface ConsoleShellProps {

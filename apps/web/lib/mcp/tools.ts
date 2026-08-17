@@ -49,7 +49,12 @@ import { buildTypeCatalog } from '@/lib/mcp/typeCatalog'
 import { principalCanWrite, principalLevelName } from '@/lib/notes/shared/permissions'
 import type { WriteResult } from '@/lib/notes/shared/contextTypes'
 import type { NoteMeta } from '@/lib/notes/shared/types'
-import { entityNotePath } from '@/lib/notes/entities'
+import {
+  entityFolderPathOf,
+  entityNotePath,
+  entityNotePaths,
+  entityOwnerPathOf,
+} from '@/lib/notes/entities'
 import { firstExcerpt, readLinkContextMeta } from '@/lib/notes/context/linkReason'
 import {
   isStructuralNodeType,
@@ -57,6 +62,7 @@ import {
   nodeTypeSpellings,
   aliasesForType,
   personAliases,
+  findAliasByRef,
   type SpaceAlias,
 } from '@/lib/types/context'
 import {
@@ -72,6 +78,9 @@ import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
 import { ConnectorError } from '@/lib/connectors/config'
 import { executeConnectorScript, listConnectors, loadConnector } from '@/lib/connectors/service'
+import { canTriggerRun, listAgents } from '@/lib/agents/service'
+import { claimManualRun } from '@/lib/agents/schedule'
+import { featureAccessForbidden } from '@/lib/auth'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
@@ -118,7 +127,14 @@ const INDEX_RULE =
   "folder, ENRICH its existing index (prose ABOVE the markers — a description of what the folder holds " +
   'is what makes it findable in search) rather than creating or replacing one. Never hand-write the ' +
   'child list; the markers are refreshed for you on every change in the folder. Writes to an index ' +
-  'path keep `type: Index` and the markers even if your content drops them.'
+  'path keep `type: Index` and the markers even if your content drops them. ' +
+  "ENTITY FOLDERS: an entity's note (people/<slug>.md) becomes a folder the moment a second note about " +
+  'that entity is needed — write the extra note at people/<slug>/<anything>.md and the entity note moves ' +
+  'to people/<slug>/index.md by itself, keeping its entity type (NOT `type: Index`) and `node:`. Both ' +
+  'paths keep resolving to the entity; read_context reports the current one as `note_path` and lists ' +
+  "the folder's other notes as `sub_notes`. A sub-note's mentions count as the entity's mentions. " +
+  'Never file a note under an entity namespace (people/, communities/, resources/, events/) unless it is ' +
+  'about that entity — the write is refused when no entity of that slug exists.'
 
 /**
  * The exact markdown an agent should paste to mention this entity. Exported so
@@ -231,9 +247,15 @@ type NodeRow = {
   tags: string[]; metadata: unknown
 }
 
+/** A node row as entities.ts wants it — metadata typed, so `metadata.notePath`
+ *  (set once the note has become an entity folder) steers entityNotePath. */
+function nodeLike(row: { id: string; type: string; metadata?: unknown }) {
+  return { id: row.id, type: row.type, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
+}
+
 /** A node as the tools report it: identity, type-driven fields, note path. */
 function describeNode(row: NodeRow) {
-  const notePath = entityNotePath({ id: row.id, type: row.type })
+  const notePath = entityNotePath(nodeLike(row))
   return {
     node_id: row.id,
     type: row.type,
@@ -326,7 +348,7 @@ export function registerTools(server: McpServer): void {
               }),
               prisma.userAlias.findMany({
                 where: { spaceId: args.space_id, userId: ctx.userId },
-                select: { aliasName: true },
+                select: { aliasId: true },
               }),
               loadSpaceAccess(args.space_id),
             ])
@@ -370,6 +392,13 @@ export function registerTools(server: McpServer): void {
         const writablePaths = (principal.spaceAdmin ? [''] : readableRoots(principal.access)).filter(
           (path) => principalCanWrite(principal, path),
         )
+        // Grants carry alias ids; the audience line names aliases, so it needs
+        // this space's id → name map.
+        const aliasNames = new Map(
+          personAliases(space?.aliases as unknown as SpaceAlias[])
+            .filter((a) => a.id)
+            .map((a) => [a.id!, a.name]),
+        )
         const describeWritable = (path: string) => ({
           path: path || '(context root)',
           your_level: principalLevelName(principal, path),
@@ -380,6 +409,7 @@ export function registerTools(server: McpServer): void {
                 audience: audienceSummary(path, spaceAccess.grants, spaceAccess.restricted, {
                   selfUserId: ctx.userId,
                   spaceName: space?.name,
+                  aliasNames,
                 }).line,
               }
             : {}),
@@ -391,7 +421,11 @@ export function registerTools(server: McpServer): void {
           you: {
             name: ctx.name,
             admin: principal.spaceAdmin === true,
-            aliases: aliasRows.map((r) => r.aliasName),
+            // Holder rows carry alias ids; the agent is told names, which is
+            // what every other tool takes.
+            aliases: aliasRows
+              .map((r) => findAliasByRef(space?.aliases as unknown as SpaceAlias[], r.aliasId, 'Person')?.name)
+              .filter((n): n is string => Boolean(n)),
           },
           entities: entitiesByType,
           entity_count: entityTotal,
@@ -487,7 +521,7 @@ export function registerTools(server: McpServer): void {
               )
                 .filter((r) => !isStructuralNodeType(r.type))
                 .map((r) => {
-                  const notePath = entityNotePath({ id: r.id, type: r.type })
+                  const notePath = entityNotePath(nodeLike(r))
                   return {
                     kind: 'entity' as const,
                     node_id: r.id,
@@ -525,11 +559,19 @@ export function registerTools(server: McpServer): void {
       description:
         'Everything about one entity in one call: its type-driven fields, the full markdown of its context note, ' +
         'the entities it is linked to (with where each link came from), and the notes that mention it. ' +
-        'Identify it by node_id or by note_path — search_context and list_context give you both.',
+        'Identify it by node_id or by note_path — search_context and list_context give you both. ' +
+        "note_path also accepts the folder form (people/<slug>/index.md) and any sub-note in the entity's " +
+        'folder (people/<slug>/<note>.md): a sub-note read returns that note with the entity it belongs to.',
       inputSchema: {
         space_id: z.string(),
         node_id: z.string().optional().describe("The entity's node id, e.g. 'person:craig-piggott'"),
-        note_path: z.string().optional().describe("The entity's context note path, e.g. 'people/craig-piggott.md'"),
+        note_path: z
+          .string()
+          .optional()
+          .describe(
+            "The entity's context note path, e.g. 'people/craig-piggott.md' (or 'people/craig-piggott/index.md' " +
+              "once it is a folder, or a sub-note 'people/craig-piggott/notes.md')",
+          ),
       },
       annotations: { readOnlyHint: true },
     },
@@ -542,7 +584,10 @@ export function registerTools(server: McpServer): void {
 
         // node_id resolves directly; note_path has to go through the node list,
         // because entityNotePath is lossy and only invertible over real nodes.
+        // Either path form names the entity; a sub-note names the entity whose
+        // folder it sits in (and is the note returned).
         let row: NodeRow | null = null
+        let subNotePath: string | null = null
         if (args.node_id) {
           row = await prisma.node.findFirst({
             where: { id: args.node_id, spaceId: args.space_id },
@@ -553,7 +598,13 @@ export function registerTools(server: McpServer): void {
             where: { spaceId: args.space_id },
             select: NODE_SELECT,
           })
-          row = all.find((n) => entityNotePath({ id: n.id, type: n.type }) === args.note_path) ?? null
+          const wanted = args.note_path!.replace(/^\//, '')
+          row = all.find((n) => entityNotePaths(nodeLike(n)).includes(wanted)) ?? null
+          const owner = row ? null : entityOwnerPathOf(wanted)
+          if (owner) {
+            row = all.find((n) => entityFolderPathOf(nodeLike(n)) === owner) ?? null
+            if (row) subNotePath = wanted
+          }
         }
 
         // Structural nodes (the space itself, sections, channels, connectors)
@@ -562,7 +613,7 @@ export function registerTools(server: McpServer): void {
         // still reads below as a plain note, via its path.
         let structuralPath: string | null = null
         if (row && isStructuralNodeType(row.type)) {
-          structuralPath = entityNotePath({ id: row.id, type: row.type })
+          structuralPath = entityNotePath(nodeLike(row))
           row = null
         }
 
@@ -577,8 +628,8 @@ export function registerTools(server: McpServer): void {
           return { entity: null, note_path: path, note: content, links: [], mentioned_by: [] }
         }
 
-        const notePath = entityNotePath({ id: row.id, type: row.type })
-        const note = notePath ? await readVisible(principal, context, notePath) : null
+        const notePath = entityNotePath(nodeLike(row))
+        const note = notePath ? await readVisible(principal, context, subNotePath ?? notePath) : null
 
         const linkRows = await prisma.link.findMany({
           where: {
@@ -598,16 +649,31 @@ export function registerTools(server: McpServer): void {
         )
 
         const { metas } = await visibleVault(principal, context)
+        // Both path forms are the entity, so a mention of either counts; the
+        // entity's own notes (index + sub-notes) don't "mention" it.
+        const selfPaths = new Set(entityNotePaths(nodeLike(row)))
+        const folder = entityFolderPathOf(nodeLike(row))
+        const isOwn = (p: string) => selfPaths.has(p) || (folder !== null && p.startsWith(`${folder}/`))
         const mentionedBy = notePath
           ? metas
-              .filter((m) => m.path !== notePath && m.linkTargets.includes(notePath))
+              .filter((m) => !isOwn(m.path) && m.linkTargets.some((t) => selfPaths.has(t)))
               .map((m) => m.path)
               .sort()
           : []
+        // The entity folder's other notes (sub-notes), when the note has become one.
+        const subNotes =
+          folder !== null
+            ? metas
+                .filter((m) => m.path.startsWith(`${folder}/`) && m.path !== notePath)
+                .map((m) => m.path)
+                .sort()
+            : []
 
         return {
           entity: describeNode(row),
-          note_path: notePath,
+          note_path: subNotePath ?? notePath,
+          ...(subNotePath ? { sub_note_of: notePath, owner_node_id: row.id } : {}),
+          sub_notes: subNotes,
           note: note ?? '(no context note yet — edit_context at note_path creates one)',
           links: linkRows.map((l) => {
             const otherId = l.sourceId === row!.id ? l.targetId : l.sourceId
@@ -867,6 +933,13 @@ export function registerTools(server: McpServer): void {
           links_synced: scope === 'shared',
           // Index paths are folders: the store holds them to the index contract
           // (`type: Index`, managed child markers) whatever the write carried.
+          ...(entityOwnerPathOf(result.path)
+            ? {
+                sub_note_of: `${entityOwnerPathOf(result.path)}/index.md`,
+                sub_note:
+                  "This note sits in an entity folder: it belongs to that entity, and its mentions are the entity's.",
+              }
+            : {}),
           ...(isIndexPath(result.path)
             ? {
                 index_note: true,
@@ -1141,7 +1214,8 @@ export function registerTools(server: McpServer): void {
         "List the space's connectors — admin-configured gateways to external APIs, databases and services. " +
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
         'and the env var names its code can read. Run one with run_connector; a connector with no hosts is ' +
-        "documentation-only. Executing needs the 'connectors:use' scope.",
+        "documentation-only. Entries with kind 'model' are LLM providers the space's agents run on (their key " +
+        "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope.",
       inputSchema: { space_id: z.string() },
       annotations: { readOnlyHint: true },
     },
@@ -1198,6 +1272,86 @@ export function registerTools(server: McpServer): void {
           }
         } catch (e) {
           throw mapConnectorError(e)
+        }
+      }),
+  )
+
+  // ── Agents ──────────────────────────────────────────────────────────────
+  // An agent is two notes — agents/<name>.md (the brief, member-writable) and
+  // agents/live/<name>.md (activation, admin-only) — plus a scheduler row.
+  // The roster is member-visible; running is author-or-admin and only for
+  // ACTIVE agents (activation is the review point). Authoring is deliberately
+  // NOT exposed: agents/ is frozen for AI origins, so add_context/edit_context
+  // refuse it — agents are written by people.
+
+  server.registerTool(
+    'list_agents',
+    {
+      description:
+        "List the space's scheduled agents: name, brief summary, model, declared connectors, whether it is active, " +
+        'its schedule, next run and last run outcome. Spend is not included (admins see it in the app). ' +
+        "Trigger one with run_agent (needs the 'agents:run' scope; the agent must be active).",
+      inputSchema: { space_id: z.string() },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) =>
+      withCtx(extra, 'list_agents', async (ctx) => {
+        const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        if (await featureAccessForbidden(principal.userId, args.space_id, 'agents', principal.email)) {
+          throw new McpError(403, 'The Agents tool is not available to you in this space')
+        }
+        const { agents, heartbeatAt } = await listAgents(principal, context)
+        return {
+          scheduler_last_tick_at: heartbeatAt,
+          agents: agents.map((a) => ({
+            name: a.name,
+            title: a.title,
+            description: a.description,
+            model: a.model,
+            connectors: a.connectors,
+            tools: a.tools,
+            invalid: a.invalid ?? a.activation.invalid,
+            active: a.activation.active,
+            schedule: a.activation.scheduleLabel,
+            state: a.rowState,
+            next_run_at: a.state.nextRunAt,
+            last_run: a.lastRun
+              ? { status: a.lastRun.status, reason: a.lastRun.terminalReason, started_at: a.lastRun.startedAt, summary: a.lastRun.summary }
+              : null,
+            brief_path: a.path,
+          })),
+        }
+      }),
+  )
+
+  server.registerTool(
+    'run_agent',
+    {
+      description:
+        "Trigger a run of an ACTIVE agent now (see list_agents). Only the agent's author or a space admin may; an inactive " +
+        'agent is refused — activation is the review point. Shares the scheduler\'s claim path so it cannot double-fire, and ' +
+        "does not advance the schedule. Returns the run id and, when the run completes within this call, its outcome.",
+      inputSchema: {
+        space_id: z.string(),
+        agent: z.string().describe("The agent's name, e.g. 'weekly-digest' for agents/weekly-digest.md"),
+      },
+    },
+    (args, extra) =>
+      withCtx(extra, 'run_agent', async (ctx) => {
+        const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
+        if (await featureAccessForbidden(principal.userId, args.space_id, 'agents', principal.email)) {
+          throw new McpError(403, 'The Agents tool is not available to you in this space')
+        }
+        if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
+          throw new McpError(403, "Only the agent's author or a space admin can run it")
+        }
+        const claimed = await claimManualRun(args.space_id, args.agent, principal.userId)
+        if (!claimed.ok) throw new McpError(claimed.code === 'unknown' ? 404 : 409, claimed.message)
+        const result = await claimed.dispatch
+        return {
+          run_id: claimed.runId,
+          outcome: result?.ok ? result.outcome : null,
+          error: result && !result.ok ? result.error : null,
         }
       }),
   )

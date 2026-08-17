@@ -29,7 +29,18 @@ export function audienceSummary(
   path: string,
   grants: AccessGrant[],
   restricted: string[],
-  opts: { selfUserId: string; spaceName?: string; maxAliases?: number },
+  opts: {
+    selfUserId: string
+    spaceName?: string
+    maxAliases?: number
+    /**
+     * Alias id → display name. Grants carry the alias's id, and this line is
+     * read by a person, so the caller supplies the space's vocabulary. An id
+     * with no entry is printed as-is: a grant outliving its alias means the
+     * delete cascade failed, and hiding it would hide the problem.
+     */
+    aliasNames?: Map<string, string>
+  },
 ): AudienceSummary {
   const reaching = grants.filter(
     (g) => g.level >= LEVEL_VIEW && grantReaches(g, path, restricted),
@@ -38,7 +49,9 @@ export function audienceSummary(
 
   const everyone = reaching.some((g) => g.subjectType === 'space')
   const aliasNames = [...new Set(
-    reaching.filter((g) => g.subjectType === 'alias').map((g) => g.subjectId),
+    reaching
+      .filter((g) => g.subjectType === 'alias')
+      .map((g) => opts.aliasNames?.get(g.subjectId) ?? g.subjectId),
   )].sort()
   const userIds = new Set(
     reaching.filter((g) => g.subjectType === 'user').map((g) => g.subjectId),

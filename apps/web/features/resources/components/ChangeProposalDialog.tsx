@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Modal from '@/components/ui/Modal';
+import { fetchJsonBody } from '@/lib/fetchJson';
 
 export default function ChangeProposalDialog({
   resourceId,
@@ -26,12 +27,7 @@ export default function ChangeProposalDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/resources/${resourceId}/changes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cellRef, originalValue, proposedValue, reason, proposedBy }),
-      });
-      if (!res.ok) throw new Error('Failed to propose change');
+      await fetchJsonBody(`/api/resources/${resourceId}/changes`, 'POST', { cellRef, originalValue, proposedValue, reason, proposedBy });
       onProposed();
       onClose();
     } catch (e: unknown) {

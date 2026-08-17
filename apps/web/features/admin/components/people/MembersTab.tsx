@@ -11,14 +11,13 @@ import { useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
+import { formatDate } from '@/lib/date';
 import { usePeopleSection } from './PeopleDataContext';
 import type { SpaceMember, PeopleData } from './shared';
 
 /** "7 Feb 2026" — the day someone joined is all this column needs. */
 function joinedLabel(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  return Number.isNaN(new Date(iso).getTime()) ? '—' : formatDate(iso);
 }
 
 export default function MembersTab() {

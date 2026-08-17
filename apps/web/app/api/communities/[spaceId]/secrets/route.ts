@@ -3,6 +3,7 @@ import { getAdminSession as requireAdmin } from '@/lib/auth';
 import prisma from '@/lib/prisma';
 import { encryptSecret } from '@/lib/crypto/secrets';
 import { isValidSecretName } from '@/lib/connectors/config';
+import { logAudit } from '@/lib/notes/audit';
 
 /**
  * Space connector secrets (admin only). Deliberately write-only: GET
@@ -63,6 +64,8 @@ export async function PUT(
     create: { spaceId, name, ciphertext, createdBy: session.email },
     update: { ciphertext, createdBy: session.email },
   });
+  // Rotation leaves a trace — the name only, never the value.
+  await logAudit(spaceId, { userId: session.userId, name: session.name, action: 'secret', path: name, detail: 'set' });
 
   return NextResponse.json({ ok: true, name });
 }
@@ -80,6 +83,7 @@ export async function DELETE(
   if (!name) return NextResponse.json({ error: 'name is required' }, { status: 400 });
 
   await prisma.connectorSecret.deleteMany({ where: { spaceId, name } });
+  await logAudit(spaceId, { userId: session.userId, name: session.name, action: 'secret', path: name, detail: 'deleted' });
 
   return NextResponse.json({ ok: true });
 }

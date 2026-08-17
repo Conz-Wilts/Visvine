@@ -29,6 +29,9 @@ export interface PickerEntity {
    *  here ("Portfolio Company" for a Space). Display only: resolve it
    *  through the space's own alias list before showing it (nodeTypeLabel). */
   alias?: string | null
+  /** The node's stored metadata — `metadata.notePath` says whether its note
+   *  has become an entity folder, which is what entityNotePath needs. */
+  metadata?: Record<string, unknown> | null
 }
 
 interface NotePickerProps {

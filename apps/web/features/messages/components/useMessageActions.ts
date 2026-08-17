@@ -11,6 +11,7 @@ import {
 } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import type { SerializedMessage } from '@/lib/messages/types';
+import { fetchJson } from '@/lib/fetchJson';
 
 interface UseMessageActionsArgs {
   selectedConversationRef: MutableRefObject<string | null>;
@@ -48,11 +49,10 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     // Optimistic flip — stars are private, so no realtime echo will correct us.
     setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred: !m.starred } : m));
     try {
-      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/star`, {
-        method: 'POST',
-      });
-      if (!res.ok) throw new Error();
-      const { starred } = await res.json();
+      const { starred } = await fetchJson<{ starred: boolean }>(
+        `/api/messages/conversations/${conversationId}/messages/${messageId}/star`,
+        { method: 'POST' },
+      );
       setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred } : m));
     } catch {
       setMessages((prev) => prev.map((m) => m.id === messageId ? { ...m, starred: !m.starred } : m));

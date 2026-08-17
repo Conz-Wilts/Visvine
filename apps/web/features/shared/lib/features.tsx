@@ -112,6 +112,18 @@ export const FEATURES: FeatureDef[] = [
       </svg>
     ),
   },
+  {
+    key: 'agents',
+    label: 'Agents',
+    href: '/agents',
+    description: 'Scheduled agents that run from your context, call connectors, and write notes back.',
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="8" width="16" height="11" rx="2" />
+        <path d="M12 3v5M9 13h.01M15 13h.01M9 17h6" />
+      </svg>
+    ),
+  },
 ];
 
 /** Sort a filtered feature list into the space's configured display order. */

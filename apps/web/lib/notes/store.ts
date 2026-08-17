@@ -10,6 +10,7 @@
 // same-author edits coalesce, and history is capped.
 
 import prisma from '@/lib/prisma'
+import type { Prisma } from '@prisma/client'
 import type {
   RawNote,
   NoteRevision,
@@ -19,7 +20,18 @@ import type {
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
-import { parseEntityHref } from './entities'
+import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
+import {
+  entityFlatPath,
+  entityIndexPathOf,
+  entityOwnerPathOf,
+  entityStub,
+  entityTypeLabelOf,
+  isEntityFolderIndex,
+  parseEntityHref,
+  type EntityNodeLike,
+} from './entities'
+import { revalidateTag } from 'next/cache'
 // Import cycles with vaultCache (it reads via listRaw) and publications (it
 // writes replicas via writeNote; we call its hooks) are benign: both sides
 // only call each other inside function bodies, never at module init.
@@ -34,6 +46,7 @@ import {
   ancestorFolders,
   applyChildrenBlock,
   buildIndexStub,
+  enforceEntityIndexFrontmatter,
   enforceIndexFrontmatter,
   folderOfIndexPath,
   hasChildrenBlock,
@@ -173,7 +186,7 @@ export async function createNote(
   content: string,
   actor: Actor,
 ): Promise<RawNote> {
-  const requested = sanitizePath(path)
+  const requested = await canonicalEntityWritePath(context, path)
   assertMarkdown(requested)
   // An index note IS a folder: creating `a/b.md` with `type: Index` creates the
   // folder `a/b` and writes its index, never a loose note that claims the type.
@@ -182,10 +195,26 @@ export async function createNote(
     const denial = await indexConversionDenial(context, requested)
     if (denial) throw new Error(denial)
     p = indexPathOf(indexFolderPathOf(requested))
+    // A brand-new entity note created straight as an index is an entity folder
+    // from birth: seeded with this content, typed as the entity, pointer set.
+    if (parseEntityHref(requested)) {
+      if (await findLive(context, requested)) throw new Error(`A note already exists at: ${requested}`)
+      if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
+      const dest = await ensureEntityFolderFor(context, requested, actor, content)
+      const row = await findLive(context, dest)
+      if (!row) throw new Error(`Note not found: ${dest}`)
+      await syncContextLinks(context, dest, row.content)
+      await agentNoteWritten(context, dest, actor, { changed: true })
+      return toRaw(row)
+    }
   }
+  // A note landing inside an entity's folder makes that folder exist: the
+  // entity note becomes people/<slug>/index.md first (or the create is refused
+  // when no such entity exists — sub-notes need a node to belong to).
+  await ensureOwnerFolderFor(context, p, actor)
   // The reverse guard: a note AT an index path is a folder whatever its
   // frontmatter says, so the Index type is enforced rather than trusted.
-  if (isIndexPath(p)) content = enforceIndexFrontmatter(content, folderOfIndexPath(p))
+  if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
   const row = await prisma.contextNote.create({
     data: {
@@ -200,6 +229,7 @@ export async function createNote(
   })
   if (isIndexPath(p)) await upsertFolderRow(context, folderOf(p))
   await syncContextLinks(context, p, content)
+  await agentNoteWritten(context, p, actor, { changed: true })
   await ensureAncestorIndexes(context, p, actor)
   await refreshIndexesForNote(context, p)
   invalidateVault(context)
@@ -276,6 +306,36 @@ async function refreshIndexesForNote(context: Context, notePath: string): Promis
   const own = folderOf(notePath)
   await refreshFolderIndex(context, own)
   if (isIndexPath(notePath) && own) await refreshFolderIndex(context, folderOf(own))
+}
+
+/**
+ * A note-level restriction/lock is a `context_folders` row keyed by the NOTE's
+ * path (SharePanel's "make this note private"). When the note moves — a rename,
+ * or the flat entity note folding into `people/<slug>/index.md` — the flags must
+ * ride along or the note silently reopens at its new path. Grants are moved by
+ * the callers; this moves the boundary flags, OR-ing them onto any row already
+ * at the destination (a folder row may pre-exist) and dropping the stale row.
+ */
+async function moveFolderFlags(context: Context, from: string, to: string): Promise<void> {
+  if (!from || !to || from === to) return
+  const where = { spaceId: context.spaceId, ownerKey: context.ownerKey }
+  const row = await prisma.contextFolder.findUnique({
+    where: { folder_identity: { ...where, path: from } },
+    select: { restricted: true, locked: true },
+  })
+  if (!row) return
+  if (row.restricted || row.locked) {
+    const flags = {
+      ...(row.restricted ? { restricted: true } : {}),
+      ...(row.locked ? { locked: true } : {}),
+    }
+    await prisma.contextFolder.upsert({
+      where: { folder_identity: { ...where, path: to } },
+      create: { ...where, path: to, ...flags },
+      update: flags,
+    })
+  }
+  await prisma.contextFolder.deleteMany({ where: { ...where, path: from } })
 }
 
 /** The `SpaceNoteFolder` row that makes a folder exist in its own right. */
@@ -374,7 +434,7 @@ export async function writeNote(
   origin: NoteRevisionOrigin = 'edit',
   model?: string,
 ): Promise<string> {
-  const p = sanitizePath(path)
+  const p = await canonicalEntityWritePath(context, path)
   assertMarkdown(p)
   // Retyping a note to `Index` makes it a folder (below). Refuse the whole save
   // when it can't be one, rather than storing a note whose type contradicts
@@ -384,11 +444,15 @@ export async function writeNote(
     const denial = await indexConversionDenial(context, p)
     if (denial) throw new Error(denial)
   }
+  const existing = await findLive(context, p)
+  // An upsert-create inside an entity's folder converts the entity note first,
+  // exactly as createNote does.
+  if (!existing) await ensureOwnerFolderFor(context, p, actor)
   // The reverse guard: a save at an index path keeps `type: Index` (and a
   // title) whatever the incoming frontmatter says — dropping the type would
-  // silently turn the folder into a loose note.
-  if (isIndexPath(p)) content = enforceIndexFrontmatter(content, folderOfIndexPath(p))
-  const existing = await findLive(context, p)
+  // silently turn the folder into a loose note. An entity folder's index keeps
+  // its ENTITY type instead (it is the person's note; the path is the folder).
+  if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   const prev = existing?.content ?? null
 
   // An index that carried the managed child block keeps it: a raw write that
@@ -419,6 +483,10 @@ export async function writeNote(
   // paths); runs even on no-op saves so a missed sync self-heals on next save.
   await syncContextLinks(context, p, content)
 
+  // Agent notes drive the scheduler's state row (activation → nextRunAt; a
+  // member's edit to a live brief → auto-deactivate). No-op elsewhere.
+  await agentNoteWritten(context, p, actor, { changed: prev !== content })
+
   // Refresh this note's published replicas in other contexts. Origin 'publish'
   // IS a replica write — skipping it is what stops replication cascades and
   // publish cycles dead. Best-effort like the link sync; self-heals on no-op
@@ -432,8 +500,14 @@ export async function writeNote(
   // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
   invalidateVault(context)
 
-  // The type is what makes a note an index, so the path follows it.
-  const finalPath = converting ? await convertNoteToIndex(context, p, actor) : p
+  // The type is what makes a note an index, so the path follows it. An entity
+  // note retyped to Index becomes an entity folder — same move, but the note
+  // keeps being the entity (type put back, pointer set on the node).
+  const finalPath = converting
+    ? parseEntityHref(p)
+      ? await ensureEntityFolderFor(context, p, actor)
+      : await convertNoteToIndex(context, p, actor)
+    : p
 
   if (prev === content) return finalPath // nothing changed — don't spawn a revision
 
@@ -518,13 +592,27 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
   }
 }
 
-export async function renameNote(context: Context, from: string, to: string): Promise<string> {
+export async function renameNote(
+  context: Context,
+  from: string,
+  to: string,
+  actor?: Actor,
+): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
   assertMarkdown(t)
   const row = await findLive(context, f)
   if (!row) throw new Error(`Note not found: ${from}`)
   if (t !== f && (await findLive(context, t))) throw new Error(`A note already exists at: ${to}`)
+  // Landing inside an entity's folder converts the entity note first (or is
+  // refused when no such entity exists). Callers without an actor (system
+  // moves) can't convert, so a sub-note destination needs the folder to exist.
+  if (t !== f) {
+    if (actor) await ensureOwnerFolderFor(context, t, actor)
+    else if (entityOwnerPathOf(t) && !(await findLive(context, indexPathOf(entityOwnerPathOf(t)!)))) {
+      throw new Error(`"${entityOwnerPathOf(t)}" is not a folder yet — open the entity and add a note first`)
+    }
+  }
   await prisma.contextNote.update({ where: { id: row.id }, data: { path: t } })
   // A rename changes which entity (if any) the note is canonical for: drop the
   // old path's context links, derive the new path's. Publications and any
@@ -538,9 +626,11 @@ export async function renameNote(context: Context, from: string, to: string): Pr
         data: { resourcePath: t },
       })
     }
+    await moveFolderFlags(context, f, t)
     // Both ends list the note: the folder it left and the folder it landed in.
     await refreshIndexesForNote(context, f)
     await refreshIndexesForNote(context, t)
+    await agentNoteRenamed(context, f, t)
   }
   invalidateVault(context)
   return t // revisions stay attached by noteId
@@ -559,6 +649,7 @@ export async function deleteNote(context: Context, path: string): Promise<void> 
   // Trashing either end of a publication deactivates it (replica stays a copy).
   await syncPublicationsOnDelete(context, [row.path])
   await refreshIndexesForNote(context, row.path)
+  await agentNoteDeleted(context, row.path)
   invalidateVault(context)
 }
 
@@ -674,12 +765,11 @@ export async function createIndexFolder(
 async function indexConversionDenial(context: Context, path: string): Promise<string | null> {
   const p = sanitizePath(path)
   if (isIndexPath(p)) return null
-  // A canonical entity note is a directory record — a person, a company, a
-  // connector. Those aren't containers, and moving one off its
-  // `<namespace>/<slug>.md` path would orphan the node that points at it.
-  if (parseEntityHref(p)) {
-    return `"${p}" is a directory record, not a folder — it can't be an index`
-  }
+  // A canonical entity note may become a folder — its OWN folder
+  // (people/<slug>/index.md), which ensureEntityFolder handles: the node keeps
+  // pointing at it. Nothing else to check here; the target folder can't already
+  // exist without the index (ensureEntityFolder is the only way it appears).
+  if (parseEntityHref(p)) return null
   const folder = indexFolderPathOf(p)
   if (await findLive(context, indexPathOf(folder))) {
     return `"${folder}" is already a folder — rename this note before making it an index`
@@ -719,6 +809,7 @@ async function convertNoteToIndex(
       data: { resourcePath: folder },
     })
   }
+  await moveFolderFlags(context, f, folder)
   await upsertFolderRow(context, folder)
   // Notes may already sit under `a/b/` (an index arriving late for a folder that
   // grew from note paths) — the new index lists them, and the parent lists it.
@@ -727,6 +818,197 @@ async function convertNoteToIndex(
   await ensureAncestorIndexes(context, dest, actor)
   invalidateVault(context)
   return dest
+}
+
+// entity folders
+//
+// A directory node's context is one note (people/<slug>.md) until it needs more
+// than one; then that note becomes the folder people/<slug>/ — it moves to
+// people/<slug>/index.md, keeps its entity type and `node:` (the path is what
+// makes it an index), and the node records the new location as
+// `metadata.notePath` so entityNotePath finds it. Every other note under the
+// folder is a sub-note of that node. See lib/notes/entities.ts.
+
+/**
+ * The directory node whose entity note lives at `flatOrIndex` (either form),
+ * or null. Ids aren't string-invertible from paths (legacy prefixes), so this
+ * narrows by slug and confirms with entityFlatPath over the real rows.
+ */
+async function nodeForEntityPath(
+  spaceId: string,
+  flatOrIndex: string,
+): Promise<(EntityNodeLike & { id: string; name: string | null }) | null> {
+  const flat = isIndexPath(flatOrIndex)
+    ? `${folderOfIndexPath(flatOrIndex)}.md`
+    : flatOrIndex
+  const slug = flat.replace(/\.md$/i, '').split('/').pop() ?? ''
+  if (!slug) return null
+  const rows = await prisma.node.findMany({
+    where: { spaceId, OR: [{ id: { endsWith: `:${slug}` } }, { id: slug }] },
+    select: { id: true, type: true, name: true, subtitle: true, metadata: true },
+  })
+  for (const row of rows) {
+    const node = { ...row, metadata: (row.metadata as Record<string, unknown> | null) ?? null }
+    if (entityFlatPath(node) === flat) return node
+  }
+  return null
+}
+
+/**
+ * Make `node`'s context a folder — idempotent. Moves people/<slug>.md to
+ * people/<slug>/index.md (row id, history, links, publications and grants all
+ * follow, as convertNoteToIndex does for any note), seeds the index from the
+ * entity stub when the node had no note yet, holds it to the entity-index
+ * contract, and records the location on the node. Returns the index path.
+ *
+ * The node pointer is shared-context state (there is one node); a personal
+ * context converting its own copy just moves the note.
+ */
+async function ensureEntityFolder(
+  context: Context,
+  node: EntityNodeLike,
+  actor: Actor,
+  /** Content for the index when the node has no note yet (default: the entity stub). */
+  seed?: string,
+): Promise<string> {
+  const flat = entityFlatPath(node)
+  const dest = entityIndexPathOf(node)
+  if (!flat || !dest) throw new Error(`"${node.id}" is not a directory entity`)
+  const folder = folderOfIndexPath(dest)
+  const live = await findLive(context, dest)
+  if (!live) {
+    const row = await findLive(context, flat)
+    if (row) {
+      await prisma.contextNote.update({ where: { id: row.id }, data: { path: dest } })
+      await syncContextLinksBulk(context, [flat], [[dest, row.content]])
+      await syncPublicationsOnRename(context, flat, dest)
+      if (context.ownerKey === SHARED_OWNER_KEY) {
+        await prisma.contextGrant.updateMany({
+          where: { spaceId: context.spaceId, resourcePath: flat },
+          data: { resourcePath: folder },
+        })
+      }
+      await moveFolderFlags(context, flat, folder)
+    } else {
+      // No note yet (the profile renders a lazy stub until the first save) —
+      // the folder still needs its index, and it IS the entity note.
+      await prisma.contextNote.create({
+        data: {
+          spaceId: context.spaceId,
+          ownerKey: context.ownerKey,
+          path: dest,
+          content: seed ?? entityStub(node),
+          starred: false,
+          createdBy: actor.id,
+        },
+      })
+    }
+    await upsertFolderRow(context, folder)
+  }
+  // Hold the (moved or pre-existing) index to the entity contract — a retype
+  // to `Index` that triggered this conversion is put back to the entity type.
+  const idx = await findLive(context, dest)
+  if (idx) {
+    const next = enforceEntityIndexFrontmatter(idx.content, entityContractOf(node))
+    if (next !== idx.content) {
+      await prisma.contextNote.update({ where: { id: idx.id }, data: { content: next } })
+    }
+  }
+  if (context.ownerKey === SHARED_OWNER_KEY) {
+    const pointer = node.metadata?.notePath
+    if (pointer !== dest) {
+      const current = await prisma.node.findUnique({ where: { id: node.id }, select: { metadata: true } })
+      const metadata = (current?.metadata as Record<string, unknown> | null) ?? {}
+      await prisma.node.update({
+        where: { id: node.id },
+        data: { metadata: { ...metadata, notePath: dest } as Prisma.InputJsonObject },
+      })
+      bustContextData()
+    }
+  }
+  await refreshFolderIndex(context, folder)
+  await refreshFolderIndex(context, folderOf(folder))
+  await ensureAncestorIndexes(context, dest, actor)
+  invalidateVault(context)
+  return dest
+}
+
+function entityContractOf(node: EntityNodeLike): { typeLabel: string; nodeId: string; name: string } {
+  return {
+    typeLabel: entityTypeLabelOf(node.type) ?? 'Note',
+    nodeId: node.id,
+    name: (node.name ?? node.id.split(':').pop() ?? node.id).trim(),
+  }
+}
+
+function bustContextData(): void {
+  try {
+    revalidateTag('context-data-v2', { expire: 0 })
+  } catch {
+    /* outside request scope */
+  }
+}
+
+/** ensureEntityFolder for the node whose entity note is `entityPath` (either form). */
+async function ensureEntityFolderFor(
+  context: Context,
+  entityPath: string,
+  actor: Actor,
+  seed?: string,
+): Promise<string> {
+  const node = await nodeForEntityPath(context.spaceId, entityPath)
+  if (!node) throw new Error(`"${entityPath}" is not a directory entity's note — no such node`)
+  return ensureEntityFolder(context, node, actor, seed)
+}
+
+/**
+ * A note about to land at `path`: if that is inside an entity's folder
+ * (people/<slug>/…), make the folder exist first — converting the entity note —
+ * or refuse when there is no such entity. Anything else is a no-op.
+ */
+async function ensureOwnerFolderFor(context: Context, path: string, actor: Actor): Promise<void> {
+  const owner = entityOwnerPathOf(path)
+  if (!owner) return
+  if (await findLive(context, indexPathOf(owner))) return
+  const node = await nodeForEntityPath(context.spaceId, `${owner}.md`)
+  if (!node) {
+    throw new Error(
+      `"${owner}" is not a directory entity — notes filed under an entity namespace must belong to one`,
+    )
+  }
+  await ensureEntityFolder(context, node, actor)
+}
+
+/**
+ * The index contract for a write at index path `p`: an entity folder's index
+ * keeps the entity's type and `node:`; every other index carries `type: Index`.
+ * An entity-shaped index path with no node behind it (a folder somebody hand-
+ * made under people/) falls back to the plain contract.
+ */
+async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
+  if (isEntityFolderIndex(p)) {
+    const node = await nodeForEntityPath(context.spaceId, p)
+    if (node) return enforceEntityIndexFrontmatter(content, entityContractOf(node))
+  }
+  return enforceIndexFrontmatter(content, folderOfIndexPath(p))
+}
+
+/**
+ * Where a write addressed to an entity note actually goes: the flat form is
+ * redirected to the folder form once the entity has converted, so a writer
+ * holding the old path (a stale link, an agent) enriches the note instead of
+ * creating a second one beside the folder.
+ */
+export async function canonicalEntityWritePath(context: Context, path: string): Promise<string> {
+  const p = sanitizePath(path)
+  if (!parseEntityHref(p) || isIndexPath(p)) return p
+  const index = indexPathOf(indexFolderPathOf(p))
+  return (await findLive(context, index)) ? index : p
+}
+
+/** True when `folder` is some entity's context folder (people/<slug>). */
+function isEntityFolder(folder: string): boolean {
+  return entityOwnerPathOf(`${folder}/x.md`) !== null && parseEntityHref(`${folder}/index.md`) !== null
 }
 
 // Rename/move a folder and everything under it (notes + nested folder rows).
@@ -738,6 +1020,17 @@ export async function renameFolder(
 ): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
+  // An entity folder IS the entity's note path (people/<slug>): its name is the
+  // node's identity, so it can't be renamed or moved — and nothing else can
+  // become one by being renamed into that shape.
+  if (isEntityFolder(f)) {
+    throw new Error(`"${f}" is a directory entity's folder — its path is the entity's identity and can't change`)
+  }
+  if (isEntityFolder(t)) {
+    throw new Error(`"${t}" is where a directory entity's notes live — a folder can't be renamed into it`)
+  }
+  // Moving a folder INTO an entity's folder converts the entity note first.
+  if (actor) await ensureOwnerFolderFor(context, `${t}/x.md`, actor)
   const notes = await prisma.contextNote.findMany({
     where: {
       spaceId: context.spaceId,
@@ -764,6 +1057,8 @@ export async function renameFolder(
   await Promise.all(
     notes.map((note) => syncPublicationsOnRename(context, note.path, t + note.path.slice(f.length))),
   )
+  // Agent briefs moved by a folder rename deactivate like a single rename does.
+  for (const note of notes) await agentNoteRenamed(context, note.path, t + note.path.slice(f.length))
   // Grants ride the rename too — a moved team subtree keeps its access rows.
   if (context.ownerKey === SHARED_OWNER_KEY) {
     await prisma.contextGrant.updateMany({
@@ -847,6 +1142,7 @@ export async function deleteFolder(context: Context, path: string): Promise<void
   }
   await syncContextLinksBulk(context, notes.map((n) => n.path)) // trashed entity notes drop their links
   await syncPublicationsOnDelete(context, notes.map((n) => n.path))
+  for (const note of notes) await agentNoteDeleted(context, note.path)
   await prisma.contextFolder.deleteMany({
     where: {
       spaceId: context.spaceId,
@@ -863,6 +1159,17 @@ export async function deleteFolder(context: Context, path: string): Promise<void
         OR: [{ resourcePath: p }, { resourcePath: { startsWith: `${p}/` } }],
       },
     })
+  }
+  // A deleted entity folder took the entity's note with it; the node falls back
+  // to the flat form (a lazy stub) until somebody writes context again.
+  if (isEntityFolder(p) && context.ownerKey === SHARED_OWNER_KEY) {
+    const node = await nodeForEntityPath(context.spaceId, `${p}.md`)
+    if (node && node.metadata?.notePath) {
+      const { notePath: _dropped, ...rest } = node.metadata
+      void _dropped
+      await prisma.node.update({ where: { id: node.id }, data: { metadata: rest as Prisma.InputJsonObject } })
+      bustContextData()
+    }
   }
   // The folder was an entry in its parent's index; it isn't any more.
   await refreshFolderIndex(context, folderOf(p))

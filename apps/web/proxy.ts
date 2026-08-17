@@ -20,6 +20,10 @@ const PUBLIC_PATHS = [
   "/.well-known/oauth-",
   "/api/oauth",
   "/api/mcp",
+  // Machine-to-machine endpoints for the agent scheduler: no user session by
+  // nature. "Public" only means "no cookie" — each route authenticates itself
+  // (Cloud Scheduler OIDC for the tick, an internal HS256 token for the run).
+  "/api/internal/",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 
