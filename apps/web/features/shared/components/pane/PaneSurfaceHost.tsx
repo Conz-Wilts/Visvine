@@ -18,8 +18,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import {
-  CONNECTIONS_RAIL_MIN_W,
   CONNECTIONS_RAIL_W,
+  useConnectionsRailVisible,
   useContextPanel,
 } from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
@@ -71,13 +71,16 @@ function identityOf(s: PaneSurface): string {
   return `entity:${s.nodeId}${sub}`;
 }
 
-/** Inset for the note content while the tree is docked and open, so the panel
- *  column never covers it. (The connections rail's inset is the shell's, not
- *  this element's — <main> narrows for it.) */
-function useDockInsetStyle(): React.CSSProperties {
+/** Insets for the note content so neither side panel covers it: the docked tree
+ *  on the left, the connections rail on the right. Both are on THIS element
+ *  rather than on the shell's <main> — the pane's tab row lives in <main> too
+ *  and must keep the full width of the card, so narrowing the scroller itself
+ *  would drag the row (and the navbar seam it continues) across with it. */
+function useDockInsetStyle(railVisible: boolean): React.CSSProperties {
   const { dockRequested, contextOpen } = useContextPanel();
   return {
     paddingLeft: dockRequested && contextOpen ? CONTEXT_PANEL_W : undefined,
+    paddingRight: railVisible ? CONNECTIONS_RAIL_W : undefined,
     transition: 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
   };
 }
@@ -85,8 +88,8 @@ function useDockInsetStyle(): React.CSSProperties {
 export default function PaneSurfaceHost() {
   const { chrome } = usePaneChromeState();
   const target = chrome?.surface ?? null;
-  const dockInsetStyle = useDockInsetStyle();
-  const { connectionsOpen, setRailInset } = useContextPanel();
+  const { connectionsOpen } = useContextPanel();
+  const dockInsetStyle = useDockInsetStyle(useConnectionsRailVisible());
 
   // The rail slides rather than popping, so closing can't unmount it in the
   // same commit — it stays mounted (open=false, sliding offscreen) until the
@@ -134,29 +137,6 @@ export default function PaneSurfaceHost() {
   const activeKind = isPanel(active) ? active.kind : null;
   const activeKindRef = useRef(activeKind);
   activeKindRef.current = activeKind;
-
-  // Hand the rail's strip back to the shell: <main> gives up that width at its
-  // right edge, which carries the page scrollbar left with the rail instead of
-  // leaving it buried under a panel that scrolls on its own.
-  //
-  // Gated on a PANEL surface being up, not on connectionsOpen alone: this host
-  // is mounted once by the directory layout and re-pointed, so it does NOT
-  // unmount when the user leaves a note for the Grid — the cleanup below never
-  // fires there. connectionsOpen deliberately survives that navigation, so
-  // without this gate the Grid kept a 300px empty strip at its right edge
-  // beside a rail that renders nothing (the surface branches above return
-  // before it). Cleared on unmount too, for the layouts that do drop the host.
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${CONNECTIONS_RAIL_MIN_W}px)`);
-    const apply = () =>
-      setRailInset(connectionsOpen && activeIsPanel && mq.matches ? CONNECTIONS_RAIL_W : 0);
-    apply();
-    mq.addEventListener('change', apply);
-    return () => {
-      mq.removeEventListener('change', apply);
-      setRailInset(0);
-    };
-  }, [connectionsOpen, activeIsPanel, setRailInset]);
 
   // The reveal plays once per entry into a note surface and then stays open;
   // switching notes swaps content behind an already-visible surface. Reset only
@@ -208,9 +188,9 @@ export default function PaneSurfaceHost() {
     active.kind === 'entity' ? active : crossKind && target?.kind === 'entity' ? target : null;
 
   return (
-    // No right inset here for the rail: the shell narrows <main> itself by
-    // `railInset` (see AuthLayoutClient), so the content — and the page
-    // scrollbar with it — already stops at the rail's left edge.
+    // The rail's inset is this element's padding-right (see useDockInsetStyle),
+    // so the note body makes room for it while the pane's tab row above keeps
+    // the full width of the card.
     <ContentReveal
       ready={revealReady}
       className="w-full pb-10 motion-reduce:[transition:none!important]"

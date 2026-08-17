@@ -128,6 +128,10 @@ const INDEX_RULE =
   'is what makes it findable in search) rather than creating or replacing one. Never hand-write the ' +
   'child list; the markers are refreshed for you on every change in the folder. Writes to an index ' +
   'path keep `type: Index` and the markers even if your content drops them. ' +
+  'INDEX LAYOUT (fixed, keep it simple): `# <Title>`, then one or two short paragraphs saying what the ' +
+  'folder holds and who it is for, then optional grouped `- [Title](/path.md) — one-line note` bullets. ' +
+  'NO tables, no columns, no HTML, no nested headings deeper than `##` — a flat list of links reads best ' +
+  'in search and costs models the fewest tokens. Every index in a space must look the same. ' +
   "ENTITY FOLDERS: an entity's note (people/<slug>.md) becomes a folder the moment a second note about " +
   'that entity is needed — write the extra note at people/<slug>/<anything>.md and the entity note moves ' +
   'to people/<slug>/index.md by itself, keeping its entity type (NOT `type: Index`) and `node:`. Both ' +
@@ -945,7 +949,8 @@ export function registerTools(server: McpServer): void {
                 index_note: true,
                 index_contract:
                   '`type: Index` and the <!-- index:children --> block are enforced on this path — ' +
-                  'read the note back if you need the exact stored content',
+                  'read the note back if you need the exact stored content. Layout is fixed: H1, short ' +
+                  'prose, flat `- [Title](/path.md)` bullets. No tables.',
               }
             : {}),
           ...(isGatedShared
@@ -1034,7 +1039,8 @@ export function registerTools(server: McpServer): void {
         "mode:'full' adds duplicate detection and oversized-note flags. Folders frozen for AI are reported " +
         "but never touched. action:'trash' soft-deletes notes you are allowed to remove (author, admin, or " +
         'full access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
-        `reading them. When fixing orphans, remember: ${MENTION_RULE}`,
+        'reading them. While cleaning, also normalise any index note whose prose uses tables/columns to the ' +
+        `fixed index layout (H1, short prose, flat link bullets). When fixing orphans, remember: ${MENTION_RULE}`,
       inputSchema: {
         space_id: z.string(),
         scope: scopeArg.describe(

@@ -9,7 +9,12 @@ import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Waypoints } from 'lucide-react';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
-import { useContextPanel, useDockVisuallyOpen } from '@/features/shared/contexts/ContextPanelContext';
+import {
+  CONNECTIONS_RAIL_W,
+  useConnectionsRailVisible,
+  useContextPanel,
+  useDockVisuallyOpen,
+} from '@/features/shared/contexts/ContextPanelContext';
 import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/tabMotion';
@@ -85,11 +90,14 @@ function PaneTabBarInner({
   // The tray centres over the note column, not the pane: while the tree is
   // docked the content insets by its width, so the attached region matches it,
   // on the same transition. The connections rail narrows the column from the
-  // right the same way — but as a class, not a style: the rail only exists at
-  // xl, a breakpoint inline padding can't see.
+  // right the same way, so the tray insets by its width too — otherwise the
+  // toolbar stays centred on the full card while the text it acts on slides
+  // left. The rail only exists at xl, which inline padding can't see, so
+  // useConnectionsRailVisible reads that breakpoint in JS.
   const { dockRequested, contextOpen, connectionsOpen, setConnectionsOpen, setTabTrailHost } =
     useContextPanel();
   const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
+  const trayInsetRight = useConnectionsRailVisible() ? CONNECTIONS_RAIL_W : 0;
   // The Connections rail toggle rides the bar's right edge whenever a note or
   // entity surface is up — bar-level chrome for a bar-level panel, so it never
   // jumps around with the editor toolbar. Hidden below xl with the rail itself.
@@ -365,6 +373,7 @@ function PaneTabBarInner({
             style={{
               height: TRAY_ROW_H,
               paddingLeft: trayInset || undefined,
+              paddingRight: trayInsetRight || undefined,
               // `translate`, not `transform`: Tailwind v4's translate-y-*
               // utilities set the standalone CSS translate property.
               transition: armed

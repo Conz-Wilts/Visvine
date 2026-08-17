@@ -37,16 +37,6 @@ interface ContextPanelValue {
   // unmounts/remounts it across those swaps.
   connectionsOpen: boolean;
   setConnectionsOpen: (v: boolean) => void;
-  // Pixels the shell's <main> must give up at its RIGHT edge while the rail is
-  // on screen. The rail is fixed over the card, so without this it would sit on
-  // top of <main>'s own scrollbar — and the rail scrolls too, which made the one
-  // visible bar ambiguous about what it scrolled. <main> hands the strip over as
-  // a border instead (a scroller paints its bar INSIDE its border), so the page
-  // scrollbar travels left with the rail and stays the note's. 0 whenever the
-  // rail isn't up, including below xl where it never renders — PaneSurfaceHost
-  // owns the value.
-  railInset: number;
-  setRailInset: (v: number) => void;
   // Portal host at the RIGHT end of the pane tab row, beside the Connections
   // toggle. Surface-level actions that belong to the whole note rather than to
   // the text being edited (Share) render here instead of in the editor's
@@ -73,8 +63,6 @@ const ContextPanelContext = createContext<ContextPanelValue>({
   setContextOpen: () => {},
   connectionsOpen: false,
   setConnectionsOpen: () => {},
-  railInset: 0,
-  setRailInset: () => {},
   tabTrailHost: null,
   setTabTrailHost: () => {},
   dockTopInset: 0,
@@ -92,21 +80,41 @@ const ContextPanelContext = createContext<ContextPanelValue>({
 // and back down.
 const DOCK_RELEASE_MS = 260;
 
-/** The connections rail's fixed width — what the shell insets <main> by, and
- *  what PaneSurfaceHost hands to `railInset`. Lives here rather than with the
- *  rail component so the shell can read it without pulling the rail's (lazily
- *  loaded) chunk into the layout bundle. */
+/** The connections rail's fixed width. It overlays the card's right edge and
+ *  reserves no space, so nothing else in the shell needs to read this — it
+ *  lives here rather than in the (lazily loaded) rail chunk only because the
+ *  rail's toggle and the rail itself both want it. */
 export const CONNECTIONS_RAIL_W = 300;
-/** The rail is `xl:block` only, so the inset must collapse with it. Same value
- *  as Tailwind's xl, read in JS because the inset is an inline style. */
-export const CONNECTIONS_RAIL_MIN_W = 1280;
+
+/** The viewport width the rail needs to exist at all (it renders `xl:block`). */
+const RAIL_MIN_W = 1280;
+
+/*
+ * True once the rail is BOTH open and wide enough to render. Anything that has
+ * to make room for it reads this rather than the raw `connectionsOpen` flag:
+ * the inset is an inline style (a px width), and inline styles can't see the
+ * breakpoint the rail itself is gated on. Both the note body (PaneSurfaceHost)
+ * and the editor toolbar tray (PaneTabBar) inset off this, so the toolbar
+ * travels with the text it belongs to instead of staying centred on the card.
+ */
+export function useConnectionsRailVisible(): boolean {
+  const { connectionsOpen } = useContextPanel();
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${RAIL_MIN_W}px)`);
+    const apply = () => setWide(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+  return connectionsOpen && wide;
+}
 
 export function ContextPanelProvider({ children }: { children: ReactNode }) {
   const [host, setHost] = useState<HTMLElement | null>(null);
   const [dockRequestedState, setDockRequestedState] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
-  const [railInset, setRailInset] = useState(0);
   const [tabTrailHost, setTabTrailHost] = useState<HTMLElement | null>(null);
   const [dockTopInsetState, setDockTopInsetState] = useState(0);
 
@@ -175,8 +183,6 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
         setContextOpen,
         connectionsOpen,
         setConnectionsOpen,
-        railInset,
-        setRailInset,
         tabTrailHost,
         setTabTrailHost,
         dockTopInset: dockTopInsetState,

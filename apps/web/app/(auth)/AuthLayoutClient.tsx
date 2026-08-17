@@ -19,7 +19,7 @@ import {
 } from "@/features/shared/contexts/ThemeContext";
 import { CreateModalProvider } from "@/features/shared/contexts/CreateModalContext";
 import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
-import { ContextPanelProvider, useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
+import { ContextPanelProvider } from "@/features/shared/contexts/ContextPanelContext";
 import { FullProfileProvider } from "@/features/shared/contexts/FullProfileContext";
 import { AuthProvider } from "@/features/auth/contexts/AuthContext";
 import type { Space } from "@/lib/types";
@@ -49,7 +49,6 @@ function useFeatureRouteGuard() {
 
 function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   const { expanded } = useSidebar();
-  const { railInset } = useContextPanel();
   const pathname = usePathname();
   useFeatureRouteGuard();
 
@@ -127,14 +126,9 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
               // No horizontal scrolling: a sideways drag would slide content
               // under the fixed rail / docked panel, which read as broken.
               overflowX: "hidden",
-              // The connections rail's strip, taken as a BORDER rather than
-              // padding: a scroller paints its scrollbar inside its border box,
-              // so the page bar travels left with the rail and stays visible —
-              // as padding it would stay pinned at the card edge, under a panel
-              // that has a scrollbar of its own. Transparent, so the card's own
-              // surface shows through while the rail slides across it.
-              borderRight: `${railInset}px solid transparent`,
-              transition: "border-right-width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
+              // Nothing is reserved for the connections rail: it's a pure
+              // overlay over the card's right edge, so opening it never narrows
+              // <main> and never shifts the pane's tab row across.
               ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
             }}
           >

@@ -56,9 +56,8 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   const { currentSpace } = useSpace();
   const spaceId = currentSpace?.id ?? null;
   // The pane tab row's height while one is up (PaneShell publishes it). The rail
-  // starts below that row rather than beside it, so the bar spans the card and
-  // the rail reads as hanging off it — the same rule the docked context tree
-  // follows on the other side.
+  // hangs BELOW that row — the bar keeps the full width of the card — so the
+  // rail's own top starts at the row's bottom edge.
   const { setConnectionsOpen, dockTopInset } = useContextPanel();
   const { entityByPath } = useDirectoryEntities();
 
@@ -156,27 +155,25 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
     // rather than the side of the screen, and it carries the card's right-hand
     // corner radii so the rail doesn't poke square corners past the frame.
     //
-    // Its CONTENT starts below the pane's pinned tab row: the row is the
-    // surface's chrome and belongs across the whole card, so the rail hangs
-    // under it rather than beside it. The rail can't simply be pushed down to
-    // clear the row, because the row can't reach across the strip either —
-    // <main> gives that width up as a border and clips its own content at the
-    // padding edge, so the bar stops at the rail's left edge. The rail
-    // therefore CONTINUES the row itself: a spacer of the row's height
-    // (dockTopInset), in the same surface and carrying the same bottom
-    // hairline, riding the slide with the rest of the column so it arrives and
-    // leaves as one piece.
+    // It starts below the pane's pinned tab row (dockTopInset): the row is the
+    // surface's chrome and belongs across the whole card, so nothing about the
+    // rail narrows it — the rail simply hangs under it. The note BODY does make
+    // room (PaneSurfaceHost pads its content by the rail's width); the shell's
+    // <main> deliberately does not, so the row and the navbar seam it continues
+    // stay put when the rail opens.
     //
     // pointer-events-none so the transparent wrapper never swallows clicks;
     // the aside re-enables them on itself.
     <div
       className="pointer-events-none fixed z-30 hidden overflow-hidden xl:block"
       style={{
-        top: 64 + SHELL_FRAME_GAP,
+        top: 64 + SHELL_FRAME_GAP + dockTopInset,
         right: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
         bottom: SHELL_FRAME_MARGIN + SHELL_FRAME_GAP,
         width: CONNECTIONS_RAIL_W,
-        borderTopRightRadius: SHELL_FRAME_RADIUS,
+        // Only when it actually reaches the card's own top corner — under a tab
+        // row it sits mid-edge, where a radius would round nothing.
+        borderTopRightRadius: dockTopInset > 0 ? 0 : SHELL_FRAME_RADIUS,
         borderBottomRightRadius: SHELL_FRAME_RADIUS,
       }}
     >
@@ -187,18 +184,6 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
       aria-label="Connections"
       aria-hidden={!open}
     >
-      {/* The tab row's continuation across the strip — the seam the bar can't
-          reach. Presentational only: the row's own tabs and actions stay in the
-          bar itself, which paints above this (z-45). Zero-height on a surface
-          with no bar, so the rail simply starts at the card top there. */}
-      {dockTopInset > 0 && (
-        <div
-          aria-hidden
-          className="shrink-0 border-b border-border-subtle bg-surface-1"
-          style={{ height: dockTopInset }}
-        />
-      )}
-
       <div className="shrink-0 border-b border-border-subtle px-4 py-2.5">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-text-primary">Connections</span>

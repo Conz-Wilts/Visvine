@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/features/shared/contexts/ThemeContext';
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 
 /**
  * Hides the page scrollbar behind a pane-top tab bar.
@@ -46,10 +45,6 @@ export default function PaneTopScrollbarMask({
   transparent?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
-  // The connections rail narrows <main>, and the scrollbar rides in with it —
-  // so the strip has to follow, or it masks blank rail and leaves the bar's top
-  // exposed beside the pinned row.
-  const { railInset } = useContextPanel();
   useEffect(() => setMounted(true), []);
   if (!mounted) return null;
 
@@ -74,7 +69,7 @@ export default function PaneTopScrollbarMask({
       }`}
       style={{
         height: resolvedHeight,
-        right: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN + scrollbarW + railInset,
+        right: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN + scrollbarW,
         // 16px, not the 12px a w-3 strip would give: classic (always-on)
         // scrollbars are 15px wide, and a sliver of track peeked past the
         // mask's left edge.
@@ -82,9 +77,7 @@ export default function PaneTopScrollbarMask({
         // Where <main> (and its scrollbar) starts: the navbar's 64px, plus the
         // frame gap above the card.
         top,
-        // Only at the card's own corner — inset by the rail it sits mid-card,
-        // where a radius would round a corner that isn't there.
-        borderTopRightRadius: transparent || railInset ? 0 : SHELL_FRAME_RADIUS,
+        borderTopRightRadius: transparent ? 0 : SHELL_FRAME_RADIUS,
       }}
     />,
     document.body,
