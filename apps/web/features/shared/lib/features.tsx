@@ -124,6 +124,23 @@ export const FEATURES: FeatureDef[] = [
       </svg>
     ),
   },
+  {
+    key: 'tools',
+    label: 'Tools',
+    href: '/tools',
+    description: 'Tools built by members and installed from the marketplace.',
+    // Nav-less: the marketplace is reached from the navbar icon, and each
+    // INSTALLED Tool gets its own rail row keyed `tool:<slug>` — so this key is
+    // the tool vocabulary itself, never a "Tools" rail item. It is here so the
+    // console's Tools panel can switch the surface (and the Tool node type with
+    // it) on and off like any other. See NAV_HIDDEN_FEATURE_KEYS.
+    icon: (
+      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14.5 5.5a3.5 3.5 0 004.9 4.2l-9.7 9.7a2.1 2.1 0 01-3-3l9.7-9.7a3.5 3.5 0 01-1.9-1.2z" />
+        <path d="M15.2 4.3l4.5 4.5" />
+      </svg>
+    ),
+  },
 ];
 
 /** Sort a filtered feature list into the space's configured display order. */

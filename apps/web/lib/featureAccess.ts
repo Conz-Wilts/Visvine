@@ -15,9 +15,50 @@ export const CORE_FEATURE_KEYS: string[] = ['directory', 'notes', 'events'];
 /**
  * Every key in the registry, in its default (registry) order. Must stay in sync
  * with features/shared/lib/features.tsx#FEATURES — same convention as CORE_FEATURE_KEYS. Used to
- * reject unknown keys from a client-submitted `order`.
+ * reject unknown keys from a client-submitted `order`, alongside the dynamic
+ * `tool:<slug>` rail keys below (see isPersistableFeatureKey).
  */
-export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'agents'];
+export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'events', 'resources', 'connectors', 'agents', 'tools'];
+
+/**
+ * The prefix of an INSTALLED Tool's dynamic rail key: `tool:<slug>`.
+ *
+ * The `tools` key above is the tool-vocabulary switch (it gates the Tool node
+ * type and the /tools marketplace). A rail row, by contrast, belongs to one
+ * installed Tool, and a space can install any number of them — so those keys
+ * can't be enumerated in a registry. They are persisted in
+ * `featureConfig.order` / `more` / `adminOnly` exactly like the registry keys,
+ * which is why every validator below accepts them alongside ALL_FEATURE_KEYS.
+ */
+export const TOOL_RAIL_KEY_PREFIX = 'tool:';
+
+/** The feature key an installed Tool's sidebar rail row is stored under. */
+export function toolRailKey(slug: string): string {
+  return `${TOOL_RAIL_KEY_PREFIX}${slug}`;
+}
+
+/**
+ * `tool:<slug>`, where the slug is the Tool's note-folder name under `tools/`
+ * — so it carries no slash, whitespace or second colon. Deliberately permissive
+ * about the rest: the key's job is to survive a round trip through
+ * `featureConfig`, not to re-validate a name the note store already accepted.
+ */
+const TOOL_RAIL_KEY_RE = /^tool:[^\s/:]+$/;
+
+/** Is `key` an installed Tool's dynamic rail key? Takes `unknown` so a
+ *  client-submitted array can be filtered with it directly. */
+export function isToolRailKey(key: unknown): key is string {
+  return typeof key === 'string' && TOOL_RAIL_KEY_RE.test(key);
+}
+
+/**
+ * Is `key` something a space may persist in `featureConfig`? Either a registry
+ * key or an installed Tool's rail key. Everything else is dropped — a stale or
+ * forged key would silently reshuffle the nav.
+ */
+function isPersistableFeatureKey(key: unknown): key is string {
+  return (typeof key === 'string' && ALL_FEATURE_KEYS.includes(key)) || isToolRailKey(key);
+}
 
 /**
  * Feature keys that are admins-only by nature rather than by choice — their
@@ -29,7 +70,8 @@ export const ALL_FEATURE_KEYS: string[] = ['directory', 'notes', 'channels', 'ev
  * writing to `connectors/` is admin-gated in contextService.writeDenial.
  * Agents deliberately is NOT here: any member may author an agent brief; only
  * activation (`agents/live/`) is admin-gated. A space may still restrict the
- * tool to admins with the ordinary per-space switch.
+ * tool to admins with the ordinary per-space switch. Tools is the same story —
+ * members author under `tools/`; only installing and publishing are admin acts.
  */
 export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
 
@@ -39,8 +81,12 @@ export const ADMIN_ONLY_FEATURE_KEYS: string[] = ['connectors'];
  *   the Directory page, so it has no rail item and is not a toggleable tool.
  * - `events` is always on (core) and reached from the calendar button in the top
  *   navbar, so it has no rail item either.
+ * - `tools` is reached from the marketplace icon in the top navbar, and each
+ *   INSTALLED Tool gets its own rail row keyed `tool:<slug>` — so the tool
+ *   vocabulary itself never wants a "Tools" row. Those per-install keys are not
+ *   nav-hidden: they are the rail rows.
  */
-export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events'];
+export const NAV_HIDDEN_FEATURE_KEYS: string[] = ['notes', 'events', 'tools'];
 
 /**
  * Is `key` enabled for a space? Core features are always enabled; any other
@@ -70,6 +116,7 @@ const NODE_TYPE_FEATURE_KEYS: Record<string, string> = {
   channel: 'channels',
   connector: 'connectors',
   agent: 'agents',
+  tool: 'tools',
 };
 
 /** The feature slug a node type belongs to, or null if it isn't feature-gated. */
@@ -136,7 +183,7 @@ export function isNodeTypeEnabled(
  */
 export function adminOnlyFeatureKeys(config: SpaceFeatureConfig | null | undefined): string[] {
   const keys = (config?.adminOnly ?? []).filter(
-    (key) => typeof key === 'string' && ALL_FEATURE_KEYS.includes(key) && !NAV_HIDDEN_FEATURE_KEYS.includes(key),
+    (key) => isPersistableFeatureKey(key) && !NAV_HIDDEN_FEATURE_KEYS.includes(key),
   );
   if (config?.directoryPrivate === true && !keys.includes('directory')) keys.push('directory');
   return [...new Set([...keys, ...ADMIN_ONLY_FEATURE_KEYS])];
@@ -175,6 +222,10 @@ export function canAccessFeature(
  * (registry) order behind them. Keys the caller didn't ask for are never added,
  * so this is safe to run over an already-filtered list. An absent or empty
  * `order` leaves `keys` exactly as given.
+ *
+ * Membership in `keys` is the only thing that qualifies an ordered key, so an
+ * installed Tool's `tool:<slug>` row sorts alongside the registry keys with no
+ * special case here.
  */
 export function sortFeatureKeys(
   config: SpaceFeatureConfig | null | undefined,
@@ -189,8 +240,9 @@ export function sortFeatureKeys(
 
 /**
  * The feature keys a space has tucked into the sidebar's "More" popup —
- * deduped and reduced to known, nav-bearing keys. Membership only: the caller
- * still filters by `canAccessFeature` and orders via `sortFeatureKeys`.
+ * deduped and reduced to known, nav-bearing keys (registry keys plus installed
+ * Tools' `tool:<slug>` rows). Membership only: the caller still filters by
+ * `canAccessFeature` and orders via `sortFeatureKeys`.
  */
 export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): string[] {
   const more = config?.more;
@@ -198,7 +250,7 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
   const seen = new Set<string>();
   const out: string[] = [];
   for (const key of more) {
-    if (!ALL_FEATURE_KEYS.includes(key) || NAV_HIDDEN_FEATURE_KEYS.includes(key) || seen.has(key)) continue;
+    if (!isPersistableFeatureKey(key) || NAV_HIDDEN_FEATURE_KEYS.includes(key) || seen.has(key)) continue;
     seen.add(key);
     out.push(key);
   }
@@ -246,6 +298,11 @@ export function mergeFeatureConfig(
  * `adminOnly` when that's given), and `adminOnly`/`order`/`more` reduced
  * to known keys with duplicates dropped (`more` also drops nav-hidden keys —
  * they have no sidebar row to tuck away).
+ *
+ * "Known" means a registry key OR an installed Tool's `tool:<slug>` rail key
+ * (isPersistableFeatureKey) — those are real rows a space places, locks and
+ * tucks away, so they persist like any other. Unknown non-tool keys are still
+ * dropped.
  */
 export function sanitizeFeatureConfig(input: {
   enabled?: Record<string, boolean>;
@@ -281,7 +338,7 @@ export function sanitizeFeatureConfig(input: {
     const seen = new Set<string>();
     const order: string[] = [];
     for (const key of input.order) {
-      if (typeof key !== 'string' || !ALL_FEATURE_KEYS.includes(key) || seen.has(key)) continue;
+      if (!isPersistableFeatureKey(key) || seen.has(key)) continue;
       seen.add(key);
       order.push(key);
     }
@@ -292,8 +349,7 @@ export function sanitizeFeatureConfig(input: {
     const more: string[] = [];
     for (const key of input.more) {
       if (
-        typeof key !== 'string' ||
-        !ALL_FEATURE_KEYS.includes(key) ||
+        !isPersistableFeatureKey(key) ||
         NAV_HIDDEN_FEATURE_KEYS.includes(key) ||
         seen.has(key)
       ) continue;

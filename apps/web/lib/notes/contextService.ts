@@ -295,6 +295,21 @@ export function lockedDenial(
   if (path === 'agents' || path.startsWith('agents/')) {
     return 'Agent briefs are frozen for AI — a human must make this change.'
   }
+  // tools/ is frozen for the same reason, one step further: a Tool's sub-notes
+  // are its executable source (lib/tools), so an autonomous pass that "tidied"
+  // them would be rewriting code that runs against the space's own data — and a
+  // Tool could otherwise rewrite itself or its neighbours. Members author tools
+  // freely (there is deliberately no admin-only writeDenial on tools/ above);
+  // only the AI origins are shut out.
+  //
+  // NOTE for the Tool authoring surface: the generic MCP context writes pass
+  // origin 'agent' (lib/mcp/tools.ts), so they land here. The dedicated Tool
+  // handlers must write with a human origin ('edit') — a person driving Claude
+  // Code is authoring, not sweeping, the same distinction that keeps
+  // 'ai-refactor' out of AI_ORIGINS.
+  if (path === 'tools' || path.startsWith('tools/')) {
+    return 'Tools are frozen for AI — a human must make this change.'
+  }
   if (!isLockedPath(p.access.locked, path)) return null
   return 'This folder is frozen for AI ("Freeze for AI") — a human must make this change.'
 }

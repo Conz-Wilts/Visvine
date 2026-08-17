@@ -61,6 +61,9 @@ model Space {
   channels        Conversation[]
   channelSections ChannelSection[]
 
+  appToolBuilds   AppToolBuild[]
+  appToolInstalls AppToolInstall[]
+
   @@index([personalOwnerId])
   @@map("spaces")
 }
@@ -242,6 +245,117 @@ model AgentHeartbeat {
   lastTickAt DateTime @map("last_tick_at")
 
   @@map("agent_heartbeat")
+}
+
+/// A space's own compiled snapshot of one `tools/<name>/` Tool note (lib/tools).
+/// Written by the store hook on every save of `index.md`/`ui.md`/`data.md`:
+/// esbuild compiles the sources, `errors`/`warnings` are the `CompileDiagnostic[]`
+/// shown back to the author, `config` is the parsed+validated frontmatter (or
+/// null when `configError` explains why parsing failed). This is the AUTHOR'S
+/// working copy — publishing snapshots one into the immutable AppToolVersion
+/// registry, so nothing here is ever read by an install.
+model AppToolBuild {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId     String   @map("space_id")
+  name        String
+  sourceHash  String   @map("source_hash") // hash of index.md+ui.md+data.md at compile time
+  ok          Boolean
+  uiBundle    String?  @map("ui_bundle") // compiled ESM, null when compilation failed
+  dataBundle  String?  @map("data_bundle")
+  errors      Json     @default("[]") // CompileDiagnostic[]
+  warnings    Json     @default("[]") // CompileDiagnostic[]
+  sizeBytes   Int      @map("size_bytes")
+  config      Json? // parsed ToolConfig, or null when configError is set
+  configError String?  @map("config_error")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, name], name: "app_tool_build_identity")
+  @@map("app_tool_builds")
+}
+
+/// The global, IMMUTABLE marketplace registry: one row per published Tool
+/// version, keyed `<sourceSpaceId>/<name>` + `version`. Publishing snapshots the
+/// author's current AppToolBuild here for super-admin review (`status`); once
+/// approved a version never changes — an upgrade is a new row, never an update
+/// to this one. `sourceSpaceId` is a plain string, NOT a foreign key: a
+/// published version must survive its authoring space being deleted, since
+/// other spaces may already have it installed.
+model AppToolVersion {
+  id            String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  key           String // `<sourceSpaceId>/<name>`
+  name          String
+  version       Int
+  title         String
+  description   String?
+  authorUserId  String?   @map("author_user_id")
+  sourceSpaceId String    @map("source_space_id") // no FK — must outlive the source space
+  config        Json // validated ToolConfig at publish time
+  perimeter     Json // declared reach: note globs / types / connectors / agents
+  indexSource   String    @map("index_source") // index.md body (docs) at publish time
+  uiSource      String    @map("ui_source") // ui.tsx source at publish time
+  dataSource    String    @map("data_source") // data.js source at publish time
+  uiBundle      String    @map("ui_bundle") // compiled ESM
+  dataBundle    String    @map("data_bundle") // compiled ESM
+  sizeBytes     Int       @map("size_bytes")
+  status        String    @default("pending") // pending | approved | rejected | withdrawn
+  submittedAt   DateTime  @default(now()) @map("submitted_at")
+  reviewedBy    String?   @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewNote    String?   @map("review_note")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  author        User?     @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+  installs      AppToolInstall[]
+
+  @@unique([key, version], name: "app_tool_version_identity")
+  @@index([status, submittedAt])
+  @@map("app_tool_versions")
+}
+
+/// A Tool installed into a space, pinned to one AppToolVersion. `key` mirrors
+/// the pinned version's key so lookups don't need a join; `requirements` is the
+/// missing-connectors/types/agents snapshot from the last check (an unmet
+/// requirement degrades the Tool, it never blocks install); `typeClaims` is the
+/// admin-confirmed set of context types this install owns a page/tab for.
+/// `pendingVersionId` names an approved newer AppToolVersion awaiting an
+/// admin-triggered upgrade — deliberately NOT a foreign key, so an admin can
+/// still see "an upgrade is available" even if that row were ever withdrawn.
+model AppToolInstall {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId          String   @map("space_id")
+  versionId        String   @map("version_id")
+  key              String
+  slug             String // rail slug: tool:<slug>
+  enabled          Boolean  @default(true)
+  installedBy      String   @map("installed_by")
+  requirements     Json     @default("{}") // { connectors: string[]; types: string[]; agents: string[] } — MISSING items at last check
+  typeClaims       Json     @default("{}") @map("type_claims") // { [typeName]: 'page' | 'tab' }
+  pendingVersionId String?  @map("pending_version_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  space            Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  version          AppToolVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  state            AppToolState[]
+
+  @@unique([spaceId, key], name: "app_tool_install_identity")
+  @@unique([spaceId, slug], name: "app_tool_install_slug")
+  @@map("app_tool_installs")
+}
+
+/// Per-install key/value state written through the Tool bridge's `visvine.state`
+/// capability (a Tool's iframe runs sandboxed without `allow-same-origin`, so it
+/// has no localStorage — this is its persistence instead).
+model AppToolState {
+  id        String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  installId String         @map("install_id")
+  key       String
+  value     Json
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  install   AppToolInstall @relation(fields: [installId], references: [id], onDelete: Cascade)
+
+  @@unique([installId, key], name: "app_tool_state_identity")
+  @@map("app_tool_state")
 }
 
 /// Which of its space's PERSON ALIASES a member holds. The aliases themselves
@@ -549,6 +663,8 @@ model User {
   messagesSent            Message[]            @relation("MessageSender")
   messageReactions        MessageReaction[]    @relation("ReactionAuthor")
   messageStars            MessageStar[]        @relation("StarAuthor")
+
+  appToolVersionsAuthored AppToolVersion[]     @relation("AppToolVersionAuthor")
 
   @@map("users")
 }

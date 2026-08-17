@@ -23,6 +23,7 @@ import {
 } from '../lib/notes/entities';
 import { isCreatableType } from '../lib/directory/createEntity';
 import { parseFrontmatter } from '../lib/notes/shared/markdown';
+import { toolFileKindOfPath, toolNameOfPath } from '../lib/tools/config';
 
 test('entityKindOf classifies node types liberally', () => {
   assert.equal(entityKindOf('person'), 'person');
@@ -74,6 +75,81 @@ test('connectors are an entity namespace, but not a creatable one', () => {
   // The note is authored by an admin under the connectors/ write gate — the
   // directory create path must never be a second door to one.
   assert.equal(isCreatableType('connector'), false);
+});
+
+test('tools are a folder-only entity namespace', () => {
+  assert.equal(entityKindOf('tool'), 'tool');
+  assert.equal(entityKindOf('Tools'), 'tool');
+  const node = { id: 'tool:deal-pipeline', type: 'tool' };
+  // The entity note IS the folder index, always — a Tool is its config note plus
+  // its source sub-notes from the moment it exists, so it never has a flat form.
+  assert.equal(entityNotePath(node), 'tools/deal-pipeline/index.md');
+  assert.equal(entityFolderPathOf(node), 'tools/deal-pipeline');
+  assert.equal(entityIndexPathOf(node), 'tools/deal-pipeline/index.md');
+  // …and nothing can point it elsewhere, pointer or no pointer.
+  assert.equal(
+    entityNotePath({ ...node, metadata: { notePath: 'tools/deal-pipeline.md' } }),
+    'tools/deal-pipeline/index.md',
+  );
+  // Only the index is registered in the reverse map: the flat path is an
+  // ordinary note path that must never resolve to the tool.
+  assert.deepEqual(entityNotePaths(node), ['tools/deal-pipeline/index.md']);
+  assert.equal(entityKindOfPath('tools/deal-pipeline/index.md'), 'tool');
+  assert.equal(isEntityFolderIndex('tools/deal-pipeline/index.md'), true);
+  assert.equal(parseEntityHref('/tools/deal-pipeline/index.md'), 'tools/deal-pipeline/index.md');
+  // The flat form is NOT an entity path — a tool is folder-only.
+  assert.equal(parseEntityHref('tools/deal-pipeline.md'), null);
+  assert.equal(entityKindOfPath('tools/deal-pipeline.md'), null);
+  assert.equal(isEntityFolderIndex('tools/deal-pipeline.md'), false);
+  // The namespace's own index is a plain folder index, as everywhere else.
+  assert.equal(parseEntityHref('tools/index.md'), null);
+  // Authoring one from the directory is not a door — the note comes first.
+  assert.equal(isCreatableType('tool'), false);
+});
+
+test('a tool’s source files are sub-notes owned by the tool node', () => {
+  assert.equal(parseEntityHref('tools/deal-pipeline/ui.md'), null);
+  assert.equal(entityKindOfPath('tools/deal-pipeline/ui.md'), null);
+  assert.equal(entityKindOfDir('tools/deal-pipeline/data.md'), 'tool');
+  assert.equal(entityOwnerPathOf('tools/deal-pipeline/ui.md'), 'tools/deal-pipeline');
+  assert.equal(entityOwnerPathOf('/tools/deal-pipeline/data.md'), 'tools/deal-pipeline');
+  assert.equal(entityOwnerPathOf('tools/deal-pipeline/index.md'), null); // the entity note itself
+  assert.equal(entityOwnerPathOf('tools/deal-pipeline.md'), null);
+
+  const map = new Map([['tools/deal-pipeline/index.md', { id: 'tool:deal-pipeline' }]]);
+  assert.deepEqual(resolveEntityOwner('tools/deal-pipeline/index.md', map), {
+    id: 'tool:deal-pipeline',
+    subPath: null,
+  });
+  assert.deepEqual(resolveEntityOwner('tools/deal-pipeline/ui.md', map), {
+    id: 'tool:deal-pipeline',
+    subPath: 'ui.md',
+  });
+  assert.equal(resolveEntityNode('tools/deal-pipeline.md', map), null);
+  assert.equal(hrefForNotePath('tools/deal-pipeline/ui.md', map), entityContextHref('tool:deal-pipeline', 'ui.md'));
+  assert.equal(hrefForNotePath('tools/deal-pipeline.md', map), noteHref('tools/deal-pipeline.md'));
+});
+
+test('the tool path helpers (lib/tools/config) name the tool a path belongs to', () => {
+  // isToolIndexPath / toolNameOfEntityPath used to live here as a second,
+  // looser pair — they've been consolidated onto lib/tools/config.ts's
+  // TOOL_NAME_RE-validated helpers, which are the single source of truth.
+  assert.equal(toolFileKindOfPath('tools/deal-pipeline/index.md'), 'index');
+  assert.equal(toolFileKindOfPath('tools/deal-pipeline.md'), 'other');
+  assert.equal(toolFileKindOfPath('tools/deal-pipeline/ui.md'), 'ui');
+  assert.equal(toolFileKindOfPath('tools/index.md'), 'other');
+  assert.equal(toolFileKindOfPath('people/connor/index.md'), null);
+
+  assert.equal(toolNameOfPath('tools/deal-pipeline/index.md'), 'deal-pipeline');
+  assert.equal(toolNameOfPath('/tools/deal-pipeline/ui.md'), 'deal-pipeline');
+  assert.equal(toolNameOfPath('tools/deal-pipeline/nested/notes.md'), 'deal-pipeline');
+  assert.equal(toolNameOfPath('tools/deal-pipeline.md'), null);
+  assert.equal(toolNameOfPath('tools/index.md'), null);
+  assert.equal(toolNameOfPath('agents/nightly.md'), null);
+  // Unlike the old entities.ts pair, a folder name TOOL_NAME_RE would reject
+  // is rejected here too — this is exactly the disagreement that got fixed.
+  assert.equal(toolNameOfPath('tools/Deal Pipeline/index.md'), null);
+  assert.equal(toolFileKindOfPath('tools/Deal Pipeline/index.md'), 'other');
 });
 
 test('entityDraftContent labels and tags the container kinds', () => {

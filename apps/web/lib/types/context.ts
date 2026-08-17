@@ -224,6 +224,11 @@ export const DEFAULT_NODE_TYPES: NodeTypeConfig[] = [
   // An agent is a scheduled worker authored as a note under agents/ (lib/agents).
   // Teal, the one saturated hue no other document type uses.
   { name: 'Agent',     color: '#0d9488', shape: 'rectangle' },
+  // A Tool is a member-built app authored as an entity folder under tools/
+  // (lib/tools) — its index is the config, its sub-notes the source. Square
+  // because a Tool is a container of its own surfaces, not a document; violet is
+  // the one palette hue (lib/profileTheme.ts PALETTES) no other type has taken.
+  { name: 'Tool',      color: '#8b5cf6', shape: 'square'    },
   // An index note IS a folder (lib/notes/shared/indexNote.ts). Listed here so
   // the Type chip on one resolves to a real configured type in every space,
   // not just the seeded ones — nothing writes an `index:` node. Fuchsia, not
@@ -263,6 +268,7 @@ export const STRUCTURAL_NODE_TYPES: readonly string[] = [
   'index',
   'connector',
   'agent',
+  'tool',
 ];
 
 /**
@@ -325,6 +331,13 @@ export function isStructuralNodeType(type: string | null | undefined): boolean {
 // (sections): 'space' now IS the canonical org type, so those rows can only be
 // handled by data migration (scripts/rename-community-to-space.ts) — which is
 // why that migration is mandatory, not optional.
+//
+// `tools` is here for a different reason: it is the note namespace a Tool lives
+// in (tools/<name>/index.md), so it is the spelling a member or an agent reaches
+// for. Folding it onto `tool` means the plural resolves to the built-in Tool
+// type instead of looking like a name nobody has claimed — the same tolerance
+// entityKindOf('tools') gives in lib/notes/entities.ts. Both spellings are also
+// reserved (lib/types/nodeTypeRegistry.ts), so neither can become a custom type.
 const TYPE_SYNONYMS: Record<string, string> = {
   organization: 'space',
   organisation: 'space',
@@ -337,6 +350,8 @@ const TYPE_SYNONYMS: Record<string, string> = {
   communities: 'space',
   space: 'space',
   spaces: 'space',
+  tool: 'tool',
+  tools: 'tool',
 };
 
 /**

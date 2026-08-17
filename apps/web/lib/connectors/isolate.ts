@@ -83,6 +83,24 @@ export interface IsolateRunOptions {
    * output with holes).
    */
   redact?: readonly string[]
+  /**
+   * Extra host capabilities, installed under a single frozen `visvine` global
+   * rather than as top-level names — so a caller adding capabilities can never
+   * collide with `fetch`/`sql`/`sleep`/`mcp` or with each other by accident.
+   * A dotted key like `"context.read"` becomes `visvine.context.read(...)`.
+   * Each function is driven through the same pending-work driver as the
+   * built-in capabilities: the isolate awaits a real promise, and a rejection
+   * surfaces inside the isolate as an Error carrying the host's message.
+   */
+  capabilities?: Record<string, (args: unknown[]) => Promise<unknown>>
+  /** Built-in capabilities to leave uninstalled — e.g. Tools' data.js gets only `sleep`. */
+  omitDefaults?: ReadonlyArray<'fetch' | 'sql' | 'mcp' | 'sleep'>
+  /**
+   * JSON-safe values installed as frozen globals before the code runs, e.g.
+   * `subject`/`install`. Marshalled through the same path as a capability
+   * return value, so the same depth/node/string caps apply.
+   */
+  globals?: Record<string, unknown>
 }
 
 function clampTimeout(ms: number): number {
@@ -236,6 +254,52 @@ function installCapability(
   // out-of-bounds access, never as anything that names the cause. The scope
   // releases it when the run ends.
   scope.manage(fn)
+}
+
+/**
+ * A tree built from dotted capability keys — leaves are the flat global name
+ * the capability function was installed under, e.g. `{ context: { read:
+ * "__cap_0" } }` for `"context.read"`.
+ */
+type NamespaceNode = { [key: string]: NamespaceNode | string }
+
+function buildNamespaceTree(keys: readonly string[], flatNameOf: (key: string) => string): NamespaceNode {
+  const root: NamespaceNode = {}
+  for (const key of keys) {
+    const parts = key.split('.')
+    let node = root
+    parts.forEach((part, i) => {
+      if (i === parts.length - 1) {
+        node[part] = flatNameOf(key)
+        return
+      }
+      const next = node[part]
+      node = typeof next === 'object' && next !== null ? next : (node[part] = {})
+    })
+  }
+  return root
+}
+
+/**
+ * Emit statements that build `node` into `varName`, using `Object.create(null)`
+ * and bracket assignment throughout — a quoted `"__proto__"` key in an object
+ * *literal* reassigns the prototype instead of setting a property, and a
+ * capability caller's dotted names are not otherwise restricted, so this is
+ * the one construction that stays a plain data property regardless of key.
+ */
+function genNamespaceStatements(varName: string, node: NamespaceNode, out: string[], counter: { n: number }): void {
+  out.push(`const ${varName} = Object.create(null);`)
+  for (const [key, value] of Object.entries(node)) {
+    const propAccess = `${varName}[${JSON.stringify(key)}]`
+    if (typeof value === 'string') {
+      out.push(`${propAccess} = ${value};`)
+    } else {
+      const childVar = `__ns_${counter.n++}`
+      genNamespaceStatements(childVar, value, out, counter)
+      out.push(`Object.freeze(${childVar});`)
+      out.push(`${propAccess} = ${childVar};`)
+    }
+  }
 }
 
 /**
@@ -400,25 +464,86 @@ export async function runInIsolate(
         ctx.setProp(ctx.global, 'console', consoleObj)
       }
 
-      installCapability(ctx, scope, 'fetch', pending, (args) => hostFetch(ctxShared, args[0], (args[1] ?? {}) as never))
-      installCapability(ctx, scope, 'sql', pending, (args) => hostSql(ctxShared, args[0], args[1]))
+      const omitDefaults = new Set(options.omitDefaults ?? [])
+      if (!omitDefaults.has('fetch')) {
+        installCapability(ctx, scope, 'fetch', pending, (args) => hostFetch(ctxShared, args[0], (args[1] ?? {}) as never))
+      }
+      if (!omitDefaults.has('sql')) {
+        installCapability(ctx, scope, 'sql', pending, (args) => hostSql(ctxShared, args[0], args[1]))
+      }
       // Not a timer: it cannot schedule anything, only pause inside the run's
       // own deadline. Backing off a 429 is otherwise impossible to write.
-      installCapability(ctx, scope, 'sleep', pending, (args) => hostSleep(ctxShared, args[0]))
-      installCapability(ctx, scope, '__mcpListTools', pending, (args) => mcpListTools(ctxShared, args[0], args[1]))
-      installCapability(ctx, scope, '__mcpCallTool', pending, (args) =>
-        mcpCallTool(ctxShared, args[0], args[1], args[2], args[3]),
-      )
-      // mcp(url, headers?) — a namespace built in-isolate over the two calls
-      // above, so no host object ever crosses the boundary.
-      ctx.unwrapResult(
-        ctx.evalCode(`globalThis.mcp = (url, headers) => ({
-          listTools: () => __mcpListTools(url, headers),
-          callTool: (name, args) => __mcpCallTool(url, name, args, headers),
-        })`),
-      ).dispose()
+      if (!omitDefaults.has('sleep')) {
+        installCapability(ctx, scope, 'sleep', pending, (args) => hostSleep(ctxShared, args[0]))
+      }
+      if (!omitDefaults.has('mcp')) {
+        installCapability(ctx, scope, '__mcpListTools', pending, (args) => mcpListTools(ctxShared, args[0], args[1]))
+        installCapability(ctx, scope, '__mcpCallTool', pending, (args) =>
+          mcpCallTool(ctxShared, args[0], args[1], args[2], args[3]),
+        )
+        // mcp(url, headers?) — a namespace built in-isolate over the two calls
+        // above, so no host object ever crosses the boundary.
+        ctx.unwrapResult(
+          ctx.evalCode(`globalThis.mcp = (url, headers) => ({
+            listTools: () => __mcpListTools(url, headers),
+            callTool: (name, args) => __mcpCallTool(url, name, args, headers),
+          })`),
+        ).dispose()
+      }
 
       ctx.unwrapResult(ctx.evalCode(PRELUDE)).dispose()
+
+      // extra capabilities — installed flat under host-chosen throwaway names,
+      // then rehomed into a single frozen `visvine` namespace so the isolate
+      // never sees the flat names at all.
+      if (options.capabilities) {
+        const capEntries = Object.entries(options.capabilities)
+        if (capEntries.length > 0) {
+          const flatNames = new Map<string, string>(capEntries.map(([key], i) => [key, `__cap_${i}`]))
+          for (const [key, fn] of capEntries) {
+            installCapability(ctx, scope, flatNames.get(key)!, pending, fn)
+          }
+          const tree = buildNamespaceTree(
+            capEntries.map(([key]) => key),
+            (key) => flatNames.get(key)!,
+          )
+          const lines: string[] = []
+          genNamespaceStatements('__visvine_root', tree, lines, { n: 0 })
+          lines.push('Object.freeze(__visvine_root);')
+          lines.push('globalThis.visvine = __visvine_root;')
+          for (const flatName of flatNames.values()) {
+            lines.push(`delete globalThis[${JSON.stringify(flatName)}];`)
+          }
+          ctx.unwrapResult(ctx.evalCode(lines.join('\n'))).dispose()
+        }
+      }
+
+      // extra globals — JSON-safe host values, deep-frozen so code can't
+      // confuse itself (Object.freeze alone is shallow, and marshalValue's
+      // output is cycle-free, so a recursive freeze here is safe).
+      if (options.globals) {
+        const globalEntries = Object.entries(options.globals)
+        if (globalEntries.length > 0) {
+          const freezeLines: string[] = [
+            `function __visvine_deepFreeze(o) {
+              if (o !== null && typeof o === 'object') {
+                Object.freeze(o)
+                for (const k of Object.keys(o)) __visvine_deepFreeze(o[k])
+              }
+              return o
+            }`,
+          ]
+          for (const [key, val] of globalEntries) {
+            const marshalled = marshalValue(val, report, redact)
+            const h = toHandle(ctx, marshalled)
+            ctx.setProp(ctx.global, key, h)
+            if (!isSingleton(ctx, h)) h.dispose()
+            freezeLines.push(`__visvine_deepFreeze(globalThis[${JSON.stringify(key)}]);`)
+          }
+          freezeLines.push('delete globalThis.__visvine_deepFreeze;')
+          ctx.unwrapResult(ctx.evalCode(freezeLines.join('\n'))).dispose()
+        }
+      }
 
       // No module loader is installed, so `import` is a non-starter. Wrapping
       // in an async IIFE is what gives top-level await without needing one.

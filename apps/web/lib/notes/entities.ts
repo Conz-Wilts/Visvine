@@ -16,6 +16,7 @@ export type EntityKind =
   | 'channel'
   | 'connector'
   | 'agent'
+  | 'tool'
 
 // `space` is the org kind (a group, organisation or community recorded in the
 // directory); there is no separate `company`
@@ -38,6 +39,14 @@ export type EntityKind =
 // agents/live/<name>.md, which is admin-only config and deliberately NOT an
 // entity note — entityKindOfPath / parseEntityHref match only the top level
 // of agents/, so activation notes never sync nodes or resolve [[mentions]].
+//
+// tool is note-first too, and the one kind that is FOLDER-ONLY: a Tool is
+// several notes by construction — tools/<name>/index.md (frontmatter = config,
+// body = docs) beside tools/<name>/ui.md and tools/<name>/data.md, which hold
+// its source (lib/tools). So the entity note is always the folder index and the
+// flat form tools/<name>.md is NOT an entity path at all; the source files are
+// ordinary sub-notes owned by the tool node, exactly like any entity sub-note.
+// See FOLDER_ONLY_ENTITY_KINDS below.
 
 // The minimal shape we need off a directory node (NBNode-compatible).
 export interface EntityNodeLike {
@@ -58,6 +67,7 @@ const SPACES_DIR = 'spaces'
 const CHANNELS_DIR = 'channels'
 const CONNECTORS_DIR = 'connectors'
 const AGENTS_DIR = 'agents'
+const TOOLS_DIR = 'tools'
 
 // The dirs kept their pre-rename names on purpose: a note path is storage AND
 // link identity (every inbound [[mention]] resolves against it), so renaming
@@ -73,7 +83,17 @@ const ENTITY_DIRS: Record<EntityKind, string> = {
   channel: CHANNELS_DIR,
   connector: CONNECTORS_DIR,
   agent: AGENTS_DIR,
+  tool: TOOLS_DIR,
 }
+
+/**
+ * Kinds whose entity note is ALWAYS the folder index (`<dir>/<slug>/index.md`).
+ * Everything else starts life as one flat note and converts to a folder only
+ * when it needs a second note (see "entity folders" below); a Tool is several
+ * notes from the moment it exists, so it never has the flat form — and the flat
+ * path is therefore not an entity path (parseEntityHref rejects it).
+ */
+const FOLDER_ONLY_ENTITY_KINDS: ReadonlySet<EntityKind> = new Set(['tool'])
 
 // Map a node `type` to an entity kind (null for non-entity types). Liberal so it
 // copes with 'person'/'people' and with every spelling organisations have worn:
@@ -95,6 +115,7 @@ export function entityKindOf(type: string | null | undefined): EntityKind | null
   if (t === 'channel' || t === 'channels') return 'channel'
   if (t === 'connector' || t === 'connectors') return 'connector'
   if (t === 'agent' || t === 'agents') return 'agent'
+  if (t === 'tool' || t === 'tools') return 'tool'
   if (t === 'resource' || t === 'resources') return 'resource'
   if (t === 'event' || t === 'events') return 'event'
   return null
@@ -132,6 +153,10 @@ function idSlug(id: string): string {
 
 // The flat form: person → people/<slug>.md, space → communities/<slug>.md,
 // resource → resources/<slug>.md. Null if the node isn't an entity kind.
+//
+// For a FOLDER-ONLY kind (a tool) this path is only the derivation base the
+// folder and index paths are cut from — it is never where the note lives and
+// never an entity path (parseEntityHref rejects it).
 export function entityFlatPath(node: EntityNodeLike): string | null {
   const kind = entityKindOf(node.type)
   const slug = idSlug(node.id)
@@ -156,25 +181,40 @@ export function entityIndexPathOf(node: EntityNodeLike): string | null {
 // entity kind: the folder form when the node's `metadata.notePath` says its
 // note has become an entity folder, else the flat form. The pointer is only
 // honoured when it names this node's own index — a stray value can't redirect
-// a person's context to some other note.
+// a person's context to some other note. A folder-only kind (a tool) has no
+// flat form to point away from, so it is always the index.
 export function entityNotePath(node: EntityNodeLike): string | null {
+  const kind = entityKindOf(node.type)
   const flat = entityFlatPath(node)
-  if (!flat) return null
-  const pointer = node.metadata?.notePath
+  if (!kind || !flat) return null
   const index = entityIndexPathOf(node)
+  if (FOLDER_ONLY_ENTITY_KINDS.has(kind)) return index
+  const pointer = node.metadata?.notePath
   return typeof pointer === 'string' && index && pointer === index ? index : flat
 }
 
 /** Every path that names this node's note — the flat form and the folder form.
  *  Reverse maps register both, so a link written before a conversion and one
- *  written after both resolve to the node. Empty for a non-entity node. */
+ *  written after both resolve to the node. A folder-only kind (a tool) registers
+ *  the index alone: its flat path is an ordinary note path that must never
+ *  resolve to the tool. Empty for a non-entity node. */
 export function entityNotePaths(node: EntityNodeLike): string[] {
+  const kind = entityKindOf(node.type)
   const flat = entityFlatPath(node)
   const index = entityIndexPathOf(node)
-  return flat && index ? [flat, index] : []
+  if (!kind || !flat || !index) return []
+  return FOLDER_ONLY_ENTITY_KINDS.has(kind) ? [index] : [flat, index]
 }
 
-const ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors'
+// Namespaces whose entity note may take EITHER form — '<ns>/<slug>.md' or
+// '<ns>/<slug>/index.md' once it has converted to a folder.
+const FLAT_ENTITY_NS_RE = 'people|resources|events|communities|spaces|channels|connectors'
+// Folder-only namespaces: only '<ns>/<slug>/index.md' names the entity (see
+// FOLDER_ONLY_ENTITY_KINDS).
+const FOLDER_ENTITY_NS_RE = 'tools'
+// Every namespace whose '<ns>/<slug>/' folder holds an entity's sub-notes,
+// whichever form the entity note itself takes.
+const ENTITY_NS_RE = `${FLAT_ENTITY_NS_RE}|${FOLDER_ENTITY_NS_RE}`
 
 // 'people/connor/sams-comms.md' → 'people/connor': the entity folder a sub-note
 // sits in (at any depth below it), or null for anything that isn't a sub-note —
@@ -196,15 +236,17 @@ export function isEntityFolderIndex(path: string): boolean {
 
 // Normalize a link href to a canonical entity-note path, or null if it isn't one.
 // Tolerant of a leading slash; requires an entity namespace + a slug, in either
-// form: '<dir>/<slug>.md' or '<dir>/<slug>/index.md' (an entity folder). The
-// namespace's own index ('people/index.md') has no slug and stays an ordinary
-// note link (see lib/notes/shared/indexNote.ts); a sub-note
-// ('people/connor/notes.md') is not an entity either — see entityOwnerPathOf.
+// form: '<dir>/<slug>.md' or '<dir>/<slug>/index.md' (an entity folder) — the
+// folder form only for a folder-only namespace like tools/. The namespace's own
+// index ('people/index.md') has no slug and stays an ordinary note link (see
+// lib/notes/shared/indexNote.ts); a sub-note ('people/connor/notes.md',
+// 'tools/kanban/ui.md') is not an entity either — see entityOwnerPathOf.
 export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
   if (
-    !new RegExp(`^(${ENTITY_NS_RE})/[^/]+(\\.md|/index\\.md)$`).test(raw) &&
+    !new RegExp(`^(${FLAT_ENTITY_NS_RE})/[^/]+(\\.md|/index\\.md)$`).test(raw) &&
+    !new RegExp(`^(${FOLDER_ENTITY_NS_RE})/[^/]+/index\\.md$`).test(raw) &&
     !/^agents\/[^/]+\.md$/.test(raw) // agents/live/… is config, not an entity
   ) {
     return null
@@ -268,8 +310,16 @@ export function entityKindOfDir(path: string): EntityKind | null {
   if (path.startsWith(`${CHANNELS_DIR}/`)) return 'channel'
   if (path.startsWith(`${CONNECTORS_DIR}/`)) return 'connector'
   if (path.startsWith(`${AGENTS_DIR}/`)) return 'agent'
+  if (path.startsWith(`${TOOLS_DIR}/`)) return 'tool'
   return null
 }
+
+// Whether a path is specifically a Tool's own index note, and which Tool a
+// path belongs to, are answered by lib/tools/config.ts's toolFileKindOfPath /
+// toolNameOfPath — those validate the folder segment against TOOL_NAME_RE,
+// which this module must not duplicate (it would only drift again). This
+// module still answers the generic entity-shape questions (entityKindOfPath,
+// isEntityFolderIndex, parseEntityHref) that every entity kind shares.
 
 /** True for `agents/<name>.md` — the brief; false for `agents/live/…` and indexes. */
 export function isAgentBriefPath(path: string): boolean {
@@ -362,6 +412,8 @@ const ENTITY_TYPE_LABEL: Record<EntityKind, string> = {
   connector: 'connector',
   // Same reason as connector: `type: agent` is what lib/agents matches on.
   agent: 'agent',
+  // Same reason again: `type: tool` is what lib/tools matches on.
+  tool: 'tool',
 }
 /** The frontmatter `type:` an entity note of this node type carries, or null
  *  for a non-entity type. */
@@ -379,6 +431,7 @@ const ENTITY_TAG: Record<EntityKind, string> = {
   channel: 'channel',
   connector: 'connector',
   agent: 'agent',
+  tool: 'tool',
 }
 
 // Default markdown for an auto-created entity context note. Carries the directory

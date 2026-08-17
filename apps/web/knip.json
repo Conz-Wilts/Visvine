@@ -1,6 +1,19 @@
 {
   "$schema": "https://unpkg.com/knip@latest/schema.json",
-  "entry": ["scripts/**/*.{ts,mjs}", "tests/**/*.test.ts"],
+  "entry": [
+    "scripts/**/*.{ts,mjs}",
+    "tests/**/*.test.ts",
+    // The Tool SDK. These four are entry points knip cannot see: the kit is
+    // compiled by esbuild into a browser bundle that Tool code imports as
+    // `@visvine/tool-kit` (never by the app), `runtime.ts` is loaded by the
+    // frame document at run time, and protocol.ts/sdkDocs.ts are the wire
+    // contract and the authoring docs — deliberately whole, not trimmed to
+    // whichever half of the app has been written so far.
+    "features/tools/kit/index.ts",
+    "features/tools/kit/runtime.ts",
+    "lib/tools/protocol.ts",
+    "lib/tools/sdkDocs.ts"
+  ],
   "project": ["app/**", "components/**", "features/**", "lib/**", "scripts/**", "tests/**"],
   "ignoreDependencies": []
 }

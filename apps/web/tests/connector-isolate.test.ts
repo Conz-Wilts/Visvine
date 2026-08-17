@@ -426,3 +426,67 @@ test('concurrent runs all complete under the process-wide slot limit', async () 
   )
   assert.deepEqual(results.map((r) => r.value), Array.from({ length: 12 }, (_, i) => i * 2))
 })
+
+// ── extra capabilities (Tool data.js) ────────────────────────────────────────
+
+test('a custom capability is callable and its result is awaited', async () => {
+  const r = await runInIsolate(perimeter(), `return await visvine.read('a', 1)`, {
+    capabilities: { read: async (args) => ({ echoed: args }) },
+  })
+  assert.equal(r.ok, true, r.error?.message)
+  assert.deepEqual(r.value, { echoed: ['a', 1] })
+})
+
+test('a dotted capability name builds a nested namespace object', async () => {
+  const r = await runInIsolate(
+    perimeter(),
+    `const a = await visvine.context.read('x'); const b = await visvine.context.write('y'); return [a, b]`,
+    {
+      capabilities: {
+        'context.read': async (args) => `read:${String(args[0])}`,
+        'context.write': async (args) => `write:${String(args[0])}`,
+      },
+    },
+  )
+  assert.equal(r.ok, true, r.error?.message)
+  assert.deepEqual(r.value, ['read:x', 'write:y'])
+})
+
+test('omitDefaults removes fetch entirely — Tools data.js gets no raw fetch/sql/mcp', async () => {
+  const r = await runInIsolate(
+    perimeter(),
+    `return typeof fetch + '|' + typeof sql + '|' + typeof mcp + '|' + typeof sleep`,
+    { omitDefaults: ['fetch', 'sql', 'mcp'] },
+  )
+  assert.equal(r.value, 'undefined|undefined|undefined|function')
+})
+
+test('a rejected capability surfaces inside the isolate with the host error message', async () => {
+  const r = await runInIsolate(perimeter(), `try { await visvine.boom() } catch (e) { return e.message }`, {
+    capabilities: { boom: async () => { throw new Error('perimeter refused this') } },
+  })
+  assert.equal(r.ok, true, r.error?.message)
+  assert.equal(r.value, 'perimeter refused this')
+})
+
+test('globals are installed frozen and cannot be reassigned', async () => {
+  const r = await runInIsolate(
+    perimeter(),
+    `subject.name = 'hacked'; subject.nested.n = 999; return subject`,
+    { globals: { subject: { name: 'original', nested: { n: 1 } } } },
+  )
+  assert.equal(r.ok, true, r.error?.message)
+  assert.deepEqual(r.value, { name: 'original', nested: { n: 1 } })
+})
+
+test('the visvine namespace itself is frozen', async () => {
+  const r = await runInIsolate(perimeter(), `visvine.read = () => 'evil'; return typeof visvine.read`, {
+    capabilities: { read: async () => 'original' },
+  })
+  assert.equal(r.ok, true, r.error?.message)
+  assert.equal(r.value, 'function')
+  const called = await runInIsolate(perimeter(), `return await visvine.read()`, {
+    capabilities: { read: async () => 'original' },
+  })
+  assert.equal(called.value, 'original')
+})

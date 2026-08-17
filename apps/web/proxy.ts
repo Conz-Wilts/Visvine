@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession, COOKIE_NAME } from "@/lib/session";
 import { isDevAuthEnabled } from "@/lib/dev-auth";
+import { toolsHostDecision } from "@/lib/tools/origin";
 
 const PUBLIC_PATHS = [
   "/signin",
@@ -24,11 +25,32 @@ const PUBLIC_PATHS = [
   // nature. "Public" only means "no cookie" — each route authenticates itself
   // (Cloud Scheduler OIDC for the tick, an internal HS256 token for the run).
   "/api/internal/",
+  // The sandboxed Tool runtime (frame document, compiled bundles, vendor ESM).
+  // Served from a cookie-less origin, so it authenticates with the short-lived
+  // frame token minted by the host page (lib/tools/frameToken.ts), never a
+  // session. Listed here so the SAME paths work on the app host too — that is
+  // the same-origin fallback while TOOLS_ORIGIN is unset.
+  "/api/tools/runtime",
   ...(isDevAuthEnabled() ? ["/dev", "/api/dev"] : []),
 ];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // The Tool frame origin (TOOLS_ORIGIN, e.g. tools.visvine.com) is this same
+  // service reached under a different host. It exists so that third-party Tool
+  // code runs where no `auth_session` cookie is scoped, so it serves the Tool
+  // runtime and NOTHING else — no page, no session-bearing API — and touches no
+  // cookie either way. Runtime paths pass through unauthenticated; the frame
+  // token in the URL is what authorizes them. See lib/tools/origin.ts.
+  const hostDecision = toolsHostDecision(req.headers.get("host"), pathname);
+  if (hostDecision === "tool-runtime") return NextResponse.next();
+  if (hostDecision === "not-found") {
+    return new NextResponse("Not Found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
 
   const isPublic =
     pathname === "/" ||

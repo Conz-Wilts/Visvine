@@ -47,8 +47,10 @@ describe('isFeatureEnabled', () => {
     assert.deepEqual(CORE_FEATURE_KEYS, ['directory', 'notes', 'events']);
   });
 
-  it('hides notes and events from the nav rail and console toggles', () => {
-    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events']);
+  it('hides notes, events and tools from the nav rail and console toggles', () => {
+    // tools is the odd one out: nav-hidden but NOT core — the marketplace icon
+    // and per-install `tool:<slug>` rows are its nav. See tools-feature-keys.test.ts.
+    assert.deepEqual(NAV_HIDDEN_FEATURE_KEYS, ['notes', 'events', 'tools']);
     // notes ("Context") is core: surfaced as the Context tab under the
     // Directory, always on, and can never be persisted off.
     assert.equal(isFeatureEnabled({ enabled: {} }, 'notes'), true);

@@ -426,7 +426,7 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   const entries = catalog({ usageByType: { person: 3, connector: 1 } })
   assert.deepEqual(
     entries.map((e) => e.type),
-    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'index'],
+    ['person', 'space', 'event', 'resource', 'section', 'channel', 'connector', 'agent', 'tool', 'index'],
   )
   const creatable = entries.filter((e) => e.creatable_via_add_context).map((e) => e.type)
   // Catalog order, not CREATABLE_TYPES order: an event is creatable now (it
@@ -447,6 +447,14 @@ test('the type catalog covers the whole closed vocabulary with the right creatab
   assert.equal(agent.creatable_via_add_context, false)
   assert.match(agent.guidance, /run_agent/)
   assert.equal(agent.note_dir, 'agents')
+  // Tool is note-first too, and folder-only: its entity note is the folder index
+  // under tools/, never creatable via add_context (tools/ is frozen for AI).
+  const tool = entries.find((e) => e.type === 'tool')!
+  assert.equal(tool.enabled, true)
+  assert.equal(tool.feature, 'tools')
+  assert.equal(tool.creatable_via_add_context, false)
+  assert.equal(tool.note_dir, 'tools')
+  assert.match(tool.guidance, /tools\/<name>\/index\.md/)
   // Person carries the identity-matching field keys an agent must spell exactly.
   const person = entries.find((e) => e.type === 'person')!
   const keys = person.fields.map((f) => f.key)

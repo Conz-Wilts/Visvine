@@ -23,8 +23,15 @@ const MAX_NAME = 32;
  * created an "Index" type would silently move its members' notes. `Note` and
  * `File` are the two things that are content in a context rather than nodes in
  * the graph — the draft menu offers them already and they are not node types.
+ *
+ * `Tool` (and its plural, which TYPE_SYNONYMS folds onto it) is reserved because
+ * `type: tool` is machine config: it marks the index of an entity folder under
+ * tools/ whose sub-notes are executable source (lib/tools). A member typing
+ * "Tool" into the draft type picker must not be able to stamp that type onto an
+ * ordinary note — unlike Connector and Agent, whose types nothing outside their
+ * own namespace acts on.
  */
-const RESERVED = ['note', 'file', 'index'];
+const RESERVED = ['note', 'file', 'index', 'tool', 'tools'];
 
 /**
  * Is this name one no space may create a type for? Surfaces that OFFER

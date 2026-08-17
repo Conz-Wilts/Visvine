@@ -6,8 +6,13 @@ const nextConfig: NextConfig = {
   // load-bearing one: the singlefile variant base64-inlines its wasm into a CJS
   // module precisely so `output: "standalone"` has a file to trace. Bundling it
   // is what breaks that, and it breaks in the image, not in dev.
+  //
+  // esbuild is the other one: it does its work in a child process it locates by
+  // resolving @esbuild/<platform> at runtime, so a bundled copy has no binary to
+  // spawn. It compiles Tool sources (lib/tools/compile.ts) on the server only.
   serverExternalPackages: [
     "@jitl/quickjs-singlefile-cjs-release-sync",
+    "esbuild",
     "pg",
     "mysql2",
   ],
