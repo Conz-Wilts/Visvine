@@ -21,6 +21,7 @@ import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
+import { toolNoteDeleted, toolNoteRenamed, toolNoteWritten } from '@/lib/tools/hooks'
 import {
   entityFlatPath,
   entityIndexPathOf,
@@ -205,6 +206,7 @@ export async function createNote(
       if (!row) throw new Error(`Note not found: ${dest}`)
       await syncContextLinks(context, dest, row.content)
       await agentNoteWritten(context, dest, actor, { changed: true })
+      await toolNoteWritten(context, dest)
       return toRaw(row)
     }
   }
@@ -230,6 +232,7 @@ export async function createNote(
   if (isIndexPath(p)) await upsertFolderRow(context, folderOf(p))
   await syncContextLinks(context, p, content)
   await agentNoteWritten(context, p, actor, { changed: true })
+  await toolNoteWritten(context, p)
   await ensureAncestorIndexes(context, p, actor)
   await refreshIndexesForNote(context, p)
   invalidateVault(context)
@@ -487,6 +490,11 @@ export async function writeNote(
   // member's edit to a live brief → auto-deactivate). No-op elsewhere.
   await agentNoteWritten(context, p, actor, { changed: prev !== content })
 
+  // Tool notes drive the compiled working copy: every save recompiles the
+  // Tool's sources so the author sees compile errors on the write itself.
+  // No-op elsewhere, and skipped by hash when nothing actually changed.
+  await toolNoteWritten(context, p)
+
   // Refresh this note's published replicas in other contexts. Origin 'publish'
   // IS a replica write — skipping it is what stops replication cascades and
   // publish cycles dead. Best-effort like the link sync; self-heals on no-op
@@ -631,6 +639,7 @@ export async function renameNote(
     await refreshIndexesForNote(context, f)
     await refreshIndexesForNote(context, t)
     await agentNoteRenamed(context, f, t)
+    await toolNoteRenamed(context, f, t)
   }
   invalidateVault(context)
   return t // revisions stay attached by noteId
@@ -650,6 +659,7 @@ export async function deleteNote(context: Context, path: string): Promise<void> 
   await syncPublicationsOnDelete(context, [row.path])
   await refreshIndexesForNote(context, row.path)
   await agentNoteDeleted(context, row.path)
+  await toolNoteDeleted(context, row.path)
   invalidateVault(context)
 }
 
@@ -1057,8 +1067,13 @@ export async function renameFolder(
   await Promise.all(
     notes.map((note) => syncPublicationsOnRename(context, note.path, t + note.path.slice(f.length))),
   )
-  // Agent briefs moved by a folder rename deactivate like a single rename does.
-  for (const note of notes) await agentNoteRenamed(context, note.path, t + note.path.slice(f.length))
+  // Agent briefs moved by a folder rename deactivate like a single rename does;
+  // a Tool folder moved this way rebuilds under its new name and drops the old.
+  for (const note of notes) {
+    const to = t + note.path.slice(f.length)
+    await agentNoteRenamed(context, note.path, to)
+    await toolNoteRenamed(context, note.path, to)
+  }
   // Grants ride the rename too — a moved team subtree keeps its access rows.
   if (context.ownerKey === SHARED_OWNER_KEY) {
     await prisma.contextGrant.updateMany({
@@ -1142,7 +1157,10 @@ export async function deleteFolder(context: Context, path: string): Promise<void
   }
   await syncContextLinksBulk(context, notes.map((n) => n.path)) // trashed entity notes drop their links
   await syncPublicationsOnDelete(context, notes.map((n) => n.path))
-  for (const note of notes) await agentNoteDeleted(context, note.path)
+  for (const note of notes) {
+    await agentNoteDeleted(context, note.path)
+    await toolNoteDeleted(context, note.path)
+  }
   await prisma.contextFolder.deleteMany({
     where: {
       spaceId: context.spaceId,

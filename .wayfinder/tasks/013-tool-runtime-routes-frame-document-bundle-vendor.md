@@ -1,16 +1,16 @@
 ---
 id: 013
 title: "Tool runtime routes: frame document, bundle, vendor ESM (React + tool-kit)"
-status: todo
+status: done
 kind: build
 size: l
 wave: 2
 depends_on: [004, 008, 009, 005]
 touches: [apps/web/app/api/tools/runtime/frame/route.ts, "apps/web/app/api/tools/runtime/bundle/[id]/route.ts", "apps/web/app/api/tools/runtime/vendor/[file]/route.ts", apps/web/lib/tools/vendorBundle.ts, apps/web/lib/tools/frameDocument.ts, apps/web/tests/tools-frame-document.test.ts]
 created_by: 002
-session: null
-model: null
-effort: null
+session: 16d262af-c562-40e6-989b-f7d743afd792
+model: opus
+effort: xhigh
 ---
 
 ## Task
@@ -24,3 +24,29 @@ Serve everything a sandboxed Tool frame needs, under the tools origin (these pat
 **routes**: `GET /api/tools/runtime/frame?token=…` → verify token → resolve bundle id (`install:<installId>` → the version's uiBundle; `preview:<spaceId>/<name>` → the AppToolBuild's uiBundle) → respond HTML with `frameHeaders(frameCsp(...))` (selfOrigin = request origin, appOrigin from lib/tools/origin). If the token is invalid → 403 HTML error card (plain page). If build not ok → 200 HTML error card listing diagnostics (this IS the 'compile error in-pane' surface for previews). `GET /api/tools/runtime/bundle/[id]?token=…` → same token check → JS with `bundleHeaders()`; the id is `v_<versionId>` or `b_<buildId>`; ETag from a hash column or computed. `GET /api/tools/runtime/vendor/[file]` → vendorFile (public, no token; only the four names).
 
 Routes must set `Cross-Origin-Resource-Policy: cross-origin` and never set cookies. Acceptance: tsc/lint/test/knip clean; with `pnpm dev` running and `TOOLS_ORIGIN=http://127.0.0.1:3000`, `curl http://127.0.0.1:3000/api/tools/runtime/vendor/react.js` returns JS (report).
+
+## Outcome
+
+Landed the three Tool runtime routes plus the vendor builder and the frame document, and verified them end to end against a real dev server AND a real standalone production build — including driving a Tool through a sandboxed iframe in a browser until it rendered and its React state updated. Three defects that would each have killed the feature in production were found and fixed along the way.
+
+**lib/tools/vendorBundle.ts** — memoised per-process esbuild build of the four vendor modules, `vendorFile(name)` → `{ code, etag }` (etag = sha1). Three things differ from the task text, all because the literal spec does not work and I proved it:
+
+1. **`export * from 'react'` yields ZERO named exports.** React ships CommonJS; a star re-export of CJS cannot be resolved statically, so esbuild emits a module whose only export is `default` — every `import { useState } from 'react'` in every Tool would be `undefined`. Confirmed by importing the built module in Node. The entries now name each export, read off the module at build time via `createRequire` anchored at apps/web (so a React upgrade needs no edit here). All 44 React exports, `Fragment/jsx/jsxs`, and `createRoot/hydrateRoot/version` verified present in the served bytes.
+2. **`external: ['react']` on `react-dom-client.js` produced a module that throws on load.** React DOM is CJS and reaches React by `require('react')`; esbuild cannot turn a synchronous require of an external into an import, so it silently (no warning — checked `result.warnings`, empty) emitted a `Dynamic require of "react" is not supported` shim. Replaced with a small plugin that resolves `react` to a one-line ESM stub re-exporting the external, which leaves a genuine `import * as … from "react"` for the import map. A post-build guard now throws if that shim ever reappears, since esbuild will not tell us. Also note `external` prefix-matches subpaths, so `['react']` would have externalised `react/jsx-runtime` into a self-referential module — that entry deliberately has no externals.
+3. **Standalone tracing cannot carry the inputs, so the vendor modules are prebuilt.** Verified against a real `next build`: `.next/standalone` has no `features/tools/kit/**`, and of react-dom only the *server* builds — `client.js` and `cjs/react-dom-client.production.js` are absent because only the untraced client bundle uses them. `outputFileTracingIncludes` fixes the kit but cannot reach react-dom's client entry (the globs walk neither pnpm's `node_modules/react-dom` symlink nor the `.pnpm` dot-directory; tried both spellings, neither matched). So I took the fallback the task named: `scripts/build-tool-vendor.ts` writes the four modules to `apps/web/public/tool-runtime/` and is wired into `apps/web`'s `build` script (pnpm does not run `prebuild` hooks — `enable-pre-post-scripts` is false — so it is an explicit `&&`); `public/` is copied whole into standalone. `vendorFile` reads those in production and falls back to esbuild in development, so a stale artifact can never shadow a kit edit locally. My `next.config.ts` edit was reverted in full — the file's only remaining diff is task 036's.
+
+**lib/tools/frameDocument.ts** (pure) — `renderFrameDocument({selfOrigin, appOrigin, bundleUrl, vendorBase, vendorVersions?, nonce?})` emits charset, base style (margin reset + `color-scheme`), the four-entry import map, `<div id="root">`, `<noscript>`, and one module script that imports the kit, sets `window.__VISVINE_PARENT_ORIGIN`, and calls `bootTool(() => import(bundleUrl), { parentOrigin })`. Added `vendorVersions` to the signature because the spec's `?v=<etag>` has to come from somewhere and the function must stay pure. Also exports `renderFrameErrorDocument` (script-free) — the error card the routes serve. No inline handlers; `</script` inside a URL is escaped.
+
+**Routes.** `frame` verifies the token, resolves `install:` → the version's uiBundle / `preview:` → the AppToolBuild, and answers HTML always: 403 card for a bad token, 404 for a missing/disabled install, and **200 with the author's diagnostics listed** for a build that did not compile. `bundle/[id]` re-derives the allowed id from the token and 403s a mismatch, so a token for one Tool cannot read another's code; immutable caching for a pinned version, `no-store` for a working copy; ETag + 304. `vendor/[file]` is public, serves only the four names, and marks immutable only when `?v=` equals the current etag (a stale `v` still resolves but is not cached, so a URL can never be pinned to the wrong build).
+
+**Out-of-scope edits, both forced and minimal.** `lib/tools/csp.ts`: (a) `frameCsp` gained an optional `nonce` — an inline import map has no reliable external form, so without a nonce in `script-src` the frame renders and does nothing; (b) `bundleHeaders` gained `Access-Control-Allow-Origin: *`. **(b) was a live browser finding**: the frame is sandboxed without `allow-same-origin`, so its origin is the opaque `null` and every ES module fetch is a CORS request — even the frame's own bundle, same URL origin as its document, is cross-origin to itself. `Cross-Origin-Resource-Policy` does not cover this; the imports were blocked and nothing booted. Safe as `*` because module fetches are uncredentialed and the tools host has no cookies. `package.json`/`.gitignore`/`eslint.config.mjs` are the prebuild wiring (eslint was linting the minified artifacts).
+
+**Verification.** `tsc --noEmit` clean; `eslint . --max-warnings=0` clean; `knip` reports nothing for any file of mine (only task 010's `lib/tools/service.ts`); full suite **880 pass / 0 fail**, including 11 new tests in `tests/tools-frame-document.test.ts` (import map completeness vs `EXTERNALS` and `VENDOR_FILES`, `?v=` versioning, no URL outside selfOrigin, exactly two scripts and no `on*=`, the nonce appearing on all three tagged elements and matching `frameCsp`'s output, `</script` injection, the boot call shape, the parent-origin global pinned against the literal in `features/tools/kit/runtime.ts`, and the error card's escaping and diagnostic rendering).
+
+Live checks — port 3000 is held by an unrelated `serve` process owned by someone else, so the dev server ran on **3010** with `TOOLS_ORIGIN=http://127.0.0.1:3010`; the acceptance curl is otherwise exactly as specified. `curl http://127.0.0.1:3010/api/tools/runtime/vendor/react.js` → 200, `text/javascript`, 10036 bytes of real React ESM, `cross-origin-resource-policy: cross-origin`, `access-control-allow-origin: *`, ETag, **no `set-cookie` on any runtime response**. All four files serve, `?v=<etag>` flips `Cache-Control` to one-year immutable, `If-None-Match` gives 304, unknown names and a traversal attempt give 404. Frame document: correct per-response CSP (`connect-src 'none'`, `frame-ancestors <app origin>`, `script-src 'self' 'nonce-…'`), no-store, no-referrer. Bad token → 403 card; a build flipped to `ok: false` → 200 card listing `line 12:4` and the offending source; bundle route → 403 without a token and 403 for a foreign id with a valid one, 304 on revalidate.
+
+Full browser end-to-end: seeded a real `AppToolBuild` (compiled through `compileToolUi`), minted a preview token, and embedded the frame with `sandbox="allow-scripts"` in a scratch host page that answers the handshake. The message log shows `visvine:ready` → `visvine:init` → `visvine:resize` with no `visvine:error`, and the Tool rendered inside the sandbox — kit `PageHeader`/`Card`/`Button`, `viewer: Dev Admin` read from the init payload, and clicking the button moved `count: 0` → `count: 1`, which is `useState` working and therefore proof that the renderer and the Tool share one React instance through the import map. The seeded row was deleted afterwards; the local DB is back to zero Tool rows.
+
+Production path proven too: `next build` succeeds, and the **standalone server** (`node .next/standalone/apps/web/server.js`) serves all four vendor modules with byte-identical output and identical ETags — conclusive, since that tree contains no `react-dom/client` for esbuild to have built from.
+
+One thing worth an eye later: bundle URLs carry the frame token as a query parameter, so the `immutable` Cache-Control on a pinned version's bundle never actually hits cache — each mint is a new URL. That is inherent to task 008's token design, not something to change here.

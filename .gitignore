@@ -67,6 +67,9 @@ next-env.d.ts
 # uploaded images
 apps/web/public/uploads/
 apps/web/public/images/nodes/
+# Built by scripts/build-tool-vendor.ts on every `pnpm build` — the Tool frame's
+# vendor ESM (React + @visvine/tool-kit), a build artifact, never a source file.
+apps/web/public/tool-runtime/
 
 # local credential docs (never commit)
 docs/*.credentials.md

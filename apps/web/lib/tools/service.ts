@@ -1,0 +1,400 @@
+/**
+ * The Tools feature's service file — one place touching the Tool notes and the
+ * build rows, mirroring lib/agents/service.ts and lib/connectors/service.ts.
+ * The REST routes, the MCP authoring tools and the author UI call this; nothing
+ * else writes a Tool's notes.
+ *
+ * This is the WORKING COPY half of the feature: `tools/<name>/` in a space's
+ * shared context, compiled on every write. Publishing a snapshot to the
+ * marketplace and installing one are the registry's business, not this file's.
+ *
+ * Everything here takes an explicit `ContextPrincipal` and writes through
+ * `writeGated`, so a Tool's source obeys exactly the grants, restricted folders
+ * and write denials any other note does — authoring a Tool is authoring notes.
+ * Two consequences worth stating out loud:
+ *
+ *  • Members author. There is no admin-only clause on `tools/` (unlike
+ *    `connectors/`), because a Tool cannot do anything its viewer's own grants
+ *    would not already allow — see lib/tools/perimeter.ts.
+ *  • Writes are stamped with the human origin `edit`, never `agent`: `tools/`
+ *    is frozen for AI origins (contextService.lockedDenial) precisely so an
+ *    autonomous sweep cannot rewrite executable code, and a person driving an
+ *    authoring agent is authoring, not sweeping.
+ *
+ * A Tool is also a directory node (`tool:<name>`), created here before its
+ * index note: the note store holds an entity folder's index to its entity
+ * contract (store.ts#enforceIndexContract), so the note only keeps `type: tool`
+ * once the node behind it exists.
+ */
+import prisma from '@/lib/prisma'
+import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
+import { spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
+import * as store from '@/lib/notes/store'
+import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
+import {
+  getBuild,
+  listBuilds,
+  rebuildTool,
+  toBuildSummary,
+  toolDiagnosticLine,
+  type BuildSummary,
+} from './builds'
+import {
+  TOOL_NAME_RE,
+  TOOL_SOURCE_FILES,
+  newToolIndexNote,
+  parseToolConfig,
+  toolDataPath,
+  toolFileKindOfPath,
+  toolFolderPath,
+  toolIndexPath,
+  toolNameOfPath,
+  toolUiPath,
+  unwrapSource,
+  wrapSource,
+  type ToolConfig,
+} from './config'
+
+/** The three files an author addresses, whatever the notes behind them are called. */
+export type ToolFileName = 'index.md' | 'ui.tsx' | 'data.js'
+
+const INDEX_FILE: ToolFileName = 'index.md'
+
+/** One authored Tool on the roster. A broken one still lists — with its error. */
+export interface AuthoredToolSummary {
+  name: string
+  /** The config note: `tools/<name>/index.md`. */
+  path: string
+  /** The directory node standing for this Tool. */
+  nodeId: string
+  title: string
+  description: string
+  /** 0 until the Tool has ever been published. */
+  version: number
+  /** The config's parse error, or null. */
+  invalid: string | null
+  createdBy: string | null
+  /** Null only for a Tool that has never compiled (no source has been written). */
+  build: BuildSummary | null
+}
+
+export interface AuthoredToolDetail extends AuthoredToolSummary {
+  config: ToolConfig | null
+  /**
+   * The author's three files. `index.md` is the note verbatim; the two sources
+   * are unwrapped out of their fenced code blocks. A source note that isn't a
+   * wrapped source at all comes back as its raw markdown rather than as null —
+   * that is a state the author has to see to fix.
+   */
+  sources: Record<ToolFileName, string | null>
+}
+
+export type ToolServiceError = { ok: false; status: number; error: string }
+export type CreateToolResult = { ok: true; name: string; build: BuildSummary } | ToolServiceError
+export type WriteToolFileResult =
+  | { ok: true; path: string; build: BuildSummary }
+  | ToolServiceError
+
+function actorOf(p: ContextPrincipal): Actor {
+  return { id: p.userId, name: p.name, email: p.email || null }
+}
+
+/** `tool:<name>` — the directory node id, which is also the install rail key. */
+function toolNodeId(name: string): string {
+  return `tool:${name}`
+}
+
+function badName(name: string): ToolServiceError {
+  return {
+    ok: false,
+    status: 400,
+    error: `"${name}" is not a valid tool name — use lower-case letters, digits and hyphens (63 max).`,
+  }
+}
+
+/** The note behind an author-facing filename. */
+function notePathOf(name: string, file: ToolFileName): string {
+  if (file === TOOL_SOURCE_FILES.ui.authorName) return toolUiPath(name)
+  if (file === TOOL_SOURCE_FILES.data.authorName) return toolDataPath(name)
+  return toolIndexPath(name)
+}
+
+/** What actually goes in the note: the two sources ride inside a fenced block. */
+function noteContentOf(file: ToolFileName, content: string): string {
+  if (file === TOOL_SOURCE_FILES.ui.authorName) return wrapSource(content, TOOL_SOURCE_FILES.ui.lang)
+  if (file === TOOL_SOURCE_FILES.data.authorName) {
+    return wrapSource(content, TOOL_SOURCE_FILES.data.lang)
+  }
+  return content
+}
+
+/** Tools live in the shared context only; a personal copy is somebody's draft. */
+function isShared(context: Context): boolean {
+  return context.ownerKey === SHARED_OWNER_KEY
+}
+
+function summarise(
+  name: string,
+  indexContent: string,
+  createdBy: string | null,
+  build: BuildSummary | null,
+): AuthoredToolSummary {
+  const fm = parseFrontmatter(indexContent)
+  const parsed = parseToolConfig(fm, name)
+  const config = parsed.ok ? parsed.config : null
+  return {
+    name,
+    path: toolIndexPath(name),
+    nodeId: toolNodeId(name),
+    title: config?.title || (typeof fm.title === 'string' && fm.title.trim()) || name,
+    description:
+      config?.description ?? (typeof fm.description === 'string' ? fm.description.trim() : ''),
+    version: config?.version ?? 0,
+    invalid: parsed.ok ? null : parsed.error,
+    createdBy,
+    build,
+  }
+}
+
+/** Who created each of these notes, in one query. */
+async function authorsOf(spaceId: string, paths: string[]): Promise<Map<string, string | null>> {
+  if (paths.length === 0) return new Map()
+  const rows = await prisma.contextNote.findMany({
+    where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: { in: paths }, deletedAt: null },
+    select: { path: true, createdBy: true },
+  })
+  return new Map(rows.map((row) => [row.path, row.createdBy]))
+}
+
+// ── reading ───────────────────────────────────────────────────────────────────
+
+/** Every Tool authored in this space that the principal can see. */
+export async function listAuthoredTools(
+  p: ContextPrincipal,
+  context: Context,
+): Promise<AuthoredToolSummary[]> {
+  if (!isShared(context)) return []
+  const { raws } = await visibleVault(p, context)
+  const indexes = raws.filter((raw) => toolFileKindOfPath(raw.path) === 'index')
+  const [authors, builds] = await Promise.all([
+    authorsOf(
+      context.spaceId,
+      indexes.map((raw) => raw.path),
+    ),
+    listBuilds(context.spaceId),
+  ])
+  const out: AuthoredToolSummary[] = []
+  for (const raw of indexes) {
+    const name = toolNameOfPath(raw.path)
+    if (!name) continue
+    const build = builds.get(name)
+    out.push(summarise(name, raw.content, authors.get(raw.path) ?? null, build ? toBuildSummary(build) : null))
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/** One Tool with its config, its three files and its build. Null if unreadable. */
+export async function describeAuthoredTool(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+): Promise<AuthoredToolDetail | null> {
+  if (!isShared(context) || !TOOL_NAME_RE.test(name)) return null
+  const indexContent = await readVisible(p, context, toolIndexPath(name))
+  if (indexContent === null) return null
+
+  const [uiNote, dataNote, authors, build] = await Promise.all([
+    readVisible(p, context, toolUiPath(name)),
+    readVisible(p, context, toolDataPath(name)),
+    authorsOf(context.spaceId, [toolIndexPath(name)]),
+    getBuild(context.spaceId, name),
+  ])
+  const summary = summarise(
+    name,
+    indexContent,
+    authors.get(toolIndexPath(name)) ?? null,
+    build ? toBuildSummary(build) : null,
+  )
+  const parsed = parseToolConfig(parseFrontmatter(indexContent), name)
+  return {
+    ...summary,
+    config: parsed.ok ? parsed.config : null,
+    sources: {
+      'index.md': indexContent,
+      'ui.tsx': uiNote === null ? null : (unwrapSource(uiNote)?.code ?? uiNote),
+      'data.js': dataNote === null ? null : (unwrapSource(dataNote)?.code ?? dataNote),
+    },
+  }
+}
+
+// ── creating ──────────────────────────────────────────────────────────────────
+
+/** The starting `ui.tsx`: renders, compiles, and shows where to type. */
+function starterUi(title: string): string {
+  return [
+    `// This is your tool's interface. It renders inside Visvine's main content`,
+    `// area, in a sandboxed frame — React and @visvine/tool-kit are importable,`,
+    `// nothing else is. The default export is what gets mounted.`,
+    ``,
+    `const TITLE = ${JSON.stringify(title)}`,
+    ``,
+    `export default function App() {`,
+    `  return (`,
+    `    <main style={{ padding: 24 }}>`,
+    `      <h1>{TITLE}</h1>`,
+    `      <p>Edit ui.tsx to build this tool.</p>`,
+    `    </main>`,
+    `  )`,
+    `}`,
+  ].join('\n')
+}
+
+/** The starting `data.js`: one handler, so the shape is obvious. */
+function starterData(): string {
+  return [
+    `// Server-side logic for this tool. It runs in a sandbox with no network of`,
+    `// its own: everything it may reach is declared in the tool's perimeter.`,
+    `// Assign one function per operation to \`handlers\`; the interface calls`,
+    `// them by name.`,
+    ``,
+    `handlers.hello = async (args, ctx) => {`,
+    `  return { greeting: 'Hello, ' + (args.name || 'world') }`,
+    `}`,
+  ].join('\n')
+}
+
+/**
+ * Create a new Tool: the directory node, the config note, and the two source
+ * scaffolds. Refuses a bad name, a name already taken, and a principal who
+ * can't write there.
+ *
+ * The node comes first on purpose. `tools/<name>/index.md` is an entity
+ * folder's index, and the store holds those to their entity's contract — with
+ * no node behind it the store would rewrite the note to `type: Index` and the
+ * config would stop parsing on the very first save.
+ */
+export async function createTool(
+  p: ContextPrincipal,
+  context: Context,
+  input: { name: string; title?: string; description?: string },
+): Promise<CreateToolResult> {
+  const name = input.name.trim().toLowerCase()
+  if (!TOOL_NAME_RE.test(name)) return badName(name)
+  if (!isShared(context)) {
+    return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
+  }
+
+  const indexPath = toolIndexPath(name)
+  const denial = await writeDenialFull(p, context, indexPath)
+  if (denial) return { ok: false, status: 403, error: denial }
+
+  if (await store.readNoteOrNull(context, indexPath)) {
+    return { ok: false, status: 409, error: `A tool named "${name}" already exists.` }
+  }
+
+  // Node ids are global slugs, so the id this Tool needs may already belong to
+  // another space's node. Better to say the name is taken than to let the store
+  // fail to find the node and quietly strip the config off the index note.
+  const nodeId = toolNodeId(name)
+  const clash = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true } })
+  if (clash && clash.spaceId !== context.spaceId) {
+    return { ok: false, status: 409, error: `The name "${name}" is taken — try another.` }
+  }
+
+  const title = (input.title ?? '').trim() || name
+  const description = (input.description ?? '').trim()
+  await syncEntityNode({
+    spaceId: context.spaceId,
+    type: 'tool',
+    nodeId,
+    name: title,
+    subtitle: description || null,
+    metadata: { notePath: indexPath },
+    parentNodeId: spaceNodeId(context.spaceId),
+    actor: actorOf(p),
+  })
+
+  try {
+    // createIndexFolder rather than a plain write: the Tool IS its folder, and
+    // this is the one call that makes the folder row, the index and the parent
+    // listing all appear together.
+    await store.createIndexFolder(
+      context,
+      toolFolderPath(name),
+      newToolIndexNote({ name, title, description }),
+      actorOf(p),
+    )
+  } catch (err) {
+    return { ok: false, status: 400, error: err instanceof Error ? err.message : 'Could not create the tool.' }
+  }
+
+  for (const [file, content] of [
+    [TOOL_SOURCE_FILES.ui.authorName, starterUi(title)] as const,
+    [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
+  ]) {
+    const written = await writeGated(p, context, notePathOf(name, file), noteContentOf(file, content))
+    if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
+  }
+
+  // Each write above already rebuilt through the store hook; this returns that
+  // row (the hash is unchanged, so nothing recompiles).
+  return { ok: true, name, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
+}
+
+// ── writing ───────────────────────────────────────────────────────────────────
+
+/**
+ * Write one of a Tool's three files and hand back the build it produced, so the
+ * author learns on the write whether their code compiles. The write goes
+ * through the note gate under the principal — grants, restricted folders and
+ * `writeDenial` all apply exactly as they do to any note.
+ */
+export async function writeToolFile(
+  p: ContextPrincipal,
+  context: Context,
+  name: string,
+  file: ToolFileName,
+  content: string,
+): Promise<WriteToolFileResult> {
+  if (!TOOL_NAME_RE.test(name)) return badName(name)
+  if (!isShared(context)) {
+    return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
+  }
+  if (!(await store.readNoteOrNull(context, toolIndexPath(name)))) {
+    return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
+  }
+
+  const path = notePathOf(name, file)
+  let written
+  try {
+    written = await writeGated(p, context, path, noteContentOf(file, content))
+  } catch (err) {
+    // The store refuses some writes by throwing (an index that can't convert, a
+    // sub-note with no entity behind it). Those are the author's problem to
+    // read, not a 500.
+    return { ok: false, status: 400, error: err instanceof Error ? err.message : `Could not write ${file}.` }
+  }
+  if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
+
+  // The store hook has already rebuilt; this reads that row back.
+  return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
+}
+
+/**
+ * A build's diagnostics as plain lines an authoring agent can act on:
+ *
+ *   index.md the tool frontmatter must include `type: tool`
+ *   ui.tsx:12:5 Expected ">" but found "class"
+ *
+ * Empty string when the build is clean, so a caller can append it to a success
+ * message without checking.
+ */
+export function writeErrorsToPlain(build: BuildSummary): string {
+  const lines: string[] = []
+  if (build.configError) lines.push(`${INDEX_FILE} ${build.configError}`)
+  for (const d of build.errors) lines.push(toolDiagnosticLine(d))
+  for (const d of build.warnings) lines.push(`warning: ${toolDiagnosticLine(d)}`)
+  return lines.join('\n')
+}

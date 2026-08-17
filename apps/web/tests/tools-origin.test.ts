@@ -21,6 +21,7 @@ import {
   TOOL_RUNTIME_PATH_PREFIX,
 } from '@/lib/tools/origin'
 import { bundleHeaders, frameCsp, frameHeaders } from '@/lib/tools/csp'
+import nextConfig from '../next.config'
 
 /** Runs `fn` with TOOLS_ORIGIN / NEXT_PUBLIC_APP_URL set, then restores both. */
 function withEnv(env: { tools?: string; app?: string }, fn: () => void): void {
@@ -229,4 +230,40 @@ test('bundleHeaders caches content-addressed JS forever, working copies never', 
   assert.equal(immutable['Cross-Origin-Resource-Policy'], 'cross-origin')
   assert.equal(immutable['Cache-Control'], 'public, max-age=31536000, immutable')
   assert.equal(bundleHeaders({ immutable: false })['Cache-Control'], 'no-store')
+})
+
+// ── next.config.ts must not let the app-wide policy clobber the frame's own ──
+
+test("next.config's app-wide CSP/X-Frame-Options do not match the Tool runtime, and still match everything else", async () => {
+  // Same matcher Next itself compiles `source` strings with, so this pins the
+  // config's actual routing behavior rather than a hand-rolled approximation.
+  // @ts-expect-error -- Next vendors this with no published types.
+  const { pathToRegexp } = (await import('next/dist/compiled/path-to-regexp')) as {
+    pathToRegexp: (source: string) => RegExp
+  }
+  const entries = await nextConfig.headers!()
+
+  const headersFor = (path: string): Record<string, string> => {
+    const merged: Record<string, string> = {}
+    for (const entry of entries) {
+      if (!pathToRegexp(entry.source).test(path)) continue
+      for (const h of entry.headers) merged[h.key] = h.value
+    }
+    return merged
+  }
+
+  const runtime = headersFor('/api/tools/runtime/frame')
+  assert.equal(runtime['Content-Security-Policy'], undefined, 'the frame mints its own CSP')
+  assert.equal(runtime['X-Frame-Options'], undefined, 'XFO has no origin-list form; frame-ancestors owns this')
+  assert.equal(runtime['Referrer-Policy'], undefined, 'the frame sets no-referrer itself')
+  assert.equal(runtime['Strict-Transport-Security'], 'max-age=63072000; includeSubDomains; preload')
+  assert.equal(runtime['Permissions-Policy'], 'camera=(), microphone=(), geolocation=(), browsing-topics=()')
+
+  const directory = headersFor('/directory')
+  assert.ok(directory['Content-Security-Policy']?.includes("frame-ancestors 'none'"))
+  assert.equal(directory['X-Frame-Options'], 'DENY')
+
+  const authorize = headersFor('/api/oauth/authorize')
+  assert.ok(authorize['Content-Security-Policy']?.includes("form-action 'self' https:"))
+  assert.equal(authorize['X-Frame-Options'], 'DENY')
 })

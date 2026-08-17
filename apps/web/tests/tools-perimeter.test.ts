@@ -76,6 +76,36 @@ test('within-segment stars match partial names, and the extension is not special
   assert.ok(!globMatch('deals/*.md', 'deals/x.csv'))
 })
 
+test('a traversal segment in the subject never matches, however permissive the glob', () => {
+  for (const path of [
+    'deals/../people/secret.md',
+    'deals/../../etc/passwd',
+    'deals/a/../../salaries.md',
+    '/deals/../secret.md',
+    'deals\\..\\x.md',
+  ]) {
+    assert.ok(!globMatch('deals/**', path), path)
+    assert.ok(!globMatch('**', path), path)
+  }
+})
+
+test('refuseRead and refuseWrite refuse a traversal subject with a distinct message', () => {
+  const p = perimeter({ read: ['deals/**'], write: ['deals/**'] })
+  for (const path of [
+    'deals/../people/secret.md',
+    'deals/../../etc/passwd',
+    'deals/a/../../salaries.md',
+    '/deals/../secret.md',
+    'deals\\..\\x.md',
+  ]) {
+    assert.match(String(refuseRead(p, path)), /^tool perimeter denied: .* is not a valid context path$/, path)
+    assert.match(String(refuseWrite(p, path)), /^tool perimeter denied: .* is not a valid context path$/, path)
+  }
+  assert.equal(refuseRead(p, 'deals/ok.md'), null)
+  assert.equal(refuseRead(p, 'deals/a/b/c.md'), null)
+  assert.equal(refuseRead(p, '/deals/ok.md'), null, 'a legitimate leading slash still normalises and passes')
+})
+
 // ── parsing ──
 
 test('parseToolPerimeter reads the frontmatter block', () => {

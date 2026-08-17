@@ -59,6 +59,21 @@ const nextConfig: NextConfig = {
     // negative lookahead is what keeps the two from stacking into an
     // intersection, since duplicate CSP headers are enforced as both.
     const AUTHORIZE = '/api/oauth/authorize';
+    // The Tool runtime (lib/tools/csp.ts) is the other carve-out, and for a
+    // sharper reason than OAuth's: these config headers WIN over anything a
+    // route handler sets under the same name, so if this app-wide policy also
+    // matched `/api/tools/runtime/*` it would silently replace the frame's own
+    // CSP and X-Frame-Options — not merge with them. That's fatal here in two
+    // ways at once: `frame-ancestors 'none'` + `X-Frame-Options: DENY` stop the
+    // Tool iframe from rendering at all, and `connect-src 'self' https:`
+    // overwrites the frame's `connect-src 'none'`, which is the whole
+    // exfiltration control the sandbox relies on. The runtime routes mint a
+    // per-response CSP (frame-ancestors naming the app origin, not a fixed
+    // value the static config could express) and deliberately omit
+    // X-Frame-Options (it has no origin-list form), so those two headers plus
+    // Referrer-Policy are left entirely to lib/tools/csp.ts. Only the transport
+    // headers that don't collide ride here.
+    const TOOL_RUNTIME = 'api/tools/runtime/';
     return [
       {
         source: AUTHORIZE,
@@ -68,7 +83,14 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: '/:path((?!api/oauth/authorize).*)',
+        source: `/${TOOL_RUNTIME}:path*`,
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()' },
+        ],
+      },
+      {
+        source: `/:path((?!${AUTHORIZE.slice(1)}|${TOOL_RUNTIME}).*)`,
         headers: [
           { key: 'Content-Security-Policy', value: directives("'self'") },
           ...otherHeaders,

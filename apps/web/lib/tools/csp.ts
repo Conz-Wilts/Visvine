@@ -38,6 +38,9 @@ function safeSources(values: readonly string[]): string[] {
   return values.filter((v) => SAFE_SOURCE_RE.test(v))
 }
 
+/** A nonce is base64/base64url text; anything else would be writing policy. */
+const SAFE_NONCE_RE = /^[A-Za-z0-9+/_=-]{16,128}$/
+
 export function frameCsp(opts: {
   /** The Visvine app origin — the only page allowed to embed this frame. */
   appOrigin: string
@@ -45,6 +48,13 @@ export function frameCsp(opts: {
   selfOrigin: string
   /** Extra image hosts, e.g. a CDN in front of the media bucket. */
   mediaHosts?: string[]
+  /**
+   * Per-response nonce for the frame document's two inline scripts — the
+   * import map (which has no reliable external form) and the boot module.
+   * Everything else stays `'self'`, so a Tool's own bundle still cannot run
+   * inline script: it never sees this value.
+   */
+  nonce?: string
 }): string {
   const imgSources = ["'self'", 'data:', 'blob:', MEDIA_ORIGIN, ...safeSources(opts.mediaHosts ?? [])]
   // When the tools origin is unconfigured the frame is same-origin with the app
@@ -52,9 +62,11 @@ export function frameCsp(opts: {
   // narrower than naming the origin.
   const ancestors =
     opts.appOrigin === opts.selfOrigin ? ["'self'"] : safeSources([opts.appOrigin])
+  const scriptSources = ["'self'"]
+  if (opts.nonce && SAFE_NONCE_RE.test(opts.nonce)) scriptSources.push(`'nonce-${opts.nonce}'`)
   return [
     "default-src 'none'",
-    "script-src 'self'",
+    `script-src ${scriptSources.join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     `img-src ${imgSources.join(' ')}`,
     "font-src 'self' data:",
@@ -86,12 +98,21 @@ export function frameHeaders(csp: string): Record<string, string> {
  * content-addressed, so the default is a year of immutable caching; pass
  * `{ immutable: false }` for a URL that can change under the same path (an
  * author's working copy while they iterate).
+ *
+ * `Access-Control-Allow-Origin` is not optional here, and the reason is easy to
+ * miss: the frame is sandboxed WITHOUT `allow-same-origin`, so its origin is
+ * the opaque `null`. Every ES module fetch is a CORS request, which makes even
+ * the frame's own bundle — same URL origin as the document — cross-origin to
+ * itself. Without this the browser blocks the import and the Tool never boots.
+ * Safe as `*` because nothing here is credentialed: module fetches send no
+ * cookies, and the tools host has none to send.
  */
 export function bundleHeaders(opts: { immutable?: boolean } = {}): Record<string, string> {
   const immutable = opts.immutable ?? true
   return {
     'Content-Type': 'text/javascript; charset=utf-8',
     'Cross-Origin-Resource-Policy': 'cross-origin',
+    'Access-Control-Allow-Origin': '*',
     'X-Content-Type-Options': 'nosniff',
     'Cache-Control': immutable ? `public, max-age=${BUNDLE_MAX_AGE}, immutable` : 'no-store',
   }

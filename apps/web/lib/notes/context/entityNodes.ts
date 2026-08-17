@@ -41,12 +41,15 @@ export type EntityNodeType =
   | 'channel'
   | 'connector'
   | 'agent'
+  | 'tool'
 
 /** Document kinds: their own artifact is the context, so no `.md` is written. */
 // A connector counts as a document even though it lives in an entity namespace:
 // the admin authored connectors/<name>.md first and the node follows it, so
-// there is nothing left to write. An agent is note-first in exactly the same way.
-const DOCUMENT_TYPES = new Set<EntityNodeType>(['connector', 'agent'])
+// there is nothing left to write. An agent is note-first in exactly the same
+// way, and so is a tool — whose note is a whole folder (lib/tools/service.ts
+// writes the index and the two sources itself).
+const DOCUMENT_TYPES = new Set<EntityNodeType>(['connector', 'agent', 'tool'])
 
 /** The containment relationship every structural edge uses. */
 const CONTAINS_RELATIONSHIP = 'contains'

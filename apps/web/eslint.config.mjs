@@ -16,6 +16,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Minified third-party bundles written by scripts/build-tool-vendor.ts —
+    // build output that happens to live under public/ so `output: standalone`
+    // carries it.
+    "public/tool-runtime/**",
   ]),
   {
     rules: {

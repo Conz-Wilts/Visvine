@@ -98,6 +98,20 @@ function segmentSource(segment: string): string {
 
 const globCache = new Map<string, RegExp>()
 
+/**
+ * True when `path` is a plain, already-resolved context path: no backslashes,
+ * no empty or `.`/`..` segment once normalized. `globMatch` refuses anything
+ * that fails this before it ever reaches the compiled regex — `.*` inside a
+ * trailing `**` would otherwise happily span a `../` the same way it spans any
+ * other text, so the glob grammar alone cannot be trusted to keep a subject
+ * inside the folder its pattern names.
+ */
+function isValidSubjectPath(path: string): boolean {
+  const target = normalizePath(path.trim())
+  if (!target || target.includes('\\')) return false
+  return target.split('/').every((segment) => segment !== '.' && segment !== '..')
+}
+
 // Compile a glob to an anchored regex.
 //
 // The grammar, kept deliberately small so a reviewer reading `deals/**` in a
@@ -113,6 +127,10 @@ const globCache = new Map<string, RegExp>()
 //     below it — the same as `deals/**`.
 // `?` is NOT a wildcard: a glob is matched against note paths somebody wrote,
 // and one-character wildcards buy nothing but surprises.
+//
+// The subject being tested is validated too (see `isValidSubjectPath`): a
+// `.`/`..` segment, a backslash, or an empty path never matches any glob, no
+// matter how permissive — a `**` spans text, not resolved path segments.
 function globRegExp(pattern: string): RegExp {
   const cached = globCache.get(pattern)
   if (cached) return cached
@@ -142,9 +160,8 @@ function globRegExp(pattern: string): RegExp {
 /** Does `path` match this glob? See {@link globRegExp} for the grammar. */
 export function globMatch(pattern: string, path: string): boolean {
   const glob = normalizePath(pattern.trim())
-  const target = normalizePath(path.trim())
-  if (!glob || !target) return false
-  return globRegExp(glob).test(target)
+  if (!glob || !isValidSubjectPath(path)) return false
+  return globRegExp(glob).test(normalizePath(path.trim()))
 }
 
 /** Does a name list entry (`hubspot`, `deal-*`, `*`) cover this name? */
@@ -255,6 +272,7 @@ function refuse(
 
 /** May the Tool read this note path? Null when it may. */
 export function refuseRead(perimeter: ToolPerimeter, notePath: string): string | null {
+  if (!isValidSubjectPath(notePath)) return `tool perimeter denied: ${notePath} is not a valid context path`
   return refuse(perimeter.read, 'read', notePath, (glob) => globMatch(glob, notePath))
 }
 
@@ -267,6 +285,7 @@ export function refuseRead(perimeter: ToolPerimeter, notePath: string): string |
  * declared, and the bridge asks this gate for the write half.
  */
 export function refuseWrite(perimeter: ToolPerimeter, notePath: string): string | null {
+  if (!isValidSubjectPath(notePath)) return `tool perimeter denied: ${notePath} is not a valid context path`
   return refuse(perimeter.write, 'write', notePath, (glob) => globMatch(glob, notePath))
 }
 
