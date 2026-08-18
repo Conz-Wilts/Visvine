@@ -99,20 +99,22 @@ sandbox has no way to install. Two facts make one unnecessary:
 
 ## Running a task
 
-`Run` on a card asks for an agent brief at `agents/wayfinder-<project>-<id>.md`
+`Run` on a card writes an agent brief at `agents/wayfinder-<project>-<id>.md`
 whose body is the task's `## Task` text plus instructions to append its result to
 the task note under `## Outcome`, then calls `visvine.agents.run(...)`.
 
-**Visvine seals `agents/` against Tool writes** — agent briefs run unattended on
-the space's model key, so no Tool may author one whatever its perimeter declares
-(`lib/tools/bridge.ts#SEALED_WRITE_DIRS`). The board therefore reads the brief
-first, and when it is missing it shows the exact markdown for a person to save at
-that path rather than pretending it wrote it. Once a brief exists and an admin has
-activated it, `Run` dispatches it and records the run on the task's frontmatter.
+**Writing a brief is the one hole in a sealed namespace.** `agents/`,
+`connectors/` and `tools/` are sealed against Tool writes
+(`lib/tools/bridge.ts#SEALED_WRITE_DIRS`); the exception is CREATING the brief of
+an agent the Tool's own perimeter names, which is why `agents: ["wayfinder-*"]`
+sits above beside `write: ["agents/*.md"]`. A brief is not the thing that runs —
+ACTIVATION is (`agents/live/<name>.md`, admins only), and an inactive agent
+refuses to run at all. So the board can prepare the work; a person still says yes.
 
-`agents/*.md` stays in the perimeter above because that is the reach this board is
-asking for; the seal outranks it. Reading a brief is allowed, and that is what
-makes the difference legible instead of silent.
+An existing brief is never rewritten: the instructions an admin approved are not
+this board's to change. When the write is refused anyway — a viewer without edit
+access in `agents/`, or a brief already sitting there — the board shows the exact
+markdown for a person to save at that path rather than guessing at the reason.
 
 ## Limits
 

@@ -493,11 +493,15 @@ function briefFor(project, projectTitle, task) {
  *
  * Three steps, each of which can honestly fail:
  *
- *  1. The brief at `agents/wayfinder-<project>-<id>.md` must exist. A Tool may
- *     not write one — `agents/` is sealed against Tool writes whatever the
- *     perimeter declares, because a brief runs unattended on the space's model
- *     key. The write is still attempted, so the refusal is the real one and not
- *     this Tool's guess at it, and the brief text comes back for a person to save.
+ *  1. The brief at `agents/wayfinder-<project>-<id>.md` must exist, and when it
+ *     does not this board writes it. `agents/` is sealed against Tool writes with
+ *     one hole: CREATING the brief of an agent the Tool's own perimeter names,
+ *     which is why `agents: ["wayfinder-*"]` is declared above. Writing a brief
+ *     starts nothing — ACTIVATION is what makes an agent run, and that stays a
+ *     space admin's act — and an existing brief is never rewritten, because the
+ *     instructions an admin approved are not a Tool's to change. The write can
+ *     still be refused (a viewer without edit access in `agents/`), so the brief
+ *     text comes back either way for a person to save.
  *  2. `visvine.agents.run(name)` needs the agent to be ACTIVE, which is a space
  *     admin's act (`agents/live/<name>.md`).
  *  3. Whatever happened is recorded on the task's own frontmatter, so the board

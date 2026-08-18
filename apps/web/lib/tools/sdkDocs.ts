@@ -316,6 +316,14 @@ The perimeter narrows; it never widens. A Tool can only ever see what the person
 using it could already see. Two members with different grants running the same
 Tool see different data, and that is correct.
 
+**\`tools/\`, \`agents/\` and \`connectors/\` are sealed against Tool writes**, whatever
+you declare — they hold configuration that runs. One exception: a Tool may CREATE
+\`agents/<name>.md\` (an agent brief) when its own \`perimeter.agents\` names that
+agent, e.g. \`agents: ["deal-*"]\` for \`agents/deal-nightly.md\`. A bare \`*\` names
+nobody. It may never rewrite a brief that already exists, never append to one, and
+never write \`agents/live/**\` — ACTIVATION is a space admin's act, so a brief your
+Tool wrote does nothing until a person turns it on.
+
 ## ui.tsx
 
 \`\`\`tsx

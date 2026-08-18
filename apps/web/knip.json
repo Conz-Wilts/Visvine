@@ -12,15 +12,7 @@
     "features/tools/kit/index.ts",
     "features/tools/kit/runtime.ts",
     "lib/tools/protocol.ts",
-    "lib/tools/sdkDocs.ts",
-    // The Tool host components. Built in wave 2, mounted in wave 3 (the
-    // marketplace and the review queue), so they have no importer yet. Drop
-    // these lines as each one gains one — they are a note that the consumer is
-    // still to come, not a permanent exemption. (ToolFrame's landed: the
-    // `/t/<slug>` page and the preview page mount it. PerimeterSummary's too:
-    // the author page shows a Tool's declared reach and asks it again in the
-    // publish dialog.)
-    "features/tools/components/CodeDiff.tsx"
+    "lib/tools/sdkDocs.ts"
   ],
   "project": ["app/**", "components/**", "features/**", "lib/**", "scripts/**", "tests/**"],
   // Tool SOURCE files the verify scripts read off disk and feed to the

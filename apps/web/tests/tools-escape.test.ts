@@ -355,6 +355,23 @@ test('an agent the tool never declared is refused before the scheduler is touche
   assert.match(error.message, /declares no agents/)
 })
 
+test('a tool cannot author an agent brief it did not declare', async () => {
+  // The escalation the seal exists to stop: write a brief naming any connector in
+  // the space, then run it on the space's model key. A Tool may create the brief
+  // of an agent its OWN perimeter names (bridge.ts#agentBriefExemption) — so the
+  // write globs here are wide open and the agents list is `*`, which names nobody,
+  // and the store is a trap: nothing may be written before the refusal.
+  const t = target({ perimeter: perimeter({ read: ['deals/**'], write: ['**'], agents: ['*'] }) })
+  for (const path of ['agents/nightly.md', 'agents/live/nightly.md']) {
+    const error = errorOf(await handleBridgeCall(t, 'context.write', { path, content: '# x' }, deps()))
+    assert.equal(error.code, 'forbidden', `${path} must be refused`)
+  }
+  const appended = errorOf(
+    await handleBridgeCall(t, 'context.append', { path: 'agents/nightly.md', text: 'x' }, deps()),
+  )
+  assert.equal(appended.code, 'forbidden')
+})
+
 // ── data.js, on a real isolate ────────────────────────────────────────────────
 
 test('a data.js handler reaching past the perimeter is refused in the perimeter’s own words', async () => {

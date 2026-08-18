@@ -20,8 +20,9 @@ Everything else about Tools is in [docs/tools.md](tools.md).
 - **A Tool can be the app's data layer.** No new tables: the board is context
   notes, with history, grants, search and the trash for free.
 - **The perimeter is the whole story.** The Tool declares `harness/**` and
-  `agents/*.md` and reaches exactly that — and one thing it declares it still may
-  not have, which is the interesting part (see [Limits](#limits)).
+  `agents/*.md`, plus `agents: ["wayfinder-*"]`, and reaches exactly that — the
+  acceptance test is what forced Visvine to decide what "declaring `agents/*.md`"
+  may actually buy a Tool (see [Limits](#limits)).
 
 ## The note layout
 
@@ -124,23 +125,29 @@ Then start `pnpm dev` and open the **Wayfinder** rail row, or go straight to
 
 ## Limits
 
-**A Tool may not write an agent brief.** `agents/`, `connectors/` and `tools/` are
-sealed against Tool writes whatever a perimeter declares
-(`lib/tools/bridge.ts#SEALED_WRITE_DIRS`) — an agent brief runs unattended on the
-space's model key, so a Tool that could author one could grant itself reach no
-reviewer ever saw. Run therefore:
+**A Tool may create an agent brief, and only create it.** This is the wall the
+acceptance test hit, and the decision it forced. `agents/`, `connectors/` and
+`tools/` are sealed against Tool writes (`lib/tools/bridge.ts#SEALED_WRITE_DIRS`)
+because they hold configuration that runs. But a brief is not the thing that runs:
+`contextService#writeDenial` guards `agents/live/` alone precisely because
+ACTIVATION is what puts an agent on the space's model key, and that stays an
+admin's decision. So the seal was narrowed (`bridge.ts#agentBriefExemption`): a
+Tool may write `agents/<name>.md` when its own perimeter names that agent —
+`agents: ["wayfinder-*"]` here — and may never rewrite one that already exists,
+because the instructions an admin approved are not a Tool's to change. The
+activation note, `context.append`, and any agent the Tool did not name stay
+sealed. Run therefore:
 
 1. reads `agents/wayfinder-<project>-<id>.md` (reads are not sealed);
-2. if it is missing, **attempts the write anyway**, so the refusal a person reads
-   is Visvine's own and not this Tool's guess at it, and shows the exact brief
-   markdown for them to save at that path;
-3. once a brief exists, calls `visvine.agents.run(...)`;
+2. if it is missing, writes it — and if that write is refused anyway (a viewer
+   without edit access in `agents/`), shows the exact brief markdown for a person
+   to save at that path, so what they read is Visvine's own refusal;
+3. calls `visvine.agents.run(...)`;
 4. records whatever happened on the task's own frontmatter, so the board still
    says so after a reload.
 
-`agents/*.md` stays in the declared perimeter because that is the reach this board
-is asking for. The seal outranks it. This is the one place where the acceptance
-test found a wall rather than a path, and it is recorded rather than papered over.
+The board can prepare the work; a person still says yes. That is the shape the
+plan promised for the Run button, and the shape that shipped.
 
 **An agent run is still two human acts away.** Activating an agent
 (`agents/live/<name>.md`) is a space admin's decision, and a run needs the space's
@@ -166,7 +173,7 @@ Against the local Docker DB and a `pnpm dev` server on :3000:
 
 - the seed runs clean and is idempotent — a second run publishes nothing, installs
   nothing and creates no duplicate notes (`0 check(s) failed` both times);
-- the compiled bundle is 44,067 bytes and `check_tool` reports the intended reach
+- the compiled bundle is ~44 KB and `check_tool` reports the intended reach
   and both page claims;
 - **rail row** — `/t/wayfinder` is in the sidebar and renders the project list;
 - **project page** — `/directory/note/harness/visvine-tools/project.md` renders the
@@ -174,8 +181,12 @@ Against the local Docker DB and a `pnpm dev` server on :3000:
 - **task page** — the task note renders the detail view, including the recorded run;
 - **a card moves** — changing a card's wave select re-files the note and the board
   redraws with the card in the new column; **Done** flips the status chip;
-- **Run** — with no brief, the sealed-namespace refusal comes back and is recorded
-  as `run: { status: "blocked" }`; with a brief present (written by a human), the
-  call reaches `agents.run` and is refused with *"The agent must be active…"*.
-  No model key is configured locally, so the run itself was never expected to
-  execute — the dispatch path is what is asserted.
+- **Run** — with a brief present, the call reaches `agents.run` and is refused with
+  *"The agent must be active…"*. No model key is configured locally, so the run
+  itself was never expected to execute — the dispatch path is what is asserted.
+
+The brief-writing half of Run was sealed when that run was made and was narrowed
+afterwards (see [Limits](#limits)); the new rule is covered by
+`tests/tools-bridge.test.ts` and the escape suite, and the seed's step 7 asserts
+the live path — re-run the seed to see it write the brief instead of being
+refused.

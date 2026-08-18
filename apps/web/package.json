@@ -45,7 +45,8 @@
     "verify:alias-identity": "tsx scripts/verify-alias-identity.ts",
     "verify:space-concurrency": "tsx scripts/verify-space-concurrency.ts",
     "verify:tools": "tsx scripts/verify-tools-e2e.ts",
-    "verify:tools:escape": "tsx scripts/verify-tools-escape.ts"
+    "verify:tools:escape": "tsx scripts/verify-tools-escape.ts",
+    "verify:wayfinder-tool": "tsx scripts/verify-wayfinder-tool.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",

@@ -213,13 +213,16 @@ function RunSummary({ run }: { run: RunRow | null }) {
 }
 
 /**
- * What came back from a Run. The interesting case is `refused`: a Tool may not
- * write an agent brief, so the board hands the person the exact note to save.
+ * What came back from a Run. Writing the brief is the Tool's job — `agents/` is
+ * sealed except for creating the brief of an agent the perimeter names — but the
+ * write is still the viewer's own, so it can be refused (no edit access in
+ * `agents/`, or a brief already there). When it is, the board hands the person
+ * the exact note to save rather than guessing at what went wrong.
  */
 function RunOutcome({ result, onDismiss }: { result: RunResult; onDismiss: () => void }) {
   if (result.brief.status === 'refused') {
     return (
-      <Banner tone="warn" title="Visvine will not let a tool write an agent brief" action={<Button size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button>}>
+      <Banner tone="warn" title={`The brief for ${result.brief.name} could not be written`} action={<Button size="sm" variant="ghost" onClick={onDismiss}>Dismiss</Button>}>
         <Stack gap="sm">
           <span>
             {result.brief.reason} Save this note at <code>{result.brief.path}</code> yourself, ask an admin to

@@ -69,9 +69,42 @@ jobs:
           DATABASE_URL="$DB_URL" node scripts/apply-sql-functions.mjs
           # No seeding: production data is managed in the app, never by deploys.
 
-      - name: Build and push image
+      - name: Build image
         run: |
-          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          # TOOLS_ORIGIN is a build arg, not just a runtime env var: next.config.ts's
+          # headers() bakes frame-src into .next/routes-manifest.json at `next build`
+          # time (see Dockerfile), so it has to be here for the image to ship a
+          # frame-src that can load the Tool iframe. Empty (the default, until the
+          # tools.visvine.com domain mapping exists) degrades to the documented
+          # same-origin fallback — see docs/tools.md's Ops runbook.
+          docker build \
+            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
+            -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+
+      - name: Verify TOOLS_ORIGIN survived the build
+        if: ${{ vars.TOOLS_ORIGIN != '' }}
+        env:
+          TOOLS_ORIGIN: ${{ vars.TOOLS_ORIGIN }}
+        run: |
+          cid=$(docker create ${{ env.IMAGE }}:${{ github.sha }})
+          docker cp "$cid:/app/apps/web/.next/routes-manifest.json" ./routes-manifest.json
+          docker rm "$cid" >/dev/null
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('./routes-manifest.json', 'utf8'));
+            const origin = process.env.TOOLS_ORIGIN;
+            const entry = (manifest.headers || []).find((h) => h.source.startsWith('/:path'));
+            const csp = (entry && entry.headers.find((h) => h.key === 'Content-Security-Policy')) || {};
+            const frameSrc = (csp.value || '').split('; ').find((d) => d.startsWith('frame-src')) || '';
+            if (!frameSrc.includes(origin)) {
+              console.error('frame-src is missing TOOLS_ORIGIN ' + origin + ' in the built image: ' + JSON.stringify(frameSrc));
+              process.exit(1);
+            }
+            console.log('frame-src bakes TOOLS_ORIGIN: ' + frameSrc);
+          "
+
+      - name: Push image
+        run: |
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
 
@@ -84,7 +117,7 @@ jobs:
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
             --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest \
-            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
             --min-instances=0 \
             --max-instances=10 \
             --timeout=1800 \

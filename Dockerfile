@@ -15,6 +15,14 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
+# next.config.ts#headers() runs once, HERE, at `next build` time — its output is
+# baked into .next/routes-manifest.json, which the standalone server.js serves
+# from directly and never re-evaluates. TOOLS_ORIGIN therefore has to be present
+# in THIS shell to reach frame-src; a Cloud Run runtime `--set-env-vars` alone
+# (set after this image already exists) cannot change it. See docs/tools.md's
+# Ops runbook for the matching deploy.yml build-arg.
+ARG TOOLS_ORIGIN=""
+ENV TOOLS_ORIGIN=$TOOLS_ORIGIN
 RUN pnpm --filter @visvine/web exec pnpm dlx prisma@7.4.0 generate
 RUN pnpm --filter @visvine/web build
 

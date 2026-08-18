@@ -25,10 +25,10 @@
  * run: `CLOUD_SQL_CONNECTION_NAME= pnpm …`.
  *
  * It does NOT need `pnpm dev` — everything is in-process. What it cannot do is
- * finish an agent run: a Tool may not write an agent brief (`agents/` is sealed
- * against Tool writes) and a run needs an admin-activated agent plus a model
- * key, so the last step asserts that refusal path rather than pretending.
- * See docs/wayfinder-tool.md.
+ * finish an agent run: the board writes the brief (that much a Tool may do, for
+ * an agent its perimeter names), but a run needs an admin-ACTIVATED agent and a
+ * model key, so the last step asserts the dispatch path and stops where a person
+ * has to say yes. See docs/wayfinder-tool.md.
  */
 import '../../../scripts/guard-local-db.mjs';
 import 'dotenv/config';
@@ -512,11 +512,11 @@ async function main(): Promise<void> {
 
   // ── 7. the agent dispatch path, told honestly ──────────────────────────────
   //
-  // `agents/` is SEALED against Tool writes (lib/tools/bridge.ts) — an agent
-  // brief runs unattended on the space's model key, so no Tool may author one
-  // whatever its perimeter declares. runTask attempts it anyway, so what the
-  // board shows is the real refusal; this asserts that, and that the refusal is
-  // recorded on the task note.
+  // `agents/` is sealed against Tool writes with one hole: CREATING the brief of
+  // an agent the Tool's own perimeter names (lib/tools/bridge.ts#agentBriefExemption),
+  // which is what this board declares. So Run writes the brief and then dispatches
+  // — and stops at ACTIVATION, which is a space admin's act. Both halves are
+  // recorded on the task note, which is what this asserts.
   step('7. runTask');
   const runnable = board.tasks.find((task) => task.id === '025');
   if (runnable) {
@@ -525,11 +525,10 @@ async function main(): Promise<void> {
       run: { id: string; status: string; detail: string };
       task: { agent: string };
     }>('runTask', { path: runnable.path });
-    const sealed = outcome.brief.status === 'refused' && /no tool may write there/i.test(outcome.brief.reason);
     check(
-      'Run writes the brief it needs, or says exactly why it may not',
+      'Run writes the brief it needs',
       outcome.brief.name === `wayfinder-${PROJECT}-025` &&
-        (outcome.brief.status === 'written' || outcome.brief.status === 'present' || sealed),
+        (outcome.brief.status === 'written' || outcome.brief.status === 'present'),
       `brief ${outcome.brief.status} at ${outcome.brief.path}${outcome.brief.reason ? ` — ${outcome.brief.reason}` : ''}`,
     );
     check(
@@ -539,10 +538,10 @@ async function main(): Promise<void> {
         outcome.run.detail ? ` — ${outcome.run.detail}` : ''
       }`,
     );
-    if (sealed) {
+    if (outcome.run.status !== 'queued') {
       console.log(
-        '\n  note  A Tool may not author an agent brief. Save the markdown the board shows at\n' +
-          `        ${outcome.brief.path}, have an admin activate it (agents/live/), and Run will\n` +
+        '\n  note  A Tool writes the brief but never activates it: have an admin activate\n' +
+          `        ${outcome.brief.path} (agents/live/) and set a model key, and Run will\n` +
           '        dispatch it. See docs/wayfinder-tool.md.',
       );
     }

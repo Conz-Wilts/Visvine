@@ -175,12 +175,84 @@ function normalizeNotePath(raw: string): string | null {
  *
  * `writeDenial` already keeps non-admins out of `connectors/` and `agents/live/`,
  * so this is the belt to that pair of braces, and it binds admins too.
+ *
+ * ONE exception, in {@link agentBriefExemption}: creating the brief of an agent
+ * the Tool's own perimeter names. See that comment for why the brief is not the
+ * thing that runs.
  */
 const SEALED_WRITE_DIRS = ['tools', 'agents', 'connectors'] as const
 
 function sealedNamespace(path: string): string | null {
   const top = path.split('/')[0]
   return (SEALED_WRITE_DIRS as readonly string[]).includes(top) ? top : null
+}
+
+/**
+ * `agents/<name>.md` → `<name>`. Exactly two segments: `agents/live/<name>.md`
+ * is the ACTIVATION, not a brief, and gets nothing from the exception below.
+ * The caller has already required a `.md` suffix.
+ */
+function agentBriefName(path: string): string | null {
+  const segments = path.split('/')
+  if (segments.length !== 2 || segments[0] !== 'agents') return null
+  const name = segments[1].slice(0, -'.md'.length)
+  return name.length > 0 ? name : null
+}
+
+/**
+ * Does this perimeter name that agent BY NAME? A bare `*` does not: the whole
+ * point of the exemption is that an admin reading the install screen saw which
+ * agent this Tool would author, and `agents: ["*"]` tells them nothing. A prefix
+ * (`wayfinder-*`) does count — it is a namespace the reviewer can read.
+ *
+ * Reuses refuseAgent rather than re-implementing nameMatch, so "which names does
+ * this entry cover" has exactly one answer in the codebase.
+ */
+function declaresAgentByName(perimeter: ResolvedTarget['perimeter'], name: string): boolean {
+  const named = perimeter.agents.filter((entry) => entry.trim() !== '*')
+  if (named.length === 0) return false
+  return refuseAgent({ ...perimeter, agents: named }, name) === null
+}
+
+/**
+ * The brief is the one thing under a sealed namespace a Tool may write, and only
+ * ever by creating it.
+ *
+ * The brief (`agents/<name>.md`) is member-writable on purpose — contextService's
+ * `writeDenial` guards `agents/live/` and nothing else, because ACTIVATION is
+ * what makes a brief run unattended on the space's model key, and that stays a
+ * space admin's decision. So a Tool creating a brief hands an admin something to
+ * read and approve; it does not start anything. `claimManualRun` refuses an
+ * inactive agent, so even `agents.run` on a Tool-authored brief does nothing
+ * until a person has said yes.
+ *
+ * CREATE, never overwrite, and never append. An admin who activated an agent
+ * approved a specific brief; the hook that auto-deactivates on a member's edit
+ * (lib/agents/hooks.ts, rule 2) deliberately exempts admins, so a Tool allowed to
+ * rewrite briefs could swap an approved agent's instructions while an admin
+ * happened to be viewing it and reach connectors it never declared. A Tool has no
+ * delete and no move, so "the path is free" is a property it cannot manufacture.
+ *
+ * Returns null when the write is exempt, else the reason it is not.
+ */
+function agentBriefExemption(
+  t: ResolvedTarget,
+  path: string,
+  mode: 'write' | 'append',
+): string | null {
+  if (mode === 'append') {
+    return 'a tool may create the brief of an agent it declared, never append to one'
+  }
+  const name = agentBriefName(path)
+  if (!name) {
+    return 'only a brief at agents/<name>.md is exempt — agents/live/ is the activation, which only a space admin writes'
+  }
+  if (!declaresAgentByName(t.perimeter, name)) {
+    return t.perimeter.agents.length > 0
+      ? `this tool's perimeter does not name the agent "${name}" (it declares ${t.perimeter.agents.join(', ')}, and a bare "*" names nobody)`
+      : `this tool declares no agents, so it may not author "${name}"`
+  }
+  return null
 }
 
 /** How a Tool is named in an audit line — the store has no `tool` origin to carry it. */
@@ -274,11 +346,13 @@ async function contextSearch(t: ResolvedTarget, params: unknown, deps: BridgeDep
 }
 
 /** The shared front half of write and append: same path rules, same caps. */
-function checkWrite(
+async function checkWrite(
   t: ResolvedTarget,
   rawPath: string,
   body: string,
-): { ok: true; path: string } | { ok: false; response: BridgeResponse } {
+  mode: 'write' | 'append',
+  deps: BridgeDeps,
+): Promise<{ ok: true; path: string } | { ok: false; response: BridgeResponse }> {
   const path = normalizeNotePath(rawPath)
   if (!path) return { ok: false, response: err('invalid', `"${rawPath}" is not a note path.`) }
   if (!path.toLowerCase().endsWith('.md')) {
@@ -290,16 +364,6 @@ function checkWrite(
   const refusal = refuseWrite(t.perimeter, path)
   if (refusal) return { ok: false, response: err('perimeter', refusal) }
 
-  const sealed = sealedNamespace(path)
-  if (sealed) {
-    return {
-      ok: false,
-      response: err(
-        'forbidden',
-        `${sealed}/ holds configuration that runs — no tool may write there, whatever its perimeter declares.`,
-      ),
-    }
-  }
   const bytes = Buffer.byteLength(body, 'utf8')
   if (bytes > BRIDGE_LIMITS.maxWriteBytes) {
     return {
@@ -308,6 +372,31 @@ function checkWrite(
         'too_large',
         `That is ${bytes} bytes, over the ${BRIDGE_LIMITS.maxWriteBytes} byte write limit.`,
       ),
+    }
+  }
+
+  const sealed = sealedNamespace(path)
+  if (sealed) {
+    const notExempt = sealed === 'agents' ? agentBriefExemption(t, path, mode) : 'no tool may write there, whatever its perimeter declares'
+    if (notExempt) {
+      return {
+        ok: false,
+        response: err('forbidden', `${sealed}/ holds configuration that runs — ${notExempt}.`),
+      }
+    }
+    // Create-only, checked last because it costs a read: an existing brief is an
+    // admin's approved instructions and a Tool never edits one. readVisible
+    // answers null for absent AND for invisible, and an invisible note is not
+    // writable either — writeGated refuses it a moment later on the same grants.
+    if ((await deps.readVisible(t.principal, t.context, path)) !== null) {
+      return {
+        ok: false,
+        response: err(
+          'forbidden',
+          `${path} already exists — a tool may create an agent brief but never change one. ` +
+            'Editing the instructions an admin approved is a person’s act.',
+        ),
+      }
     }
   }
   return { ok: true, path }
@@ -328,7 +417,7 @@ const TOOL_WRITE_ORIGIN = 'edit'
 async function contextWrite(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.write, params)
   if (!parsed.ok) return parsed.response
-  const checked = checkWrite(t, parsed.value.path, parsed.value.content)
+  const checked = await checkWrite(t, parsed.value.path, parsed.value.content, 'write', deps)
   if (!checked.ok) return checked.response
 
   const result = await deps.writeGated(
@@ -352,7 +441,7 @@ async function contextWrite(t: ResolvedTarget, params: unknown, deps: BridgeDeps
 async function contextAppend(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.append, params)
   if (!parsed.ok) return parsed.response
-  const checked = checkWrite(t, parsed.value.path, parsed.value.text)
+  const checked = await checkWrite(t, parsed.value.path, parsed.value.text, 'append', deps)
   if (!checked.ok) return checked.response
 
   const result = await deps.appendLogGated(

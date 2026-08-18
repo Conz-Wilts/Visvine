@@ -100,11 +100,33 @@ are the five gates every surface (bridge, isolate, review UI, install checklist)
 calls — never a second copy of the rule, so a denial always quotes the same
 declaration a reviewer read.
 
-Three namespaces are **sealed against Tool writes categorically**, whatever a
-perimeter declares: `tools/`, `agents/`, `connectors/` hold configuration that
-*runs*, and a Tool that could write them could grant itself unreviewed reach —
-see `lib/tools/bridge.ts#SEALED_WRITE_DIRS`. This binds admins too; it is not
-merely `writeDenial`'s member gate.
+Three namespaces are **sealed against Tool writes**, whatever a perimeter
+declares: `tools/`, `agents/`, `connectors/` hold configuration that *runs*, and
+a Tool that could write them could grant itself unreviewed reach — see
+`lib/tools/bridge.ts#SEALED_WRITE_DIRS`. This binds admins too; it is not merely
+`writeDenial`'s member gate.
+
+**The one exception: creating an agent brief the Tool named.** A Tool may
+`context.write` a note at `agents/<name>.md` when its own `perimeter.agents`
+names that agent — a bare `*` does not count, a prefix like `wayfinder-*` does.
+Everything else in the three namespaces stays sealed, including `agents/live/**`
+(the activation), `context.append` anywhere under `agents/`, and any path a Tool
+did not declare an agent for.
+
+The brief is not the thing that runs. `contextService#writeDenial` guards
+`agents/live/` and nothing else, precisely because ACTIVATION is what puts an
+agent on the space's model key and that stays a space admin's decision; a
+Tool-written brief is something an admin can read and approve, and `claimManualRun`
+refuses an inactive agent, so `agents.run` on it does nothing until they do.
+
+**Create, never change.** An existing brief is refused: the admin who activated an
+agent approved a specific brief, and `lib/agents/hooks.ts` (rule 2) deliberately
+exempts admins from the auto-deactivate that catches a member's edit — so a Tool
+allowed to rewrite briefs could swap an approved agent's instructions while an
+admin was viewing it, and reach connectors it never declared. A Tool has no delete
+and no move, so it cannot free the path either. See
+`lib/tools/bridge.ts#agentBriefExemption`; the rule is exercised by
+`tests/tools-bridge.test.ts` and the escape suite.
 
 ## Authoring loop (over MCP)
 
@@ -266,7 +288,7 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 | `context.list` | List note metadata under an optional glob, perimeter- and grant-filtered. |
 | `context.read` | One note's body + parsed frontmatter. |
 | `context.search` | Ranked search over what the viewer can read, perimeter-filtered after ranking. |
-| `context.write` / `context.append` | Write/append a `.md` note — refused outright for `tools/`, `agents/`, `connectors/`. |
+| `context.write` / `context.append` | Write/append a `.md` note — refused for `tools/`, `agents/`, `connectors/`, except that `write` may CREATE the brief of an agent the perimeter names (see [Frontmatter reference](#frontmatter-reference)). |
 | `connectors.call` | Run a declared connector, exactly the path `run_connector` uses. |
 | `agents.run` | Trigger a declared, active agent (author-or-admin, dispatched not awaited). |
 | `data.call` | Call a `data.js` handler in the isolate. |
@@ -299,6 +321,25 @@ of 4 — a chatty Tool can't starve connectors and agents of isolate slots. And
 `TOOL_BUNDLE_LIMITS` (`lib/tools/compile.ts`), the compile-time ceiling:
 512,000 bytes of source, 1,000,000 bytes of compiled bundle (JSX expands 2-5×),
 10s compile timeout.
+
+`state.set` has two caps of its own (`lib/tools/state.ts`): **16 KB** per
+serialized value (`STATE_MAX_BYTES`) and **100 keys** per install
+(`STATE_MAX_KEYS`). Past the key cap an *install* refuses the new key —
+evicting a row an installed Tool relies on would be silent data loss, where a
+refusal reaches the author through the bridge — while a *preview*, which has no
+author watching, drops its least-recently-written key instead. The smallness is
+the point: state is for UI preferences, not for space data, which belongs in
+context notes where the space can search, share and audit it.
+
+### Audit trail
+
+Every Tool act a person can be held to writes an audit line (`action: 'tool'`,
+`logAudit`): publish, review verdict, install, upgrade, uninstall
+(`registry.ts`, `installs.ts`) and every bridge `context.write`/`context.append`
+(`bridge.ts`), the last detailed `tool:<name> write` — or `tool:<name>
+(preview) write` — because the note store has no `tool` origin of its own to
+carry it. Note writes are additionally stamped with the **viewer's** identity,
+not the author's, since the viewer is who the write actually ran as.
 
 ### `data.js` in the isolate
 
@@ -353,6 +394,14 @@ registry order *first*, with the new Tool appended after it. `tools` itself
 nav-hidden — it has no rail row of its own, reached only from the marketplace
 icon in the navbar.
 
+Turning `tools` off for a space is a **real** switch, not a hidden nav row:
+every door re-asks it server-side. `resolveBridgeTarget` (`lib/tools/target.ts`)
+checks it before any perimeter or config work, which covers both the bridge and
+the frame-token route for installs *and* previews; the MCP authoring and install
+handlers check it (`lib/mcp/appTools.ts`); and the rail rows and `/t/<slug>`
+drop out with it, so a space that switches Tools off is never left with a row
+that renders a failing frame.
+
 ### Type pages
 
 The profiles / space pages / event pages analogy: a Tool can own the page for a
@@ -402,7 +451,27 @@ isolation story locally, no DNS required.
 Until the domain mapping exists, `TOOLS_ORIGIN` should stay **unset** in
 production: the app falls back to the same-origin sandbox automatically (still
 `sandbox="allow-scripts"` + the full CSP, just weaker host isolation), never a
-hard failure. To turn on the separate origin:
+hard failure.
+
+**`TOOLS_ORIGIN` has to be a BUILD-time value, not just a runtime one.**
+`next.config.ts#headers()` runs once, at `next build` time, and its output is
+baked into `.next/routes-manifest.json` — the standalone production server
+(`server.js`) serves headers straight from that file and never re-evaluates
+`next.config.ts` per request (unlike `next dev`, which does, on every
+request). So setting `TOOLS_ORIGIN` only as a Cloud Run *runtime* env var
+(`--set-env-vars`, after the image already exists) has no effect on
+`frame-src` at all — the CSP baked into the image at build time is whatever
+was, or wasn't, in the shell that ran `next build`. Confirmed locally by
+building this app twice, with and without `TOOLS_ORIGIN`, and diffing
+`routes-manifest.json`'s `frame-src` between the two.
+
+`deploy.yml` and the root `Dockerfile` already carry the plumbing for this —
+`docker build --build-arg TOOLS_ORIGIN=...` sets it as a build-time `ENV`
+before `next build` runs, and the same value also rides `--set-env-vars` on
+the Cloud Run deploy step (the proxy's host split and `frameUrl()` read it at
+*runtime* too, so both matter). Both draw from one place: the GitHub Actions
+repository variable `TOOLS_ORIGIN`. To turn on the separate origin, it is a
+**single checklist**, not two unrelated changes:
 
 ```sh
 # 1. DNS: CNAME tools.visvine.com to Cloud Run's mapping target.
@@ -417,15 +486,16 @@ gcloud run domain-mappings create \
   --region australia-southeast1 \
   --project visvine-platform
 
-# 3. Add TOOLS_ORIGIN to the deploy env. Edit .github/workflows/deploy.yml's
-#    Cloud Run deploy step and append to the existing --set-env-vars value
-#    (do not touch --set-secrets — TOOLS_ORIGIN is not a secret):
-#
-#      --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=...,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=https://tools.visvine.com
-#
-#    This is a one-line, comma-separated addition to the existing value on the
-#    `--set-env-vars=` flag in the "Deploy to Cloud Run" step — not a new step,
-#    not a secret.
+# 3. Set the TOOLS_ORIGIN repository variable (Settings → Secrets and
+#    variables → Actions → Variables → New repository variable). It is not a
+#    secret — it's a public hostname — so it's a variable, not a secret:
+gh variable set TOOLS_ORIGIN --body "https://tools.visvine.com"
+#    No YAML edit needed: the next push to main builds the image with
+#    --build-arg TOOLS_ORIGIN=<that value>, deploys with the matching
+#    --set-env-vars, and a "Verify TOOLS_ORIGIN survived the build" step fails
+#    the deploy outright if the built image's frame-src doesn't name it —
+#    the CI equivalent of the diff described above, run on every deploy
+#    instead of by hand.
 ```
 
 **Verify** (once the mapping has propagated — can take a few minutes):
@@ -436,7 +506,13 @@ curl -sI https://tools.visvine.com/api/tools/runtime/vendor/react.js  # expect 2
 ```
 
 The first curl is the important one: it proves `toolsHostDecision` is really
-splitting the host, not just answering the app on a second name.
+splitting the host, not just answering the app on a second name. To check
+`frame-src` itself without waiting on DNS, inspect the response headers on any
+page: `curl -sI https://visvine.com/ | grep -i content-security-policy` must
+show `frame-src 'self' https://tools.visvine.com`, not `frame-src 'self'`
+alone — the latter means the image was built without `TOOLS_ORIGIN` (the CI
+gate above exists so that should never reach prod, but this is the direct
+check if it ever does).
 
 ### Local dev
 
@@ -463,14 +539,35 @@ pnpm --filter @visvine/web exec knip
 pnpm db:migrate                              # applies the app_tool_* migration locally
 ```
 
-Live, scripted checks (style of `scripts/verify-*.ts` — resolve a real
-principal, drive the services directly, no browser):
+Live, scripted checks, in the style of the connector and agent verifications —
+they resolve a real principal and drive the services directly. **All three need
+a dev server on `:3000`** (`pnpm dev`), because they also exercise the runtime
+routes over real HTTP; the last two additionally drive Chromium through
+Playwright. Each is a `pnpm --filter @visvine/web` script:
 
 ```sh
-pnpm --filter @visvine/web exec tsx scripts/verify-tools-e2e.ts       # author over MCP → install → render → write
-pnpm --filter @visvine/web exec tsx scripts/verify-tools-escape.ts    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space
-pnpm --filter @visvine/web exec tsx scripts/verify-wayfinder-tool.ts  # the acceptance Tool
+pnpm --filter @visvine/web verify:tools           # author over MCP → publish → review → install → frame + bridge write
+pnpm --filter @visvine/web verify:tools:escape    # adversarial: undeclared reads, cookie theft, content-area escape, cross-space
+pnpm --filter @visvine/web verify:wayfinder-tool  # the acceptance Tool: board renders, writes, agent dispatch
 ```
+
+`verify:tools:escape`'s first step is a standalone guard against the
+build-vs-runtime `TOOLS_ORIGIN` trap described in "Production setup": if
+`apps/web/.next/routes-manifest.json` exists (this checkout ran `pnpm build`,
+not just `pnpm dev`) and `TOOLS_ORIGIN` is set in the shell, it fails unless
+the manifest's baked `frame-src` names that origin. No manifest on disk — the
+common case, a plain `pnpm dev` checkout — is a SKIP, not a failure.
+
+`verify:tools` and `verify:tools:escape` remove every row and note they create,
+leaving the shared dev DB as they found it. `verify:wayfinder-tool` instead
+leaves its seed in place and is idempotent — re-running it is the supported way
+to get back to a known board.
+
+> **Local gotcha.** If this box's `apps/web/.env` still carries a
+> `CLOUD_SQL_CONNECTION_NAME` from a `dev:cloud` session,
+> `scripts/guard-local-db.mjs` refuses on sight even when `DATABASE_URL` points
+> at Docker. Prefix the run with `CLOUD_SQL_CONNECTION_NAME= ` to clear it for
+> that command rather than editing `.env`.
 
 ## Code map
 
