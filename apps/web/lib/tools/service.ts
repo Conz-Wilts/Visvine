@@ -27,19 +27,16 @@
  * once the node behind it exists.
  */
 import prisma from '@/lib/prisma'
-import { listAgents } from '@/lib/agents/service'
-import { listConnectors } from '@/lib/connectors/service'
 import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
-import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
-import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import { computeRequirements, type ToolRequirements } from './requirements'
+import { spaceFacts } from './installs'
 import type { ToolPerimeter } from './perimeter'
-import type { ToolVersionSummary } from './registry'
+import { latestPublications, toolKey, type ToolPublicationSummary } from './registry'
 import {
   getBuild,
   listBuilds,
@@ -85,6 +82,11 @@ export interface AuthoredToolSummary {
   createdBy: string | null
   /** Null only for a Tool that has never compiled (no source has been written). */
   build: BuildSummary | null
+  /**
+   * The newest published version of this Tool, whatever its status — pending,
+   * rejected and withdrawn included. Null when it has never been published.
+   */
+  publication: ToolPublicationSummary | null
 }
 
 export interface AuthoredToolDetail extends AuthoredToolSummary {
@@ -96,25 +98,6 @@ export interface AuthoredToolDetail extends AuthoredToolSummary {
    * that is a state the author has to see to fix.
    */
   sources: Record<ToolFileName, string | null>
-}
-
-/**
- * What `GET …/tools/authoring/<name>` answers with: the working copy, what this
- * space fails to satisfy of its declared reach, and its publication trail.
- *
- * TODO: this belongs in lib/tools/api.ts beside every other Tools envelope —
- * it is here only because that file was held by another wave-3 task when the
- * author page landed. Move it, keeping the name, and re-point both ends.
- */
-export interface AuthoredToolView {
-  tool: AuthoredToolDetail
-  /**
-   * Null when the config doesn't parse — nothing was declared, which is not the
-   * same as nothing missing.
-   */
-  requirements: ToolRequirements | null
-  /** Every version published from this working copy, newest first. */
-  versions: ToolVersionSummary[]
 }
 
 type ToolServiceError = { ok: false; status: number; error: string }
@@ -166,6 +149,7 @@ function summarise(
   indexContent: string,
   createdBy: string | null,
   build: BuildSummary | null,
+  publication: ToolPublicationSummary | null,
 ): AuthoredToolSummary {
   const fm = parseFrontmatter(indexContent)
   const parsed = parseToolConfig(fm, name)
@@ -181,6 +165,7 @@ function summarise(
     invalid: parsed.ok ? null : parsed.error,
     createdBy,
     build,
+    publication,
   }
 }
 
@@ -204,19 +189,29 @@ export async function listAuthoredTools(
   if (!isShared(context)) return []
   const { raws } = await visibleVault(p, context)
   const indexes = raws.filter((raw) => toolFileKindOfPath(raw.path) === 'index')
-  const [authors, builds] = await Promise.all([
+  const names = indexes.map((raw) => toolNameOfPath(raw.path)).filter((name): name is string => !!name)
+  const [authors, builds, publications] = await Promise.all([
     authorsOf(
       context.spaceId,
       indexes.map((raw) => raw.path),
     ),
     listBuilds(context.spaceId),
+    latestPublications(names.map((name) => toolKey(context.spaceId, name))),
   ])
   const out: AuthoredToolSummary[] = []
   for (const raw of indexes) {
     const name = toolNameOfPath(raw.path)
     if (!name) continue
     const build = builds.get(name)
-    out.push(summarise(name, raw.content, authors.get(raw.path) ?? null, build ? toBuildSummary(build) : null))
+    out.push(
+      summarise(
+        name,
+        raw.content,
+        authors.get(raw.path) ?? null,
+        build ? toBuildSummary(build) : null,
+        publications.get(toolKey(context.spaceId, name)) ?? null,
+      ),
+    )
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -231,17 +226,20 @@ export async function describeAuthoredTool(
   const indexContent = await readVisible(p, context, toolIndexPath(name))
   if (indexContent === null) return null
 
-  const [uiNote, dataNote, authors, build] = await Promise.all([
+  const key = toolKey(context.spaceId, name)
+  const [uiNote, dataNote, authors, build, publications] = await Promise.all([
     readVisible(p, context, toolUiPath(name)),
     readVisible(p, context, toolDataPath(name)),
     authorsOf(context.spaceId, [toolIndexPath(name)]),
     getBuild(context.spaceId, name),
+    latestPublications([key]),
   ])
   const summary = summarise(
     name,
     indexContent,
     authors.get(toolIndexPath(name)) ?? null,
     build ? toBuildSummary(build) : null,
+    publications.get(key) ?? null,
   )
   const parsed = parseToolConfig(parseFrontmatter(indexContent), name)
   return {
@@ -262,39 +260,18 @@ export async function describeAuthoredTool(
  * Read under the AUTHOR's own principal, like check_tool's lint and unlike an
  * install's (which reads under the acting admin's): an author who cannot see a
  * connector could not have written a Tool against it either, so telling them it
- * is there would be telling them about something they cannot use.
- *
- * Node types fold the space's stored vocabulary together with the built-in
- * defaults, because `findNodeTypeConfig` resolves a built-in whether or not the
- * column lists it — mirroring lib/tools/installs.ts#spaceFacts, so an author's
- * checklist and an admin's install checklist can't disagree.
- *
- * TODO: lib/mcp/appTools.ts#liveSpaceFacts walks the same three name spaces for
- * check_tool and should be folded onto this once wave 3's authoring tasks are
- * out of that file — three readings of "what does this space have" is two too
- * many, and they must never drift.
+ * is there would be telling them about something they cannot use. `spaceFacts`
+ * (lib/tools/installs.ts) is the one reading of "what does this space have" —
+ * install/upgrade/recheck and check_tool read it under their own principals, so
+ * an author's checklist and an admin's install checklist can't disagree.
  */
 export async function toolRequirementsInSpace(
   p: ContextPrincipal,
   context: Context,
   perimeter: ToolPerimeter,
 ): Promise<ToolRequirements> {
-  const [connectors, agents, config] = await Promise.all([
-    listConnectors(p, context),
-    listAgents(p, context),
-    readSpaceConfig(context.spaceId),
-  ])
-  const types = new Set<string>()
-  for (const type of [...((config?.nodeTypes ?? []) as NodeTypeConfig[]), ...DEFAULT_NODE_TYPES]) {
-    if (typeof type?.name === 'string' && type.name.trim()) types.add(type.name.trim().toLowerCase())
-  }
-  return computeRequirements(perimeter, {
-    // Model connectors name an LLM provider and are never runnable, so a Tool
-    // declaring one has nothing it could call (lib/connectors/service.ts).
-    connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
-    types: [...types],
-    agents: agents.agents.map((a) => a.name),
-  })
+  const facts = await spaceFacts(p, context)
+  return computeRequirements(perimeter, facts.available)
 }
 
 // ── creating ──────────────────────────────────────────────────────────────────

@@ -20,6 +20,11 @@ const eslintConfig = defineConfig([
     // build output that happens to live under public/ so `output: standalone`
     // carries it.
     "public/tool-runtime/**",
+    // Tool source files the verify scripts feed to the server-side Tool
+    // compiler (lib/tools/compile.ts). They are data, not app code — they
+    // import `@visvine/tool-kit`, assign to a `handlers` global the isolate
+    // provides, and one is a deliberate syntax error.
+    "scripts/fixtures/**",
   ]),
   {
     rules: {

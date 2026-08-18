@@ -9,7 +9,7 @@
 // read-only, because a Person type you can't see the shape of isn't much of a
 // description; it just doesn't edit them, so no name is ever edited twice.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { DEFAULT_NODE_TYPES, aliasesForType, mergeNodeTypeList } from '@/lib/types';
 import type { SpaceAlias, Space, NodeTypeConfig } from '@/lib/types';
@@ -17,6 +17,10 @@ import { isNodeTypeEnabled, nodeTypeToolKey } from '@/lib/featureAccess';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { FEATURES } from '@/features/shared/lib/features';
 import { Alert, Chip, ColorPicker, chipClass } from '@/components/ui';
+import Select from '@/components/ui/Select';
+import { patchInstall } from '@/features/tools/lib/client';
+import { pageClaimantsFor } from '@/lib/tools/typePages';
+import type { InstalledToolDto } from '@/lib/tools/installs';
 import { useConsoleSave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { usePeopleSection } from '@/features/admin/components/people/PeopleDataContext';
 
@@ -161,14 +165,67 @@ function PersonAliases() {
   );
 }
 
+// ─── Who draws a type's page ──────────────────────────────────────────────────
+
+/**
+ * The Tool that owns this type's page, on the row for the type itself.
+ *
+ * The profiles/spaces/events analogy, from the admin's side: a member-invented
+ * type gets a real page the moment an installed Tool claims it, and this is the
+ * one place that says which Tool that is. Built-in types never appear here —
+ * Visvine owns those pages (lib/tools/typePages.ts).
+ *
+ * More than one claimant is impossible by construction (the install path refuses
+ * a second page claim) and so is exactly the case worth being able to settle
+ * from a screen: the picker hands the page to one Tool and releases it from the
+ * rest, rather than leaving the answer to whichever install renders first.
+ */
+function TypePageOwner({ typeName, claimants, onChoose, saving }: {
+  typeName: string;
+  claimants: InstalledToolDto[];
+  onChoose: (installId: string) => void;
+  saving: boolean;
+}) {
+  const noun = `${typeName.toLowerCase()} notes`;
+
+  if (claimants.length > 1) {
+    return (
+      <Select
+        className="w-44 shrink-0"
+        value={claimants[0].id}
+        disabled={saving}
+        title={`${claimants.length} tools claim this page — pick the one that draws it`}
+        aria-label={`Which tool draws the page for ${noun}`}
+        onChange={e => onChoose(e.target.value)}
+      >
+        {claimants.map(install => (
+          <option key={install.id} value={install.id}>{install.title}</option>
+        ))}
+      </Select>
+    );
+  }
+
+  const owner = claimants[0] ?? null;
+  return (
+    <span
+      className="w-24 shrink-0 truncate text-right text-xs text-text-muted"
+      title={owner ? `${owner.title} draws the page for ${noun}` : `No installed tool draws a page for ${noun}`}
+    >
+      {owner ? owner.title : '—'}
+    </span>
+  );
+}
+
 // ─── Type Section ─────────────────────────────────────────────────────────────
 
-function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
+function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAliases, isPerson, noteScoped, previewChips, onAddAlias, onRemoveAlias, onUpdateAliasColor, onUpdateTypeColor, saving }: {
   typeName: string;
   typeColor: string;
   /** The tool this type came in with — named on the row so switching a tool off
       never silently takes a type with it. Absent on member-made types. */
   toolLabel?: string;
+  /** Which installed Tool draws this type's page. Member-made types only. */
+  pageOwner?: ReactNode;
   aliases: SpaceAlias[];
   allAliases: SpaceAlias[];
   /** Person's aliases are the permission model, so it renders its own list. */
@@ -274,6 +331,11 @@ function TypeSection({ typeName, typeColor, toolLabel, aliases, allAliases, isPe
             {toolLabel}
           </span>
         )}
+
+        {/* Same column, same reason, for a member-made type: what draws its
+            page. A tool type's page is Visvine's own, so the two never both
+            appear on one row. */}
+        {pageOwner}
       </div>
 
       {/* Expanded panel */}
@@ -404,6 +466,27 @@ export default function TypesPanel() {
   const handleUpdateTypeColor = (type: NodeTypeConfig, color: string) =>
     saveTypes(mergeNodeTypeList(types, [{ ...type, color }]));
 
+  // Hand a type's page to one install and take it off the others. Release
+  // before claim, in that order: setTypeClaims refuses a `page` on a type
+  // another install still holds, so a claim sent first would 409 and leave the
+  // disagreement exactly as it was.
+  const handleChoosePageOwner = (
+    typeName: string,
+    claimants: InstalledToolDto[],
+    installId: string,
+  ) => {
+    if (!currentSpace) return;
+    const spaceId = currentSpace.id;
+    const type = typeName.trim().toLowerCase();
+    return save(async () => {
+      for (const other of claimants) {
+        if (other.id === installId) continue;
+        await patchInstall(spaceId, other.id, { typeClaims: { [type]: 'tab' } });
+      }
+      await patchInstall(spaceId, installId, { typeClaims: { [type]: 'page' } });
+    });
+  };
+
   if (!currentSpace) {
     return <div className="p-6 text-sm text-text-muted">Select a space to manage types.</div>;
   }
@@ -436,13 +519,30 @@ export default function TypesPanel() {
   const renderType = (liveType: NodeTypeConfig, toolLabel?: string) => {
     const isPerson = liveType.name.toLowerCase() === PERMISSION_TYPE;
     const typeAliases = aliasesForType(aliases, liveType.name);
+    // Only a member-made type can have a Tool-owned page; pageClaimantsFor
+    // answers empty for everything else, so the column stays off those rows
+    // rather than promising a '—' that could never become a name.
+    const noteScoped = liveType.scope === 'note';
+    const claimants = noteScoped
+      ? pageClaimantsFor(currentSpace.installedTools, liveType.name)
+      : [];
     return (
       <TypeSection
         key={liveType.name}
         typeName={liveType.name}
         typeColor={liveType.color}
         toolLabel={toolLabel}
-        noteScoped={liveType.scope === 'note'}
+        pageOwner={
+          noteScoped ? (
+            <TypePageOwner
+              typeName={liveType.name}
+              claimants={claimants}
+              saving={saving}
+              onChoose={installId => handleChoosePageOwner(liveType.name, claimants, installId)}
+            />
+          ) : undefined
+        }
+        noteScoped={noteScoped}
         aliases={typeAliases}
         allAliases={aliases}
         isPerson={isPerson}

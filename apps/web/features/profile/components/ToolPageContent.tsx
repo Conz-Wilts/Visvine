@@ -30,21 +30,20 @@ import Link from 'next/link';
 import { AlertTriangle, Check, Copy, ExternalLink, Upload } from 'lucide-react';
 import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { fetchJson, FetchJsonError } from '@/lib/fetchJson';
+import { FetchJsonError } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
 import { entityContextHref } from '@/lib/notes/entities';
 import { TOOL_SOURCE_FILES } from '@/lib/tools/config';
-// Type-only, all three: lib/tools/builds.ts pulls in esbuild and
-// lib/tools/service.ts pulls in Prisma, so a value import from either would
-// drag the compiler into the browser bundle. `requirements.ts` is pure, and is
-// imported for real.
+// Type-only, both: lib/tools/builds.ts pulls in esbuild, so a value import
+// would drag the compiler into the browser bundle. `requirements.ts` is pure,
+// and is imported for real.
 import type { BuildSummary } from '@/lib/tools/builds';
-import type { AuthoredToolView } from '@/lib/tools/service';
+import type { AuthoredToolView } from '@/lib/tools/api';
 import type { ToolVersionSummary } from '@/lib/tools/registry';
 import { describeRequirements } from '@/lib/tools/requirements';
 import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
-import { publishTool } from '@/features/tools/lib/client';
+import { fetchAuthoredTool, publishTool } from '@/features/tools/lib/client';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
 
@@ -325,13 +324,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const reload = useCallback(async () => {
     if (!spaceId) return;
     try {
-      // Not features/tools/lib/client.ts#fetchAuthoredTool: that helper is typed
-      // to the narrower `AuthoredToolResponse`, and this page needs the space's
-      // requirements check and the publication trail the same GET carries. The
-      // two should converge on AuthoredToolView — see the TODO on that type.
-      const next = await fetchJson<AuthoredToolView>(
-        `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
-      );
+      const next = await fetchAuthoredTool(spaceId, name);
       setView(next);
       setError(null);
     } catch (e) {

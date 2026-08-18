@@ -4,10 +4,12 @@ import { parseBody } from '@/lib/api/route'
 import { describeAuthoredTool, toolRequirementsInSpace } from '@/lib/tools/service'
 import { publishTool, toolKey, versionHistory } from '@/lib/tools/registry'
 import { bad, requireToolsAccess } from '@/lib/tools/route'
-import type { AuthoredToolDetail, PublishBlockedResponse, PublishResponse } from '@/lib/tools/api'
-// The GET envelope lives in lib/tools/service.ts rather than lib/tools/api.ts —
-// see the TODO on AuthoredToolView.
-import type { AuthoredToolView } from '@/lib/tools/service'
+import type {
+  AuthoredToolDetail,
+  AuthoredToolView,
+  PublishBlockedResponse,
+  PublishResponse,
+} from '@/lib/tools/api'
 
 /**
  * One working copy: config, the author's three files (sources unwrapped out of

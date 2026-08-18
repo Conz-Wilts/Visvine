@@ -34,21 +34,12 @@ import { resolveTarget, type Target } from '@/lib/mcp/context'
 import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
-import { listConnectors } from '@/lib/connectors/service'
-import { listAgents } from '@/lib/agents/service'
-import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
-import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
 import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
 import type { ToolConfig } from '@/lib/tools/config'
 import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
 import { describePerimeter, perimeterIsEmpty } from '@/lib/tools/perimeter'
 import { BRIDGE_METHODS } from '@/lib/tools/protocol'
-import {
-  computeRequirements,
-  describeRequirements,
-  isDegraded,
-  type SpaceAvailability,
-} from '@/lib/tools/requirements'
+import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
 import {
   createTool as createToolService,
@@ -70,19 +61,14 @@ import {
 import {
   installVersion as installVersionService,
   listInstalls as listInstallsService,
+  spaceFacts as spaceFactsService,
   type InstallResult,
   type InstallSummary,
+  type SpaceFacts,
 } from '@/lib/tools/installs'
 
 /** The three filenames an author addresses, in the order they matter. */
 const TOOL_FILES = ['index.md', 'ui.tsx', 'data.js'] as const satisfies readonly ToolFileName[]
-
-/** What the space has, plus which of its types a Tool may own the page for. */
-interface ToolSpaceFacts {
-  available: SpaceAvailability
-  /** Member-invented types (`scope: 'note'`), lower-cased — the pageable ones. */
-  customTypes: string[]
-}
 
 /**
  * Every service call the handlers make, in one seam. Faked wholesale in tests;
@@ -132,42 +118,15 @@ export interface AppToolDeps {
   listInstalls(spaceId: string): Promise<InstallSummary[]>
   /** The newest APPROVED version of a marketplace key, for `install_tool { key }`. */
   latestApprovedVersion(key: string): Promise<ToolVersionSummary | null>
-  spaceFacts(p: ContextPrincipal, context: Context): Promise<ToolSpaceFacts>
+  /**
+   * The three name spaces a perimeter is checked against, plus which of the
+   * types a Tool may own the page for — lib/tools/installs.ts#spaceFacts, read
+   * under the CALLER's own principal rather than an admin's: check_tool is a
+   * lint for the author, and an author who cannot see a connector cannot write
+   * a Tool against it either.
+   */
+  spaceFacts(p: ContextPrincipal, context: Context): Promise<SpaceFacts>
   appOrigin(): string
-}
-
-/**
- * The three name spaces a perimeter is checked against, read under the CALLER's
- * principal rather than an admin's: check_tool is a lint for the author, and an
- * author who cannot see a connector cannot write a Tool against it either.
- *
- * Node types fold the space's stored vocabulary together with the built-in
- * defaults, because `findNodeTypeConfig` resolves a built-in whether or not the
- * column lists it — mirroring lib/tools/installs.ts#spaceFacts, so an author's
- * checklist and an admin's install checklist can't disagree.
- */
-async function liveSpaceFacts(p: ContextPrincipal, context: Context): Promise<ToolSpaceFacts> {
-  const [connectors, agents, config] = await Promise.all([
-    listConnectors(p, context),
-    listAgents(p, context),
-    readSpaceConfig(context.spaceId),
-  ])
-  const stored = (config?.nodeTypes ?? []) as NodeTypeConfig[]
-  const types = new Set<string>()
-  for (const type of [...stored, ...DEFAULT_NODE_TYPES]) {
-    if (typeof type?.name === 'string' && type.name.trim()) types.add(type.name.trim().toLowerCase())
-  }
-  return {
-    available: {
-      // Model connectors name an LLM provider and are never runnable.
-      connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
-      types: [...types],
-      agents: agents.agents.map((a) => a.name),
-    },
-    customTypes: stored
-      .filter((type) => type?.scope === 'note' && typeof type.name === 'string')
-      .map((type) => type.name.trim().toLowerCase()),
-  }
 }
 
 const liveDeps: AppToolDeps = {
@@ -187,7 +146,7 @@ const liveDeps: AppToolDeps = {
     const history = await versionHistoryService(key)
     return history.find((v) => v.status === 'approved') ?? null
   },
-  spaceFacts: liveSpaceFacts,
+  spaceFacts: spaceFactsService,
   appOrigin: liveAppOrigin,
 }
 

@@ -15,6 +15,7 @@ import type { BuildSummary } from './builds'
 import type { ToolConfig } from './config'
 import type { InstallSummary, TypeClaimConflict } from './installs'
 import type { PerimeterDiff } from './perimeter'
+import type { ToolRequirements } from './requirements'
 import type { BrowseEntry, ToolVersionStatus, ToolVersionSummary } from './registry'
 import type { AuthoredToolDetail, AuthoredToolSummary } from './service'
 
@@ -144,8 +145,19 @@ export interface AuthoredToolsResponse {
   tools: AuthoredToolSummary[]
 }
 
-export interface AuthoredToolResponse {
+/**
+ * What `GET …/tools/authoring/<name>` answers with: the working copy, what this
+ * space fails to satisfy of its declared reach, and its publication trail.
+ */
+export interface AuthoredToolView {
   tool: AuthoredToolDetail
+  /**
+   * Null when the config doesn't parse — nothing was declared, which is not the
+   * same as nothing missing.
+   */
+  requirements: ToolRequirements | null
+  /** Every version published from this working copy, newest first. */
+  versions: ToolVersionSummary[]
 }
 
 export interface PublishResponse {

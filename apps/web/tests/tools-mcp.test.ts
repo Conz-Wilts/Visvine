@@ -95,6 +95,7 @@ function detail(over: Partial<AuthoredToolDetail> = {}): AuthoredToolDetail {
     invalid: null,
     createdBy: 'user_1',
     build: build(),
+    publication: null,
     config: config(),
     sources: {
       'index.md': '---\ntype: tool\n---\n\n# Board\n',
@@ -450,6 +451,7 @@ test('list_tools reports authored builds and installed state side by side', asyn
           invalid: null,
           createdBy: 'user_1',
           build: brokenBuild(),
+          publication: null,
         },
       ],
       listInstalls: async () => [install()],
@@ -479,6 +481,7 @@ test('list_tools reports a tool that has never compiled rather than crashing on 
           invalid: null,
           createdBy: 'user_1',
           build: null,
+          publication: null,
         },
       ],
       listInstalls: async () => [],

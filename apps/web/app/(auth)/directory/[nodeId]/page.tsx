@@ -13,7 +13,7 @@
 // spaces, notes, files, any type we haven't given a page — is nothing but its
 // context, so those get Context/Raw and no first tab at all.
 
-import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
@@ -23,6 +23,10 @@ import { isFeatureEnabled } from '@/lib/featureAccess';
 import { entityFolderPathOf, entityKindOf, entityNotePath } from '@/lib/notes/entities';
 import { isOwnSpaceNode } from '@/lib/types/context';
 import type { SpaceFeatureConfig, NBNode } from '@/lib/types';
+import type { ToolSubject } from '@/lib/tools/protocol';
+import type { TypePageOwner } from '@/lib/tools/typePages';
+import TypePageTab from '@/features/tools/components/TypePageTab';
+import { useTypeTabs } from '@/features/tools/hooks/useTypePages';
 import ProfileSkeletonLoader from '@/features/profile/components/ProfileSkeletonLoader';
 import { type NoteMode } from '@/features/notes/components/NoteModeToggle';
 import { usePrefetchEntityContext } from '@/features/notes/lib/contextPrefetch';
@@ -36,8 +40,11 @@ import AgentPageContent from '@/features/profile/components/AgentPageContent';
 import ToolPageContent from '@/features/profile/components/ToolPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
- *  takes plain string ids via the shell registration. */
-type ProfileTab = 'about' | 'context' | 'raw' | 'preview' | 'connections' | 'communities';
+ *  takes plain string ids via the shell registration. `tool:<slug>` is an
+ *  installed Tool's extra tab (see the Tool tabs section below); it is local
+ *  state rather than a ?tab= value, so a Tool can never own a built-in page by
+ *  way of a link. */
+type ProfileTab = 'about' | 'context' | 'raw' | 'preview' | 'connections' | 'communities' | `tool:${string}`;
 
 /** The note the Context tab shows — what the tree highlights: the entity's own
  *  note (flat, or its folder index once converted), or, when the URL carries
@@ -102,6 +109,64 @@ const modeForTab = (tab: ProfileTab): NoteMode => (tab === 'raw' ? 'raw' : 'wysi
 const CONTEXT_TAB: PaneTabItem = { id: 'context', label: 'Context' };
 const RAW_TAB: PaneTabItem = { id: 'raw', label: 'Raw' };
 
+// ── Tool tabs ────────────────────────────────────────────────────────────────
+//
+// A built-in type keeps its built-in page — a Tool may only add a tab beside it
+// (lib/tools/typePages.ts is where that rule is enforced, on the read side as
+// well as the write side). Everything a Tool tab needs is in these three
+// helpers plus one render branch per page shell: a Tool must not become a
+// second kind of node route.
+
+const TOOL_TAB_PREFIX = 'tool:';
+const toolTabId = (slug: string): ProfileTab => `${TOOL_TAB_PREFIX}${slug}`;
+const isToolTab = (tab: string): boolean => tab.startsWith(TOOL_TAB_PREFIX);
+
+/** Tool tabs go after the page's own first tab and before Context/Raw — or at
+ *  the front where the page has no first tab of its own (the note IS the page
+ *  there, and a Tool's tab is a peer of it, not of Raw). */
+function withToolTabs(tabs: PaneTabItem[], owners: TypePageOwner[]): PaneTabItem[] {
+  if (owners.length === 0) return tabs;
+  const extra = owners.map((owner) => ({ id: toolTabId(owner.slug), label: owner.title }));
+  const lead = tabs.length > 0 && !isNoteTab(tabs[0].id as ProfileTab) ? 1 : 0;
+  return [...tabs.slice(0, lead), ...extra, ...tabs.slice(lead)];
+}
+
+/** The Tool tabs this node's type earns, and which of them is showing. An
+ *  install that has gone (uninstalled, switched off, claim withdrawn) simply
+ *  isn't here, so the pages fall back to their first tab by the same rule they
+ *  use for a retired ?tab= value. */
+function useToolTabs(
+  node: NBNode | null,
+  activeTab: ProfileTab,
+): { owners: TypePageOwner[]; active: TypePageOwner | null } {
+  const owners = useTypeTabs(node?.type);
+  return { owners, active: owners.find((owner) => toolTabId(owner.slug) === activeTab) ?? null };
+}
+
+/** A Tool tab's body, in the same frame every other first-tab body renders in. */
+function ToolTabBody({ owner, nodeId, node, notePath }: {
+  owner: TypePageOwner;
+  nodeId: string;
+  node: NBNode | null;
+  notePath: string | null;
+}) {
+  const type = node?.type ?? '';
+  const subject = useMemo<ToolSubject>(
+    () => ({ kind: 'node', nodeId, type, notePath }),
+    [nodeId, type, notePath],
+  );
+  return (
+    <div className="w-full pb-10">
+      <div
+        role="tabpanel"
+        className="profile-enter mx-auto w-full max-w-5xl px-4 pt-6 sm:px-6 xl:max-w-6xl"
+      >
+        <TypePageTab owner={owner} subject={subject} mode="tab" />
+      </div>
+    </div>
+  );
+}
+
 function NotFoundState({ title }: { title: string }) {
   const router = useRouter();
   return (
@@ -131,6 +196,8 @@ function useEntityChrome(args: {
   loading: boolean;
   error: boolean;
   contextAvailable: boolean;
+  /** Installed Tools adding a tab for this node's type — usually none. */
+  toolTabs: TypePageOwner[];
   ariaLabel: string;
   onSelect: (id: string) => void;
 }): void {
@@ -140,13 +207,14 @@ function useEntityChrome(args: {
 
   // With no first tab the bar is the note's own two tabs — and if there's no
   // context either there is nothing left to show, so the bar goes away.
-  const tabs = hasContext
+  const base = hasContext
     ? firstTab
       ? [firstTab, CONTEXT_TAB, RAW_TAB]
       : [CONTEXT_TAB, RAW_TAB]
     : firstTab
       ? [firstTab]
       : null;
+  const tabs = base ? withToolTabs(base, args.toolTabs) : null;
 
   usePaneChrome({
     tabs: error ? null : tabs,
@@ -250,8 +318,19 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   const { currentSpace, loading: spaceLoading } = useSpace();
   const contextAvailable = useContextTabAvailable(node);
   const [wantedTab, setTabParam] = useProfileTabParam();
+  // A Tool tab is local state: it has no ?tab= value (see ProfileTab), and
+  // deriving `activeTab` through the owner list rather than an effect means a
+  // Tool that goes away drops the page back to the profile with nothing to
+  // chase it.
+  const [toolTab, setToolTab] = useState<ProfileTab | null>(null);
+  const toolOwners = useTypeTabs(node?.type);
+  const showingTool = toolOwners.find((owner) => toolTabId(owner.slug) === toolTab) ?? null;
 
-  const activeTab: ProfileTab = wantedTab && contextAvailable ? wantedTab : 'about';
+  const activeTab: ProfileTab = showingTool
+    ? (toolTab as ProfileTab)
+    : wantedTab && contextAvailable
+      ? wantedTab
+      : 'about';
   const notePath = useEntityNotePath(nodeId, node);
   // Warm the Context tab (Tiptap chunk + note/registry/config fetches) as soon
   // as the profile knows the tab exists, so clicking over paints immediately.
@@ -266,11 +345,24 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
   // bar from correcting itself a beat after arrival.
   const barTab: ProfileTab = stillResolving && wantedTab ? wantedTab : activeTab;
 
-  const handleSelect = useCallback((id: string) => setTabParam(id as ProfileTab), [setTabParam]);
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (isToolTab(id)) {
+        // Clear ?tab= as well: the URL must not say Context while a Tool's tab
+        // is on screen, and a reload lands back on the profile.
+        setToolTab(id as ProfileTab);
+        setTabParam('about');
+        return;
+      }
+      setToolTab(null);
+      setTabParam(id as ProfileTab);
+    },
+    [setTabParam],
+  );
 
   const barVisible = contextAvailable || stillResolving;
   usePaneChrome({
-    tabs: barVisible ? PERSON_TABS : null,
+    tabs: barVisible ? withToolTabs(PERSON_TABS, toolOwners) : null,
     activeId: barTab,
     onSelect: handleSelect,
     attachedOpen: barVisible && barTab === 'context',
@@ -292,6 +384,10 @@ function PersonProfilePage({ nodeId }: { nodeId: string }) {
 
   // Note surfaces are entirely shell-rendered (PaneSurfaceHost).
   if (noteSurface) return null;
+
+  if (showingTool) {
+    return <ToolTabBody owner={showingTool} nodeId={nodeId} node={node} notePath={notePath} />;
+  }
 
   return (
     <div className="w-full pb-10">
@@ -342,6 +438,7 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   usePrefetchEntityContext(nodeId, node, contextAvailable);
   const notePath = useEntityNotePath(nodeId, node);
   const noteSurface = isNoteTab(activeTab) && contextAvailable;
+  const { owners: toolTabs, active: toolOwner } = useToolTabs(node, activeTab);
 
   // Tab changes keep local state (instant) and the URL (?tab=context) in sync.
   const changeTab = useCallback(
@@ -376,10 +473,13 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   useEffect(() => {
     const retired = activeTab === 'connections' || activeTab === 'communities';
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
-    if (retired || staleContext) {
+    // A Tool tab whose install has gone (uninstalled, switched off, claim
+    // withdrawn) is as retired as the two above.
+    const staleTool = isToolTab(activeTab) && !loading && data && !toolOwner;
+    if (retired || staleContext || staleTool) {
       changeTab('about');
     }
-  }, [activeTab, loading, data, contextAvailable, changeTab]);
+  }, [activeTab, loading, data, contextAvailable, toolOwner, changeTab]);
 
   const loadingState = loading && !data;
   const errorState = !loadingState && (!!error || !data);
@@ -392,6 +492,7 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
     loading: loadingState,
     error: errorState,
     contextAvailable,
+    toolTabs,
     ariaLabel,
     onSelect: handleSelect,
   });
@@ -405,6 +506,10 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   if (errorState) return <NotFoundState title={notFoundTitle} />;
 
   if (noteSurface) return null;
+
+  if (toolOwner) {
+    return <ToolTabBody owner={toolOwner} nodeId={nodeId} node={node} notePath={notePath} />;
+  }
 
   return (
     <div className="w-full pb-10">
@@ -436,6 +541,7 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
   const [activeTab, setActiveTab] = useState<ProfileTab>(wantedTab ?? 'context');
   usePrefetchEntityContext(nodeId, node, contextAvailable);
   const notePath = useEntityNotePath(nodeId, node);
+  const { owners: toolTabs, active: toolOwner } = useToolTabs(node, activeTab);
 
   const changeTab = useCallback(
     (tab: ProfileTab) => {
@@ -446,11 +552,23 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
-  // Only the two note tabs exist here, so anything else (a retired deep link)
-  // lands back on Context.
+  // A link to ?tab=context/raw from INSIDE this page's own body — no first tab
+  // here, but a Tool tab's body can still hold one — is a same-route
+  // navigation: this component does not remount, so local state has to follow
+  // the URL. See NodePage's identical effect for why it's the last URL value,
+  // not activeTab, being compared.
+  const lastWantedTab = useRef(wantedTab);
   useEffect(() => {
-    if (!isNoteTab(activeTab)) changeTab('context');
-  }, [activeTab, changeTab]);
+    if (wantedTab === lastWantedTab.current) return;
+    lastWantedTab.current = wantedTab;
+    if (wantedTab) setActiveTab(wantedTab);
+  }, [wantedTab]);
+
+  // The two note tabs and any Tool tab are all this page has, so anything else
+  // (a retired deep link, a Tool that has gone) lands back on Context.
+  useEffect(() => {
+    if (!isNoteTab(activeTab) && !toolOwner) changeTab('context');
+  }, [activeTab, toolOwner, changeTab]);
 
   const loadingState = loading && !data;
   const errorState = !loadingState && (!!error || !data);
@@ -463,11 +581,17 @@ function ContextOnlyPage({ nodeId, ariaLabel, notFoundTitle }: {
     loading: loadingState,
     error: errorState,
     contextAvailable,
+    toolTabs,
     ariaLabel,
     onSelect: handleSelect,
   });
 
   if (errorState) return <NotFoundState title={notFoundTitle} />;
+
+  if (toolOwner) {
+    return <ToolTabBody owner={toolOwner} nodeId={nodeId} node={node} notePath={notePath} />;
+  }
+
   // The note surface is shell-rendered; while loading the predicted bar and the
   // docked tree already stand in for it.
   if (loadingState || contextAvailable) return null;
@@ -520,6 +644,17 @@ function NoteOnlyPage({ nodeId, firstTab, href, ariaLabel, notFoundTitle }: {
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
+  // A link to ?tab=context/raw from INSIDE the first tab is a same-route
+  // navigation: this component does not remount, so local state has to follow
+  // the URL. See NodePage's identical effect for why it's the last URL value,
+  // not activeTab, being compared.
+  const lastWantedTab = useRef(wantedTab);
+  useEffect(() => {
+    if (wantedTab === lastWantedTab.current) return;
+    lastWantedTab.current = wantedTab;
+    if (wantedTab) setActiveTab(wantedTab);
+  }, [wantedTab]);
+
   // Context resolved as unavailable (notes tool off / foreign node): there is
   // nothing to render here, so fall through to the real page.
   useEffect(() => {
@@ -568,6 +703,7 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   usePrefetchEntityContext(nodeId, node, contextAvailable);
   const notePath = useEntityNotePath(nodeId, node);
   const noteSurface = isNoteTab(activeTab) && contextAvailable;
+  const { owners: toolTabs, active: toolOwner } = useToolTabs(node, activeTab);
 
   const changeTab = useCallback(
     (tab: ProfileTab) => {
@@ -578,14 +714,27 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
-  // Anything but preview/available-context falls back to Preview (retired deep
-  // links, or ?tab=context when the notes tool is off for this space).
+  // A link to ?tab=context/raw from INSIDE the first tab (a resource's preview)
+  // is a same-route navigation: this component does not remount, so local
+  // state has to follow the URL. See NodePage's identical effect for why it's
+  // the last URL value, not activeTab, being compared.
+  const lastWantedTab = useRef(wantedTab);
+  useEffect(() => {
+    if (wantedTab === lastWantedTab.current) return;
+    lastWantedTab.current = wantedTab;
+    if (wantedTab) setActiveTab(wantedTab);
+  }, [wantedTab]);
+
+  // Anything but preview/available-context/a live Tool tab falls back to Preview
+  // (retired deep links, or ?tab=context when the notes tool is off for this
+  // space).
   useEffect(() => {
     const staleContext = isNoteTab(activeTab) && !loading && data && !contextAvailable;
-    if ((activeTab !== 'preview' && !isNoteTab(activeTab)) || staleContext) {
+    const staleTool = isToolTab(activeTab) && !loading && data && !toolOwner;
+    if ((activeTab !== 'preview' && !isNoteTab(activeTab) && !isToolTab(activeTab)) || staleContext || staleTool) {
       changeTab('preview');
     }
-  }, [activeTab, loading, data, contextAvailable, changeTab]);
+  }, [activeTab, loading, data, contextAvailable, toolOwner, changeTab]);
 
   const loadingState = loading && !data;
   const errorState = !loadingState && (!!error || !data);
@@ -598,6 +747,7 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
     loading: loadingState,
     error: errorState,
     contextAvailable,
+    toolTabs,
     ariaLabel: 'Resource sections',
     onSelect: handleSelect,
   });
@@ -609,6 +759,10 @@ function ResourceNodePage({ nodeId }: { nodeId: string }) {
   if (errorState) return <NotFoundState title="Resource not found" />;
 
   if (noteSurface) return null;
+
+  if (toolOwner) {
+    return <ToolTabBody owner={toolOwner} nodeId={nodeId} node={node} notePath={notePath} />;
+  }
 
   return (
     <div className="w-full pb-10">

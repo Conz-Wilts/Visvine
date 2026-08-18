@@ -35,14 +35,6 @@ const SDK_HINT = 'get_tool_sdk';
 /** How many compile errors a row shows before it stops listing them. */
 const SHOWN_DIAGNOSTICS = 3;
 
-/** What a publish this session did, so the row can say so. The roster route
- *  carries the working copy, not the registry, so this is the only place a
- *  submission's state is known without leaving the page. */
-interface Submitted {
-  version: number;
-  status: ToolVersionStatus;
-}
-
 export default function MineTab({
   spaceId,
   tools,
@@ -59,7 +51,6 @@ export default function MineTab({
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const [publishing, setPublishing] = useState<AuthoredToolSummary | null>(null);
-  const [submitted, setSubmitted] = useState<Record<string, Submitted>>({});
 
   return (
     <div className="space-y-4">
@@ -83,13 +74,7 @@ export default function MineTab({
         />
       ) : (
         tools.map((tool) => (
-          <AuthoredRow
-            key={tool.name}
-            tool={tool}
-            isAdmin={isAdmin}
-            submitted={submitted[tool.name] ?? null}
-            onPublish={() => setPublishing(tool)}
-          />
+          <AuthoredRow key={tool.name} tool={tool} isAdmin={isAdmin} onPublish={() => setPublishing(tool)} />
         ))
       )}
 
@@ -98,8 +83,7 @@ export default function MineTab({
           spaceId={spaceId}
           tool={publishing}
           onClose={() => setPublishing(null)}
-          onPublished={(version, status) => {
-            setSubmitted((current) => ({ ...current, [publishing.name]: { version, status } }));
+          onPublished={(version) => {
             setPublishing(null);
             onToast('success', `${publishing.title} v${version} submitted for review.`);
             onChanged();
@@ -111,15 +95,35 @@ export default function MineTab({
   );
 }
 
+/** Beside the build chip: what a Tool's newest submission stands at, if any. */
+function PublicationChip({ publication }: { publication: AuthoredToolSummary['publication'] }) {
+  if (!publication) return null;
+  const label: Record<ToolVersionStatus, string> = {
+    pending: 'In review',
+    approved: 'Approved',
+    rejected: 'Rejected',
+    withdrawn: 'Withdrawn',
+  };
+  const color: Record<ToolVersionStatus, string> = {
+    pending: '#d97706',
+    approved: '#16a34a',
+    rejected: '#dc2626',
+    withdrawn: '#6b7280',
+  };
+  return (
+    <Chip tone="soft" size="sm" color={color[publication.status]}>
+      v{publication.version} · {label[publication.status]}
+    </Chip>
+  );
+}
+
 function AuthoredRow({
   tool,
   isAdmin,
-  submitted,
   onPublish,
 }: {
   tool: AuthoredToolSummary;
   isAdmin: boolean;
-  submitted: Submitted | null;
   onPublish: () => void;
 }) {
   const build = tool.build;
@@ -145,6 +149,7 @@ function AuthoredRow({
                 {errors.length} {errors.length === 1 ? 'error' : 'errors'}
               </Chip>
             )}
+            <PublicationChip publication={tool.publication} />
           </div>
           <p className="truncate font-mono text-[11px] text-text-muted">
             {tool.name} · {tool.version > 0 ? `published v${tool.version}` : 'never published'}
@@ -175,10 +180,9 @@ function AuthoredRow({
         </div>
       </header>
 
-      {submitted && (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          v{submitted.version} is <span className="font-medium">{submitted.status}</span> — a Visvine reviewer
-          reads the perimeter and the code diff before it reaches the marketplace.
+      {tool.publication?.reviewNote && (
+        <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+          <span className="font-medium text-text-primary">Reviewer note</span> — {tool.publication.reviewNote}
         </p>
       )}
 

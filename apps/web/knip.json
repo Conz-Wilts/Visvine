@@ -23,5 +23,10 @@
     "features/tools/components/CodeDiff.tsx"
   ],
   "project": ["app/**", "components/**", "features/**", "lib/**", "scripts/**", "tests/**"],
+  // Tool SOURCE files the verify scripts read off disk and feed to the
+  // server-side Tool compiler. Nothing imports them, and nothing should:
+  // `@visvine/tool-kit` only resolves through the frame's import map at run
+  // time. They are fixtures, not modules.
+  "ignore": ["scripts/fixtures/**"],
   "ignoreDependencies": []
 }

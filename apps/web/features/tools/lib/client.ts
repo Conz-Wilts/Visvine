@@ -14,8 +14,8 @@
  */
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson'
 import type {
-  AuthoredToolResponse,
   AuthoredToolsResponse,
+  AuthoredToolView,
   BrowseResponse,
   InstallCreatedResponse,
   InstallUpdatedResponse,
@@ -110,12 +110,13 @@ export function fetchAuthoredTools(spaceId: string, signal?: AbortSignal): Promi
   )
 }
 
+/** The working copy, its checklist against this space, and its publication trail. */
 export function fetchAuthoredTool(
   spaceId: string,
   name: string,
   signal?: AbortSignal,
-): Promise<AuthoredToolResponse> {
-  return fetchJson<AuthoredToolResponse>(
+): Promise<AuthoredToolView> {
+  return fetchJson<AuthoredToolView>(
     `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     { signal },
   )

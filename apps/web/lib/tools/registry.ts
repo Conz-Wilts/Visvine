@@ -665,6 +665,58 @@ export async function versionHistory(key: string): Promise<ToolVersionSummary[]>
   return rows.map(toSummary)
 }
 
+/** What `AuthoredToolSummary.publication` carries — enough for the roster to
+ *  show a status chip and a reviewer's note without a second request. */
+export interface ToolPublicationSummary {
+  versionId: string
+  version: number
+  status: ToolVersionStatus
+  reviewNote: string | null
+  submittedAt: string
+  reviewedAt: string | null
+}
+
+const PUBLICATION_SELECT = {
+  id: true,
+  key: true,
+  version: true,
+  status: true,
+  reviewNote: true,
+  submittedAt: true,
+  reviewedAt: true,
+} as const
+
+/**
+ * The newest version of each of these keys, whatever its status — pending,
+ * rejected and withdrawn included, since a rejection note is the whole point.
+ * One query for a whole roster, folded in memory like `browseVersions`: rows
+ * come back ordered newest-version-first, so the first one seen per key wins.
+ */
+export async function latestPublications(
+  keys: readonly string[],
+): Promise<Map<string, ToolPublicationSummary>> {
+  const uniqueKeys = [...new Set(keys)]
+  if (uniqueKeys.length === 0) return new Map()
+  const rows = await prisma.appToolVersion.findMany({
+    where: { key: { in: uniqueKeys } },
+    orderBy: { version: 'desc' },
+    select: PUBLICATION_SELECT,
+  })
+  const out = new Map<string, ToolPublicationSummary>()
+  for (const row of rows) {
+    if (out.has(row.key)) continue
+    out.set(row.key, {
+      versionId: row.id,
+      version: row.version,
+      status: decodeStatus(row.status),
+      reviewNote: row.reviewNote,
+      submittedAt: row.submittedAt.toISOString(),
+      reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+    })
+  }
+  return out
+}
+
 /**
  * The approved version a reviewer should diff against: the highest approved one
  * BELOW this number. Null for a first submission, and null when every earlier

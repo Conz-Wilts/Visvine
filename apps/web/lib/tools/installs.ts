@@ -29,11 +29,11 @@
 import prisma from '@/lib/prisma'
 import { isAdmin } from '@/lib/auth'
 import { principalForUser } from '@/lib/agents/principal'
+import { listAgents } from '@/lib/agents/service'
 import { listConnectors } from '@/lib/connectors/service'
 import { logAudit } from '@/lib/notes/audit'
-import { visibleVault } from '@/lib/notes/contextService'
-import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import { readSpaceConfig, updateSpaceConfig, UnknownSpaceError } from '@/lib/spaces/spaceConfig'
 import {
   ALL_FEATURE_KEYS,
@@ -228,7 +228,7 @@ function sharedContext(spaceId: string): Context {
   return { spaceId, ownerKey: SHARED_OWNER_KEY }
 }
 
-interface SpaceFacts {
+export interface SpaceFacts {
   available: SpaceAvailability
   /** Member-invented types (`scope: 'note'`), lower-cased — the pageable ones. */
   customTypes: string[]
@@ -238,24 +238,25 @@ interface SpaceFacts {
  * The three name spaces a Tool's perimeter is checked against, plus which of the
  * types a Tool may own the page for.
  *
- * Read through the ACTING ADMIN's principal: admins bypass every context gate,
- * so this is the whole space either way, and it avoids inventing a system
- * principal for a question an admin is asking on screen.
+ * The one reading of "what does this space have": installing/upgrading/
+ * rechecking, check_tool (lib/mcp/appTools.ts) and the authoring checklist
+ * (lib/tools/service.ts#toolRequirementsInSpace) all call this, so the three can
+ * no longer drift into disagreeing checklists. Which principal to read under is
+ * the CALLER's decision, not this function's — an install reads under the acting
+ * admin's (admins bypass every context gate, so it's the whole space either way),
+ * while an author's or a caller's own checklist reads under their own (they
+ * cannot use what they cannot see).
  *
  * Node types fold the space's stored vocabulary together with the built-in
  * defaults, because `findNodeTypeConfig` resolves a built-in whether or not the
  * column lists it — a Tool declaring `person` in a space that never edited its
  * types must not read as a missing requirement.
  */
-async function spaceFacts(spaceId: string, userId: string): Promise<SpaceFacts | null> {
-  const principal = await principalForUser(spaceId, userId)
-  if (!principal) return null
-  const context = sharedContext(spaceId)
-
-  const [connectors, vault, config] = await Promise.all([
-    listConnectors(principal, context),
-    visibleVault(principal, context),
-    readSpaceConfig(spaceId),
+export async function spaceFacts(p: ContextPrincipal, context: Context): Promise<SpaceFacts> {
+  const [connectors, agents, config] = await Promise.all([
+    listConnectors(p, context),
+    listAgents(p, context),
+    readSpaceConfig(context.spaceId),
   ])
 
   const stored = (config?.nodeTypes ?? []) as NodeTypeConfig[]
@@ -264,25 +265,26 @@ async function spaceFacts(spaceId: string, userId: string): Promise<SpaceFacts |
     if (typeof type?.name === 'string' && type.name.trim()) types.add(type.name.trim().toLowerCase())
   }
 
-  const agents: string[] = []
-  for (const raw of vault.raws) {
-    if (!isAgentBriefPath(raw.path)) continue
-    const name = agentNameOfPath(raw.path)
-    if (name) agents.push(name)
-  }
-
   return {
     available: {
       // Model connectors name an LLM provider and are never runnable, so a Tool
       // declaring one has nothing it could call (lib/connectors/service.ts).
       connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
       types: [...types],
-      agents,
+      agents: agents.agents.map((a) => a.name),
     },
     customTypes: stored
       .filter((type) => type?.scope === 'note' && typeof type.name === 'string')
       .map((type) => type.name.trim().toLowerCase()),
   }
+}
+
+/** `spaceFacts` for an acting admin identified by user id, or null when they are
+ *  not a member of the space at all — install/upgrade/recheck's own principal. */
+async function spaceFactsForActor(spaceId: string, userId: string): Promise<SpaceFacts | null> {
+  const principal = await principalForUser(spaceId, userId)
+  if (!principal) return null
+  return spaceFacts(principal, sharedContext(spaceId))
 }
 
 // ── rail placement ───────────────────────────────────────────────────────────
@@ -536,7 +538,7 @@ export async function installVersion(
   }
 
   const config = decodeToolConfig(version.config, version.name)
-  const facts = await spaceFacts(spaceId, actor.userId)
+  const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
   const requirements = computeRequirements(decodeToolPerimeter(version.perimeter), facts.available)
 
@@ -744,7 +746,7 @@ export async function setTypeClaims(
     }
   }
 
-  const facts = await spaceFacts(spaceId, actor.userId)
+  const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
 
   const out: { updated?: InstallRow } = {}
@@ -825,7 +827,7 @@ export async function applyUpgrade(
   }
 
   const config = decodeToolConfig(next.config, next.name)
-  const facts = await spaceFacts(spaceId, actor.userId)
+  const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
   const requirements = computeRequirements(decodeToolPerimeter(next.perimeter), facts.available)
 
@@ -895,7 +897,7 @@ export async function refreshRequirements(
 ): Promise<RefreshResult> {
   const refusal = await refuseNonAdmin(spaceId, actor, 're-check tool requirements')
   if (refusal) return refusal
-  const facts = await spaceFacts(spaceId, actor.userId)
+  const facts = await spaceFactsForActor(spaceId, actor.userId)
   if (!facts) return { ok: false, status: 403, error: 'You are not a member of this space.' }
 
   const rows = await prisma.appToolInstall.findMany({
