@@ -64,14 +64,19 @@ Read this week's notes under updates/ and write a digest to reports/weekly.md �
 
 - **One Cloud Scheduler job** hits `POST /api/internal/agents/tick` every 5 minutes with a Google
   OIDC token; the route verifies it itself (`lib/agents/internalAuth.ts`) because Cloud Run is
-  `--allow-unauthenticated`. The tick: heartbeat → reclaim runs stuck > `MAX_RUN_MS` → prune old
+  `--allow-unauthenticated`. The tick: heartbeat → reclaim runs stuck > `MAX_RUN_MS + RECLAIM_GRACE_MS`
+  (CAS on `running_since`; counts toward `repeated_failure`) → prune old
   runs → re-derive rows whose activation note changed → CAS-claim due rows (`WHERE active AND
-  status='idle' AND next_run_at <= now()`, ≤ 5 per tick, one running per space) → create run rows →
+  status='idle' AND next_run_at <= now()`, ≤ 5 per tick, one running per space — best-effort across
+  overlapping ticks; the per-agent CAS is the hard guarantee) → create run rows (the claim names the
+  run in `current_run_id`, and the executor's release is a CAS on it, so a reclaimed run's late
+  release can never flip the row idle under a newer run) →
   **self-dispatch** each run as its own request to `POST /api/internal/agents/run` (60-second HS256
   token from `AUTH_SECRET`) and await them. No backfill: dispatch sets `next_run_at` to the next
   occurrence *after now*.
-- Cloud Run `--timeout=1800`; Scheduler `attemptDeadline` 1500 s; `MAX_RUN_MS` = 20 min = the
-  stale-run reclaim timeout (`lib/agents/limits.ts`). If runs ever need >30 min, swap
+- Cloud Run `--timeout=1800`; Scheduler `attemptDeadline` 1500 s; `MAX_RUN_MS` = 20 min, and the
+  stale-run reclaim fires at `MAX_RUN_MS + RECLAIM_GRACE_MS` (22 min; `lib/agents/limits.ts`). If runs
+  ever need >30 min, swap
   `lib/agents/dispatch.ts` for Cloud Tasks; nothing else changes.
 - Dev: `AGENT_DISPATCH=inline` (default outside production) runs inside the tick request;
   `curl -X POST -H "Authorization: Bearer $AGENT_TICK_SECRET" localhost:3000/api/internal/agents/tick`.
@@ -98,8 +103,13 @@ package registries; nothing is built until a vendor is chosen (`AGENT_SANDBOX_PR
 ```sh
 # 1. A service account for the scheduler (no roles needed — the route checks the email claim)
 gcloud iam service-accounts create visvine-agent-tick --project visvine-platform
-# 2. Tell the app which SA to accept (set on the Cloud Run service; not in deploy.yml's --set-env-vars)
-#    AGENT_TICK_SERVICE_ACCOUNT=visvine-agent-tick@visvine-platform.iam.gserviceaccount.com
+# 2. Tell the app which SA to accept. deploy.yml uses --set-env-vars/--set-secrets, which REPLACE
+#    the service's whole env on every deploy, so the value must ride the workflow, not be set by hand:
+#    GitHub repo variable AGENT_TICK_SERVICE_ACCOUNT=visvine-agent-tick@visvine-platform.iam.gserviceaccount.com
+#    (deploy.yml passes `${{ vars.AGENT_TICK_SERVICE_ACCOUNT }}`; unset → the tick answers 401, agents idle).
+#    Likewise SECRETS_KEY (model keys + connector secrets) must exist as a Secret Manager secret named
+#    SECRETS_KEY — deploy.yml mounts it via --set-secrets. Rotating it orphans every stored key.
+#    A missing/wrong SECRETS_KEY fails runs (`config`, "could not be decrypted") but no longer deactivates them.
 # 3. The job
 gcloud scheduler jobs create http visvine-agent-tick \
   --project visvine-platform --location australia-southeast1 \

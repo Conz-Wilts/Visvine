@@ -18,7 +18,8 @@
  * unauthenticated request — mcp-handler builds that header itself and omits it.
  */
 import type { AuthInfo } from '@modelcontextprotocol/server'
-import { MCP_SCOPES, scopeForTool, serializeScopes } from '@/lib/mcp/scopes'
+import { scopeForTool, scopesForKind, serializeScopes } from '@/lib/mcp/scopes'
+import type { McpServerKind } from '@/lib/mcp/config'
 
 type Handler = (req: Request) => Response | Promise<Response>
 
@@ -109,7 +110,7 @@ export function withScopeGate(handler: Handler, resourceMetadataUrl: string): Ha
  * `scopes_supported` says, which is a slower path and one more thing to keep in
  * step. Any `scope` the inner layer already set wins.
  */
-export function withScopeHint(handler: Handler): Handler {
+export function withScopeHint(handler: Handler, kind: McpServerKind): Handler {
   return async (req: Request): Promise<Response> => {
     const res = await handler(req)
     if (res.status !== 401 && res.status !== 403) return res
@@ -117,7 +118,7 @@ export function withScopeHint(handler: Handler): Handler {
     if (!existing || /(^|[\s,])scope=/.test(existing)) return res
 
     const headers = new Headers(res.headers)
-    headers.set('WWW-Authenticate', `${existing}, scope="${serializeScopes(MCP_SCOPES)}"`)
+    headers.set('WWW-Authenticate', `${existing}, scope="${serializeScopes(scopesForKind(kind))}"`)
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers })
   }
 }

@@ -332,8 +332,18 @@ export async function createTool(
   }
 
   const indexPath = toolIndexPath(name)
-  const denial = await writeDenialFull(p, context, indexPath)
-  if (denial) return { ok: false, status: 403, error: denial }
+  // Every path this call will write is checked BEFORE anything is created, so a
+  // denial can never leave a half-made Tool (node + index, no sources) behind
+  // that 409s on the retry. Denial reasons are per-path (a note-level
+  // writeDenial can seal one file and not its sibling), hence all three.
+  for (const path of [
+    indexPath,
+    notePathOf(name, TOOL_SOURCE_FILES.ui.authorName),
+    notePathOf(name, TOOL_SOURCE_FILES.data.authorName),
+  ]) {
+    const denial = await writeDenialFull(p, context, path)
+    if (denial) return { ok: false, status: 403, error: denial }
+  }
 
   if (await store.readNoteOrNull(context, indexPath)) {
     return { ok: false, status: 409, error: `A tool named "${name}" already exists.` }
@@ -380,6 +390,7 @@ export async function createTool(
     [TOOL_SOURCE_FILES.data.authorName, starterData()] as const,
   ]) {
     const written = await writeGated(p, context, notePathOf(name, file), noteContentOf(file, content))
+    // Pre-checked above; only a grant revoked mid-call can land here.
     if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
   }
 

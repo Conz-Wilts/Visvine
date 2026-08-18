@@ -18,7 +18,7 @@ import assert from 'node:assert/strict'
 import type { McpServer } from '@modelcontextprotocol/server'
 import { MCP_SCOPES, SCOPE_DESCRIPTIONS, TOOL_SCOPES, scopeForTool } from '@/lib/mcp/scopes'
 import { registerAppTools, type AppToolDeps } from '@/lib/mcp/appTools'
-import { registerTools } from '@/lib/mcp/tools'
+import { registerCreatorTools, registerTools } from '@/lib/mcp/tools'
 
 /** A server that records what was registered on it and runs nothing. */
 function recordingServer(): { server: McpServer; names: string[]; descriptions: Map<string, string> } {
@@ -37,12 +37,18 @@ function recordingServer(): { server: McpServer; names: string[]; descriptions: 
 const NO_DEPS = {} as AppToolDeps
 
 test('every registered tool has a scope, and every scope has a tool', () => {
-  // The WHOLE surface, not just the authoring half: registerTools ends by
-  // calling registerAppTools, so this is the set an agent can actually reach.
-  const { server, names } = recordingServer()
+  // The WHOLE surface across BOTH servers: the context server (registerTools,
+  // which ends by registering the discover/install half of the Tool group) and
+  // the creator server (registerCreatorTools, the authoring loop). Together
+  // this is the set an agent can actually reach.
+  const { server, names: contextNames } = recordingServer()
   registerTools(server)
+  const { server: creator, names: creatorNames } = recordingServer()
+  registerCreatorTools(creator)
+  const names = [...new Set([...contextNames, ...creatorNames])]
 
-  assert.ok(names.length > 0, 'registerTools registered nothing')
+  assert.ok(contextNames.length > 0, 'registerTools registered nothing')
+  assert.ok(creatorNames.length > 0, 'registerCreatorTools registered nothing')
   for (const name of names) {
     const scope = scopeForTool(name)
     assert.ok(scope, `${name} is registered but has no entry in TOOL_SCOPES`)
@@ -57,21 +63,27 @@ test('every registered tool has a scope, and every scope has a tool', () => {
   assert.equal(names.length, Object.keys(TOOL_SCOPES).length)
 })
 
-test('the nine authoring tools are registered, and split three ways by capability', () => {
-  const { server, names } = recordingServer()
-  registerAppTools(server, NO_DEPS)
-
-  assert.deepEqual(names.sort(), [
+test('the nine Tool tools are split across the two servers by job', () => {
+  // The CREATOR server carries the authoring loop — and list_tools, so an
+  // author can see what already exists — but NOT install_tool.
+  const creator = recordingServer()
+  registerAppTools(creator.server, 'creator', NO_DEPS)
+  assert.deepEqual(creator.names.sort(), [
     'check_tool',
     'create_tool',
     'get_tool_sdk',
-    'install_tool',
     'list_tools',
     'preview_tool',
     'publish_tool',
     'read_tool',
     'write_tool',
   ])
+
+  // The CONTEXT server only discovers and activates: nothing on it writes a
+  // Tool's code.
+  const context = recordingServer()
+  registerAppTools(context.server, 'context', NO_DEPS)
+  assert.deepEqual(context.names.sort(), ['install_tool', 'list_tools'])
 
   // Reading a tool is reading notes — nothing here that read_context couldn't
   // already fetch, and the SDK is a static document.
@@ -104,9 +116,10 @@ test('the new scopes are in the catalogue and have consent copy', () => {
   }
 })
 
-test('each authoring tool description is written for an LLM author', () => {
+test('each Tool tool description is written for an LLM author', () => {
   const { server, descriptions } = recordingServer()
-  registerAppTools(server, NO_DEPS)
+  registerAppTools(server, 'creator', NO_DEPS)
+  registerAppTools(server, 'context', NO_DEPS)
 
   for (const [name, description] of descriptions) {
     assert.ok(description.length > 120, `${name}'s description is too thin to author from`)
@@ -117,4 +130,29 @@ test('each authoring tool description is written for an LLM author', () => {
   assert.match(descriptions.get('publish_tool') ?? '', /ADMINS ONLY/)
   assert.match(descriptions.get('publish_tool') ?? '', /review/i)
   assert.match(descriptions.get('install_tool') ?? '', /ADMINS ONLY/)
+})
+
+test('the creator server is list_spaces + authoring; the context server never carries authoring', () => {
+  const creator = recordingServer()
+  registerCreatorTools(creator.server)
+  assert.deepEqual(creator.names.sort(), [
+    'check_tool',
+    'create_tool',
+    'get_tool_sdk',
+    'list_spaces',
+    'list_tools',
+    'preview_tool',
+    'publish_tool',
+    'read_tool',
+    'write_tool',
+  ])
+
+  const context = recordingServer()
+  registerTools(context.server)
+  for (const name of ['create_tool', 'write_tool', 'check_tool', 'preview_tool', 'publish_tool', 'read_tool', 'get_tool_sdk']) {
+    assert.ok(!context.names.includes(name), `${name} must not be on the context server`)
+  }
+  for (const name of ['list_spaces', 'list_context', 'search_context', 'list_tools', 'install_tool']) {
+    assert.ok(context.names.includes(name), `${name} must be on the context server`)
+  }
 })

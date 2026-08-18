@@ -1,12 +1,14 @@
 /**
- * The two OAuth discovery documents, defined once.
+ * The OAuth discovery documents, defined once.
  *
- * The protected-resource document is served from two paths (the origin root and
- * the MCP endpoint's own sub-path), because MCP clients probe both; they must be
+ * There is one authorization-server document and one protected-resource
+ * document PER MCP SERVER (context / creator). Each resource document is served
+ * from two paths (the origin root, RFC 9728 path-suffixed, and the MCP
+ * endpoint's own sub-path), because MCP clients probe both; they must be
  * byte-identical, which is easiest to guarantee by building them here.
  */
-import { oauthIssuer, mcpResourceUrl } from '@/lib/mcp/config'
-import { MCP_SCOPES } from '@/lib/mcp/scopes'
+import { oauthIssuer, mcpResourceUrl, type McpServerKind } from '@/lib/mcp/config'
+import { MCP_SCOPES, scopesForKind } from '@/lib/mcp/scopes'
 
 /** These documents are public and fetched cross-origin by browser-based agents. */
 export const METADATA_CORS = {
@@ -41,13 +43,13 @@ export function authorizationServerMetadata(): Record<string, unknown> {
   }
 }
 
-/** OAuth 2.0 Protected Resource Metadata (RFC 9728). */
-export function protectedResourceMetadata(): Record<string, unknown> {
+/** OAuth 2.0 Protected Resource Metadata (RFC 9728) for one MCP server. */
+export function protectedResourceMetadata(kind: McpServerKind): Record<string, unknown> {
   return {
-    resource: mcpResourceUrl(),
+    resource: mcpResourceUrl(kind),
     authorization_servers: [oauthIssuer()],
-    scopes_supported: [...MCP_SCOPES],
+    scopes_supported: [...scopesForKind(kind)],
     bearer_methods_supported: ['header'],
-    resource_name: 'Visvine context',
+    resource_name: kind === 'creator' ? 'Visvine Creator' : 'Visvine context',
   }
 }

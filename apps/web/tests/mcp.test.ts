@@ -17,6 +17,7 @@ import {
   parseScopes,
   negotiateScopes,
   serializeScopes,
+  scopesForKind,
 } from '@/lib/mcp/scopes'
 import { mintAccessToken, verifyAccessToken } from '@/lib/mcp/tokens'
 import {
@@ -24,6 +25,7 @@ import {
   mcpServerInfo,
   canonicalizeResource,
   isCanonicalResource,
+  resourceKindOf,
 } from '@/lib/mcp/config'
 import {
   isClientIdUrl,
@@ -32,9 +34,9 @@ import {
   parseClientIdDocument,
   ClientResolutionError,
 } from '@/lib/mcp/clients'
-import { missingScopesForBody } from '@/lib/mcp/challenge'
+import { missingScopesForBody, withScopeHint } from '@/lib/mcp/challenge'
 import { authorizationServerMetadata, protectedResourceMetadata } from '@/lib/mcp/metadata'
-import { verifyPkceS256 } from '@/lib/mcp/oauth'
+import { verifyPkceS256, kindFromStored } from '@/lib/mcp/oauth'
 import { CREATABLE_TYPES, isCreatableType } from '@/lib/directory/createEntity'
 import { mentionFor } from '@/lib/mcp/tools'
 import { canonicalNodeType, nodeTypeSpellings } from '@/lib/types/context'
@@ -71,13 +73,36 @@ test('parseScopes keeps valid scopes and drops retired ones', () => {
 })
 
 test('negotiateScopes falls back to read-only and honours the client allowlist', () => {
-  assert.deepEqual(negotiateScopes(null, null), ['context:read'])
-  assert.deepEqual(negotiateScopes('context:read context:write', null), [
+  assert.deepEqual(negotiateScopes(null, null, 'context'), ['context:read'])
+  assert.deepEqual(negotiateScopes('context:read context:write', null, 'context'), [
     'context:read',
     'context:write',
   ])
   // A client that only registered for reads cannot request writes.
-  assert.deepEqual(negotiateScopes('context:read context:write', 'context:read'), ['context:read'])
+  assert.deepEqual(negotiateScopes('context:read context:write', 'context:read', 'context'), ['context:read'])
+})
+
+test('the creator server negotiates, advertises and hints only the authoring scopes', async () => {
+  // Consent for a Tool-authoring connection never asks for capabilities the
+  // creator surface cannot exercise, whatever the client requested.
+  assert.deepEqual(negotiateScopes(serializeScopes(MCP_SCOPES), null, 'creator'), ['context:read', 'tools:author'])
+  assert.deepEqual(negotiateScopes('context:write agents:run', null, 'creator'), [])
+  assert.deepEqual(negotiateScopes(null, null, 'creator'), ['context:read'])
+  assert.deepEqual(protectedResourceMetadata('creator').scopes_supported, ['context:read', 'tools:author'])
+  assert.deepEqual(protectedResourceMetadata('context').scopes_supported, [...MCP_SCOPES])
+  // Every scope the creator can grant is one some creator-surface tool needs,
+  // and every creator-surface tool's scope is grantable there.
+  for (const scope of scopesForKind('creator')) assert.ok(MCP_SCOPES.includes(scope))
+  for (const name of ['create_tool', 'write_tool', 'check_tool', 'preview_tool', 'publish_tool', 'read_tool', 'get_tool_sdk', 'list_tools'] as const) {
+    assert.ok(scopesForKind('creator').includes(TOOL_SCOPES[name]), `${name} is not grantable on the creator server`)
+  }
+  // The 401 challenge hints the same list.
+  const challenged = withScopeHint(
+    async () => new Response(null, { status: 401, headers: { 'WWW-Authenticate': 'Bearer realm="x"' } }),
+    'creator',
+  )
+  const res = await challenged(new Request('http://localhost:3000/api/mcp/creator', { method: 'POST' }))
+  assert.match(res.headers.get('WWW-Authenticate') ?? '', /scope="context:read tools:author"/)
 })
 
 // ── MCP 2026-07-28: resource indicators (RFC 8707) ──
@@ -95,8 +120,8 @@ test('canonicalizeResource normalises exactly what the spec says is insignifican
 })
 
 test('only our own resource identifier is an acceptable audience', () => {
-  assert.equal(isCanonicalResource(mcpResourceUrl()), true)
-  assert.equal(isCanonicalResource(`${mcpResourceUrl()}/`), true)
+  assert.equal(isCanonicalResource(mcpResourceUrl('context')), true)
+  assert.equal(isCanonicalResource(`${mcpResourceUrl('context')}/`), true)
   // Scheme and host may arrive uppercased; the path may NOT — paths are
   // case-sensitive, so an uppercased one names a different resource.
   assert.equal(isCanonicalResource('HTTP://LOCALHOST:3000/api/mcp'), true)
@@ -104,6 +129,23 @@ test('only our own resource identifier is an acceptable audience', () => {
   // The whole point: a token must never be minted for somebody else's server.
   assert.equal(isCanonicalResource('https://someone-else.example/api/mcp'), false)
   assert.equal(isCanonicalResource(''), false)
+})
+
+test('the two servers are two resources, and a resource value names exactly one of them', () => {
+  assert.equal(mcpResourceUrl('context'), 'http://localhost:3000/api/mcp')
+  assert.equal(mcpResourceUrl('creator'), 'http://localhost:3000/api/mcp/creator')
+  assert.equal(mcpResourceUrl('context'), mcpResourceUrl('context'))
+
+  assert.equal(resourceKindOf(mcpResourceUrl('creator')), 'creator')
+  assert.equal(resourceKindOf(`${mcpResourceUrl('creator')}/`), 'creator')
+  assert.equal(resourceKindOf(mcpResourceUrl('context')), 'context')
+  assert.equal(resourceKindOf(null), null)
+  assert.equal(resourceKindOf('https://someone-else.example/api/mcp/creator'), null)
+  assert.equal(isCanonicalResource(mcpResourceUrl('creator')), true)
+
+  // The two identities clients see are distinct.
+  assert.equal(mcpServerInfo('context').name, 'visvine')
+  assert.equal(mcpServerInfo('creator').name, 'visvine-creator')
 })
 
 // ── MCP 2026-07-28: Client ID Metadata Documents ──
@@ -297,14 +339,20 @@ test('the discovery documents advertise the 2026-07-28 capabilities', () => {
   // DCR stays advertised — deprecated, not removed.
   assert.ok(typeof as.registration_endpoint === 'string')
 
-  const pr = protectedResourceMetadata()
-  assert.equal(pr.resource, mcpResourceUrl())
+  const pr = protectedResourceMetadata('context')
+  assert.equal(pr.resource, mcpResourceUrl('context'))
   assert.deepEqual(pr.authorization_servers, [as.issuer])
   assert.deepEqual(pr.scopes_supported, [...MCP_SCOPES])
+
+  // The creator server publishes its own document naming its own resource,
+  // against the same authorization server.
+  const creator = protectedResourceMetadata('creator')
+  assert.equal(creator.resource, mcpResourceUrl('creator'))
+  assert.deepEqual(creator.authorization_servers, [as.issuer])
 })
 
 test('the server identity carries an absolute logo URL, not a build-hashed one', () => {
-  const info = mcpServerInfo()
+  const info = mcpServerInfo('context')
   assert.equal(info.name, 'visvine')
   assert.equal(info.websiteUrl, 'http://localhost:3000')
 
@@ -323,10 +371,11 @@ test('an access token round-trips with its identity and scopes', async () => {
     IDENTITY,
     ['context:read', 'context:write'],
     'mcp_client_1',
+    'context',
   )
   assert.equal(expiresIn, 3600)
 
-  const verified = await verifyAccessToken(token)
+  const verified = await verifyAccessToken(token, 'context')
   assert.ok(verified)
   assert.equal(verified.userId, 'user_1')
   assert.equal(verified.email, 'test@local.dev')
@@ -339,12 +388,12 @@ test('a web session JWT cannot be replayed as an MCP access token', async () => 
   const sessionJwt = await new SignJWT({ name: 'Test User', email: 'test@local.dev' })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject('user_1')
-    .setAudience(mcpResourceUrl())
+    .setAudience(mcpResourceUrl('context'))
     .setIssuedAt()
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(process.env.AUTH_SECRET))
 
-  assert.equal(await verifyAccessToken(sessionJwt), null)
+  assert.equal(await verifyAccessToken(sessionJwt, 'context'), null)
 })
 
 test('a token minted for another audience is rejected', async () => {
@@ -356,13 +405,23 @@ test('a token minted for another audience is rejected', async () => {
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(process.env.AUTH_SECRET))
 
-  assert.equal(await verifyAccessToken(foreign), null)
+  assert.equal(await verifyAccessToken(foreign, 'context'), null)
+})
+
+test('a token for one server is not a token for the other', async () => {
+  const { token: creatorToken } = await mintAccessToken(IDENTITY, ['tools:author'], 'mcp_client_1', 'creator')
+  assert.ok(await verifyAccessToken(creatorToken, 'creator'))
+  assert.equal(await verifyAccessToken(creatorToken, 'context'), null)
+
+  const { token: contextToken } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1', 'context')
+  assert.ok(await verifyAccessToken(contextToken, 'context'))
+  assert.equal(await verifyAccessToken(contextToken, 'creator'), null)
 })
 
 test('garbage and tampered tokens verify as null', async () => {
-  assert.equal(await verifyAccessToken('not-a-jwt'), null)
-  const { token } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1')
-  assert.equal(await verifyAccessToken(`${token}x`), null)
+  assert.equal(await verifyAccessToken('not-a-jwt', 'context'), null)
+  const { token } = await mintAccessToken(IDENTITY, ['context:read'], 'mcp_client_1', 'context')
+  assert.equal(await verifyAccessToken(`${token}x`, 'context'), null)
 })
 
 test('PKCE S256 accepts the matching verifier and nothing else', () => {
@@ -519,4 +578,13 @@ test('type filters canonicalise, so a search for a retired spelling still finds 
   assert.ok(spellings.includes('organization'))
   assert.deepEqual(nodeTypeSpellings('person'), ['person'])
   assert.deepEqual(nodeTypeSpellings(''), [])
+})
+
+test('kindFromStored fails closed on anything but a known server kind', () => {
+  assert.equal(kindFromStored('context'), 'context')
+  assert.equal(kindFromStored('creator'), 'creator')
+  assert.equal(kindFromStored('CREATOR'), null)
+  assert.equal(kindFromStored(''), null)
+  assert.equal(kindFromStored(null), null)
+  assert.equal(kindFromStored(undefined), null)
 })

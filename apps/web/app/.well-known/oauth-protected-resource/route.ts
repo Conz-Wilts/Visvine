@@ -10,7 +10,7 @@ import { protectedResourceMetadata, METADATA_CORS } from '@/lib/mcp/metadata'
 export const runtime = 'nodejs'
 
 export function GET() {
-  return NextResponse.json(protectedResourceMetadata(), { headers: METADATA_CORS })
+  return NextResponse.json(protectedResourceMetadata('context'), { headers: METADATA_CORS })
 }
 
 export function OPTIONS() {

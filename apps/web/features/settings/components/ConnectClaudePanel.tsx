@@ -1,7 +1,12 @@
 'use client';
 
 // Settings → MCP. How someone points Claude at their own Visvine
-// context.
+// context — and, separately, at the Tool creator.
+//
+// Two servers, two addresses (lib/mcp/config.ts): the everyday one reads,
+// searches and writes context and can discover and install Tools; the creator
+// one carries only the authoring loop that writes a Tool's code. They are
+// separate OAuth resources, so connecting one never grants the other.
 //
 // This lives in personal settings rather than the space console on purpose:
 // the OAuth token an MCP client holds belongs to the *person*, and every tool
@@ -20,7 +25,10 @@ import { Alert, Button, SettingsSection } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 export interface McpConnectInfo {
+  /** The context server. */
   url: string;
+  /** The Tool creator server. */
+  creatorUrl: string;
   issuer: string;
   scopes: { scope: string; description: string }[];
 }
@@ -48,7 +56,7 @@ export function useMcpConnectInfo() {
  * Read-only address + Copy, mirroring the invite-link row in the console so the
  * two "copy this and hand it over" affordances look the same.
  */
-export function McpServerUrlRow({ url }: { url: string | null }) {
+export function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | null; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -65,7 +73,7 @@ export function McpServerUrlRow({ url }: { url: string | null }) {
       <input
         readOnly
         value={url ?? 'Loading…'}
-        aria-label="MCP server address"
+        aria-label={label}
         className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 font-mono text-xs text-text-secondary"
       />
       <Button variant="brand" onClick={copy} disabled={!url}>
@@ -87,6 +95,13 @@ export default function ConnectClaudePanel() {
         description="Give Claude access to your Visvine context — the entities, notes and connections in every space you're a member of. Visvine runs the server itself; there is nothing to install."
       >
         <McpServerUrlRow url={info?.url ?? null} />
+      </SettingsSection>
+
+      <SettingsSection
+        title="Connect the Tool creator"
+        description="A separate server for building Tools with a coding agent (Claude Code, Cursor): scaffold, write, compile, preview and publish. It carries only the authoring loop — connect it when you're building a Tool, and use the address above for everything else."
+      >
+        <McpServerUrlRow url={info?.creatorUrl ?? null} label="Tool creator MCP server address" />
       </SettingsSection>
     </div>
   );

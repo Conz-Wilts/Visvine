@@ -9,6 +9,18 @@
 import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { REFRESH_TTL_SECONDS } from '@/lib/mcp/tokens'
+import { MCP_SERVER_KINDS, type McpServerKind } from '@/lib/mcp/config'
+
+/**
+ * A stored `resource` column back to a server kind. Fails CLOSED: an unknown
+ * value yields null and the grant is refused (`invalid_grant`) rather than
+ * quietly minting a token for the broader context server. The column carries a
+ * CHECK constraint (migration 20260818150000), so null here means the schema and
+ * MCP_SERVER_KINDS have drifted — a bug to surface, not paper over.
+ */
+export function kindFromStored(value: string | null | undefined): McpServerKind | null {
+  return (MCP_SERVER_KINDS as readonly string[]).includes(value ?? '') ? (value as McpServerKind) : null
+}
 
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -61,6 +73,8 @@ export async function createAuthCode(input: {
   redirectUri: string
   scope: string
   codeChallenge: string
+  /** Which MCP server the resulting tokens are for (RFC 8707). */
+  resource: McpServerKind
 }): Promise<string> {
   const code = randomToken(32)
   await prisma.oAuthAuthCode.create({
@@ -70,6 +84,7 @@ export async function createAuthCode(input: {
       userId: input.userId,
       redirectUri: input.redirectUri,
       scope: input.scope,
+      resource: input.resource,
       codeChallenge: input.codeChallenge,
       codeChallengeMethod: 'S256',
       expiresAt: new Date(Date.now() + AUTH_CODE_TTL_MS),
@@ -93,6 +108,7 @@ export async function issueRefreshToken(input: {
   clientId: string
   userId: string
   scope: string
+  resource: McpServerKind
 }): Promise<string> {
   const token = randomToken(32)
   await prisma.oAuthRefreshToken.create({
@@ -101,6 +117,7 @@ export async function issueRefreshToken(input: {
       clientId: input.clientId,
       userId: input.userId,
       scope: input.scope,
+      resource: input.resource,
       expiresAt: new Date(Date.now() + REFRESH_TTL_SECONDS * 1000),
     },
   })
@@ -111,18 +128,30 @@ export async function issueRefreshToken(input: {
  * Validate and rotate a refresh token: revoke the presented one, mint a fresh
  * one. Returns the new token plus its grant, or null when the presented token is
  * invalid, expired or already revoked.
+ *
+ * `expectedResource` is the RFC 8707 `resource` the client named on this
+ * refresh, if any. A grant for the other server is reported as
+ * `{ wrongResource }` WITHOUT rotating — the client mis-addressed one request,
+ * which is no reason to burn its grant.
  */
-export async function rotateRefreshToken(token: string): Promise<{
+export async function rotateRefreshToken(
+  token: string,
+  expectedResource?: McpServerKind | null,
+): Promise<{
   userId: string
   clientId: string
   scope: string
+  resource: McpServerKind
   refreshToken: string
-} | null> {
+} | { wrongResource: McpServerKind } | null> {
   if (!token) return null
   const row = await prisma.oAuthRefreshToken.findUnique({
     where: { tokenHash: hashToken(token) },
   })
   if (!row || row.revokedAt || row.expiresAt.getTime() < Date.now()) return null
+  const resource = kindFromStored(row.resource)
+  if (!resource) return null
+  if (expectedResource && resource !== expectedResource) return { wrongResource: resource }
 
   await prisma.oAuthRefreshToken.update({
     where: { id: row.id },
@@ -132,8 +161,9 @@ export async function rotateRefreshToken(token: string): Promise<{
     clientId: row.clientId,
     userId: row.userId,
     scope: row.scope,
+    resource,
   })
-  return { userId: row.userId, clientId: row.clientId, scope: row.scope, refreshToken }
+  return { userId: row.userId, clientId: row.clientId, scope: row.scope, resource, refreshToken }
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {

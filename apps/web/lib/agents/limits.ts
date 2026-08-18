@@ -2,8 +2,16 @@
  * The numbers the scheduler, executor and panel must agree on. Pure.
  */
 
-/** Wall-clock cap on one run — AND the stale-`running` reclaim timeout (same number, on purpose). */
+/** Wall-clock cap on one run. */
 export const MAX_RUN_MS = 20 * 60_000
+/**
+ * The tick reclaims a row stuck in `running` after MAX_RUN_MS + this. The
+ * grace exists because the executor's own timeout fires at exactly MAX_RUN_MS
+ * and then still has to write the run row and release the state row; reclaiming
+ * at the same instant raced that release. Two minutes is far more than either
+ * write takes, and far less than a tick interval.
+ */
+export const RECLAIM_GRACE_MS = 2 * 60_000
 /** Cloud Scheduler fires the tick this often. */
 const TICK_INTERVAL_MS = 5 * 60_000
 /** A due agent not picked up for two ticks means the tick itself is not firing. */

@@ -191,6 +191,7 @@ model AgentState {
   nextRunAt           DateTime? @map("next_run_at")
   lastRunAt           DateTime? @map("last_run_at")
   runningSince        DateTime? @map("running_since")
+  currentRunId        String?   @map("current_run_id") // the AgentRun holding the `running` claim; release is a CAS on it
   scheduleHash        String?   @map("schedule_hash")
   budgetMonthlyCents  Int?      @map("budget_monthly_cents") // null = uncapped
   deactivatedReason   String?   @map("deactivated_reason") // brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin
@@ -840,6 +841,8 @@ model OAuthAuthCode {
   userId              String    @map("user_id")
   redirectUri         String    @map("redirect_uri")
   scope               String
+  /// Which MCP server the token is for (RFC 8707): "context" | "creator".
+  resource            String    @default("context")
   codeChallenge       String    @map("code_challenge")
   codeChallengeMethod String    @default("S256") @map("code_challenge_method")
   expiresAt           DateTime  @map("expires_at")
@@ -857,6 +860,8 @@ model OAuthRefreshToken {
   clientId  String    @map("client_id")
   userId    String    @map("user_id")
   scope     String
+  /// Which MCP server refreshed tokens are for (RFC 8707): "context" | "creator".
+  resource  String    @default("context")
   expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
   createdAt DateTime  @default(now()) @map("created_at")

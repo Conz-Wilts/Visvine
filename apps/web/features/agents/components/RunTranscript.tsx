@@ -6,7 +6,7 @@ import type { AgentRunEvent } from '@/lib/agents/runs';
 import type { SerializedRun } from '@/lib/agents/service';
 import { fmtCents, terminalLabel } from '../lib/rowState';
 
-type RunWithEvents = SerializedRun & { events: AgentRunEvent[] };
+type RunWithEvents = SerializedRun & { events: AgentRunEvent[]; transcriptHidden: boolean };
 
 /**
  * One run's transcript. Polls every 3 s while the run is `running` — the
@@ -63,7 +63,10 @@ export default function RunTranscript({ spaceId, agentName, runId }: { spaceId: 
       </div>
       {run.errorMessage && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">{run.errorMessage}</p>}
       <ol className="flex flex-col gap-2 rounded-xl border border-border-subtle bg-surface-2 p-3 font-mono text-[12px] leading-relaxed">
-        {run.events.length === 0 && <li className="text-text-muted">No events yet.</li>}
+        {run.transcriptHidden && (
+          <li className="text-text-muted">Transcript is visible to the agent's author and space admins only.</li>
+        )}
+        {!run.transcriptHidden && run.events.length === 0 && <li className="text-text-muted">No events yet.</li>}
         {run.events.map((e, i) => (
           <li key={i} className="whitespace-pre-wrap break-words">
             {e.type === 'assistant' && (

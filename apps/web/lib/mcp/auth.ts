@@ -4,6 +4,7 @@
  */
 import type { AuthInfo, CallToolResult } from '@modelcontextprotocol/server'
 import { verifyAccessToken } from '@/lib/mcp/tokens'
+import type { McpServerKind } from '@/lib/mcp/config'
 import { TOOL_SCOPES, type McpToolName } from '@/lib/mcp/scopes'
 
 /** The caller behind a verified token — the identity every tool acts as. */
@@ -25,20 +26,23 @@ export class McpError extends Error {
   }
 }
 
-/** The verifier `withMcpAuth` calls on every request. */
-export async function verifyMcpBearer(
-  _req: Request,
-  bearerToken?: string,
-): Promise<AuthInfo | undefined> {
-  if (!bearerToken) return undefined
-  const v = await verifyAccessToken(bearerToken)
-  if (!v) return undefined
-  return {
-    token: bearerToken,
-    clientId: v.clientId,
-    scopes: v.scopes,
-    expiresAt: v.expiresAt,
-    extra: { userId: v.userId, name: v.name, email: v.email, personId: v.personId },
+/**
+ * The verifier `withMcpAuth` calls on every request, bound to one server: a
+ * token minted for the creator server is not a token for the context server,
+ * and vice versa (its `aud` says which).
+ */
+export function mcpBearerVerifier(kind: McpServerKind) {
+  return async (_req: Request, bearerToken?: string): Promise<AuthInfo | undefined> => {
+    if (!bearerToken) return undefined
+    const v = await verifyAccessToken(bearerToken, kind)
+    if (!v) return undefined
+    return {
+      token: bearerToken,
+      clientId: v.clientId,
+      scopes: v.scopes,
+      expiresAt: v.expiresAt,
+      extra: { userId: v.userId, name: v.name, email: v.email, personId: v.personId },
+    }
   }
 }
 

@@ -99,6 +99,7 @@ async function main() {
     { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' },
     MCP_SCOPES,
     'verify-oauth-crm-mcp',
+    'context',
   );
 
   const client = new Client({ name: 'verify-oauth-crm', version: '1.0.0' });

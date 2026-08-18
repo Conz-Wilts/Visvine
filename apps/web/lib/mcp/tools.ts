@@ -1,11 +1,18 @@
 /**
- * The MCP tool surface: fourteen tools over the context layer.
+ * The MCP tool surfaces. Two servers share this file (see registerTools and
+ * registerCreatorTools at the bottom):
  *
+ *   CONTEXT server (/api/mcp)
  *   read     list_spaces, list_context, search_context, read_context,
  *            list_files, read_file
  *   write    add_context, edit_context, append_context, move_context
  *   maintain clean_context, manage_alias
  *   connect  list_connectors, run_connector
+ *   agents   list_agents, run_agent
+ *   tools    list_tools, install_tool          (discover + activate)
+ *
+ *   CREATOR server (/api/mcp/creator)
+ *   list_spaces + the Tool authoring loop (lib/mcp/appTools.ts)
  *
  * The shape of this surface follows the shape of the model, deliberately:
  *
@@ -286,9 +293,12 @@ function describeNode(row: NodeRow) {
   }
 }
 
-export function registerTools(server: McpServer): void {
-  // ── Read ────────────────────────────────────────────────────────────────
-
+/**
+ * `list_spaces` is on BOTH servers: it is the entry point every other tool's
+ * `space_id` comes from, and the creator server needs it as much as the
+ * context server does.
+ */
+function registerListSpaces(server: McpServer): void {
   server.registerTool(
     'list_spaces',
     {
@@ -304,6 +314,17 @@ export function registerTools(server: McpServer): void {
         spaces: await listMySpaces(ctx),
       })),
   )
+}
+
+/**
+ * The CONTEXT server (/api/mcp): everything above, plus Tool discovery and
+ * activation (list_tools, install_tool). Authoring a Tool lives on the creator
+ * server — see registerCreatorTools.
+ */
+export function registerTools(server: McpServer): void {
+  // ── Read ────────────────────────────────────────────────────────────────
+
+  registerListSpaces(server)
 
   server.registerTool(
     'list_context',
@@ -1368,5 +1389,18 @@ export function registerTools(server: McpServer): void {
   // the SDK, a preview link, and the marketplace's publish and install.
   // lib/mcp/appTools.ts — its own file because it is nine tools and a service
   // seam, not because it is a different kind of surface.
-  registerAppTools(server)
+  registerAppTools(server, 'context')
+}
+
+/**
+ * The CREATOR server (/api/mcp/creator): the Tool authoring loop and nothing
+ * else — list_spaces to find where to build, then get_tool_sdk → create_tool →
+ * write_tool → check_tool → preview_tool → publish_tool (lib/mcp/appTools.ts).
+ * A coding agent pointed here can build a Tool without also holding the
+ * context read/write surface, and a context connection never carries the
+ * tools that write executable code into a space.
+ */
+export function registerCreatorTools(server: McpServer): void {
+  registerListSpaces(server)
+  registerAppTools(server, 'creator')
 }

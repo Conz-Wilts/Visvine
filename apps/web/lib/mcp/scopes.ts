@@ -10,6 +10,7 @@
  * token carrying `context:write` is still refused on a space where the
  * caller has no write access.
  */
+import type { McpServerKind } from '@/lib/mcp/config'
 
 export const MCP_SCOPES = [
   'context:read',
@@ -21,6 +22,26 @@ export const MCP_SCOPES = [
 ] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
+
+/**
+ * The scopes each MCP server can actually use — what its `scopes_supported`
+ * advertises, what its 401 challenge hints, and the ceiling `negotiateScopes`
+ * applies at consent. The creator server exposes only the authoring loop
+ * (lib/mcp/appTools.ts `surface === 'creator'`), so a Tool-building
+ * connection is never asked to consent to writing notes, calling connectors,
+ * running agents or installing Tools — capabilities it could not exercise
+ * anyway. tests/mcp.test.ts pins that every creator-surface tool's scope is
+ * grantable here, so adding a tool to that surface without widening this list
+ * fails the suite.
+ */
+const SCOPES_FOR_KIND: Record<McpServerKind, readonly McpScope[]> = {
+  context: MCP_SCOPES,
+  creator: ['context:read', 'tools:author'],
+}
+
+export function scopesForKind(kind: McpServerKind): readonly McpScope[] {
+  return SCOPES_FOR_KIND[kind]
+}
 
 /** Plain-language consent copy — what the user actually sees when approving. */
 export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
@@ -130,10 +151,12 @@ export function serializeScopes(scopes: readonly string[]): string {
 export function negotiateScopes(
   requested: string | null | undefined,
   clientAllowlist: string | null | undefined,
+  kind: McpServerKind,
 ): McpScope[] {
   const req = parseScopes(requested)
   const allowed = clientAllowlist ? new Set(parseScopes(clientAllowlist)) : null
-  const base = req.length > 0 ? req : DEFAULT_SCOPES
+  const forKind = new Set(scopesForKind(kind))
+  const base = (req.length > 0 ? req : DEFAULT_SCOPES).filter((s) => forKind.has(s))
   if (!allowed) return base
   return base.filter((s) => allowed.has(s))
 }

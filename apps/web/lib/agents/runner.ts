@@ -66,19 +66,30 @@ function nowIso(d: Date, tz: string): string {
   }
 }
 
-/** Release the state row after a run: idle, failure bookkeeping, auto-deactivation. */
+/**
+ * Release the state row after a run: idle, failure bookkeeping, auto-deactivation.
+ *
+ * A compare-and-swap on `currentRunId`: the row is only touched if it still
+ * belongs to THIS run. If the tick has reclaimed it (and maybe re-claimed it for
+ * a newer run), this release matches nothing and does no bookkeeping — the
+ * reclaim already failed the run and counted the failure. Without the CAS a
+ * late release would flip the row idle under the newer run.
+ */
 async function release(
   stateId: string,
+  runId: string,
   spaceId: string,
   name: string,
   outcome: { failed: boolean; countsAsFailure: boolean; deactivate: { reason: DeactivationReason; detail: string | null } | null },
 ): Promise<DeactivationReason | null> {
-  const state = await prisma.agentState.findUnique({ where: { id: stateId }, select: { consecutiveFailures: true } })
-  const failures = outcome.countsAsFailure ? (state?.consecutiveFailures ?? 0) + 1 : outcome.failed ? (state?.consecutiveFailures ?? 0) : 0
-  await prisma.agentState.update({
-    where: { id: stateId },
-    data: { status: 'idle', runningSince: null, consecutiveFailures: failures },
+  const state = await prisma.agentState.findUnique({ where: { id: stateId }, select: { consecutiveFailures: true, currentRunId: true } })
+  if (!state || state.currentRunId !== runId) return null // reclaimed: not ours any more
+  const failures = outcome.countsAsFailure ? state.consecutiveFailures + 1 : outcome.failed ? state.consecutiveFailures : 0
+  const moved = await prisma.agentState.updateMany({
+    where: { id: stateId, currentRunId: runId },
+    data: { status: 'idle', runningSince: null, currentRunId: null, consecutiveFailures: failures },
   })
+  if (moved.count !== 1) return null // reclaimed between the read and the write
   if (outcome.deactivate) {
     await deactivateAgent(spaceId, name, outcome.deactivate.reason, outcome.deactivate.detail)
     return outcome.deactivate.reason
@@ -122,7 +133,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
       errorMessage: message,
       model: o.model ?? undefined,
     })
-    const deactivated = await release(state.id, spaceId, name, {
+    const deactivated = await release(state.id, runId, spaceId, name, {
       failed: true,
       countsAsFailure: o.countsAsFailure ?? true,
       deactivate: o.deactivate ?? null,
@@ -153,7 +164,16 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     // 3. The model, on the space's key.
     const resolved = await resolveAgentChatConfig(spaceId, brief.model)
     if (!resolved.ok) {
-      const deactivate = resolved.reason === 'invalid_model' ? null : { reason: 'config' as const, detail: resolved.message }
+      // Only faults in the BRIEF or the SPACE deactivate (`no_key`, `no_endpoint`
+      // — an admin has to act). `invalid_model` is a stale brief the author
+      // will fix; `bad_key` is a PLATFORM fault (SECRETS_KEY missing/rotated on
+      // the instance) that would otherwise deactivate every active agent in
+      // every space on a single misconfigured deploy — it fails the run and
+      // counts toward repeated_failure, no more.
+      const deactivate =
+        resolved.reason === 'invalid_model' || resolved.reason === 'bad_key'
+          ? null
+          : { reason: 'config' as const, detail: resolved.message }
       return fail('config', resolved.message, { deactivate })
     }
     const { config, ref } = resolved
@@ -231,7 +251,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
           errorMessage: null,
           model: brief.model,
         })
-        const deactivated = await release(state.id, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })
+        const deactivated = await release(state.id, runId, spaceId, name, { failed: false, countsAsFailure: false, deactivate: null })
         return { status: 'succeeded', reason: result.reason, deactivated }
       }
       case 'stopped': {

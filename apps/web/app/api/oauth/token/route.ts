@@ -12,9 +12,10 @@ import {
   rotateRefreshToken,
   verifyPkceS256,
   getUserIdentity,
+  kindFromStored,
 } from '@/lib/mcp/oauth'
 import { resolveClient, ClientResolutionError } from '@/lib/mcp/clients'
-import { isCanonicalResource, mcpResourceUrl } from '@/lib/mcp/config'
+import { isCanonicalResource, mcpResourceUrl, resourceKindOf } from '@/lib/mcp/config'
 import { mintAccessToken } from '@/lib/mcp/tokens'
 import { parseScopes, serializeScopes } from '@/lib/mcp/scopes'
 
@@ -59,12 +60,18 @@ async function clientStillValid(clientId: string): Promise<boolean> {
 export async function POST(req: NextRequest) {
   const p = await readParams(req)
 
-  // RFC 8707. Tokens from this server are always minted for the one MCP
-  // resource, so a request naming a different one is refused rather than
-  // quietly satisfied with a token the client would then send elsewhere.
+  // RFC 8707. Tokens from this server are minted for exactly one of the two MCP
+  // resources (context / creator) — the one the grant was authorized for — so
+  // a request naming anything else is refused rather than quietly satisfied
+  // with a token the client would then send elsewhere. A `resource` here that
+  // names OUR OTHER server is refused too: the user consented to one.
   if (p.resource !== undefined && !isCanonicalResource(p.resource)) {
-    return oauthError('invalid_target', `Tokens are only issued for ${mcpResourceUrl()}`)
+    return oauthError(
+      'invalid_target',
+      `Tokens are only issued for ${mcpResourceUrl('context')} or ${mcpResourceUrl('creator')}`,
+    )
   }
+  const requestedKind = p.resource !== undefined ? resourceKindOf(p.resource) : null
 
   if (p.grant_type === 'authorization_code') {
     const row = await consumeAuthCode(p.code ?? '')
@@ -80,12 +87,18 @@ export async function POST(req: NextRequest) {
     const identity = await getUserIdentity(row.userId)
     if (!identity) return oauthError('invalid_grant', 'The authorizing user no longer exists')
 
+    const kind = kindFromStored(row.resource)
+    if (!kind) return oauthError('invalid_grant', 'Authorization code carries an unknown resource')
+    if (requestedKind && requestedKind !== kind) {
+      return oauthError('invalid_target', `This code was authorized for ${mcpResourceUrl(kind)}`)
+    }
     const scopes = parseScopes(row.scope)
-    const { token, expiresIn } = await mintAccessToken(identity, scopes, row.clientId)
+    const { token, expiresIn } = await mintAccessToken(identity, scopes, row.clientId, kind)
     const refreshToken = await issueRefreshToken({
       clientId: row.clientId,
       userId: row.userId,
       scope: serializeScopes(scopes),
+      resource: kind,
     })
 
     return NextResponse.json(
@@ -101,8 +114,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (p.grant_type === 'refresh_token') {
-    const rotated = await rotateRefreshToken(p.refresh_token ?? '')
+    const rotated = await rotateRefreshToken(p.refresh_token ?? '', requestedKind)
     if (!rotated) return oauthError('invalid_grant', 'Refresh token is invalid, expired or revoked')
+    if ('wrongResource' in rotated) {
+      return oauthError('invalid_target', `This grant is for ${mcpResourceUrl(rotated.wrongResource)}`)
+    }
     if (p.client_id && rotated.clientId !== p.client_id) {
       return oauthError('invalid_grant', 'Refresh token was issued to another client')
     }
@@ -116,7 +132,7 @@ export async function POST(req: NextRequest) {
     // Re-parsed through the current catalogue, so a grant stored before a scope
     // was retired cannot carry it forward.
     const scopes = parseScopes(rotated.scope)
-    const { token, expiresIn } = await mintAccessToken(identity, scopes, rotated.clientId)
+    const { token, expiresIn } = await mintAccessToken(identity, scopes, rotated.clientId, rotated.resource)
 
     return NextResponse.json(
       {

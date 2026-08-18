@@ -130,28 +130,49 @@ and no move, so it cannot free the path either. See
 
 ## Authoring loop (over MCP)
 
-An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's MCP
-server — there is no in-app AI Tool builder. The tool group lives in
-`lib/mcp/appTools.ts` (`registerAppTools`), registered from `lib/mcp/tools.ts`
-beside `list_connectors`/`run_connector` and `list_agents`/`run_agent`, and every
-handler goes through `resolveTarget(ctx, space_id, scope)` — the same
-space-selection seam every other MCP tool uses — so a Tool's notes obey the
-caller's real grants.
+An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's
+**creator MCP server** — there is no in-app AI Tool builder. Visvine runs two MCP
+servers (`lib/mcp/config.ts#MCP_SERVER_KINDS`), each its own OAuth protected
+resource with its own token audience:
 
-| MCP tool | Scope | Does |
+| Server | URL | Carries |
 |---|---|---|
-| `get_tool_sdk` | `context:read` | Returns `TOOL_AUTHOR_GUIDE` + `TOOL_KIT_DTS` (`lib/tools/sdkDocs.ts`) and the bridge method list — read this once before writing anything. |
-| `list_tools` | `context:read` | Authored Tools in the space (with build status) plus installed Tools. |
-| `read_tool` | `context:read` | One Tool's `index.md`/`ui.tsx`/`data.js` (unwrapped) + parsed config + build diagnostics. |
-| `create_tool` | `tools:author` | Creates the entity folder + scaffolds (`lib/tools/service.ts#createTool`); returns the file list, the preview deep link and web URL, and a pointer to `get_tool_sdk`. |
-| `write_tool` | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result. |
-| `check_tool` | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). |
-| `preview_tool` | `tools:author` | The two preview URLs again, plus current build status — no rendering happens over MCP. |
-| `publish_tool` | `tools:author` | `publishTool` — admin-only; explains the review gate in its response. |
-| `install_tool` | `tools:install` | `installVersion` — admin-only; returns the install plus any type-claim conflicts and unmet requirements. |
+| **Visvine** (context) | `/api/mcp` | Everything about the space's context — read/search/write, connectors, agents — plus Tool **discovery and activation**: `list_tools`, `install_tool`. |
+| **Visvine Creator** | `/api/mcp/creator` | `list_spaces` plus the **authoring loop**: `get_tool_sdk`, `create_tool`, `read_tool`, `write_tool`, `check_tool`, `preview_tool`, `publish_tool` (and `list_tools`, so an author can see what exists). |
 
-Every scope is declared in `lib/mcp/scopes.ts#TOOL_SCOPES`, the single source the
-server checks before dispatch and replies `insufficient_scope` for.
+Both addresses are shown in Settings → MCP (`/api/mcp/connect-info`). A token
+minted for one server is refused by the other (`aud`), so an everyday "help me
+with my notes" connection never carries the surface that writes executable code
+into a space, and a coding agent pointed at the creator cannot read the space's
+notes beyond the Tools themselves. The tool group lives in `lib/mcp/appTools.ts`
+(`registerAppTools(server, surface)`), registered from `lib/mcp/tools.ts`
+(`registerTools` for the context server, `registerCreatorTools` for the
+creator), and every handler goes through `resolveTarget(ctx, space_id, scope)`
+— the same space-selection seam every other MCP tool uses — so a Tool's notes
+obey the caller's real grants.
+
+| MCP tool | Server | Scope | Does |
+|---|---|---|---|
+| `get_tool_sdk` | creator | `context:read` | Returns `TOOL_AUTHOR_GUIDE` + `TOOL_KIT_DTS` (`lib/tools/sdkDocs.ts`) and the bridge method list — read this once before writing anything. |
+| `list_tools` | both | `context:read` | Authored Tools in the space (with build status) plus installed Tools. |
+| `read_tool` | creator | `context:read` | One Tool's `index.md`/`ui.tsx`/`data.js` (unwrapped) + parsed config + build diagnostics. |
+| `create_tool` | creator | `tools:author` | Creates the entity folder + scaffolds (`lib/tools/service.ts#createTool`); returns the file list, the preview deep link and web URL, and a pointer to `get_tool_sdk`. |
+| `write_tool` | creator | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result. |
+| `check_tool` | creator | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). |
+| `preview_tool` | creator | `tools:author` | The two preview URLs again, plus current build status — no rendering happens over MCP. |
+| `publish_tool` | creator | `tools:author` | `publishTool` — admin-only; explains the review gate in its response. |
+| `install_tool` | context | `tools:install` | `installVersion` — admin-only; returns the install plus any type-claim conflicts and unmet requirements. |
+
+Every scope is declared in `lib/mcp/scopes.ts#TOOL_SCOPES`, the single source
+both servers check before dispatch and reply `insufficient_scope` for. Which
+server a tool sits on is decided in `registerAppTools` and pinned by
+`tests/mcp-scopes.test.ts`. Each server also has its own scope **ceiling**
+(`scopesForKind`): the creator advertises, hints (401 `scope=`) and negotiates
+only `context:read tools:author`, so a Tool-authoring connection is never asked
+to consent to writing notes, calling connectors, running agents or installing
+Tools; a request that survives with no scope at all is refused `invalid_scope`.
+Grants remember their server (`resource` column, CHECK-constrained), and an
+unknown value is refused rather than treated as the context server.
 
 ### The write → diagnostics cycle
 

@@ -31,6 +31,7 @@ import type { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { withCtx, McpError, type McpContext } from '@/lib/mcp/auth'
 import { resolveTarget, type Target } from '@/lib/mcp/context'
+import type { McpServerKind } from '@/lib/mcp/config'
 import { featureAccessForbidden } from '@/lib/auth'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
@@ -575,10 +576,25 @@ const TOOL_SHAPE =
   'reach Visvine ONLY through the bridge, within the reach `perimeter:` declares — and never beyond ' +
   'what the person looking at it could already read. Call get_tool_sdk before writing any code.'
 
-export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps): void {
+/**
+ * Which server is registering: the CONTEXT server gets the two tools that
+ * discover and activate Tools in a space (list_tools, install_tool); the
+ * CREATOR server gets the whole authoring loop (list_tools again, so an author
+ * can see what exists, plus get_tool_sdk, create/read/write/check/preview/
+ * publish_tool). install_tool is deliberately NOT on the creator server: putting
+ * someone else's code in front of a space's members is a space-admin act done
+ * from the everyday connection, not part of building.
+ */
+export function registerAppTools(
+  server: McpServer,
+  surface: McpServerKind,
+  deps: AppToolDeps = liveDeps,
+): void {
+  const authoring = surface === 'creator'
+
   // ── Author ──────────────────────────────────────────────────────────────
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'create_tool',
     {
       description:
@@ -612,7 +628,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'list_tools', (ctx) => listTools(ctx, args, deps)),
   )
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'read_tool',
     {
       description:
@@ -630,7 +646,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'read_tool', (ctx) => readTool(ctx, args, deps)),
   )
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'write_tool',
     {
       description:
@@ -652,7 +668,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'write_tool', (ctx) => writeTool(ctx, args, deps)),
   )
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'check_tool',
     {
       description:
@@ -666,7 +682,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'check_tool', (ctx) => checkTool(ctx, args, deps)),
   )
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'get_tool_sdk',
     {
       description:
@@ -682,7 +698,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'get_tool_sdk', (ctx) => getToolSdk(ctx, args)),
   )
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'preview_tool',
     {
       description:
@@ -698,7 +714,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
 
   // ── Marketplace ─────────────────────────────────────────────────────────
 
-  server.registerTool(
+  if (authoring) server.registerTool(
     'publish_tool',
     {
       description:
@@ -715,7 +731,7 @@ export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps
     (args, extra) => withCtx(extra, 'publish_tool', (ctx) => publishTool(ctx, args, deps)),
   )
 
-  server.registerTool(
+  if (!authoring) server.registerTool(
     'install_tool',
     {
       description:

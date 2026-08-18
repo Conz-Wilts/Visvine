@@ -59,6 +59,8 @@ export function capEvents(events: AgentRunEvent[]): AgentRunEvent[] {
 }
 
 export async function createRun(input: {
+  /** Pre-minted by the claim path so agent_state.current_run_id can name it. */
+  id?: string
   stateId: string
   spaceId: string
   name: string
@@ -68,6 +70,7 @@ export async function createRun(input: {
 }): Promise<AgentRun> {
   return prisma.agentRun.create({
     data: {
+      ...(input.id ? { id: input.id } : {}),
       stateId: input.stateId,
       spaceId: input.spaceId,
       name: input.name,

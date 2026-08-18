@@ -1,12 +1,13 @@
 /**
- * What a person needs in order to point an MCP client at this deployment.
+ * What a person needs in order to point an MCP client at this deployment:
+ * the two server addresses (context and creator) and the scope catalogue.
  *
- * The URL is derived server-side rather than rebuilt in the browser, because
- * `mcpResourceUrl()` is the same value the protected-resource metadata
- * advertises and the token `aud` is checked against — a URL the settings page
- * assembled from `window.location` would drift the moment MCP_RESOURCE_URL is
- * set. Session-gated: none of this is secret, but it is only ever shown to
- * someone who is signed in.
+ * The URLs are derived server-side rather than rebuilt in the browser, because
+ * `mcpResourceUrl()` is the same value each protected-resource metadata
+ * document advertises and the token `aud` is checked against — a URL the
+ * settings page assembled from `window.location` would drift the moment
+ * MCP_RESOURCE_URL is set. Session-gated: none of this is secret, but it is
+ * only ever shown to someone who is signed in.
  */
 
 import { NextResponse } from 'next/server';
@@ -19,7 +20,9 @@ export async function GET() {
   if (session instanceof Response) return session;
 
   return NextResponse.json({
-    url: mcpResourceUrl(),
+    /** The context server — kept as `url` so older clients of this route keep working. */
+    url: mcpResourceUrl('context'),
+    creatorUrl: mcpResourceUrl('creator'),
     issuer: oauthIssuer(),
     scopes: MCP_SCOPES.map((scope) => ({ scope, description: SCOPE_DESCRIPTIONS[scope] })),
   });

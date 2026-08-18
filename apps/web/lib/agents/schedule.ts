@@ -12,12 +12,13 @@
  * No backfill: dispatch sets `next_run_at` to the next occurrence AFTER now.
  * A nightly agent that missed three nights fires once.
  */
+import crypto from 'node:crypto'
 import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { agentActivationPath, nextOccurrence, parseAgentActivation, scheduleHash } from './config'
 import { dispatchRun, type DispatchResult } from './dispatch'
-import { effectiveTimezone, syncAgentState } from './hooks'
-import { MAX_RUN_MS, MAX_RUNS_PER_TICK } from './limits'
+import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
+import { MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS, MAX_RUNS_PER_TICK, RECLAIM_GRACE_MS } from './limits'
 import { createRun, failStaleRun, pruneRuns } from './runs'
 
 export interface TickReport {
@@ -38,26 +39,39 @@ export async function lastHeartbeat(): Promise<Date | null> {
   return row?.lastTickAt ?? null
 }
 
-/** Rows stuck in `running` past MAX_RUN_MS: their instance died. Fail the run, free the row. */
-async function reclaimStale(now: Date): Promise<number> {
-  const cutoff = new Date(now.getTime() - MAX_RUN_MS)
+/**
+ * Rows stuck in `running` past MAX_RUN_MS + RECLAIM_GRACE_MS: their instance
+ * died (a live executor times itself out at MAX_RUN_MS and releases well
+ * inside the grace). Fail the run, free the row — by CAS on `runningSince`, so
+ * an executor releasing at the same moment can't be double-counted — and apply
+ * the same repeated-failure policy a live release would, or an agent whose
+ * instance dies every run would keep firing forever.
+ */
+export async function reclaimStale(now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - MAX_RUN_MS - RECLAIM_GRACE_MS)
   const stale = await prisma.agentState.findMany({
     where: { status: 'running', runningSince: { lt: cutoff } },
-    select: { id: true, consecutiveFailures: true },
+    select: { id: true, spaceId: true, name: true, runningSince: true, currentRunId: true, consecutiveFailures: true },
   })
+  let reclaimed = 0
   for (const row of stale) {
-    const run = await prisma.agentRun.findFirst({
-      where: { stateId: row.id, status: 'running' },
-      orderBy: { startedAt: 'desc' },
-      select: { id: true },
+    const failures = row.consecutiveFailures + 1
+    const moved = await prisma.agentState.updateMany({
+      where: { id: row.id, status: 'running', runningSince: row.runningSince },
+      data: { status: 'idle', runningSince: null, currentRunId: null, consecutiveFailures: failures },
     })
-    if (run) await failStaleRun(run.id, 'timeout', 'The run did not finish and its instance was reclaimed.')
-    await prisma.agentState.update({
-      where: { id: row.id },
-      data: { status: 'idle', runningSince: null, consecutiveFailures: row.consecutiveFailures + 1 },
-    })
+    if (moved.count !== 1) continue // the executor released first; nothing to reclaim
+    reclaimed++
+    const runId =
+      row.currentRunId ??
+      (await prisma.agentRun.findFirst({ where: { stateId: row.id, status: 'running' }, orderBy: { startedAt: 'desc' }, select: { id: true } }))?.id ??
+      null
+    if (runId) await failStaleRun(runId, 'timeout', 'The run did not finish and its instance was reclaimed.')
+    if (failures >= MAX_CONSECUTIVE_FAILURES) {
+      await deactivateAgent(row.spaceId, row.name, 'repeated_failure', `${failures} consecutive failed runs`)
+    }
   }
-  return stale.length
+  return reclaimed
 }
 
 /**
@@ -66,19 +80,22 @@ async function reclaimStale(now: Date): Promise<number> {
  * `manual` requires only active+idle and leaves next_run_at alone (a manual
  * run is extra, not a replacement). Returns true iff exactly one row moved.
  */
-async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, nextRunAt: Date | null): Promise<boolean> {
+async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, nextRunAt: Date | null, runId: string): Promise<boolean> {
   const changed =
     mode === 'scheduled'
       ? await prisma.$executeRaw`
           UPDATE "agent_state"
-             SET "status" = 'running', "running_since" = ${now}, "last_run_at" = ${now}, "next_run_at" = ${nextRunAt}, "updated_at" = ${now}
+             SET "status" = 'running', "running_since" = ${now}, "current_run_id" = ${runId}, "last_run_at" = ${now}, "next_run_at" = ${nextRunAt}, "updated_at" = ${now}
            WHERE "id" = ${stateId} AND "status" = 'idle' AND "active" = true AND "next_run_at" IS NOT NULL AND "next_run_at" <= ${now}`
       : await prisma.$executeRaw`
           UPDATE "agent_state"
-             SET "status" = 'running', "running_since" = ${now}, "last_run_at" = ${now}, "updated_at" = ${now}
+             SET "status" = 'running', "running_since" = ${now}, "current_run_id" = ${runId}, "last_run_at" = ${now}, "updated_at" = ${now}
            WHERE "id" = ${stateId} AND "status" = 'idle' AND "active" = true`
   return changed === 1
 }
+
+/** The run id is minted BEFORE the claim so the claim can name it (release is a CAS on it). */
+const newRunId = () => crypto.randomUUID()
 
 /** Which spaces already have a run in flight — one at a time per space. */
 async function busySpaces(): Promise<Set<string>> {
@@ -126,9 +143,10 @@ export async function tick(now = new Date()): Promise<TickReport> {
       if (!fresh.active || !fresh.nextRunAt || fresh.nextRunAt > now) continue
     }
     const next = nextOccurrence(parsed.activation.schedule, now, tz)
-    if (!(await claim(row.id, 'scheduled', now, next))) continue
+    const runId = newRunId()
+    if (!(await claim(row.id, 'scheduled', now, next, runId))) continue
 
-    const run = await createRun({ stateId: row.id, spaceId: row.spaceId, name: row.name, trigger: 'scheduled' })
+    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger: 'scheduled' })
     claimed.push({ runId: run.id, stateId: row.id })
     busy.add(row.spaceId)
   }
@@ -160,8 +178,9 @@ export async function claimManualRun(
   if (!row.active) return { ok: false, code: 'inactive', message: 'The agent must be active before it can be run — ask a space admin to activate it.' }
   if (row.status === 'running') return { ok: false, code: 'busy', message: 'The agent is already running.' }
   if ((await busySpaces()).has(spaceId)) return { ok: false, code: 'busy', message: 'Another agent in this space is running; try again shortly.' }
-  if (!(await claim(row.id, 'manual', now, null))) return { ok: false, code: 'busy', message: 'The agent was just claimed by another run.' }
-  const run = await createRun({ stateId: row.id, spaceId, name, trigger: 'manual', startedBy })
+  const runId = newRunId()
+  if (!(await claim(row.id, 'manual', now, null, runId))) return { ok: false, code: 'busy', message: 'The agent was just claimed by another run.' }
+  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy })
   const dispatch = dispatchRun(run.id)
   return { ok: true, runId: run.id, dispatch }
 }

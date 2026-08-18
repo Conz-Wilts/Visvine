@@ -67,6 +67,7 @@ async function main() {
     { userId: admin.id, name: admin.name ?? '', email: admin.email ?? '' },
     MCP_SCOPES,
     'verify-fund-metrics-mcp',
+    'context',
   );
 
   const client = new Client({ name: 'verify-fund-metrics', version: '1.0.0' });

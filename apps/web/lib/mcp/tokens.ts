@@ -2,13 +2,15 @@
  * MCP access-token minting + verification.
  *
  * Access tokens are HS256 JWTs signed with the same `AUTH_SECRET` as web
- * sessions, but with `typ: "mcp_access"`, an `aud` bound to the MCP resource
- * URL, and a `scope` claim. The `typ` guard in `verifyAccessToken` is what stops
- * an ordinary `auth_session` cookie JWT from being replayed as an MCP token —
- * do not relax it.
+ * sessions, but with `typ: "mcp_access"`, an `aud` bound to ONE MCP resource
+ * URL (the context server or the creator server — lib/mcp/config.ts), and a
+ * `scope` claim. The `typ` guard in `verifyAccessToken` is what stops an
+ * ordinary `auth_session` cookie JWT from being replayed as an MCP token — do
+ * not relax it. The `aud` check is what stops a token minted for one server
+ * from being presented to the other.
  */
 import { SignJWT, jwtVerify } from 'jose'
-import { mcpResourceUrl } from '@/lib/mcp/config'
+import { mcpResourceUrl, type McpServerKind } from '@/lib/mcp/config'
 import { serializeScopes } from '@/lib/mcp/scopes'
 
 const ACCESS_TTL_SECONDS = 60 * 60 // 1 hour
@@ -33,6 +35,7 @@ export async function mintAccessToken(
   identity: McpIdentity,
   scopes: readonly string[],
   clientId: string,
+  kind: McpServerKind,
 ): Promise<{ token: string; expiresIn: number }> {
   const token = await new SignJWT({
     name: identity.name,
@@ -44,7 +47,7 @@ export async function mintAccessToken(
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(identity.userId)
-    .setAudience(mcpResourceUrl())
+    .setAudience(mcpResourceUrl(kind))
     .setIssuedAt()
     .setExpirationTime(`${ACCESS_TTL_SECONDS}s`)
     .sign(secret())
@@ -61,9 +64,13 @@ export interface VerifiedAccessToken {
   expiresAt?: number
 }
 
-export async function verifyAccessToken(token: string): Promise<VerifiedAccessToken | null> {
+/** Verify a bearer for the server named by `kind` — a token for the other server is null here. */
+export async function verifyAccessToken(
+  token: string,
+  kind: McpServerKind,
+): Promise<VerifiedAccessToken | null> {
   try {
-    const { payload } = await jwtVerify(token, secret(), { audience: mcpResourceUrl() })
+    const { payload } = await jwtVerify(token, secret(), { audience: mcpResourceUrl(kind) })
     if (payload.typ !== TOKEN_TYPE) return null
     if (!payload.sub) return null
     const scope = typeof payload.scope === 'string' ? payload.scope : ''

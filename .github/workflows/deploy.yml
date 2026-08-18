@@ -78,7 +78,7 @@ jobs:
           # tools.visvine.com domain mapping exists) degrades to the documented
           # same-origin fallback — see docs/tools.md's Ops runbook.
           docker build \
-            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
+            --build-arg TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }} \
             -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
 
       - name: Verify TOOLS_ORIGIN survived the build
@@ -116,8 +116,8 @@ jobs:
             --platform=managed \
             --service-account=visvine-cloudrun@${{ env.PROJECT }}.iam.gserviceaccount.com \
             --add-cloudsql-instances=${{ env.SQL_INSTANCE }} \
-            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest \
-            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }} \
+            --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=GOOGLE_CLIENT_SECRET:latest,SUPER_ADMIN_EMAILS=SUPER_ADMIN_EMAILS:latest,GCS_MEDIA_BUCKET=GCS_MEDIA_BUCKET:latest,GCS_RESOURCES_BUCKET=GCS_RESOURCES_BUCKET:latest,SECRETS_KEY=SECRETS_KEY:latest \
+            --set-env-vars=NEXT_PUBLIC_APP_URL=https://visvine.com,GCS_CDN_BASE_URL=https://storage.googleapis.com/visvine-media,ENABLE_DEV_AUTH=false,TOOLS_ORIGIN=${{ vars.TOOLS_ORIGIN }},AGENT_TICK_SERVICE_ACCOUNT=${{ vars.AGENT_TICK_SERVICE_ACCOUNT }} \
             --min-instances=0 \
             --max-instances=10 \
             --timeout=1800 \
