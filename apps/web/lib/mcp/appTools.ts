@@ -1,0 +1,779 @@
+/**
+ * The authoring loop over MCP: nine tools that let an external coding agent
+ * (Claude Code, Cursor) build a Visvine Tool without a checkout of this repo.
+ *
+ *   learn    get_tool_sdk               the guide, the .d.ts and the bridge surface
+ *   author   create_tool, write_tool    scaffold, then edit one file at a time
+ *   verify   check_tool, read_tool      compile + lint, read back what is stored
+ *   see it   preview_tool, list_tools   where it renders, what exists here
+ *   ship     publish_tool, install_tool the review gate and the marketplace
+ *
+ * The loop this surface is designed for — and the reason every write answers
+ * with a fresh build rather than an "ok" — is:
+ *
+ *   get_tool_sdk → create_tool → write_tool(ui.tsx) → read the diagnostics →
+ *   write_tool again → check_tool → preview_tool → publish_tool
+ *
+ * A Tool is three notes (`tools/<name>/index.md`, `ui.tsx`, `data.js`), so every
+ * write here goes through lib/tools/service.ts and therefore through
+ * `writeGated` — the same grants, restricted folders and write denials as any
+ * other note. Nothing in this file re-implements authorization: `resolveTarget`
+ * resolves the principal exactly as the other MCP tools do, publish and install
+ * are refused by the registry's own admin checks, and the refusals come back
+ * with their status attached.
+ *
+ * Every service call sits behind {@link AppToolDeps} so the handlers can be
+ * exercised — the write → diagnostics round trip, an admin refusal — with no
+ * database. `registerAppTools` is the only thing that reaches for the live
+ * implementations.
+ */
+import type { McpServer } from '@modelcontextprotocol/server'
+import { z } from 'zod'
+import { withCtx, McpError, type McpContext } from '@/lib/mcp/auth'
+import { resolveTarget, type Target } from '@/lib/mcp/context'
+import { featureAccessForbidden } from '@/lib/auth'
+import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
+import type { Context } from '@/lib/notes/store'
+import { listConnectors } from '@/lib/connectors/service'
+import { listAgents } from '@/lib/agents/service'
+import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
+import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
+import { toBuildSummary, rebuildTool, toolDiagnosticLine, type BuildSummary } from '@/lib/tools/builds'
+import type { ToolConfig } from '@/lib/tools/config'
+import { appOrigin as liveAppOrigin } from '@/lib/tools/origin'
+import { describePerimeter, perimeterIsEmpty } from '@/lib/tools/perimeter'
+import { BRIDGE_METHODS } from '@/lib/tools/protocol'
+import {
+  computeRequirements,
+  describeRequirements,
+  isDegraded,
+  type SpaceAvailability,
+} from '@/lib/tools/requirements'
+import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
+import {
+  createTool as createToolService,
+  describeAuthoredTool as describeAuthoredToolService,
+  listAuthoredTools as listAuthoredToolsService,
+  writeToolFile as writeToolFileService,
+  type AuthoredToolDetail,
+  type AuthoredToolSummary,
+  type CreateToolResult,
+  type ToolFileName,
+  type WriteToolFileResult,
+} from '@/lib/tools/service'
+import {
+  publishTool as publishToolService,
+  versionHistory as versionHistoryService,
+  type PublishResult,
+  type ToolVersionSummary,
+} from '@/lib/tools/registry'
+import {
+  installVersion as installVersionService,
+  listInstalls as listInstallsService,
+  type InstallResult,
+  type InstallSummary,
+} from '@/lib/tools/installs'
+
+/** The three filenames an author addresses, in the order they matter. */
+const TOOL_FILES = ['index.md', 'ui.tsx', 'data.js'] as const satisfies readonly ToolFileName[]
+
+/** What the space has, plus which of its types a Tool may own the page for. */
+interface ToolSpaceFacts {
+  available: SpaceAvailability
+  /** Member-invented types (`scope: 'note'`), lower-cased — the pageable ones. */
+  customTypes: string[]
+}
+
+/**
+ * Every service call the handlers make, in one seam. Faked wholesale in tests;
+ * the live implementations below are the only place this file touches prisma,
+ * the note store or the registry.
+ */
+export interface AppToolDeps {
+  resolveTarget(ctx: McpContext, spaceId: string): Promise<Target>
+  /**
+   * Whether the caller is locked out of the `tools` feature key entirely —
+   * checked right after every `resolveTarget`, before a handler reaches the
+   * service, exactly like `requireToolsAccess` in lib/tools/route.ts and
+   * `forbiddenForTools` in lib/tools/target.ts.
+   */
+  featureAccessForbidden(userId: string, spaceId: string, email: string): Promise<boolean>
+  listAuthoredTools(p: ContextPrincipal, context: Context): Promise<AuthoredToolSummary[]>
+  describeAuthoredTool(
+    p: ContextPrincipal,
+    context: Context,
+    name: string,
+  ): Promise<AuthoredToolDetail | null>
+  createTool(
+    p: ContextPrincipal,
+    context: Context,
+    input: { name: string; title?: string; description?: string },
+  ): Promise<CreateToolResult>
+  writeToolFile(
+    p: ContextPrincipal,
+    context: Context,
+    name: string,
+    file: ToolFileName,
+    content: string,
+  ): Promise<WriteToolFileResult>
+  /** A forced recompile, already decoded — check_tool's first act. */
+  rebuild(spaceId: string, name: string): Promise<BuildSummary>
+  publishTool(
+    p: ContextPrincipal,
+    context: Context,
+    name: string,
+    opts: { note?: string },
+  ): Promise<PublishResult>
+  installVersion(
+    spaceId: string,
+    versionId: string,
+    actor: { userId: string; email: string },
+  ): Promise<InstallResult>
+  listInstalls(spaceId: string): Promise<InstallSummary[]>
+  /** The newest APPROVED version of a marketplace key, for `install_tool { key }`. */
+  latestApprovedVersion(key: string): Promise<ToolVersionSummary | null>
+  spaceFacts(p: ContextPrincipal, context: Context): Promise<ToolSpaceFacts>
+  appOrigin(): string
+}
+
+/**
+ * The three name spaces a perimeter is checked against, read under the CALLER's
+ * principal rather than an admin's: check_tool is a lint for the author, and an
+ * author who cannot see a connector cannot write a Tool against it either.
+ *
+ * Node types fold the space's stored vocabulary together with the built-in
+ * defaults, because `findNodeTypeConfig` resolves a built-in whether or not the
+ * column lists it — mirroring lib/tools/installs.ts#spaceFacts, so an author's
+ * checklist and an admin's install checklist can't disagree.
+ */
+async function liveSpaceFacts(p: ContextPrincipal, context: Context): Promise<ToolSpaceFacts> {
+  const [connectors, agents, config] = await Promise.all([
+    listConnectors(p, context),
+    listAgents(p, context),
+    readSpaceConfig(context.spaceId),
+  ])
+  const stored = (config?.nodeTypes ?? []) as NodeTypeConfig[]
+  const types = new Set<string>()
+  for (const type of [...stored, ...DEFAULT_NODE_TYPES]) {
+    if (typeof type?.name === 'string' && type.name.trim()) types.add(type.name.trim().toLowerCase())
+  }
+  return {
+    available: {
+      // Model connectors name an LLM provider and are never runnable.
+      connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
+      types: [...types],
+      agents: agents.agents.map((a) => a.name),
+    },
+    customTypes: stored
+      .filter((type) => type?.scope === 'note' && typeof type.name === 'string')
+      .map((type) => type.name.trim().toLowerCase()),
+  }
+}
+
+const liveDeps: AppToolDeps = {
+  resolveTarget: (ctx, spaceId) => resolveTarget(ctx, spaceId, 'shared'),
+  featureAccessForbidden: (userId, spaceId, email) =>
+    featureAccessForbidden(userId, spaceId, 'tools', email),
+  listAuthoredTools: listAuthoredToolsService,
+  describeAuthoredTool: describeAuthoredToolService,
+  createTool: createToolService,
+  writeToolFile: writeToolFileService,
+  rebuild: async (spaceId, name) => toBuildSummary(await rebuildTool(spaceId, name)),
+  publishTool: publishToolService,
+  installVersion: installVersionService,
+  listInstalls: listInstallsService,
+  latestApprovedVersion: async (key) => {
+    // versionHistory is newest-first, so the first approved row is the newest.
+    const history = await versionHistoryService(key)
+    return history.find((v) => v.status === 'approved') ?? null
+  },
+  spaceFacts: liveSpaceFacts,
+  appOrigin: liveAppOrigin,
+}
+
+// ── shared shapes ─────────────────────────────────────────────────────────────
+
+/**
+ * A build as an authoring agent reads it. `errors` are plain lines
+ * (`ui.tsx:12:5 Expected ">"`) because that is what an agent can act on without
+ * unpacking a structure, and `config_error` is kept separate from them: a broken
+ * `index.md` is a different fix from a syntax error in the code.
+ */
+function buildReport(build: BuildSummary | null) {
+  if (!build) {
+    return {
+      ok: false,
+      never_compiled: true,
+      errors: ['This tool has never been compiled — write ui.tsx to build it.'],
+      warnings: [],
+      config_error: null,
+      size_bytes: 0,
+    }
+  }
+  return {
+    ok: build.ok,
+    errors: build.errors.map(toolDiagnosticLine),
+    warnings: build.warnings.map(toolDiagnosticLine),
+    config_error: build.configError,
+    size_bytes: build.sizeBytes,
+    built_at: build.updatedAt,
+  }
+}
+
+/**
+ * Where the author can look at what they just wrote. Both forms every time: the
+ * desktop app opens the deep link in place, and anything else (a browser, a
+ * terminal that only prints links) needs the URL.
+ */
+function previewLinks(name: string, origin: string) {
+  return {
+    desktop_deep_link: `visvine-desktop://open/tools/preview/${name}`,
+    preview_url: `${origin}/tools/preview/${name}`,
+  }
+}
+
+/** What a Tool asks to occupy in the app, as lines rather than a config dump. */
+function describeSurfaces(config: ToolConfig | null): string[] {
+  if (!config) return []
+  const lines: string[] = []
+  if (config.surfaces.rail) {
+    lines.push(
+      `Sidebar row "${config.surfaces.rail.label}" (${config.surfaces.rail.icon}) with its own full-pane page`,
+    )
+  } else {
+    lines.push('No sidebar row — this tool has no page of its own')
+  }
+  for (const claim of config.surfaces.types) {
+    lines.push(
+      claim.mode === 'page'
+        ? `Owns the page for node type "${claim.type}"`
+        : `Adds a tab to the page for node type "${claim.type}"`,
+    )
+  }
+  return lines
+}
+
+/** Turn a service refusal (`{ ok: false, status, error }`) into a tool error. */
+function refuse(result: { status: number; error: string }): never {
+  throw new McpError(result.status, result.error)
+}
+
+/**
+ * The same gate every other Tools door enforces — REST routes
+ * (`requireToolsAccess`) and the bridge (`forbiddenForTools`) both refuse a
+ * space that switched the `tools` feature off before touching the service;
+ * MCP authoring must too, or it becomes the one door left standing.
+ */
+async function requireToolsFeature(ctx: McpContext, target: Target, deps: AppToolDeps): Promise<void> {
+  if (await deps.featureAccessForbidden(ctx.userId, target.context.spaceId, ctx.email)) {
+    throw new McpError(403, 'The Tools feature is not available to you in this space')
+  }
+}
+
+/** The target plus the tool it names, or a 404 that says how to find one. */
+async function requireTool(
+  ctx: McpContext,
+  spaceId: string,
+  name: string,
+  deps: AppToolDeps,
+): Promise<{ target: Target; detail: AuthoredToolDetail }> {
+  const target = await deps.resolveTarget(ctx, spaceId)
+  await requireToolsFeature(ctx, target, deps)
+  const detail = await deps.describeAuthoredTool(target.principal, target.context, name)
+  if (!detail) {
+    throw new McpError(404, `No tool named "${name}" here — list_tools shows what exists.`)
+  }
+  return { target, detail }
+}
+
+// ── arguments ─────────────────────────────────────────────────────────────────
+
+interface CreateToolArgs {
+  space_id: string
+  name: string
+  title: string
+  description: string
+}
+interface ListToolsArgs {
+  space_id: string
+}
+interface ReadToolArgs {
+  space_id: string
+  name: string
+  file?: ToolFileName
+}
+interface WriteToolArgs {
+  space_id: string
+  name: string
+  file: ToolFileName
+  content: string
+}
+interface CheckToolArgs {
+  space_id: string
+  name: string
+}
+interface PreviewToolArgs {
+  space_id: string
+  name: string
+}
+interface PublishToolArgs {
+  space_id: string
+  name: string
+  note?: string
+}
+interface InstallToolArgs {
+  space_id: string
+  version_id?: string
+  key?: string
+}
+
+// ── handlers ──────────────────────────────────────────────────────────────────
+
+async function createTool(ctx: McpContext, args: CreateToolArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await deps.createTool(target.principal, target.context, {
+    name: args.name,
+    title: args.title,
+    description: args.description,
+  })
+  if (!result.ok) refuse(result)
+  return {
+    name: result.name,
+    files: TOOL_FILES.map((file) => `tools/${result.name}/${file}`),
+    build: buildReport(result.build),
+    ...previewLinks(result.name, deps.appOrigin()),
+    next: [
+      'Call get_tool_sdk once — it returns the authoring guide, the @visvine/tool-kit type definitions and the bridge method list.',
+      `Then write_tool { name: "${result.name}", file: "ui.tsx", content } and read the build it hands back.`,
+      'Declare everything the tool touches in index.md `perimeter:` — the bridge refuses anything undeclared.',
+    ],
+  }
+}
+
+async function listTools(ctx: McpContext, args: ListToolsArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const [authored, installed] = await Promise.all([
+    deps.listAuthoredTools(target.principal, target.context),
+    deps.listInstalls(target.context.spaceId),
+  ])
+  return {
+    authored: authored.map((tool) => ({
+      name: tool.name,
+      title: tool.title,
+      description: tool.description,
+      path: tool.path,
+      node_id: tool.nodeId,
+      // 0 means never published; the registry number is the published one.
+      published_version: tool.version,
+      invalid: tool.invalid,
+      build: buildReport(tool.build),
+    })),
+    installed: installed.map((install) => ({
+      slug: install.slug,
+      key: install.key,
+      title: install.title,
+      version: install.version,
+      enabled: install.enabled,
+      degraded: install.degraded,
+      missing: describeRequirements(install.requirements),
+      upgrade_available: install.pendingVersion?.version ?? null,
+    })),
+  }
+}
+
+async function readTool(ctx: McpContext, args: ReadToolArgs, deps: AppToolDeps = liveDeps) {
+  const { detail } = await requireTool(ctx, args.space_id, args.name, deps)
+  const wanted = args.file ? { [args.file]: detail.sources[args.file] } : detail.sources
+  return {
+    name: detail.name,
+    title: detail.title,
+    description: detail.description,
+    path: detail.path,
+    // The sources exactly as the compiler reads them: `ui.tsx` and `data.js`
+    // are unwrapped out of the fenced blocks the notes store them in, so what
+    // comes back here is what write_tool takes.
+    files: wanted,
+    config: detail.config,
+    invalid: detail.invalid,
+    build: buildReport(detail.build),
+  }
+}
+
+async function writeTool(ctx: McpContext, args: WriteToolArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await deps.writeToolFile(
+    target.principal,
+    target.context,
+    args.name,
+    args.file,
+    args.content,
+  )
+  if (!result.ok) refuse(result)
+  const report = buildReport(result.build)
+  return {
+    status: 'applied',
+    path: result.path,
+    file: args.file,
+    // The point of this tool: the write and its compile result are one answer,
+    // so an author iterates on diagnostics without a second call.
+    build: report,
+    ...(report.ok
+      ? {}
+      : {
+          fix: 'The tool will not run until this compiles. Each error is `file:line:column message`; read_tool returns the current source.',
+        }),
+  }
+}
+
+async function checkTool(ctx: McpContext, args: CheckToolArgs, deps: AppToolDeps = liveDeps) {
+  const { target, detail } = await requireTool(ctx, args.space_id, args.name, deps)
+  const build = await deps.rebuild(target.context.spaceId, args.name)
+  const config = build.config ?? detail.config
+
+  const warnings: string[] = []
+  if (!config) {
+    warnings.push('index.md does not parse as a tool config, so nothing below could be checked.')
+  }
+  if (config && perimeterIsEmpty(config.perimeter)) {
+    warnings.push(
+      'The perimeter is empty — this tool can read and write no space data. Declare note globs in `perimeter.read`/`perimeter.write` and any node types, connectors and agents it uses.',
+    )
+  }
+  if (config && !config.description.trim()) {
+    warnings.push(
+      'index.md has no `description:` — it is what the marketplace card and the install checklist show.',
+    )
+  }
+
+  const facts = await deps.spaceFacts(target.principal, target.context)
+  const custom = new Set(facts.customTypes)
+  for (const claim of config?.surfaces.types ?? []) {
+    if (claim.mode !== 'page' || custom.has(claim.type)) continue
+    // parseToolConfig already refuses `page` on a built-in type, so what is
+    // left is a page claim on a type this space simply hasn't invented: the
+    // install resolves it down to a tab rather than refusing.
+    warnings.push(
+      `\`surfaces.types\` claims the page for "${claim.type}", which is not a member-invented type in this space — installing will downgrade it to a tab.`,
+    )
+  }
+
+  const requirements = config
+    ? computeRequirements(config.perimeter, facts.available)
+    : { connectors: [], types: [], agents: [] }
+
+  return {
+    name: args.name,
+    build: buildReport(build),
+    perimeter: config ? describePerimeter(config.perimeter) : [],
+    surfaces: describeSurfaces(config),
+    requirements: {
+      // Missing things never block an install — the tool runs degraded behind a
+      // banner, and unsatisfied reads come back empty.
+      degraded_here: isDegraded(requirements),
+      missing: describeRequirements(requirements),
+    },
+    warnings,
+    ready_to_publish: build.ok && warnings.length === 0,
+  }
+}
+
+async function getToolSdk(_ctx: McpContext, _args: Record<string, never>) {
+  return {
+    guide: TOOL_AUTHOR_GUIDE,
+    tool_kit_dts: TOOL_KIT_DTS,
+    // Everything a tool can ask the host for. `ui.tsx` reaches these through
+    // @visvine/tool-kit; `data.js` gets the same set as isolate capabilities.
+    bridge_methods: [...BRIDGE_METHODS],
+    files: {
+      'index.md':
+        'Frontmatter is the config (type, title, description, surfaces, perimeter); the body is documentation for humans.',
+      'ui.tsx':
+        'React/TSX, compiled on write. The default export is mounted. Only react, react-dom and @visvine/tool-kit are importable.',
+      'data.js':
+        'Optional server-side handlers. Assign one function per operation to `handlers.<name>`; the interface calls them by name through `data.call`.',
+    },
+  }
+}
+
+async function previewTool(ctx: McpContext, args: PreviewToolArgs, deps: AppToolDeps = liveDeps) {
+  const { detail } = await requireTool(ctx, args.space_id, args.name, deps)
+  const report = buildReport(detail.build)
+  return {
+    name: detail.name,
+    title: detail.title,
+    ...previewLinks(detail.name, deps.appOrigin()),
+    build: report,
+    // Nothing is rendered here — a preview link is the feedback channel, not a
+    // screenshot. A tool that does not compile will render an error card.
+    renders: report.ok
+      ? 'Opening either link renders the working copy in a sandboxed frame.'
+      : 'This tool does not compile, so the preview will show an error card. Fix the build first — check_tool lists the errors.',
+  }
+}
+
+async function publishTool(ctx: McpContext, args: PublishToolArgs, deps: AppToolDeps = liveDeps) {
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  const result = await deps.publishTool(target.principal, target.context, args.name, {
+    note: args.note,
+  })
+  if (!result.ok) refuse(result)
+  return {
+    version_id: result.version.id,
+    key: result.version.key,
+    version: result.version.version,
+    status: result.version.status,
+    submitted_at: result.version.submittedAt,
+    perimeter: describePerimeter(result.version.perimeter),
+    // The review gate, stated because an author will otherwise wait for a
+    // marketplace entry that is not coming yet.
+    review:
+      'This snapshot is immutable and now PENDING review by a Visvine super-admin, who sees the declared perimeter and a diff of the code against the last approved version. It is not installable by anyone until it is approved, and publishing again is refused while this one is in the queue.',
+    ...(result.warning ? { warning: result.warning } : {}),
+  }
+}
+
+async function installTool(ctx: McpContext, args: InstallToolArgs, deps: AppToolDeps = liveDeps) {
+  if (!args.version_id && !args.key) {
+    throw new McpError(400, 'Pass either version_id or key.')
+  }
+  const target = await deps.resolveTarget(ctx, args.space_id)
+  await requireToolsFeature(ctx, target, deps)
+  let versionId = args.version_id
+  if (!versionId) {
+    const latest = await deps.latestApprovedVersion(args.key!)
+    if (!latest) {
+      throw new McpError(404, `No approved version of "${args.key}" to install.`)
+    }
+    versionId = latest.id
+  }
+  const result = await deps.installVersion(target.context.spaceId, versionId, {
+    userId: ctx.userId,
+    email: ctx.email,
+  })
+  if (!result.ok) refuse(result)
+  return {
+    slug: result.install.slug,
+    key: result.install.key,
+    title: result.install.title,
+    version: result.install.version,
+    enabled: result.install.enabled,
+    href: `/t/${result.install.slug}`,
+    requirements: {
+      degraded: result.install.degraded,
+      missing: describeRequirements(result.install.requirements),
+    },
+    type_claims: result.install.typeClaims,
+    // `page` claims the space would not grant: a built-in page stays built in,
+    // and a type whose page another install already owns is left alone.
+    downgraded_to_tab: result.downgraded,
+    conflicts: result.conflicts.map((c) => `"${c.type}" page is already owned by the ${c.heldBy} tool`),
+  }
+}
+
+/**
+ * The handlers on their own, for tests and for scripts/verify-*.ts: no server,
+ * no transport, plain JSON in and out. `registerAppTools` is these same
+ * functions wrapped in the MCP scope/error gate.
+ */
+export const appToolHandlers = {
+  createTool,
+  listTools,
+  readTool,
+  writeTool,
+  checkTool,
+  getToolSdk,
+  previewTool,
+  publishTool,
+  installTool,
+}
+
+// ── registration ──────────────────────────────────────────────────────────────
+
+const spaceArg = z
+  .string()
+  .describe('The space to author in — list_spaces returns the ids you can act in')
+
+const nameArg = z
+  .string()
+  .describe("The tool's name: lower-case letters, digits and hyphens, e.g. 'deal-pipeline'")
+
+const fileArg = z
+  .enum(TOOL_FILES)
+  .describe(
+    "'index.md' (frontmatter = config, body = docs), 'ui.tsx' (the React interface) or 'data.js' (server-side handlers)",
+  )
+
+/** The paragraph every authoring tool needs an agent to have read once. */
+const TOOL_SHAPE =
+  'A Tool is three notes in the space: `tools/<name>/index.md` (frontmatter is the config — title, ' +
+  'description, `surfaces:` and `perimeter:` — and the body is documentation), `ui.tsx` (a React ' +
+  'component, default export, compiled server-side on every write) and `data.js` (optional handlers ' +
+  'that run server-side). It renders in the main content area only, inside a sandboxed frame, and can ' +
+  'reach Visvine ONLY through the bridge, within the reach `perimeter:` declares — and never beyond ' +
+  'what the person looking at it could already read. Call get_tool_sdk before writing any code.'
+
+export function registerAppTools(server: McpServer, deps: AppToolDeps = liveDeps): void {
+  // ── Author ──────────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'create_tool',
+    {
+      description:
+        'Scaffold a new Tool in a space: the directory entity, its config note and two source files that ' +
+        `already compile and render. Start here when asked to build something for a space. ${TOOL_SHAPE} ` +
+        'Returns the file list, a preview link, and a pointer to get_tool_sdk. The name must be unique in ' +
+        'the space; edit the files afterwards with write_tool.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        title: z.string().describe('Display name, e.g. "Deal Pipeline" — shown on the rail row and the marketplace card'),
+        description: z
+          .string()
+          .describe('One sentence on what it does. This is the marketplace card and the install checklist.'),
+      },
+    },
+    (args, extra) => withCtx(extra, 'create_tool', (ctx) => createTool(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'list_tools',
+    {
+      description:
+        "Everything Tool-shaped in one space: the tools AUTHORED here (with build status, so you can see " +
+        'which ones compile) and the tools INSTALLED here from the marketplace (with slug, version and ' +
+        'whether they are running degraded). Call this before creating one, so you extend an existing tool ' +
+        'rather than duplicating it.',
+      inputSchema: { space_id: spaceArg },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) => withCtx(extra, 'list_tools', (ctx) => listTools(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'read_tool',
+    {
+      description:
+        "Read a tool's source back — `index.md` verbatim, and `ui.tsx`/`data.js` as plain code (the notes " +
+        'store them inside fenced blocks; this unwraps them, and write_tool takes the same plain form). ' +
+        'Also returns the parsed config and the current build diagnostics. Read before you edit: write_tool ' +
+        'replaces a whole file.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        file: fileArg.optional().describe('Only this file — omit for all three'),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) => withCtx(extra, 'read_tool', (ctx) => readTool(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'write_tool',
+    {
+      description:
+        "Write one of a tool's three files, replacing it, and get the fresh build back in the same answer — " +
+        'that is the authoring loop: write, read the diagnostics, write again. `build.ok` is true when it ' +
+        'compiles; otherwise `build.errors` holds lines like `ui.tsx:12:5 Expected ">" but found "class"`, ' +
+        'and `build.config_error` holds anything wrong with the frontmatter in `index.md`. A tool only ' +
+        'runs when the config parses AND `ui.tsx` compiles; a broken `data.js` also takes the build down. ' +
+        "In `ui.tsx` only `react`, `react-dom` and `@visvine/tool-kit` are importable — every other import " +
+        'is refused at compile time. In `data.js` assign each operation to `handlers.<name>`. ' +
+        'Writes obey your own note permissions, so this is refused wherever an ordinary note write would be.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        file: fileArg,
+        content: z.string().describe('The complete new contents of that file'),
+      },
+    },
+    (args, extra) => withCtx(extra, 'write_tool', (ctx) => writeTool(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'check_tool',
+    {
+      description:
+        'Recompile a tool and lint it before you publish: config errors, compile diagnostics, a plain-English ' +
+        'summary of the reach its perimeter declares, which of the connectors/types/agents it names this ' +
+        "space actually has (it still installs when they're missing — it just runs degraded), what surfaces " +
+        'it asks to occupy, and warnings worth fixing (an empty perimeter, a page claim that will be ' +
+        'downgraded to a tab, a missing description). `ready_to_publish` is the one-line verdict.',
+      inputSchema: { space_id: spaceArg, name: nameArg },
+    },
+    (args, extra) => withCtx(extra, 'check_tool', (ctx) => checkTool(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'get_tool_sdk',
+    {
+      description:
+        'The manual for writing a Visvine Tool: the authoring guide (file layout, frontmatter, the perimeter, ' +
+        'the limits), the TypeScript definitions for `@visvine/tool-kit` (the components, hooks and the ' +
+        'context/connector/agent client a tool imports), and the list of bridge methods a tool may call. ' +
+        'Call this once before writing any tool code — the API is small and specific, and guessing it wastes ' +
+        'a compile round trip.',
+      inputSchema: {},
+      annotations: { readOnlyHint: true },
+    },
+    // No `deps`: the SDK is two static documents and a method list.
+    (args, extra) => withCtx(extra, 'get_tool_sdk', (ctx) => getToolSdk(ctx, args)),
+  )
+
+  server.registerTool(
+    'preview_tool',
+    {
+      description:
+        'Where to look at a tool: a `visvine-desktop://` deep link that opens it in the desktop app and the ' +
+        'equivalent web URL, plus its current build status. Hand these to the person you are working for — ' +
+        'nothing is rendered back to you, so the build diagnostics from write_tool and check_tool are your ' +
+        'own feedback channel.',
+      inputSchema: { space_id: spaceArg, name: nameArg },
+      annotations: { readOnlyHint: true },
+    },
+    (args, extra) => withCtx(extra, 'preview_tool', (ctx) => previewTool(ctx, args, deps)),
+  )
+
+  // ── Marketplace ─────────────────────────────────────────────────────────
+
+  server.registerTool(
+    'publish_tool',
+    {
+      description:
+        'Publish the working copy as an immutable version and queue it for review. SPACE ADMINS ONLY, and ' +
+        'only when the tool compiles. It does NOT go live: a Visvine super-admin reviews the declared ' +
+        'perimeter and a code diff first, and only an approved version can be installed anywhere. One ' +
+        'pending version per tool — withdraw it in the app before publishing again. Run check_tool first.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        note: z.string().optional().describe('A note for the reviewer — what changed and why'),
+      },
+    },
+    (args, extra) => withCtx(extra, 'publish_tool', (ctx) => publishTool(ctx, args, deps)),
+  )
+
+  server.registerTool(
+    'install_tool',
+    {
+      description:
+        'Install an approved marketplace version into a space. SPACE ADMINS ONLY. Identify it by version_id, ' +
+        'or by key (`<source-space-id>/<name>`) to take the newest approved version. Returns the install ' +
+        'slug and its `/t/<slug>` page, the requirements this space does not satisfy (which never block the ' +
+        'install — the tool runs degraded behind a banner and unsatisfied reads come back empty), and any ' +
+        'type-page claims that were downgraded to a tab or refused because another install owns them.',
+      inputSchema: {
+        space_id: spaceArg,
+        version_id: z.string().optional().describe('The exact version to install, from the marketplace'),
+        key: z
+          .string()
+          .optional()
+          .describe("The tool's marketplace key, e.g. 'space_abc/deal-pipeline' — installs its newest approved version"),
+      },
+    },
+    (args, extra) => withCtx(extra, 'install_tool', (ctx) => installTool(ctx, args, deps)),
+  )
+}

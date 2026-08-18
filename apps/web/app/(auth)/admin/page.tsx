@@ -9,7 +9,9 @@ import InvitePanel from '@/features/admin/components/people/InvitePanel';
 import SpaceSettingsPanel from '@/features/admin/components/SpaceSettingsPanel';
 import TypesPanel from '@/features/admin/components/TypesPanel';
 import SpaceToolsPanel from '@/features/admin/components/SpaceToolsPanel';
+import ToolReviewPanel, { useToolReviewQueue } from '@/features/admin/components/ToolReviewPanel';
 import ConsoleShell, { type ConsoleSection } from '@/features/admin/components/console/ConsoleShell';
+import { useSession } from '@/features/auth/lib/auth-client';
 import { LoadingText, Alert } from '@/components/ui';
 import { Space } from '@/lib/types';
 
@@ -32,6 +34,14 @@ function AdminConsole({ space, onSaved }: {
 
   const configKey = `${space.id}-${JSON.stringify(space.featureConfig ?? {})}`;
 
+  // Tool review is the one section that is not about this space: the queue is
+  // global and the gate is Visvine super admin, so a space admin never sees the
+  // tab. The routes behind it are gated the same way — hiding it is the courtesy,
+  // not the security.
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.isSuperAdmin === true;
+  const reviewQueue = useToolReviewQueue(isSuperAdmin);
+
   const sections: ConsoleSection[] = [
     { id: 'general', label: 'General', width: 'form' },
     { id: 'tools', label: 'Tools', width: 'form' },
@@ -40,6 +50,9 @@ function AdminConsole({ space, onSaved }: {
     // are resolved here, so one badge counts them both.
     { id: 'members', label: 'Members', width: 'wide', badge: pending.members + pending.requests },
     { id: 'invite', label: 'Invite', width: 'form' },
+    ...(isSuperAdmin
+      ? ([{ id: 'review', label: 'Tool review', width: 'wide', badge: reviewQueue.items.length }] as const)
+      : []),
   ];
 
   return (
@@ -68,6 +81,10 @@ function AdminConsole({ space, onSaved }: {
               return <InvitePanel />;
             case 'types':
               return <TypesPanel key={`${space.id}-${JSON.stringify(space.nodeTypes)}`} />;
+            // Not keyed on the space: the queue outlives whichever space the
+            // console happens to be pointed at.
+            case 'review':
+              return isSuperAdmin ? <ToolReviewPanel queue={reviewQueue} /> : null;
             default:
               return null;
           }

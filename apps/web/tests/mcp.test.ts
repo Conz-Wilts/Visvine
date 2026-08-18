@@ -48,8 +48,18 @@ process.env.NEXT_PUBLIC_APP_URL ??= 'http://localhost:3000'
 
 const IDENTITY = { userId: 'user_1', name: 'Test User', email: 'test@local.dev', personId: null }
 
-test('the catalogue is the two context scopes plus connectors:use and agents:run', () => {
-  assert.deepEqual([...MCP_SCOPES], ['context:read', 'context:write', 'connectors:use', 'agents:run'])
+test('the catalogue is the two context scopes plus the four capability scopes', () => {
+  assert.deepEqual(
+    [...MCP_SCOPES],
+    [
+      'context:read',
+      'context:write',
+      'connectors:use',
+      'agents:run',
+      'tools:author',
+      'tools:install',
+    ],
+  )
   assert.deepEqual(DEFAULT_SCOPES, ['context:read'])
 })
 
@@ -210,7 +220,9 @@ test('an omitted application_type is inferred, not defaulted to web', () => {
 
 test('every tool maps to a scope in the catalogue, and reads outnumber writes', () => {
   const tools = Object.keys(TOOL_SCOPES)
-  assert.equal(tools.length, 16)
+  // 16 context/connector/agent tools + the nine Tool-authoring ones
+  // (tests/mcp-scopes.test.ts pins those against what is actually registered).
+  assert.equal(tools.length, 25)
   for (const scope of Object.values(TOOL_SCOPES)) {
     assert.ok(MCP_SCOPES.includes(scope), `${scope} is not in the catalogue`)
   }

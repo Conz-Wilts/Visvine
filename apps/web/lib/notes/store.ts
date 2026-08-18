@@ -19,7 +19,7 @@ import type {
 } from './shared/types'
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
-import { syncContextLinks, syncContextLinksBulk } from './entityLinks'
+import { ensureToolNode, syncContextLinks, syncContextLinksBulk } from './entityLinks'
 import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
 import { toolNoteDeleted, toolNoteRenamed, toolNoteWritten } from '@/lib/tools/hooks'
 import {
@@ -993,11 +993,20 @@ async function ensureOwnerFolderFor(context: Context, path: string, actor: Actor
  * The index contract for a write at index path `p`: an entity folder's index
  * keeps the entity's type and `node:`; every other index carries `type: Index`.
  * An entity-shaped index path with no node behind it (a folder somebody hand-
- * made under people/) falls back to the plain contract.
+ * made under people/) falls back to the plain contract — EXCEPT a Tool: it is
+ * folder-only (lib/notes/entities.ts FOLDER_ONLY_ENTITY_KINDS), so a write
+ * straight at `tools/<name>/index.md` declaring `type: tool` is its only
+ * chance to gain the node that makes it a real Tool, and ensureToolNode makes
+ * it right here — before the frontmatter below is decided, since this runs
+ * ahead of syncContextLinks (see ensureToolNode's own comment for why that
+ * ordering matters).
  */
 async function enforceIndexContract(context: Context, p: string, content: string): Promise<string> {
   if (isEntityFolderIndex(p)) {
-    const node = await nodeForEntityPath(context.spaceId, p)
+    let node = await nodeForEntityPath(context.spaceId, p)
+    if (!node && context.ownerKey === SHARED_OWNER_KEY && (await ensureToolNode(context.spaceId, p, content))) {
+      node = await nodeForEntityPath(context.spaceId, p)
+    }
     if (node) return enforceEntityIndexFrontmatter(content, entityContractOf(node))
   }
   return enforceIndexFrontmatter(content, folderOfIndexPath(p))

@@ -81,6 +81,7 @@ import { executeConnectorScript, listConnectors, loadConnector } from '@/lib/con
 import { canTriggerRun, listAgents } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
 import { featureAccessForbidden } from '@/lib/auth'
+import { registerAppTools } from '@/lib/mcp/appTools'
 import { readNoteOrNull, type Context } from '@/lib/notes/store'
 import { runClean, applyCleanFixes, trashNotes } from '@/lib/notes/clean'
 import type { CleanRole } from '@/lib/notes/shared/clean'
@@ -1361,4 +1362,11 @@ export function registerTools(server: McpServer): void {
         }
       }),
   )
+
+  // ── Tools (the authoring loop) ──────────────────────────────────────────
+  // create/read/write/check the three notes a user-built Tool is made of, plus
+  // the SDK, a preview link, and the marketplace's publish and install.
+  // lib/mcp/appTools.ts — its own file because it is nine tools and a service
+  // seam, not because it is a different kind of surface.
+  registerAppTools(server)
 }

@@ -30,7 +30,7 @@ export default function HomePage() {
       return;
     }
     const config = (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null;
-    router.replace(defaultLandingHref(config, isAdmin));
+    router.replace(defaultLandingHref(config, isAdmin, currentSpace.installedTools));
   }, [currentSpace, loading, isAdmin, router]);
 
   return (

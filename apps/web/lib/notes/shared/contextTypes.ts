@@ -139,6 +139,7 @@ export interface AuditEntry {
     | 'connector'
     | 'agent' // activation / deactivation / run of a space agent (lib/agents)
     | 'secret' // a ConnectorSecret set or deleted (name only, never the value)
+    | 'tool' // publish / withdraw / review / install / uninstall / enable / upgrade of a Tool (lib/tools)
   path: string
   detail?: string
 }

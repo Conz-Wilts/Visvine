@@ -27,12 +27,19 @@
  * once the node behind it exists.
  */
 import prisma from '@/lib/prisma'
+import { listAgents } from '@/lib/agents/service'
+import { listConnectors } from '@/lib/connectors/service'
 import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/notes/contextService'
 import { spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
+import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
+import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context'
+import { computeRequirements, type ToolRequirements } from './requirements'
+import type { ToolPerimeter } from './perimeter'
+import type { ToolVersionSummary } from './registry'
 import {
   getBuild,
   listBuilds,
@@ -91,7 +98,26 @@ export interface AuthoredToolDetail extends AuthoredToolSummary {
   sources: Record<ToolFileName, string | null>
 }
 
-export type ToolServiceError = { ok: false; status: number; error: string }
+/**
+ * What `GET …/tools/authoring/<name>` answers with: the working copy, what this
+ * space fails to satisfy of its declared reach, and its publication trail.
+ *
+ * TODO: this belongs in lib/tools/api.ts beside every other Tools envelope —
+ * it is here only because that file was held by another wave-3 task when the
+ * author page landed. Move it, keeping the name, and re-point both ends.
+ */
+export interface AuthoredToolView {
+  tool: AuthoredToolDetail
+  /**
+   * Null when the config doesn't parse — nothing was declared, which is not the
+   * same as nothing missing.
+   */
+  requirements: ToolRequirements | null
+  /** Every version published from this working copy, newest first. */
+  versions: ToolVersionSummary[]
+}
+
+type ToolServiceError = { ok: false; status: number; error: string }
 export type CreateToolResult = { ok: true; name: string; build: BuildSummary } | ToolServiceError
 export type WriteToolFileResult =
   | { ok: true; path: string; build: BuildSummary }
@@ -227,6 +253,48 @@ export async function describeAuthoredTool(
       'data.js': dataNote === null ? null : (unwrapSource(dataNote)?.code ?? dataNote),
     },
   }
+}
+
+/**
+ * What this space fails to satisfy of a working copy's declared reach — the
+ * author's checklist, before anything is published or installed.
+ *
+ * Read under the AUTHOR's own principal, like check_tool's lint and unlike an
+ * install's (which reads under the acting admin's): an author who cannot see a
+ * connector could not have written a Tool against it either, so telling them it
+ * is there would be telling them about something they cannot use.
+ *
+ * Node types fold the space's stored vocabulary together with the built-in
+ * defaults, because `findNodeTypeConfig` resolves a built-in whether or not the
+ * column lists it — mirroring lib/tools/installs.ts#spaceFacts, so an author's
+ * checklist and an admin's install checklist can't disagree.
+ *
+ * TODO: lib/mcp/appTools.ts#liveSpaceFacts walks the same three name spaces for
+ * check_tool and should be folded onto this once wave 3's authoring tasks are
+ * out of that file — three readings of "what does this space have" is two too
+ * many, and they must never drift.
+ */
+export async function toolRequirementsInSpace(
+  p: ContextPrincipal,
+  context: Context,
+  perimeter: ToolPerimeter,
+): Promise<ToolRequirements> {
+  const [connectors, agents, config] = await Promise.all([
+    listConnectors(p, context),
+    listAgents(p, context),
+    readSpaceConfig(context.spaceId),
+  ])
+  const types = new Set<string>()
+  for (const type of [...((config?.nodeTypes ?? []) as NodeTypeConfig[]), ...DEFAULT_NODE_TYPES]) {
+    if (typeof type?.name === 'string' && type.name.trim()) types.add(type.name.trim().toLowerCase())
+  }
+  return computeRequirements(perimeter, {
+    // Model connectors name an LLM provider and are never runnable, so a Tool
+    // declaring one has nothing it could call (lib/connectors/service.ts).
+    connectors: connectors.filter((c) => c.kind !== 'model').map((c) => c.name),
+    types: [...types],
+    agents: agents.agents.map((a) => a.name),
+  })
 }
 
 // ── creating ──────────────────────────────────────────────────────────────────

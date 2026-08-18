@@ -13,7 +13,7 @@
 // spaces, notes, files, any type we haven't given a page — is nothing but its
 // context, so those get Context/Raw and no first tab at all.
 
-import React, { Suspense, useCallback, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
@@ -33,6 +33,7 @@ import SpacePageContent from '@/features/profile/components/SpacePageContent';
 import ResourcePreviewContent from '@/features/profile/components/ResourcePreviewContent';
 import ConnectorPageContent from '@/features/profile/components/ConnectorPageContent';
 import AgentPageContent from '@/features/profile/components/AgentPageContent';
+import ToolPageContent from '@/features/profile/components/ToolPageContent';
 
 /** URL-level tab ids. Kept as a type for the ?tab= plumbing — the bar itself
  *  takes plain string ids via the shell registration. */
@@ -352,6 +353,23 @@ function NodePage({ nodeId, firstTab, ariaLabel, notFoundTitle, renderBody }: {
   );
   const handleSelect = useCallback((id: string) => changeTab(id as ProfileTab), [changeTab]);
 
+  // A link to ?tab=context from INSIDE the first tab — an agent's "edit the
+  // brief" link, a Tool's source files — is a same-route navigation: this
+  // component does not remount, so the URL is the only thing that moved and
+  // local state has to follow it, or the address bar says Context while the
+  // page still shows the first tab.
+  //
+  // Compared against the LAST URL value rather than against `activeTab`: the
+  // two disagree for a tick every time the user clicks a tab (state moves
+  // first, `router.replace` lands after), and reading that as a URL change
+  // would drag the tab straight back to where it was.
+  const lastWantedTab = useRef(wantedTab);
+  useEffect(() => {
+    if (wantedTab === lastWantedTab.current) return;
+    lastWantedTab.current = wantedTab;
+    if (wantedTab) setActiveTab(wantedTab);
+  }, [wantedTab]);
+
   // A tab with no panel behind it falls back to the first tab: ?tab=connections
   // and ?tab=spaces are retired links, and context resolves late (tool off
   // / non-entity node), so it can only be judged once the node has loaded.
@@ -659,6 +677,32 @@ function AgentRoute({ nodeId }: { nodeId: string }) {
   );
 }
 
+// ── Tool nodes → Tool + Context/Raw ───────────────────────────────────────────
+
+// The note IS the Tool — `tools/<name>/index.md` is its config and docs, and
+// `ui.md`/`data.md` beside it are its source, all reachable from the Context
+// tab's notes strip. What the notes can't say is whether it compiles, what its
+// declared reach costs this space, and where it stands in the marketplace; that
+// is the first tab.
+//
+// Every member gets it, like an agent and unlike a connector: members author
+// Tools (lib/tools/service.ts), the authoring route is grant-gated rather than
+// admin-gated, and the actions that aren't a member's — Publish — are the ones
+// the tab hides.
+const TOOL_FIRST_TAB: PaneTabItem = { id: 'about', label: 'Tool' };
+
+function ToolRoute({ nodeId }: { nodeId: string }) {
+  return (
+    <NodePage
+      nodeId={nodeId}
+      firstTab={TOOL_FIRST_TAB}
+      ariaLabel="Tool sections"
+      notFoundTitle="Tool not found"
+      renderBody={(id) => <ToolPageContent nodeId={id} />}
+    />
+  );
+}
+
 // ── Route entry ───────────────────────────────────────────────────────────────
 
 const noop = () => {};
@@ -793,6 +837,9 @@ function NodeRoute() {
   }
   if (nodeId.startsWith('agent:')) {
     return <AgentRoute nodeId={nodeId} />;
+  }
+  if (nodeId.startsWith('tool:')) {
+    return <ToolRoute nodeId={nodeId} />;
   }
   if (isOrgId(nodeId)) {
     return (

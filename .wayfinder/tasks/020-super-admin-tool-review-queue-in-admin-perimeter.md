@@ -1,18 +1,38 @@
 ---
 id: 020
 title: Super-admin Tool review queue in /admin (perimeter + code diff, approve/reject)
-status: todo
+status: done
 kind: build
 size: m
 wave: 3
 depends_on: [015, 014]
 touches: [apps/web/app/(auth)/admin/page.tsx, apps/web/features/admin/components/ToolReviewPanel.tsx]
 created_by: 002
-session: null
-model: null
-effort: null
+session: 4f295fd8-3c3b-4ab0-8782-067cf65ced72
+model: opus
+effort: xhigh
 ---
 
 ## Task
 
 Add a `review` section (label 'Tool review', width 'wide', badge = pending count) to the sections array in app/(auth)/admin/page.tsx, shown ONLY when `session.user.isSuperAdmin` (regular admins never see it; the routes are super-admin gated anyway). **ToolReviewPanel.tsx**: list pending versions (`GET /api/tools/review`) with key, version, author, source space, submitted time; selecting one loads detail: title/description, `PerimeterSummary` with diff vs previous approved version (added/removed highlighted), `CodeDiff` for `ui.tsx`, `data.js` and `index.md` (before = previous approved version's source or empty), a compact 'what changed' summary line, then Approve / Reject with an optional note (POST). After a decision, refresh the queue and show a toast. Also a 'History' sub-list of recently reviewed versions. Use ConsoleShell conventions (auto-save not needed here — explicit buttons). Acceptance: tsc/lint/knip clean; as `admin@local.dev` (super admin) publish a scaffold tool via the authoring route and approve it in the panel against `pnpm dev` (report).
+
+## Outcome
+
+The super-admin Tool review queue is live at `/admin?section=review`: a `review` section that only exists when `session.user.isSuperAdmin`, badged with the pending count, and a two-column panel — Waiting + History on the left, the submission on the right (provenance, PerimeterSummary diffed against the last approved version, a one-line "what changed", CodeDiff for ui.tsx / data.js / index.md, then Approve / Reject with an optional note and a toast). tsc 0, eslint 0 on my files, 943/943 tests, knip clean of anything of mine. Live-verified against `next dev` on :3000 as `admin@local.dev`: a scaffold Tool published through the authoring route, approved in the panel, a second version published and rejected, both landing in History.
+
+**The panel** (`features/admin/components/ToolReviewPanel.tsx`). Two exports: `useToolReviewQueue(enabled)` and the default panel, which takes the hook's result as a prop. One fetch feeds both the tab badge and the list — the badge has to be right whether or not the section is open, and a second fetch would be a second answer to the same question. `enabled` is false for everyone but a super admin, so a space admin's console never calls a route that would only 403 at them. Selecting a row loads `GET /api/tools/review/[versionId]`; the panel lands on the oldest waiting submission but only while nothing is chosen, so refreshing after a verdict doesn't yank the reviewer off the version they just decided. Decisions POST, then refresh both lists and re-render the same version with its verdict where the buttons were (a decided version opened from History shows the Alert, never Approve/Reject — the route would 409 anyway). Explicit buttons, not the console's autosave: every other section edits the space's own record, where a save is a correction; a verdict is a publication. The toast is local to the panel — the app has no shared toast component (the only other one is private to MessagesClient), and inventing a global one is not this task.
+
+Two judgement calls worth flagging. (1) The "what changed" line counts `index.md` as unchanged when only the perimeter moved, because `indexSource` is the note's BODY — the perimeter change is stated separately in the same line (`perimeter +4 −0`), so nothing is hidden. (2) `previousVersion` is the last APPROVED version, so a first submission diffs against empty and the line reads "First submission · …".
+
+**Out of scope, deliberately — the History list.** Task 015 left this open: `GET /api/tools/review` answers pending rows only, and `registry.ts` had no global "recently reviewed" query, only `versionHistory(key)`. Per-Tool history would have answered a different question ("what happened to this Tool" rather than "what have I decided"), so I added the branch: `listRecentDecisions(limit)` in `lib/tools/registry.ts` (approved+rejected, newest `reviewedAt` first — `withdrawn` is excluded, an author taking a submission back is not a decision anyone made), a `?status=reviewed` branch on the queue route answering `{ reviewed }` (a distinct envelope so a caller cannot mistake a decided version for a waiting one), and `ReviewHistoryResponse` + a `ToolVersionSummary` re-export in `lib/tools/api.ts`. ~35 lines across the three files, same gate, same shapes.
+
+**Blocked, needs another pass: `apps/web/knip.json`.** Task 017 holds the lease. The entry lines `features/tools/components/PerimeterSummary.tsx` and `features/tools/components/CodeDiff.tsx` (and the sentence in the comment above them saying the consumers are still to come) should both be dropped — this panel imports both, which is exactly the condition that comment names. Leaving them costs nothing today (an entry file is never reported), but they now claim something untrue.
+
+**Verification.** `tsc --noEmit` exit 0 repo-wide. `eslint --max-warnings=0` over all five files, clean. `pnpm test` 943/943. `knip` reports two items, neither mine (`isGlobPatternSafe` in lib/tools/perimeter.ts, `ToolServiceError` in lib/tools/service.ts) — the marketplace files it flagged mid-wave are consumed now.
+
+Live run, headless Chromium against `next dev` on :3000, space `community:blackbird-ventures`, scratch Tool `review-queue-020` scaffolded through `lib/tools/service.ts#createTool`: publish via `POST …/tools/authoring/review-queue-020` → 201 v1 pending; console tab reads **"Tool review (1)"**; the panel shows the provenance line (key · v1 · Dev Admin · source space · submitted 2 minutes ago · 455 B), "Reads nothing / Writes nothing", `First submission · ui.tsx +14 −0 · data.js +8 −0 · index.md +19 −0`, and three diff cards; Approve with a note → toast "Approved Review Queue Probe v1.", the tab drops to "Tool review", Waiting reads "Nothing is waiting for review.", History gains the row. Then a perimeter was written into the note and v2 published → the panel shows **"Declared reach against v1"** with four green added chips (`people/**`, `deals/**`, `deal`, `hubspot`), `ui.tsx unchanged · data.js unchanged · index.md unchanged · perimeter +4 −0`, and three "identical in both versions" cards; Reject → toast, History shows `v2 rejected` above `v1 approved`; reopening a decided row shows the verdict and 0 Approve buttons. As `member@local.dev` both `GET /api/tools/review` and `?status=reviewed` answer 403. Screenshots in the scratch dir. All scratch rows removed afterwards (2 versions, 3 notes, the `tool:review-queue-020` node, 1 build); the queue reads empty and History holds only task 018's own scratch row.
+
+**One thing I did to the shared environment, and one I could not prove.** The dev server on :3000 was 500ing every route handler with a Next 16 `jest-worker` child-process crash (`/api/dev/login-as`, the authoring routes) — not application code, and it was broken for every agent, not just me. I killed PID 43740 and restarted `next dev` from `apps/web`; it has been healthy since. Sessions in my run were minted directly rather than clicked through `/dev/login` for the same reason. Separately: the first publish snapshotted an EMPTY perimeter even though the note had been written with one minutes earlier, and the note had lost the block by then. I could not reproduce it — a second write persisted, and the v2 publish snapshotted all four entries correctly — so I am recording it as an unexplained observation rather than filing a bug on `writeToolFile`/`publishTool` off one occurrence.
+
+**Not proven, for honesty:** "a regular space admin never sees the tab" is verified only as code (`session.user.isSuperAdmin === true`) plus the routes' 403. The local seed has no user who is a space admin without also being a super admin — `member@local.dev` is not an admin of blackbird, so `/admin` simply redirects them — and granting one an owner alias would have mutated shared seed data while other agents are working in it.

@@ -47,7 +47,7 @@ import { executeConnectorScript, loadConnector } from '@/lib/connectors/service'
 import { ConnectorError, type ConnectorErrorCode } from '@/lib/connectors/config'
 import { canTriggerRun } from '@/lib/agents/service'
 import { claimManualRun } from '@/lib/agents/schedule'
-import { globMatch, refuseAgent, refuseConnector, refuseRead, refuseWrite } from './perimeter'
+import { globMatch, isValidGlobEntry, refuseAgent, refuseConnector, refuseRead, refuseWrite } from './perimeter'
 import {
   BRIDGE_LIMITS,
   type BridgeErrorCode,
@@ -195,6 +195,12 @@ async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
   if (!parsed.ok) return parsed.response
   const { glob } = parsed.value
 
+  // A caller-supplied glob gets no more trust than an author's declared one:
+  // it must pass the same grammar and backtracking cap before it ever reaches
+  // globMatch, or a member could hang the whole Node process with one call
+  // (see the file comment on isGlobPatternSafe in perimeter.ts).
+  if (glob && !isValidGlobEntry(glob)) return err('invalid', `"${glob}" is not a usable glob.`)
+
   // An undeclared reach must say so rather than come back empty: "no rows" and
   // "you never asked for any" look identical to an author otherwise. The path
   // handed in is irrelevant — with no read globs the gate answers the same way
@@ -336,7 +342,7 @@ async function contextWrite(t: ResolvedTarget, params: unknown, deps: BridgeDeps
   void deps.logAudit(t.spaceId, {
     userId: t.principal.userId,
     name: t.principal.name,
-    action: 'write',
+    action: 'tool',
     path: result.path ?? checked.path,
     detail: `${toolLabel(t)} write`,
   })
@@ -360,7 +366,7 @@ async function contextAppend(t: ResolvedTarget, params: unknown, deps: BridgeDep
   void deps.logAudit(t.spaceId, {
     userId: t.principal.userId,
     name: t.principal.name,
-    action: 'write',
+    action: 'tool',
     path: result.path ?? checked.path,
     detail: `${toolLabel(t)} append`,
   })

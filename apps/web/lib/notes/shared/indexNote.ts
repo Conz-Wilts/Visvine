@@ -108,6 +108,39 @@ export function enforceIndexFrontmatter(content: string, folderPath: string): st
 }
 
 /**
+ * What a write at a FOLDER-ONLY entity's index path (currently just a Tool —
+ * see lib/notes/entities.ts FOLDER_ONLY_ENTITY_KINDS) is asking to become,
+ * read off its own frontmatter. Pure, so the store and its tests can agree on
+ * the answer without a DB in the loop.
+ *
+ * `wantsKind` is the lower-cased type label that means "yes" (`'tool'`).
+ * Returns null when the write doesn't even claim that type — an ordinary
+ * index note, not a Tool that lost its way — so the caller falls back to the
+ * plain Index contract instead of trying to back it with a node.
+ */
+export function declaredFolderOnlyEntity(
+  frontmatter: { type?: unknown; title?: unknown; description?: unknown },
+  wantsKind: string,
+  fallbackName: string,
+): { name: string; subtitle: string | null } | null {
+  const declared = typeof frontmatter.type === 'string' ? frontmatter.type.trim().toLowerCase() : ''
+  if (declared !== wantsKind) return null
+  const title = typeof frontmatter.title === 'string' ? frontmatter.title.trim() : ''
+  const description = typeof frontmatter.description === 'string' ? frontmatter.description.trim() : ''
+  return { name: title || fallbackName, subtitle: description || null }
+}
+
+/**
+ * The refusal for a folder-only entity's index write whose node id is already
+ * claimed by someone else — the one case such a write can't just make its own
+ * node. Named so a hand-made write and the authoring service that owns the
+ * happy path (`howToCreate`) refuse in the same words.
+ */
+export function entityNameClashDenial(name: string, kindLabel: string, howToCreate: string): string {
+  return `The name "${name}" is taken — create this ${kindLabel} with a different name (see ${howToCreate}).`
+}
+
+/**
  * The entity-folder variant of the contract: an index at 'people/<slug>/index.md'
  * IS the person's note, so it keeps the entity's own type (`Person`, …) and its
  * `node:` back-pointer rather than `type: Index` — index-ness is the path. A

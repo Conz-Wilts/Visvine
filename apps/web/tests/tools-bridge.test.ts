@@ -224,6 +224,14 @@ test('the executable namespaces are sealed even when the perimeter names them', 
 
 // ── caps ──────────────────────────────────────────────────────────────────────
 
+test('context.list refuses a pathological caller-supplied glob before touching the vault', async () => {
+  const t = target({ perimeter: perimeter({ read: ['**'] }) })
+  const response = await handleBridgeCall(t, 'context.list', { glob: '**/a*/**/a*/**/x' }, deps())
+  const error = errorOf(response)
+  assert.equal(error.code, 'invalid')
+  assert.match(error.message, /is not a usable glob/)
+})
+
 test('context.list is capped at maxRows and only lists what the perimeter names', async () => {
   const metas = [
     ...Array.from({ length: BRIDGE_LIMITS.maxRows + 50 }, (_, i) => note(`deals/${String(i).padStart(4, '0')}.md`)),

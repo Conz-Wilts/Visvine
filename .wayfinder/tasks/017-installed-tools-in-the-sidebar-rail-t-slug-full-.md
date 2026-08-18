@@ -1,16 +1,16 @@
 ---
 id: 017
 title: "Installed Tools in the sidebar rail, `/t/[slug]` full-pane page, admin ordering"
-status: todo
+status: done
 kind: build
 size: m
 wave: 3
 depends_on: [012, 014, 006]
 touches: [apps/web/lib/spaces/queries.ts, apps/web/lib/types/space.ts, apps/web/features/shared/lib/features.tsx, apps/web/features/shared/components/layout/Sidebar.tsx, apps/web/features/shared/contexts/SpaceContext.tsx, apps/web/features/admin/components/SpaceToolsPanel.tsx, "apps/web/app/(auth)/t/[slug]/page.tsx", apps/web/features/tools/components/ToolPage.tsx, apps/web/features/tools/components/toolIcons.tsx, apps/web/tests/tools-rail.test.ts]
 created_by: 002
-session: null
-model: null
-effort: null
+session: 407a8fed-c8e5-47f7-aad3-1c429172a68f
+model: opus
+effort: xhigh
 ---
 
 ## Task
@@ -23,3 +23,19 @@ Surface (a): each install becomes a sidebar rail row and a full-pane page.
 4. **SpaceToolsPanel.tsx**: installed tools appear in the same order/More editor as built-in features (drag/reorder + More toggle) — same commit path (`mergeFeatureConfig` semantics; never wipe tool keys); no enable toggle here (that lives in /tools Installed).
 5. **features/tools/components/toolIcons.tsx**: `ToolIcon({ name })` mapping the small named icon set from `parseToolConfig` (grid, kanban, table, chart, calendar, list, sparkles, box) to inline SVGs in the Sidebar's icon style.
 6. **app/(auth)/t/[slug]/page.tsx** + **ToolPage.tsx**: resolve the install by slug from `useSpace().currentSpace.installedTools` (404 state when missing/disabled), set the page header via the shared header context like /channels or /agents does, and render `<ToolFrame target={{kind:'install', installId}} mode="page" title=…/>` filling the main content area (`AuthLayoutClient` full-bleed hatch if that's how /channels gets edge-to-edge — check `fullBleed` in app/(auth)/AuthLayoutClient.tsx and extend its path test to `/t/` — that file is NOT in your touches, so if a change there is unavoidable, keep it to the one path predicate and say so). The frame is the only thing in the pane; navbar and sidebar untouched. Acceptance: tsc/lint/test/knip clean; with an install row present (insert one manually or via the registry lib in a tsx script), the rail shows the item and `/t/<slug>` renders the frame (screenshot via Playwright/chrome-devtools MCP if available; report).
+
+## Outcome
+
+Installed Tools are now first-class sidebar rows with their own full-pane page: the space DTO carries `installedTools`, `railFeatures`/`moreFeatures`/`defaultLandingHref` merge `tool:<slug>` rows, the Sidebar draws them (degraded ones get a dot), the console's Tools panel drags and tucks them like built-ins without ever wiping their keys, and `/t/<slug>` mounts `<ToolFrame mode="page">` edge-to-edge. Verified live end to end against a seeded install: the rail row, the degraded dot, the navbar title, the degraded banner and the Tool's own UI all render, a More move round-trips through `featureConfig` with the tool key intact, and a bad slug shows the 404 state. tsc/lint/test/knip are clean for every file I touched (943/943 tests pass, including 16 new ones).
+
+**Ordering (the load-bearing rule).** Extracted `navFeatureKeys(config, isAdmin, toolKeys)` into `lib/featureAccess.ts` — the JSX-free module its own header says pure feature logic belongs in — and `toolRailRows(installs)` into a new `features/tools/lib/railRows.ts`. `features.tsx` now only maps those keys back to rows and adds the icon. This was forced as well as tidy: the repo's `jsx: preserve` means `node --import tsx` cannot evaluate a `.tsx` module (esbuild emits classic `React.createElement`), so the task's "pure `railKeys(...)` helper you extract" had to be a real `.ts` seam rather than a wrapper. Tool keys go LAST in the candidate list, so `sortFeatureKeys` leaves an unplaced install after the built-in rows — the first visible row is the tab members land on, and installing must not move a space's front door (the same invariant `installs.ts#orderWithRail` protects on the write side). Tool rows run through `canAccessFeature` like any other key: members see installed Tools, but a row an admin locked on Members → Tools stays locked — admin-only-ness isn't a *Tool* concept, and a Tool isn't an exception to the *row* concept either.
+
+**Never wiping tool keys.** The settings PUT writes `order`/`more` whole, so `SpaceToolsPanel` now carries any `tool:<slug>` key it has no row for (install list a moment behind, or a sibling admin's uninstall) straight through every save via `composeOrder`/`carriedMore`. Tool rows get no trash button and aren't in the "Add tool" picker unless their key is stored `false` — enabling lives in /tools → Installed, and a trash icon here would read as an uninstall it isn't. `enabled` is seeded with tool keys so the console and the sidebar can't disagree about a hidden row.
+
+**Out-of-scope edits, all minimal and deliberate.** (1) `lib/tools/installs.ts`: `InstalledToolDto` gained `id` — `BridgeTarget {kind:'install'}` names the install id and the DTO had no way to reach it; extracted the row→DTO mapper and added `installedToolsForSpaces(spaceIds)`, one batched query, because `listVisibleSpaces` returns N spaces and per-space `installedToolsForClient` would have been N queries. It filters to enabled installs (the DTO draws rail rows and routes `/t/<slug>`; a disabled install has neither) while the single-space read keeps its documented "console still lists them" behaviour. (2) `lib/featureAccess.ts` + new `features/tools/lib/railRows.ts` per the extraction above. (3) `AuthLayoutClient.tsx`: the sanctioned one-line `fullBleed` predicate (`|| pathname.startsWith("/t/")`) — the frame IS the pane and a second scroll container around it double-scrolls — plus passing `installedTools` to the existing `defaultLandingHref` call, and the same one-liner in `home/page.tsx`, so a Tool that IS the first rail row is actually the tab you land on. (4) `tests/tools-registry.test.ts`: one `id:` added to a DTO literal. (5) `knip.json`: dropped the `ToolFrame.tsx` entry line, as that file's own comment instructed once it gained an importer. `SpaceContext.tsx` needed no change — `useSpace().currentSpace` is a `Space`, so the new field arrives for free.
+
+**Deviation from the brief worth recording.** The task listed the icon set as `grid, kanban, table, chart, calendar, list, sparkles, box`; the actual `TOOL_RAIL_ICONS` in `lib/tools/config.ts` is `grid, kanban, list, table, calendar, chart, note, folder, people, sparkle`. `toolIcons.tsx` maps the real ten (`parseToolConfig` refuses anything else), falling back to `grid` for an install pinned to a version published before a name existed — a wrong shape beats a hole in the sidebar.
+
+**Live verification** (local dev, `me:user_dev_admin`, a seeded approved version + install with an unmet `hubspot` connector requirement): rail shows "Deals" with the amber degraded dot and the explanatory `title`; `/t/deal-board` renders the compiled Tool inside the sandboxed frame filling the pane with the navbar showing "Deal Board" and the degraded banner above it; the network log confirms ONE `app_tool_installs` query with `space_id IN (…) AND enabled = …` for the whole space list; keyboard-dragging the row into More persisted `{"more":["tool:deal-board"],"order":[…,"tool:deal-board"],"enabled":{…,"tool:deal-board":true}}` with nothing dropped; the More popup lists it; `/t/nope-not-a-tool` shows the "No tool here" card. Along the way the run also exercised ToolFrame's error card (my first fixture imported a name the kit doesn't export — the in-pane card named it exactly). Note for later waves: that seeded version + install is still in the LOCAL dev DB (`key: seed/deal-board`) and is real data tasks 018/019/022 can test against; the space's `more` was restored to `[]` so the row sits back on the rail.
+
+Residual: 1 pre-existing `tsc` error and the knip entries in the repo are task 019's in-flight `ToolPageContent`, task 018's marketplace files, 045's `isGlobPatternSafe` and 010's `service.ts` types — none of mine.

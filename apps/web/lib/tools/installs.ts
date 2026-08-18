@@ -30,6 +30,7 @@ import prisma from '@/lib/prisma'
 import { isAdmin } from '@/lib/auth'
 import { principalForUser } from '@/lib/agents/principal'
 import { listConnectors } from '@/lib/connectors/service'
+import { logAudit } from '@/lib/notes/audit'
 import { visibleVault } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
@@ -86,6 +87,11 @@ export interface InstallSummary {
  * `icon`/`label` are null for a Tool with no rail row (it lives on a type page).
  */
 export interface InstalledToolDto {
+  /** The install row's id — what `BridgeTarget { kind: 'install' }` names, so
+   *  the `/t/<slug>` page can mount a frame without a lookup of its own. Not a
+   *  secret: every bridge and frame-token call re-derives the space and the
+   *  viewer's standing from it server-side. */
+  id: string
   key: string
   slug: string
   title: string
@@ -426,33 +432,52 @@ export async function listInstalls(spaceId: string): Promise<InstallSummary[]> {
   return summarise(rows)
 }
 
+/** One install row → the space-DTO slice: enough to draw the rail row, route
+ *  `/t/<slug>` and dispatch a type page, with no perimeter, requirements detail
+ *  or version history. */
+function toClientDto(row: InstallRow): InstalledToolDto {
+  const config = decodeToolConfig(row.version.config, row.version.name)
+  const requirements = parseRequirements(row.requirements)
+  return {
+    id: row.id,
+    key: row.key,
+    slug: row.slug,
+    title: row.version.title,
+    icon: config.surfaces.rail?.icon ?? null,
+    label: config.surfaces.rail?.label ?? null,
+    href: `/t/${row.slug}`,
+    enabled: row.enabled,
+    degraded: isDegraded(requirements),
+    types: parseTypeClaims(row.typeClaims),
+  }
+}
+
 /**
- * The slice the space DTO carries: enough to draw the rail row, route `/t/<slug>`
- * and dispatch a type page, with no perimeter, requirements detail or version
- * history. Disabled installs are included — the console still lists them, and
- * hiding them here would make an admin's switch look like an uninstall.
+ * The same slice for many spaces in ONE query — what `lib/spaces/queries.ts`
+ * hangs on every Space it serializes for the client.
+ *
+ * ENABLED installs only: this list is what draws the sidebar rail rows and
+ * routes `/t/<slug>`, and a disabled install has neither. The console reads
+ * `listInstalls`, which still sees them.
  */
-export async function installedToolsForClient(spaceId: string): Promise<InstalledToolDto[]> {
+export async function installedToolsForSpaces(
+  spaceIds: readonly string[],
+): Promise<Map<string, InstalledToolDto[]>> {
+  const out = new Map<string, InstalledToolDto[]>()
+  if (spaceIds.length === 0) return out
   const rows = await prisma.appToolInstall.findMany({
-    where: { spaceId },
-    orderBy: { slug: 'asc' },
-    select: INSTALL_SELECT,
+    where: { spaceId: { in: [...spaceIds] }, enabled: true },
+    // Stable and space-independent: the rail's own order comes from
+    // `featureConfig.order`, so this only has to be the same every time.
+    orderBy: [{ spaceId: 'asc' }, { slug: 'asc' }],
+    select: { ...INSTALL_SELECT, spaceId: true },
   })
-  return rows.map((row) => {
-    const config = decodeToolConfig(row.version.config, row.version.name)
-    const requirements = parseRequirements(row.requirements)
-    return {
-      key: row.key,
-      slug: row.slug,
-      title: row.version.title,
-      icon: config.surfaces.rail?.icon ?? null,
-      label: config.surfaces.rail?.label ?? null,
-      href: `/t/${row.slug}`,
-      enabled: row.enabled,
-      degraded: isDegraded(requirements),
-      types: parseTypeClaims(row.typeClaims),
-    }
-  })
+  for (const row of rows) {
+    const list = out.get(row.spaceId)
+    if (list) list.push(toClientDto(row))
+    else out.set(row.spaceId, [toClientDto(row)])
+  }
+  return out
 }
 
 // ── install ──────────────────────────────────────────────────────────────────
@@ -571,6 +596,13 @@ export async function installVersion(
   if (!out.created || !out.resolution) {
     return { ok: false, status: 500, error: 'The install did not complete.' }
   }
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${out.created.slug}`,
+    detail: `installed ${version.key} as ${out.created.slug}`,
+  })
 
   const [summary] = await summarise([out.created])
   return {
@@ -640,6 +672,13 @@ export async function uninstall(
   } catch (err) {
     return refusalOf(err)
   }
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${install.slug}`,
+    detail: `uninstalled ${install.key} (${install.slug})`,
+  })
   return { ok: true }
 }
 
@@ -659,6 +698,13 @@ export async function setInstallEnabled(
     where: { id: installId },
     data: { enabled },
     select: INSTALL_SELECT,
+  })
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${install.slug}`,
+    detail: `${enabled ? 'enabled' : 'disabled'} ${install.slug}`,
   })
   const [summary] = await summarise([updated])
   return { ok: true, install: summary }
@@ -732,6 +778,15 @@ export async function setTypeClaims(
     return refusalOf(err)
   }
   if (!out.updated) return { ok: false, status: 500, error: 'The claim change did not complete.' }
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${install.slug}`,
+    detail: `type claims changed on ${install.slug}: ${Object.entries(claims)
+      .map(([type, mode]) => `${type}=${mode}`)
+      .join(', ')}`,
+  })
   const [summary] = await summarise([out.updated])
   return { ok: true, install: summary }
 }
@@ -760,7 +815,7 @@ export async function applyUpgrade(
 
   const next = await prisma.appToolVersion.findUnique({
     where: { id: install.pendingVersionId },
-    select: { id: true, key: true, name: true, status: true, config: true, perimeter: true },
+    select: { id: true, key: true, name: true, version: true, status: true, config: true, perimeter: true },
   })
   if (!next || next.status !== 'approved' || next.key !== install.key) {
     // The offer went away (withdrawn, or a key that isn't this Tool's). Clear it
@@ -814,6 +869,13 @@ export async function applyUpgrade(
     return refusalOf(err)
   }
   if (!out.updated) return { ok: false, status: 500, error: 'The upgrade did not complete.' }
+  void logAudit(spaceId, {
+    userId: actor.userId,
+    name: actor.email,
+    action: 'tool',
+    path: `tools/${install.slug}`,
+    detail: `upgraded to v${next.version}`,
+  })
   const [summary] = await summarise([out.updated])
   return { ok: true, install: summary }
 }

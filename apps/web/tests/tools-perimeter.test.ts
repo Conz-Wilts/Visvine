@@ -14,6 +14,7 @@ import {
   diffPerimeter,
   EMPTY_PERIMETER,
   globMatch,
+  isValidGlobEntry,
   parseToolPerimeter,
   perimeterIsEmpty,
   refuseAgent,
@@ -106,6 +107,55 @@ test('refuseRead and refuseWrite refuse a traversal subject with a distinct mess
   assert.equal(refuseRead(p, '/deals/ok.md'), null, 'a legitimate leading slash still normalises and passes')
 })
 
+// ── catastrophic backtracking ──
+
+test('consecutive ** segments compile fast and still match everything below', () => {
+  // The exact shape that measured 141s before the fix: many adjacent `**`
+  // segments in a row, matched against a subject deep enough that a
+  // backtracking regex would explore every split point between them.
+  const pathological = '**/'.repeat(14) + 'zzz.md'
+  const subject = 'a/'.repeat(24) + 'zzz.md'
+  const start = performance.now()
+  const matched = globMatch(pathological, subject)
+  const elapsed = performance.now() - start
+  assert.ok(matched, 'zzz.md at the end still matches through the collapsed **')
+  assert.ok(elapsed < 100, `took ${elapsed}ms — consecutive ** must collapse to one group`)
+
+  const noMatch = globMatch(pathological, 'a/'.repeat(24) + 'other.md')
+  assert.ok(!noMatch)
+})
+
+test('a glob with more ** groups than the cap never matches, and stays fast', () => {
+  // Collapsing does not help here — none of the three `**` are adjacent — so
+  // this relies on the hard cap in globRegExp's isGlobPatternSafe backstop.
+  const pathological = '**/a*/**/a*/**/x'
+  const subject = 'a/'.repeat(24) + 'x'
+  const start = performance.now()
+  const matched = globMatch(pathological, subject)
+  const elapsed = performance.now() - start
+  assert.equal(matched, false, 'a pattern over the ** cap is treated as unmatchable, not compiled')
+  assert.ok(elapsed < 100, `took ${elapsed}ms`)
+})
+
+test('refuseRead on a many-** perimeter entry returns promptly', () => {
+  const p = perimeter({ read: ['**/'.repeat(14) + 'zzz.md'] })
+  const subject = 'a/'.repeat(24) + 'index.md'
+  const start = performance.now()
+  refuseRead(p, subject)
+  const elapsed = performance.now() - start
+  assert.ok(elapsed < 100, `took ${elapsed}ms`)
+})
+
+test('isValidGlobEntry accepts ordinary globs and refuses pathological ones', () => {
+  assert.ok(isValidGlobEntry('deals/**'))
+  assert.ok(isValidGlobEntry('people/*/index.md'))
+  assert.ok(isValidGlobEntry('deals/'))
+  assert.ok(!isValidGlobEntry(''))
+  assert.ok(!isValidGlobEntry('deals/../secret.md'), 'traversal is still refused')
+  assert.ok(!isValidGlobEntry('**/a*/**/a*/**/x'), 'too many ** groups')
+  assert.ok(!isValidGlobEntry('a*a*a*a*b'), 'too many *s in one segment')
+})
+
 // ── parsing ──
 
 test('parseToolPerimeter reads the frontmatter block', () => {
@@ -154,6 +204,8 @@ test('parseToolPerimeter says what is wrong instead of vanishing', () => {
     [{ read: ['../../etc/passwd'] }, /Bad `perimeter\.read` entry/],
     [{ read: ['deals/./x.md'] }, /Bad `perimeter\.read` entry/],
     [{ read: ['deals\\x.md'] }, /Bad `perimeter\.read` entry/],
+    [{ read: ['**/a*/**/a*/**/x'] }, /too many wildcard segments/],
+    [{ write: ['a*a*a*a*b'] }, /too many wildcard segments/],
     [{ types: 'deal' }, /`perimeter\.types` must be a list/],
     [{ types: ['deal!'] }, /Bad `perimeter\.types` entry/],
     [{ connectors: [''] }, /Bad `perimeter\.connectors` entry/],

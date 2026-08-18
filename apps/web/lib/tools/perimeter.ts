@@ -97,6 +97,8 @@ function segmentSource(segment: string): string {
 }
 
 const globCache = new Map<string, RegExp>()
+/** How many distinct compiled patterns globCache holds before it clears itself. */
+const GLOB_CACHE_MAX = 1000
 
 /**
  * True when `path` is a plain, already-resolved context path: no backslashes,
@@ -131,13 +133,93 @@ function isValidSubjectPath(path: string): boolean {
 // The subject being tested is validated too (see `isValidSubjectPath`): a
 // `.`/`..` segment, a backslash, or an empty path never matches any glob, no
 // matter how permissive — a `**` spans text, not resolved path segments.
+//
+// A `**` segment compiles to an unbounded `(?:[^/]+/)*` group, and a regex
+// engine failing a match explores every way of splitting the subject between
+// two or more of those groups — exponentially many ways as they pile up. Two
+// defences below keep that from ever reaching the compiler: adjacent `**`
+// segments are collapsed to one (they mean the same thing anyway), and
+// {@link isGlobPatternSafe} caps how many non-adjacent groups — and how many
+// `*`s within one segment — a pattern may have at all.
+
+/**
+ * Consecutive `**` segments mean exactly what one does — two of them in a row
+ * between `a` and `b` mean the same "any depth" as one — but compiled
+ * literally each becomes its own unbounded group, and adjacent unbounded
+ * groups are the cheapest way to build a catastrophically slow regex: a
+ * 30-character glob with eight of them took 697ms to fail a match, ten took
+ * 9.3s.
+ */
+function collapseDoubleStars(parts: string[]): string[] {
+  const out: string[] = []
+  for (const part of parts) {
+    if (part === '**' && out[out.length - 1] === '**') continue
+    out.push(part)
+  }
+  return out
+}
+
+/** How many non-adjacent `**` groups a pattern may have before it is unsafe to compile. */
+const MAX_DOUBLE_STAR_GROUPS = 2
+/** How many `*`s a single segment may have before it is unsafe to compile. */
+const MAX_STARS_PER_SEGMENT = 3
+
+/**
+ * True when this glob is safe to compile: collapsing removes the cheapest
+ * pathological shape, but not the only one. A pattern with three separate
+ * `**` groups each followed by an `a*` segment has no adjacent pair to
+ * collapse and still backtracks catastrophically — each `**` is
+ * independently unbounded, and chaining three of them is enough on its own.
+ * So this counts the groups that SURVIVE collapsing and refuses beyond a
+ * small cap, and separately caps `*`s within one segment, which produces the
+ * same blowup within a single path component (many `a*` runs in a row
+ * against a long run of `a`s with no trailing literal to anchor on).
+ *
+ * Exported so a Tool author's declared globs (parseGlobList) and a bridge
+ * caller's glob (contextList) are held to the identical bar, rather than
+ * globRegExp being the only thing standing between a pathological pattern and
+ * the regex compiler.
+ */
+function isGlobPatternSafe(pattern: string): boolean {
+  const normalized = pattern.endsWith('/') ? `${pattern}**` : pattern
+  const parts = normalized.split('/')
+  let groups = 0
+  let inGroup = false
+  for (const part of parts) {
+    if (part === '**') {
+      if (!inGroup) groups++
+      inGroup = true
+      continue
+    }
+    inGroup = false
+    if (part.split('*').length - 1 > MAX_STARS_PER_SEGMENT) return false
+  }
+  return groups <= MAX_DOUBLE_STAR_GROUPS
+}
+
+/** A regex that matches nothing, ever — what an unsafe glob compiles to instead. */
+const NEVER_MATCH = /(?!)/
+
+function cacheGlob(pattern: string, re: RegExp): RegExp {
+  if (globCache.size >= GLOB_CACHE_MAX) globCache.clear()
+  globCache.set(pattern, re)
+  return re
+}
+
 function globRegExp(pattern: string): RegExp {
   const cached = globCache.get(pattern)
   if (cached) return cached
 
   // `deals/` → `deals/**`; a bare `**` already means everything.
   const normalized = pattern.endsWith('/') ? `${pattern}**` : pattern
-  const parts = normalized.split('/')
+
+  // Callers are expected to have refused this already (parseGlobList,
+  // contextList's isValidGlobEntry check) — this is the backstop that keeps
+  // globRegExp itself from ever building a backtracking regex, whoever calls
+  // it and however the pattern got here.
+  if (!isGlobPatternSafe(normalized)) return cacheGlob(pattern, NEVER_MATCH)
+
+  const parts = collapseDoubleStars(normalized.split('/'))
   const source: string[] = ['^']
   for (let i = 0; i < parts.length; i++) {
     const last = i === parts.length - 1
@@ -152,9 +234,7 @@ function globRegExp(pattern: string): RegExp {
     if (!last) source.push('/')
   }
   source.push('$')
-  const re = new RegExp(source.join(''))
-  globCache.set(pattern, re)
-  return re
+  return cacheGlob(pattern, new RegExp(source.join('')))
 }
 
 /** Does `path` match this glob? See {@link globRegExp} for the grammar. */
@@ -162,6 +242,21 @@ export function globMatch(pattern: string, path: string): boolean {
   const glob = normalizePath(pattern.trim())
   if (!glob || !isValidSubjectPath(path)) return false
   return globRegExp(glob).test(normalizePath(path.trim()))
+}
+
+/**
+ * True when `value` is a well-formed, safe-to-compile glob entry: the
+ * grammar `GLOB_ENTRY_RE` describes, no `.`/`..` segment, and within
+ * {@link isGlobPatternSafe}'s backtracking cap. Exported so a caller-supplied
+ * glob (the bridge's `context.list`) is held to exactly the bar an author's
+ * declared globs (`parseGlobList`) are, instead of a second copy of the
+ * grammar drifting from this one.
+ */
+export function isValidGlobEntry(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || !GLOB_ENTRY_RE.test(trimmed)) return false
+  if (trimmed.split('/').some((seg) => seg === '.' || seg === '..')) return false
+  return isGlobPatternSafe(trimmed)
 }
 
 /** Does a name list entry (`hubspot`, `deal-*`, `*`) cover this name? */
@@ -189,6 +284,15 @@ function parseGlobList(
         error:
           `Bad \`perimeter.${field}\` entry ${JSON.stringify(entry)} — use a context-relative glob ` +
           'like "deals/**", "people/*/index.md" or "deals/" (that folder and everything below)',
+      }
+    }
+    if (!isGlobPatternSafe(value)) {
+      return {
+        ok: false,
+        error:
+          `Bad \`perimeter.${field}\` entry ${JSON.stringify(entry)} — too many wildcard segments ` +
+          `(at most ${MAX_DOUBLE_STAR_GROUPS} "**" groups and ${MAX_STARS_PER_SEGMENT} "*"s in one segment; ` +
+          'more than that can make a match run forever)',
       }
     }
     list.push(value)

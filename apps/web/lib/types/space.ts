@@ -1,6 +1,9 @@
 // Space domain: the Space record and its design/feature configuration.
 
 import type { NodeTypeConfig, SpaceAlias, LinkTypeConfig } from './context';
+// Type-only (erased at compile), so this stays a plain type module even though
+// lib/tools/installs.ts talks to Prisma.
+import type { InstalledToolDto } from '@/lib/tools/installs';
 
 interface SpaceDesignFont {
   name: string;
@@ -65,4 +68,10 @@ export interface Space {
   visibility?: 'public' | 'private'; // 'public' = discoverable & self-joinable; 'private' = invite/admin-add only
   timezone?: string | null; // IANA zone the space's scheduled agents run in (null = UTC)
   agentConfig?: { customEndpoint?: { baseURL: string } | null }; // admin-only agent settings (lib/agents)
+  // The Tools this space runs, enabled ones only. Rides the space DTO because
+  // the sidebar rail, the `/t/<slug>` page and the type-page dispatch all need
+  // it on every render — see lib/tools/installs.ts#installedToolsForSpaces.
+  // Absent (rather than empty) on the responses that don't carry installs, so a
+  // consumer can tell "no tools" from "not loaded".
+  installedTools?: InstalledToolDto[];
 }

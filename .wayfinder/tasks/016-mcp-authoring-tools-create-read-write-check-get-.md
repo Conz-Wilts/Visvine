@@ -1,16 +1,16 @@
 ---
 id: 016
 title: "MCP authoring tools: create/read/write/check/get_sdk/preview/publish/install + scopes"
-status: todo
+status: done
 kind: build
 size: l
 wave: 3
 depends_on: [010, 012, 004, 003]
 touches: [apps/web/lib/mcp/appTools.ts, apps/web/lib/mcp/tools.ts, apps/web/lib/mcp/scopes.ts, apps/web/tests/tools-mcp.test.ts, apps/web/tests/mcp-scopes.test.ts]
 created_by: 002
-session: null
-model: null
-effort: null
+session: e46323ef-ff70-405d-b361-5fdf8350e8f9
+model: opus
+effort: xhigh
 ---
 
 ## Task
@@ -30,3 +30,21 @@ Tools (zod schemas, crisp descriptions written FOR an LLM author — the descrip
 - `publish_tool { space?, name, note? }` → `publishTool` (admin-only; explain the review gate in the response).
 - `install_tool { space?, versionId | key }` → `installVersion` (admin), returns install + conflicts + requirements.
 All writes go through the same principal seams so `writeDenial`/grants apply; the response text should be short JSON-in-text like the existing tools. Tests: every new tool has a scope; handler unit tests with a fake `deps` (inject service functions) covering the write→diagnostics round trip and admin refusal on publish/install. Acceptance: tsc/lint/test/knip clean; run `pnpm dev` and call `list_tools` through the MCP endpoint if a token is easy to mint locally (report; optional).
+
+## Outcome
+
+The authoring loop is live over MCP: nine tools in the new **lib/mcp/appTools.ts**, registered from tools.ts with a one-line call, behind two new scopes. 27 new node:test assertions pass; my files are clean under tsc/eslint/knip; and I ran a live end-to-end smoke through the real MCP endpoint against the local Docker DB — all nine tools advertised, `list_tools`/`read_tool`/`check_tool`/`preview_tool`/`get_tool_sdk` answering, and a read-only token refused on `create_tool` with `Insufficient scope: required "tools:author"`.
+
+**lib/mcp/appTools.ts** — `registerAppTools(server, deps?)` plus `appToolHandlers = { createTool, listTools, readTool, writeTool, checkTool, getToolSdk, previewTool, publishTool, installTool }`, each `(ctx: McpContext, args, deps?) => Promise<JSON>`. Every service call sits behind an injectable `AppToolDeps`, so the handlers run with no DB; `registerAppTools` is the only thing that reaches for the live implementations, and it wraps each handler in `withCtx` exactly like the other 16 tools. Notable shapes: `write_tool` ALWAYS returns the fresh build (`build.ok`, `build.errors` as `ui.tsx:12:5 Expected "}" but found "<"` lines from `toolDiagnosticLine`, `build.config_error` kept SEPARATE because a broken index note is a different fix from a syntax error, plus a `fix` line only when it failed) — that write→diagnostics pairing is the whole reason the tool exists. `check_tool` forces a rebuild then lints: `describePerimeter`, `describeSurfaces`, `computeRequirements`/`describeRequirements` against this space, and three warnings (empty perimeter, missing description, a `page` claim on a type this space hasn't invented — `parseToolConfig` already refuses `page` on a BUILT-IN, so the surviving case is the one `installs.ts` silently downgrades to a tab), ending in a one-line `ready_to_publish`. `create_tool` returns the three file paths, both preview forms and a pointer at `get_tool_sdk`. `install_tool` takes `version_id` OR `key` (resolved to the newest approved version through `versionHistory`), and reports install + `downgraded_to_tab` + conflicts named by the holding slug + the requirements checklist that never blocks.
+
+**Scopes** — `MCP_SCOPES` gains `tools:author` and `tools:install` with consent copy (the consent page and `/api/mcp/connect-info` read `SCOPE_DESCRIPTIONS` generically, so nothing else needed touching). `TOOL_SCOPES`: `list_tools`/`read_tool`/`get_tool_sdk` on `context:read`; create/write/check/preview/publish on `tools:author`; install on `tools:install`. Authoring deliberately does NOT ride `context:write` — a token granted to tidy notes must not be able to add a running app to a space's sidebar — and install is separate because it is the only act that runs code nobody in the space wrote. The comment in scopes.ts states all three reasons.
+
+**Two decisions worth recording.** (1) `space_id` is REQUIRED on every tool, not the task's `space?`. There is no default-space seam anywhere in lib/mcp, all 16 existing tools require it, and `list_spaces`'s description already tells an agent to start there — inventing a default risked authoring a Tool into the wrong space. (2) `check_tool` reads the space's connectors/types/agents under the CALLER's principal rather than an admin's (installs.ts#spaceFacts uses the acting admin's): check_tool is a lint for the author, and an author who can't see a connector can't write against it either. The fold of stored `nodeTypes` with `DEFAULT_NODE_TYPES` mirrors installs.ts exactly, so an author's checklist and an admin's install checklist can't disagree.
+
+**Tests.** `tests/mcp-scopes.test.ts` (4) registers the REAL surface against a recording server — `registerTools` now ends with `registerAppTools`, so it asserts both directions: every registered tool has a `TOOL_SCOPES` entry in the catalogue, and every entry is registered somewhere (an orphan entry reads as coverage that isn't there). It also pins the nine names, the three-way scope split, and that each description is thick enough to author from. `tests/tools-mcp.test.ts` (23) drives the handlers with a fake `deps` whose every method throws unless the test stubs it, so a handler reaching for something extra fails loudly: the write→diagnostics round trip (broken build → formatted lines + `fix`; clean build → no `fix`; config error kept separate; a note-gate denial coming back as 403), read/404, check_tool's warnings and requirements, list/preview/sdk, and the admin refusals on publish and install passed back with status intact.
+
+**Verification.** `node --import tsx --test tests/tools-mcp.test.ts tests/mcp-scopes.test.ts tests/mcp.test.ts` → 56/56. `pnpm test` → 927/928 at the time of writing; the one failure is `tests/tools-rail.test.ts`, another agent's in-flight wave-3 file (task 017), not touched by me. `pnpm exec tsc --noEmit` → zero errors naming any of my files. `eslint --max-warnings=0` over all six changed files → clean. `knip` → nothing against my files (I un-exported the arg interfaces and `ToolSpaceFacts` once knip flagged them; the four remaining entries are other agents' `railKeys`/`moreKeys`, `isGlobPatternSafe` and `ToolServiceError`).
+
+**Live smoke (done, not skipped).** My own `pnpm dev` refused — another agent already had a dev server on :3015 — so I drove that one. Connected as admin@local.dev to `community:blackbird-ventures`: 25 tools advertised including all nine; `list_tools` returned task 015's `route-smoke-015` with `build.ok: true, 452 bytes`; `read_tool { file: 'ui.tsx' }` returned unwrapped source; `check_tool` returned the perimeter bullets, `degraded_here: true` with two missing lines, the page-claim downgrade warning and `ready: false`; `preview_tool` returned `visvine-desktop://open/tools/preview/route-smoke-015` and the web URL; a missing name 404'd with "list_tools shows what exists"; and a `context:read`-only token on `create_tool` was refused by the transport's step-up challenge with the new scope name — so `lib/mcp/challenge.ts` picked the new scopes up with no change, as intended. Read-only throughout: nothing was written to the shared DB.
+
+**One out-of-scope edit, minimal.** `tests/mcp.test.ts` had two assertions that hard-code the catalogue (`MCP_SCOPES` deepEqual) and the tool count (16). Adding scopes and tools necessarily breaks both, so I updated exactly those two lines (count → 25, with a comment pointing at tests/mcp-scopes.test.ts for the registered-surface check). No other change to that file.

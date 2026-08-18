@@ -26,6 +26,7 @@
  */
 import prisma from '@/lib/prisma'
 import { isSuperAdmin } from '@/lib/session'
+import { logAudit } from '@/lib/notes/audit'
 import { writeGated } from '@/lib/notes/contextService'
 import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -432,6 +433,13 @@ export async function publishTool(
       error: `${name} already has a version awaiting review — withdraw it before publishing again.`,
     }
   }
+  void logAudit(spaceId, {
+    userId: p.userId,
+    name: p.name,
+    action: 'tool',
+    path: indexPath,
+    detail: `published v${created.version}`,
+  })
 
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
   // would hit the tools/ AI freeze in contextService.lockedDenial.
@@ -452,7 +460,15 @@ export async function publishTool(
 export async function withdrawVersion(versionId: string, callerId: string): Promise<VersionResult> {
   const row = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, status: true, authorUserId: true },
+    select: {
+      id: true,
+      status: true,
+      authorUserId: true,
+      name: true,
+      version: true,
+      sourceSpaceId: true,
+      author: { select: { name: true } },
+    },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
   if (row.authorUserId !== callerId) {
@@ -466,6 +482,13 @@ export async function withdrawVersion(versionId: string, callerId: string): Prom
     data: { status: 'withdrawn' },
     select: SUMMARY_SELECT,
   })
+  void logAudit(row.sourceSpaceId, {
+    userId: callerId,
+    name: row.author?.name ?? callerId,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `withdrew v${row.version}`,
+  })
   return { ok: true, version: toSummary(updated) }
 }
 
@@ -476,6 +499,22 @@ export async function listReviewQueue(): Promise<ToolVersionSummary[]> {
   const rows = await prisma.appToolVersion.findMany({
     where: { status: 'pending' },
     orderBy: { submittedAt: 'asc' },
+    select: SUMMARY_SELECT,
+  })
+  return rows.map(toSummary)
+}
+
+/**
+ * The decisions already made, newest first — the other half of the reviewer's
+ * screen. `withdrawn` is absent on purpose: an author taking a submission back
+ * is not a decision anyone made, so it belongs in that Tool's own version
+ * history rather than in the reviewer's trail.
+ */
+export async function listRecentDecisions(limit: number): Promise<ToolVersionSummary[]> {
+  const rows = await prisma.appToolVersion.findMany({
+    where: { status: { in: ['approved', 'rejected'] }, reviewedAt: { not: null } },
+    orderBy: { reviewedAt: 'desc' },
+    take: limit,
     select: SUMMARY_SELECT,
   })
   return rows.map(toSummary)
@@ -504,7 +543,7 @@ export async function reviewVersion(
   }
   const row = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, key: true, version: true, status: true },
+    select: { id: true, key: true, name: true, version: true, status: true, sourceSpaceId: true },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
   if (row.status !== 'pending') {
@@ -520,6 +559,13 @@ export async function reviewVersion(
       reviewNote: note?.trim() ? note.trim() : null,
     },
     select: SUMMARY_SELECT,
+  })
+  void logAudit(row.sourceSpaceId, {
+    userId: reviewer.userId,
+    name: reviewer.email,
+    action: 'tool',
+    path: toolIndexPath(row.name),
+    detail: `${decision} v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
 
   let upgraded = 0

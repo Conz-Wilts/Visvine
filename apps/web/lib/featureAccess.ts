@@ -258,6 +258,56 @@ export function moreFeatureKeys(config: SpaceFeatureConfig | null | undefined): 
 }
 
 /**
+ * The nav keys a viewer sees, split between the sidebar rail and the "More"
+ * popup, in the space's configured order.
+ *
+ * This is the pure half of features/shared/lib/features.tsx's `railFeatures` /
+ * `moreFeatures`: that module maps these keys back to rows with labels and
+ * icons, and every decision about WHICH rows and in WHAT order is made here,
+ * where a server route or a node:test can reach it without the JSX.
+ *
+ * `toolKeys` are the `tool:<slug>` rows a space's installed Tools contribute, in
+ * install order. They come last in the candidate list on purpose: `sortFeatureKeys`
+ * leaves unlisted keys where they were, so a Tool an admin has never placed
+ * falls in AFTER the built-in rows. The first visible row is the tab members
+ * land on when they enter the space, and installing a Tool must not move a
+ * space's front door (lib/tools/installs.ts#orderWithRail keeps the stored
+ * `order` honest about the same rule).
+ *
+ * Nav-hidden keys are dropped up front — they have no row to place — and every
+ * candidate goes through `canAccessFeature`. A Tool is not an exception to that:
+ * members see installed Tools, but a row an admin locked on Members → Tools is
+ * locked whether a Tool or a built-in is behind it.
+ *
+ * `toolKeys` are dropped wholesale when `tools` itself is off — switched off or
+ * locked to admins for a non-admin viewer — the same rule the bridge enforces
+ * for a running Tool (lib/tools/target.ts#forbiddenForTools): a disabled space
+ * never sees the shape of a Tool it may not run, install-scoped `enabled`
+ * included. Without this, an installed Tool's row (and its per-install
+ * `adminOnly`/`enabled` state) would keep it visible after the vocabulary was
+ * switched off, and clicking through would land on a page whose frame refuses
+ * to run.
+ */
+export function navFeatureKeys(
+  config: SpaceFeatureConfig | null | undefined,
+  isAdmin: boolean,
+  toolKeys: readonly string[] = [],
+): { rail: string[]; more: string[] } {
+  const toolsOn = canAccessFeature(config, 'tools', isAdmin);
+  const ordered = sortFeatureKeys(
+    config,
+    [...ALL_FEATURE_KEYS.filter((key) => !NAV_HIDDEN_FEATURE_KEYS.includes(key)), ...(toolsOn ? toolKeys : [])].filter(
+      (key) => canAccessFeature(config, key, isAdmin),
+    ),
+  );
+  const more = moreFeatureKeys(config);
+  return {
+    rail: ordered.filter((key) => !more.includes(key)),
+    more: ordered.filter((key) => more.includes(key)),
+  };
+}
+
+/**
  * Fold a client-submitted patch over the stored config and normalize the result.
  *
  * featureConfig is written by more than one console panel — Tools owns which

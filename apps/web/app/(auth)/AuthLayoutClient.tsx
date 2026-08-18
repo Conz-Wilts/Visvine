@@ -42,7 +42,7 @@ function useFeatureRouteGuard() {
       (f) => pathname === f.href || pathname.startsWith(f.href + "/")
     );
     if (onFeature && !canAccessFeature(config, onFeature.key, isAdmin)) {
-      router.replace(defaultLandingHref(config, isAdmin));
+      router.replace(defaultLandingHref(config, isAdmin, currentSpace.installedTools));
     }
   }, [currentSpace, loading, isAdmin, pathname, router]);
 }
@@ -54,7 +54,10 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
 
   // /channels is a Slack-style full-bleed surface: panels run edge-to-edge and
   // scroll internally, so the shell drops its gutters and scroll container.
-  const fullBleed = pathname.startsWith("/channels");
+  // An installed Tool's page (/t/<slug>) is the same shape: the frame IS the
+  // pane, sized to it and scrolling inside itself, so the shell must not add a
+  // second scroll container around it.
+  const fullBleed = pathname.startsWith("/channels") || pathname.startsWith("/t/");
 
   // Every page scrolls inside <main> — not on the document — so the green
   // scrollbar starts BELOW the fixed navbar instead of running up its right

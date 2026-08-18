@@ -65,14 +65,25 @@ export default function Sidebar() {
   // see (an admins-only directory is hidden from members), then split between
   // the rail and the "More" popup per featureConfig.more. See features/shared/lib/features.tsx.
   const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null;
+  // The space's installed Tools ride the space DTO (lib/spaces/queries.ts), so
+  // each one's rail row is built from the same data the rest of the nav is —
+  // no fetch, no second loading state.
+  const installedTools = currentSpace?.installedTools;
   // No space selected (and not merely still loading one): the tools and the
   // Create button all act on the current space, so none of them belong on the
   // rail. The empty rail card stays — the L-shell and the content inset are
   // sized around it. During the initial load the tools render as usual so the
   // rail doesn't flash empty on every page load.
   const noSpace = !spaceLoading && !currentSpace;
-  const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin);
-  const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin);
+  const allNav = noSpace ? [] : railFeatures(featureConfig, isAdmin, installedTools);
+  const moreNav = noSpace ? [] : moreFeatures(featureConfig, isAdmin, installedTools);
+  // An install whose requirements this space doesn't meet still runs, with the
+  // unsatisfied parts returning nothing — so its row gets a dot rather than
+  // disappearing. Keyed by href because that is what a FeatureDef carries
+  // through to the row; a Tool's is `/t/<slug>`, which no built-in can collide with.
+  const degradedHrefs = new Set(
+    (installedTools ?? []).filter((tool) => tool.degraded).map((tool) => tool.href),
+  );
   // A tool stays lit on its sub-routes too (e.g. /channels redirects straight
   // to /channels/<conversationId>, which used to drop the pill right after the
   // click). Longest matching href wins so /directory/note/index.md beats /directory.
@@ -210,6 +221,17 @@ export default function Sidebar() {
                 {/* Icon: fixed 40x40 cell, centered */}
                 <span className="relative flex items-center justify-center shrink-0" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
                   {icon}
+                  {/* Degraded install marker. Ringed in the rail's own
+                      background so it reads as a badge on the icon rather than
+                      part of the glyph, and it sits inside the icon cell so it
+                      travels with the row whether the rail is collapsed or open. */}
+                  {degradedHrefs.has(href) && (
+                    <span
+                      title={`${label} is missing something it needs in this space — it runs with those parts switched off.`}
+                      className="absolute right-1 top-1 h-2 w-2 rounded-full"
+                      style={{ background: "#f59e0b", boxShadow: "0 0 0 2px var(--shell-bg, #ffffff)" }}
+                    />
+                  )}
                 </span>
                 {/* Label: always present, clipped by container overflow-hidden when collapsed */}
                 <span className="text-sm font-medium whitespace-nowrap" style={{ marginLeft: LABEL_ML }}>

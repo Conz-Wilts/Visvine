@@ -27,7 +27,7 @@ import {
 import { scheduleLinkReasons } from '@/lib/notes/linkReasons'
 import { parseFrontmatter, splitFrontmatter } from './shared/markdown'
 import { excerptsForTargets } from './shared/references'
-import { isIndexPath } from './shared/indexNote'
+import { declaredFolderOnlyEntity, entityNameClashDenial, isIndexPath } from './shared/indexNote'
 import {
   entityKindOfPath,
   entityMentionPaths,
@@ -35,6 +35,7 @@ import {
   entityNotePaths,
   entityOwnerPathOf,
 } from './entities'
+import { toolFileKindOfPath, toolNameOfPath } from '@/lib/tools/config'
 
 // Matches store.ts's SHARED_OWNER_KEY — redeclared here (not imported) so the
 // store can call into this module without a circular import.
@@ -174,11 +175,67 @@ async function syncNoteNode(
   path: string,
   content: string | null,
 ): Promise<boolean> {
-  if (isIndexPath(path)) return false
   const kind = entityKindOfPath(path)
+  // A Tool's entity note IS an index path (it is folder-only — see
+  // entities.ts), so it must be checked BEFORE the generic index-path skip
+  // below; every other entity kind's index (a person's, a connector's) is
+  // reached elsewhere and has nothing new to sync here.
+  if (kind === 'tool') return content === null ? false : ensureToolNode(spaceId, path, content)
+  if (isIndexPath(path)) return false
   if (kind === 'connector') return syncConnectorNode(spaceId, path, content)
   if (kind === 'agent') return syncAgentNode(spaceId, path, content)
   return false
+}
+
+/**
+ * The `tool:<name>` node behind a `tools/<name>/index.md` write, created when
+ * the write declares `type: tool` and no node backs it yet.
+ *
+ * lib/tools/service.ts#createTool already makes this node BEFORE writing the
+ * note, because a Tool is folder-only: its entity note is always the index
+ * path, which store.ts#enforceIndexContract holds to the entity contract —
+ * with no node behind it, the contract falls back to the plain Index shape
+ * and `type: tool` is silently lost. Every OTHER door into `tools/` — a
+ * create-note write, a REST write, a restore from trash, an import — needs
+ * the same node made, which is why this is exported: store.ts#enforceIndexContract
+ * calls it directly, BEFORE enforcing the frontmatter contract (enforceIndexContract
+ * runs ahead of syncContextLinks in both writeNote and createNote, so waiting
+ * for this function's other caller — syncNoteNode above, reached only through
+ * syncContextLinks — would be one save too late: the type would already have
+ * been rewritten to `Index` by the time it ran).
+ *
+ * No-op (`false`) for anything else: a path that isn't a Tool's index, a name
+ * TOOL_NAME_RE rejects, content that doesn't declare `type: tool`, or a node
+ * that already exists in this space. Throws when the node id is already
+ * claimed by ANOTHER space — the one case this can't just make its own node —
+ * with a message naming createTool, exactly like createTool's own name-clash
+ * refusal.
+ */
+export async function ensureToolNode(spaceId: string, path: string, content: string): Promise<boolean> {
+  if (toolFileKindOfPath(path) !== 'index') return false
+  const name = toolNameOfPath(path)
+  if (!name) return false
+  const declared = declaredFolderOnlyEntity(parseFrontmatter(content), 'tool', name)
+  if (!declared) return false
+
+  const nodeId = `tool:${name}`
+  const clash = await prisma.node.findUnique({ where: { id: nodeId }, select: { spaceId: true } })
+  if (clash) {
+    if (clash.spaceId === spaceId) return false // already made — createTool, or a second hand-made save
+    throw new Error(entityNameClashDenial(name, 'tool', 'lib/tools/service.ts#createTool'))
+  }
+
+  await syncEntityNode({
+    spaceId,
+    type: 'tool',
+    nodeId,
+    name: declared.name,
+    subtitle: declared.subtitle,
+    metadata: { notePath: path },
+    parentNodeId: spaceNodeId(spaceId),
+    revalidate: false,
+  })
+  return true
 }
 
 /**

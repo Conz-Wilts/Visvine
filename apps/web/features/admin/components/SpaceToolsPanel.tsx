@@ -1,10 +1,11 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Space, SpaceFeatureConfig } from '@/lib/types';
-import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, moreFeatureKeys, sortFeatureKeys } from '@/features/shared/lib/features';
+import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, isToolRailKey, moreFeatureKeys, sortFeatureKeys, toolFeatures } from '@/features/shared/lib/features';
 import { Modal, SearchInput, SettingsSection } from '@/components/ui';
+import Toggle from '@/components/ui/Toggle';
 import { useConsoleAutosave } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
@@ -82,12 +83,51 @@ function typeNamesPhrase(featureKey: string): string | null {
 export default function SpaceToolsPanel({ space, onSaved }: Props) {
   const savedConfig = (space.featureConfig ?? {}) as SpaceFeatureConfig;
 
+  // An installed Tool is a row here exactly like a built-in: same drag, same
+  // More toggle, same commit path. What it does NOT get is the Add/Remove pair —
+  // whether a Tool is installed and enabled is decided in /tools → Installed, and
+  // a trash icon on this page would read as an uninstall it isn't.
+  const toolRows = useMemo(() => toolFeatures(space.installedTools), [space.installedTools]);
+  const allFeatures = useMemo(() => [...FEATURES, ...toolRows], [toolRows]);
+  const featureOf = (key: string) => allFeatures.find(f => f.key === key);
+
+  /**
+   * `tool:<slug>` keys the space has placed that this panel has no row for — a
+   * Tool installed since this space object was fetched, or one another admin
+   * uninstalled while the panel was open.
+   *
+   * The settings PUT writes `order` and `more` whole (only `enabled` merges key
+   * by key), so a key this panel forgets is a Tool unplaced for everyone. These
+   * ride through every save untouched rather than being rebuilt from a list that
+   * may be a moment behind the database.
+   */
+  const carried = useMemo(() => {
+    const known = new Set(allFeatures.map(f => f.key));
+    const seen = new Set<string>();
+    return [...(savedConfig.order ?? []), ...(savedConfig.more ?? [])].filter(key => {
+      if (!isToolRailKey(key) || known.has(key) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    // savedConfig is re-read from the stored space, which is what re-keys this panel.
+  }, [allFeatures, savedConfig.order, savedConfig.more]);
+  const carriedRef = useRef(carried);
+  carriedRef.current = carried;
+  const carriedMore = carried.filter(key => (savedConfig.more ?? []).includes(key));
+  const carriedMoreRef = useRef(carriedMore);
+  carriedMoreRef.current = carriedMore;
+
   // Which tools the space has added, seeded from its current config. Adds
   // and removes persist immediately; a removed tool takes its node types with it
-  // (isNodeTypeEnabled reads the same `enabled` map).
+  // (isNodeTypeEnabled reads the same `enabled` map). An installed Tool's key is
+  // seeded too — installing writes it `true`, and this panel has no way to write
+  // it `false` — so that a row hidden in the config reads as hidden HERE as well
+  // as in the sidebar, rather than the two disagreeing.
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(
-      FEATURES.filter(f => !f.core).map(f => [f.key, isFeatureEnabled(savedConfig, f.key)])
+      allFeatures
+        .filter(f => !f.core)
+        .map(f => [f.key, isFeatureEnabled(savedConfig, f.key)])
     )
   );
   // Tools only admins can see. Edited on Members → Tools, not here;
@@ -98,7 +138,10 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   // Nav-hidden features (Messages and Events in the top bar, Context under the
   // Directory) are never a toggle and never ordered here — see NAV_HIDDEN_FEATURE_KEYS.
   const [order, setOrder] = useState<string[]>(() =>
-    sortFeatureKeys(savedConfig, FEATURES.filter(f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)).map(f => f.key))
+    sortFeatureKeys(savedConfig, [
+      ...allFeatures.filter(f => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key)).map(f => f.key),
+      ...carried,
+    ])
   );
   // Keys tucked into the sidebar's "More" popup. Membership is positional in the
   // UI — a row below the More divider is in More — but stored as its own list.
@@ -181,11 +224,13 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   const moreRef = useRef(more);
   moreRef.current = more;
 
-  // `order` carries every tool, added or not; only added ones have a row.
+  // `order` carries every tool, added or not; only added ones have a row. Keys
+  // with no feature behind them at all (see `carried`) are in neither list —
+  // they are re-appended on every save instead of being rendered.
   const isAdded = (key: string) =>
     FEATURES.find(f => f.key === key)?.core === true || enabled[key] !== false;
-  const addedKeys = order.filter(key => isAdded(key));
-  const removedKeys = order.filter(key => !isAdded(key));
+  const addedKeys = order.filter(key => featureOf(key) && isAdded(key));
+  const removedKeys = order.filter(key => featureOf(key) && !isAdded(key));
   // Two rendered lists — the sidebar rail and the More block — modelled as one
   // sequence with a sentinel between them, so a drag from one section to the
   // other is the same operation as a reorder within one.
@@ -306,14 +351,20 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     });
   };
 
+  /** The `order` a save carries: the placed rows, the removed ones, and then
+   *  every key this panel has no row for (see `carried`). */
+  const composeOrder = (placed: string[], removed: string[]) =>
+    [...placed, ...removed, ...carriedRef.current];
+
   /**
    * Split a dragged sequence back into order + More membership. `persist` is
    * false for the live moves inside a drag — endDrag saves once on drop.
    */
   const applySequence = (seq: string[], persist: boolean) => {
     const cut = seq.indexOf(MORE_DIVIDER);
-    const nextMore = seq.slice(cut + 1);
-    const nextOrder = [...seq.slice(0, cut), ...nextMore, ...removedRef.current];
+    const dragged = seq.slice(cut + 1);
+    const nextMore = [...dragged, ...carriedMoreRef.current];
+    const nextOrder = composeOrder([...seq.slice(0, cut), ...dragged], removedRef.current);
     if (persist) {
       commit(enabled, adminOnly, nextOrder, nextMore);
     } else {
@@ -327,7 +378,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
     commit(
       { ...enabled, [key]: true },
       adminOnly,
-      [...addedKeys.filter(k => !more.includes(k)), key, ...more, ...removedKeys.filter(k => k !== key)],
+      composeOrder([...railKeys, key, ...moreKeys], removedKeys.filter(k => k !== key)),
       more,
     );
   };
@@ -339,13 +390,29 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       { ...enabled, [key]: false },
       // Admins-only is placement on a row that no longer exists — drop it too.
       adminOnly.filter(k => k !== key),
-      [...addedKeys.filter(k => k !== key), key, ...removedKeys],
+      composeOrder(addedKeys.filter(k => k !== key), [key, ...removedKeys]),
       // A removed tool has no sidebar row left to tuck away.
       more.filter(k => k !== key),
     );
   };
 
-  const availableFeatures = removedKeys.map(key => FEATURES.find(f => f.key === key)!);
+  // Tools with no sidebar row of their own — `tools` today (see
+  // NAV_HIDDEN_FEATURE_KEYS). They're still ordinary switches in `enabled` —
+  // nothing else can ever turn `tools` on for a space otherwise — but there's no
+  // rail/More position to drag them into, so they get a plain toggle in their
+  // own list instead of a row in `order`, and only surface in the picker while
+  // off (mirroring how a removed built-in only shows there too).
+  const unplaceableFeatures = allFeatures.filter(f => !f.core && NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
+  const isUnplaceableEnabled = (key: string) => enabled[key] !== false;
+  const enabledUnplaceable = unplaceableFeatures.filter(f => isUnplaceableEnabled(f.key));
+  const disabledUnplaceable = unplaceableFeatures.filter(f => !isUnplaceableEnabled(f.key));
+
+  /** Flip a no-row tool on or off. Only `enabled` changes — `order`/`more` never see it. */
+  const toggleUnplaceable = (key: string, on: boolean) => {
+    commit({ ...enabled, [key]: on }, adminOnly, order, more);
+  };
+
+  const availableFeatures = [...removedKeys.map(key => featureOf(key)!), ...disabledUnplaceable];
   // Search matches the label, the blurb and the node type names, so "space"
   // finds Channels even though no tool is called that.
   const pickerResults = availableFeatures.filter(feature => {
@@ -356,8 +423,10 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
   });
   /** One tool row. Rendered in both the rail list and the More block. */
   const renderToolRow = (item: string) => {
-    const feature = FEATURES.find(f => f.key === item)!;
-    const isCore = feature.core === true;
+    const feature = featureOf(item)!;
+    // Core tools can't be removed, and an installed Tool isn't removed from
+    // here at all — both keep the slot so every row's controls line up.
+    const isFixed = feature.core === true || isToolRailKey(feature.key);
     // Position across both lists — arrow keys walk the whole sequence, crossing
     // into and out of More on the way.
     const position = sequence.indexOf(feature.key) + 1;
@@ -411,9 +480,8 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               admins-only lock lives on Members → Tools. This page is
               only about which tools the space has and where they sit. */}
           {/* Remove — takes the tool's pages and its node types with it, so it
-              asks first. Core tools can't be removed, but they still hold the
-              slot so every row's toggle lines up. */}
-          {isCore ? (
+              asks first. */}
+          {isFixed ? (
             <span className="h-7 w-7 shrink-0" />
           ) : (
             <button
@@ -525,6 +593,39 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         </div>
       </SettingsSection>
 
+      {/* Tools reached elsewhere in the app (the marketplace icon, an install's
+          own rail row) rather than a "Tools" row here — see NAV_HIDDEN_FEATURE_KEYS.
+          Still an on/off switch like any other tool, just not a draggable one. */}
+      {unplaceableFeatures.length > 0 && (
+        <SettingsSection
+          title="No sidebar row"
+          description="Reached elsewhere in the app, so there's nothing to reorder — just on or off."
+        >
+          <div className="divide-y divide-border-subtle">
+            {enabledUnplaceable.length === 0 ? (
+              <p className="py-3 text-sm text-text-muted">
+                Nothing on. Add one from the picker above.
+              </p>
+            ) : (
+              enabledUnplaceable.map(feature => (
+                <div key={feature.key} className="flex items-center gap-3 py-3">
+                  <span className="shrink-0 text-text-secondary">{feature.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-text-primary">{feature.label}</div>
+                    <div className="truncate text-xs text-text-muted">{feature.description}</div>
+                  </div>
+                  <Toggle
+                    checked
+                    onChange={on => toggleUnplaceable(feature.key, on)}
+                    aria-label={`Turn off ${feature.label}`}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </SettingsSection>
+      )}
+
       {/* The catalogue of everything not yet added. Each row names the node types
           the tool brings with it — that's the half of an add that isn't visible
           in the sidebar. Adding leaves the picker open so several tools can go
@@ -558,7 +659,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
                   <button
                     type="button"
                     onClick={() => {
-                      addTool(feature.key);
+                      if (unplaceableFeatures.some(f => f.key === feature.key)) {
+                        toggleUnplaceable(feature.key, true);
+                      } else {
+                        addTool(feature.key);
+                      }
                       if (availableFeatures.length <= 1) setPickerOpen(false);
                     }}
                     className="flex w-full items-start gap-3 rounded-xl p-2.5 text-left transition-colors hover:bg-surface-2"

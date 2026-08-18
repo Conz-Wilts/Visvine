@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 import type { SpaceFeatureConfig } from '@/lib/types';
-import { NAV_HIDDEN_FEATURE_KEYS, canAccessFeature, moreFeatureKeys, sortFeatureKeys } from '@/lib/featureAccess';
+import type { InstalledToolDto } from '@/lib/tools/installs';
+import { navFeatureKeys } from '@/lib/featureAccess';
+import { toolRailRows, type ToolRailRow } from '@/features/tools/lib/railRows';
+import ToolIcon from '@/features/tools/components/toolIcons';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
 // tests can import it without this module's icons. Re-exported here so UI code
@@ -12,8 +15,10 @@ export {
   adminOnlyFeatureKeys,
   canAccessFeature,
   featureNodeTypeNames,
+  isToolRailKey,
   moreFeatureKeys,
   sortFeatureKeys,
+  toolRailKey,
 } from '@/lib/featureAccess';
 
 /**
@@ -143,52 +148,68 @@ export const FEATURES: FeatureDef[] = [
   },
 ];
 
-/** Sort a filtered feature list into the space's configured display order. */
-function inConfiguredOrder(
-  config: SpaceFeatureConfig | null | undefined,
-  features: FeatureDef[],
-): FeatureDef[] {
-  const keys = sortFeatureKeys(config, features.map((f) => f.key));
-  return keys.map((key) => features.find((f) => f.key === key)!);
+/**
+ * An installed Tool's rail row as a `FeatureDef` — the same shape a built-in
+ * produces, which is the whole trick: the rail, the "More" popup and the
+ * console's order editor need no special case for Tools at all, and a
+ * `tool:<slug>` key sorts, tucks away and locks exactly like `resources`.
+ *
+ * Which installs get a row is `toolRailRows`' decision; this only adds the icon
+ * and the sentence the console's picker shows.
+ */
+function toolFeature(row: ToolRailRow): FeatureDef {
+  return {
+    key: row.key,
+    label: row.label,
+    href: row.href,
+    description: `${row.title} — a tool installed in this space.`,
+    icon: <ToolIcon name={row.icon} />,
+  };
 }
 
-/** The features a given user should see in the nav, in the configured order. */
-function visibleFeatures(
-  config: SpaceFeatureConfig | null | undefined,
-  isAdmin: boolean,
+/** The rail rows a space's installed Tools contribute, in install order. */
+export function toolFeatures(
+  installedTools: readonly InstalledToolDto[] | null | undefined,
 ): FeatureDef[] {
-  return inConfiguredOrder(config, FEATURES.filter((f) => canAccessFeature(config, f.key, isAdmin)));
+  return toolRailRows(installedTools).map(toolFeature);
 }
 
 /**
- * The nav features split between the sidebar rail and its "More" popup. Both
- * lists exclude nav-hidden features (notes, events — reached from the top navbar
- * or the Directory rather than the rail) and keep the configured display
- * order; `more` membership comes from `featureConfig.more`.
+ * The nav rows, split between the sidebar rail and its "More" popup.
+ *
+ * Which keys and in what order is `navFeatureKeys`' decision (lib/featureAccess.ts —
+ * pure, and where the tests reach it); this only maps them back to rows. Every
+ * key it returns is either a registry key or one of the tool rows passed in, so
+ * the lookup always resolves.
  */
 function navFeatures(
   config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
-): FeatureDef[] {
-  return visibleFeatures(config, isAdmin).filter((f) => !NAV_HIDDEN_FEATURE_KEYS.includes(f.key));
+  installedTools: readonly InstalledToolDto[] | null | undefined,
+): { rail: FeatureDef[]; more: FeatureDef[] } {
+  const tools = toolFeatures(installedTools);
+  const rows = new Map([...FEATURES, ...tools].map((f) => [f.key, f]));
+  const keys = navFeatureKeys(config, isAdmin, tools.map((f) => f.key));
+  const resolve = (list: string[]) => list.map((key) => rows.get(key)!).filter(Boolean);
+  return { rail: resolve(keys.rail), more: resolve(keys.more) };
 }
 
 /** The features a given user sees as sidebar rail rows, in configured order. */
 export function railFeatures(
   config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
+  installedTools?: readonly InstalledToolDto[] | null,
 ): FeatureDef[] {
-  const more = moreFeatureKeys(config);
-  return navFeatures(config, isAdmin).filter((f) => !more.includes(f.key));
+  return navFeatures(config, isAdmin, installedTools).rail;
 }
 
 /** The features a given user sees inside the "More" popup, in configured order. */
 export function moreFeatures(
   config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
+  installedTools?: readonly InstalledToolDto[] | null,
 ): FeatureDef[] {
-  const more = moreFeatureKeys(config);
-  return navFeatures(config, isAdmin).filter((f) => more.includes(f.key));
+  return navFeatures(config, isAdmin, installedTools).more;
 }
 
 /**
@@ -201,6 +222,11 @@ export function moreFeatures(
 export function defaultLandingHref(
   config: SpaceFeatureConfig | null | undefined,
   isAdmin: boolean,
+  installedTools?: readonly InstalledToolDto[] | null,
 ): string {
-  return railFeatures(config, isAdmin)[0]?.href ?? moreFeatures(config, isAdmin)[0]?.href ?? '/directory';
+  return (
+    railFeatures(config, isAdmin, installedTools)[0]?.href ??
+    moreFeatures(config, isAdmin, installedTools)[0]?.href ??
+    '/directory'
+  );
 }

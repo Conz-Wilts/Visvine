@@ -1,7 +1,7 @@
 /**
- * OAuth scope catalogue for the MCP server — three scopes, matching the three
- * things the tool surface does: read context, write context, and call external
- * systems through admin-configured connectors.
+ * OAuth scope catalogue for the MCP server — one scope per kind of thing the
+ * tool surface does: read context, write context, call external systems through
+ * admin-configured connectors, run an agent, author a Tool, install a Tool.
  *
  * Scopes are the COARSE capability gate carried by an access token, enforced
  * per-tool in `withCtx`. They do NOT replace the per-space authorization
@@ -11,7 +11,14 @@
  * caller has no write access.
  */
 
-export const MCP_SCOPES = ['context:read', 'context:write', 'connectors:use', 'agents:run'] as const
+export const MCP_SCOPES = [
+  'context:read',
+  'context:write',
+  'connectors:use',
+  'agents:run',
+  'tools:author',
+  'tools:install',
+] as const
 
 export type McpScope = (typeof MCP_SCOPES)[number]
 
@@ -25,6 +32,10 @@ export const SCOPE_DESCRIPTIONS: Record<McpScope, string> = {
     'Call external APIs and databases through connectors configured by space admins',
   'agents:run':
     'Trigger a run of an agent you authored or administer — it runs on the space\'s model key with the reach its brief declares',
+  'tools:author':
+    'Build tools in your spaces — write their code, compile it, and submit one for review to the tool marketplace',
+  'tools:install':
+    'Install a reviewed tool from the marketplace into a space you administer',
 }
 
 /**
@@ -61,6 +72,26 @@ export const TOOL_SCOPES = {
   // AI origins (agents are written by people).
   list_agents: 'context:read',
   run_agent: 'agents:run',
+  // Tools (lib/mcp/appTools.ts). Three splits, each for a different reason:
+  //  • Reading a Tool is reading notes — the roster, the source and the SDK
+  //    docs carry nothing a `context:read` token couldn't already fetch with
+  //    read_context, and get_tool_sdk is a static document.
+  //  • Authoring writes EXECUTABLE code into a space, so it does not ride
+  //    `context:write`: a token granted to summarise notes should not be able
+  //    to add a running app to the sidebar. Publishing rides it too — it is
+  //    the last step of authoring, and it is admin-gated underneath.
+  //  • Installing puts someone ELSE'S code in front of a space's members. It
+  //    is the only act here that runs code nobody in the space wrote, so it
+  //    gets a scope of its own that a purely authoring agent never asks for.
+  list_tools: 'context:read',
+  read_tool: 'context:read',
+  get_tool_sdk: 'context:read',
+  create_tool: 'tools:author',
+  write_tool: 'tools:author',
+  check_tool: 'tools:author',
+  preview_tool: 'tools:author',
+  publish_tool: 'tools:author',
+  install_tool: 'tools:install',
 } as const satisfies Record<string, McpScope>
 
 export type McpToolName = keyof typeof TOOL_SCOPES

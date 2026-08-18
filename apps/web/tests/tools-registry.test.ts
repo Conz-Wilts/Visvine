@@ -40,7 +40,6 @@ import {
 import {
   applyUpgrade,
   installVersion,
-  installedToolsForClient,
   listInstalls,
   refreshRequirements,
   resolveTypeClaims,
@@ -266,7 +265,6 @@ test('the registry library exposes the marketplace lifecycle', () => {
 test('the install library exposes the space-side lifecycle', () => {
   for (const fn of [
     listInstalls,
-    installedToolsForClient,
     installVersion,
     uninstall,
     setInstallEnabled,
@@ -334,6 +332,7 @@ test('the install shapes carry what the rail, the page and the banner need', () 
     pendingVersion: null,
   }
   const dto: InstalledToolDto = {
+    id: install.id,
     key: install.key,
     slug: install.slug,
     title: install.title,

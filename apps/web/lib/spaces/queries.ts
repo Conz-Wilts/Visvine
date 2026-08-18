@@ -2,6 +2,7 @@
 import prisma from '@/lib/prisma';
 import { isSuperAdmin, type SessionPayload } from '@/lib/session';
 import { adminSpaceIds } from '@/lib/auth';
+import { installedToolsForSpaces } from '@/lib/tools/installs';
 import type { Space, SpaceAlias } from '@/lib/types';
 
 /**
@@ -72,6 +73,11 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     orderBy: { name: 'asc' },
   });
 
+  // The installed Tools of every space in the list, in ONE query rather than
+  // one per space: each install is a sidebar rail row and a `/t/<slug>` page, so
+  // the client needs them wherever it resolves `currentSpace` from.
+  const installedTools = await installedToolsForSpaces(data.map(c => c.id));
+
   // Prisma returns camelCase fields already via @map
   return data.map(c => ({
     id: c.id,
@@ -91,6 +97,7 @@ export async function listVisibleSpaces(session: SessionPayload): Promise<Space[
     visibility: (c.visibility as 'public' | 'private') ?? 'public',
     timezone: c.timezone ?? null,
     agentConfig: (c.agentConfig as unknown as Space['agentConfig']) ?? undefined,
+    installedTools: installedTools.get(c.id) ?? [],
   }));
 }
 
