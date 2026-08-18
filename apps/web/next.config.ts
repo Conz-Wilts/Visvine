@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { toolsOrigin } from "./lib/tools/origin";
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -26,6 +27,17 @@ const nextConfig: NextConfig = {
     // origins beyond 'self', no framing of this app (clickjacking), no plugin
     // objects, a pinned <base>, and same-origin form posts. `img-src`/`connect-src`
     // stay broad (https:) so GCS/Google avatars and API calls keep working.
+    // A Tool's iframe is served from TOOLS_ORIGIN when one is configured
+    // (lib/tools/origin.ts) — a different host from the app on purpose, so the
+    // frame has no cookie to steal. `frame-src 'self'` alone therefore blocks
+    // the very frame this app renders: with the prod origin set, NO Tool would
+    // load at all ("Framing 'https://tools.visvine.com/…' violates … frame-src
+    // 'self'"). Naming the tools origin here is the app's half of that split;
+    // the frame's own `frame-ancestors` (lib/tools/csp.ts) is the other half,
+    // and it names only this app. Unset, `'self'` is already correct — the
+    // same-origin fallback serves the frame from here.
+    const frameSrc = ["'self'", toolsOrigin()].filter(Boolean).join(' ');
+
     const directives = (formAction: string) =>
       [
         "default-src 'self'",
@@ -35,7 +47,7 @@ const nextConfig: NextConfig = {
         "font-src 'self' data:",
         "connect-src 'self' https:",
         "frame-ancestors 'none'",
-        "frame-src 'self'",
+        `frame-src ${frameSrc}`,
         "object-src 'none'",
         "base-uri 'self'",
         `form-action ${formAction}`,

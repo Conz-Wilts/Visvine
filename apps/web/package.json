@@ -44,7 +44,8 @@
     "connectors:verify:oauth": "tsx scripts/verify-oauth-crm-mcp.ts",
     "verify:alias-identity": "tsx scripts/verify-alias-identity.ts",
     "verify:space-concurrency": "tsx scripts/verify-space-concurrency.ts",
-    "verify:tools": "tsx scripts/verify-tools-e2e.ts"
+    "verify:tools": "tsx scripts/verify-tools-e2e.ts",
+    "verify:tools:escape": "tsx scripts/verify-tools-escape.ts"
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.5",
@@ -96,6 +97,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.3.0",
     "knip": "^6.26.0",
+    "playwright": "^1.62.1",
     "prisma": "7.4.0",
     "tailwindcss": "^4",
     "tsx": "^4.20.6",
