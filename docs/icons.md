@@ -104,13 +104,17 @@ avoids the gap. It is split instead:
    **Applied to production 2026-08-18.**
 2. **Contract** — `prisma/manual/20260818140000_icons_drop_emoji_columns.sql`.
    Converts `conversations.icon` from emoji to icon names and drops
-   `channel_sections.emoji` and `spaces.emoji`. **Not yet run in production** —
-   it must wait until the image that stopped reading those columns is live. See
+   `channel_sections.emoji` and `spaces.emoji`. **Applied to production
+   2026-08-18**, after the release was live at 100% traffic. See
    `apps/web/prisma/manual/README.md`.
 
-Between the two, prod carries both columns and both readers work. New code
+Between the two, prod carried both columns and both readers worked. New code
 meeting an emoji still sitting in `conversations.icon` falls back to the default
-hash glyph, which is why that conversion is deferred rather than done early.
+hash glyph, which is why that conversion was deferred rather than done early.
+
+Both phases are now complete: production is fully migrated and
+`prisma migrate diff` reports no drift beyond the pgvector HNSW indexes, which
+Prisma cannot express and `apply-sql-functions.mjs` owns.
 
 ## A Tool's own icon
 

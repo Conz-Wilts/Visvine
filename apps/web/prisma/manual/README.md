@@ -40,6 +40,13 @@ Afterwards, `prisma migrate diff` should report no drift against
 
 ## Pending
 
-| File | Blocked on | What it does |
+Nothing.
+
+## Applied
+
+| File | Applied | What it did |
 |---|---|---|
-| `20260818140000_icons_drop_emoji_columns.sql` | the icon release being live in prod | Converts `conversations.icon` from emoji to owned icon names, then drops `channel_sections.emoji` and `spaces.emoji`. Phase 2 of `20260818120000_icons_replace_emoji`. See `docs/icons.md`. |
+| `20260818140000_icons_drop_emoji_columns.sql` | prod 2026-08-18 | Converted `conversations.icon` from emoji to owned icon names, then dropped `channel_sections.emoji` and `spaces.emoji`. Phase 2 of `20260818120000_icons_replace_emoji`. See `docs/icons.md`. |
+
+Files are kept after they run: they are idempotent, and a database restored from
+an older backup may still need them.
