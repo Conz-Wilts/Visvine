@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const section = await createChannelSection(
       parsed.data.spaceId,
       parsed.data.name,
-      parsed.data.emoji,
+      parsed.data.icon,
       parsed.data.context,
       user.id,
     );

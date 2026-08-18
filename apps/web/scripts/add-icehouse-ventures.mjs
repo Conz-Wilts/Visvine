@@ -68,11 +68,11 @@ try {
   // 1. Space
   console.log('--- Upserting space ---');
   await client.query(
-    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, emoji, visibility, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, $9, 'public', NOW())
+    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, visibility, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8, 'public', NOW())
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags, node_types = EXCLUDED.node_types,
-       aliases = EXCLUDED.aliases, country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       aliases = EXCLUDED.aliases, country = EXCLUDED.country`,
     [
       space.id,
       space.name,
@@ -82,7 +82,6 @@ try {
       JSON.stringify(NODE_TYPES),
       JSON.stringify(SPACE_ALIASES),
       space.country ?? 'NZ',
-      space.emoji ?? null,
     ]
   );
   console.log(`  ✓ ${COMM}`);

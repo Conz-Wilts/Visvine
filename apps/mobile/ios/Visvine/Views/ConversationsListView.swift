@@ -69,7 +69,7 @@ struct ConversationsListView: View {
                 let items = model.filtered(query: search.query, userId: auth.user?.id)
                 if items.isEmpty {
                     VStack(spacing: 12) {
-                        Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 44)).foregroundStyle(c.borderDefault)
+                        VisvineIcon(.message, size: 44).foregroundStyle(c.borderDefault)
                         Text(search.query.isEmpty ? "No messages yet" : "No conversations found").foregroundStyle(c.textMuted)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

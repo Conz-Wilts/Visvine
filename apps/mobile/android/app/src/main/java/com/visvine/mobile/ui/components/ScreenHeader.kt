@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -36,9 +33,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
 import com.visvine.mobile.ui.viewmodel.CommunityViewModel
+
 
 private fun initials(name: String?): String =
     name?.split(" ")?.mapNotNull { it.firstOrNull() }?.joinToString("")?.take(2)?.uppercase() ?: "?"
@@ -79,7 +78,7 @@ fun ScreenHeader(
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Hub, contentDescription = null, tint = colors.accent, modifier = Modifier.size(22.dp))
+                    Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(22.dp))
                     Text("Visvine", color = colors.textPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -132,7 +131,7 @@ fun ScreenHeader(
                             fontSize = 16.sp,
                             modifier = Modifier.weight(1f),
                         )
-                        if (active) Icon(Icons.Filled.Check, contentDescription = null, tint = colors.accent, modifier = Modifier.size(18.dp))
+                        if (active) Icon(AppIcons.Check, contentDescription = null, tint = colors.accent, modifier = Modifier.size(18.dp))
                     }
                 }
             }

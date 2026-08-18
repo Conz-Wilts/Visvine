@@ -11,7 +11,7 @@
 // knows whether anything is there.
 
 import { useState } from 'react'
-import { Lock } from 'lucide-react'
+import { LockIcon } from '@/features/shared/icons';
 import { Textarea } from '@/components/ui'
 
 interface AccessRequestCardProps {
@@ -54,7 +54,7 @@ export function AccessRequestCard({
     // not a dialog over it. A card + shadow read as a modal the viewer could
     // dismiss, so the state sits flat on the context background instead.
     <div className="flex w-full max-w-md flex-col items-center gap-3 px-8 py-10 text-center">
-      <Lock className="h-6 w-6 text-text-muted" aria-hidden="true" strokeWidth={1.5} />
+      <LockIcon className="h-6 w-6 text-text-muted" aria-hidden="true" strokeWidth={1.5} />
       <h2 className="text-base font-semibold text-text-primary">{heading}</h2>
       {body && <p className="text-sm text-text-secondary">{body}</p>}
 

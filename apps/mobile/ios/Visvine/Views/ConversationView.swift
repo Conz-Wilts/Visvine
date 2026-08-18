@@ -65,7 +65,7 @@ struct ConversationView: View {
                 ProgressView().tint(c.accent).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.messages.isEmpty {
                 VStack(spacing: 4) {
-                    Image(systemName: "bubble.left.and.bubble.right").font(.system(size: 32)).foregroundStyle(c.textMuted)
+                    VisvineIcon(.message, size: 32).foregroundStyle(c.textMuted)
                         .frame(width: 64, height: 64).background(c.bgTertiary, in: Circle()).padding(.bottom, 8)
                     Text("No messages yet").font(.system(size: 16, weight: .medium)).foregroundStyle(c.textMuted)
                     Text("Start the conversation!").font(.system(size: 14)).foregroundStyle(c.textLight)
@@ -109,7 +109,7 @@ struct ConversationView: View {
             Button { send() } label: {
                 Group {
                     if model.sending { ProgressView().tint(.white) }
-                    else { Image(systemName: "arrow.up").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white) }
+                    else { VisvineIcon(.arrowUp, size: 18).foregroundStyle(.white) }
                 }
                 .frame(width: 40, height: 40)
                 .background(input.trimmingCharacters(in: .whitespaces).isEmpty ? c.borderDefault : c.accent, in: Circle())

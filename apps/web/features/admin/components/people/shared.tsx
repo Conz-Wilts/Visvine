@@ -7,7 +7,7 @@
 // context will honour.
 
 import { useMemo, useRef, useState } from 'react';
-import { ChevronDown, Users, FileText, Folder } from 'lucide-react';
+import { ChevronDownIcon, FileTextIcon, FolderIcon, UsersIcon } from '@/features/shared/icons';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 import type { AliasInfo } from '@/lib/notes/aliases';
 import type { AccessOverviewResponse } from '@/features/notes/lib/notesApi';
@@ -268,7 +268,7 @@ function PathPicker({
         ) : (
           <PathLabel path={value} contextName={contextName} paths={paths} />
         )}
-        <ChevronDown className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDownIcon className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[260px] overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-xl">
@@ -288,11 +288,11 @@ function PathPicker({
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-text-secondary transition-colors hover:bg-surface-2"
               >
                 {p.path === '' ? (
-                  <Users className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  <UsersIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
                 ) : p.kind === 'folder' ? (
-                  <Folder className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  <FolderIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
                 ) : (
-                  <FileText className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                  <FileTextIcon className="h-3.5 w-3.5 shrink-0 opacity-60" />
                 )}
                 <PathLabel path={p.path} contextName={contextName} paths={paths} />
               </button>

@@ -74,6 +74,11 @@ export function toolDataPath(name: string): string {
   return `${toolFolderPath(name)}/${TOOL_SOURCE_FILES.data.path}`
 }
 
+/** `tools/<name>/icon.md` — the wrapped SVG the author writes as `icon.svg`. */
+export function toolIconPath(name: string): string {
+  return `${toolFolderPath(name)}/${TOOL_SOURCE_FILES.icon.path}`
+}
+
 /** Drop a leading slash, so `/tools/x/index.md` reads like the stored path. */
 function normalizePath(path: string): string {
   return path.startsWith('/') ? path.slice(1) : path
@@ -100,7 +105,7 @@ export function toolNameOfPath(path: string): string | null {
  * path is not under `tools/` at all — that is the "not my business" answer the
  * store hooks branch on.
  */
-export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'other' | null {
+export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'icon' | 'other' | null {
   const raw = normalizePath(path)
   if (raw !== TOOLS_DIR && !raw.startsWith(`${TOOLS_DIR}/`)) return null
   const name = toolNameOfPath(raw)
@@ -109,6 +114,7 @@ export function toolFileKindOfPath(path: string): 'index' | 'ui' | 'data' | 'oth
   if (basename === INDEX_BASENAME) return 'index'
   if (basename === TOOL_SOURCE_FILES.ui.path) return 'ui'
   if (basename === TOOL_SOURCE_FILES.data.path) return 'data'
+  if (basename === TOOL_SOURCE_FILES.icon.path) return 'icon'
   return 'other'
 }
 
@@ -118,21 +124,33 @@ export function isToolPath(path: string): boolean {
 }
 
 /**
- * The two source files, keyed by the role the runtime knows them by.
+ * The source files, keyed by the role the runtime knows them by.
  *
  * `path` is the note basename inside the Tool folder; `authorName` is what the
  * file is called everywhere a person or an authoring agent sees it, and `lang`
  * is both the fence info string and what the compiler is told to expect.
+ *
+ * `icon` is optional and is not code: it holds the author's own rail glyph, and
+ * it lives here rather than in a bucket for the same reason the sources do — a
+ * Tool is notes, so its icon versions with `publish`, travels through the
+ * marketplace install path, and lands in the review queue with everything else.
+ * It is sanitized on the way in (lib/tools/iconSvg.ts), which matters more than
+ * for the sources: unlike ui.tsx, the icon renders in the app's own document.
  */
 export const TOOL_SOURCE_FILES = {
   ui: { path: 'ui.md', authorName: 'ui.tsx', lang: 'tsx' },
   data: { path: 'data.md', authorName: 'data.js', lang: 'js' },
+  icon: { path: 'icon.md', authorName: 'icon.svg', lang: 'svg' },
 } as const
 
 type ToolSourceLang = (typeof TOOL_SOURCE_FILES)[keyof typeof TOOL_SOURCE_FILES]['lang']
 
 const SOURCE_TYPE = 'tool-source'
-const SOURCE_LANGS: readonly ToolSourceLang[] = [TOOL_SOURCE_FILES.ui.lang, TOOL_SOURCE_FILES.data.lang]
+const SOURCE_LANGS: readonly ToolSourceLang[] = [
+  TOOL_SOURCE_FILES.ui.lang,
+  TOOL_SOURCE_FILES.data.lang,
+  TOOL_SOURCE_FILES.icon.lang,
+]
 
 /** The longest run of consecutive backticks anywhere in the code. */
 function longestBacktickRun(code: string): number {
@@ -217,13 +235,18 @@ export interface ToolConfig {
 }
 
 /**
- * The rail icons a Tool may choose from.
+ * The built-in rail icons a Tool may choose from.
  *
  * A named set rather than free-form: the rail renders real icon components from
- * the app's own set (features/shared/lib/features.tsx), and a marketplace Tool
+ * the app's own set (assets/icons, see docs/icons.md), and a marketplace Tool
  * naming an icon that doesn't exist would render a hole in the sidebar chrome it
  * is not allowed to touch. Small on purpose — enough shapes to say what a Tool
  * is, few enough that installs look like the rest of the app.
+ *
+ * These names are a published contract (a Tool's frontmatter refers to them),
+ * so they are not the icon FILE names — features/tools/components/toolIcons.tsx
+ * maps them onto the owned set. A Tool that wants a shape outside this list
+ * ships its own: see {@link TOOL_CUSTOM_RAIL_ICON}.
  */
 export const TOOL_RAIL_ICONS = [
   'grid',
@@ -239,6 +262,19 @@ export const TOOL_RAIL_ICONS = [
 ] as const
 
 const DEFAULT_RAIL_ICON: (typeof TOOL_RAIL_ICONS)[number] = 'grid'
+
+/**
+ * The rail icon that means "use my own": the Tool draws its glyph in
+ * `icon.svg` instead of picking one of ours.
+ *
+ * Not a shape in TOOL_RAIL_ICONS because it isn't one — it is a pointer at
+ * another file, and keeping it out of that list keeps "which built-in did you
+ * pick" and "did you ship your own" two separate questions everywhere they are
+ * asked. An author who names it without writing icon.svg gets a build error,
+ * not a silent fallback, because a rail row is the one place a Tool's identity
+ * shows before you click it.
+ */
+export const TOOL_CUSTOM_RAIL_ICON = 'custom'
 
 /**
  * Node types a Tool may never own the page for.
@@ -294,10 +330,12 @@ function parseRail(
   }
   const label = trimmedString(rail.label) || fallbackLabel
   const icon = trimmedString(rail.icon).toLowerCase() || DEFAULT_RAIL_ICON
-  if (!(TOOL_RAIL_ICONS as readonly string[]).includes(icon)) {
+  if (icon !== TOOL_CUSTOM_RAIL_ICON && !(TOOL_RAIL_ICONS as readonly string[]).includes(icon)) {
     return {
       ok: false,
-      error: `Unknown \`surfaces.rail.icon\` ${JSON.stringify(rail.icon)} — pick one of ${TOOL_RAIL_ICONS.join(', ')}`,
+      error:
+        `Unknown \`surfaces.rail.icon\` ${JSON.stringify(rail.icon)} — pick one of ` +
+        `${TOOL_RAIL_ICONS.join(', ')}, or \`${TOOL_CUSTOM_RAIL_ICON}\` to use your own ${TOOL_SOURCE_FILES.icon.authorName}`,
     }
   }
   return { ok: true, rail: { label, icon } }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VirtuosoHandle } from 'react-virtuoso';
-import { Search, X } from 'lucide-react';
+import { SearchIcon, XIcon } from '@/features/shared/icons';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -113,7 +113,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const [showSectionForm, setShowSectionForm] = useState(false);
   const [sectionName, setSectionName] = useState('');
   const [creatingSection, setCreatingSection] = useState(false);
-  // Channel-header extras: emoji-icon picker + saved-messages dropdown panel.
+  // Channel-header extras: icon picker + saved-messages dropdown panel.
   const [showHeaderIconPicker, setShowHeaderIconPicker] = useState(false);
   const [headerPanel, setHeaderPanel] = useState<'saved' | null>(null);
   const [panelItems, setPanelItems] = useState<SavedMessageEntry[]>([]);
@@ -544,9 +544,9 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   const handleRenameSection = useCallback(async (sectionId: string, name: string) => {
     try {
-      // The whole text (emoji included) lives in `name` — the rename form
-      // prefills any legacy emoji into it, so clear the separate column.
-      await fetchJsonBody(`/api/messages/sections/${sectionId}`, 'PATCH', { name, emoji: null });
+      // Renaming touches only the name; the icon is set from its own picker
+      // and must survive a rename.
+      await fetchJsonBody(`/api/messages/sections/${sectionId}`, 'PATCH', { name });
       await fetchChannels();
     } catch (e) {
       setError((e as Error).message || 'Unable to rename the section.');
@@ -727,13 +727,13 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       const browsableHere = browsableChannels.filter((ch) => ch.sectionId === section.id);
       // While searching, hide sections with no matches so results stay scannable.
       if (joinedHere.length || browsableHere.length || !conversationSearch.trim()) {
-        sections.push({ key: section.id, name: section.name, emoji: section.emoji, joined: joinedHere, browsable: browsableHere });
+        sections.push({ key: section.id, name: section.name, icon: section.icon, joined: joinedHere, browsable: browsableHere });
       }
     }
     const joinedUnfiled = joined.filter((c) => !c.sectionId || !sectionIds.has(c.sectionId));
     const browsableUnfiled = browsableChannels.filter((ch) => !ch.sectionId || !sectionIds.has(ch.sectionId));
     if (joinedUnfiled.length || browsableUnfiled.length) {
-      sections.push({ key: '__none__', name: 'Channels', emoji: null, joined: joinedUnfiled, browsable: browsableUnfiled });
+      sections.push({ key: '__none__', name: 'Channels', icon: null, joined: joinedUnfiled, browsable: browsableUnfiled });
     }
     return sections;
   }, [filteredConversations, browsableChannels, channelSections, conversationSearch]);
@@ -866,7 +866,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
         <div className="flex flex-col items-center gap-3 pt-6 pb-5">
           <div className="w-full max-w-2xl">
             <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm transition-colors focus-within:border-brand-green/40">
-              <Search className="h-4 w-4 shrink-0 text-text-muted" />
+              <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
               <input
                 ref={sidebarSearchRef}
                 value={conversationSearch}
@@ -876,7 +876,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
               />
               {conversationSearch && (
                 <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-                  <X className="h-3.5 w-3.5" />
+                  <XIcon className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>

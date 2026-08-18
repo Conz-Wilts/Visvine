@@ -7,6 +7,16 @@ const COMPONENTS_BOUNDARY = {
   message: "Only @/components/ui is shared. Domain UI belongs in @/features/<domain>/components.",
 };
 
+// We own our icons: every glyph is a file in assets/icons/, codegen'd into
+// components by scripts/build-icons.ts. Renting them back from a library is the
+// thing this boundary exists to stop — a library bump would silently redraw the
+// UI, and there is no way to hand-tune a glyph we don't have the source for.
+// See docs/icons.md.
+const ICON_LIBRARIES = {
+  group: ["lucide-react", "@heroicons/react", "@heroicons/react/*", "react-icons", "react-icons/*"],
+  message: "Icons are ours — import from '@/features/shared/icons' (see docs/icons.md).",
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTypescript,
@@ -64,7 +74,10 @@ const eslintConfig = defineConfig([
     // features/<domain>/components/.
     files: ["**/*.{ts,tsx}"],
     rules: {
-      "no-restricted-imports": ["error", { patterns: [COMPONENTS_BOUNDARY] }],
+      "no-restricted-imports": [
+        "error",
+        { patterns: [COMPONENTS_BOUNDARY, ICON_LIBRARIES] },
+      ],
     },
   },
   {
@@ -77,7 +90,7 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          patterns: [COMPONENTS_BOUNDARY],
+          patterns: [COMPONENTS_BOUNDARY, ICON_LIBRARIES],
           paths: ["react", "react-dom"].map((name) => ({
             name,
             message: "lib/ must stay React-free — put this in features/<domain>/ instead.",

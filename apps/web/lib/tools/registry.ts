@@ -32,7 +32,13 @@ import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
-import { getBuild, readToolSources, toBuildSummary, toolDiagnosticLine } from './builds'
+import {
+  getBuild,
+  readToolSources,
+  toBuildSummary,
+  toolDiagnosticLine,
+  toolSourceHash,
+} from './builds'
 import {
   TOOL_NAME_RE,
   toolIndexPath,
@@ -85,6 +91,11 @@ export interface ToolVersionSummary {
   perimeter: ToolPerimeter
   /** Rail row and type claims the Tool asks for, for the marketplace card. */
   surfaces: { rail: { label: string; icon: string } | null; types: ToolTypeSurface[] }
+  /**
+   * The Tool's own rail glyph when it ships one (`rail.icon: custom`), already
+   * sanitized at build time. Null means it picked a built-in shape.
+   */
+  iconSvg: string | null
 }
 
 /** A version opened: the summary plus everything a reviewer or a diff reads. */
@@ -219,6 +230,7 @@ const SUMMARY_SELECT = {
   authorUserId: true,
   config: true,
   perimeter: true,
+  iconSvg: true,
   author: { select: { id: true, name: true } },
 } as const
 
@@ -245,6 +257,7 @@ type SummaryRow = {
   authorUserId: string | null
   config: unknown
   perimeter: unknown
+  iconSvg: string | null
   author: { id: string; name: string } | null
 }
 
@@ -270,6 +283,7 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     // install time; config.perimeter is the same thing inside the snapshot.
     perimeter: decodeToolPerimeter(row.perimeter),
     surfaces: config.surfaces,
+    iconSvg: row.iconSvg,
   }
 }
 
@@ -380,10 +394,26 @@ export async function publishTool(
   }
 
   // The sources as the compiler read them — publishing is admin-only, and an
-  // admin's visibility lens is the whole space, so this is the same three notes
-  // the build was made from rather than a second, possibly narrower, reading.
+  // admin's visibility lens is the whole space, so these are the same notes the
+  // build was made from rather than a second, possibly narrower, reading.
   const indexPath = toolIndexPath(name)
   const sources = await readToolSources(spaceId, name)
+
+  // ...and they must still hash to what the build was compiled from.
+  //
+  // The row above carries the BUNDLES an installer will execute; the notes here
+  // carry the SOURCE a reviewer reads. They are two separate reads, so without
+  // this check a write landing between them publishes benign source paired with
+  // a different bundle — and `app_tool_versions` is immutable, so that pairing
+  // would be permanent. The whole review gate rests on "what was approved is
+  // what ships", which is exactly this equality.
+  if (toolSourceHash(sources) !== buildRow.sourceHash) {
+    return {
+      ok: false,
+      status: 409,
+      error: `${name} changed while it was being published — save it again, then publish.`,
+    }
+  }
   if (sources.index === null) return { ok: false, status: 404, error: `No tool note at ${indexPath}.` }
   if (sources.ui === null) {
     return { ok: false, status: 400, error: `${name} has no ui.tsx — a tool must have something to render.` }
@@ -417,6 +447,9 @@ export async function publishTool(
         indexSource: splitFrontmatter(indexNote).body,
         uiSource: unwrapSource(sources.ui ?? '')?.code ?? '',
         dataSource: sources.data ? (unwrapSource(sources.data)?.code ?? '') : '',
+        // Snapshotted from the BUILD, not re-read from icon.md: the build is
+        // where sanitization happened, so this is the reviewed, trusted markup.
+        iconSvg: buildRow.iconSvg,
         uiBundle: buildRow.uiBundle ?? '',
         dataBundle: buildRow.dataBundle ?? '',
         sizeBytes: build.sizeBytes,

@@ -242,8 +242,8 @@ export async function listChannelsForSpace(
 
 // ─── Channel sections (Circle-style sections) ─────────────────────────────────
 
-function serializeSection(section: { id: string; name: string; emoji: string | null; position: number }): ChannelSectionEntry {
-  return { id: section.id, name: section.name, emoji: section.emoji, position: section.position };
+function serializeSection(section: { id: string; name: string; icon: string | null; position: number }): ChannelSectionEntry {
+  return { id: section.id, name: section.name, icon: section.icon, position: section.position };
 }
 
 async function ensureSectionInSpace(sectionId: string, spaceId: string) {
@@ -267,7 +267,7 @@ export async function listChannelSections(spaceId: string): Promise<ChannelSecti
 export async function createChannelSection(
   spaceId: string,
   name: string,
-  emoji?: string,
+  icon?: string,
   context?: string,
   actorId?: string,
 ): Promise<ChannelSectionEntry> {
@@ -287,7 +287,7 @@ export async function createChannelSection(
     data: {
       spaceId,
       name: name.trim(),
-      emoji: emoji ?? null,
+      icon: icon ?? null,
       position: (last?.position ?? -1) + 1,
     },
   });
@@ -297,7 +297,7 @@ export async function createChannelSection(
     name: created.name,
     recordId: created.id,
     body: context,
-    metadata: { emoji: created.emoji },
+    metadata: { icon: created.icon },
     parentNodeId: spaceNodeId(spaceId),
     ...(actorId ? { actor: { id: actorId, name: '' } } : {}),
   });
@@ -306,7 +306,7 @@ export async function createChannelSection(
 
 export async function updateChannelSection(
   sectionId: string,
-  payload: { name?: string; emoji?: string | null; position?: number },
+  payload: { name?: string; icon?: string | null; position?: number },
 ): Promise<ChannelSectionEntry> {
   const existing = await prisma.channelSection.findUnique({ where: { id: sectionId } });
   if (!existing) {
@@ -316,20 +316,20 @@ export async function updateChannelSection(
     where: { id: sectionId },
     data: {
       ...(payload.name !== undefined ? { name: payload.name.trim() } : {}),
-      ...(payload.emoji !== undefined ? { emoji: payload.emoji } : {}),
+      ...(payload.icon !== undefined ? { icon: payload.icon } : {}),
       ...(payload.position !== undefined ? { position: payload.position } : {}),
     },
   });
   // Keep the graph label in step with the rename. The node id (and so the note
   // path) is deliberately NOT re-derived — the note is the section's history, and
   // moving it on every rename would break links into it.
-  if (payload.name !== undefined || payload.emoji !== undefined) {
+  if (payload.name !== undefined || payload.icon !== undefined) {
     await syncEntityNodeSafe({
       spaceId: updated.spaceId,
       type: 'section',
       name: updated.name,
       recordId: updated.id,
-      metadata: { emoji: updated.emoji },
+      metadata: { icon: updated.icon },
     });
   }
   return serializeSection(updated);

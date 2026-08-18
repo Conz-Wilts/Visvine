@@ -16,10 +16,7 @@ import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
-import {
-  Loader2, ImagePlus, MapPin, Video, Globe, Users, Lock, ChevronDown, ChevronUp,
-  Check, Link2, CalendarPlus, ExternalLink, ArrowLeft, X, Sparkles, Trash2, Plus,
-} from 'lucide-react';
+import { ArrowLeftIcon, CalendarPlusIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ExternalLinkIcon, GlobeIcon, ImagePlusIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PlusIcon, SparklesIcon, Trash2Icon, UsersIcon, VideoIcon, XIcon } from '@/features/shared/icons';
 
 type EventType = 'in-person' | 'virtual' | 'hybrid';
 
@@ -58,9 +55,9 @@ interface EventComposerProps {
 const THEME_COLORS = ['#78d870', '#2563eb', '#9333ea', '#ef4444', '#f59e0b', '#0ea5e9', '#ec4899', '#111827'];
 
 const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.ReactNode; description: string }[] = [
-  { value: 'space', label: 'Space', icon: <Users className="w-4 h-4" />, description: 'Members of this space' },
-  { value: 'public', label: 'Public link', icon: <Globe className="w-4 h-4" />, description: 'Anyone with the link can RSVP' },
-  { value: 'private', label: 'Unlisted', icon: <Lock className="w-4 h-4" />, description: 'Only people you invite' },
+  { value: 'space', label: 'Space', icon: <UsersIcon className="w-4 h-4" />, description: 'Members of this space' },
+  { value: 'public', label: 'Public link', icon: <GlobeIcon className="w-4 h-4" />, description: 'Anyone with the link can RSVP' },
+  { value: 'private', label: 'Unlisted', icon: <LockIcon className="w-4 h-4" />, description: 'Only people you invite' },
 ];
 
 function inputClass() {
@@ -289,7 +286,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           onClick={() => router.back()}
           className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-grey hover:text-brand-black transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Back
+          <ArrowLeftIcon className="w-4 h-4" /> Back
         </button>
         <SaveIndicator state={saveState} />
       </div>
@@ -318,18 +315,18 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           <img src={coverImageUrl} alt="Event cover" className="w-full h-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-2 px-6 text-center">
-            <ImagePlus className="w-8 h-8 opacity-90" />
+            <ImagePlusIcon className="w-8 h-8 opacity-90" />
             <span className="text-sm font-semibold drop-shadow">{title.trim() || 'Add a cover'}</span>
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
         {uploading && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-white" />
+            <LoaderCircleIcon className="w-6 h-6 animate-spin text-white" />
           </div>
         )}
         <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/40 backdrop-blur text-xs font-semibold">
-          <ImagePlus className="w-3.5 h-3.5" />
+          <ImagePlusIcon className="w-3.5 h-3.5" />
           {coverImageUrl ? 'Change cover' : 'Upload'}
         </span>
       </button>
@@ -384,9 +381,9 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
         <label className="block text-sm font-medium text-brand-black mb-2">Location</label>
         <div className="flex gap-2 mb-3 justify-center">
           {([
-            { value: 'in-person', label: 'In person', icon: <MapPin className="w-4 h-4" /> },
-            { value: 'virtual', label: 'Virtual', icon: <Video className="w-4 h-4" /> },
-            { value: 'hybrid', label: 'Hybrid', icon: <Globe className="w-4 h-4" /> },
+            { value: 'in-person', label: 'In person', icon: <MapPinIcon className="w-4 h-4" /> },
+            { value: 'virtual', label: 'Virtual', icon: <VideoIcon className="w-4 h-4" /> },
+            { value: 'hybrid', label: 'Hybrid', icon: <GlobeIcon className="w-4 h-4" /> },
           ] as const).map((opt) => (
             <button
               key={opt.value}
@@ -443,7 +440,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           className="w-full flex items-center justify-between px-5 py-3.5 bg-brand-light-bg/50 hover:bg-brand-light-bg transition-colors"
         >
           <span className="text-sm font-semibold text-brand-black">More options</span>
-          {detailsOpen ? <ChevronUp className="w-4 h-4 text-brand-grey" /> : <ChevronDown className="w-4 h-4 text-brand-grey" />}
+          {detailsOpen ? <ChevronUpIcon className="w-4 h-4 text-brand-grey" /> : <ChevronDownIcon className="w-4 h-4 text-brand-grey" />}
         </button>
         {detailsOpen && (
           <div className="px-5 py-5 space-y-5">
@@ -535,7 +532,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
                           className="p-2 text-brand-grey hover:text-red-600 transition-colors flex-shrink-0"
                           aria-label="Remove question"
                         >
-                          <X className="w-4 h-4" />
+                          <XIcon className="w-4 h-4" />
                         </button>
                       </div>
                       {q.type === 'select' && (
@@ -575,7 +572,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
                 onClick={addQuestion}
                 className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-green hover:opacity-80 transition-opacity"
               >
-                <Plus className="w-4 h-4" /> Add question
+                <PlusIcon className="w-4 h-4" /> Add question
               </button>
             </div>
           </div>
@@ -592,7 +589,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
                 onClick={onDelete}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2Icon className="w-4 h-4" />
                 Delete event
               </button>
             )}
@@ -603,7 +600,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
             disabled={publishing || uploading}
             className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
           >
-            {publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {publishing ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
             {mode === 'edit' ? 'Save changes' : 'Publish event'}
           </button>
         </div>
@@ -622,9 +619,9 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
 
 function SaveIndicator({ state }: { state: 'idle' | 'saving' | 'saved' | 'error' }) {
   if (state === 'idle') return <span className="text-xs text-brand-grey">Draft</span>;
-  if (state === 'saving') return <span className="inline-flex items-center gap-1.5 text-xs text-brand-grey"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</span>;
+  if (state === 'saving') return <span className="inline-flex items-center gap-1.5 text-xs text-brand-grey"><LoaderCircleIcon className="w-3.5 h-3.5 animate-spin" /> Saving…</span>;
   if (state === 'error') return <span className="text-xs text-red-600">Couldn’t save — keep editing</span>;
-  return <span className="inline-flex items-center gap-1.5 text-xs text-brand-green"><Check className="w-3.5 h-3.5" /> Saved</span>;
+  return <span className="inline-flex items-center gap-1.5 text-xs text-brand-green"><CheckIcon className="w-3.5 h-3.5" /> Saved</span>;
 }
 
 function Toggle({ label, hint, value, onChange }: { label: string; hint: string; value: boolean; onChange: (v: boolean) => void }) {
@@ -671,7 +668,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             <p className="text-sm text-brand-grey mt-1">Share the link and start collecting RSVPs.</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-brand-grey hover:text-brand-black rounded-lg" aria-label="Close">
-            <X className="w-5 h-5" />
+            <XIcon className="w-5 h-5" />
           </button>
         </div>
 
@@ -681,7 +678,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             onClick={copy}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
           >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Link2 className="w-3.5 h-3.5" />}
+            {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <Link2Icon className="w-3.5 h-3.5" />}
             {copied ? 'Copied' : 'Copy link'}
           </button>
         </div>
@@ -693,7 +690,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
           >
-            <CalendarPlus className="w-4 h-4" /> Add to calendar
+            <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
           </a>
           <a
             href={path}
@@ -701,7 +698,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             rel="noreferrer"
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
           >
-            <ExternalLink className="w-4 h-4" /> View page
+            <ExternalLinkIcon className="w-4 h-4" /> View page
           </a>
         </div>
 

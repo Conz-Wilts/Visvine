@@ -12,7 +12,6 @@ export interface NodeTypeConfig {
   name: string; // e.g., "Person", "Organization"
   color: string; // Hex color e.g., "#2563eb"
   shape: NodeShape; // Shape to render
-  icon?: string; // Optional emoji or icon
   /**
    * `note` marks a type a member invented from the draft surface. Things made
    * under it are plain context notes — Context and Raw, a coloured type chip,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
@@ -84,7 +84,7 @@ export default function AgentsPage() {
       <div className="flex flex-col gap-4">
         {schedulerDelayed && (
           <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
               The scheduler hasn&apos;t ticked{data.heartbeatAt ? ` since ${new Date(data.heartbeatAt).toLocaleString()}` : ' yet'} — active agents will not fire
               until it does. (In production this is the Cloud Scheduler job; in dev, POST /api/internal/agents/tick.)

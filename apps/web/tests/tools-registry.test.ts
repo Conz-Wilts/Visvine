@@ -294,6 +294,7 @@ test('the published shapes are what the routes and the space DTO carry', () => {
     author: { userId: 'u1', name: 'Ana' },
     perimeter: EMPTY_PERIMETER,
     surfaces: { rail: { label: 'Deals', icon: 'kanban' }, types: [] },
+    iconSvg: null,
   }
   const detail: ToolVersionDetail = { ...summary, config: decodeToolConfig({}, 'deal-pipeline'), indexSource: '', uiSource: '', dataSource: '' }
   const entry: BrowseEntry = { ...summary, installs: 2 }
@@ -337,6 +338,7 @@ test('the install shapes carry what the rail, the page and the banner need', () 
     slug: install.slug,
     title: install.title,
     icon: 'kanban',
+    iconSvg: null,
     label: 'Deals',
     href: '/t/deal-pipeline',
     enabled: true,

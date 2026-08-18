@@ -8,7 +8,7 @@
 // places.
 
 import { useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2Icon } from '@/features/shared/icons';
 import { Avatar, Button, Chip, ConfirmDialog, SearchInput } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { formatDate } from '@/lib/date';
@@ -154,7 +154,7 @@ function MemberRow({ member, held, busy, onRemove }: {
           disabled={busy}
           className="!inline-flex !items-center !gap-1.5 !px-2.5 !py-1 !text-xs"
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          <Trash2Icon className="h-3.5 w-3.5" />
           Remove
         </Button>
       </td>

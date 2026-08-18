@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+import { Trash2Icon } from '@/features/shared/icons';
 import { Space } from '@/lib/types';
 import { COUNTRIES, getCountry } from '@/lib/countries';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -408,7 +408,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
           className="inline-flex items-center gap-2 px-4 py-2.5 text-base font-semibold"
           onClick={() => { setDeleteError(''); setConfirmDelete(true); }}
         >
-          <Trash2 size={18} aria-hidden />
+          <Trash2Icon size={18} aria-hidden />
           Delete this space
         </Button>
       </section>

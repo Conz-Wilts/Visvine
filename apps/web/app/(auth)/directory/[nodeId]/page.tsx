@@ -15,7 +15,7 @@
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeftIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useSession } from '@/features/auth/lib/auth-client';
@@ -177,7 +177,7 @@ function NotFoundState({ title }: { title: string }) {
         onClick={() => router.back()}
         className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-border-default rounded-xl hover:bg-surface-2 transition-colors"
       >
-        <ArrowLeft className="w-4 h-4" /> Go back
+        <ArrowLeftIcon className="w-4 h-4" /> Go back
       </button>
     </div>
   );

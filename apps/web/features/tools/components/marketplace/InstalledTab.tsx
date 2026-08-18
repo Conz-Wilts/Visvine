@@ -20,7 +20,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpCircle, Blocks, ExternalLink } from 'lucide-react';
+import { BlocksIcon, CircleArrowUpIcon, ExternalLinkIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Chip, ConfirmDialog, EmptyState, Skeleton } from '@/components/ui';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
@@ -54,7 +54,7 @@ export default function InstalledTab({
   if (!spaceId) {
     return (
       <EmptyState
-        icon={<Blocks className="h-6 w-6" />}
+        icon={<BlocksIcon className="h-6 w-6" />}
         // `EmptyState` shows the description and keeps the title only as its
         // fallback, so each line has to stand on its own.
         title="No space selected"
@@ -68,7 +68,7 @@ export default function InstalledTab({
   if (installs.length === 0) {
     return (
       <EmptyState
-        icon={<Blocks className="h-6 w-6" />}
+        icon={<BlocksIcon className="h-6 w-6" />}
         title="This space runs no tools yet"
         description={
           isAdmin
@@ -183,7 +183,7 @@ function InstallRow({
               href={`/t/${install.slug}`}
               className="flex items-center gap-1 text-xs font-medium text-brand-dark-green hover:opacity-80"
             >
-              Open <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+              Open <ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />
             </Link>
           )}
           <Toggle
@@ -203,7 +203,7 @@ function InstallRow({
       {missing.length > 0 && (
         <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
           <p className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
-            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <TriangleAlertIcon className="h-4 w-4 shrink-0" aria-hidden />
             Running with limits
           </p>
           <ul className="mt-1 space-y-0.5 text-sm text-amber-800">
@@ -349,7 +349,7 @@ function UpgradeCard({
     <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-green-800">
-          <ArrowUpCircle className="h-4 w-4 shrink-0" aria-hidden />
+          <CircleArrowUpIcon className="h-4 w-4 shrink-0" aria-hidden />
           Version {pending.version} is available
         </p>
         <button

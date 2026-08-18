@@ -68,8 +68,25 @@ import {
   type SpaceFacts,
 } from '@/lib/tools/installs'
 
-/** The three filenames an author addresses, in the order they matter. */
-const TOOL_FILES = ['index.md', 'ui.tsx', 'data.js'] as const satisfies readonly ToolFileName[]
+/**
+ * The filenames an author addresses, in the order they matter.
+ *
+ * `icon.svg` is last because it is optional and it is not code: a Tool only has
+ * one if it ships its own rail glyph rather than picking a built-in shape
+ * (lib/tools/config.ts#TOOL_CUSTOM_RAIL_ICON). It is writable over MCP like the
+ * rest — an authoring agent that can build a Tool can draw its icon — and the
+ * build sanitizes whatever comes through (lib/tools/iconSvg.ts) before anything
+ * renders it.
+ */
+const TOOL_FILES = ['index.md', 'ui.tsx', 'data.js', 'icon.svg'] as const satisfies readonly ToolFileName[]
+
+/**
+ * What `create_tool` actually writes. Not the same list: a new Tool gets its
+ * config and its two source scaffolds, and no icon — an icon is something an
+ * author adds when they want one, and reporting a file that isn't there would
+ * send an agent looking for it.
+ */
+const SCAFFOLDED_FILES: readonly ToolFileName[] = ['index.md', 'ui.tsx', 'data.js']
 
 /**
  * Every service call the handlers make, in one seam. Faked wholesale in tests;
@@ -300,7 +317,7 @@ async function createTool(ctx: McpContext, args: CreateToolArgs, deps: AppToolDe
   if (!result.ok) refuse(result)
   return {
     name: result.name,
-    files: TOOL_FILES.map((file) => `tools/${result.name}/${file}`),
+    files: SCAFFOLDED_FILES.map((file) => `tools/${result.name}/${file}`),
     build: buildReport(result.build),
     ...previewLinks(result.name, deps.appOrigin()),
     next: [

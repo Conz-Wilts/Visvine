@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { XIcon } from '@/features/shared/icons';
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey';
 
 // Viewport-scaled width presets: a floor in rem, growth as a share of screen
@@ -93,7 +93,7 @@ export default function Modal({
               aria-label="Close"
               className="p-1.5 rounded-lg text-brand-grey hover:bg-gray-100 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <XIcon className="w-4 h-4" />
             </button>
           </div>
         )}

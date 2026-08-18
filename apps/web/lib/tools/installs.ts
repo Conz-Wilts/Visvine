@@ -85,6 +85,9 @@ export interface InstallSummary {
  * The installed-Tools slice of the space DTO — what the sidebar, the `/t/<slug>`
  * page and the type-page dispatch need on every render, and nothing more.
  * `icon`/`label` are null for a Tool with no rail row (it lives on a type page).
+ * `iconSvg` carries the Tool's OWN glyph when it shipped one — already
+ * sanitized at build time and snapshotted at publish (lib/tools/iconSvg.ts), so
+ * the rail renders it as-is.
  */
 export interface InstalledToolDto {
   /** The install row's id — what `BridgeTarget { kind: 'install' }` names, so
@@ -96,6 +99,7 @@ export interface InstalledToolDto {
   slug: string
   title: string
   icon: string | null
+  iconSvg: string | null
   label: string | null
   href: string
   enabled: boolean
@@ -339,6 +343,7 @@ const INSTALL_SELECT = {
       description: true,
       config: true,
       perimeter: true,
+      iconSvg: true,
     },
   },
 } as const
@@ -359,6 +364,7 @@ interface InstallRow {
     description: string | null
     config: unknown
     perimeter: unknown
+    iconSvg: string | null
   }
 }
 
@@ -446,6 +452,7 @@ function toClientDto(row: InstallRow): InstalledToolDto {
     slug: row.slug,
     title: row.version.title,
     icon: config.surfaces.rail?.icon ?? null,
+    iconSvg: row.version.iconSvg,
     label: config.surfaces.rail?.label ?? null,
     href: `/t/${row.slug}`,
     enabled: row.enabled,

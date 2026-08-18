@@ -11,7 +11,7 @@
 
 import { useState } from 'react';
 import type { RSVPResponse, FormField } from '@/lib/types';
-import { Check, Loader2, CalendarPlus } from 'lucide-react';
+import { CalendarPlusIcon, CheckIcon, LoaderCircleIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
@@ -82,14 +82,14 @@ export function PublicRsvpForm({
     return (
       <div className="rounded-2xl border border-brand-green/30 bg-brand-light-bg/50 p-6 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-brand-green flex items-center justify-center mb-3">
-          <Check className="w-6 h-6 text-white" />
+          <CheckIcon className="w-6 h-6 text-white" />
         </div>
         <p className="text-base font-semibold text-brand-black">{done.message}</p>
         <a
           href={`/api/public/events/${encodeURIComponent(slug)}/ics`}
           className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green transition-all"
         >
-          <CalendarPlus className="w-4 h-4" /> Add to calendar
+          <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
         </a>
       </div>
     );
@@ -187,7 +187,7 @@ export function PublicRsvpForm({
         disabled={submitting}
         className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-brand-green rounded-xl hover:opacity-90 disabled:opacity-50 transition-all"
       >
-        {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+        {submitting && <LoaderCircleIcon className="w-4 h-4 animate-spin" />}
         {response === 'declined' ? 'Send response' : joinsWaitlist ? 'Join waitlist' : 'RSVP'}
       </button>
     </form>

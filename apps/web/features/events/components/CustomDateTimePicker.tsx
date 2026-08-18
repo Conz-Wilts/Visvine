@@ -5,7 +5,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, ClockIcon } from '@/features/shared/icons';
 
 interface CustomDateTimePickerProps {
   label: string;
@@ -146,7 +146,7 @@ export function CustomDateTimePicker({
         <span className={selectedDate ? 'text-brand-black' : 'text-brand-grey'}>
           {formatDisplayValue() || placeholder}
         </span>
-        <Calendar className="w-5 h-5 text-brand-green flex-shrink-0" />
+        <CalendarIcon className="w-5 h-5 text-brand-green flex-shrink-0" />
       </button>
 
       {isOpen && (
@@ -160,7 +160,7 @@ export function CustomDateTimePicker({
                 onClick={() => navigateMonth('prev')}
                 className="p-1.5 hover:bg-brand-light-bg rounded-lg transition-colors"
               >
-                <ChevronLeft className="w-4 h-4 text-brand-green" />
+                <ChevronLeftIcon className="w-4 h-4 text-brand-green" />
               </button>
               <h3 className="text-sm font-bold text-brand-black">
                 {currentMonth.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
@@ -170,7 +170,7 @@ export function CustomDateTimePicker({
                 onClick={() => navigateMonth('next')}
                 className="p-1.5 hover:bg-brand-light-bg rounded-lg transition-colors"
               >
-                <ChevronRight className="w-4 h-4 text-brand-green" />
+                <ChevronRightIcon className="w-4 h-4 text-brand-green" />
               </button>
             </div>
 
@@ -207,7 +207,7 @@ export function CustomDateTimePicker({
             {/* Time selection */}
             <div className="pt-3 border-t border-gray-200">
               <div className="flex items-center gap-1.5 mb-2">
-                <Clock className="w-3.5 h-3.5 text-brand-green" />
+                <ClockIcon className="w-3.5 h-3.5 text-brand-green" />
                 <span className="text-xs font-semibold text-brand-black">Time</span>
               </div>
               

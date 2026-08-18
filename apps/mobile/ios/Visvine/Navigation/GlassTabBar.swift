@@ -8,11 +8,14 @@ struct GlassTabBar: View {
     @Binding var selected: MainTab
     var onSearch: () -> Void
 
-    private struct Item { let tab: MainTab; let label: String; let filled: String; let outline: String }
+    // One icon per tab, not a filled/outline pair: our glyphs are stroke-only
+    // (see docs/icons.md), and focus is already carried by the accent colour on
+    // the whole cell — which was doing most of the work anyway.
+    private struct Item { let tab: MainTab; let label: String; let icon: VisvineIconName }
     private let items: [Item] = [
-        Item(tab: .directory, label: "Directory", filled: "person.2.fill", outline: "person.2"),
-        Item(tab: .messages, label: "Messages", filled: "bubble.left.and.bubble.right.fill", outline: "bubble.left.and.bubble.right"),
-        Item(tab: .events, label: "Events", filled: "calendar", outline: "calendar"),
+        Item(tab: .directory, label: "Directory", icon: .people),
+        Item(tab: .messages, label: "Messages", icon: .message),
+        Item(tab: .events, label: "Events", icon: .calendar),
     ]
 
     var body: some View {
@@ -24,8 +27,7 @@ struct GlassTabBar: View {
                     let focused = selected == item.tab
                     Button { selected = item.tab } label: {
                         VStack(spacing: 2) {
-                            Image(systemName: focused ? item.filled : item.outline)
-                                .font(.system(size: 20))
+                            VisvineIcon(item.icon, size: 20)
                             Text(item.label).font(.system(size: 11, weight: .bold))
                         }
                         .foregroundStyle(focused ? c.accent : neutral)
@@ -37,8 +39,7 @@ struct GlassTabBar: View {
             .glass(cornerRadius: 32)
 
             Button(action: onSearch) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 24))
+                VisvineIcon(.search, size: 24)
                     .foregroundStyle(neutral)
                     .frame(width: 64, height: 64)
                     .glass(cornerRadius: 32)

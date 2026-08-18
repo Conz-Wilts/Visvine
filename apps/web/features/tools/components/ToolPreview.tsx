@@ -33,7 +33,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, FileCode2, RotateCw } from 'lucide-react';
+import { FileCode2Icon, RotateCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { Skeleton } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { FetchJsonError } from '@/lib/fetchJson';
@@ -141,11 +141,11 @@ export default function ToolPreview({ name }: { name: string }) {
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button type="button" onClick={reload} className={STRIP_BUTTON}>
-            <RotateCw className="h-3.5 w-3.5" />
+            <RotateCwIcon className="h-3.5 w-3.5" />
             Reload
           </button>
           <Link href={entityContextHref(nodeId, TOOL_SOURCE_FILES.ui.path)} className={STRIP_BUTTON}>
-            <FileCode2 className="h-3.5 w-3.5" />
+            <FileCode2Icon className="h-3.5 w-3.5" />
             Open source
           </Link>
         </div>
@@ -175,7 +175,7 @@ function NotBuilding({ tool }: { tool: AuthoredToolDetail }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-surface-1 px-5 py-4">
       <div className="flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+        <TriangleAlertIcon className="h-4 w-4 shrink-0 text-red-600" />
         <h2 className="text-sm font-semibold text-text-primary">
           {tool.build ? 'This tool does not compile' : 'This tool has never compiled'}
         </h2>
@@ -212,7 +212,7 @@ function PreviewUnavailable({
   return (
     <div className="flex items-center justify-center px-6 py-24">
       <div className="max-w-md rounded-2xl border border-border-subtle bg-surface-1 px-6 py-8 text-center">
-        <AlertTriangle className="mx-auto h-5 w-5 text-amber-500" />
+        <TriangleAlertIcon className="mx-auto h-5 w-5 text-amber-500" />
         <h1 className="mt-3 text-lg font-semibold text-text-primary">
           {status === 403 ? 'Tools are off for you here' : 'Nothing to preview'}
         </h1>

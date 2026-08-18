@@ -23,7 +23,6 @@ export interface ProfileSpace {
   id: string;
   name: string;
   imageUrl: string | null;
-  emoji: string | null;
   visibility: string;
   memberCount: number;
   /** Whether this person holds an alias that manages the space. */
@@ -44,7 +43,7 @@ async function loadRows(userId: string) {
     include: {
       space: {
         select: {
-          id: true, name: true, imageUrl: true, emoji: true, visibility: true,
+          id: true, name: true, imageUrl: true, visibility: true,
           _count: { select: { members: { where: { status: 'active' } } } },
         },
       },
@@ -81,7 +80,6 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       id: row.space.id,
       name: row.space.name,
       imageUrl: normalizeImageUrl(row.space.imageUrl) ?? row.space.imageUrl,
-      emoji: row.space.emoji,
       visibility: row.space.visibility,
       memberCount: row.space._count.members,
       isAdmin,

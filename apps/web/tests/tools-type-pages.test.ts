@@ -30,6 +30,7 @@ function install(slug: string, types: TypeClaims, overrides: Partial<InstalledTo
     slug,
     title: `The ${slug} tool`,
     icon: null,
+    iconSvg: null,
     label: null,
     href: `/t/${slug}`,
     enabled: true,

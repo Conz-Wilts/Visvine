@@ -21,7 +21,7 @@
 // the content column swaps — so walking a chain of notes never leaves the page.
 
 import { useCallback, useMemo, useState, type CSSProperties } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon } from '@/features/shared/icons';
 import { folderOfIndexPath, isIndexPath } from '@/lib/notes/shared/indexNote';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { findAlias, getNodeTypeConfig } from '@/lib/types';
@@ -243,7 +243,7 @@ export default function ContextLinksPanel({
         <div className="flex flex-col gap-px">
           {groups.map((group) => {
             const isCollapsed = collapsed.has(group.key);
-            const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+            const Chevron = isCollapsed ? ChevronRightIcon : ChevronDownIcon;
             return (
               <section key={group.key}>
                 <button

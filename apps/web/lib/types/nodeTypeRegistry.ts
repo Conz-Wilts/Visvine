@@ -89,7 +89,7 @@ export function seedNodeTypes(stored: NodeTypeConfig[] | null | undefined): Node
  * The console saves the WHOLE space record from a client snapshot that can
  * be minutes old (features/admin/components/TypesPanel.tsx), so a plain
  * overwrite means an admin recolouring Person deletes every type a member
- * created in the meantime. Incoming entries win on colour/shape/icon — that is
+ * created in the meantime. Incoming entries win on colour/shape — that is
  * the edit being saved — and anything stored but absent from the payload is
  * kept. Removing a type is therefore not something a stale snapshot can do by
  * accident; it needs its own deliberate call.

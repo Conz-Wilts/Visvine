@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Globe2, Link2Off } from 'lucide-react';
+import { EarthIcon, ExternalLinkIcon, Link2OffIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
 import { findAlias, nodeTypeLabel, type NBNode } from '@/lib/types';
@@ -89,7 +89,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
               {externalUrl && (
                 <a href={externalUrl} target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                  <Globe2 className="w-3.5 h-3.5" />{hostname(externalUrl)}
+                  <EarthIcon className="w-3.5 h-3.5" />{hostname(externalUrl)}
                 </a>
               )}
             </div>
@@ -111,7 +111,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
             <a href={externalUrl} target="_blank" rel="noopener noreferrer"
                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-90 flex-none"
                style={{ background: theme.dark }}>
-              <ExternalLink className="w-4 h-4" /> Open site
+              <ExternalLinkIcon className="w-4 h-4" /> Open site
             </a>
           )}
         </div>
@@ -149,7 +149,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
         </>
       ) : (
         <div className="flex flex-col items-center justify-center gap-2 py-16 rounded-2xl border border-border-subtle bg-surface-1 text-center">
-          <Link2Off className="w-6 h-6 text-text-muted" />
+          <Link2OffIcon className="w-6 h-6 text-text-muted" />
           <p className="text-sm text-text-muted">No link attached to this resource.</p>
         </div>
       )}

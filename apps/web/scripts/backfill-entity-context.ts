@@ -94,7 +94,7 @@ async function backfillSpace(space: { id: string; name: string; description: str
   // ── 2. Spaces ──────────────────────────────────────────────────────────────
   const spaces = await prisma.channelSection.findMany({
     where: { spaceId: space.id },
-    select: { id: true, name: true, emoji: true },
+    select: { id: true, name: true, icon: true },
   });
   for (const space of spaces) {
     if (!dryRun) {
@@ -103,7 +103,7 @@ async function backfillSpace(space: { id: string; name: string; description: str
         type: 'section',
         name: space.name,
         recordId: space.id,
-        metadata: { emoji: space.emoji },
+        metadata: { icon: space.icon },
         parentNodeId: spaceNode,
         revalidate: false,
       });

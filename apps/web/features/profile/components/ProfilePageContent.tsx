@@ -1,11 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import {
-  MapPin, Linkedin, Twitter, Phone, Mail, Globe2, Calendar,
-  Pencil, Plus, Share2,
-  Check, ChevronDown, ChevronUp, Camera, Loader2,
-} from 'lucide-react';
+import { CalendarIcon, CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LinkedinIcon, LoaderCircleIcon, MailIcon, MapPinIcon, PencilIcon, PhoneIcon, PlusIcon, Share2Icon, TwitterIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
@@ -222,7 +218,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             <button onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}
                     aria-label="Change profile photo"
                     className={`absolute inset-0 flex items-center justify-center bg-black/45 text-white transition-opacity ${avatarUploading ? 'opacity-100' : 'opacity-0 hover:opacity-100 focus-visible:opacity-100'}`}>
-              {avatarUploading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6" />}
+              {avatarUploading ? <LoaderCircleIcon className="w-6 h-6 animate-spin" /> : <CameraIcon className="w-6 h-6" />}
             </button>
           )}
         </div>
@@ -253,18 +249,18 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                 <span className="inline-flex items-center gap-1.5">
                   {hasCountry
                     ? <CountryFlag location={profile.location} />
-                    : <MapPin className="w-3.5 h-3.5" />}
+                    : <MapPinIcon className="w-3.5 h-3.5" />}
                   {profile.location}
                 </span>
               )}
               {profile.website && (
                 <a href={profile.website} target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                  <Globe2 className="w-3.5 h-3.5" />{hostname(profile.website)}
+                  <EarthIcon className="w-3.5 h-3.5" />{hostname(profile.website)}
                 </a>
               )}
               {joinedLabel && (
-                <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {joinedLabel}</span>
+                <span className="inline-flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5" />Joined {joinedLabel}</span>
               )}
             </div>
           </div>
@@ -272,14 +268,14 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           <div className="flex flex-wrap items-center gap-2 flex-none">
             <button onClick={shareProfile}
               className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
-              {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
               <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
             </button>
             {isOwner ? (
               <button onClick={() => setModal('basicInfo')}
                 className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap text-white transition hover:opacity-95 active:scale-[0.99]"
                 style={{ background: theme.base }}>
-                <Pencil className="w-4 h-4 flex-none" /> Edit profile
+                <PencilIcon className="w-4 h-4 flex-none" /> Edit profile
               </button>
             ) : null}
           </div>
@@ -382,7 +378,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   {missing.slice(0, 3).map(([key, s]) => (
                     <button key={key} onClick={() => setModal(COMPLETION_MODAL[key] ?? 'basicInfo')}
                             className="flex items-center gap-2 px-2 py-1.5 -mx-2 rounded-lg text-[13px] text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors text-left">
-                      <Plus className="w-3.5 h-3.5 text-text-muted flex-none" /> Add {s.label.toLowerCase()}
+                      <PlusIcon className="w-3.5 h-3.5 text-text-muted flex-none" /> Add {s.label.toLowerCase()}
                     </button>
                   ))}
                 </div>
@@ -396,13 +392,13 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             {hasContact ? (
               <>
                 <div className="flex flex-col gap-0.5 -mx-2">
-                  {profile.email && <ContactRow icon={<Mail className="w-4 h-4" />} href={`mailto:${profile.email}`} text={profile.email} />}
-                  {profile.phone && <ContactRow icon={<Phone className="w-4 h-4" />} href={`tel:${profile.phone}`} text={profile.phone} />}
+                  {profile.email && <ContactRow icon={<MailIcon className="w-4 h-4" />} href={`mailto:${profile.email}`} text={profile.email} />}
+                  {profile.phone && <ContactRow icon={<PhoneIcon className="w-4 h-4" />} href={`tel:${profile.phone}`} text={profile.phone} />}
                 </div>
                 {(profile.linkedinUrl || profile.twitterUrl) && (
                   <div className="flex gap-2 mt-2.5">
-                    {profile.linkedinUrl && <SocialBtn href={profile.linkedinUrl} theme={theme} label="LinkedIn"><Linkedin className="w-4 h-4" /></SocialBtn>}
-                    {profile.twitterUrl && <SocialBtn href={profile.twitterUrl} theme={theme} label="X / Twitter"><Twitter className="w-4 h-4" /></SocialBtn>}
+                    {profile.linkedinUrl && <SocialBtn href={profile.linkedinUrl} theme={theme} label="LinkedIn"><LinkedinIcon className="w-4 h-4" /></SocialBtn>}
+                    {profile.twitterUrl && <SocialBtn href={profile.twitterUrl} theme={theme} label="X / Twitter"><TwitterIcon className="w-4 h-4" /></SocialBtn>}
                   </div>
                 )}
               </>
@@ -507,7 +503,7 @@ function BioText({ bio, theme }: { bio: string; theme: ThemePalette }) {
       <p className="text-[15px] text-text-secondary leading-relaxed whitespace-pre-line max-w-[72ch]">{text}</p>
       {long && (
         <button onClick={() => setOpen((v) => !v)} className="mt-2 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-          {open ? <><ChevronUp className="w-3.5 h-3.5" /> Show less</> : <><ChevronDown className="w-3.5 h-3.5" /> Read more</>}
+          {open ? <><ChevronUpIcon className="w-3.5 h-3.5" /> Show less</> : <><ChevronDownIcon className="w-3.5 h-3.5" /> Read more</>}
         </button>
       )}
     </div>

@@ -81,3 +81,17 @@ app/src/main/java/com/visvine/mobile/
   but inert until a remote source is connected (its `refresh()` is the seam).
 - App icons are vector adaptive icons (no binary assets committed).
 ```
+
+## Icons
+
+The app draws Visvine's own icons, not Material's. The glyphs are SVG files in
+`assets/icons/` at the repo root (shared with the web and iOS apps); they become
+`res/drawable/ic_*.xml` vector drawables via:
+
+    node scripts/build-icons.mjs           # regenerate (output is committed)
+    node scripts/build-icons.mjs --check   # fail if the committed output is stale
+
+`ui/icons/AppIcons.kt` names them, so a call site reads
+`Icon(AppIcons.Check, contentDescription = null, tint = ...)`. Adding a glyph:
+add its name to `ANDROID_ICONS` in the script, run it, add the property to
+`AppIcons`. See `docs/icons.md`.

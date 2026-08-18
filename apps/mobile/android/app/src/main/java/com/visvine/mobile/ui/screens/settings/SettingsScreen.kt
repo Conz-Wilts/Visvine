@@ -6,9 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,12 +17,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Switch
@@ -39,8 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.ThemeViewModel
+
 
 /** Port of screens/Settings/SettingsScreen.tsx. */
 @OptIn(ExperimentalLayoutApi::class)
@@ -59,7 +55,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.accent) }
+            IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
             Text("Settings", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
@@ -74,7 +70,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(if (isDark) Icons.Filled.DarkMode else Icons.Outlined.WbSunny, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp).padding(end = 0.dp))
+                        Icon(if (isDark) AppIcons.DarkMode else AppIcons.LightMode, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp).padding(end = 0.dp))
                         Text("Dark Mode", color = colors.textPrimary, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp))
                     }
                     Switch(
@@ -91,7 +87,7 @@ fun SettingsScreen(
 
                 // Theme colour
                 Row(modifier = Modifier.fillMaxWidth().padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Outlined.Palette, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
+                    Icon(AppIcons.Palette, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
                     Text("Theme Colour", color = colors.textPrimary, fontSize = 16.sp, modifier = Modifier.padding(start = 12.dp).weight(1f))
                     Text(activeTheme.name, color = colors.textMuted, fontSize = 14.sp)
                 }
@@ -113,7 +109,7 @@ fun SettingsScreen(
                                     .clickable { viewModel.setTheme(theme.id) },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                if (active) Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (active) Icon(AppIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                             }
                             Text(theme.name, color = colors.textMuted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
                         }

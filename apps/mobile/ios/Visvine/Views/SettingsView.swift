@@ -14,7 +14,7 @@ struct SettingsView: View {
 
                 // Dark mode
                 HStack {
-                    Image(systemName: theme.isDark ? "moon.fill" : "sun.max").foregroundStyle(c.accent)
+                    VisvineIcon(theme.isDark ? .darkMode : .lightMode).foregroundStyle(c.accent)
                     Text("Dark Mode").font(.system(size: 16)).foregroundStyle(c.textPrimary)
                     Spacer()
                     Toggle("", isOn: Binding(
@@ -28,7 +28,7 @@ struct SettingsView: View {
 
                 // Theme colour
                 HStack {
-                    Image(systemName: "paintpalette").foregroundStyle(c.accent)
+                    VisvineIcon(.palette).foregroundStyle(c.accent)
                     Text("Theme Colour").font(.system(size: 16)).foregroundStyle(c.textPrimary)
                     Spacer()
                     Text(theme.theme.name).font(.system(size: 14)).foregroundStyle(c.textMuted)
@@ -42,7 +42,7 @@ struct SettingsView: View {
                             ZStack {
                                 Circle().fill(item.accent).frame(width: active ? 36 : 32, height: active ? 36 : 32)
                                     .overlay(active ? Circle().stroke(item.accentDark, lineWidth: 2) : nil)
-                                if active { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) }
+                                if active { VisvineIcon(.check, size: 14).foregroundStyle(.white) }
                             }
                             Text(item.name).font(.system(size: 11)).foregroundStyle(c.textMuted)
                         }

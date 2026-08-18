@@ -30,6 +30,7 @@ function install(slug: string, overrides: Partial<InstalledToolDto> = {}): Insta
     slug,
     title: `The ${slug} tool`,
     icon: 'kanban',
+    iconSvg: null,
     label: slug,
     href: `/t/${slug}`,
     enabled: true,

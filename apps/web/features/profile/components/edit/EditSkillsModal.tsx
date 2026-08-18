@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
-import { X } from 'lucide-react';
+import { XIcon } from '@/features/shared/icons';
 import type { FullProfile } from '@/lib/types/profile';
 
 interface Props {
@@ -56,7 +56,7 @@ export default function EditSkillsModal({ open, onClose, tags, onSave }: Props) 
             <span key={tag} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-dark-green bg-brand-light-bg rounded-full">
               {tag}
               <button type="button" onClick={() => removeTag(tag)} className="text-brand-grey hover:text-red-500 transition-colors">
-                <X className="w-3 h-3" />
+                <XIcon className="w-3 h-3" />
               </button>
             </span>
           ))}

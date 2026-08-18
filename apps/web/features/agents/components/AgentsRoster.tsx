@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Bot, Play } from 'lucide-react';
+import { BotIcon, PlayIcon } from '@/features/shared/icons';
 import Toggle from '@/components/ui/Toggle';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
@@ -78,7 +78,7 @@ export default function AgentsRoster({
     return (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border-default px-6 py-14 text-center">
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-light-bg text-brand-dark-green">
-          <Bot className="h-5 w-5" />
+          <BotIcon className="h-5 w-5" />
         </span>
         <div>
           <p className="text-sm font-semibold text-text-primary">No agents yet</p>
@@ -168,7 +168,7 @@ export default function AgentsRoster({
                             : 'Run now'
                       }
                     >
-                      <Play className="h-3 w-3" /> Run now
+                      <PlayIcon className="h-3 w-3" /> Run now
                     </button>
                   </td>
                 </tr>

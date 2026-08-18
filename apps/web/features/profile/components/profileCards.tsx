@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { PencilIcon, PlusIcon } from '@/features/shared/icons';
 import type { ThemePalette } from '@/lib/profileTheme';
 
 /** Typed helper for inline CSS custom properties (CSSProperties rejects arbitrary keys). */
@@ -49,7 +49,7 @@ export function SectionCard({ id, title, badge, isOwner, onEdit, addLabel, scrol
         {isOwner && onEdit && (
           <button onClick={onEdit}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[13px] font-semibold text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors">
-            {addLabel ? <Plus className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}{addLabel ? 'Add' : 'Edit'}
+            {addLabel ? <PlusIcon className="w-3.5 h-3.5" /> : <PencilIcon className="w-3.5 h-3.5" />}{addLabel ? 'Add' : 'Edit'}
           </button>
         )}
       </div>
@@ -72,7 +72,7 @@ export function AddPrompt({ theme, label, onClick }: { theme: ThemePalette; labe
     <button onClick={onClick}
       className="w-full py-4 border-[1.5px] border-dashed border-border-default rounded-xl text-sm text-text-muted hover:text-[color:var(--accent-dark)] hover:border-[color:var(--accent)] flex items-center justify-center gap-1.5 transition-colors"
       style={cssVars({ '--accent': theme.base, '--accent-dark': theme.dark })}>
-      <Plus className="w-4 h-4" /> {label}
+      <PlusIcon className="w-4 h-4" /> {label}
     </button>
   );
 }

@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Radio } from 'lucide-react'
+import { RadioIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { entityNotePath, entityStub, hrefForNotePath, noteHref } from '@/lib/notes/entities'
 import type { NoteMeta, References, RestrictedReference, UnlinkedReference } from '@/lib/notes/shared/types'
@@ -407,7 +407,7 @@ export function NoteContextPanel({ path, mode = 'wysiwyg', onModeChange, onReady
       />
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <Radio className="h-4 w-4 shrink-0 text-brand-green" />
+          <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
             Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.

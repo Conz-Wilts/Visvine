@@ -65,7 +65,7 @@ struct DevLoginView: View {
                                     if model.signingInId == user.id {
                                         ProgressView().tint(c.accent)
                                     } else {
-                                        Image(systemName: "chevron.right").foregroundStyle(c.textMuted)
+                                        VisvineIcon(.chevronRight).foregroundStyle(c.textMuted)
                                     }
                                 }
                                 .padding(14)

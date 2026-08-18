@@ -15,16 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -39,7 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,9 +37,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.CommunityViewModel
 import com.visvine.mobile.ui.viewmodel.ProfileViewModel
+
 
 /** Port of screens/Profile/ProfileScreen.tsx. */
 @Composable
@@ -72,7 +64,7 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.accent) }
+            IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
             Text("Profile", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
@@ -97,7 +89,7 @@ fun ProfileScreen(
                         }
                     }
                     Box(modifier = Modifier.size(32.dp).clip(CircleShape).background(colors.bgPrimary).clickable { onEditProfile() }, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Edit, contentDescription = "Edit", tint = colors.accent, modifier = Modifier.size(16.dp))
+                        Icon(AppIcons.Edit, contentDescription = "Edit", tint = colors.accent, modifier = Modifier.size(16.dp))
                     }
                 }
                 Text(displayName, color = colors.textPrimary, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
@@ -126,17 +118,17 @@ fun ProfileScreen(
                     ) {
                         Box(Modifier.size(8.dp).clip(CircleShape).background(colors.accent))
                         Text(community.name, color = if (active) colors.accent else colors.textSecondary, fontSize = 16.sp, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal, modifier = Modifier.weight(1f))
-                        if (active) Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
+                        if (active) Icon(AppIcons.CircleCheck, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
                     }
                 }
             }
 
             // Menu
             Card(colors.bgPrimary) {
-                MenuItem(Icons.Outlined.Person, "Edit Profile", onEditProfile)
-                MenuItem(Icons.Outlined.Settings, "Settings", onSettings)
-                MenuItem(Icons.Outlined.Notifications, "Notifications") {}
-                MenuItem(Icons.Outlined.HelpOutline, "Help & Support") {}
+                MenuItem(AppIcons.Person, "Edit Profile", onEditProfile)
+                MenuItem(AppIcons.Settings, "Settings", onSettings)
+                MenuItem(AppIcons.Bell, "Notifications") {}
+                MenuItem(AppIcons.Help, "Help & Support") {}
             }
 
             // Sign out
@@ -146,7 +138,7 @@ fun ProfileScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = colors.error, modifier = Modifier.size(20.dp))
+                    Icon(AppIcons.Logout, contentDescription = null, tint = colors.error, modifier = Modifier.size(20.dp))
                     Text("Sign Out", color = colors.error, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -190,7 +182,7 @@ private fun InfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
+private fun MenuItem(icon: Painter, label: String, onClick: () -> Unit) {
     val colors = VisvineTheme.colors
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 14.dp),
@@ -199,6 +191,6 @@ private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
     ) {
         Icon(icon, contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(24.dp))
         Text(label, color = colors.textSecondary, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
+        Icon(AppIcons.ChevronRight, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(20.dp))
     }
 }

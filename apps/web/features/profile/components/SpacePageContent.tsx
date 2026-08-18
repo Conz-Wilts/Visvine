@@ -25,7 +25,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Globe2, Share2, Check, ChevronRight, Users, Calendar, Sparkles } from 'lucide-react';
+import { CalendarIcon, CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon, SparklesIcon, UsersIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
@@ -117,7 +117,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
           <div className="absolute top-4 right-4 z-10">
             <button onClick={sharePage}
               className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black/25 text-white text-xs font-semibold backdrop-blur hover:bg-black/35 transition">
-              {copied ? <Check className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+              {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <Share2Icon className="w-3.5 h-3.5" />}
               {copied ? 'Copied!' : 'Share'}
             </button>
           </div>
@@ -148,7 +148,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
               <Chip tone="soft" size="md" color={theme.base}>{typeLabel}</Chip>
               {node.location && (
                 <Chip tone="muted" size="md">
-                  <MapPin className="w-3 h-3" /> {node.location}
+                  <MapPinIcon className="w-3 h-3" /> {node.location}
                 </Chip>
               )}
             </div>
@@ -160,7 +160,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
                 <a href={node.url} target="_blank" rel="noopener noreferrer"
                    className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                  <Globe2 className="w-3.5 h-3.5" />{hostname(node.url)}
+                  <EarthIcon className="w-3.5 h-3.5" />{hostname(node.url)}
                 </a>
               </div>
             )}
@@ -219,7 +219,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
               {people.length > 12 && onConnectionsClick && (
                 <button onClick={onConnectionsClick}
                         className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                  +{people.length - 12} more <ChevronRight className="w-3.5 h-3.5" />
+                  +{people.length - 12} more <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
               )}
             </SectionCard>
@@ -244,10 +244,10 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
         <div className="flex flex-col gap-4 lg:sticky lg:top-16 self-start">
           <RailCard title="At a glance">
             <div className="flex flex-col gap-3">
-              {node.location && <KV icon={<MapPin className="w-4 h-4" />} label="HQ" value={node.location} />}
+              {node.location && <KV icon={<MapPinIcon className="w-4 h-4" />} label="HQ" value={node.location} />}
               {node.url && (
                 <div className="flex items-start gap-3 text-sm">
-                  <span className="text-text-muted mt-0.5 flex-none"><Globe2 className="w-4 h-4" /></span>
+                  <span className="text-text-muted mt-0.5 flex-none"><EarthIcon className="w-4 h-4" /></span>
                   <div className="min-w-0">
                     <div className="text-xs text-text-muted">Website</div>
                     <a href={node.url} target="_blank" rel="noopener noreferrer"
@@ -255,11 +255,11 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
                   </div>
                 </div>
               )}
-              {statedMembers && <KV icon={<Users className="w-4 h-4" />} label="Members" value={statedMembers} />}
-              {founded && <KV icon={<Calendar className="w-4 h-4" />} label="Founded" value={founded} />}
+              {statedMembers && <KV icon={<UsersIcon className="w-4 h-4" />} label="Members" value={statedMembers} />}
+              {founded && <KV icon={<CalendarIcon className="w-4 h-4" />} label="Founded" value={founded} />}
               {railFields.map((field) => (
                 <KV key={field.key}
-                    icon={<Sparkles className="w-4 h-4" />}
+                    icon={<SparklesIcon className="w-4 h-4" />}
                     label={field.label}
                     value={fieldValues[field.key]} />
               ))}
@@ -291,7 +291,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
               {connectionCount > people.length + 8 && onConnectionsClick && (
                 <button onClick={onConnectionsClick}
                         className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                  +{connectionCount - people.length - 8} more <ChevronRight className="w-3.5 h-3.5" />
+                  +{connectionCount - people.length - 8} more <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
               )}
             </RailCard>

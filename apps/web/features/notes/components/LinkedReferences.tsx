@@ -6,7 +6,7 @@
 // the note.
 
 import { useState, type ReactNode } from 'react'
-import { Lock } from 'lucide-react'
+import { LockIcon } from '@/features/shared/icons';
 import type {
   References,
   LinkedReference,
@@ -161,7 +161,7 @@ function LockedReference({
       </div>
       <div className="notes-ref-row">
         <div className="notes-ref-block notes-ref-locked" aria-label="A note you don't have access to references this">
-          <Lock className="notes-ref-lock-icon" aria-hidden="true" strokeWidth={1.5} />
+          <LockIcon className="notes-ref-lock-icon" aria-hidden="true" strokeWidth={1.5} />
           <div className="notes-ref-locked-lines" aria-hidden="true">
             <span className="notes-ref-locked-line" style={{ width: '38%' }} />
             <span className="notes-ref-locked-line" style={{ width: '86%' }} />

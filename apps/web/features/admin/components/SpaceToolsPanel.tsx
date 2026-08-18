@@ -1,7 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2Icon } from '@/features/shared/icons';
 import { Space, SpaceFeatureConfig } from '@/lib/types';
 import { FEATURES, NAV_HIDDEN_FEATURE_KEYS, adminOnlyFeatureKeys, featureNodeTypeNames, isFeatureEnabled, isToolRailKey, moreFeatureKeys, sortFeatureKeys, toolFeatures } from '@/features/shared/lib/features';
 import { Modal, SearchInput, SettingsSection } from '@/components/ui';
@@ -497,7 +497,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
                   : 'text-text-muted hover:bg-red-500/10 hover:text-red-500'
               }`}
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2Icon className="h-4 w-4" />
             </button>
           )}
         </div>

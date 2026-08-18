@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { Alert, Button, Chip, Field, LoadingText, Textarea } from '@/components/ui';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import CodeDiff from '@/features/tools/components/CodeDiff';
+import ToolIcon from '@/features/tools/components/toolIcons';
 import { diffLines } from '@/features/tools/lib/diff';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
@@ -313,10 +314,28 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
             <div className="space-y-6">
               <header>
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* A Tool that ships its own glyph is asking to draw in every
+                      installing space's sidebar. The reviewer approving that
+                      should be looking at it, not at the word "custom". The
+                      markup is sanitized at build time (lib/tools/iconSvg.ts)
+                      and stored sanitized — this renders, it does not re-check. */}
+                  {version.surfaces.rail && (
+                    <span
+                      className="shrink-0 text-text-primary"
+                      title={version.iconSvg ? 'This tool ships its own icon' : 'Built-in icon'}
+                    >
+                      <ToolIcon name={version.surfaces.rail.icon} svg={version.iconSvg} />
+                    </span>
+                  )}
                   <h2 className="text-base font-semibold text-text-primary">{version.title}</h2>
                   <Chip tone="soft" size="sm" color={STATUS_COLOR[version.status]}>
                     {version.status}
                   </Chip>
+                  {version.iconSvg && (
+                    <Chip tone="muted" size="sm">
+                      custom icon
+                    </Chip>
+                  )}
                 </div>
                 {version.description && (
                   <p className="mt-1 text-sm text-text-secondary">{version.description}</p>

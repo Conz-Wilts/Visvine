@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCcw, Check, Loader2 } from 'lucide-react';
+import { CheckIcon, LoaderCircleIcon, RotateCcwIcon, XIcon, ZoomInIcon, ZoomOutIcon } from '@/features/shared/icons';
 
 interface ImageCropperProps {
   imageFile: File;
@@ -292,7 +292,7 @@ export default function ImageCropper({
             disabled={isUploading}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
           >
-            <X className="w-5 h-5" />
+            <XIcon className="w-5 h-5" />
           </button>
         </div>
 
@@ -342,7 +342,7 @@ export default function ImageCropper({
                 disabled={zoom <= MIN_ZOOM || isUploading}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <ZoomOut className="w-5 h-5" />
+                <ZoomOutIcon className="w-5 h-5" />
               </button>
 
               <div className="flex-1 max-w-[150px]">
@@ -364,7 +364,7 @@ export default function ImageCropper({
                 disabled={zoom >= MAX_ZOOM || isUploading}
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <ZoomIn className="w-5 h-5" />
+                <ZoomInIcon className="w-5 h-5" />
               </button>
 
               <button
@@ -374,7 +374,7 @@ export default function ImageCropper({
                 className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
                 title="Reset"
               >
-                <RotateCcw className="w-5 h-5" />
+                <RotateCcwIcon className="w-5 h-5" />
               </button>
             </div>
 
@@ -429,12 +429,12 @@ export default function ImageCropper({
           >
             {isUploading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <LoaderCircleIcon className="w-4 h-4 animate-spin" />
                 Uploading...
               </>
             ) : (
               <>
-                <Check className="w-4 h-4" />
+                <CheckIcon className="w-4 h-4" />
                 Save Photo
               </>
             )}

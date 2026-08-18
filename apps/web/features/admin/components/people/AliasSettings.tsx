@@ -15,7 +15,7 @@
 // (lib/notes/shared/authz.ts).
 
 import { useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { PlusIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
 import { Avatar, Button, ColorPicker, ConfirmDialog, Input } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { notesApi } from '@/features/notes/lib/notesApi';
@@ -189,7 +189,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
               title={`Delete ${alias.name}`}
               className="shrink-0 rounded-full p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2Icon className="h-3.5 w-3.5" />
             </button>
           </>
         )}
@@ -211,7 +211,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
                 onClick={() => act({ action: 'removeHolder', name: alias.name, userId: holder.userId })}
                 className="rounded-full p-0.5 text-text-muted transition hover:text-red-500 disabled:opacity-40"
               >
-                <X className="h-3 w-3" />
+                <XIcon className="h-3 w-3" />
               </button>
             </span>
           ))}
@@ -225,7 +225,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
                 onClick={() => setAdding((o) => !o)}
                 className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-default px-2.5 py-1 text-xs font-medium text-text-muted transition hover:text-text-primary disabled:opacity-40"
               >
-                <Plus className="h-3 w-3" /> Give to
+                <PlusIcon className="h-3 w-3" /> Give to
               </button>
               {adding && (
                 <div className="absolute left-0 top-full z-50 mt-1 max-h-64 min-w-[200px] overflow-y-auto rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-xl">
@@ -330,7 +330,7 @@ export function NewAliasRow({ spaceId, taken, busy, run }: {
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border-default px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
       >
-        <Plus className="h-3 w-3" /> New alias
+        <PlusIcon className="h-3 w-3" /> New alias
       </button>
     );
   }

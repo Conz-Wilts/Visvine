@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,11 +33,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.data.model.Event
 import com.visvine.mobile.ui.components.ScreenHeader
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.CommunityViewModel
 import com.visvine.mobile.ui.viewmodel.EventsListViewModel
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
+import androidx.compose.ui.graphics.painter.Painter
+
 
 /** Port of screens/Events/EventsListScreen.tsx. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -116,12 +114,12 @@ private fun EventCard(event: Event, onClick: () -> Unit) {
                 }
             }
             event.location?.let { loc ->
-                MetaRow(Icons.Outlined.LocationOn, loc.label)
+                MetaRow(AppIcons.Location, loc.label)
             }
-            MetaRow(Icons.Outlined.Schedule, "${DateTimeFormat.shortDate(event.startAt)} at ${DateTimeFormat.time(event.startAt)}")
+            MetaRow(AppIcons.Clock, "${DateTimeFormat.shortDate(event.startAt)} at ${DateTimeFormat.time(event.startAt)}")
             Row(modifier = Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Outlined.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
+                    Icon(AppIcons.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
                     Text("${event.analytics.rsvpCount} RSVPs", color = colors.textMuted, fontSize = 12.sp)
                 }
                 event.capacity?.let { cap ->
@@ -135,7 +133,7 @@ private fun EventCard(event: Event, onClick: () -> Unit) {
 }
 
 @Composable
-private fun MetaRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+private fun MetaRow(icon: Painter, text: String) {
     val colors = VisvineTheme.colors
     Row(modifier = Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Icon(icon, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
@@ -152,7 +150,7 @@ private fun EmptyMessage(text: String, inline: Boolean = false) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(36.dp)).background(colors.bgTertiary), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.CalendarToday, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
+            Icon(AppIcons.Calendar, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
         }
         Text(text, color = colors.textMuted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }

@@ -13,8 +13,7 @@ struct LoginView: View {
                 Spacer()
                 ZStack {
                     Circle().fill(c.accentLight).frame(width: 110, height: 110)
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                        .font(.system(size: 56)).foregroundStyle(c.accent)
+                    VisvineIcon(.network, size: 56).foregroundStyle(c.accent)
                 }
                 Text("Visvine").font(.system(size: 34, weight: .bold)).foregroundStyle(c.textPrimary).padding(.top, 16)
                 Text("Connect with your space").font(.system(size: 16)).foregroundStyle(c.textMuted).padding(.top, 8)
@@ -37,7 +36,7 @@ struct LoginView: View {
                         DevLoginView()
                     } label: {
                         HStack {
-                            Image(systemName: "wrench.and.screwdriver")
+                            VisvineIcon(.tool)
                             Text("Dev login (skip Google)").font(.system(size: 14, weight: .semibold))
                         }
                         .foregroundStyle(c.accentDark)

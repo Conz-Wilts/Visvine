@@ -14,8 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,9 +33,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.data.model.Conversation
 import com.visvine.mobile.ui.components.ScreenHeader
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.ConversationsViewModel
+
 
 /** Port of screens/Messaging/ConversationsListScreen.tsx. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,7 +72,7 @@ fun ConversationsListScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center,
                     ) {
-                        Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = colors.borderDefault, modifier = Modifier.size(48.dp))
+                        Icon(AppIcons.Message, contentDescription = null, tint = colors.borderDefault, modifier = Modifier.size(48.dp))
                         Text(if (query.isNotEmpty()) "No conversations found" else "No messages yet", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 12.dp))
                     }
                 } else {

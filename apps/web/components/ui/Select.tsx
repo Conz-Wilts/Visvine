@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDownIcon } from '@/features/shared/icons';
 
 type SelectProps = React.SelectHTMLAttributes<HTMLSelectElement>;
 
@@ -20,7 +20,7 @@ export default function Select({ className, children, ...props }: SelectProps) {
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+      <ChevronDownIcon className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
     </div>
   );
 }

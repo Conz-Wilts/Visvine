@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Calendar, MapPin, Users, Video, Pencil } from 'lucide-react';
+import { CalendarIcon, MapPinIcon, PencilIcon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import { formatEventTime, getEventStatus, isEventUpcoming, startsInLabel } from '@/lib/eventUtils';
 import Avatar from '@/components/ui/Avatar';
 import type { NBEvent } from '@/lib/types';
@@ -126,20 +126,20 @@ function FeedCard({
             )}
             {isVirtual ? (
               <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
-                <Video className="w-3.5 h-3.5" />
+                <VideoIcon className="w-3.5 h-3.5" />
                 Virtual event
               </span>
             ) : (
               event.location && (
                 <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle truncate max-w-[220px]">
-                  <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                  <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0" />
                   {event.location.label}
                 </span>
               )
             )}
             {attendeeCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
-                <Users className="w-3.5 h-3.5" />
+                <UsersIcon className="w-3.5 h-3.5" />
                 {attendeeCount} Attendee{attendeeCount === 1 ? '' : 's'}
               </span>
             )}
@@ -153,7 +153,7 @@ function FeedCard({
           className="absolute top-3 right-3 p-1.5 text-brand-grey hover:text-brand-green hover:bg-brand-light-bg rounded-lg transition-all opacity-0 group-hover:opacity-100 bg-surface-1/80 backdrop-blur-sm"
           title="Edit event"
         >
-          <Pencil className="w-4 h-4" />
+          <PencilIcon className="w-4 h-4" />
         </button>
       )}
     </div>
@@ -195,7 +195,7 @@ export default function EventsFeedView({ events, space, loading = false, onEdit,
   if (events.length === 0) {
     return (
       <div className="max-w-3xl mx-auto text-center py-20">
-        <Calendar className="w-14 h-14 text-brand-grey mx-auto mb-4" />
+        <CalendarIcon className="w-14 h-14 text-brand-grey mx-auto mb-4" />
         <p className="text-sm text-text-muted">No events found</p>
       </div>
     );

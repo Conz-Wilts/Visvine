@@ -16,8 +16,7 @@ model Space {
   tags            String[]               @default([])
   createdAt       DateTime               @default(now()) @map("created_at")
   imageUrl        String?                @map("image_url")
-  nodeTypes       Json?                  @default("[{\"icon\": \"👤\", \"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"icon\": \"🏘️\", \"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"icon\": \"📅\", \"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
-  emoji           String?
+  nodeTypes       Json?                  @default("[{\"name\": \"Person\", \"color\": \"#2563eb\", \"shape\": \"rectangle\"}, {\"name\": \"Space\", \"color\": \"#78d870\", \"shape\": \"square\"}, {\"name\": \"Event\", \"color\": \"#ef4444\", \"shape\": \"rectangle\"}]") @map("node_types")
   aliases         Json?                  @default("[{\"name\": \"Owner\", \"color\": \"#b4881b\", \"owner\": true, \"system\": true, \"nodeType\": \"Person\"}]")
   linkTypes       Json?                  @default("[{\"name\": \"Related\", \"color\": \"#94a3b8\", \"directed\": false}, {\"name\": \"Knows\", \"color\": \"#2563eb\", \"directed\": false}, {\"name\": \"Works at\", \"color\": \"#9333ea\", \"directed\": true}, {\"name\": \"Founded\", \"color\": \"#16a34a\", \"directed\": true}, {\"name\": \"Invested in\", \"color\": \"#f59e0b\", \"directed\": true}, {\"name\": \"Member of\", \"color\": \"#0ea5e9\", \"directed\": true}, {\"name\": \"Partner\", \"color\": \"#ec4899\", \"directed\": false}, {\"name\": \"Mentors\", \"color\": \"#14b8a6\", \"directed\": true}, {\"name\": \"Attended\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Hosting\", \"color\": \"#ef4444\", \"directed\": true, \"system\": true}, {\"name\": \"Introduced\", \"color\": \"#06b6d4\", \"directed\": false, \"system\": true}, {\"name\": \"Mentioned\", \"color\": \"#8b5cf6\", \"directed\": false, \"system\": true}]") @map("link_types")
   country         String?
@@ -268,6 +267,11 @@ model AppToolBuild {
   sizeBytes   Int      @map("size_bytes")
   config      Json? // parsed ToolConfig, or null when configError is set
   configError String?  @map("config_error")
+  /// The author's own rail glyph from icon.md — ALREADY SANITIZED by
+  /// lib/tools/iconSvg.ts. Null when the Tool uses a built-in icon. Stored
+  /// sanitized on purpose: this is what the rail renders, and nothing
+  /// downstream re-parses author markup.
+  iconSvg     String?  @map("icon_svg")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -297,6 +301,9 @@ model AppToolVersion {
   indexSource   String    @map("index_source") // index.md body (docs) at publish time
   uiSource      String    @map("ui_source") // ui.tsx source at publish time
   dataSource    String    @map("data_source") // data.js source at publish time
+  /// The Tool's own rail glyph, sanitized at build time (lib/tools/iconSvg.ts)
+  /// and snapshotted here so an install carries it. Null = uses a built-in.
+  iconSvg       String?   @map("icon_svg")
   uiBundle      String    @map("ui_bundle") // compiled ESM
   dataBundle    String    @map("data_bundle") // compiled ESM
   sizeBytes     Int       @map("size_bytes")
@@ -880,7 +887,8 @@ model Conversation {
   name        String?
   description String?
   avatarUrl   String?              @map("avatar_url")
-  /// Emoji icon for CHANNEL conversations. Null = default hashtag icon.
+  /// Name of an owned icon (assets/icons) for CHANNEL conversations. Null =
+  /// the default hashtag. Held emoji until the 2026-08 icon rename.
   icon        String?
   /// How a CHANNEL renders: classic chat thread or social-feed post cards.
   viewMode    ChannelViewMode      @default(CHAT) @map("view_mode")
@@ -914,7 +922,9 @@ model ChannelSection {
   id        String         @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId   String         @map("space_id")
   name      String
-  emoji     String?
+  /// Name of an owned icon (assets/icons), or null for none. Held emoji until
+  /// the 2026-08 icon rename — see docs/icons.md.
+  icon      String?
   position  Int            @default(0)
   createdAt DateTime       @default(now()) @map("created_at")
   space     Space          @relation(fields: [spaceId], references: [id], onDelete: Cascade)

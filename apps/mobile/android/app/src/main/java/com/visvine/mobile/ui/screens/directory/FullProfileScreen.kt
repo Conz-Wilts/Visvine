@@ -22,15 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.PersonAddAlt
-import androidx.compose.material.icons.outlined.Sell
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -42,7 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -54,10 +45,12 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.visvine.mobile.data.model.FullProfile
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.DynamicColors
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.FullProfileViewModel
 import java.net.URI
+
 
 private fun initials(name: String): String {
     val parts = name.trim().split(Regex("\\s+"))
@@ -94,7 +87,7 @@ fun FullProfileScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(colors.bgPrimary).clickable { onBack() }, contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.textPrimary, modifier = Modifier.size(22.dp))
+                Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.textPrimary, modifier = Modifier.size(22.dp))
             }
             Text(
                 state.profile?.name ?: initialName ?: "Profile",
@@ -143,7 +136,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
                 }
                 if (profile.openToWork) {
                     Box(modifier = Modifier.size(24.dp).clip(CircleShape).background(Color(0xFF10B981)).border(3.dp, colors.bgPrimary, CircleShape), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
+                        Icon(AppIcons.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
                     }
                 }
             }
@@ -167,7 +160,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 profile.location?.let {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Outlined.LocationOn, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
+                        Icon(AppIcons.Location, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
                         Text(it, color = colors.textMuted, fontSize = 13.sp)
                     }
                 }
@@ -176,7 +169,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
                         modifier = Modifier.clickable { openUrl(context, site) },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Icon(Icons.Outlined.OpenInNew, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(14.dp))
+                        Icon(AppIcons.OpenInNew, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(14.dp))
                         Text(safeHostname(site), color = colors.accentDark, fontSize = 13.sp)
                     }
                 }
@@ -190,7 +183,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
                         }.padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Outlined.PersonAddAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Icon(AppIcons.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                         Text("Connect", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                     Row(
@@ -200,16 +193,16 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
                         }.padding(vertical = 10.dp),
                         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Outlined.Email, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(16.dp))
+                        Icon(AppIcons.Mail, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(16.dp))
                         Text("Message", color = colors.accentDark, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(start = 6.dp))
                     }
                 }
             }
 
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                joinedYear?.let { StatChip(Icons.Outlined.CalendarToday, "Member since $it", colors) }
+                joinedYear?.let { StatChip(AppIcons.Calendar, "Member since $it", colors) }
                 if (profile.tags.isNotEmpty()) {
-                    StatChip(Icons.Outlined.Sell, "${profile.tags.size} skill${if (profile.tags.size == 1) "" else "s"}", colors)
+                    StatChip(AppIcons.Tag, "${profile.tags.size} skill${if (profile.tags.size == 1) "" else "s"}", colors)
                 }
             }
         }
@@ -231,11 +224,11 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
         if (hasContact) {
             Section("Contact", colors) {
                 Column {
-                    profile.email?.let { ContactRow(Icons.Outlined.Email, it, colors) { openUrl(context, "mailto:$it") } }
-                    profile.phone?.let { ContactRow(Icons.Outlined.CalendarToday, it, colors) { openUrl(context, "tel:$it") } }
-                    profile.website?.let { ContactRow(Icons.Outlined.OpenInNew, safeHostname(it), colors) { openUrl(context, it) } }
-                    profile.linkedinUrl?.let { ContactRow(Icons.Outlined.OpenInNew, "LinkedIn", colors) { openUrl(context, it) } }
-                    profile.twitterUrl?.let { ContactRow(Icons.Outlined.OpenInNew, "X / Twitter", colors) { openUrl(context, it) } }
+                    profile.email?.let { ContactRow(AppIcons.Mail, it, colors) { openUrl(context, "mailto:$it") } }
+                    profile.phone?.let { ContactRow(AppIcons.Calendar, it, colors) { openUrl(context, "tel:$it") } }
+                    profile.website?.let { ContactRow(AppIcons.OpenInNew, safeHostname(it), colors) { openUrl(context, it) } }
+                    profile.linkedinUrl?.let { ContactRow(AppIcons.OpenInNew, "LinkedIn", colors) { openUrl(context, it) } }
+                    profile.twitterUrl?.let { ContactRow(AppIcons.OpenInNew, "X / Twitter", colors) { openUrl(context, it) } }
                 }
             }
         }
@@ -243,7 +236,7 @@ private fun ProfileBody(profile: FullProfile, isOwner: Boolean, colors: DynamicC
 }
 
 @Composable
-private fun StatChip(icon: ImageVector, label: String, colors: DynamicColors) {
+private fun StatChip(icon: Painter, label: String, colors: DynamicColors) {
     Row(
         modifier = Modifier.clip(RoundedCornerShape(999.dp)).background(colors.bgTertiary).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -262,7 +255,7 @@ private fun Section(title: String, colors: DynamicColors, content: @Composable (
 }
 
 @Composable
-private fun ContactRow(icon: ImageVector, label: String, colors: DynamicColors, onClick: () -> Unit) {
+private fun ContactRow(icon: Painter, label: String, colors: DynamicColors, onClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),

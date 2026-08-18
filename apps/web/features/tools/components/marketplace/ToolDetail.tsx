@@ -19,6 +19,7 @@ import { useEffect, useState } from 'react';
 import { Chip, LoadingText, Modal, Skeleton } from '@/components/ui';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
+import ToolIcon from '@/features/tools/components/toolIcons';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { fetchVersion } from '@/features/tools/lib/client';
 import type { BrowseItem, InstallSummary, VersionDetail, VersionHistoryEntry } from '@/lib/tools/api';
@@ -152,10 +153,18 @@ export default function ToolDetail({
                   </h3>
                   <ul className="space-y-1 text-sm text-text-secondary">
                     {version.surfaces.rail && (
-                      <li>
-                        A sidebar row labelled{' '}
-                        <span className="font-medium text-text-primary">{version.surfaces.rail.label}</span>, with
-                        its own full page.
+                      <li className="flex items-center gap-1.5">
+                        {/* The actual glyph, drawn as the rail would draw it —
+                            a custom icon is something an admin should SEE
+                            before it lands in their sidebar, not read about. */}
+                        <span className="shrink-0 text-text-primary">
+                          <ToolIcon name={version.surfaces.rail.icon} svg={version.iconSvg} />
+                        </span>
+                        <span>
+                          A sidebar row labelled{' '}
+                          <span className="font-medium text-text-primary">{version.surfaces.rail.label}</span>,
+                          with its own full page.
+                        </span>
                       </li>
                     )}
                     {version.surfaces.types.map((surface) => (

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';
+import { ExternalLinkIcon, RefreshCwIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import Link from 'next/link';
 import { clsx } from 'clsx';
 import { Button } from '@/components/ui';
@@ -41,7 +41,7 @@ export default function ToolErrorCard({
       )}
     >
       <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-        <AlertTriangle className="h-5 w-5" />
+        <TriangleAlertIcon className="h-5 w-5" />
       </span>
       <div className="space-y-1">
         <p className="text-sm font-semibold text-text-primary">{title} stopped working</p>
@@ -49,14 +49,14 @@ export default function ToolErrorCard({
       </div>
       <div className="mt-1 flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onReload} className="inline-flex items-center gap-1.5">
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCwIcon className="h-3.5 w-3.5" />
           Reload
         </Button>
         <Link
           href={reportHref}
           className="inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
         >
-          <ExternalLink className="h-3.5 w-3.5" />
+          <ExternalLinkIcon className="h-3.5 w-3.5" />
           {reportLabel}
         </Link>
       </div>

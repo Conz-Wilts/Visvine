@@ -2,9 +2,9 @@
 
 import type { Dispatch, KeyboardEvent, MutableRefObject, RefObject, SetStateAction } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import { Plus, Search, X, ArrowLeft, UserPlus, Pencil, LogOut, Hash, Star } from 'lucide-react';
+import { ArrowLeftIcon, HashIcon, LogOutIcon, PencilIcon, PlusIcon, SearchIcon, StarIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
-import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
+import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import MessageComposer from './MessageComposer';
 import MessageRow from './MessageRow';
 import FeedView from './FeedView';
@@ -157,7 +157,7 @@ export default function ThreadPanel({
       {!selectedConversation && (
         <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-2">
-            <Hash className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
+            <HashIcon className="h-9 w-9 text-text-muted" strokeWidth={1.5} />
           </div>
           <div>
             <p className="text-base font-semibold text-text-primary">No channel selected</p>
@@ -175,7 +175,7 @@ export default function ThreadPanel({
               onClick={onShowChannelForm}
               className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
             >
-              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              <PlusIcon className="h-4 w-4" strokeWidth={2.5} />
               New channel
             </button>
           )}
@@ -193,7 +193,7 @@ export default function ThreadPanel({
                   onClick={onBackToList}
                   className="mr-1 rounded-lg p-1.5 text-text-muted hover:bg-surface-3"
                 >
-                  <ArrowLeft className="h-5 w-5" />
+                  <ArrowLeftIcon className="h-5 w-5" />
                 </button>
               )}
               <div
@@ -221,8 +221,8 @@ export default function ThreadPanel({
                       </button>
                       {showHeaderIconPicker && (
                         <span className="absolute left-0 top-7 z-30">
-                          <EmojiIconPicker
-                            onSelect={(emoji) => void updateSelectedChannel({ icon: emoji })}
+                          <ChannelIconPicker
+                            onSelect={(icon) => void updateSelectedChannel({ icon })}
                             onClear={selectedConversation.icon ? () => void updateSelectedChannel({ icon: null }) : undefined}
                             onClose={() => setShowHeaderIconPicker(false)}
                           />
@@ -263,7 +263,7 @@ export default function ThreadPanel({
                 className={`rounded-lg p-2 transition-colors ${headerPanel === 'saved' ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
                 title="Saved messages"
               >
-                <Star className="h-4 w-4" />
+                <StarIcon className="h-4 w-4" />
               </button>
               <button
                 type="button"
@@ -271,7 +271,7 @@ export default function ThreadPanel({
                 className={`rounded-lg p-2 transition-colors ${showMessageSearch ? 'bg-brand-green/10 text-brand-dark-green' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
                 title="Search in conversation"
               >
-                <Search className="h-4 w-4" />
+                <SearchIcon className="h-4 w-4" />
               </button>
 
               {/* Below xl the details layer is hidden — keep management actions here */}
@@ -283,7 +283,7 @@ export default function ThreadPanel({
                     className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
                     title="Add members"
                   >
-                    <UserPlus className="h-4 w-4" />
+                    <UserPlusIcon className="h-4 w-4" />
                   </button>
                   <button
                     type="button"
@@ -291,7 +291,7 @@ export default function ThreadPanel({
                     className="hidden rounded-lg p-2 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary md:block xl:hidden"
                     title="Rename channel"
                   >
-                    <Pencil className="h-4 w-4" />
+                    <PencilIcon className="h-4 w-4" />
                   </button>
                 </>
               )}
@@ -302,7 +302,7 @@ export default function ThreadPanel({
                 className="rounded-lg p-2 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500 xl:hidden"
                 title="Leave channel"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOutIcon className="h-4 w-4" />
               </button>
             </div>
 
@@ -314,7 +314,7 @@ export default function ThreadPanel({
                     Your saved messages
                   </p>
                   <button type="button" onClick={() => setHeaderPanel(null)} className="text-text-muted hover:text-text-secondary">
-                    <X className="h-3.5 w-3.5" />
+                    <XIcon className="h-3.5 w-3.5" />
                   </button>
                 </div>
                 {panelLoading && (
@@ -351,7 +351,7 @@ export default function ThreadPanel({
           {showMessageSearch && (
             <div className="px-5 py-2.5">
               <div className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2">
-                <Search className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                <SearchIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />
                 <input
                   value={messageSearch}
                   onChange={(e) => setMessageSearch(e.target.value)}
@@ -361,7 +361,7 @@ export default function ThreadPanel({
                 />
                 {messageSearch && (
                   <button type="button" onClick={() => setMessageSearch('')} className="text-text-muted hover:text-text-secondary">
-                    <X className="h-3.5 w-3.5" />
+                    <XIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>

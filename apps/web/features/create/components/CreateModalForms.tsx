@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, Newspaper } from 'lucide-react';
+import { MessageCircleIcon, NewspaperIcon } from '@/features/shared/icons';
 import { Chip, chipClass, chipStyle } from '@/components/ui';
 import type { CreateableType } from '@/features/shared/contexts/CreateModalContext';
 import type { CreateSuggestion } from '@/lib/create/suggestedType';
@@ -12,7 +12,7 @@ import { formatBytes } from '@/lib/utils';
 import { slugify } from '@/lib/eventUtils';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { searchLocations } from '@/lib/locationData';
-import { ChannelIcon, EmojiIconPicker } from '@/features/messages/components/ChannelIcon';
+import { ChannelIcon, ChannelIconPicker } from '@/features/messages/components/ChannelIcon';
 import {
   MAX_SOURCE_BYTES,
   SOURCE_ACCEPT,
@@ -618,8 +618,8 @@ export function ChannelForm({
             </button>
             {showIconPicker && (
               <div className="absolute left-0 top-11 z-30">
-                <EmojiIconPicker
-                  onSelect={(emoji) => { onChange({ ...data, icon: emoji }); setShowIconPicker(false); }}
+                <ChannelIconPicker
+                  onSelect={(icon) => { onChange({ ...data, icon }); setShowIconPicker(false); }}
                   onClear={data.icon ? () => { onChange({ ...data, icon: null }); setShowIconPicker(false); } : undefined}
                   onClose={() => setShowIconPicker(false)}
                 />
@@ -648,8 +648,8 @@ export function ChannelForm({
       <Field label="View style">
         <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
           {([
-            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle, title: 'Classic channel thread' },
-            { mode: 'FEED' as const, label: 'Feed', icon: Newspaper, title: 'Post cards with comments' },
+            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircleIcon, title: 'Classic channel thread' },
+            { mode: 'FEED' as const, label: 'Feed', icon: NewspaperIcon, title: 'Post cards with comments' },
           ]).map(({ mode, label, icon: Icon, title }) => {
             const active = data.viewMode === mode;
             return (
@@ -679,7 +679,7 @@ export function ChannelForm({
             <option value="">No section</option>
             {sections.map((section) => (
               <option key={section.id} value={section.id}>
-                {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                {section.name}
               </option>
             ))}
           </select>

@@ -4,8 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,10 +20,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,9 +44,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.data.model.Message
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.ConversationViewModel
+
 
 /** Port of screens/Messaging/ConversationScreen.tsx. */
 @Composable
@@ -74,7 +72,7 @@ fun ConversationScreen(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.accent) }
+            IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
             Text(conversationName ?: "Chat", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
 
@@ -93,7 +91,7 @@ fun ConversationScreen(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(colors.bgTertiary), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(32.dp))
+                    Icon(AppIcons.Message, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(32.dp))
                 }
                 Text("No messages yet", color = colors.textMuted, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 12.dp))
                 Text("Start the conversation!", color = colors.textLight, fontSize = 14.sp)
@@ -142,7 +140,7 @@ fun ConversationScreen(
                         input = ""
                         viewModel.send(text) { restored -> input = restored }
                     }, enabled = canSend) {
-                        Icon(Icons.Filled.ArrowUpward, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+                        Icon(AppIcons.ArrowUp, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
                     }
                 }
             }

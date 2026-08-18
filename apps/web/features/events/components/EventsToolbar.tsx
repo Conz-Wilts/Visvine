@@ -5,7 +5,7 @@
  * Grey dropdown-style selectors matching Directory's FilterDropdown pattern
  */
 
-import { X } from 'lucide-react';
+import { XIcon } from '@/features/shared/icons';
 import Dropdown from '@/components/ui/Dropdown';
 
 interface EventsToolbarProps {
@@ -61,7 +61,7 @@ export default function EventsToolbar({
           }}
           className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
         >
-          <X className="h-3.5 w-3.5" />
+          <XIcon className="h-3.5 w-3.5" />
           Clear
         </button>
       )}

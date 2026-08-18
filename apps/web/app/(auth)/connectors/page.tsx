@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, KeyRound, Plug } from 'lucide-react';
+import { KeyRoundIcon, PlugIcon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
@@ -130,13 +130,13 @@ function ConnectorCard({ connector }: { connector: ConnectorRow }) {
           <span className="truncate">{status.detail}</span>
         ) : (
           <span className="flex min-w-0 items-center gap-1.5">
-            <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${status.tone === 'bad' ? 'text-red-500' : 'text-amber-500'}`} />
+            <TriangleAlertIcon className={`h-3.5 w-3.5 shrink-0 ${status.tone === 'bad' ? 'text-red-500' : 'text-amber-500'}`} />
             <span className="truncate">{status.detail}</span>
           </span>
         )}
         {connector.secrets.length > 0 && connector.missingSecrets.length === 0 && (
           <span className="ml-auto flex shrink-0 items-center gap-1">
-            <KeyRound className="h-3.5 w-3.5" />
+            <KeyRoundIcon className="h-3.5 w-3.5" />
             {connector.secrets.length}
           </span>
         )}
@@ -197,7 +197,7 @@ export default function ConnectorsPage() {
       return (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border-default px-6 py-14 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-light-bg text-brand-dark-green">
-            <Plug className="h-5 w-5" />
+            <PlugIcon className="h-5 w-5" />
           </span>
           <div>
             <p className="text-sm font-semibold text-text-primary">No connectors yet</p>

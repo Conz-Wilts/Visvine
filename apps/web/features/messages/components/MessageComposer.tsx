@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
-import { Plus, ImagePlus, X, AtSign, Link2, Send, Smile } from 'lucide-react';
+import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
 
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
@@ -369,7 +369,7 @@ export default function MessageComposer({
             {'  '}{replyTo.text}
           </p>
           <button type="button" onClick={onCancelReply} className="shrink-0 text-text-muted hover:text-text-secondary">
-            <X className="h-3.5 w-3.5" />
+            <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -385,7 +385,7 @@ export default function MessageComposer({
                 onClick={() => setImageUrls((prev) => prev.filter((_, idx) => idx !== i))}
                 className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900/80 text-white"
               >
-                <X className="h-3 w-3" />
+                <XIcon className="h-3 w-3" />
               </button>
             </div>
           ))}
@@ -400,7 +400,7 @@ export default function MessageComposer({
       {/* Link input */}
       {showLinkInput && (
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-surface-3/60 px-3 py-2">
-          <Link2 className="h-4 w-4 shrink-0 text-text-muted" />
+          <Link2Icon className="h-4 w-4 shrink-0 text-text-muted" />
           <input
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
@@ -422,7 +422,7 @@ export default function MessageComposer({
             Add
           </button>
           <button type="button" onClick={() => setShowLinkInput(false)} className="text-text-muted">
-            <X className="h-3.5 w-3.5" />
+            <XIcon className="h-3.5 w-3.5" />
           </button>
         </div>
       )}
@@ -484,7 +484,7 @@ export default function MessageComposer({
             >
               {uploading
                 ? <span className="block h-5 w-5 animate-spin rounded-full border-2 border-brand-green border-t-transparent" />
-                : <ImagePlus className="h-5 w-5" />}
+                : <ImagePlusIcon className="h-5 w-5" />}
             </button>
             <textarea
               ref={textareaRef}
@@ -504,7 +504,7 @@ export default function MessageComposer({
               className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               aria-label="Send"
             >
-              <Send className="h-4 w-4" />
+              <SendIcon className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -540,7 +540,7 @@ export default function MessageComposer({
                   }`}
                   title="Attach"
                 >
-                  <Plus className="h-5 w-5" />
+                  <PlusIcon className="h-5 w-5" />
                 </button>
 
                 {/* Attachment popup menu */}
@@ -551,7 +551,7 @@ export default function MessageComposer({
                       onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
                     >
-                      <ImagePlus className="h-4 w-4 text-text-muted" />
+                      <ImagePlusIcon className="h-4 w-4 text-text-muted" />
                       Upload image
                     </button>
                     <button
@@ -559,7 +559,7 @@ export default function MessageComposer({
                       onClick={() => { setShowLinkInput((v) => !v); setShowAttachMenu(false); }}
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-sm text-text-primary hover:bg-surface-2 transition-colors"
                     >
-                      <Link2 className="h-4 w-4 text-text-muted" />
+                      <Link2Icon className="h-4 w-4 text-text-muted" />
                       Add link
                     </button>
                   </div>
@@ -587,7 +587,7 @@ export default function MessageComposer({
                   }`}
                   title="Emoji"
                 >
-                  <Smile className="h-5 w-5" />
+                  <SmileIcon className="h-5 w-5" />
                 </button>
 
                 {showEmojiPicker && (
@@ -623,7 +623,7 @@ export default function MessageComposer({
                 className="flex h-7 w-7 items-center justify-center rounded-md text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
                 title="Mention someone"
               >
-                <AtSign className="h-5 w-5" />
+                <AtSignIcon className="h-5 w-5" />
               </button>
             </div>
 
@@ -635,7 +635,7 @@ export default function MessageComposer({
               className="flex h-7 w-7 items-center justify-center rounded-md text-brand-green transition-colors hover:bg-brand-green/10 disabled:text-text-muted disabled:hover:bg-transparent"
               title="Send"
             >
-              <Send className="h-4.5 w-4.5" />
+              <SendIcon className="h-4.5 w-4.5" />
             </button>
           </div>
         </div>

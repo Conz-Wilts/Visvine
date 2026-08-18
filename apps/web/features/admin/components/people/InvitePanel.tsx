@@ -13,7 +13,7 @@
 // what a person can do here.
 
 import { useEffect, useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { UserPlusIcon } from '@/features/shared/icons';
 import {
   Alert,
   Button,
@@ -181,7 +181,7 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
       <div>
         <Button type="submit" variant="pill-primary" loading={loading} loadingText="Adding…">
           <span className="inline-flex items-center gap-1.5">
-            <UserPlus size={14} />
+            <UserPlusIcon size={14} />
             Add to space
           </span>
         </Button>

@@ -12,7 +12,7 @@
 // a transient error can never let the stub clobber an existing note.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Radio } from 'lucide-react'
+import { RadioIcon } from '@/features/shared/icons';
 import { useRouter } from 'next/navigation'
 import { CHIP_ACCENT_HOVER, Chip, chipClass } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
@@ -678,7 +678,7 @@ export function EntityContextPanel({
 
       {isReplica && pubs?.asTarget && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-sm text-text-secondary">
-          <Radio className="h-4 w-4 shrink-0 text-brand-green" />
+          <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
           <span>
             Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> — kept in
             sync with its source, read-only here. Unlink it from Share to make it an editable copy.

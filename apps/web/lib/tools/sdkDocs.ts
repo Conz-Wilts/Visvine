@@ -284,6 +284,7 @@ and review like anything else:
 tools/<name>/index.md    frontmatter = config, body = docs for humans
 tools/<name>/ui.tsx      the React component (compiled on write)
 tools/<name>/data.js     optional server-side handlers (sandboxed isolate)
+tools/<name>/icon.svg    optional: your own sidebar glyph
 \`\`\`
 
 ## index.md
@@ -295,6 +296,8 @@ title: Deal Pipeline
 description: Kanban over deal notes
 surfaces:
   rail: { label: Deals, icon: kanban }     # optional: sidebar item + full page
+                                           # icon: one of the built-ins, or
+                                           # 'custom' to use your own icon.svg
   types: [{ type: deal, mode: page }]      # optional: own the page for a type
 perimeter:
   read:  ["deals/**", "people/*/index.md"]
@@ -306,6 +309,33 @@ perimeter:
 
 What this Tool is for, in a paragraph or two.
 \`\`\`
+
+## icon.svg — optional
+
+Name a built-in shape in \`surfaces.rail.icon\` (\`grid\`, \`kanban\`, \`list\`,
+\`table\`, \`calendar\`, \`chart\`, \`note\`, \`folder\`, \`people\`, \`sparkle\`) and
+you need no icon file. To ship your own, set \`icon: custom\` and write
+\`icon.svg\`:
+
+\`\`\`xml
+<svg viewBox="0 0 24 24">
+  <path d="M4 7h16M4 12h10M4 17h7" />
+</svg>
+\`\`\`
+
+It renders in the app's own sidebar, not inside your Tool's frame, so it is held
+to a strict shape and anything outside it fails the build:
+
+- **24x24 only** — \`viewBox="0 0 24 24"\`. A different canvas is rejected rather
+  than rescaled, so your strokes land on the same grid as every other icon.
+- **Geometry only** — \`path\`, \`circle\`, \`rect\`, \`line\`, \`polyline\`,
+  \`polygon\`, \`ellipse\`, \`g\`. No \`script\`, \`style\`, \`image\`, \`use\`,
+  \`foreignObject\`, \`a\`, animation, event handlers, links, \`url(...)\`, or
+  \`id\`/\`class\`.
+- **No colours** — paint is supplied by the sidebar so your icon follows the
+  theme and the active-row highlight like a built-in. Draw strokes, not fills.
+
+## The perimeter
 
 **The perimeter is the whole security story.** Anything not listed is refused at
 the bridge with a \`perimeter\` error, and an admin reads this block before

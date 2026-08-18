@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, KeyRound, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { CheckIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { timeAgo } from '@/lib/date';
@@ -151,7 +151,7 @@ function EditButton({ onClick, label }: { onClick: () => void; label: string }) 
       title={label}
       className="shrink-0 rounded-md p-1.5 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
     >
-      <Pencil className="h-3.5 w-3.5" />
+      <PencilIcon className="h-3.5 w-3.5" />
     </button>
   );
 }
@@ -160,7 +160,7 @@ function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (
     <p className="flex items-start gap-1.5 text-xs text-red-600">
-      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+      <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
       <span className="min-w-0 break-words">{message}</span>
     </p>
   );
@@ -249,7 +249,7 @@ function SecretTemplate({
                 : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
             }`}
           >
-            <KeyRound className="h-3 w-3" />
+            <KeyRoundIcon className="h-3 w-3" />
             {secretName}
             {!stored && <span className="font-normal">· not set</span>}
           </button>
@@ -370,7 +370,7 @@ function EnvEditor({
               aria-label="Remove variable"
               className="shrink-0 rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2Icon className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}
@@ -380,7 +380,7 @@ function EnvEditor({
             onClick={() => setRows((all) => [...all, { key: '', value: '' }])}
             className={`${GHOST_BUTTON} inline-flex items-center gap-1.5`}
           >
-            <Plus className="h-3 w-3" /> Add variable
+            <PlusIcon className="h-3 w-3" /> Add variable
           </button>
           <span className="text-xs text-text-muted">
             Use <code className="font-mono">{'{{secret:NAME}}'}</code>, never a raw value.
@@ -480,7 +480,7 @@ function SecretEditor({
             title={`Clear ${secret.name}`}
             className="rounded-lg border border-border-default p-1.5 text-text-muted transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2Icon className="h-3.5 w-3.5" />
           </button>
         )}
       </form>
@@ -604,7 +604,7 @@ function ModelSection({
           }`}
           title={key.set ? `Set ${key.updatedAt ? timeAgo(new Date(key.updatedAt).getTime()) : ''} — click to replace or clear` : 'Not stored — click to add'}
         >
-          <KeyRound className="h-3 w-3" />
+          <KeyRoundIcon className="h-3 w-3" />
           {key.name}
           {!key.set && <span className="text-[10px] font-semibold uppercase">missing</span>}
         </button>
@@ -690,7 +690,7 @@ function ConnectorConsole({
             disabled={running || code.trim().length === 0}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
-            <Play className="h-3.5 w-3.5" />
+            <PlayIcon className="h-3.5 w-3.5" />
             {running ? 'Running…' : 'Run'}
           </button>
         </div>
@@ -703,7 +703,7 @@ function ConnectorConsole({
           </pre>
           {entry.error ? (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+              <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 break-words">{entry.error}</span>
             </div>
           ) : entry.result ? (
@@ -739,7 +739,7 @@ function RunOutput({ result }: { result: RunResult }) {
       )}
       {result.error && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 break-words font-mono">{result.error.message}</span>
         </div>
       )}
@@ -997,7 +997,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
             title={runnable ? undefined : status.hint}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
           >
-            <Play className="h-3.5 w-3.5" />
+            <PlayIcon className="h-3.5 w-3.5" />
             {testing ? 'Testing…' : 'Test'}
           </button>
         )}
@@ -1009,16 +1009,16 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           className={`flex items-start gap-2 pb-5 text-xs ${test.ok ? 'text-brand-dark-green' : 'text-red-600'}`}
         >
           {test.ok ? (
-            <Check className="mt-px h-3.5 w-3.5 shrink-0" />
+            <CheckIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           ) : (
-            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />
+            <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           )}
           <span className="min-w-0 break-words">{test.message}</span>
         </p>
       ) : (
         status.tone !== 'ok' && (
           <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
-            <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+            <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
             {status.hint}
           </p>
         )
@@ -1027,7 +1027,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       {/* ══ PARSE ERROR — the note exists but nothing below it is live ══ */}
       {connector.invalid && (
         <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+          <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div className="min-w-0">
             <p className="break-words text-sm text-red-700">{connector.invalid}</p>
             <Link
@@ -1170,7 +1170,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         <Section title="Console" meta="runs for real">
           {!runnable ? (
             <p className="flex items-start gap-2 text-sm text-text-muted">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
               <span>
                 {connector.invalid
                   ? 'Fix the frontmatter before running.'

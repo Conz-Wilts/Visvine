@@ -160,6 +160,16 @@ export interface AuthoredToolView {
   versions: ToolVersionSummary[]
 }
 
+/**
+ * What the icon endpoints answer with. The rebuilt BUILD is the payload that
+ * matters: a rejected SVG is a build error, not an HTTP error, so the author
+ * reads it in the same place as a broken `ui.tsx`.
+ */
+export interface ToolIconResponse {
+  path: string
+  build: BuildSummary
+}
+
 export interface PublishResponse {
   version: ToolVersionSummary
   /** Set when the registry row landed but the note's `version:` bump didn't. */

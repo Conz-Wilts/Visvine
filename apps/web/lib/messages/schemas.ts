@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { ICON_NAMES } from '@/lib/icons/names';
 
-/** A short emoji string (grapheme clusters can be several code units long). */
-const emojiSchema = z.string().trim().min(1).max(16);
+/**
+ * A channel's or section's icon: the name of an icon we own, never an emoji.
+ * Validating against the generated list is what stops a stale client (or a
+ * hand-rolled API call) writing an emoji back into a column we just cleared.
+ */
+const iconSchema = z.enum(ICON_NAMES);
 
 /** Rendering style of a channel: classic chat thread or social-feed post cards. */
 const viewModeSchema = z.enum(['CHAT', 'FEED']);
@@ -10,7 +15,7 @@ export const createChannelSchema = z.object({
   spaceId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(500).optional(),
-  icon: emojiSchema.optional(),
+  icon: iconSchema.optional(),
   sectionId: z.string().min(1).optional(),
   viewMode: viewModeSchema.optional(),
   // Starting text for the channel's context note (channels/<slug>.md). Optional
@@ -22,7 +27,7 @@ export const updateGroupSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().trim().max(500).nullable().optional(),
   avatarUrl: z.string().url().nullable().optional(),
-  icon: emojiSchema.nullable().optional(),
+  icon: iconSchema.nullable().optional(),
   sectionId: z.string().min(1).nullable().optional(),
   viewMode: viewModeSchema.optional(),
 });
@@ -30,14 +35,14 @@ export const updateGroupSchema = z.object({
 export const createSectionSchema = z.object({
   spaceId: z.string().min(1),
   name: z.string().trim().min(1).max(80),
-  emoji: emojiSchema.optional(),
+  icon: iconSchema.optional(),
   /** Starting text for the section's context note (sections/<slug>.md). */
   context: z.string().trim().max(5000).optional(),
 });
 
 export const updateSectionSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
-  emoji: emojiSchema.nullable().optional(),
+  icon: iconSchema.nullable().optional(),
   position: z.number().int().min(0).optional(),
 });
 

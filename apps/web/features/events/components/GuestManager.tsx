@@ -13,10 +13,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NBEvent, NBAttendee, RSVPStatus } from '@/lib/types';
 import { copyToClipboard } from '@/lib/utils';
-import {
-  Check, Clock, X, UserCheck, Users, Link2, FileDown, RefreshCw, Loader2,
-  CheckCircle2, ChevronUp, Ban, ArrowUpCircle,
-} from 'lucide-react';
+import { BanIcon, CheckIcon, ChevronUpIcon, CircleArrowUpIcon, CircleCheckIcon, ClockIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, RefreshCwIcon, UserCheckIcon, UsersIcon, XIcon } from '@/features/shared/icons';
 
 interface AttendeeRow extends NBAttendee {
   name?: string;
@@ -53,13 +50,13 @@ function matchesFilter(a: AttendeeRow, f: FilterKey): boolean {
 }
 
 const STATUS_BADGE: Partial<Record<RSVPStatus, { label: string; cls: string; icon: React.ReactNode }>> = {
-  going: { label: 'Going', cls: 'bg-brand-green/10 text-brand-green', icon: <Check className="w-3 h-3" /> },
-  waitlisted: { label: 'Waitlist', cls: 'bg-orange-100 text-orange-700', icon: <Clock className="w-3 h-3" /> },
-  pending: { label: 'Pending', cls: 'bg-amber-100 text-amber-700', icon: <Clock className="w-3 h-3" /> },
-  checked_in: { label: 'Checked in', cls: 'bg-brand-green/15 text-brand-green', icon: <UserCheck className="w-3 h-3" /> },
-  cancelled: { label: 'Cancelled', cls: 'bg-gray-100 text-brand-grey', icon: <X className="w-3 h-3" /> },
-  no_show: { label: 'No show', cls: 'bg-gray-100 text-brand-grey', icon: <Ban className="w-3 h-3" /> },
-  invited: { label: 'Invited', cls: 'bg-blue-100 text-blue-700', icon: <Clock className="w-3 h-3" /> },
+  going: { label: 'Going', cls: 'bg-brand-green/10 text-brand-green', icon: <CheckIcon className="w-3 h-3" /> },
+  waitlisted: { label: 'Waitlist', cls: 'bg-orange-100 text-orange-700', icon: <ClockIcon className="w-3 h-3" /> },
+  pending: { label: 'Pending', cls: 'bg-amber-100 text-amber-700', icon: <ClockIcon className="w-3 h-3" /> },
+  checked_in: { label: 'Checked in', cls: 'bg-brand-green/15 text-brand-green', icon: <UserCheckIcon className="w-3 h-3" /> },
+  cancelled: { label: 'Cancelled', cls: 'bg-gray-100 text-brand-grey', icon: <XIcon className="w-3 h-3" /> },
+  no_show: { label: 'No show', cls: 'bg-gray-100 text-brand-grey', icon: <BanIcon className="w-3 h-3" /> },
+  invited: { label: 'Invited', cls: 'bg-blue-100 text-blue-700', icon: <ClockIcon className="w-3 h-3" /> },
 };
 
 export function GuestManager({ event, spaceId }: GuestManagerProps) {
@@ -205,7 +202,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
       {/* action row */}
       <div className="flex flex-wrap items-center gap-2.5">
         <button onClick={copyLink} className={actionBtn}>
-          {copied ? <Check className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+          {copied ? <CheckIcon className="w-4 h-4" /> : <Link2Icon className="w-4 h-4" />}
           {copied ? 'Copied' : 'Invite link'}
         </button>
         <a
@@ -214,10 +211,10 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
           rel="noreferrer"
           className={actionBtn}
         >
-          <FileDown className="w-4 h-4" /> Export CSV
+          <FileDownIcon className="w-4 h-4" /> Export CSV
         </a>
         <button onClick={() => load()} className={actionBtn}>
-          <RefreshCw className="w-4 h-4" /> Refresh
+          <RefreshCwIcon className="w-4 h-4" /> Refresh
         </button>
         <div className="ml-auto text-sm text-brand-grey">
           {occupied}
@@ -256,21 +253,21 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-xl bg-brand-light-bg border border-brand-green/30">
           <span className="text-sm font-medium text-brand-black">{selected.size} selected</span>
-          <button onClick={() => bulk('approve')} disabled={busy} className={bulkBtn}><CheckCircle2 className="w-4 h-4" /> Approve</button>
-          <button onClick={() => bulk('promote')} disabled={busy} className={bulkBtn}><ArrowUpCircle className="w-4 h-4" /> Promote</button>
-          <button onClick={() => bulk('checkin')} disabled={busy} className={bulkBtn}><UserCheck className="w-4 h-4" /> Check in</button>
-          <button onClick={() => bulk('remove')} disabled={busy} className={`${bulkBtn} text-red-600`}><X className="w-4 h-4" /> Remove</button>
-          <button onClick={() => setSelected(new Set())} className="ml-auto text-brand-grey hover:text-brand-black"><ChevronUp className="w-4 h-4" /></button>
+          <button onClick={() => bulk('approve')} disabled={busy} className={bulkBtn}><CircleCheckIcon className="w-4 h-4" /> Approve</button>
+          <button onClick={() => bulk('promote')} disabled={busy} className={bulkBtn}><CircleArrowUpIcon className="w-4 h-4" /> Promote</button>
+          <button onClick={() => bulk('checkin')} disabled={busy} className={bulkBtn}><UserCheckIcon className="w-4 h-4" /> Check in</button>
+          <button onClick={() => bulk('remove')} disabled={busy} className={`${bulkBtn} text-red-600`}><XIcon className="w-4 h-4" /> Remove</button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-brand-grey hover:text-brand-black"><ChevronUpIcon className="w-4 h-4" /></button>
         </div>
       )}
 
       {/* list */}
       <div className="rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="py-16 flex items-center justify-center text-brand-grey"><Loader2 className="w-5 h-5 animate-spin" /></div>
+          <div className="py-16 flex items-center justify-center text-brand-grey"><LoaderCircleIcon className="w-5 h-5 animate-spin" /></div>
         ) : visible.length === 0 ? (
           <div className="py-16 text-center text-brand-grey flex flex-col items-center gap-2">
-            <Users className="w-7 h-7 opacity-50" />
+            <UsersIcon className="w-7 h-7 opacity-50" />
             No guests {filter !== 'all' ? 'in this view' : 'yet'}.
           </div>
         ) : (
@@ -340,14 +337,14 @@ function RowActions({
 }: { status: RSVPStatus; onAct: (action: string) => void; onRemove: () => void }) {
   return (
     <div className="flex items-center gap-1">
-      {status === 'pending' && <IconBtn title="Approve" onClick={() => onAct('approve')}><Check className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {status === 'waitlisted' && <IconBtn title="Promote" onClick={() => onAct('promote')}><ArrowUpCircle className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {(status === 'going') && <IconBtn title="Check in" onClick={() => onAct('checkin')}><UserCheck className="w-4 h-4 text-brand-green" /></IconBtn>}
-      {status === 'checked_in' && <IconBtn title="Undo check-in" onClick={() => onAct('uncheckin')}><UserCheck className="w-4 h-4 text-brand-grey" /></IconBtn>}
+      {status === 'pending' && <IconBtn title="Approve" onClick={() => onAct('approve')}><CheckIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {status === 'waitlisted' && <IconBtn title="Promote" onClick={() => onAct('promote')}><CircleArrowUpIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {(status === 'going') && <IconBtn title="Check in" onClick={() => onAct('checkin')}><UserCheckIcon className="w-4 h-4 text-brand-green" /></IconBtn>}
+      {status === 'checked_in' && <IconBtn title="Undo check-in" onClick={() => onAct('uncheckin')}><UserCheckIcon className="w-4 h-4 text-brand-grey" /></IconBtn>}
       {status !== 'cancelled' && status !== 'waitlisted' && (
-        <IconBtn title="Move to waitlist" onClick={() => onAct('waitlist')}><Clock className="w-4 h-4 text-brand-grey" /></IconBtn>
+        <IconBtn title="Move to waitlist" onClick={() => onAct('waitlist')}><ClockIcon className="w-4 h-4 text-brand-grey" /></IconBtn>
       )}
-      <IconBtn title="Remove" onClick={onRemove}><X className="w-4 h-4 text-red-500" /></IconBtn>
+      <IconBtn title="Remove" onClick={onRemove}><XIcon className="w-4 h-4 text-red-500" /></IconBtn>
     </div>
   );
 }

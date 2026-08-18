@@ -9,7 +9,7 @@
 // the settings route merges rather than replaces.
 
 import { useState } from 'react';
-import { Lock } from 'lucide-react';
+import { LockIcon } from '@/features/shared/icons';
 import type { Space, SpaceFeatureConfig } from '@/lib/types';
 import {
   ADMIN_ONLY_FEATURE_KEYS,
@@ -90,7 +90,7 @@ export default function ToolAccessTab({ space, onSaved }: {
                     : `Only admins can open ${feature.label}`
                 }
               >
-                <Lock className="h-3.5 w-3.5" />
+                <LockIcon className="h-3.5 w-3.5" />
                 <Toggle
                   checked={locked}
                   disabled={always}

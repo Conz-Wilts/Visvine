@@ -18,7 +18,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { formatEventTime, isEventPast, getEventStatus } from '@/lib/eventUtils';
 import type { NBEvent } from '@/lib/types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from '@/features/shared/icons';
 
 interface EventWithStats extends NBEvent {
   _stats?: { totalAttendees: number };
@@ -200,7 +200,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface-3 transition-colors"
                 aria-label="Previous month"
               >
-                <ChevronLeft className="h-5 w-5" />
+                <ChevronLeftIcon className="h-5 w-5" />
               </button>
               <button
                 type="button"
@@ -215,7 +215,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
                 className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted hover:bg-surface-3 transition-colors"
                 aria-label="Next month"
               >
-                <ChevronRight className="h-5 w-5" />
+                <ChevronRightIcon className="h-5 w-5" />
               </button>
             </div>
           </div>

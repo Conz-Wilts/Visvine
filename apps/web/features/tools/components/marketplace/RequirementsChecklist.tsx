@@ -22,7 +22,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { Check, Minus, X } from 'lucide-react';
+import { CheckIcon, MinusIcon, XIcon } from '@/features/shared/icons';
 import { clsx } from 'clsx';
 import type { ToolPerimeter } from '@/lib/tools/perimeter';
 import type { ToolRequirements } from '@/lib/tools/requirements';
@@ -74,9 +74,9 @@ function checklistLines(
 }
 
 const ICONS: Record<Verdict, ReactNode> = {
-  met: <Check className="h-3.5 w-3.5 text-green-600" aria-hidden />,
-  missing: <X className="h-3.5 w-3.5 text-amber-600" aria-hidden />,
-  unchecked: <Minus className="h-3.5 w-3.5 text-text-muted" aria-hidden />,
+  met: <CheckIcon className="h-3.5 w-3.5 text-green-600" aria-hidden />,
+  missing: <XIcon className="h-3.5 w-3.5 text-amber-600" aria-hidden />,
+  unchecked: <MinusIcon className="h-3.5 w-3.5 text-text-muted" aria-hidden />,
 };
 
 const VERDICT_LABEL: Record<Verdict, string> = {

@@ -70,6 +70,7 @@ function build(over: Partial<BuildSummary> = {}): BuildSummary {
     config: config(),
     configError: null,
     updatedAt: '2026-08-18T00:00:00.000Z',
+    iconSvg: null,
     ...over,
   }
 }
@@ -101,6 +102,7 @@ function detail(over: Partial<AuthoredToolDetail> = {}): AuthoredToolDetail {
       'index.md': '---\ntype: tool\n---\n\n# Board\n',
       'ui.tsx': 'export default function App() { return <p>hi</p> }',
       'data.js': 'handlers.hello = async () => ({ ok: true })',
+      'icon.svg': null,
     },
     ...over,
   }
@@ -128,6 +130,7 @@ function install(over: Partial<InstallSummary> = {}): InstallSummary {
 function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
   return {
     id: 'ver_1',
+    iconSvg: null,
     key: `${SPACE}/board`,
     name: 'board',
     version: 3,
@@ -310,11 +313,11 @@ test('write_tool passes a note-gate denial back as a 403', async () => {
 
 // ── read ─────────────────────────────────────────────────────────────────────
 
-test('read_tool returns all three files, or just the one asked for', async () => {
+test('read_tool returns every file, or just the one asked for', async () => {
   const d = deps({ describeAuthoredTool: async () => detail() })
 
   const all = await appToolHandlers.readTool(CTX, { space_id: SPACE, name: 'board' }, d)
-  assert.deepEqual(Object.keys(all.files).sort(), ['data.js', 'index.md', 'ui.tsx'])
+  assert.deepEqual(Object.keys(all.files).sort(), ['data.js', 'icon.svg', 'index.md', 'ui.tsx'])
   assert.equal(all.config?.title, 'Board')
   assert.equal(all.build.ok, true)
 

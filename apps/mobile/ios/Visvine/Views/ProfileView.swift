@@ -67,7 +67,7 @@ struct ProfileView: View {
                             initialsAvatar(displayName)
                         }
                         NavigationLink(value: ProfileRoute.edit) {
-                            Image(systemName: "pencil").font(.system(size: 14)).foregroundStyle(c.accent)
+                            VisvineIcon(.pencil, size: 14).foregroundStyle(c.accent)
                                 .frame(width: 32, height: 32).background(c.bgPrimary, in: Circle()).shadow(radius: 2)
                         }
                     }
@@ -95,7 +95,7 @@ struct ProfileView: View {
                             Circle().fill(c.accent).frame(width: 8, height: 8)
                             Text(item.name).font(.system(size: 16)).foregroundStyle(active ? c.accent : c.textSecondary)
                             Spacer()
-                            if active { Image(systemName: "checkmark.circle.fill").foregroundStyle(c.accent) }
+                            if active { VisvineIcon(.checkCircle).foregroundStyle(c.accent) }
                         }
                         .padding(.vertical, 12)
                     }
@@ -103,10 +103,10 @@ struct ProfileView: View {
 
                 // Menu
                 card {
-                    menuRow("person", "Edit Profile", route: .edit)
-                    menuRow("gearshape", "Settings", route: .settings)
-                    menuStatic("bell", "Notifications")
-                    menuStatic("questionmark.circle", "Help & Support")
+                    menuRow(.person, "Edit Profile", route: .edit)
+                    menuRow(.settings, "Settings", route: .settings)
+                    menuStatic(.bell, "Notifications")
+                    menuStatic(.help, "Help & Support")
                 }
 
                 // Sign out
@@ -114,7 +114,7 @@ struct ProfileView: View {
                     Button { confirmSignOut = true } label: {
                         HStack {
                             Spacer()
-                            Image(systemName: "rectangle.portrait.and.arrow.right").foregroundStyle(c.error)
+                            VisvineIcon(.logout).foregroundStyle(c.error)
                             Text("Sign Out").font(.system(size: 16, weight: .medium)).foregroundStyle(c.error)
                             Spacer()
                         }
@@ -158,26 +158,26 @@ struct ProfileView: View {
         .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 12)
     }
 
-    private func menuRow(_ icon: String, _ label: String, route: ProfileRoute) -> some View {
+    private func menuRow(_ icon: VisvineIconName, _ label: String, route: ProfileRoute) -> some View {
         let c = theme.colors
         return NavigationLink(value: route) {
             HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(c.textSecondary).frame(width: 24)
+                VisvineIcon(icon).foregroundStyle(c.textSecondary).frame(width: 24)
                 Text(label).font(.system(size: 16)).foregroundStyle(c.textSecondary)
                 Spacer()
-                Image(systemName: "chevron.right").foregroundStyle(c.textMuted)
+                VisvineIcon(.chevronRight).foregroundStyle(c.textMuted)
             }
             .padding(.vertical, 14)
         }
     }
 
-    private func menuStatic(_ icon: String, _ label: String) -> some View {
+    private func menuStatic(_ icon: VisvineIconName, _ label: String) -> some View {
         let c = theme.colors
         return HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(c.textSecondary).frame(width: 24)
+            VisvineIcon(icon).foregroundStyle(c.textSecondary).frame(width: 24)
             Text(label).font(.system(size: 16)).foregroundStyle(c.textSecondary)
             Spacer()
-            Image(systemName: "chevron.right").foregroundStyle(c.textMuted)
+            VisvineIcon(.chevronRight).foregroundStyle(c.textMuted)
         }
         .padding(.vertical, 14)
     }

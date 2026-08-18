@@ -20,16 +20,18 @@ import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table
 import { Markdown } from 'tiptap-markdown'
 import {
   BoldIcon,
-  ItalicIcon,
-  ListBulletIcon,
-  NumberedListIcon,
-  CheckCircleIcon,
-  CodeBracketIcon,
-  TableCellsIcon,
-  ChevronUpDownIcon as ChevronsUpDownIcon,
   CheckIcon,
-} from '@heroicons/react/24/outline'
-import { TextQuote as QuoteIcon, Sparkles as SparklesIcon, Star as StarIcon } from 'lucide-react'
+  ChevronsUpDownIcon,
+  CircleCheckIcon,
+  CodeIcon,
+  ItalicIcon,
+  ListIcon,
+  ListOrderedIcon,
+  SparklesIcon,
+  StarIcon,
+  TableIcon,
+  TextQuoteIcon,
+} from '@/features/shared/icons';
 import { Hashtag } from '../lib/hashtag'
 import { EntityChip } from '../lib/entityChip'
 import { NotePicker, type PickerEntity } from './NotePicker'
@@ -579,26 +581,26 @@ export function NoteEditor({
         </ToolbarButton>
         <Divider />
         <ToolbarButton label="Bullet list" onClick={() => editor?.chain().focus().toggleBulletList().run()} active={!!editor?.isActive('bulletList')}>
-          <ListBulletIcon className="h-4 w-4" />
+          <ListIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton label="Numbered list" onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={!!editor?.isActive('orderedList')}>
-          <NumberedListIcon className="h-4 w-4" />
+          <ListOrderedIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton label="Checklist" onClick={() => editor?.chain().focus().toggleTaskList().run()} active={!!editor?.isActive('taskList')}>
-          <CheckCircleIcon className="h-4 w-4" />
+          <CircleCheckIcon className="h-4 w-4" />
         </ToolbarButton>
         <Divider />
         <ToolbarButton label="Quote" onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={!!editor?.isActive('blockquote')}>
-          <QuoteIcon size={16} />
+          <TextQuoteIcon size={16} />
         </ToolbarButton>
         <ToolbarButton label="Code" onClick={() => editor?.chain().focus().toggleCodeBlock().run()} active={!!editor?.isActive('codeBlock')}>
-          <CodeBracketIcon className="h-4 w-4" />
+          <CodeIcon className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
           label="Table"
           onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
         >
-          <TableCellsIcon className="h-4 w-4" />
+          <TableIcon className="h-4 w-4" />
         </ToolbarButton>
       </>
     ) : null

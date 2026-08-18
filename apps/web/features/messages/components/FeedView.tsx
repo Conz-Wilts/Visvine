@@ -9,7 +9,7 @@
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Smile, Star, Pencil, Trash2, Pin, MessageCircle } from 'lucide-react';
+import { MessageCircleIcon, PencilIcon, PinIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
 import LinkPreviewCard from '@/components/ui/LinkPreviewCard';
 import MessageComposer from './MessageComposer';
@@ -155,7 +155,7 @@ const CommentRow = memo(function CommentRow({
           className="rounded-md p-1 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
           title="React"
         >
-          <Smile className="h-3.5 w-3.5" />
+          <SmileIcon className="h-3.5 w-3.5" />
         </button>
         {comment.isOwn && (
           <button
@@ -164,7 +164,7 @@ const CommentRow = memo(function CommentRow({
             className="rounded-md p-1 text-text-muted hover:bg-red-50 hover:text-red-500"
             title="Delete"
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2Icon className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
@@ -242,12 +242,12 @@ const PostCard = memo(function PostCard({
             <span className="text-[11px] text-text-muted">{formatChatTimestamp(post.createdAt)}</span>
             {post.pinnedAt && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-green/10 px-2 py-0.5 text-[10px] font-medium text-brand-dark-green">
-                <Pin className="h-2.5 w-2.5" /> Pinned
+                <PinIcon className="h-2.5 w-2.5" /> Pinned
               </span>
             )}
             {post.starred && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                <Star className="h-2.5 w-2.5 fill-current" /> Saved
+                <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
           </p>
@@ -320,7 +320,7 @@ const PostCard = memo(function PostCard({
             onClick={() => setShowCommentInput((v) => !v)}
             className="flex items-center gap-1 rounded-full border border-border-subtle bg-surface-1 px-2 py-0.5 text-xs text-text-muted transition-colors hover:bg-surface-2"
           >
-            <MessageCircle className="h-3 w-3" />
+            <MessageCircleIcon className="h-3 w-3" />
             {comments.length > 0
               ? `${comments.length} comment${comments.length === 1 ? '' : 's'}`
               : 'Comment'}
@@ -368,7 +368,7 @@ const PostCard = memo(function PostCard({
             className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
             title="React"
           >
-            <Smile className="h-4 w-4" />
+            <SmileIcon className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -376,7 +376,7 @@ const PostCard = memo(function PostCard({
             className={`rounded-md p-1.5 hover:bg-surface-2 ${post.starred ? 'text-amber-500' : 'text-text-muted hover:text-text-secondary'}`}
             title={post.starred ? 'Remove from saved' : 'Save for later'}
           >
-            <Star className={`h-4 w-4 ${post.starred ? 'fill-current' : ''}`} />
+            <StarIcon className={`h-4 w-4 ${post.starred ? 'fill-current' : ''}`} />
           </button>
           {canEdit && (
             <button
@@ -385,7 +385,7 @@ const PostCard = memo(function PostCard({
               className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
               title="Edit"
             >
-              <Pencil className="h-4 w-4" />
+              <PencilIcon className="h-4 w-4" />
             </button>
           )}
           {post.isOwn && (
@@ -395,7 +395,7 @@ const PostCard = memo(function PostCard({
               className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
               title="Delete"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2Icon className="h-4 w-4" />
             </button>
           )}
         </div>

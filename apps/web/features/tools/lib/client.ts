@@ -21,6 +21,7 @@ import type {
   InstallUpdatedResponse,
   InstallsResponse,
   PublishResponse,
+  ToolIconResponse,
   VersionResponse,
 } from '@/lib/tools/api'
 import type { TypeClaims } from '@/lib/tools/installs'
@@ -130,6 +131,26 @@ export function publishTool(spaceId: string, name: string, note?: string): Promi
     'POST',
     { action: 'publish', ...(note ? { note } : {}) },
   )
+}
+
+/**
+ * Set or clear a Tool's own rail glyph.
+ *
+ * The response carries the rebuilt BUILD, not just an ok: an SVG that fails the
+ * sanitizer comes back as a build error rather than an HTTP error, because that
+ * is the same channel every other authoring mistake arrives on and the author
+ * is already reading it.
+ */
+export function setToolIcon(spaceId: string, name: string, svg: string): Promise<ToolIconResponse> {
+  return fetchJsonBody<ToolIconResponse>(iconUrl(spaceId, name), 'PUT', { svg });
+}
+
+export function clearToolIcon(spaceId: string, name: string): Promise<ToolIconResponse> {
+  return fetchJson<ToolIconResponse>(iconUrl(spaceId, name), { method: 'DELETE' });
+}
+
+function iconUrl(spaceId: string, name: string): string {
+  return `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}/icon`;
 }
 
 // ── what the space has (the install checklist's other half) ──────────────────

@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Check, ChevronRight } from 'lucide-react'
+import { ArrowRightIcon, CheckIcon, ChevronRightIcon } from '@/features/shared/icons';
 import { CHIP_ACCENT_HOVER, Chip, chipClass, Modal } from '@/components/ui'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { canCreateType } from '@/lib/create/creatable'
@@ -753,7 +753,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       className="flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
       style={{ background: theme.base }}
     >
-      {committing ? 'Creating…' : <>Create <Check className="h-3.5 w-3.5" /></>}
+      {committing ? 'Creating…' : <>Create <CheckIcon className="h-3.5 w-3.5" /></>}
     </button>
   )
 
@@ -878,7 +878,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
             }
             className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-xs font-semibold transition hover:bg-amber-100"
           >
-            Open it <ArrowRight className="h-3 w-3" />
+            Open it <ArrowRightIcon className="h-3 w-3" />
           </button>
         </div>
       )}
@@ -1127,7 +1127,7 @@ function TypeMenu({
         style={label ? { background: theme.base } : { ['--accent' as string]: theme.dark }}
       >
         {label ?? 'Pick a type'}
-        <ChevronRight className={`h-3 w-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
+        <ChevronRightIcon className={`h-3 w-3 opacity-70 transition-transform duration-200 ${open ? 'rotate-90' : ''}`} />
       </button>
 
       {open && (
@@ -1213,7 +1213,7 @@ function TypeMenu({
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">
                       {row.config.name}
                     </span>
-                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.config.color }} />
                   </button>
                 )
@@ -1238,7 +1238,7 @@ function TypeMenu({
                           flat — unfolded under its own caret it's obvious. */}
                       {query && <span className="text-text-muted"> · {row.option.label}</span>}
                     </span>
-                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     <span className="h-3 w-3 shrink-0 rounded shadow-sm" style={{ background: row.alias.color }} />
                   </button>
                 )
@@ -1260,7 +1260,7 @@ function TypeMenu({
                       aria-label={`More specific than ${row.option.label}`}
                       className="flex w-7 shrink-0 items-center justify-center text-text-muted transition hover:text-text-primary"
                     >
-                      <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+                      <ChevronRightIcon className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
                     </button>
                   ) : (
                     <span className="w-7 shrink-0" aria-hidden />
@@ -1281,7 +1281,7 @@ function TypeMenu({
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-text-primary">
                       {row.option.label}
                     </span>
-                    {picked && <Check className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
+                    {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     {/* The same rounded square the console's Types tab paints —
                         a type looks the same wherever you meet it. */}
                     <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.color }} />
@@ -1451,7 +1451,7 @@ function ChannelExtras({
             <option value="">No section</option>
             {sections.map((section) => (
               <option key={section.id} value={section.id}>
-                {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                {section.name}
               </option>
             ))}
           </select>

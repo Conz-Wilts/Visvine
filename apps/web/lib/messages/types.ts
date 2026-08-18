@@ -77,7 +77,7 @@ export interface ConversationSummary {
   name: string;
   description?: string | null;
   avatarUrl: string | null;
-  /** Channel emoji icon — null renders the default hashtag. */
+  /** Channel icon — the name of an owned icon; null renders the default hashtag. */
   icon?: string | null;
   /** Channel rendering style — absent means 'CHAT' (classic thread). */
   viewMode?: ChannelViewMode;
@@ -116,7 +116,8 @@ export interface ChannelDirectoryEntry {
 export interface ChannelSectionEntry {
   id: string;
   name: string;
-  emoji: string | null;
+  /** Name of an owned icon shown before the section name, or null for none. */
+  icon: string | null;
   position: number;
 }
 

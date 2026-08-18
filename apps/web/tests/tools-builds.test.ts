@@ -37,6 +37,7 @@ function sources(over: Partial<ToolSources> = {}): ToolSources {
     index: newToolIndexNote({ name: NAME, title: 'Hello' }),
     ui: wrapSource(UI_CODE, 'tsx'),
     data: wrapSource(DATA_CODE, 'js'),
+    icon: null,
     ...over,
   }
 }
@@ -66,6 +67,7 @@ function rowOf(input: ToolBuildInput): AppToolBuild {
     sizeBytes: input.sizeBytes,
     config: (input.config ?? null) as unknown as AppToolBuild['config'],
     configError: input.configError,
+    iconSvg: input.iconSvg,
     createdAt: new Date('2026-08-18T00:00:00.000Z'),
     updatedAt: new Date('2026-08-18T00:00:00.000Z'),
   }
@@ -122,10 +124,12 @@ test('toolSourceHash changes with any source, and tells absent from empty', () =
   assert.notEqual(toolSourceHash(base), toolSourceHash(sources({ data: null })))
   // A deleted data.js and a blanked one are different acts.
   assert.notEqual(toolSourceHash(sources({ data: null })), toolSourceHash(sources({ data: '' })))
-  // The three slots are distinct: moving content between them is a change.
+  // Adding an icon is a change like any other source edit.
+  assert.notEqual(toolSourceHash(base), toolSourceHash(sources({ icon: wrapSource('<svg />', 'svg') })))
+  // The slots are distinct: moving content between them is a change.
   assert.notEqual(
-    toolSourceHash({ index: 'a', ui: 'b', data: null }),
-    toolSourceHash({ index: 'a', ui: null, data: 'b' }),
+    toolSourceHash({ index: 'a', ui: 'b', data: null, icon: null }),
+    toolSourceHash({ index: 'a', ui: null, data: 'b', icon: null }),
   )
 })
 
@@ -277,6 +281,7 @@ test('writeErrorsToPlain lists the config error first, then errors, then warning
     warnings: [{ file: 'data.js', message: 'unreachable code', line: 4, column: 2, text: null }],
     sizeBytes: 0,
     config: null,
+    iconSvg: null,
     updatedAt: '2026-08-18T00:00:00.000Z',
   })
   assert.deepEqual(plain.split('\n'), [
@@ -295,6 +300,7 @@ test('writeErrorsToPlain is empty for a clean build', () => {
       warnings: [],
       sizeBytes: 120,
       config: null,
+      iconSvg: null,
       updatedAt: '2026-08-18T00:00:00.000Z',
     }),
     '',

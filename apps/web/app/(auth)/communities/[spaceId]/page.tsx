@@ -11,11 +11,7 @@
 import React, { useState, useEffect, useMemo, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  MapPin, Calendar, Users, Share2, FolderOpen, Sparkles, Network as NetworkIcon,
-  Plus, Check, ChevronRight, LogOut, Globe2, UserPlus,
-  CalendarPlus, Loader2,
-} from 'lucide-react';
+import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, FolderOpenIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon, SparklesIcon, UserPlusIcon, UsersIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
@@ -67,7 +63,6 @@ interface Overview {
     country?: string | null;
     tags: string[];
     imageUrl?: string | null;
-    emoji?: string | null;
     nodeTypes?: NodeTypeConfig[] | null;
     createdAt: string;
     memberCount: number;
@@ -220,7 +215,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         <div className="absolute top-4 right-4 flex gap-2 z-10">
           <button onClick={share}
             className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-black/25 text-white text-xs font-semibold backdrop-blur hover:bg-black/35 transition">
-            <Share2 className="w-3.5 h-3.5" /> {copied ? 'Copied!' : 'Share'}
+            <Share2Icon className="w-3.5 h-3.5" /> {copied ? 'Copied!' : 'Share'}
           </button>
         </div>
       </div>
@@ -233,9 +228,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             {space.imageUrl ? (
               <img src={space.imageUrl} alt={space.name} className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-5xl text-white"
+              <div className="w-full h-full flex items-center justify-center text-white"
                    style={{ background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
-                {space.emoji || <span className="text-4xl font-bold">{getInitials(space.name)}</span>}
+                <span className="text-4xl font-bold">{getInitials(space.name)}</span>
               </div>
             )}
           </div>
@@ -247,7 +242,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
             <Chip tone="soft" size="md" color={theme.base}>Space</Chip>
             {space.location && (
               <Chip tone="muted" size="md">
-                <MapPin className="w-3 h-3" /> {space.location}
+                <MapPinIcon className="w-3 h-3" /> {space.location}
               </Chip>
             )}
             {isActive && (
@@ -267,9 +262,9 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
             {space.country && (
-              <span className="inline-flex items-center gap-1.5"><Globe2 className="w-3.5 h-3.5" />{space.country}</span>
+              <span className="inline-flex items-center gap-1.5"><EarthIcon className="w-3.5 h-3.5" />{space.country}</span>
             )}
-            <span className="inline-flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Created {createdYear}</span>
+            <span className="inline-flex items-center gap-1.5"><CalendarIcon className="w-3.5 h-3.5" />Created {createdYear}</span>
           </div>
 
           {/* actions */}
@@ -283,7 +278,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 </button>
                 <button onClick={share}
                   className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
-                  <UserPlus className="w-4 h-4" /> Invite
+                  <UserPlusIcon className="w-4 h-4" /> Invite
                 </button>
                 {confirmLeave ? (
                   <span className="inline-flex items-center gap-2 text-sm">
@@ -295,7 +290,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 ) : (
                   <button onClick={() => setConfirmLeave(true)}
                     className="inline-flex items-center gap-1.5 h-10 px-3 rounded-xl text-sm font-semibold text-text-muted hover:text-red-500 hover:bg-surface-2 transition">
-                    <LogOut className="w-4 h-4" /> Leave
+                    <LogOutIcon className="w-4 h-4" /> Leave
                   </button>
                 )}
               </>
@@ -303,7 +298,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               <button onClick={handleJoin} disabled={joining}
                 className="inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white transition hover:opacity-95 active:scale-[0.99] disabled:opacity-60"
                 style={{ background: theme.base }}>
-                {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {joining ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <PlusIcon className="w-4 h-4" />}
                 Join space
               </button>
             )}
@@ -338,7 +333,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
           {showChecklist && (
-            <SectionCard id="checklist" icon={<Sparkles className="w-[18px] h-[18px]" />} title="Set up your space" theme={theme}>
+            <SectionCard id="checklist" icon={<SparklesIcon className="w-[18px] h-[18px]" />} title="Set up your space" theme={theme}>
               <div className="flex items-center gap-4 mb-3">
                 <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
                      style={{ background: `conic-gradient(${theme.base} ${(checklistDone / checklist.length) * 100}%, var(--surface-3,#f3f4f6) 0)` }}>
@@ -352,7 +347,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                   <li key={c.label} className="flex items-center gap-2.5 text-sm">
                     <span className={`w-5 h-5 rounded-full grid place-items-center flex-none border ${c.done ? 'text-white' : 'border-border-default text-transparent'}`}
                           style={c.done ? { background: theme.base, borderColor: theme.base } : undefined}>
-                      <Check className="w-3 h-3" />
+                      <CheckIcon className="w-3 h-3" />
                     </span>
                     <span className={c.done ? 'text-text-muted line-through' : 'text-text-secondary'}>{c.label}</span>
                   </li>
@@ -362,7 +357,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
           )}
 
           {/* About */}
-          <SectionCard id="overview" icon={<Sparkles className="w-[18px] h-[18px]" />} title="About" theme={theme}>
+          <SectionCard id="overview" icon={<SparklesIcon className="w-[18px] h-[18px]" />} title="About" theme={theme}>
             {space.description ? (
               <AboutText text={space.description} theme={theme} />
             ) : isAdminViewer ? (
@@ -374,7 +369,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           {/* Upcoming events */}
           {isMember && (
-            <SectionCard id="events" icon={<Calendar className="w-[18px] h-[18px]" />} title="Upcoming events" theme={theme}
+            <SectionCard id="events" icon={<CalendarIcon className="w-[18px] h-[18px]" />} title="Upcoming events" theme={theme}
                          action={<Link href="/events" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link>}>
               {events.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -386,7 +381,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                   <p className="text-sm font-semibold text-text-primary">No upcoming events</p>
                   <Link href="/events/new"
                         className="mt-1 inline-flex items-center gap-1.5 text-sm font-bold hover:underline" style={{ color: theme.dark }}>
-                    <CalendarPlus className="w-4 h-4" /> Create an event
+                    <CalendarPlusIcon className="w-4 h-4" /> Create an event
                   </Link>
                 </div>
               )}
@@ -395,7 +390,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           {/* Resources */}
           {isMember && (
-            <SectionCard id="resources" icon={<FolderOpen className="w-[18px] h-[18px]" />} title="Resources" theme={theme}
+            <SectionCard id="resources" icon={<FolderOpenIcon className="w-[18px] h-[18px]" />} title="Resources" theme={theme}
                          action={resources.length > 0 ? <Link href="/resources" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link> : undefined}>
               {resources.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -416,7 +411,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               ) : (
                 <Link href="/resources"
                       className="w-full py-4 border-[1.5px] border-dashed border-border-default rounded-xl text-sm text-text-muted hover:text-text-secondary flex items-center justify-center gap-1.5 transition">
-                  <Plus className="w-4 h-4" /> Upload the first resource
+                  <PlusIcon className="w-4 h-4" /> Upload the first resource
                 </Link>
               )}
             </SectionCard>
@@ -427,10 +422,10 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         <div className="flex flex-col gap-4 lg:sticky lg:top-16 self-start">
           <RailCard title="At a glance">
             <div className="flex flex-col gap-3">
-              {space.location && <KV icon={<MapPin className="w-4 h-4" />} label="Location" value={space.location} />}
-              {space.country && <KV icon={<Globe2 className="w-4 h-4" />} label="Country" value={space.country} />}
-              <KV icon={<Users className="w-4 h-4" />} label="Members" value={String(counts.members)} />
-              <KV icon={<Calendar className="w-4 h-4" />} label="Created"
+              {space.location && <KV icon={<MapPinIcon className="w-4 h-4" />} label="Location" value={space.location} />}
+              {space.country && <KV icon={<EarthIcon className="w-4 h-4" />} label="Country" value={space.country} />}
+              <KV icon={<UsersIcon className="w-4 h-4" />} label="Members" value={String(counts.members)} />
+              <KV icon={<CalendarIcon className="w-4 h-4" />} label="Created"
                   value={new Date(space.createdAt).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} />
               {(space.nodeTypes?.length ?? 0) > 0 && (
                 <div className="flex items-start gap-3 text-sm">
@@ -475,7 +470,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                   {counts.members > 8 && (
                     <button onClick={openDirectory}
                             className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                      +{counts.members - 8} more <ChevronRight className="w-3.5 h-3.5" />
+                      +{counts.members - 8} more <ChevronRightIcon className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </>
@@ -488,7 +483,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
               <NetworkPreview theme={theme} />
               <button onClick={openDirectory}
                       className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                Explore the network <ChevronRight className="w-3.5 h-3.5" />
+                Explore the network <ChevronRightIcon className="w-3.5 h-3.5" />
               </button>
             </RailCard>
           )}
@@ -576,7 +571,7 @@ function EventMiniCard({ event, theme }: { event: OverviewEvent; theme: ThemePal
            style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}>
         {event.coverImageUrl
           ? <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-          : <Calendar className="w-8 h-8 text-white/70" />}
+          : <CalendarIcon className="w-8 h-8 text-white/70" />}
         <span className="absolute top-2 left-2 flex flex-col items-center w-10 rounded-lg overflow-hidden bg-surface-1 shadow-sm">
           <span className="w-full text-center text-[9px] font-bold text-white py-0.5" style={{ background: accent }}>{month}</span>
           <span className="text-sm font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
@@ -590,7 +585,7 @@ function EventMiniCard({ event, theme }: { event: OverviewEvent; theme: ThemePal
         </span>
         {event.going > 0 && (
           <span className="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold" style={{ color: theme.dark }}>
-            <Users className="w-3 h-3" /> {event.going} going
+            <UsersIcon className="w-3 h-3" /> {event.going} going
           </span>
         )}
       </div>

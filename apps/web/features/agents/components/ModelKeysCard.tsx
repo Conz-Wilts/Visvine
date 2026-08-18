@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { KeyRound, Trash2 } from 'lucide-react';
+import { KeyRoundIcon, Trash2Icon } from '@/features/shared/icons';
 import { Button, Input } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
@@ -75,7 +75,7 @@ export default function ModelKeysCard({
   return (
     <section className="rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft">
       <div className="flex items-center gap-2">
-        <KeyRound className="h-4 w-4 text-text-muted" />
+        <KeyRoundIcon className="h-4 w-4 text-text-muted" />
         <h2 className="text-sm font-semibold text-text-primary">Model keys</h2>
       </div>
       <p className="mt-1 text-[13px] leading-snug text-text-muted">
@@ -113,7 +113,7 @@ export default function ModelKeysCard({
                       disabled={busy === p.keySecret}
                       aria-label={`Delete ${p.keySecret}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2Icon className="h-4 w-4" />
                     </button>
                   )}
                 </div>

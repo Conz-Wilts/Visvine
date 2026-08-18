@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { LoaderCircleIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { defaultLandingHref } from '@/features/shared/lib/features';
 import type { SpaceFeatureConfig } from '@/lib/types';
@@ -35,7 +35,7 @@ export default function HomePage() {
 
   return (
     <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-text-muted">
-      <Loader2 className="w-5 h-5 animate-spin mr-2" /> Opening your space…
+      <LoaderCircleIcon className="w-5 h-5 animate-spin mr-2" /> Opening your space…
     </div>
   );
 }

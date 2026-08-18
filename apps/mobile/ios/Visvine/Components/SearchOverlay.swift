@@ -14,7 +14,7 @@ struct SearchOverlay: View {
                 Spacer()
                 HStack(spacing: 10) {
                     HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(c.textPrimary)
+                        VisvineIcon(.search).foregroundStyle(c.textPrimary)
                         TextField(search.placeholder, text: $search.query)
                             .focused($focused)
                             .submitLabel(.search)
@@ -27,8 +27,7 @@ struct SearchOverlay: View {
                     .glass(cornerRadius: 32)
 
                     Button { search.close() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 22, weight: .semibold))
+                        VisvineIcon(.xmark, size: 22)
                             .foregroundStyle(c.textPrimary)
                             .frame(width: 64, height: 64)
                             .glass(cornerRadius: 32)

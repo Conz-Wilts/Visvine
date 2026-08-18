@@ -19,12 +19,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Check, Copy, Hammer, ExternalLink, Eye } from 'lucide-react';
+import { CheckIcon, CopyIcon, ExternalLinkIcon, EyeIcon, HammerIcon } from '@/features/shared/icons';
 import { Chip, EmptyState, Modal, Skeleton, Textarea } from '@/components/ui';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
 import { toolDiagnosticLine } from '@/features/tools/components/BuildDiagnostics';
+import ToolIconPicker from '@/features/tools/components/marketplace/ToolIconPicker';
 import { publishTool } from '@/features/tools/lib/client';
 import type { AuthoredToolSummary } from '@/lib/tools/api';
 import type { ToolVersionStatus } from '@/lib/tools/registry';
@@ -58,7 +59,7 @@ export default function MineTab({
 
       {!spaceId ? (
         <EmptyState
-          icon={<Hammer className="h-6 w-6" />}
+          icon={<HammerIcon className="h-6 w-6" />}
           // `EmptyState` shows the description and keeps the title only as its
           // fallback, so each line has to stand on its own.
           title="No space selected"
@@ -68,13 +69,21 @@ export default function MineTab({
         <RowsSkeleton />
       ) : tools.length === 0 ? (
         <EmptyState
-          icon={<Hammer className="h-6 w-6" />}
+          icon={<HammerIcon className="h-6 w-6" />}
           title="You haven’t written a tool here yet"
           description="You haven’t written a tool in this space yet. Point a coding agent at it over MCP and ask for one — the card above has the first call."
         />
       ) : (
         tools.map((tool) => (
-          <AuthoredRow key={tool.name} tool={tool} isAdmin={isAdmin} onPublish={() => setPublishing(tool)} />
+          <AuthoredRow
+            key={tool.name}
+            spaceId={spaceId}
+            tool={tool}
+            isAdmin={isAdmin}
+            onPublish={() => setPublishing(tool)}
+            onChanged={onChanged}
+            onToast={onToast}
+          />
         ))
       )}
 
@@ -118,13 +127,19 @@ function PublicationChip({ publication }: { publication: AuthoredToolSummary['pu
 }
 
 function AuthoredRow({
+  spaceId,
   tool,
   isAdmin,
   onPublish,
+  onChanged,
+  onToast,
 }: {
+  spaceId: string | null;
   tool: AuthoredToolSummary;
   isAdmin: boolean;
   onPublish: () => void;
+  onChanged: () => void;
+  onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const build = tool.build;
   const errors = build?.errors ?? [];
@@ -158,18 +173,21 @@ function AuthoredRow({
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {spaceId && (
+            <ToolIconPicker spaceId={spaceId} tool={tool} onChanged={onChanged} onToast={onToast} />
+          )}
           <Link
             href={`/directory/${encodeURIComponent(`tool:${tool.name}`)}`}
             className="flex items-center gap-1 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-brand-green hover:text-text-primary"
           >
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            <ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />
             Open
           </Link>
           <Link
             href={`/tools/preview/${encodeURIComponent(tool.name)}`}
             className="flex items-center gap-1 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-brand-green hover:text-text-primary"
           >
-            <Eye className="h-3.5 w-3.5" aria-hidden />
+            <EyeIcon className="h-3.5 w-3.5" aria-hidden />
             Preview
           </Link>
           {isAdmin && (
@@ -324,7 +342,7 @@ function NewToolCard({ onToast }: { onToast: (tone: 'success' | 'error' | 'warni
     <section className="rounded-2xl border border-dashed border-border-default bg-surface-2 p-4">
       <div className="flex flex-wrap items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-light-bg text-brand-dark-green">
-          <Hammer className="h-5 w-5" aria-hidden />
+          <HammerIcon className="h-5 w-5" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-text-primary">New tool</h3>
@@ -342,7 +360,7 @@ function NewToolCard({ onToast }: { onToast: (tone: 'success' | 'error' | 'warni
         </div>
         <Button variant="ghost" size="sm" onClick={copy} className="shrink-0">
           <span className="flex items-center gap-1.5">
-            {copied ? <Check className="h-3.5 w-3.5" aria-hidden /> : <Copy className="h-3.5 w-3.5" aria-hidden />}
+            {copied ? <CheckIcon className="h-3.5 w-3.5" aria-hidden /> : <CopyIcon className="h-3.5 w-3.5" aria-hidden />}
             {copied ? 'Copied' : `Copy ${SDK_HINT}`}
           </span>
         </Button>

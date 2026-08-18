@@ -8,7 +8,7 @@
 // grant exactly the way an alias's "Can access" list does.
 
 import { useState } from 'react';
-import { FileText, Folder, Users } from 'lucide-react';
+import { FileTextIcon, FolderIcon, UsersIcon } from '@/features/shared/icons';
 import { Avatar, Button, ConfirmDialog, SettingsSection } from '@/components/ui';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { timeAgo } from '@/lib/date';
@@ -20,7 +20,7 @@ import { LevelSelect } from './shared';
 
 /** "3 hours ago" without pulling in a date library. */
 function TargetChip({ path, contextName }: { path: string; contextName: string }) {
-  const Icon = path === '' ? Users : path.endsWith('.md') ? FileText : Folder;
+  const Icon = path === '' ? UsersIcon : path.endsWith('.md') ? FileTextIcon : FolderIcon;
   return (
     <span className="inline-flex max-w-full items-center gap-1 rounded-md bg-surface-2 px-1.5 py-0.5 align-middle text-[11px] font-medium text-text-secondary">
       <Icon className="h-3 w-3 shrink-0 opacity-70" />

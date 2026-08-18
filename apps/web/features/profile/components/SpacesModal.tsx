@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, ShieldCheck, Lock, Users } from 'lucide-react';
+import { LockIcon, ShieldCheckIcon, UsersIcon, XIcon } from '@/features/shared/icons';
 import Modal from '@/components/ui/Modal';
 import { getInitials } from '@/lib/avatarUtils';
 import type { ThemePalette } from '@/lib/profileTheme';
@@ -10,7 +10,6 @@ export interface ProfileSpace {
   id: string;
   name: string;
   imageUrl: string | null;
-  emoji: string | null;
   visibility: string;
   memberCount: number;
   role: string;
@@ -55,7 +54,7 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, personName
           <h2 className="text-base font-bold font-open-sauce text-text-primary">Spaces</h2>
           <button onClick={onClose} aria-label="Close"
                   className="p-1.5 rounded-lg text-text-muted hover:bg-surface-2 hover:text-text-primary transition-colors">
-            <X className="w-4 h-4" />
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -71,7 +70,7 @@ export default function SpacesModal({ open, onClose, spaces, isOwner, personName
                     trailing={isOwner
                       ? <span className="text-[11.5px] font-medium text-text-muted whitespace-nowrap">Always visible</span>
                       : <span className="inline-flex items-center gap-1 text-[11.5px] font-semibold whitespace-nowrap" style={{ color: theme.dark }}>
-                          <ShieldCheck className="w-3.5 h-3.5" /> Admin
+                          <ShieldCheckIcon className="w-3.5 h-3.5" /> Admin
                         </span>}
                   />
                 ))}
@@ -127,7 +126,7 @@ function SpaceRow({ space: c, theme, trailing, dimmed }: {
       ) : (
         <span className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-semibold flex-none"
               style={{ background: theme.light, color: theme.dark }}>
-          {c.emoji || getInitials(c.name)}
+          {getInitials(c.name)}
         </span>
       )}
       <div className="min-w-0 flex-1">
@@ -135,12 +134,12 @@ function SpaceRow({ space: c, theme, trailing, dimmed }: {
           <span className="text-[13.5px] font-semibold text-text-primary truncate">{c.name}</span>
           {c.visibility === 'private' && (
             <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-text-muted bg-surface-2 border border-border-subtle rounded px-1.5 h-[18px] flex-none">
-              <Lock className="w-2.5 h-2.5" /> Private
+              <LockIcon className="w-2.5 h-2.5" /> Private
             </span>
           )}
         </div>
         <span className="inline-flex items-center gap-1 text-xs text-text-muted">
-          <Users className="w-3 h-3" /> {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'}
+          <UsersIcon className="w-3 h-3" /> {c.memberCount} {c.memberCount === 1 ? 'member' : 'members'}
         </span>
       </div>
       {trailing}

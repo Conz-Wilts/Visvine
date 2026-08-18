@@ -35,10 +35,7 @@ import {
 } from '@/lib/eventUtils';
 import { RegistrationField } from '@/features/events/components/RegistrationField';
 import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
-import {
-  Link2, Trash2, Pencil, MapPin, Video, Users, FileDown,
-  CalendarPlus, Check, Loader2, Lock, ClipboardList, Globe2,
-} from 'lucide-react';
+import { CalendarPlusIcon, CheckIcon, ClipboardListIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
 import { fetchJsonBody } from '@/lib/fetchJson';
 
@@ -259,14 +256,14 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 
             {/* host toolbar (manage view) / edit entry point (public view) — boxed, above the guest list */}
             <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft p-2 flex flex-col gap-0.5">
-              <ToolbarBtn icon={<Pencil className="w-4 h-4" />} label="Edit event"
+              <ToolbarBtn icon={<PencilIcon className="w-4 h-4" />} label="Edit event"
                           onClick={() => router.push(`/events/${encodeURIComponent(eventId)}/${manage ? 'edit' : 'manage'}`)} />
               {manage && (
                 <>
-                  <ToolbarBtn icon={<Link2 className="w-4 h-4" />} label={copyStatus || 'Copy invite link'} onClick={copyInviteLink} />
-                  <ToolbarBtn icon={<FileDown className="w-4 h-4" />} label="Export guest CSV"
+                  <ToolbarBtn icon={<Link2Icon className="w-4 h-4" />} label={copyStatus || 'Copy invite link'} onClick={copyInviteLink} />
+                  <ToolbarBtn icon={<FileDownIcon className="w-4 h-4" />} label="Export guest CSV"
                               onClick={() => window.open(`/api/events/${encodeURIComponent(eventId)}/export.csv?spaceId=${currentSpace.id}`, '_blank')} />
-                  <ToolbarBtn icon={<Trash2 className="w-4 h-4" />} label="Delete event" danger
+                  <ToolbarBtn icon={<Trash2Icon className="w-4 h-4" />} label="Delete event" danger
                               onClick={() => setShowDeleteModal(true)} />
                 </>
               )}
@@ -276,7 +273,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {event.guestListVisible !== false && goingCount > 0 && (
               <InfoCard>
                 <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary mb-3">
-                  <Users className="w-[18px] h-[18px]" style={{ color: theme.dark }} />
+                  <UsersIcon className="w-[18px] h-[18px]" style={{ color: theme.dark }} />
                   {goingCount} going
                 </h2>
                 {guests.length > 0 ? (
@@ -353,7 +350,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                 </div>
                 <a href={`/api/events/${encodeURIComponent(eventId)}/ics?spaceId=${currentSpace.id}`} target="_blank" rel="noopener noreferrer"
                    className="flex-none inline-flex items-center gap-1.5 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                  <CalendarPlus className="w-4 h-4" /> <span className="hidden sm:inline">Add to calendar</span>
+                  <CalendarPlusIcon className="w-4 h-4" /> <span className="hidden sm:inline">Add to calendar</span>
                 </a>
               </div>
 
@@ -362,7 +359,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                   <div className="h-px bg-border-subtle my-4" />
                   <div className="flex items-start gap-3.5">
                     <div className="w-12 grid place-items-center flex-none">
-                      {isVirtual ? <Video className="w-5 h-5" style={{ color: theme.dark }} /> : <MapPin className="w-5 h-5" style={{ color: theme.dark }} />}
+                      {isVirtual ? <VideoIcon className="w-5 h-5" style={{ color: theme.dark }} /> : <MapPinIcon className="w-5 h-5" style={{ color: theme.dark }} />}
                     </div>
                     <div className="min-w-0 flex-1">
                       {isVirtual ? (
@@ -376,7 +373,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                               </a>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-xs text-text-muted">
-                                <Lock className="w-3 h-3" /> Link visible after you RSVP
+                                <LockIcon className="w-3 h-3" /> Link visible after you RSVP
                               </span>
                             )
                           ) : (
@@ -389,7 +386,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                           {event.location?.address && <div className="text-xs text-text-muted mt-0.5">{event.location.address}</div>}
                           {isHybrid && (
                             <span className="inline-flex items-center gap-1 mt-1 text-xs text-text-muted">
-                              <Video className="w-3 h-3" /> Also streamed online
+                              <VideoIcon className="w-3 h-3" /> Also streamed online
                             </span>
                           )}
                         </>
@@ -399,7 +396,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                       <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location.address || event.location.label)}`}
                          target="_blank" rel="noopener noreferrer"
                          className="flex-none inline-flex items-center gap-1.5 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                        <Globe2 className="w-4 h-4" /> <span className="hidden sm:inline">Open map</span>
+                        <EarthIcon className="w-4 h-4" /> <span className="hidden sm:inline">Open map</span>
                       </a>
                     )}
                   </div>
@@ -617,7 +614,7 @@ function RsvpCard({
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 rounded-xl px-3.5 py-3" style={{ background: theme.light }}>
           <span className="w-8 h-8 rounded-full grid place-items-center text-white flex-none" style={{ background: theme.dark }}>
-            <Check className="w-4 h-4" />
+            <CheckIcon className="w-4 h-4" />
           </span>
           <div>
             <div className="text-sm font-bold" style={{ color: theme.dark }}>
@@ -629,7 +626,7 @@ function RsvpCard({
         <div className="flex items-center gap-3">
           <a href={`/api/events/${encodeURIComponent(eventId)}/ics?spaceId=${spaceId}`} target="_blank" rel="noopener noreferrer"
              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
-            <CalendarPlus className="w-4 h-4" /> Add to calendar
+            <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
           </a>
           <button onClick={() => setEditing(true)} className="text-[13px] font-semibold text-text-muted hover:text-text-primary transition">
             Change response
@@ -702,7 +699,7 @@ function RsvpCard({
         <button onClick={submit} disabled={submitting || !sessionName}
                 className="flex-1 inline-flex items-center justify-center gap-2 h-11 rounded-xl text-sm font-bold text-white transition hover:opacity-95 active:scale-[0.99] disabled:opacity-50"
                 style={{ background: theme.base }}>
-          {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+          {submitting && <LoaderCircleIcon className="w-4 h-4 animate-spin" />}
           {response === 'declined' ? 'Send response' : 'RSVP'}
         </button>
         {viewer && (
@@ -742,11 +739,11 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
     <div className="max-w-2xl flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary">
-          <ClipboardList className="w-[18px] h-[18px]" style={{ color: theme.dark }} /> RSVP form
+          <ClipboardListIcon className="w-[18px] h-[18px]" style={{ color: theme.dark }} /> RSVP form
         </h2>
         <button onClick={onCopy}
                 className="inline-flex items-center gap-2 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
-          <Link2 className="w-4 h-4" /> {copyStatus || 'Copy form link'}
+          <Link2Icon className="w-4 h-4" /> {copyStatus || 'Copy form link'}
         </button>
       </div>
 

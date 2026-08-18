@@ -31,6 +31,7 @@ import { readVisible, visibleVault, writeDenialFull, writeGated } from '@/lib/no
 import { spaceNodeId, syncEntityNode } from '@/lib/notes/context/entityNodes'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
+import { canRemove, type ResolvedContext } from '@/lib/notes/resolve'
 import * as store from '@/lib/notes/store'
 import { SHARED_OWNER_KEY, type Actor, type Context } from '@/lib/notes/store'
 import { computeRequirements, type ToolRequirements } from './requirements'
@@ -51,6 +52,7 @@ import {
   newToolIndexNote,
   parseToolConfig,
   toolDataPath,
+  toolIconPath,
   toolFileKindOfPath,
   toolFolderPath,
   toolIndexPath,
@@ -61,8 +63,8 @@ import {
   type ToolConfig,
 } from './config'
 
-/** The three files an author addresses, whatever the notes behind them are called. */
-export type ToolFileName = 'index.md' | 'ui.tsx' | 'data.js'
+/** The files an author addresses, whatever the notes behind them are called. */
+export type ToolFileName = 'index.md' | 'ui.tsx' | 'data.js' | 'icon.svg'
 
 const INDEX_FILE: ToolFileName = 'index.md'
 
@@ -92,10 +94,17 @@ export interface AuthoredToolSummary {
 export interface AuthoredToolDetail extends AuthoredToolSummary {
   config: ToolConfig | null
   /**
-   * The author's three files. `index.md` is the note verbatim; the two sources
-   * are unwrapped out of their fenced code blocks. A source note that isn't a
+   * The author's files. `index.md` is the note verbatim; the sources are
+   * unwrapped out of their fenced code blocks. A source note that isn't a
    * wrapped source at all comes back as its raw markdown rather than as null —
-   * that is a state the author has to see to fix.
+   * that is a state the author has to see to fix. `icon.svg` is null for a Tool
+   * that uses one of the built-in rail shapes, which is most of them.
+   *
+   * WARNING: these are the author's files VERBATIM, including `icon.svg`, which
+   * is the one place unsanitized author markup leaves the server. It is here so
+   * an author can read back what they wrote and fix it. **Never render it as
+   * HTML.** Anything that draws a Tool's icon must read the build's `iconSvg`
+   * (sanitized by lib/tools/iconSvg.ts), the way ToolIconPicker does.
    */
   sources: Record<ToolFileName, string | null>
 }
@@ -127,6 +136,7 @@ function badName(name: string): ToolServiceError {
 function notePathOf(name: string, file: ToolFileName): string {
   if (file === TOOL_SOURCE_FILES.ui.authorName) return toolUiPath(name)
   if (file === TOOL_SOURCE_FILES.data.authorName) return toolDataPath(name)
+  if (file === TOOL_SOURCE_FILES.icon.authorName) return toolIconPath(name)
   return toolIndexPath(name)
 }
 
@@ -135,6 +145,9 @@ function noteContentOf(file: ToolFileName, content: string): string {
   if (file === TOOL_SOURCE_FILES.ui.authorName) return wrapSource(content, TOOL_SOURCE_FILES.ui.lang)
   if (file === TOOL_SOURCE_FILES.data.authorName) {
     return wrapSource(content, TOOL_SOURCE_FILES.data.lang)
+  }
+  if (file === TOOL_SOURCE_FILES.icon.authorName) {
+    return wrapSource(content, TOOL_SOURCE_FILES.icon.lang)
   }
   return content
 }
@@ -227,9 +240,10 @@ export async function describeAuthoredTool(
   if (indexContent === null) return null
 
   const key = toolKey(context.spaceId, name)
-  const [uiNote, dataNote, authors, build, publications] = await Promise.all([
+  const [uiNote, dataNote, iconNote, authors, build, publications] = await Promise.all([
     readVisible(p, context, toolUiPath(name)),
     readVisible(p, context, toolDataPath(name)),
+    readVisible(p, context, toolIconPath(name)),
     authorsOf(context.spaceId, [toolIndexPath(name)]),
     getBuild(context.spaceId, name),
     latestPublications([key]),
@@ -249,6 +263,7 @@ export async function describeAuthoredTool(
       'index.md': indexContent,
       'ui.tsx': uiNote === null ? null : (unwrapSource(uiNote)?.code ?? uiNote),
       'data.js': dataNote === null ? null : (unwrapSource(dataNote)?.code ?? dataNote),
+      'icon.svg': iconNote === null ? null : (unwrapSource(iconNote)?.code ?? iconNote),
     },
   }
 }
@@ -435,6 +450,58 @@ export async function writeToolFile(
   if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
 
   // The store hook has already rebuilt; this reads that row back.
+  return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
+}
+
+/**
+ * Remove a Tool's own icon, falling it back to whatever built-in shape its
+ * frontmatter names.
+ *
+ * A separate call rather than `writeToolFile(name, 'icon.svg', '')`: an empty
+ * icon note is a broken icon note, and the build would (correctly) report it as
+ * one. "I don't want a custom icon any more" means the file goes away.
+ *
+ * Gated on the same write permission as writing it — the check is
+ * `writeDenialFull` on the icon's own path, so a member who cannot write into
+ * this Tool's folder cannot clear its icon either.
+ */
+export async function deleteToolIcon(
+  p: ContextPrincipal,
+  context: ResolvedContext,
+  name: string,
+): Promise<WriteToolFileResult> {
+  if (!TOOL_NAME_RE.test(name)) return badName(name)
+  if (!isShared(context)) {
+    return { ok: false, status: 400, error: 'Tools are authored in a space, not in personal context.' }
+  }
+  if (!(await store.readNoteOrNull(context, toolIndexPath(name)))) {
+    return { ok: false, status: 404, error: `No tool named "${name}" — create it first.` }
+  }
+
+  const path = toolIconPath(name)
+  const denial = await writeDenialFull(p, context, path)
+  if (denial) return { ok: false, status: 403, error: denial }
+
+  // Removing an icon DELETES its note, so it is held to the same bar as any
+  // other note deletion — admin, the note's author, or a full-access grant —
+  // rather than to mere write access. Write and delete are different powers
+  // everywhere else in the app (app/api/notes/item DELETE, lib/notes/clean.ts);
+  // this being the one door where they were the same was the bug.
+  const existing = await store.readNoteOrNull(context, path)
+  if (existing !== null) {
+    const createdBy = await store.getNoteCreatedBy(context, path)
+    if (!canRemove(context, createdBy, { principal: p, path })) {
+      return {
+        ok: false,
+        status: 403,
+        error: 'Only an admin, the author, or a full-access member can remove this tool’s icon.',
+      }
+    }
+    await store.deleteNote(context, path)
+  }
+
+  // Deleting goes around the store's write hook, so the rebuild is explicit —
+  // otherwise the build would keep serving the icon that is no longer there.
   return { ok: true, path, build: toBuildSummary(await rebuildTool(context.spaceId, name)) }
 }
 

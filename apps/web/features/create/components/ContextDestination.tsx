@@ -7,7 +7,7 @@
 // are identical for both.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Folder, GripVertical } from 'lucide-react';
+import { FolderIcon, GripVerticalIcon } from '@/features/shared/icons';
 import { slugify } from '@/lib/eventUtils';
 import { notesApi } from '@/features/notes/lib/notesApi';
 import { contextKeys, swrFetch } from '@/features/notes/lib/contextPrefetch';
@@ -244,7 +244,7 @@ export function FolderDropBoard({
         }`}
         style={{ borderColor: accent, color: accent }}
       >
-        <GripVertical className="h-4 w-4 shrink-0 opacity-70" />
+        <GripVerticalIcon className="h-4 w-4 shrink-0 opacity-70" />
         <span className="min-w-0 flex-1 truncate">{cardLabel}</span>
         <span className="shrink-0 text-[11px] font-normal opacity-70">drag into a folder</span>
       </div>
@@ -272,7 +272,7 @@ export function FolderDropBoard({
                 boxShadow: isOver ? `inset 2px 0 0 ${accent}` : undefined,
               }}
             >
-              <Folder className="h-4 w-4 shrink-0 text-text-muted" />
+              <FolderIcon className="h-4 w-4 shrink-0 text-text-muted" />
               <span className="min-w-0 flex-1 truncate text-text-primary">{row.label}</span>
               {isOver && (
                 <span className="shrink-0 truncate font-mono text-[11px] text-text-muted">

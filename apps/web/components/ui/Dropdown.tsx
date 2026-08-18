@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { CheckIcon, ChevronDownIcon } from '@/features/shared/icons';
 import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
 
 // Shared dropdown sizing — import these when building a custom dropdown
@@ -75,7 +75,7 @@ export default function Dropdown<T extends string>({
         className={compact ? DROPDOWN_TRIGGER_COMPACT_CLASS : DROPDOWN_TRIGGER_CLASS}
         style={active ? DROPDOWN_TRIGGER_ACTIVE_STYLE : DROPDOWN_TRIGGER_IDLE_STYLE}
       >
-        <ChevronDown
+        <ChevronDownIcon
           className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           style={{ opacity: 0.5 }}
         />
@@ -95,7 +95,7 @@ export default function Dropdown<T extends string>({
               <span className={value === opt.value ? 'font-medium text-text-primary' : 'text-text-secondary'}>
                 {opt.label}
               </span>
-              {value === opt.value && <Check className="h-4 w-4 shrink-0 text-brand-green" />}
+              {value === opt.value && <CheckIcon className="h-4 w-4 shrink-0 text-brand-green" />}
             </button>
           ))}
         </div>

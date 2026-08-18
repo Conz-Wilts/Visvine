@@ -7,7 +7,7 @@
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Waypoints } from 'lucide-react';
+import { WaypointsIcon } from '@/features/shared/icons';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
 import {
   CONNECTIONS_RAIL_W,
@@ -333,7 +333,7 @@ function PaneTabBarInner({
               connectionsOpen ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
             }`}
           >
-            <Waypoints className="h-4 w-4" />
+            <WaypointsIcon className="h-4 w-4" />
             Connections
             {connectionsOpen && (
               <span aria-hidden className="absolute inset-x-0 bottom-0 h-0.5 bg-brand-green" />

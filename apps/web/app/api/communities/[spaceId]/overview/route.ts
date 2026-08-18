@@ -25,7 +25,7 @@ export async function GET(
       where: { id: spaceId },
       select: {
         id: true, name: true, description: true, location: true, country: true,
-        tags: true, imageUrl: true, emoji: true, nodeTypes: true, createdAt: true,
+        tags: true, imageUrl: true, nodeTypes: true, createdAt: true,
         aliases: true,
       },
     });

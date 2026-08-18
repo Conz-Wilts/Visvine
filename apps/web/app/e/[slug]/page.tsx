@@ -9,7 +9,7 @@ import { notFound } from 'next/navigation';
 import { getEventBySlug, getAttendees } from '@/lib/eventRepo';
 import { formatEventDateRange, normalizeStatus, occupiedSpots } from '@/lib/eventUtils';
 import { PublicRsvpForm } from '@/features/events/components/PublicRsvpForm';
-import { Calendar, MapPin, Users, Video } from 'lucide-react';
+import { CalendarIcon, MapPinIcon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import type { Metadata } from 'next';
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
@@ -59,18 +59,18 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
         <div className="mt-4 space-y-2.5 text-brand-black">
           {when && (
             <div className="flex items-start gap-3">
-              <Calendar className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
+              <CalendarIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
               <span className="font-medium">{when}</span>
             </div>
           )}
           {(event.location?.label || isVirtual) && (
             <div className="flex items-start gap-3">
-              {isVirtual ? <Video className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" /> : <MapPin className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />}
+              {isVirtual ? <VideoIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" /> : <MapPinIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />}
               <span>{event.location?.label || 'Online event'}</span>
             </div>
           )}
           <div className="flex items-start gap-3">
-            <Users className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
+            <UsersIcon className="w-5 h-5 text-brand-green mt-0.5 flex-shrink-0" />
             <span>
               {going} going
               {event.capacity

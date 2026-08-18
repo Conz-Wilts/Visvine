@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Blocks, Download } from 'lucide-react';
+import { BlocksIcon, DownloadIcon } from '@/features/shared/icons';
 import { Chip, EmptyState, SearchInput, Skeleton } from '@/components/ui';
 import Button from '@/components/ui/Button';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
@@ -96,7 +96,7 @@ export default function BrowseTab({
         <CardGridSkeleton />
       ) : items.length === 0 ? (
         <EmptyState
-          icon={<Blocks className="h-6 w-6" />}
+          icon={<BlocksIcon className="h-6 w-6" />}
           // `EmptyState` shows the description and keeps the title only as its
           // fallback, so each line has to stand on its own.
           title="Nothing to show"
@@ -158,7 +158,7 @@ function ToolCard({ item, onOpen }: { item: BrowseItem; onOpen: () => void }) {
       <div className="mt-auto flex items-center gap-3 pt-3 text-xs text-text-muted">
         <span className="truncate">{item.author.name ?? 'Unknown author'}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
-          <Download className="h-3.5 w-3.5" aria-hidden />
+          <DownloadIcon className="h-3.5 w-3.5" aria-hidden />
           {item.installs} {item.installs === 1 ? 'space' : 'spaces'}
         </span>
       </div>

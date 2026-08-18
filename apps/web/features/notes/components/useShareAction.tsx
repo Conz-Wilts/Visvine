@@ -14,7 +14,7 @@
 // never appear twice.
 
 import { createPortal } from 'react-dom'
-import { Share2 } from 'lucide-react'
+import { Share2Icon } from '@/features/shared/icons';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
 
 export function useShareAction({ onOpen, title }: { onOpen: () => void; title: string }): {
@@ -36,7 +36,7 @@ export function useShareAction({ onOpen, title }: { onOpen: () => void; title: s
           title={title}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary transition hover:bg-surface-2"
         >
-          <Share2 className="h-3.5 w-3.5" />
+          <Share2Icon className="h-3.5 w-3.5" />
           Share
         </button>
       ),
@@ -51,7 +51,7 @@ export function useShareAction({ onOpen, title }: { onOpen: () => void; title: s
         title={title}
         className="flex h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap text-brand-grey outline-none transition-colors duration-150 hover:text-brand-black"
       >
-        <Share2 className="h-4 w-4" />
+        <Share2Icon className="h-4 w-4" />
         Share
       </button>,
       tabTrailHost,

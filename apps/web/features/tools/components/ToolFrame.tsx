@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { clsx } from 'clsx';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCwIcon } from '@/features/shared/icons';
 import { Button, Skeleton } from '@/components/ui';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import type { BridgeTarget, ToolSubject } from '@/lib/tools/protocol';
@@ -305,7 +305,7 @@ function ToolFrameSlowNotice({ reportHref, onReload }: { reportHref: string; onR
       <span>This Tool is taking longer than usual to start.</span>
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" onClick={onReload} className="inline-flex items-center gap-1.5">
-          <RefreshCw className="h-3 w-3" />
+          <RefreshCwIcon className="h-3 w-3" />
           Reload
         </Button>
         <Link href={reportHref} className="font-medium text-text-secondary hover:text-text-primary">

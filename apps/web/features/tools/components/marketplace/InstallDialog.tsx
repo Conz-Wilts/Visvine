@@ -32,6 +32,7 @@ import { computeRequirements, type ToolRequirements } from '@/lib/tools/requirem
 import type { InstallCreatedResponse, InstallSummary, VersionDetail } from '@/lib/tools/api';
 import type { TypeClaimMode, TypeClaims } from '@/lib/tools/installs';
 import { DEFAULT_NODE_TYPES, type NodeTypeConfig } from '@/lib/types/context';
+import ToolIcon from '@/features/tools/components/toolIcons';
 import RequirementsChecklist from './RequirementsChecklist';
 
 export type InstallOutcome = InstallCreatedResponse;
@@ -251,11 +252,16 @@ export default function InstallDialog({
         </section>
 
         {version.surfaces.rail && (
-          <p className="text-sm text-text-muted">
-            Adds a sidebar row labelled{' '}
+          <p className="flex flex-wrap items-center gap-x-1 gap-y-1.5 text-sm text-text-muted">
+            Adds a sidebar row
+            {/* Shown, not described: the admin is about to put this glyph in
+                their own chrome, so it belongs in the confirmation. */}
+            <span className="shrink-0 text-text-primary">
+              <ToolIcon name={version.surfaces.rail.icon} svg={version.iconSvg} />
+            </span>
             <Chip tone="muted" size="sm">
               {version.surfaces.rail.label}
-            </Chip>{' '}
+            </Chip>
             — reorder or hide it in the console under Tools.
           </p>
         )}

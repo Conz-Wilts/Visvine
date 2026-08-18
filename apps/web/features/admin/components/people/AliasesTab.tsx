@@ -9,7 +9,7 @@
 // Person type it happens to be spelled on.
 
 import { useMemo, useState } from 'react';
-import { Settings2 } from 'lucide-react';
+import { Settings2Icon } from '@/features/shared/icons';
 import { Chip } from '@/components/ui';
 import { AliasSettings, EveryoneSettings, NewAliasRow } from './AliasSettings';
 import { usePeopleSection } from './PeopleDataContext';
@@ -44,7 +44,7 @@ function PermissionRow({ name, color, tone, detail, open, onToggle, children }: 
             open ? 'bg-surface-3 text-text-primary' : 'text-text-muted hover:bg-surface-3 hover:text-text-primary'
           }`}
         >
-          <Settings2 className="h-4 w-4" />
+          <Settings2Icon className="h-4 w-4" />
         </button>
       </div>
       {open && <div className="pb-4 pl-1 pr-1">{children}</div>}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Play } from 'lucide-react';
+import { PlayIcon } from '@/features/shared/icons';
 import { Button, Input, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -172,7 +172,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
             onClick={runNow}
             title={!agent.activation.active ? 'Activate the agent first' : !canRun ? 'Only the author or an admin can run it' : 'Run now'}
           >
-            <Play className="h-3 w-3" /> Run now
+            <PlayIcon className="h-3 w-3" /> Run now
           </button>
         }
       >

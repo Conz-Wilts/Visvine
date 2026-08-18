@@ -133,7 +133,7 @@ struct DirectoryView: View {
             pill(label: "Tag", count: model.selectedTags.count) { sheet = .tag }
             Button { model.sortAscending.toggle() } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: model.sortAscending ? "arrow.down" : "arrow.up").font(.system(size: 12))
+                    VisvineIcon(model.sortAscending ? .arrowDown : .arrowUp, size: 12)
                     Text(model.sortAscending ? "A–Z" : "Z–A").font(.system(size: 12, weight: .semibold))
                 }
                 .foregroundStyle(c.textSecondary).padding(.horizontal, 12).padding(.vertical, 6)
@@ -142,7 +142,7 @@ struct DirectoryView: View {
             if model.hasFilters {
                 Button { model.clearAll() } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "xmark").font(.system(size: 12))
+                        VisvineIcon(.xmark, size: 12)
                         Text("Clear").font(.system(size: 12, weight: .semibold))
                     }.foregroundStyle(c.textMuted)
                 }
@@ -158,7 +158,7 @@ struct DirectoryView: View {
         return Button(action: action) {
             HStack(spacing: 6) {
                 Text(label + (active ? " · \(count)" : "")).font(.system(size: 12, weight: .semibold))
-                Image(systemName: "chevron.down").font(.system(size: 12))
+                VisvineIcon(.chevronDown, size: 12)
             }
             .foregroundStyle(active ? .white : c.textSecondary)
             .padding(.horizontal, 12).padding(.vertical, 6)
@@ -184,7 +184,7 @@ struct DirectoryView: View {
                         HStack {
                             Text(isType ? capitalizeFirst(value) : value).foregroundStyle(c.textPrimary)
                             Spacer()
-                            Image(systemName: active ? "checkmark.square.fill" : "square")
+                            VisvineIcon(active ? .checkSquare : .square)
                                 .foregroundStyle(active ? c.accent : c.textMuted)
                         }
                     }
@@ -249,7 +249,7 @@ struct DirectoryView: View {
         return VStack(spacing: 12) {
             ZStack {
                 Circle().fill(c.bgTertiary).frame(width: 72, height: 72)
-                Image(systemName: "person.2").font(.system(size: 32)).foregroundStyle(c.textMuted)
+                VisvineIcon(.people, size: 32).foregroundStyle(c.textMuted)
             }
             Text(model.hasFilters ? "No members match filters" : "No members found")
                 .font(.system(size: 16, weight: .medium)).foregroundStyle(c.textMuted)

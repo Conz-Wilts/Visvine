@@ -21,18 +21,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  X,
-  Users,
-  UsersRound,
-  Lock,
-  LockOpen,
-  Radio,
-  Link2Off,
-  Bot,
-  Check,
-  ChevronDown,
-} from 'lucide-react'
+import { BotIcon, CheckIcon, ChevronDownIcon, Link2OffIcon, LockIcon, LockOpenIcon, RadioIcon, UsersIcon, UsersRoundIcon, XIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useEscapeKey } from '@/features/shared/hooks/useEscapeKey'
 import Avatar from '@/components/ui/Avatar'
@@ -214,7 +203,7 @@ function PickerMenu({
         }`}
       >
         {currentLabel}
-        <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDownIcon className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open &&
@@ -241,7 +230,7 @@ function PickerMenu({
                   >
                     <span className="w-4 shrink-0 pt-0.5">
                       {current === item.value && !item.danger && (
-                        <Check className="h-4 w-4 text-brand-green" />
+                        <CheckIcon className="h-4 w-4 text-brand-green" />
                       )}
                     </span>
                     <span className="min-w-0">
@@ -327,7 +316,7 @@ function SubjectAvatar({
           size === 'chip' ? 'h-7 w-7 rounded-lg' : 'h-9 w-9'
         }`}
       >
-        <UsersRound className={size === 'chip' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
+        <UsersRoundIcon className={size === 'chip' ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
       </span>
     )
   }
@@ -671,7 +660,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
               onClick={() => setPending((prev) => prev.filter((x) => x.key !== p.key))}
               className="rounded-full p-0.5 text-text-muted transition hover:text-text-primary"
             >
-              <X className="h-3.5 w-3.5" />
+              <XIcon className="h-3.5 w-3.5" />
             </button>
           </span>
         ))}
@@ -812,7 +801,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         <SectionHeading>General access</SectionHeading>
         <div className={`-mx-2 ${ROW_CLASS}`}>
           <IconTile tone={spaceEntry ? 'brand' : 'muted'}>
-            {spaceEntry ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+            {spaceEntry ? <UsersIcon className="h-4 w-4" /> : <LockIcon className="h-4 w-4" />}
           </IconTile>
           <div className="min-w-0 flex-1">
             {canManage && (!spaceEntry || spaceEntry.via === path) ? (
@@ -875,7 +864,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         {canManage && path !== '' && (
           <div className={`-mx-2 mt-0.5 ${ROW_CLASS}`}>
             <IconTile tone={isRestricted ? 'amber' : 'muted'}>
-              {isRestricted ? <Lock className="h-4 w-4" /> : <LockOpen className="h-4 w-4" />}
+              {isRestricted ? <LockIcon className="h-4 w-4" /> : <LockOpenIcon className="h-4 w-4" />}
             </IconTile>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-text-primary">{restrictRow.title}</div>
@@ -894,7 +883,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
         {canManage && kind === 'folder' && path !== '' && (
           <div className={`-mx-2 mt-0.5 ${ROW_CLASS}`}>
             <IconTile tone="muted">
-              <Bot className="h-4 w-4" />
+              <BotIcon className="h-4 w-4" />
             </IconTile>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-text-primary">Freeze for AI</div>
@@ -921,7 +910,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
           <SectionHeading>Published copies</SectionHeading>
           {pubs?.asTarget && (
             <div className="mb-1 flex items-center gap-2 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-sm">
-              <Radio className="h-4 w-4 shrink-0 text-brand-green" />
+              <RadioIcon className="h-4 w-4 shrink-0 text-brand-green" />
               <span className="min-w-0 flex-1 text-text-secondary">
                 Published from <span className="font-medium">{pubs.asTarget.sourceSpaceName}</span> —
                 read-only here.
@@ -933,13 +922,13 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                 className="shrink-0 rounded p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
                 title="Unlink (keep as an editable copy)"
               >
-                <Link2Off className="h-4 w-4" />
+                <Link2OffIcon className="h-4 w-4" />
               </button>
             </div>
           )}
           {(pubs?.asSource ?? []).map((pub) => (
             <div key={pub.id} className={`-mx-2 text-sm ${ROW_CLASS}`}>
-              <Radio className={`h-4 w-4 shrink-0 ${pub.active ? 'text-brand-green' : 'text-text-muted'}`} />
+              <RadioIcon className={`h-4 w-4 shrink-0 ${pub.active ? 'text-brand-green' : 'text-text-muted'}`} />
               <span className="min-w-0 flex-1 truncate text-text-secondary">
                 → {pub.targetSpaceName} · {pub.targetPath}
                 {!pub.active && ' (unlinked)'}
@@ -952,7 +941,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                   className="shrink-0 rounded p-1 text-text-muted transition hover:text-red-500 disabled:opacity-40"
                   title="Unlink (the copy stays, no longer syncing)"
                 >
-                  <Link2Off className="h-4 w-4" />
+                  <Link2OffIcon className="h-4 w-4" />
                 </button>
               )}
             </div>
@@ -1035,7 +1024,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
               className="-mr-1 shrink-0 rounded-full p-1.5 text-text-muted transition hover:bg-surface-2 hover:text-text-secondary"
               aria-label="Close"
             >
-              <X className="h-4 w-4" />
+              <XIcon className="h-4 w-4" />
             </button>
           </div>
 

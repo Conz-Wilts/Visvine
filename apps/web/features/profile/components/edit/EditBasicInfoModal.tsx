@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { Camera, Loader2 } from 'lucide-react';
+import { CameraIcon, LoaderCircleIcon } from '@/features/shared/icons';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
@@ -92,7 +92,7 @@ export default function EditBasicInfoModal({ open, onClose, profile, onSave }: P
               <PersonSilhouette />
             )}
             <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity">
-              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+              {uploading ? <LoaderCircleIcon className="w-5 h-5 animate-spin" /> : <CameraIcon className="w-5 h-5" />}
             </span>
           </button>
           <div className="min-w-0">

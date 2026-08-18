@@ -227,14 +227,14 @@ try {
   // 1. Space
   console.log('--- Upserting Blackbird Ventures space ---');
   await client.query(
-    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, emoji, image_url, visibility, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', '🐦', NULL, 'public', NOW())
+    `INSERT INTO spaces (id, name, description, location, tags, node_types, aliases, country, image_url, visibility, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 'AU', NULL, 'public', NOW())
      -- node_types and aliases are NOT updated on conflict: the alias
      -- list is the permission model (who owns the space, what each alias
      -- reaches), so a data re-import must never overwrite it.
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description,
        location = EXCLUDED.location, tags = EXCLUDED.tags,
-       country = EXCLUDED.country, emoji = EXCLUDED.emoji`,
+       country = EXCLUDED.country`,
     [COMM, COMM_NAME, COMM_DESC, 'Sydney, Australia', ['VC', 'Portfolio', 'Australia', 'New Zealand'],
       JSON.stringify(NODE_TYPES), JSON.stringify(SPACE_ALIASES)],
   );

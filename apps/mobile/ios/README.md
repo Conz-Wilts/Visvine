@@ -74,3 +74,17 @@ Visvine/
 - App icon / accent color live in `Assets.xcassets`; the 1024px icon image is a
   placeholder to be supplied by design.
 ```
+
+## Icons
+
+The app draws Visvine's own icons, not SF Symbols. The glyphs are SVG files in
+`assets/icons/` at the repo root (shared with the web and Android apps); they
+become template-rendered image sets under `Visvine/Assets.xcassets/Icons` via:
+
+    node scripts/build-icons.mjs           # regenerate (output is committed)
+    node scripts/build-icons.mjs --check   # fail if the committed output is stale
+
+`Components/VisvineIcon.swift` is the view that draws one, so a call site reads
+`VisvineIcon(.check, size: 14)` and still takes its tint from `foregroundStyle`.
+Adding a glyph: add its name to `IOS_ICONS` in the script, run it, add the case
+to `VisvineIconName`. See `docs/icons.md`.

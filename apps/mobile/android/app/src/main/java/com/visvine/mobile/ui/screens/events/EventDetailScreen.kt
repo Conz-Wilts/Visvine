@@ -16,14 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,12 +34,14 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visvine.mobile.data.model.Event
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.DynamicColors
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.util.DateTimeFormat
 import com.visvine.mobile.ui.viewmodel.EventDetailViewModel
 import kotlin.math.min
 import kotlin.math.roundToInt
+
 
 /** Port of screens/Events/EventDetailScreen.tsx. */
 @Composable
@@ -64,7 +58,7 @@ fun EventDetailScreen(
             modifier = Modifier.fillMaxWidth().background(colors.bgPrimary).statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = colors.accent) }
+            IconButton(onClick = onBack) { Icon(AppIcons.ArrowLeft, contentDescription = "Back", tint = colors.accent) }
             Text(state.event?.title ?: eventTitle ?: "Event", color = colors.textPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
@@ -99,10 +93,10 @@ private fun EventBody(event: Event, colors: DynamicColors) {
 
         // Info
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(16.dp)).background(colors.bgPrimary).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            InfoRow(Icons.Filled.CalendarMonth, "Date", DateTimeFormat.longDate(event.startAt), colors)
-            InfoRow(Icons.Filled.Schedule, "Time", DateTimeFormat.time(event.startAt) + (event.endAt?.let { " - ${DateTimeFormat.time(it)}" } ?: ""), colors)
-            event.timezone?.let { InfoRow(Icons.Filled.Public, "Timezone", it, colors) }
-            event.location?.let { InfoRow(Icons.Outlined.LocationOn, "Location", it.label, colors, subtext = it.address) }
+            InfoRow(AppIcons.Calendar, "Date", DateTimeFormat.longDate(event.startAt), colors)
+            InfoRow(AppIcons.Clock, "Time", DateTimeFormat.time(event.startAt) + (event.endAt?.let { " - ${DateTimeFormat.time(it)}" } ?: ""), colors)
+            event.timezone?.let { InfoRow(AppIcons.Globe, "Timezone", it, colors) }
+            event.location?.let { InfoRow(AppIcons.Location, "Location", it.label, colors, subtext = it.address) }
         }
 
         // Attendance
@@ -128,7 +122,7 @@ private fun EventBody(event: Event, colors: DynamicColors) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).clip(RoundedCornerShape(12.dp)).background(colors.bgTertiary).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(if (event.visibility == "private") Icons.Filled.Lock else Icons.Filled.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
+                Icon(if (event.visibility == "private") AppIcons.Lock else AppIcons.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(16.dp))
                 Text(if (event.visibility == "private") "Private event" else "Space members only", color = colors.textMuted, fontSize = 14.sp)
             }
         }
@@ -140,7 +134,7 @@ private fun EventBody(event: Event, colors: DynamicColors) {
 }
 
 @Composable
-private fun InfoRow(icon: ImageVector, label: String, value: String, colors: DynamicColors, subtext: String? = null) {
+private fun InfoRow(icon: Painter, label: String, value: String, colors: DynamicColors, subtext: String? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(colors.accentLight), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(18.dp))

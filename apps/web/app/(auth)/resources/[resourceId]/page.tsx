@@ -24,10 +24,7 @@ import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import Chip from '@/components/ui/Chip';
 import type { Resource, ResourceComment, ResourceChange } from '@/lib/types';
-import {
-  Download, Share2, Trash2, Bookmark, MessageSquare, GitPullRequest, Info,
-  Loader2, Check, X, ChevronLeft, Send,
-} from 'lucide-react';
+import { BookmarkIcon, CheckIcon, ChevronLeftIcon, DownloadIcon, GitPullRequestIcon, InfoIcon, LoaderCircleIcon, MessageSquareIcon, SendIcon, Share2Icon, Trash2Icon, XIcon } from '@/features/shared/icons';
 
 // xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
 const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/SpreadsheetViewer'), { ssr: false });
@@ -142,7 +139,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   if (loading) {
     return (
       <div className="flex h-[calc(100dvh-56px)] items-center justify-center text-sm text-text-muted">
-        <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading resource…
+        <LoaderCircleIcon className="w-5 h-5 animate-spin mr-2" /> Loading resource…
       </div>
     );
   }
@@ -166,7 +163,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-border-subtle bg-surface-1/85 backdrop-blur">
         <div className="flex min-w-0 items-center gap-1.5 text-sm">
           <Link href="/resources" className="inline-flex items-center gap-0.5 font-semibold text-text-muted hover:text-text-primary transition flex-none">
-            <ChevronLeft className="w-4 h-4" /> Resources
+            <ChevronLeftIcon className="w-4 h-4" /> Resources
           </Link>
           <span className="text-text-muted flex-none">/</span>
           <span className="font-semibold text-text-primary truncate">{resource.name}</span>
@@ -176,21 +173,21 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
           {isSpreadsheet && selectedCell && (
             <button onClick={() => setShowPropose(true)}
                     className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold text-brand-dark-green bg-brand-light-bg border border-brand-green/40 hover:bg-brand-green/15 transition">
-              <GitPullRequest className="w-4 h-4" /> Propose change · {selectedCell}
+              <GitPullRequestIcon className="w-4 h-4" /> Propose change · {selectedCell}
             </button>
           )}
           <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-[13px] font-bold text-white bg-brand-green hover:opacity-95 active:scale-[0.99] transition">
-            <Download className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
+            <DownloadIcon className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
           </a>
           <IconBtn title={pinned ? 'Unpin' : 'Pin'} onClick={handlePin} active={pinned}>
-            <Bookmark className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} />
+            <BookmarkIcon className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} />
           </IconBtn>
           <IconBtn title={copied ? 'Copied!' : 'Copy link'} onClick={share}>
-            <Share2 className="w-4 h-4" />
+            <Share2Icon className="w-4 h-4" />
           </IconBtn>
           <IconBtn title="Delete" onClick={handleDelete} danger>
-            <Trash2 className="w-4 h-4" />
+            <Trash2Icon className="w-4 h-4" />
           </IconBtn>
         </div>
       </div>
@@ -222,7 +219,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
             {resource.fileSize ? <><span>·</span><span>{formatBytes(resource.fileSize)}</span></> : null}
             <span>·</span>
             <button onClick={() => setTab('comments')} className="inline-flex items-center gap-1 font-semibold text-text-secondary hover:underline">
-              <MessageSquare className="w-3 h-3" /> {comments.length}
+              <MessageSquareIcon className="w-3 h-3" /> {comments.length}
             </button>
           </div>
         </div>
@@ -257,7 +254,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
               <p className="text-xs text-text-muted">No preview available for this file type.</p>
               <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
                  className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white bg-brand-green hover:opacity-95 transition">
-                <Download className="w-4 h-4" /> Download
+                <DownloadIcon className="w-4 h-4" /> Download
               </a>
             </div>
           )}
@@ -267,13 +264,13 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
         <aside className="flex flex-col w-full lg:w-[360px] flex-none border-t lg:border-t-0 lg:border-l border-border-subtle bg-surface-1 lg:min-h-0">
           <div className="flex gap-1 px-3 pt-2 border-b border-border-subtle">
             <PanelTabBtn active={tab === 'comments'} onClick={() => setTab('comments')}
-                         icon={<MessageSquare className="w-3.5 h-3.5" />} label="Comments" count={comments.length} />
+                         icon={<MessageSquareIcon className="w-3.5 h-3.5" />} label="Comments" count={comments.length} />
             {isSpreadsheet && (
               <PanelTabBtn active={tab === 'changes'} onClick={() => setTab('changes')}
-                           icon={<GitPullRequest className="w-3.5 h-3.5" />} label="Changes" count={pendingCount} highlight={pendingCount > 0} />
+                           icon={<GitPullRequestIcon className="w-3.5 h-3.5" />} label="Changes" count={pendingCount} highlight={pendingCount > 0} />
             )}
             <PanelTabBtn active={tab === 'details'} onClick={() => setTab('details')}
-                         icon={<Info className="w-3.5 h-3.5" />} label="Details" />
+                         icon={<InfoIcon className="w-3.5 h-3.5" />} label="Details" />
           </div>
 
           <div className="flex-1 lg:overflow-y-auto">
@@ -418,7 +415,7 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
                     className="flex-1 px-3 py-2 border border-border-default rounded-xl bg-surface-1 text-sm text-text-primary placeholder:text-text-muted resize-none focus:outline-none focus:ring-2 focus:ring-brand-green/40 focus:border-brand-green transition" />
           <button onClick={post} disabled={posting || !text.trim()}
                   className="h-9 w-9 grid place-items-center rounded-xl text-white bg-brand-green hover:opacity-95 disabled:opacity-50 transition flex-none">
-            {posting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {posting ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SendIcon className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -462,11 +459,11 @@ function ChangesTab({ changes, canReview, onReview }: {
             <div className="flex gap-2 mt-2.5">
               <button onClick={() => onReview(c.id, 'approved')}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-white bg-brand-green hover:opacity-95 transition">
-                <Check className="w-3.5 h-3.5" /> Approve
+                <CheckIcon className="w-3.5 h-3.5" /> Approve
               </button>
               <button onClick={() => onReview(c.id, 'rejected')}
                       className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-lg text-xs font-bold text-text-secondary bg-surface-2 border border-border-default hover:bg-surface-3 transition">
-                <X className="w-3.5 h-3.5" /> Reject
+                <XIcon className="w-3.5 h-3.5" /> Reject
               </button>
             </div>
           )}

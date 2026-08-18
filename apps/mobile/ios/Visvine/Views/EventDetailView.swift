@@ -66,10 +66,10 @@ struct EventDetailView: View {
 
                 // Info
                 VStack(spacing: 16) {
-                    infoRow("calendar", "Date", DateFormatting.longDate(event.startAt))
-                    infoRow("clock", "Time", DateFormatting.time(event.startAt) + (event.endAt.map { " - \(DateFormatting.time($0))" } ?? ""))
-                    if let tz = event.timezone { infoRow("globe", "Timezone", tz) }
-                    if let location = event.location { infoRow("mappin.and.ellipse", "Location", location.label, subtext: location.address) }
+                    infoRow(.calendar, "Date", DateFormatting.longDate(event.startAt))
+                    infoRow(.clock, "Time", DateFormatting.time(event.startAt) + (event.endAt.map { " - \(DateFormatting.time($0))" } ?? ""))
+                    if let tz = event.timezone { infoRow(.globe, "Timezone", tz) }
+                    if let location = event.location { infoRow(.location, "Location", location.label, subtext: location.address) }
                 }
                 .padding(20).background(c.bgPrimary, in: RoundedRectangle(cornerRadius: 16)).padding(16)
 
@@ -98,7 +98,7 @@ struct EventDetailView: View {
 
                 if (event.visibility ?? "community") != "public" {
                     HStack(spacing: 8) {
-                        Image(systemName: event.visibility == "private" ? "lock.fill" : "person.2.fill").font(.system(size: 14))
+                        VisvineIcon(event.visibility == "private" ? .lock : .people, size: 14)
                         Text(event.visibility == "private" ? "Private event" : "Space members only").font(.system(size: 14))
                     }
                     .foregroundStyle(c.textMuted).padding(.horizontal, 16).padding(.vertical, 12)
@@ -115,10 +115,10 @@ struct EventDetailView: View {
         }
     }
 
-    private func infoRow(_ icon: String, _ label: String, _ value: String, subtext: String? = nil) -> some View {
+    private func infoRow(_ icon: VisvineIconName, _ label: String, _ value: String, subtext: String? = nil) -> some View {
         let c = theme.colors
         return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon).font(.system(size: 16)).foregroundStyle(c.accentDark)
+            VisvineIcon(icon, size: 16).foregroundStyle(c.accentDark)
                 .frame(width: 36, height: 36).background(c.accentLight, in: RoundedRectangle(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.system(size: 12)).foregroundStyle(c.textMuted)

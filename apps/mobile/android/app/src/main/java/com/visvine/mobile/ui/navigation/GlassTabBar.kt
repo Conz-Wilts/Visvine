@@ -10,38 +10,38 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Chat
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.PeopleOutline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.visvine.mobile.ui.components.glassSurface
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 
+
+// One icon per tab, not a filled/outline pair: our glyphs are stroke-only (see
+// docs/icons.md), and focus is already carried by the accent colour on the whole
+// cell — which was doing most of the work anyway.
+//
+// The icon is a lambda rather than a Painter because `AppIcons` properties are
+// @Composable getters (they resolve a drawable against the current context), so
+// they cannot be evaluated in a top-level `val`.
 private data class TabMeta(
     val route: String,
     val label: String,
-    val filled: ImageVector,
-    val outline: ImageVector,
+    val icon: @Composable () -> Painter,
 )
 
 private val TABS = listOf(
-    TabMeta(Routes.DIRECTORY, "Directory", Icons.Filled.People, Icons.Outlined.PeopleOutline),
-    TabMeta(Routes.MESSAGES, "Messages", Icons.Filled.Chat, Icons.Outlined.ChatBubbleOutline),
-    TabMeta(Routes.EVENTS, "Events", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
+    TabMeta(Routes.DIRECTORY, "Directory") { AppIcons.People },
+    TabMeta(Routes.MESSAGES, "Messages") { AppIcons.Message },
+    TabMeta(Routes.EVENTS, "Events") { AppIcons.Calendar },
 )
 
 /**
@@ -88,7 +88,7 @@ fun GlassTabBar(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        imageVector = if (focused) tab.filled else tab.outline,
+                        painter = tab.icon(),
                         contentDescription = tab.label,
                         tint = tint,
                         modifier = Modifier.size(22.dp),
@@ -105,7 +105,7 @@ fun GlassTabBar(
                 .clickable { onSearch() },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.Search, contentDescription = "Search", tint = neutral, modifier = Modifier.size(30.dp))
+            Icon(AppIcons.Search, contentDescription = "Search", tint = neutral, modifier = Modifier.size(30.dp))
         }
     }
 }

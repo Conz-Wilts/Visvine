@@ -20,7 +20,7 @@ struct ScreenHeader: View {
                 }
             } else {
                 HStack(spacing: 8) {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                    VisvineIcon(.network)
                         .foregroundStyle(c.accent)
                     Text("Visvine").font(.system(size: 18, weight: .bold)).foregroundStyle(c.textPrimary)
                 }
@@ -73,7 +73,7 @@ struct ScreenHeader: View {
                         CommunityAvatar(name: item.name, imageUrl: item.image, size: 28)
                         Text(item.name).foregroundStyle(active ? c.accentDark : c.textSecondary)
                         Spacer()
-                        if active { Image(systemName: "checkmark").foregroundStyle(c.accent) }
+                        if active { VisvineIcon(.check).foregroundStyle(c.accent) }
                     }
                 }
                 .listRowBackground(active ? c.accentLight : c.bgPrimary)

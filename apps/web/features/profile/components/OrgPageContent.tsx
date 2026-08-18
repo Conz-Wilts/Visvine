@@ -20,7 +20,7 @@
 
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Globe2, Share2, Check, ChevronRight, Users } from 'lucide-react';
+import { CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon, UsersIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
@@ -132,12 +132,12 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
                 {node.location && (
-                  <span className="inline-flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{node.location}</span>
+                  <span className="inline-flex items-center gap-1.5"><MapPinIcon className="w-3.5 h-3.5" />{node.location}</span>
                 )}
                 {node.url && (
                   <a href={node.url} target="_blank" rel="noopener noreferrer"
                      className="inline-flex items-center gap-1.5 font-semibold hover:underline" style={{ color: theme.dark }}>
-                    <Globe2 className="w-3.5 h-3.5" />{hostname(node.url)}
+                    <EarthIcon className="w-3.5 h-3.5" />{hostname(node.url)}
                   </a>
                 )}
               </div>
@@ -148,7 +148,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
             <div className="flex-none">
               <button onClick={sharePage}
                 className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
-                {copied ? <Check className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+                {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
                 <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
               </button>
             </div>
@@ -201,7 +201,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
               {people.length > 12 && onConnectionsClick && (
                 <button onClick={onConnectionsClick}
                         className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                  +{people.length - 12} more <ChevronRight className="w-3.5 h-3.5" />
+                  +{people.length - 12} more <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
               )}
             </SectionCard>
@@ -226,10 +226,10 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
         <div className="flex flex-col gap-4 lg:sticky lg:top-16 self-start">
           <RailCard title="At a glance">
             <div className="flex flex-col gap-3">
-              {node.location && <KV icon={<MapPin className="w-4 h-4" />} label="Location" value={node.location} />}
+              {node.location && <KV icon={<MapPinIcon className="w-4 h-4" />} label="Location" value={node.location} />}
               {node.url && (
                 <div className="flex items-start gap-3 text-sm">
-                  <span className="text-text-muted mt-0.5 flex-none"><Globe2 className="w-4 h-4" /></span>
+                  <span className="text-text-muted mt-0.5 flex-none"><EarthIcon className="w-4 h-4" /></span>
                   <div className="min-w-0">
                     <div className="text-xs text-text-muted">Website</div>
                     <a href={node.url} target="_blank" rel="noopener noreferrer"
@@ -239,7 +239,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
               )}
               {railFields.map((field) => (
                 <KV key={field.key}
-                    icon={<Users className="w-4 h-4" />}
+                    icon={<UsersIcon className="w-4 h-4" />}
                     label={field.label}
                     value={fieldValues[field.key]} />
               ))}
@@ -271,7 +271,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
               {connectionCount > people.length + 8 && onConnectionsClick && (
                 <button onClick={onConnectionsClick}
                         className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
-                  +{connectionCount - people.length - 8} more <ChevronRight className="w-3.5 h-3.5" />
+                  +{connectionCount - people.length - 8} more <ChevronRightIcon className="w-3.5 h-3.5" />
                 </button>
               )}
             </RailCard>

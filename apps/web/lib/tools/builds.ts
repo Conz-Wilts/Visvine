@@ -37,14 +37,17 @@ import {
   type CompileResult,
 } from './compile'
 import {
+  TOOL_CUSTOM_RAIL_ICON,
   TOOL_SOURCE_FILES,
   parseToolConfig,
   toolDataPath,
+  toolIconPath,
   toolIndexPath,
   toolUiPath,
   unwrapSource,
   type ToolConfig,
 } from './config'
+import { sanitizeToolIcon } from './iconSvg'
 
 /** Matches store.ts's SHARED_OWNER_KEY. Tools only ever live in shared context. */
 const SHARED_OWNER_KEY = 'shared'
@@ -68,6 +71,8 @@ export interface ToolSources {
   index: string | null
   ui: string | null
   data: string | null
+  /** `icon.md`, when the author shipped their own rail glyph. */
+  icon: string | null
 }
 
 /** What a rebuild persists. The row's own keys, minus the generated ones. */
@@ -83,6 +88,8 @@ export interface ToolBuildInput {
   sizeBytes: number
   config: ToolConfig | null
   configError: string | null
+  /** The author's own rail glyph, already sanitized. Null = uses a built-in. */
+  iconSvg: string | null
 }
 
 /** The read / compile / persist steps, injectable for tests. */
@@ -107,6 +114,13 @@ export interface BuildSummary {
   config: ToolConfig | null
   configError: string | null
   updatedAt: string
+  /**
+   * The author's own rail glyph, sanitized. Null = the Tool uses a built-in
+   * shape. Carried on the summary so the author's roster can SHOW the icon it
+   * would publish with, which is the only way to tell a rejected upload from an
+   * accepted one at a glance.
+   */
+  iconSvg: string | null
 }
 
 // ── live dependencies ─────────────────────────────────────────────────────────
@@ -139,6 +153,7 @@ const liveDeps: ToolBuildDeps = {
       sizeBytes: input.sizeBytes,
       config: (input.config ?? null) as unknown as Prisma.InputJsonValue,
       configError: input.configError,
+      iconSvg: input.iconSvg,
     }
     return prisma.appToolBuild.upsert({
       where: { app_tool_build_identity: { spaceId: input.spaceId, name: input.name } },
@@ -151,7 +166,7 @@ const liveDeps: ToolBuildDeps = {
 // ── source identity ───────────────────────────────────────────────────────────
 
 /**
- * The identity of a Tool's three sources.
+ * The identity of a Tool's sources.
  *
  * Each source is preceded by a presence marker so a missing note and an empty
  * one hash differently — deleting `data.js` and blanking it are different acts,
@@ -165,6 +180,8 @@ export function toolSourceHash(sources: ToolSources): string {
     sources.ui ?? '',
     sources.data === null ? '-' : '+',
     sources.data ?? '',
+    sources.icon === null ? '-' : '+',
+    sources.icon ?? '',
   ])
 }
 
@@ -180,18 +197,19 @@ export function buildIsCurrent(existing: { sourceHash: string } | null, hash: st
   return existing !== null && existing.sourceHash === hash
 }
 
-/** Read the three notes that make up a Tool. */
+/** Read the notes that make up a Tool. Only `index` and `ui` are required. */
 export async function readToolSources(
   spaceId: string,
   name: string,
   deps: ToolBuildDeps = liveDeps,
 ): Promise<ToolSources> {
-  const [index, ui, data] = await Promise.all([
+  const [index, ui, data, icon] = await Promise.all([
     deps.readSource(spaceId, toolIndexPath(name)),
     deps.readSource(spaceId, toolUiPath(name)),
     deps.readSource(spaceId, toolDataPath(name)),
+    deps.readSource(spaceId, toolIconPath(name)),
   ])
-  return { index, ui, data }
+  return { index, ui, data, icon }
 }
 
 // ── the rebuild ───────────────────────────────────────────────────────────────
@@ -300,6 +318,46 @@ export async function rebuildTool(
     }
   }
 
+  // icon.svg — optional, and not code. Sanitizing here rather than at render
+  // time is what makes the stored value the trusted one: nothing downstream
+  // (the rail, the marketplace card, the review queue) re-parses author markup,
+  // it renders what this step approved. See lib/tools/iconSvg.ts.
+  let iconSvg: string | null = null
+  const iconFile = TOOL_SOURCE_FILES.icon
+  if (sources.icon !== null) {
+    const unwrapped = unwrapSource(sources.icon)
+    if (!unwrapped || unwrapped.lang !== iconFile.lang) {
+      errors.push(unreadableSource(iconFile.authorName, toolIconPath(name)))
+    } else {
+      const result = sanitizeToolIcon(unwrapped.code)
+      if (result.ok) iconSvg = result.svg
+      else {
+        errors.push({
+          file: iconFile.authorName,
+          message: result.error,
+          line: null,
+          column: null,
+          text: null,
+        })
+      }
+    }
+  }
+
+  // Naming `custom` without shipping the glyph would leave a hole in the rail,
+  // which is chrome a Tool is not allowed to touch — so it is an error the
+  // author sees, not a silent fallback to a shape they did not pick.
+  if (config?.surfaces.rail?.icon === TOOL_CUSTOM_RAIL_ICON && iconSvg === null) {
+    errors.push({
+      file: INDEX_FILENAME,
+      message:
+        `\`surfaces.rail.icon: ${TOOL_CUSTOM_RAIL_ICON}\` needs an ${iconFile.authorName} — ` +
+        `upload one, or pick a built-in icon instead.`,
+      line: null,
+      column: null,
+      text: null,
+    })
+  }
+
   const ok = configError === null && uiBundle !== null && errors.length === 0
   return deps.saveBuild({
     spaceId,
@@ -315,6 +373,7 @@ export async function rebuildTool(
     sizeBytes,
     config,
     configError,
+    iconSvg: ok ? iconSvg : null,
   })
 }
 
@@ -373,6 +432,7 @@ export function toBuildSummary(row: AppToolBuild): BuildSummary {
     config: (row.config as unknown as ToolConfig | null) ?? null,
     configError: row.configError,
     updatedAt: row.updatedAt.toISOString(),
+    iconSvg: row.iconSvg,
   }
 }
 

@@ -4,6 +4,16 @@ import type { InstalledToolDto } from '@/lib/tools/installs';
 import { navFeatureKeys } from '@/lib/featureAccess';
 import { toolRailRows, type ToolRailRow } from '@/features/tools/lib/railRows';
 import ToolIcon from '@/features/tools/components/toolIcons';
+import {
+  NavDirectoryIcon,
+  NavContextIcon,
+  NavChannelsIcon,
+  NavEventsIcon,
+  NavResourcesIcon,
+  NavConnectorsIcon,
+  NavAgentsIcon,
+  NavToolsIcon,
+} from '@/features/shared/icons';
 
 // Pure access logic lives in lib/featureAccess.ts (no JSX) so server routes and
 // tests can import it without this module's icons. Re-exported here so UI code
@@ -45,11 +55,7 @@ export const FEATURES: FeatureDef[] = [
     href: '/directory',
     description: 'A searchable grid of everyone and everything in the space.',
     core: true,
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-      </svg>
-    ),
+    icon: <NavDirectoryIcon className={iconClass} />,
   },
   {
     key: 'notes',
@@ -59,26 +65,14 @@ export const FEATURES: FeatureDef[] = [
     // Always on and nav-less: reached from the Directory and from profiles, not
     // its own sidebar rail item or a toggleable tool. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="18" cy="5" r="3" />
-        <circle cx="6" cy="12" r="3" />
-        <circle cx="18" cy="19" r="3" />
-        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-      </svg>
-    ),
+    icon: <NavContextIcon className={iconClass} />,
   },
   {
     key: 'channels',
     label: 'Channels',
     href: '/channels',
     description: 'A shared feed and topic channels for posts and conversation.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10 3L8 21M16 3l-2 18M4 8h16M3 16h16" />
-      </svg>
-    ),
+    icon: <NavChannelsIcon className={iconClass} />,
   },
   {
     key: 'events',
@@ -89,45 +83,28 @@ export const FEATURES: FeatureDef[] = [
     // global navbar, not a sidebar rail item, so there is nothing to toggle or
     // reorder per space. See NAV_HIDDEN_FEATURE_KEYS.
     core: true,
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-      </svg>
-    ),
+    icon: <NavEventsIcon className={iconClass} />,
   },
   {
     key: 'resources',
     label: 'Resources',
     href: '/resources',
     description: 'A library of shared documents, links and materials.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-      </svg>
-    ),
+    icon: <NavResourcesIcon className={iconClass} />,
   },
   {
     key: 'connectors',
     label: 'Connectors',
     href: '/connectors',
     description: 'Gateways to external APIs and databases that agents can call.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-10 0V8zM12 17v4" />
-      </svg>
-    ),
+    icon: <NavConnectorsIcon className={iconClass} />,
   },
   {
     key: 'agents',
     label: 'Agents',
     href: '/agents',
     description: 'Scheduled agents that run from your context, call connectors, and write notes back.',
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="8" width="16" height="11" rx="2" />
-        <path d="M12 3v5M9 13h.01M15 13h.01M9 17h6" />
-      </svg>
-    ),
+    icon: <NavAgentsIcon className={iconClass} />,
   },
   {
     key: 'tools',
@@ -139,12 +116,7 @@ export const FEATURES: FeatureDef[] = [
     // the tool vocabulary itself, never a "Tools" rail item. It is here so the
     // console's Tools panel can switch the surface (and the Tool node type with
     // it) on and off like any other. See NAV_HIDDEN_FEATURE_KEYS.
-    icon: (
-      <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14.5 5.5a3.5 3.5 0 004.9 4.2l-9.7 9.7a2.1 2.1 0 01-3-3l9.7-9.7a3.5 3.5 0 01-1.9-1.2z" />
-        <path d="M15.2 4.3l4.5 4.5" />
-      </svg>
-    ),
+    icon: <NavToolsIcon className={iconClass} />,
   },
 ];
 
@@ -163,7 +135,7 @@ function toolFeature(row: ToolRailRow): FeatureDef {
     label: row.label,
     href: row.href,
     description: `${row.title} — a tool installed in this space.`,
-    icon: <ToolIcon name={row.icon} />,
+    icon: <ToolIcon name={row.icon} svg={row.iconSvg} />,
   };
 }
 

@@ -24,6 +24,8 @@ export interface ToolRailRow {
   href: string;
   /** One of TOOL_RAIL_ICONS (lib/tools/config.ts), or null for the default. */
   icon: string | null;
+  /** The Tool's own glyph when it shipped one, sanitized at build time. */
+  iconSvg: string | null;
   /** The install wants something this space hasn't got and runs without it. */
   degraded: boolean;
 }
@@ -50,6 +52,7 @@ export function toolRailRows(
       title: tool.title,
       href: tool.href,
       icon: tool.icon,
+      iconSvg: tool.iconSvg,
       degraded: tool.degraded,
     }));
 }

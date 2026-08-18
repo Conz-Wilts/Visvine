@@ -88,7 +88,7 @@ struct FullProfileView: View {
                     avatarFallback(profile.name)
                 }
                 if profile.openToWork == true {
-                    Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
+                    VisvineIcon(.check, size: 12).foregroundStyle(.white)
                         .frame(width: 24, height: 24).background(Color(hex: 0x10B981), in: Circle())
                         .overlay(Circle().stroke(c.bgPrimary, lineWidth: 3))
                 }
@@ -117,10 +117,10 @@ struct FullProfileView: View {
 
             HStack(spacing: 6) {
                 if let year = profile.createdAt?.prefix(4), let y = Int(year) {
-                    chip(icon: "calendar", text: "Member since \(y)")
+                    chip(icon: .calendar, text: "Member since \(y)")
                 }
                 if let tags = profile.tags, !tags.isEmpty {
-                    chip(icon: "tag", text: "\(tags.count) skill\(tags.count == 1 ? "" : "s")")
+                    chip(icon: .tag, text: "\(tags.count) skill\(tags.count == 1 ? "" : "s")")
                 }
             }
         }
@@ -136,10 +136,10 @@ struct FullProfileView: View {
         .frame(width: 120, height: 120).clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private func chip(icon: String, text: String) -> some View {
+    private func chip(icon: VisvineIconName, text: String) -> some View {
         let c = theme.colors
         return HStack(spacing: 4) {
-            Image(systemName: icon).font(.system(size: 12))
+            VisvineIcon(icon, size: 12)
             Text(text).font(.system(size: 12, weight: .medium))
         }
         .foregroundStyle(c.textSecondary).padding(.horizontal, 10).padding(.vertical, 4).background(c.bgTertiary, in: Capsule())
@@ -156,19 +156,19 @@ struct FullProfileView: View {
 
     @ViewBuilder private func contact(_ profile: FullProfile) -> some View {
         VStack(spacing: 0) {
-            if let email = profile.email { contactRow("envelope", email) { openURL(URL(string: "mailto:\(email)")!) } }
-            if let phone = profile.phone { contactRow("phone", phone) { openURL(URL(string: "tel:\(phone)")!) } }
-            if let website = profile.website { contactRow("safari", safeHostname(website)) { if let u = URL(string: website) { openURL(u) } } }
-            if let linkedin = profile.linkedinUrl { contactRow("link", "LinkedIn") { if let u = URL(string: linkedin) { openURL(u) } } }
-            if let twitter = profile.twitterUrl { contactRow("link", "X / Twitter") { if let u = URL(string: twitter) { openURL(u) } } }
+            if let email = profile.email { contactRow(.mail, email) { openURL(URL(string: "mailto:\(email)")!) } }
+            if let phone = profile.phone { contactRow(.phone, phone) { openURL(URL(string: "tel:\(phone)")!) } }
+            if let website = profile.website { contactRow(.globe, safeHostname(website)) { if let u = URL(string: website) { openURL(u) } } }
+            if let linkedin = profile.linkedinUrl { contactRow(.link, "LinkedIn") { if let u = URL(string: linkedin) { openURL(u) } } }
+            if let twitter = profile.twitterUrl { contactRow(.link, "X / Twitter") { if let u = URL(string: twitter) { openURL(u) } } }
         }
     }
 
-    private func contactRow(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+    private func contactRow(_ icon: VisvineIconName, _ label: String, _ action: @escaping () -> Void) -> some View {
         let c = theme.colors
         return Button(action: action) {
             HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(c.textMuted)
+                VisvineIcon(icon).foregroundStyle(c.textMuted)
                 Text(label).font(.system(size: 14)).foregroundStyle(c.textSecondary).lineLimit(1)
                 Spacer()
             }

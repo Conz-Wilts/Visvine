@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { CheckIcon, LoaderCircleIcon, RefreshCwIcon } from '@/features/shared/icons';
 import type { SaveStatus as SaveStatusValue } from '@/lib/autosave';
 
 /**
@@ -34,7 +34,7 @@ export default function SaveStatus({ status, onRetry, className }: SaveStatusPro
             onClick={onRetry}
             className="inline-flex items-center gap-1 font-semibold underline underline-offset-2 hover:opacity-80"
           >
-            <RefreshCw size={11} />
+            <RefreshCwIcon size={11} />
             Retry
           </button>
         )}
@@ -51,12 +51,12 @@ export default function SaveStatus({ status, onRetry, className }: SaveStatusPro
     >
       {status === 'saving' ? (
         <>
-          <Loader2 size={12} className="animate-spin" />
+          <LoaderCircleIcon size={12} className="animate-spin" />
           Saving…
         </>
       ) : (
         <>
-          <Check size={12} className="text-brand-dark-green" />
+          <CheckIcon size={12} className="text-brand-dark-green" />
           Saved
         </>
       )}

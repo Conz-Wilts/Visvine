@@ -229,7 +229,6 @@ async function createSpace() {
       location: "Sydney, Australia",
       tags: ["VC", "Portfolio", "Australia", "New Zealand"],
       country: "AU",
-      emoji: "🐦",
       nodeTypes: NODE_TYPES,
       // Demo content is meant to show up in Discover; the column default is private.
       visibility: "public",

@@ -10,7 +10,7 @@
  */
 
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { Smile, Reply, Pencil, Trash2, Star } from 'lucide-react';
+import { PencilIcon, ReplyIcon, SmileIcon, StarIcon, Trash2Icon } from '@/features/shared/icons';
 import Image from 'next/image';
 import ReactMarkdown, { type Options as ReactMarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -320,7 +320,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             )}
             {message.starred && (
               <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                <Star className="h-2.5 w-2.5 fill-current" /> Saved
+                <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
           </div>
@@ -329,7 +329,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
         {/* Saved badge for grouped messages (the header line carries it otherwise) */}
         {!showHeader && message.starred && (
           <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-            <Star className="h-2.5 w-2.5 fill-current" /> Saved
+            <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
           </span>
         )}
 
@@ -418,7 +418,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
             title="React"
           >
-            <Smile className="h-4 w-4" />
+            <SmileIcon className="h-4 w-4" />
           </button>
           <button
             type="button"
@@ -426,7 +426,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
             className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
             title="Reply"
           >
-            <Reply className="h-4 w-4" />
+            <ReplyIcon className="h-4 w-4" />
           </button>
           {onToggleStar && (
             <button
@@ -435,7 +435,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
               className={`rounded-md p-1.5 hover:bg-surface-2 ${message.starred ? 'text-amber-500' : 'text-text-muted hover:text-text-secondary'}`}
               title={message.starred ? 'Remove from saved' : 'Save for later'}
             >
-              <Star className={`h-4 w-4 ${message.starred ? 'fill-current' : ''}`} />
+              <StarIcon className={`h-4 w-4 ${message.starred ? 'fill-current' : ''}`} />
             </button>
           )}
           {canEdit && (
@@ -445,7 +445,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
               className="rounded-md p-1.5 text-text-muted hover:bg-surface-2 hover:text-text-secondary"
               title="Edit"
             >
-              <Pencil className="h-4 w-4" />
+              <PencilIcon className="h-4 w-4" />
             </button>
           )}
               {message.isOwn && (
@@ -455,7 +455,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                   className="rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-500"
                   title="Delete"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2Icon className="h-4 w-4" />
                 </button>
               )}
             </div>

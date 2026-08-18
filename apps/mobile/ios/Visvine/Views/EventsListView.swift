@@ -81,7 +81,7 @@ struct EventsListView: View {
         return VStack(spacing: 12) {
             ZStack {
                 Circle().fill(c.bgTertiary).frame(width: 72, height: 72)
-                Image(systemName: "calendar").font(.system(size: 32)).foregroundStyle(c.textMuted)
+                VisvineIcon(.calendar, size: 32).foregroundStyle(c.textMuted)
             }
             Text(text).font(.system(size: 16, weight: .medium)).foregroundStyle(c.textMuted)
         }
@@ -114,12 +114,12 @@ private struct EventCard: View {
                     }
                 }
                 if let location = event.location {
-                    meta("mappin.and.ellipse", location.label)
+                    meta(.location, location.label)
                 }
-                meta("clock", "\(DateFormatting.shortDate(event.startAt)) at \(DateFormatting.time(event.startAt))")
+                meta(.clock, "\(DateFormatting.shortDate(event.startAt)) at \(DateFormatting.time(event.startAt))")
                 HStack(spacing: 10) {
                     HStack(spacing: 4) {
-                        Image(systemName: "person.2").font(.system(size: 12))
+                        VisvineIcon(.people, size: 12)
                         Text("\(analytics.rsvpCount) RSVPs").font(.system(size: 12))
                     }.foregroundStyle(c.textMuted)
                     if let capacity = event.capacity {
@@ -133,10 +133,10 @@ private struct EventCard: View {
         .padding(16).background(c.bgPrimary, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    private func meta(_ icon: String, _ text: String) -> some View {
+    private func meta(_ icon: VisvineIconName, _ text: String) -> some View {
         let c = theme.colors
         return HStack(spacing: 5) {
-            Image(systemName: icon).font(.system(size: 12))
+            VisvineIcon(icon, size: 12)
             Text(text).font(.system(size: 13)).lineLimit(1)
         }.foregroundStyle(c.textMuted)
     }

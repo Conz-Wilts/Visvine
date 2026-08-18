@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Pencil, Briefcase } from 'lucide-react';
+import { BriefcaseIcon, PencilIcon, PlusIcon, Trash2Icon } from '@/features/shared/icons';
 import EditModal from './EditModal';
 import ModalFooter from './ModalFooter';
 import {
@@ -108,7 +108,7 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
               <div key={entry.id}
                    className={`flex items-start gap-3 p-3 border rounded-xl ${draft?.id === entry.id ? 'border-brand-dark-green/40 bg-brand-light-bg/40' : 'border-gray-200'}`}>
                 <span className="w-9 h-9 flex-none rounded-lg bg-gray-100 text-brand-grey flex items-center justify-center">
-                  <Briefcase className="w-4 h-4" />
+                  <BriefcaseIcon className="w-4 h-4" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-brand-black truncate">{entry.title}</p>
@@ -119,11 +119,11 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
                 <div className="flex gap-1 flex-none">
                   <button type="button" onClick={() => editEntry(entry)} aria-label={`Edit ${entry.title}`}
                           className="p-1.5 rounded-lg text-brand-grey hover:bg-gray-100 transition-colors">
-                    <Pencil className="w-3.5 h-3.5" />
+                    <PencilIcon className="w-3.5 h-3.5" />
                   </button>
                   <button type="button" onClick={() => removeEntry(entry.id)} aria-label={`Remove ${entry.title}`}
                           className="p-1.5 rounded-lg text-brand-grey hover:text-red-500 hover:bg-red-50 transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2Icon className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -193,7 +193,7 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
         ) : (
           <button type="button" onClick={() => setDraft(emptyDraft())}
                   className="w-full py-3 border-[1.5px] border-dashed border-gray-300 rounded-xl text-sm text-brand-grey hover:text-brand-black hover:border-gray-400 flex items-center justify-center gap-1.5 transition-colors">
-            <Plus className="w-4 h-4" /> Add a role
+            <PlusIcon className="w-4 h-4" /> Add a role
           </button>
         )}
 

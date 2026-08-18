@@ -6,7 +6,7 @@
  * actions.
  */
 
-import { UserPlus, Pencil, LogOut, X, Hash, MessageCircle, Newspaper } from 'lucide-react';
+import { HashIcon, LogOutIcon, MessageCircleIcon, NewspaperIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
 
@@ -36,7 +36,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       {/* Identity */}
       <div className="flex flex-col items-center px-6 pb-5 pt-7 text-center">
         <p className="flex items-center gap-1 text-base font-semibold text-text-primary">
-          <Hash className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />
+          <HashIcon className="h-[18px] w-[18px] shrink-0" strokeWidth={2.5} />
           <span>{conversation.name}</span>
         </p>
         <p className="mt-0.5 text-xs text-text-muted">
@@ -54,8 +54,8 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
           <SectionLabel>View style</SectionLabel>
           <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
             {([
-              { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle },
-              { mode: 'FEED' as const, label: 'Feed', icon: Newspaper },
+              { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircleIcon },
+              { mode: 'FEED' as const, label: 'Feed', icon: NewspaperIcon },
             ]).map(({ mode, label, icon: Icon }) => {
               const active = viewMode === mode;
               return (
@@ -95,7 +95,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
                 className="hidden rounded-full p-1 text-text-muted hover:bg-surface-3 hover:text-red-500 group-hover:block"
                 aria-label={`Remove ${p.name}`}
               >
-                <X className="h-3.5 w-3.5" />
+                <XIcon className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
@@ -111,7 +111,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
               onClick={onAddMembers}
               className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
             >
-              <UserPlus className="h-4 w-4 text-text-muted" />
+              <UserPlusIcon className="h-4 w-4 text-text-muted" />
               Add members
             </button>
             <button
@@ -119,7 +119,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
               onClick={onRename}
               className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
             >
-              <Pencil className="h-4 w-4 text-text-muted" />
+              <PencilIcon className="h-4 w-4 text-text-muted" />
               Rename channel
             </button>
           </>
@@ -129,7 +129,7 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
           onClick={onLeave}
           className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm text-red-500 transition-colors hover:bg-red-50"
         >
-          <LogOut className="h-4 w-4" />
+          <LogOutIcon className="h-4 w-4" />
           Leave channel
         </button>
       </div>
@@ -151,7 +151,7 @@ export default function ProfilePanel(props: ProfilePanelProps) {
             className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
             aria-label="Close details"
           >
-            <X className="h-4 w-4" />
+            <XIcon className="h-4 w-4" />
           </button>
         </div>
       ) : (

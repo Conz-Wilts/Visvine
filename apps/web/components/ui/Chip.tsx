@@ -20,7 +20,7 @@
 // a chip wrapping a colour picker). Reach for <Chip> first.
 
 import { clsx } from 'clsx';
-import { X } from 'lucide-react';
+import { XIcon } from '@/features/shared/icons';
 import type { CSSProperties, ReactNode } from 'react';
 import { hexToPalette } from '@/lib/profileTheme';
 
@@ -164,7 +164,7 @@ export default function Chip({
       aria-label={removeLabel ?? 'Remove'}
       className="rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
     >
-      <X className={ICON_CLASS[size]} />
+      <XIcon className={ICON_CLASS[size]} />
     </button>
   );
 

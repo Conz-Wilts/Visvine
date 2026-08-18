@@ -3,16 +3,16 @@
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
-import { Plus, Search, X, Hash, MessageCircle, ChevronDown, ChevronRight, Pencil, Trash2, Newspaper } from 'lucide-react';
+import { ChevronDownIcon, ChevronRightIcon, HashIcon, Icon, MessageCircleIcon, NewspaperIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
-import { ChannelIcon, EmojiIconPicker } from './ChannelIcon';
+import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
 import type { ChannelDirectoryEntry, ChannelSectionEntry, ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 
 /** Circle-style rail section: one per section (joined + browsable channels filed there), then an unfiled bucket. */
 export interface ChannelListGroup {
   key: string;
   name: string;
-  emoji: string | null;
+  icon: string | null;
   joined: ConversationSummary[];
   browsable: ChannelDirectoryEntry[];
 }
@@ -148,7 +148,7 @@ export default function ConversationListPanel({
   const channelControls = (
     <div className="px-3 pb-2 pt-3">
       <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
-        <Search className="h-4 w-4 shrink-0 text-text-muted" />
+        <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
         <input
           ref={sidebarSearchRef}
           value={conversationSearch}
@@ -158,7 +158,7 @@ export default function ConversationListPanel({
         />
         {conversationSearch && (
           <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-            <X className="h-3.5 w-3.5" />
+            <XIcon className="h-3.5 w-3.5" />
           </button>
         )}
       </div>
@@ -185,8 +185,8 @@ export default function ConversationListPanel({
             </button>
             {showIconPicker && (
               <div className="absolute left-0 top-10 z-30">
-                <EmojiIconPicker
-                  onSelect={(emoji) => setChannelIcon(emoji)}
+                <ChannelIconPicker
+                  onSelect={(icon) => setChannelIcon(icon)}
                   onClear={channelIcon ? () => setChannelIcon(null) : undefined}
                   onClose={() => setShowIconPicker(false)}
                 />
@@ -212,8 +212,8 @@ export default function ConversationListPanel({
         {/* View style: classic chat thread vs social-feed post cards */}
         <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
           {([
-            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircle, title: 'Classic channel thread' },
-            { mode: 'FEED' as const, label: 'Feed', icon: Newspaper, title: 'Post cards with comments' },
+            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircleIcon, title: 'Classic channel thread' },
+            { mode: 'FEED' as const, label: 'Feed', icon: NewspaperIcon, title: 'Post cards with comments' },
           ]).map(({ mode, label, icon: Icon, title }) => {
             const active = channelViewMode === mode;
             return (
@@ -241,7 +241,7 @@ export default function ConversationListPanel({
             <option value="">No section</option>
             {channelSections.map((section) => (
               <option key={section.id} value={section.id}>
-                {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                {section.name}
               </option>
             ))}
           </select>
@@ -286,7 +286,7 @@ export default function ConversationListPanel({
           {!conversationsLoading && channelGroups.length === 0 && (
             <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
               <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-surface-2">
-                <Hash className="h-6 w-6 text-text-muted" />
+                <HashIcon className="h-6 w-6 text-text-muted" />
               </div>
               <p className="text-sm font-medium text-text-secondary">No channels yet</p>
               <p className="mt-1 text-xs text-text-muted">
@@ -331,10 +331,11 @@ export default function ConversationListPanel({
                           className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
                         >
                           {collapsed
-                            ? <ChevronRight className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />
-                            : <ChevronDown className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />}
-                          <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-text-secondary group-hover:text-text-primary">
-                            {section.emoji ? `${section.emoji} ` : ''}{section.name}
+                            ? <ChevronRightIcon className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />
+                            : <ChevronDownIcon className="h-4 w-4 shrink-0 text-text-muted" strokeWidth={2.5} />}
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[15px] font-semibold text-text-secondary group-hover:text-text-primary">
+                            {section.icon && <Icon name={section.icon} className="h-4 w-4 shrink-0" strokeWidth={2} />}
+                            <span className="truncate">{section.name}</span>
                           </span>
                         </button>
                         {collapsed && sectionUnread > 0 && (
@@ -347,10 +348,10 @@ export default function ConversationListPanel({
                             <button
                               type="button"
                               title="Rename section"
-                              onClick={() => { setEditingSectionId(section.key); setEditingSectionName(`${section.emoji ? `${section.emoji} ` : ''}${section.name}`); }}
+                              onClick={() => { setEditingSectionId(section.key); setEditingSectionName(section.name); }}
                               className="rounded p-0.5 text-text-muted hover:text-text-secondary"
                             >
-                              <Pencil className="h-3 w-3" />
+                              <PencilIcon className="h-3 w-3" />
                             </button>
                             <button
                               type="button"
@@ -359,7 +360,7 @@ export default function ConversationListPanel({
                               onClick={() => void deleteSection(section.key)}
                               className="rounded p-0.5 text-text-muted hover:text-red-500 disabled:opacity-50"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2Icon className="h-3 w-3" />
                             </button>
                           </span>
                         )}
@@ -460,7 +461,7 @@ export default function ConversationListPanel({
                   onClick={() => openCreateModal('section')}
                   className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[15px] font-medium text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
                 >
-                  <Plus className="h-[18px] w-[18px]" strokeWidth={2.5} />
+                  <PlusIcon className="h-[18px] w-[18px]" strokeWidth={2.5} />
                   New section
                 </button>
               )}

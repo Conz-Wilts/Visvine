@@ -20,14 +20,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -55,10 +47,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.visvine.mobile.data.model.DirectoryMember
 import com.visvine.mobile.ui.components.ScreenHeader
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.DirectoryViewModel
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
 import com.visvine.mobile.ui.viewmodel.SortOrder
+
 
 private val TYPE_COLORS = mapOf(
     "person" to Color(0xFF2563EB),
@@ -159,7 +153,7 @@ fun DirectoryScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(if (isType) "Filter by Type" else "Filter by Tag", color = colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Icon(Icons.Filled.Close, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(22.dp).clickable { openDropdown = null })
+                Icon(AppIcons.Close, contentDescription = "Close", tint = colors.textMuted, modifier = Modifier.size(22.dp).clickable { openDropdown = null })
             }
             if (values.isEmpty()) {
                 Text("None available", color = colors.textMuted, modifier = Modifier.padding(24.dp), textAlign = TextAlign.Center)
@@ -176,7 +170,7 @@ fun DirectoryScreen(
                     ) {
                         Text(if (isType) capitalize(value) else value, color = colors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Icon(
-                            if (active) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                            if (active) AppIcons.CheckSquare else AppIcons.EmptySquare,
                             contentDescription = null,
                             tint = if (active) colors.accent else colors.textMuted,
                             modifier = Modifier.size(22.dp),
@@ -236,7 +230,7 @@ private fun FiltersRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Icon(
-                if (sortOrder == SortOrder.AZ) Icons.Filled.ArrowDownward else Icons.Filled.ArrowUpward,
+                if (sortOrder == SortOrder.AZ) AppIcons.ArrowDown else AppIcons.ArrowUp,
                 contentDescription = null, tint = colors.textSecondary, modifier = Modifier.size(14.dp),
             )
             Text(if (sortOrder == SortOrder.AZ) "A–Z" else "Z–A", color = colors.textSecondary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
@@ -247,7 +241,7 @@ private fun FiltersRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(Icons.Filled.Close, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
+                Icon(AppIcons.Close, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(14.dp))
                 Text("Clear", color = colors.textMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
             }
         }
@@ -274,7 +268,7 @@ private fun DropdownButton(label: String, count: Int, onClick: () -> Unit) {
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
         )
-        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, tint = if (active) Color.White else colors.textSecondary, modifier = Modifier.size(14.dp))
+        Icon(AppIcons.ChevronDown, contentDescription = null, tint = if (active) Color.White else colors.textSecondary, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -328,7 +322,7 @@ private fun EmptyState(hasFilters: Boolean) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(modifier = Modifier.size(72.dp).clip(RoundedCornerShape(36.dp)).background(colors.bgTertiary), contentAlignment = Alignment.Center) {
-            Icon(Icons.Outlined.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
+            Icon(AppIcons.People, contentDescription = null, tint = colors.textMuted, modifier = Modifier.size(36.dp))
         }
         Text(if (hasFilters) "No members match filters" else "No members found", color = colors.textMuted, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }

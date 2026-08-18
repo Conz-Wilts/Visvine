@@ -230,8 +230,8 @@ const RESOURCE_NODE = {
 // ---- channels / messages ------------------------------------------------------
 
 const SECTIONS = [
-  { id: 'section_bb_firm', name: 'Firm', emoji: '🐦', position: 0 },
-  { id: 'section_bb_portfolio', name: 'Portfolio', emoji: '📈', position: 1 },
+  { id: 'section_bb_firm', name: 'Firm', icon: 'bird', position: 0 },
+  { id: 'section_bb_portfolio', name: 'Portfolio', icon: 'trending-up', position: 1 },
 ];
 
 const CHANNELS = [
@@ -400,10 +400,10 @@ try {
   console.log('\n--- Channels & messages ---');
   for (const s of SECTIONS) {
     await client.query(
-      `INSERT INTO channel_sections (id, space_id, name, emoji, position)
+      `INSERT INTO channel_sections (id, space_id, name, icon, position)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, emoji = EXCLUDED.emoji, position = EXCLUDED.position`,
-      [s.id, COMM, s.name, s.emoji, s.position],
+       ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, icon = EXCLUDED.icon, position = EXCLUDED.position`,
+      [s.id, COMM, s.name, s.icon, s.position],
     );
   }
   for (const ch of CHANNELS) {

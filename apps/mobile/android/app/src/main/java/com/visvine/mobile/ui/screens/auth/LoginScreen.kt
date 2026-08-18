@@ -1,5 +1,6 @@
 package com.visvine.mobile.ui.screens.auth
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,11 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -33,11 +32,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.statusBarsPadding
 import com.visvine.mobile.core.AppConfig
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.AuthViewModel
+
 
 /** Port of screens/Auth/LoginScreen.tsx. */
 @Composable
@@ -66,7 +65,7 @@ fun LoginScreen(
                 modifier = Modifier.size(110.dp).clip(CircleShape).background(colors.accentLight),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Hub, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
+                Icon(AppIcons.Network, contentDescription = null, tint = colors.accent, modifier = Modifier.size(64.dp))
             }
             Text("Visvine", color = colors.textPrimary, fontSize = 34.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
             Text("Connect with your space", color = colors.textMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
@@ -90,8 +89,8 @@ fun LoginScreen(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Icon(Icons.Filled.Build, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(20.dp))
-                    Text("Dev login (skip Google)", color = colors.accentDark, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, vertical = 4.dp))
+                    Icon(AppIcons.Tool, contentDescription = null, tint = colors.accentDark, modifier = Modifier.size(20.dp))
+                    Text("Dev login (skip Google)", color = colors.accentDark, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 10.dp, top = 4.dp, bottom = 4.dp))
                 }
             }
 

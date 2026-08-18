@@ -27,7 +27,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Check, Copy, ExternalLink, Upload } from 'lucide-react';
+import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
 import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { FetchJsonError } from '@/lib/fetchJson';
@@ -112,7 +112,7 @@ function BuildReport({ build }: { build: BuildSummary | null }) {
 
       {build.ok && build.errors.length === 0 && (
         <p className="flex items-center gap-2 text-sm text-text-primary">
-          <Check className="h-4 w-4 shrink-0 text-brand-dark-green" />
+          <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />
           Compiles — {fmtBytes(build.sizeBytes)} of bundle, built{' '}
           {timeAgo(new Date(build.updatedAt).getTime(), { style: 'short' })}.
         </p>
@@ -419,11 +419,11 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Link href={`/tools/preview/${encodeURIComponent(tool.name)}`} className={HEADER_BUTTON}>
-            <ExternalLink className="h-3.5 w-3.5" />
+            <ExternalLinkIcon className="h-3.5 w-3.5" />
             Preview
           </Link>
           <button type="button" onClick={copyMcpHint} className={HEADER_BUTTON}>
-            {copied ? <Check className="h-3.5 w-3.5 text-brand-dark-green" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? <CheckIcon className="h-3.5 w-3.5 text-brand-dark-green" /> : <CopyIcon className="h-3.5 w-3.5" />}
             {copied ? 'Copied' : 'Copy MCP hint'}
           </button>
           {isAdmin && (
@@ -440,7 +440,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
               }
               className={HEADER_BUTTON}
             >
-              <Upload className="h-3.5 w-3.5" />
+              <UploadIcon className="h-3.5 w-3.5" />
               Publish
             </button>
           )}
@@ -453,7 +453,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
 
       {status.tone !== 'ok' && (
         <p className="flex items-start gap-2 pb-5 text-xs text-text-muted">
-          <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
           <span className="min-w-0 break-words">{status.hint}</span>
         </p>
       )}
@@ -539,7 +539,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
             <p className="text-sm text-text-muted">Nothing declared to check.</p>
           ) : missing.length === 0 ? (
             <p className="flex items-center gap-2 text-sm text-text-primary">
-              <Check className="h-4 w-4 shrink-0 text-brand-dark-green" />
+              <CheckIcon className="h-4 w-4 shrink-0 text-brand-dark-green" />
               Everything this tool names exists here.
             </p>
           ) : (
@@ -547,7 +547,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
               <ul className="flex flex-col gap-1.5">
                 {missing.map((line) => (
                   <li key={line} className="flex items-start gap-2 text-[13px] text-amber-800">
-                    <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0 text-amber-500" />
                     <span className="min-w-0 break-words">{line}</span>
                   </li>
                 ))}

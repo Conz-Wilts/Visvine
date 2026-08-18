@@ -13,9 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
@@ -34,8 +31,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.visvine.mobile.ui.icons.AppIcons
 import com.visvine.mobile.ui.theme.VisvineTheme
 import com.visvine.mobile.ui.viewmodel.SearchViewModel
+
 
 /** Port of components/SearchOverlay.tsx — a floating bottom search bar. */
 @Composable
@@ -73,7 +72,7 @@ fun SearchOverlay(searchViewModel: SearchViewModel, isDark: Boolean) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = if (isDark) Color.White else Color.Black)
+                Icon(AppIcons.Search, contentDescription = null, tint = if (isDark) Color.White else Color.Black)
                 TextField(
                     value = query,
                     onValueChange = searchViewModel::setQuery,
@@ -101,7 +100,7 @@ fun SearchOverlay(searchViewModel: SearchViewModel, isDark: Boolean) {
                     .clickable { searchViewModel.close() },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.Close, contentDescription = "Close search", tint = if (isDark) Color.White else Color.Black, modifier = Modifier.size(26.dp))
+                Icon(AppIcons.Close, contentDescription = "Close search", tint = if (isDark) Color.White else Color.Black, modifier = Modifier.size(26.dp))
             }
         }
     }
