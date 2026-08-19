@@ -1,7 +1,8 @@
 /**
  * The tick, and the one claim path every run (scheduled OR manual) goes through.
  *
- * One Cloud Scheduler job hits /api/internal/agents/tick every five minutes.
+ * One Cloud Scheduler job hits /api/internal/agents/tick every minute (a
+ * slower job still works; events just wait longer for the next tick).
  * The tick: records a heartbeat → reclaims runs whose instance died → prunes
  * old runs → re-derives any row whose activation note changed under it →
  * CLAIMS the due rows with an atomic compare-and-swap on `status` (correct

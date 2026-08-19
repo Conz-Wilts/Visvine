@@ -4,6 +4,7 @@
  */
 
 import prisma from './prisma';
+import { purgeNodeObjects } from '@/lib/storage/purge';
 import { revalidateTag, unstable_cache } from 'next/cache';
 import type { EventsData, NBEvent, NBAttendee, ContextData, NBNode, NBLink, RSVPStatus, RSVPResponse } from './types';
 import { normalizeImageUrl } from './mediaUrl';
@@ -360,6 +361,10 @@ export async function upsertEvent(spaceId: string, event: NBEvent): Promise<void
 }
 
 export async function deleteEvent(spaceId: string, eventId: string): Promise<void> {
+  // The event's cover image is keyed by this node id — purge before the row, or
+  // nothing can attribute the bytes afterwards. Best-effort; the reconciliation
+  // sweep (pnpm db:gc:objects) is what makes a miss temporary.
+  await purgeNodeObjects([eventId]).catch(() => {});
   await prisma.node.deleteMany({ where: { id: eventId, spaceId, type: 'event' } });
   revalidateTag('context-data-v2', { expire: 0 });
 }

@@ -124,3 +124,48 @@ test('deleteAccount deletes the User row last', () => {
     'Identity must go before User; it is looked up by userId',
   )
 })
+
+/**
+ * The guards above reason about COLUMNS on tables, which is why they could not
+ * see the widest gap of all: a whole TENANT keyed to the person.
+ *
+ * A personal space is `me:<userId>` with `personalOwnerId` set, and its notes
+ * are stored with `ownerKey = 'shared'` INSIDE that space — the ownership lives
+ * in the space id, not in the owner key. So the `ownerKey = userId` sweep never
+ * matched one of them, `personalOwnerId` has no foreign key for a cascade to
+ * follow, and closing an account left the space and every note in it standing,
+ * owned by a user row that no longer existed.
+ */
+test('the personal space is deleted with the account', () => {
+  assert.match(
+    service,
+    /personalOwnerId:\s*userId/,
+    'deleteAccount must find personal spaces by personalOwnerId',
+  )
+  assert.match(
+    service,
+    /tx\.space\.deleteMany/,
+    'deleteAccount must delete the personal space itself — its notes are ownerKey "shared" inside it',
+  )
+})
+
+test('the personal space is exempt from the last-admin guard', () => {
+  // Its owner being its only possible admin is the definition of a personal
+  // space; running assertMembersCanLeave over it would refuse every deletion.
+  assert.match(
+    service,
+    /personalIds\.has\(/,
+    'the ownership guard must skip personal spaces or no account can ever be closed',
+  )
+})
+
+test('bytes are purged before the rows that point at them', () => {
+  // The media bucket is keyed by ENTITY id, so a node's images are only
+  // findable while the node exists. Purging after the cascade would leave
+  // objects that nothing can attribute to a tenant any more.
+  const purge = service.indexOf('purgeSpaceObjects(')
+  const rows = service.indexOf('prisma.$transaction')
+  assert.ok(purge > 0, 'account deletion never purges GCS objects')
+  assert.ok(rows > 0, 'expected the row deletion transaction')
+  assert.ok(purge < rows, 'objects must be purged before the rows that identify them are deleted')
+})

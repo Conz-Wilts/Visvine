@@ -7,6 +7,7 @@
 // free search paths work; only the vector stage skips them).
 
 import { getStorage, RESOURCES_BUCKET, uploadResourceFile } from '@/lib/gcs'
+import { contextSourceObjectPath } from '@/lib/storage/objectPaths'
 import { type Context } from '../store'
 import { embedTexts, embeddingsConfig } from '../embeddings'
 import { chunkSourceText } from '../shared/chunking'
@@ -35,8 +36,11 @@ export interface IngestInput {
   storeOriginal?: boolean
 }
 
+// Built through lib/storage/objectPaths.ts, which is the only place any object
+// path in this app is constructed — that is what lets a space or account delete
+// express "these bytes were theirs" as a prefix and be provably right about it.
 function gcsObjectPath(context: Context, sourceId: string, name: string): string {
-  return `context-sources/${context.spaceId}/${context.ownerKey}/${sourceId}/${name}`
+  return contextSourceObjectPath(context.spaceId, context.ownerKey, sourceId, name)
 }
 
 // Like embeddings, original-file storage degrades to off when unconfigured

@@ -37,6 +37,7 @@ import {
   RESOURCES_BUCKET,
   uploadResourceFile,
 } from '@/lib/gcs'
+import { resourceObjectPath } from '@/lib/storage/objectPaths'
 import { isFeatureAdminOnly } from '@/lib/featureAccess'
 import { readSpaceConfig } from '@/lib/spaces/spaceConfig'
 import { setFolderRestricted } from '@/lib/notes/access'
@@ -186,7 +187,7 @@ export async function uploadResource(input: UploadInput): Promise<DriveFile> {
   // Server-minted, always. The uuid segment is what makes two files of the same
   // name distinct objects, and what stops a guessed path resolving to anything.
   const uuid = randomUUID()
-  const gcsPath = `resources/${spaceId}/${uuid}/${storedName}`
+  const gcsPath = resourceObjectPath(spaceId, uuid, storedName)
   await uploadResourceFile(gcsPath, bytes, mimeType)
 
   const kind = isImage ? null : sourceKindOf(storedName)

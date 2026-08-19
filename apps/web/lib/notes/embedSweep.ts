@@ -29,6 +29,8 @@ export interface EmbedSweepResult {
   configured: boolean
   notes: number
   chunks: number
+  /** Vectors deleted because no live note sits at their path any more. */
+  pruned: number
 }
 
 /**
@@ -36,8 +38,14 @@ export interface EmbedSweepResult {
  * Returns counts; `configured: false` (and zero work) when no key is set.
  */
 export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
+  // Pruning is not an embedding operation and must not be gated on a key: a
+  // space whose OPENAI_API_KEY was removed still deletes notes, and its orphaned
+  // vectors would otherwise be unreachable by any repair. Runs first so the
+  // staleness comparison below never considers a row it is about to delete.
+  const pruned = await pruneOrphanEmbeddings(spaceId)
+
   const config = embeddingsConfig()
-  if (!config) return { configured: false, notes: 0, chunks: 0 }
+  if (!config) return { configured: false, notes: 0, chunks: 0, pruned }
   const where = spaceId ? { spaceId } : {}
 
   const contextRows = await prisma.contextNote.groupBy({
@@ -96,5 +104,45 @@ export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
     }
   }
 
-  return { configured: true, notes, chunks: chunks.length }
+  return { configured: true, notes, chunks: chunks.length, pruned }
+}
+
+/**
+ * Delete vectors whose note is gone — the reconciling half of the lifecycle
+ * whose eager half lives in lib/notes/projections.ts#dropEmbedding.
+ *
+ * `context_note_embeddings` cannot carry a foreign key to `context_notes`: a
+ * note's identity is (space_id, owner_key, path), a unique constraint rather
+ * than the primary key, and the path moves on rename. So the row's lifecycle is
+ * code's responsibility, and code that runs once per event can be missed — a
+ * projection that failed all eight of its attempts, a bulk path that never
+ * enqueued one, a row that predates the eager delete existing at all. This is
+ * what makes the miss temporary.
+ *
+ * Written as one statement so the whole comparison happens in Postgres; loading
+ * both sides into Node to diff them would be the same query with extra steps and
+ * a memory ceiling.
+ */
+async function pruneOrphanEmbeddings(spaceId?: string): Promise<number> {
+  if (spaceId) {
+    return prisma.$executeRaw`
+      DELETE FROM context_note_embeddings e
+      WHERE e.space_id = ${spaceId}
+        AND NOT EXISTS (
+          SELECT 1 FROM context_notes n
+          WHERE n.space_id = e.space_id
+            AND n.owner_key = e.owner_key
+            AND n.path = e.path
+            AND n.deleted_at IS NULL
+        )`
+  }
+  return prisma.$executeRaw`
+    DELETE FROM context_note_embeddings e
+    WHERE NOT EXISTS (
+      SELECT 1 FROM context_notes n
+      WHERE n.space_id = e.space_id
+        AND n.owner_key = e.owner_key
+        AND n.path = e.path
+        AND n.deleted_at IS NULL
+    )`
 }

@@ -3,6 +3,11 @@ import { ApiError } from '@/lib/api/route'
 import { assertMembersCanLeave } from '@/lib/notes/aliases'
 import { findMemberNode } from '@/lib/identity/connection'
 import { logger } from '@/lib/logger'
+import {
+  purgeNodeObjects,
+  purgePersonalContextObjects,
+  purgeSpaceObjects,
+} from '@/lib/storage/purge'
 
 /**
  * What an audit entry's actor becomes when that person deletes their account.
@@ -29,9 +34,21 @@ const DELETED_ACTOR_NAME = 'Deleted user'
  *  - the member node representing them in every space directory, and with it
  *    (via cascade) their links there
  *  - every personal context: notes, folders, files, embeddings, sources, chunks
+ *  - their PERSONAL SPACE (`me:<userId>`) in full, and with it every note in it
+ *  - the bytes: Drive files, uploaded originals and images, in both buckets
  *  - context grants, aliases held, and outstanding access requests
  *  - the `User` row, which cascades memberships, messages, reactions, stars,
  *    and the conversations they created
+ *
+ * The personal space is called out because it was the widest gap and the least
+ * visible one. A personal space's notes are stored with `ownerKey = 'shared'`
+ * INSIDE the space `me:<userId>` — the ownership is in the space id, not in the
+ * owner key — so the `ownerKey = userId` sweep below never matched a single one
+ * of them, and `personalOwnerId` has no foreign key for a cascade to follow.
+ * Closing an account left the space row and every note in it standing, owned by
+ * a user that no longer existed. The coverage guard in tests/delete-account.ts
+ * structurally could not see it either: it reasons about COLUMNS on tables, and
+ * this was a whole tenant.
  *
  * What stays, deliberately: notes other people wrote in a space's SHARED
  * context, even when the subject is the departing member — that text is the
@@ -49,6 +66,10 @@ export interface DeleteAccountResult {
   nodes: number
   /** Personal-context notes removed across all spaces. */
   notes: number
+  /** Personal spaces deleted in full (normally one, zero if never created). */
+  personalSpaces: number
+  /** GCS objects removed across both buckets. */
+  objects: number
 }
 
 export async function deleteAccount(userId: string): Promise<DeleteAccountResult> {
@@ -57,8 +78,20 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     select: { spaceId: true, status: true },
   })
 
+  // Their personal spaces. Found by `personalOwnerId`, which is a plain scalar
+  // — no FK, so nothing cascades from the User row and these have to be named
+  // explicitly. A membership row usually exists too, but not necessarily, and
+  // the ownership claim is the one that decides.
+  const personalSpaces = await prisma.space.findMany({
+    where: { personalOwnerId: userId },
+    select: { id: true },
+  })
+
   // Guard before we delete anything: a space must not be left unmanageable.
-  for (const { spaceId } of memberships) {
+  // A personal space is exempt — it is being deleted outright, and its owner
+  // being its only possible admin is the definition of one.
+  const personalIds = new Set(personalSpaces.map((s) => s.id))
+  for (const { spaceId } of memberships.filter((m) => !personalIds.has(m.spaceId))) {
     try {
       await assertMembersCanLeave(spaceId, [userId])
     } catch (e) {
@@ -73,6 +106,27 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
   for (const { spaceId } of memberships) {
     const node = await findMemberNode(spaceId, userId)
     if (node) nodeIds.push(node.id)
+  }
+
+  // Bytes before rows, for the same reason the space route does it in that
+  // order: the media bucket is keyed by entity id, so a node's images are only
+  // findable while the node exists. Best-effort — a bucket outage must not be
+  // able to block someone from closing their account, and
+  // scripts/gc-orphan-objects.ts reconciles whatever a failure leaves behind.
+  let objects = 0
+  const otherSpaceIds = memberships.map((m) => m.spaceId).filter((id) => !personalIds.has(id))
+  try {
+    for (const { id } of personalSpaces) {
+      const r = await purgeSpaceObjects(id)
+      objects += r.resources + r.media
+    }
+    const r = await purgePersonalContextObjects(userId, otherSpaceIds)
+    objects += r.resources + r.media
+    // Their member node in each surviving space carries their photo.
+    const n = await purgeNodeObjects(nodeIds)
+    objects += n.media
+  } catch (err) {
+    logger.error('account.delete.purge_failed', { userId, err })
   }
 
   const result = await prisma.$transaction(async (tx) => {
@@ -134,11 +188,27 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.identity.deleteMany({ where: { userId } })
     await tx.person.deleteMany({ where: { userId } })
 
+    // Their personal space, in full. Its notes are `ownerKey = 'shared'` INSIDE
+    // `me:<userId>`, so none of the ownerKey sweeps above touched them — the
+    // ownership is expressed by the space id. Deleting the space row cascades
+    // every FK-backed table beneath it (notes, folders, sidecar state,
+    // embeddings, sources, chunks, grants, agents, tools, resources), which is
+    // exactly what the space-delete route relies on.
+    if (personalSpaces.length) {
+      await tx.space.deleteMany({ where: { id: { in: personalSpaces.map((sp) => sp.id) } } })
+    }
+
     // Last: cascades memberships, messages, reactions and the conversations
     // they created.
     await tx.user.delete({ where: { id: userId } })
 
-    return { spaces: memberships.length, nodes: nodeIds.length, notes: notes.count }
+    return {
+      spaces: memberships.length,
+      nodes: nodeIds.length,
+      notes: notes.count,
+      personalSpaces: personalSpaces.length,
+      objects,
+    }
   })
 
   logger.info('account.deleted', { userId, ...result })

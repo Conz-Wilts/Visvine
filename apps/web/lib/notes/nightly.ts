@@ -14,7 +14,6 @@
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 import { aiConfigured } from '@/lib/notes/ai'
-import { semanticConfigured } from '@/lib/notes/embeddings'
 import { embedSweep } from '@/lib/notes/embedSweep'
 import { generateLinkReasons } from '@/lib/notes/linkReasons'
 import { drainProjections, projectionBacklog } from '@/lib/notes/projections'
@@ -42,13 +41,47 @@ async function runNightlyMaintenance(): Promise<void> {
     if (drained.claimed || backlog.pending) {
       logger.info('notes.nightly.projections', { ...drained, ...backlog })
     }
-    if (semanticConfigured()) {
-      const embedded = await embedSweep()
+    // Not gated on a key any more. embedSweep no-ops its embedding half when
+    // there is none, but its ORPHAN PRUNE has to run regardless: a space that
+    // never had a key, or had one removed, still deletes and renames notes, and
+    // its stranded vectors would otherwise have nothing that ever collects them.
+    const embedded = await embedSweep()
+    if (embedded.notes || embedded.chunks || embedded.pruned) {
       logger.info('notes.nightly.embeddings', {
+        configured: embedded.configured,
         notes: embedded.notes,
         chunks: embedded.chunks,
+        pruned: embedded.pruned,
       })
     }
+    // Reconcile object storage against the database — REPORT ONLY, never
+    // deleting. The eager purge (lib/storage/purge.ts) cannot be a guarantee:
+    // there is no two-phase commit between Postgres and GCS, so a delete can
+    // always be lost to a crash or a bucket blip. Running the comparison nightly
+    // is what makes the resulting drift visible instead of discovered. Deleting
+    // stays a deliberate human act — `pnpm db:gc:objects --apply` — because a
+    // sweep that deletes unattended is one bad predicate away from data loss.
+    if (process.env.GCS_RESOURCES_BUCKET || process.env.GCS_MEDIA_BUCKET) {
+      try {
+        const { findOrphanObjects } = await import('@/lib/storage/audit')
+        const audit = await findOrphanObjects()
+        if (audit.orphans.length > 0 || audit.unrecognised.length > 0) {
+          logger.warn('notes.nightly.storage_drift', {
+            orphans: audit.orphans.length,
+            bytes: audit.bytes,
+            unrecognised: audit.unrecognised.length,
+            scanned: audit.scanned,
+            hint: 'run `pnpm db:gc:objects` to see them, `--apply` to delete',
+          })
+        } else {
+          logger.info('notes.nightly.storage_ok', { scanned: audit.scanned })
+        }
+      } catch (err) {
+        // A bucket being unreachable must not take the rest of the sweep with it.
+        logger.error('notes.nightly.storage_audit_failed', { err })
+      }
+    }
+
     if (aiConfigured()) {
       const spaces = await prisma.space.findMany({ select: { id: true } })
       let updated = 0

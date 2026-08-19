@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { MEDIA_PREFIXES, mediaPrefixBare } from '@/lib/storage/objectPaths';
 import { uploadProfileImage, deleteProfileImage, getMediaUrl } from '@/lib/gcs';
 import { requireApiSession, handleApiError, forbiddenResponse } from '@/lib/api/route';
 import { isAdmin, spaceMemberForbidden } from '@/lib/auth';
@@ -30,15 +31,14 @@ const MAX_SIZE = 10 * 1024 * 1024;
 // GCS object prefixes. Two of them predate their type's rename ('persons',
 // 'communities') and stay as they are: the prefix is part of the stored object
 // path, so changing it would orphan every image already uploaded.
-const ENTITY_PREFIXES: Record<ImageEntityType, string> = {
-  card:   'cards',
-  person: 'persons',
-  space:  'communities',
-  event:  'events',
-};
+// The prefix table moved to lib/storage/objectPaths.ts — the one module that
+// mints object paths, so a tenant purge and a reconciliation sweep can both
+// reason about the layout instead of re-deriving it. `mediaPrefixBare` is the
+// no-trailing-slash form these two helpers want (they append `/<variant>.webp`).
+const ENTITY_PREFIXES = MEDIA_PREFIXES;
 
 function buildPrefix(entityType: ImageEntityType, entityId: string): string {
-  return `${ENTITY_PREFIXES[entityType]}/${entityId}`;
+  return mediaPrefixBare(entityType, entityId);
 }
 
 /**

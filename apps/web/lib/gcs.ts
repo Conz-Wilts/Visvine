@@ -99,6 +99,71 @@ export async function uploadResourceFile(
   return objectPath;
 }
 
+// Bulk object lifecycle.
+//
+// Every eager delete in the app removes ONE object because it removes one row
+// (docs/data-architecture.md §1: bytes have exactly one owner). Bulk deletes —
+// dropping a space, closing an account — remove thousands of rows at once and
+// cannot reasonably do that one file at a time, so they work by PREFIX instead.
+// That is only safe because every object path this app mints starts with the
+// tenant it belongs to; see lib/storage/objectPaths.ts, which is the single
+// place those prefixes are constructed and the reason a prefix delete can never
+// reach across a tenant boundary.
+
+/** One object as the lifecycle and audit paths need to see it. */
+export interface StoredObject {
+  name: string;
+  sizeBytes: number;
+  /** Epoch ms the object was created, or 0 when the backend did not report it. */
+  createdMs: number;
+}
+
+/**
+ * Every object under `prefix` (omit it for the whole bucket), paged by the
+ * client library. `createdMs` is what lets the orphan audit refuse to judge an
+ * object that may still be mid-upload — an upload writes bytes before it writes
+ * the row, so recency is the difference between collecting garbage and
+ * collecting somebody's file.
+ */
+export async function listObjects(bucketName: string, prefix?: string): Promise<StoredObject[]> {
+  const [files] = await getStorage().bucket(bucketName).getFiles(prefix ? { prefix } : {});
+  return files.map((f) => ({
+    name: f.name,
+    sizeBytes: Number(f.metadata?.size ?? 0),
+    createdMs: f.metadata?.timeCreated ? Date.parse(String(f.metadata.timeCreated)) : 0,
+  }));
+}
+
+/** Delete one object, ignoring a miss. */
+export async function deleteObject(bucketName: string, objectPath: string): Promise<void> {
+  await getStorage().bucket(bucketName).file(objectPath).delete({ ignoreNotFound: true });
+}
+
+/**
+ * Delete every object under `prefix`. Returns how many were removed.
+ *
+ * Refuses an empty prefix: `deleteFiles({ prefix: '' })` empties the bucket, and
+ * the callers here build prefixes from ids that a bug could leave blank. A
+ * guard that costs nothing is worth more than the argument that it cannot happen.
+ */
+export async function deleteObjectsByPrefix(bucketName: string, prefix: string): Promise<number> {
+  if (!prefix || !prefix.trim()) {
+    throw new Error('deleteObjectsByPrefix requires a non-empty prefix');
+  }
+  const names = (await listObjects(bucketName, prefix)).map((o) => o.name);
+  if (names.length === 0) return 0;
+  const bucket = getStorage().bucket(bucketName);
+  // Bounded concurrency: a space can hold thousands of objects and an unbounded
+  // Promise.all would open a socket per file.
+  const CONCURRENCY = 16;
+  for (let i = 0; i < names.length; i += CONCURRENCY) {
+    await Promise.all(
+      names.slice(i, i + CONCURRENCY).map((name) => bucket.file(name).delete({ ignoreNotFound: true }))
+    );
+  }
+  return names.length;
+}
+
 export async function deleteResourceFile(objectPath: string): Promise<void> {
   const storage = getStorage();
   const bucket = storage.bucket(RESOURCES_BUCKET());

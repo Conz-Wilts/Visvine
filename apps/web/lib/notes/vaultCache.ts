@@ -18,6 +18,7 @@
 
 import { listRaw, SHARED_OWNER_KEY, type Context } from './store'
 import prisma from '@/lib/prisma'
+import { logger } from '@/lib/logger'
 import { buildNoteIndex } from './shared/context'
 import {
   buildVaultView,
@@ -33,6 +34,38 @@ import type { NoteMeta, RawNote } from './shared/types'
 const COALESCE_MS = 5_000
 // Bound memory: full note bodies are cached per context, so cap the contexts held.
 const MAX_CONTEXTS = 20
+/**
+ * …and cap the BYTES, which is the bound that actually matters.
+ *
+ * A count cap alone is not a memory bound: 20 contexts is a few megabytes for
+ * ordinary spaces and over a gigabyte for twenty large ones, and nothing in the
+ * old cap could tell those apart. Retrieval assembles its candidate set in
+ * memory (see the note on getVault), so a context's whole live corpus is
+ * resident while anyone is searching it — this is the ceiling of the current
+ * design and it deserves a number rather than an assumption.
+ *
+ * 256 MB of note text, evicted least-recently-used. Measured against the
+ * present corpus, a note averages ~1 KB, so this holds roughly 250k notes
+ * across all resident contexts — far past any space that exists, and small
+ * enough that a Cloud Run instance cannot be pushed into an OOM by someone
+ * opening enough tabs.
+ */
+const MAX_CACHE_BYTES = 256 * 1024 * 1024
+/**
+ * A single context this large is a warning, not an error: it still works, but it
+ * is approaching the point where candidate assembly should move into Postgres
+ * rather than into Node. Logged once per build so the ceiling is observed before
+ * it is hit, instead of being discovered as a latency graph.
+ */
+const LARGE_CONTEXT_BYTES = 32 * 1024 * 1024
+/**
+ * Per-entry cap on cached visibility views. Each view shares the underlying note
+ * OBJECTS with the unfiltered corpus (filterVisible returns a subset, not
+ * copies), so a view costs an array plus its rebuilt index — small, but not
+ * nothing, and the number of distinct signatures in a space with per-note grants
+ * is bounded only by its membership.
+ */
+const MAX_VIEWS_PER_ENTRY = 32
 
 interface Stamp {
   count: number
@@ -47,6 +80,8 @@ export interface VaultEntry {
   bySig: Map<string, VaultView>
   stamp: Stamp
   checkedAt: number
+  /** Total note-content bytes held by this entry, for the byte-budgeted LRU. */
+  bytes: number
 }
 
 const cache = new Map<string, VaultEntry>()
@@ -67,16 +102,50 @@ async function stampOf(context: Context): Promise<Stamp> {
 
 async function build(context: Context, stamp: Stamp): Promise<VaultEntry> {
   const raws = await listRaw(context)
-  return { raws, metas: buildNoteIndex(raws), bySig: new Map(), stamp, checkedAt: Date.now() }
+  let bytes = 0
+  for (const r of raws) bytes += r.content.length
+  if (bytes > LARGE_CONTEXT_BYTES) {
+    logger.warn('notes.vault.large_context', {
+      spaceId: context.spaceId,
+      ownerKey: context.ownerKey,
+      notes: raws.length,
+      bytes,
+      // Not an error — it still works. But candidate assembly for search happens
+      // over this array in Node, so past roughly this size the right move is to
+      // push the first-stage filter into Postgres.
+      hint: 'context corpus is large enough that in-memory candidate assembly is becoming the bottleneck',
+    })
+  }
+  return {
+    raws,
+    metas: buildNoteIndex(raws),
+    bySig: new Map(),
+    stamp,
+    checkedAt: Date.now(),
+    bytes,
+  }
+}
+
+/** Total note bytes currently resident across every cached context. */
+function cachedBytes(): number {
+  let total = 0
+  for (const entry of cache.values()) total += entry.bytes
+  return total
 }
 
 function touch(key: string, entry: VaultEntry): VaultEntry {
-  // Re-insert for LRU recency, then evict the oldest contexts past the cap.
+  // Re-insert for LRU recency, then evict the oldest contexts until BOTH bounds
+  // hold. The byte budget is the real one — a count cap cannot tell twenty small
+  // spaces from twenty large ones, and it was the only bound there used to be.
   cache.delete(key)
   cache.set(key, entry)
-  while (cache.size > MAX_CONTEXTS) {
+  while (cache.size > MAX_CONTEXTS || (cache.size > 1 && cachedBytes() > MAX_CACHE_BYTES)) {
     const oldest = cache.keys().next().value
-    if (oldest === undefined) break
+    // `cache.size > 1` above guarantees the entry just inserted is never the one
+    // evicted: a single context larger than the whole budget must still be
+    // served, and evicting it here would mean rebuilding it on the next call
+    // forever.
+    if (oldest === undefined || oldest === key) break
     cache.delete(oldest)
   }
   return entry
@@ -134,8 +203,19 @@ export function vaultFor(entry: VaultEntry, p: ContextPrincipal, context: Contex
   }
   const sig = visibilitySignature(p)
   const cached = entry.bySig.get(sig)
-  if (cached) return cached
+  if (cached) {
+    // Re-insert for LRU recency, so the eviction below drops the least recently
+    // used signature rather than the oldest-created one.
+    entry.bySig.delete(sig)
+    entry.bySig.set(sig, cached)
+    return cached
+  }
   const view = buildVaultView(entry.raws, p)
   entry.bySig.set(sig, view)
+  while (entry.bySig.size > MAX_VIEWS_PER_ENTRY) {
+    const oldest = entry.bySig.keys().next().value
+    if (oldest === undefined || oldest === sig) break
+    entry.bySig.delete(oldest)
+  }
   return view
 }

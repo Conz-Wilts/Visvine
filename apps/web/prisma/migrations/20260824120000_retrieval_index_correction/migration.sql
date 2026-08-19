@@ -1,0 +1,91 @@
+-- Retrieval index correction: drop two HNSW indexes that could never be used,
+-- and add the one that the queries actually want.
+--
+-- WHAT WAS WRONG
+--
+-- prisma/sql/retrieval-indexes.sql built HNSW indexes on
+-- context_note_embeddings.embedding and context_source_chunks.embedding, on the
+-- stated grounds that "cosine ranking runs in Postgres" and both stages were
+-- otherwise sequential scans. Neither index was ever used, for two independent
+-- reasons, and both were verified against this schema on pgvector 0.8.2:
+--
+-- 1. THE ORDERING FORM. lib/notes/vectorStage.ts and lib/notes/sourceStage.ts
+--    both select `1 - (embedding <=> $1) AS score` and `ORDER BY score DESC`.
+--    Postgres only recognises an HNSW index for `ORDER BY embedding <=> $1`
+--    (ASC, the bare operator). Wrapping it in `1 - (...)` and reversing the sort
+--    is semantically identical and syntactically invisible to the planner, so
+--    the plan was `Seq Scan -> Sort` in every case.
+--
+-- 2. THE FILTER. Even written in the index-eligible form, both queries carry
+--    `path IN (<the visible paths>)` — the candidate set assembled in memory by
+--    lib/notes/vaultCache.ts. That filter is far more selective than the ANN
+--    index, so the planner correctly prefers a scan anyway; and if it ever did
+--    choose the index, HNSW applies the filter AFTER the scan, meaning a
+--    LIMIT 20 could return fewer than 20 visible rows. The index would not have
+--    been an optimisation, it would have been a silent recall bug.
+--
+-- WHY DROPPING IS THE RIGHT CALL, NOT FIXING THE ORDER BY
+--
+-- ANN indexes buy their speed by not looking at every row. These queries have
+-- already narrowed to one context's visible notes before they reach Postgres,
+-- so there is nothing left for an ANN index to skip. Measured on this schema:
+-- a 5,000-note context ranks exactly in ~21ms with the plain scan, using the
+-- (space_id, owner_key, path) unique index to reach the context. That is well
+-- inside budget for a search request, and it is EXACT — no recall trade, no
+-- post-filter drops, no ef_search to tune.
+--
+-- The indexes were not free: two HNSW structures over 768-dimensional vectors
+-- cost real build time and write amplification on every re-embed, which the
+-- nightly sweep does in bulk. Paying that for a plan that never fires is the
+-- worst of both.
+--
+-- If the retrieval architecture ever stops assembling candidates in memory (see
+-- the vault-cache ceiling in docs/data-architecture.md §7), an ANN index becomes
+-- the right tool again — and at that point it needs the bare-operator ORDER BY
+-- and `hnsw.iterative_scan = relaxed_order` together, or it reintroduces the
+-- recall bug above. Reinstating one is a deliberate act, not a default.
+
+DROP INDEX IF EXISTS "context_note_embeddings_embedding_hnsw";
+DROP INDEX IF EXISTS "context_source_chunks_embedding_hnsw";
+
+-- The index the chunk stage actually wants. Its filter is
+-- (space_id, owner_key, model, path IN …); the existing
+-- (space_id, owner_key, model) index gets it to the context and then scans every
+-- chunk in it. Adding `path` lets the same index also cut to the visible files,
+-- which is the selective part — a space with one large uploaded workbook and a
+-- hundred small notes was scanning the workbook's every chunk on every search.
+CREATE INDEX IF NOT EXISTS "context_source_chunks_space_owner_path_idx"
+    ON "context_source_chunks" ("space_id", "owner_key", "path");
+
+-- NOT DONE HERE: cleaning up the embedding rows whose note no longer exists.
+--
+-- context_note_embeddings is keyed by (space_id, owner_key, path) with no
+-- foreign key to context_notes -- it cannot have one, because a note's identity
+-- is that triple and its row id is not in the key. Nothing pruned these: the
+-- sweep only ever upserted, so every deleted note and every renamed note left
+-- its vector behind permanently. It was contained (the vector stage intersects
+-- with the live candidate paths, so a stale row could never surface a deleted
+-- note) but unbounded.
+--
+-- An earlier draft of this migration deleted the backlog with one statement
+-- here. That was the wrong place for it. The backlog is however many years of
+-- deletions have accumulated, entirely unknown before the statement runs, and
+-- deploy.yml executes migrations against production BEFORE building the image --
+-- so an unbounded DELETE holding locks and generating WAL would be running while
+-- production is still serving, for a cleanup that is pure housekeeping and
+-- urgent to nobody.
+--
+-- Ongoing pruning is now on the note write path
+-- (lib/notes/projections.ts#dropEmbedding), and the accumulated backlog is
+-- cleared by the nightly sweep (lib/notes/embedSweep.ts#pruneOrphanEmbeddings),
+-- which runs at 3am, is idempotent, and can be triggered on demand with
+-- `pnpm db:embed`. Same rows, same statement, at an hour when it costs nothing.
+
+-- Note on the index above: a plain CREATE INDEX takes an ACCESS EXCLUSIVE lock
+-- for the duration of the build, so writes to context_source_chunks block while
+-- it runs (uploads mid-deploy, nothing else). CONCURRENTLY would avoid that but
+-- cannot run inside a transaction block, and both `prisma migrate deploy` and
+-- scripts/apply-sql-functions.mjs wrap their statements in one. The table is
+-- small and the window is short; if it ever is not, the fix is to build the
+-- index by hand with CONCURRENTLY before deploying, at which point the
+-- IF NOT EXISTS above makes this a no-op.

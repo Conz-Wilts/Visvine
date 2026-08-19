@@ -71,7 +71,8 @@ files, screenshots, exports. A blob is never addressed directly by a feature —
 a note or a row holds the pointer, and `ContextSource` + `ContextSourceChunk`
 are how a blob's *contents* re-enter tier 1's retrieval stack.
 
-Three rules, learned the hard way from the Drive (§5):
+Five rules, learned the hard way from the Drive (§5) and from the bulk-delete
+audit (§8):
 
 - **The pointer is a column, never a JSON blob and never a client input.** The
   object path is what gets signed into a download URL, so a client-supplied one
@@ -80,6 +81,21 @@ Three rules, learned the hard way from the Drive (§5):
   stores a value that is wrong fifteen minutes later.
 - **Bytes have exactly one owner.** When two records reference one object, one of
   them owns it and deletes it; the other is a projection and must not.
+- **The path begins with the tenant.** Every object path is minted in
+  `lib/storage/objectPaths.ts` and starts with the space that owns it. That is
+  what makes "delete this tenant's bytes" expressible as a prefix, which is the
+  only form a bulk delete can take — a per-row delete cannot be reached from a
+  `deleteMany`. It is a checked property (`tests/storage-objects.test.ts`), not a
+  convention, because it is the boundary a prefix delete must never cross.
+- **Eager deletion is best-effort; reconciliation is what converges.** There is
+  no two-phase commit between Postgres and GCS, so an object delete can always
+  be lost — to a crash, a transaction that rolls back after it, or a bucket
+  blip. Deleting eagerly is right because it is immediate and cheap; it is not a
+  guarantee. `pnpm db:gc:objects` is the guarantee: it compares both buckets
+  against the live rows and reports (or, with `--apply`, deletes) what nothing
+  points at. It is also the ONLY complete answer for the media bucket, whose
+  objects are keyed by entity id rather than by tenant — nothing can enumerate
+  the nodes of a space that has already been deleted.
 
 And the rule that makes the tier worth having at all: **a stored file whose
 contents never reach tier 1 is a folder with extra steps.** Every text-bearing
@@ -347,8 +363,10 @@ question is not whether they can be rebuilt but who guarantees they were.
 ```
 writeNote()
  ├─ BEGIN ────────────────────────────────────────────────────┐
- │   context_notes        UPSERT   the declaration            │  one transaction
- │   note_projection_jobs INSERT   "this write owes a rebuild"│
+ │   context_notes         UPSERT  the declaration            │
+ │   context_note_revisions INSERT the LEDGER (unreplayable)  │  one transaction
+ │   context_folders       UPSERT  structural, if an index    │
+ │   note_projection_jobs  INSERT  "this write owes a rebuild"│
  ├─ COMMIT ───────────────────────────────────────────────────┘
  │
  ├─ settleProjection()  ← inline, so the author sees compile errors on save
@@ -370,6 +388,20 @@ schedule. A row that burns 8 attempts is PARKED with its error rather than
 retried forever — at that point it is a bug to fix, and leaving it due would
 starve healthy jobs behind it.
 
+The revision row is inside the transaction, and that is the correction the
+outbox itself made necessary. §1 calls `ContextNoteRevision` a LEDGER — "dropping
+a ledger loses history permanently" — and it was the one table on this path
+appended AFTER the commit. So the outbox made every *replayable* projection
+durable and left the single *unreplayable* record bare: a crash in that window
+stored the new content and lost the record of who wrote it, with nothing able to
+reconstruct it. The same applies to the `context_folders` row that makes an index
+note a folder: it is structural, nothing derives it, and no projection would ever
+notice it missing. Both now commit with the note.
+
+The rule that falls out: **what the outbox protects is what can be rebuilt. What
+cannot be rebuilt has to be in the transaction.** Those are complementary, not
+alternatives — reaching for the job row is the wrong instinct for a ledger.
+
 Three design choices worth keeping:
 
 - **Inline, not asynchronous.** The outbox buys durability, not background
@@ -388,6 +420,17 @@ Three design choices worth keeping:
 
 ## 7. Known open edges
 
+- **Retrieval assembles candidates in memory.** `listRaw` loads every live note
+  in a context — bodies and all — and BM25, the link neighbourhood and the
+  visibility lens all run over that array in Node; pgvector is a *reranker over
+  an in-memory candidate set*, not a first-class retrieval index. This is the
+  real ceiling of tier 1. It is now bounded and observed rather than assumed:
+  the vault cache has a 256 MB budget with LRU eviction (a count cap is not a
+  memory bound), per-entry visibility views are capped, and a context past 32 MB
+  logs `notes.vault.large_context` so the ceiling is seen before it is hit. At
+  the measured ~1 KB/note this is comfortable to roughly 10–50k notes per space.
+  Past that, the first-stage filter has to move into Postgres — and that is also
+  the point at which an ANN index becomes worth having again (§8).
 - **Agent memory** (§3) is designed but not built. The gap is real: nothing
   currently carries a conclusion from one run to the next.
 - ~~**No retrieval evaluation harness.**~~ **Built.** `lib/notes/shared/evalRetrieval.ts`
@@ -405,3 +448,132 @@ Three design choices worth keeping:
 - **No cross-space memory.** A lesson learned in one space cannot reach another
   except by a human copying it. That is the correct default for a multi-tenant
   product and should stay a deliberate, granted act if it is ever built.
+
+---
+
+## 8. The foundations audit (2026-08-19)
+
+A pass over the three tiers as built rather than as documented — the schema, the
+write path and the storage layer, checked against the rules above. Six things
+were wrong. All six are fixed; what follows is what each one teaches, because
+the failure modes rhyme.
+
+**The unreplayable table was the one left outside the transaction.** §6 has the
+detail. The general shape: durability machinery attracts attention to the things
+it covers, and the thing it does not cover becomes *less* visible for having
+machinery next to it. `ContextNoteRevision` was appended after the commit for the
+same reason it looked safe — everything around it had a job row.
+
+**Bulk deletes could not reach the code that owns bytes.** `deleteResource` and
+`sourceStore.deleteSource` each removed their object correctly. Dropping a space
+and closing an account used `deleteMany`, which by construction never calls
+either, so every file of every deleted space stayed in the bucket permanently and
+nothing collected it. The rule "bytes have exactly one owner" was written for the
+one-row case and silently did not describe the many-row case. Both paths now go
+through `lib/storage/purge.ts`, paths are minted in one module so a tenant's
+bytes are a prefix, and `pnpm db:gc:objects` reconciles.
+
+**Closing an account left the whole personal space behind.** The widest gap and
+the least visible. A personal space's notes are `ownerKey = 'shared'` inside the
+space `me:<userId>` — the ownership is in the space id, not the owner key — so
+the `ownerKey = userId` sweep matched none of them, and `personalOwnerId` has no
+foreign key for a cascade to follow. The coverage guard could not see it either,
+because it reasons about columns on tables and this was a whole tenant. Lesson:
+a guard inherits the blind spot of the abstraction it is written in.
+
+**Two HNSW indexes were never once used.** The queries write
+`ORDER BY 1 - (embedding <=> $1) DESC`, which is not an indexable ordering, and
+they filter on `path IN (<visible paths>)`, which is more selective than the
+index anyway — and which HNSW would apply *after* the scan, so engaging the index
+would have been a recall bug rather than an optimisation. Dropped, with the
+reasoning and the conditions for wanting one back recorded in migration
+`20260824120000_retrieval_index_correction`. Lesson: an index is a claim about a
+query plan, and a claim nobody checked with `EXPLAIN` is a comment.
+
+**Nothing pruned embeddings.** `context_note_embeddings` is keyed by
+(space_id, owner_key, path) and cannot carry a foreign key, so its lifecycle is
+code's job — and the sweep only ever upserted. Every deleted and renamed note
+left its vector behind for good. It was contained rather than dangerous (the
+vector stage intersects with live candidate paths), which is exactly why it
+survived so long. Pruned now on the write path and reconciled by the nightly
+sweep, the same eager/reconcile pair as tier 3.
+
+**Integrity was enforced on one axis and hand-written on the other.** 27 of the
+28 tables carrying `space_id` had a cascading foreign key; 26 of 32
+user-identity columns had none, and account deletion was correct only because
+one file remembered each of them. Most of that asymmetry is legitimate and is
+now written down on the `User` model: polymorphic keys (`owner_key`) cannot have
+one, provenance stamps (`uploaded_by`) must *outlive* the person, and the audit
+trail is redacted on purpose. What was left after those exclusions was access
+and credentials — an owner alias or an exchangeable refresh token surviving a
+deleted account — and those are foreign keys now.
+
+The through-line: **every one of these was a rule that held in the case it was
+written for and silently did not describe the neighbouring case.** Single-row vs
+bulk. Replayable vs not. One tenant axis vs the other. Writing the rule down (§1)
+was what made them findable at all; the next audit should start by asking, of
+each rule, which case it was written for.
+
+### 8.1 The follow-up pass
+
+Four changes after the audit, aimed at the same class of problem: a rule that is
+true but unenforced.
+
+**Enum columns are constraints now, not comments.** Two dozen columns enumerated
+their values in a line comment and were checked nowhere — the schema had exactly
+two CHECK constraints in total. A typo committed, was durable, and surfaced later
+as a reader that skipped the row. Migration
+`20260824120200_enum_check_constraints` adds 27, sourced from the TypeScript
+unions rather than from the comments, and `tests/schema-constraints.test.ts`
+fails when a new enum-ish column arrives unconstrained.
+
+The exercise paid for itself before it shipped. FOUR column comments were already
+wrong: `context_sources.kind` (three values listed, six in the dispatch table),
+`agent_runs.trigger` (two listed, five in `RunTrigger`),
+`identity_resolutions.decision` (omitted `created`, which 624 rows actually hold)
+and `agent_state.deactivatedReason` (omitted `config`). The third was found by
+`pnpm db:constraints:validate`; the fourth by the coverage test, on its first
+run. Neither was findable by reading, which is the argument.
+
+Every constraint — the CHECKs here and the foreign keys from the audit itself —
+is added `NOT VALID`. That is not a weaker form: Postgres creates the
+constraint's triggers in full, so every insert and update is checked and
+`ON DELETE CASCADE` fires exactly as it would otherwise. The only thing skipped
+is the one-time scan proving EXISTING rows comply.
+
+The reason is that deploy migrates production *before* building the image, so a
+migration that aborts on one unexpected row leaves production half-migrated with
+the old image serving. Proving old rows comply moves to
+`pnpm db:constraints:validate`, where it can fail safely and print the offending
+values.
+
+**And a constraint migration must not touch data.** An earlier draft of the
+foreign-key migration deleted every row referencing a missing user, so each
+constraint could be added valid. It read as tidiness and was not: unattended,
+destructive, and operating on a count nobody had seen. A row pointing at a
+long-gone user is broken — but "broken" is a conclusion for a person to reach
+with the rows in front of them, not a licence for a deploy step to delete data on
+its way past. The same reasoning removed a bulk `DELETE` of orphaned embeddings
+from the retrieval migration; the nightly sweep already does that job, at an hour
+when it costs nothing. `tests/schema-constraints.test.ts` now fails if either
+migration grows a `DELETE`, `UPDATE`, `TRUNCATE` or `DROP TABLE`.
+
+**Converting an entity note to a folder is atomic.** `ensureEntityFolder` made
+six structural writes with no transaction: the note's path, its grants, its
+folder flags, the folder row, the index contract, and the node's pointer. A
+crash between the first two left a note that had moved with grants still naming
+its old path — a restricted note silently readable — and nothing derived it, so
+no projection would ever notice. §6 said structural work stays inline with the
+write; being inline was only half the requirement.
+
+**A parked projection job now tells someone.** Eight exhausted attempts means a
+note's derived state is permanently stale until a person intervenes — the one
+failure the outbox cannot recover from, and the only one that wrote nothing but a
+log line. Every comparable giving-up here notifies (a broken connection, a
+deactivated agent, a failed run). This one now does too, deduped per note.
+
+**The storage audit runs nightly.** `pnpm db:gc:objects` was correct and manual,
+so drift was only ever found by remembering to look. The comparison moved to
+`lib/storage/audit.ts` and the nightly sweep runs it in report-only mode; the
+script stays the only thing that can delete. A GC you have to remember to run
+reports zero for a year and then reports a surprise.

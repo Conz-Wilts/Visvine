@@ -86,6 +86,12 @@ export interface Actor {
   email?: string | null
 }
 
+/**
+ * A Prisma client or an interactive-transaction client. The revision ledger is
+ * written through this so it can ride the note's own transaction.
+ */
+type Db = Prisma.TransactionClient | typeof prisma
+
 const MAX_REVISIONS = 50
 // Consecutive manual edits by the same person within this window collapse into a
 // single revision (latest snapshot wins), so autosave doesn't spam an entry per save.
@@ -128,8 +134,8 @@ function toRaw(row: { path: string; content: string; updatedAt: Date }): RawNote
 }
 
 // A live (non-trashed) note at this exact path, or null.
-function findLive(context: Context, path: string) {
-  return prisma.contextNote.findFirst({
+function findLive(context: Context, path: string, db: Db = prisma) {
+  return db.contextNote.findFirst({
     where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path, deletedAt: null },
   })
 }
@@ -218,12 +224,18 @@ export async function createNote(
     if (parseEntityHref(requested)) {
       if (await findLive(context, requested)) throw new Error(`A note already exists at: ${requested}`)
       if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
-      const dest = await ensureEntityFolderFor(context, requested, actor, content)
-      const row = await findLive(context, dest)
-      if (!row) throw new Error(`Note not found: ${dest}`)
-      // The folder was built by helpers that own their own writes, so there is
-      // no note transaction left to ride; enqueue the rebuild on its own and
-      // settle it the same way. The row is still what carries a failure forward.
+      // The folder is built by helpers that own their own writes, so there is
+      // no note transaction here for the job to ride. The job is therefore
+      // enqueued BEFORE the build rather than after it, which is the safe half
+      // of the choice: a crash mid-build leaves a job for a path that holds no
+      // note, and applyProjections treats exactly that as a no-op ("convergent
+      // staleness" — the mutation that owns the path is authoritative for it).
+      // Enqueueing afterwards left the opposite and worse case, a built folder
+      // with no record that its projections were ever owed.
+      const node = await nodeForEntityPath(context.spaceId, requested)
+      if (!node) throw new Error(`"${requested}" is not a directory entity's note — no such node`)
+      const dest = entityIndexPathOf(node)
+      if (!dest) throw new Error(`"${requested}" is not a directory entity`)
       const projection: ProjectionInput = {
         context,
         path: dest,
@@ -233,7 +245,11 @@ export async function createNote(
         model: stamp?.model,
         changed: true,
       }
-      await settleProjection(await enqueueProjection(prisma, projection), projection)
+      const jobId = await enqueueProjection(prisma, projection)
+      await ensureEntityFolder(context, node, actor, content)
+      const row = await findLive(context, dest)
+      if (!row) throw new Error(`Note not found: ${dest}`)
+      await settleProjection(jobId, projection)
       return toRaw(row)
     }
   }
@@ -266,9 +282,13 @@ export async function createNote(
       },
       select: { path: true, content: true, updatedAt: true },
     })
+    // An index note IS a folder, so its ContextFolder row is STRUCTURAL and
+    // commits with the note. Outside the transaction, a crash here left an
+    // index note whose folder did not exist — and no projection would ever
+    // notice, because a folder row is not derived from anything.
+    if (isIndexPath(p)) await upsertFolderRow(tx, context, folderOf(p))
     return { row, jobId: await enqueueProjection(tx, projection) }
   })
-  if (isIndexPath(p)) await upsertFolderRow(context, folderOf(p))
   await settleProjection(jobId, projection)
   invalidateVault(context)
   return toRaw(row)
@@ -354,10 +374,15 @@ export async function refreshIndexesForNote(context: Context, notePath: string):
  * the callers; this moves the boundary flags, OR-ing them onto any row already
  * at the destination (a folder row may pre-exist) and dropping the stale row.
  */
-async function moveFolderFlags(context: Context, from: string, to: string): Promise<void> {
+async function moveFolderFlags(
+  db: Db,
+  context: Context,
+  from: string,
+  to: string,
+): Promise<void> {
   if (!from || !to || from === to) return
   const where = { spaceId: context.spaceId, ownerKey: context.ownerKey }
-  const row = await prisma.contextFolder.findUnique({
+  const row = await db.contextFolder.findUnique({
     where: { folder_identity: { ...where, path: from } },
     select: { restricted: true, locked: true },
   })
@@ -367,19 +392,27 @@ async function moveFolderFlags(context: Context, from: string, to: string): Prom
       ...(row.restricted ? { restricted: true } : {}),
       ...(row.locked ? { locked: true } : {}),
     }
-    await prisma.contextFolder.upsert({
+    await db.contextFolder.upsert({
       where: { folder_identity: { ...where, path: to } },
       create: { ...where, path: to, ...flags },
       update: flags,
     })
   }
-  await prisma.contextFolder.deleteMany({ where: { ...where, path: from } })
+  await db.contextFolder.deleteMany({ where: { ...where, path: from } })
 }
 
-/** The `SpaceNoteFolder` row that makes a folder exist in its own right. */
-async function upsertFolderRow(context: Context, folder: string): Promise<void> {
+/**
+ * The `SpaceNoteFolder` row that makes a folder exist in its own right.
+ *
+ * Takes the client because this is STRUCTURAL, not derived: an index note IS a
+ * folder, so the row has to land with the note or the folder exists in one tier
+ * and not the other, and nothing on the outbox would ever notice. §6 puts
+ * structural work inline with the write; being inline is only half of it — it
+ * also has to be in the same transaction.
+ */
+async function upsertFolderRow(db: Db, context: Context, folder: string): Promise<void> {
   if (!folder) return
-  await prisma.contextFolder.upsert({
+  await db.contextFolder.upsert({
     where: {
       folder_identity: { spaceId: context.spaceId, ownerKey: context.ownerKey, path: folder },
     },
@@ -504,7 +537,7 @@ export async function writeNote(
   // Before the outbox these were the same statement plus six bare awaits, so a
   // crash between them left a stored declaration with stale derived state and
   // nothing anywhere saying so. See lib/notes/projections.ts.
-  const { note, jobId } = await prisma.$transaction(async (tx) => {
+  const jobId = await prisma.$transaction(async (tx) => {
     const note = existing
       ? await tx.contextNote.update({
           where: { id: existing.id },
@@ -529,7 +562,34 @@ export async function writeNote(
       model,
       changed: prev !== content,
     })
-    return { note, jobId }
+    // The revision ledger rides the same transaction. It is the ONLY thing on
+    // this path that a replay cannot rebuild (§1: a ledger, not a projection),
+    // so it is the last thing that should have been left outside — the content
+    // committing without its history is an unrecoverable loss, where a missed
+    // projection is merely owed. A no-op save records nothing, as before.
+    if (prev !== content) {
+      // Seed a baseline of the pre-edit content the first time a note is
+      // edited, so the oldest revision has a snapshot to diff/restore from.
+      if (prev !== null) {
+        const count = await tx.contextNoteRevision.count({ where: { noteId: note.id } })
+        if (count === 0) {
+          await recordRevision(
+            tx,
+            note.id,
+            { content: prev, editor: 'Unknown', origin: 'baseline' },
+            Date.now() - 1,
+          )
+        }
+      }
+      await recordRevision(tx, note.id, {
+        content,
+        editor: actor.name,
+        editorEmail: actor.email ?? undefined,
+        origin,
+        model,
+      })
+    }
+    return jobId
   })
 
   // Rebuild what this write derives — directory links, agent state, the Tool
@@ -558,28 +618,6 @@ export async function writeNote(
       : await convertNoteToIndex(context, p, actor)
     : p
 
-  if (prev === content) return finalPath // nothing changed — don't spawn a revision
-
-  // Seed a baseline of the pre-edit content the first time a note is edited, so
-  // the oldest revision has a snapshot to diff/restore from.
-  if (prev !== null) {
-    const count = await prisma.contextNoteRevision.count({ where: { noteId: note.id } })
-    if (count === 0) {
-      await recordRevision(
-        note.id,
-        { content: prev, editor: 'Unknown', origin: 'baseline' },
-        Date.now() - 1,
-      )
-    }
-  }
-
-  await recordRevision(note.id, {
-    content,
-    editor: actor.name,
-    editorEmail: actor.email ?? undefined,
-    origin,
-    model,
-  })
   return finalPath
 }
 
@@ -593,8 +631,22 @@ interface RevisionInput {
 
 // Append a revision, coalescing consecutive same-author manual edits within the
 // window (latest wins), then prune to MAX_REVISIONS (oldest first).
-async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now()): Promise<void> {
-  const last = await prisma.contextNoteRevision.findFirst({
+//
+// Takes the client rather than reaching for `prisma`, because this runs INSIDE
+// the note's own transaction. `ContextNoteRevision` is a LEDGER by
+// docs/data-architecture.md §1 — "dropping a ledger loses history permanently" —
+// so it is the one table on this path that a retry cannot reconstruct. It used
+// to be appended after the commit, which meant a crash in between stored the new
+// content and lost the record of who changed it, forever. The outbox protected
+// the six replayable projections and left the unreplayable ledger bare; this
+// closes that inversion by making the note and its history commit together.
+async function recordRevision(
+  db: Db,
+  noteId: string,
+  rev: RevisionInput,
+  at = Date.now(),
+): Promise<void> {
+  const last = await db.contextNoteRevision.findFirst({
     where: { noteId },
     orderBy: { at: 'desc' },
   })
@@ -606,7 +658,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     at - last.at.getTime() < COALESCE_WINDOW_MS
 
   if (coalesce && last) {
-    await prisma.contextNoteRevision.update({
+    await db.contextNoteRevision.update({
       where: { id: last.id },
       data: {
         content: rev.content,
@@ -616,7 +668,7 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
       },
     })
   } else {
-    await prisma.contextNoteRevision.create({
+    await db.contextNoteRevision.create({
       data: {
         noteId,
         content: rev.content,
@@ -629,16 +681,18 @@ async function recordRevision(noteId: string, rev: RevisionInput, at = Date.now(
     })
   }
 
-  const count = await prisma.contextNoteRevision.count({ where: { noteId } })
-  if (count > MAX_REVISIONS) {
-    const stale = await prisma.contextNoteRevision.findMany({
-      where: { noteId },
-      orderBy: { at: 'asc' },
-      take: count - MAX_REVISIONS,
-      select: { id: true },
-    })
-    await prisma.contextNoteRevision.deleteMany({ where: { id: { in: stale.map((s) => s.id) } } })
-  }
+  // Prune in ONE statement rather than count → findMany → deleteMany. This runs
+  // inside the note's transaction now, on the autosave hot path, so three round
+  // trips per save is three too many — and doing the trim in a single statement
+  // also means it cannot see a different set than it deletes.
+  await db.$executeRaw`
+    DELETE FROM context_note_revisions
+    WHERE id IN (
+      SELECT id FROM context_note_revisions
+      WHERE note_id = ${noteId}
+      ORDER BY at DESC, id DESC
+      OFFSET ${MAX_REVISIONS}
+    )`
 }
 
 export async function renameNote(
@@ -684,7 +738,7 @@ export async function renameNote(
         data: { resourcePath: t },
       })
     }
-    await moveFolderFlags(context, f, t)
+    await moveFolderFlags(prisma, context, f, t)
     if (jobId) await settleProjection(jobId, projection)
   }
   invalidateVault(context)
@@ -802,7 +856,7 @@ export async function emptyTrash(context: Context): Promise<void> {
 
 export async function createFolder(context: Context, path: string, actor?: Actor): Promise<void> {
   const p = sanitizePath(path)
-  await upsertFolderRow(context, p)
+  await upsertFolderRow(prisma, context, p)
   // The synthetic index path makes ancestorFolders cover this folder AND its parents.
   if (actor) {
     await ensureAncestorIndexes(context, indexPathOf(p), actor)
@@ -827,7 +881,7 @@ export async function createIndexFolder(
   if (p.toLowerCase().endsWith('.md')) throw new Error(`A folder path is not a file: ${path}`)
   const idx = indexPathOf(p)
   if (await findLive(context, idx)) throw new Error(`A folder already exists at: ${p}`)
-  await upsertFolderRow(context, p)
+  await upsertFolderRow(prisma, context, p)
   // createNote does the rest of the invariant: ancestor indexes, the folder rows
   // above it, and the parent index that now lists this folder.
   await createNote(context, idx, content, actor)
@@ -886,8 +940,8 @@ async function convertNoteToIndex(
       data: { resourcePath: folder },
     })
   }
-  await moveFolderFlags(context, f, folder)
-  await upsertFolderRow(context, folder)
+  await moveFolderFlags(prisma, context, f, folder)
+  await upsertFolderRow(prisma, context, folder)
   // Notes may already sit under `a/b/` (an index arriving late for a folder that
   // grew from note paths) — the new index lists them, and the parent lists it.
   await refreshFolderIndex(context, folder)
@@ -952,57 +1006,96 @@ async function ensureEntityFolder(
   const dest = entityIndexPathOf(node)
   if (!flat || !dest) throw new Error(`"${node.id}" is not a directory entity`)
   const folder = folderOfIndexPath(dest)
-  const live = await findLive(context, dest)
-  if (!live) {
-    const row = await findLive(context, flat)
-    if (row) {
-      await prisma.contextNote.update({ where: { id: row.id }, data: { path: dest } })
-      await syncContextLinksBulk(context, [flat], [[dest, row.content]])
-      await syncPublicationsOnRename(context, flat, dest)
-      if (context.ownerKey === SHARED_OWNER_KEY) {
-        await prisma.contextGrant.updateMany({
-          where: { spaceId: context.spaceId, resourcePath: flat },
-          data: { resourcePath: folder },
+  const shared = context.ownerKey === SHARED_OWNER_KEY
+
+  // THE STRUCTURAL HALF — all of it, or none of it.
+  //
+  // Turning an entity note into an entity FOLDER is six writes that only mean
+  // something together: the note moves to the index path, its grants follow to
+  // the folder, its restricted/locked flags follow, the folder row appears, the
+  // index is held to the entity contract, and the node records where its note
+  // now lives. None of that is derived from anything, so no projection would
+  // ever rebuild it and the outbox cannot help — §6's line about structural work
+  // staying inline was only half the requirement. It has to be ATOMIC.
+  //
+  // Outside a transaction, a crash after the path update left an entity whose
+  // note had moved but whose grants still pointed at the old path (so a
+  // restricted person's note silently became readable), or whose node pointer
+  // still named a path with nothing at it. Both are states nothing detects and
+  // nothing repairs.
+  const moved = await prisma.$transaction(async (tx) => {
+    let renamedFrom: string | null = null
+    const live = await findLive(context, dest, tx)
+    if (!live) {
+      const row = await findLive(context, flat, tx)
+      if (row) {
+        await tx.contextNote.update({ where: { id: row.id }, data: { path: dest } })
+        if (shared) {
+          await tx.contextGrant.updateMany({
+            where: { spaceId: context.spaceId, resourcePath: flat },
+            data: { resourcePath: folder },
+          })
+        }
+        await moveFolderFlags(tx, context, flat, folder)
+        renamedFrom = flat
+      } else {
+        // No note yet (the profile renders a lazy stub until the first save) —
+        // the folder still needs its index, and it IS the entity note.
+        await tx.contextNote.create({
+          data: {
+            spaceId: context.spaceId,
+            ownerKey: context.ownerKey,
+            path: dest,
+            content: seed ?? entityStub(node),
+            starred: false,
+            createdBy: actor.id,
+          },
         })
       }
-      await moveFolderFlags(context, flat, folder)
-    } else {
-      // No note yet (the profile renders a lazy stub until the first save) —
-      // the folder still needs its index, and it IS the entity note.
-      await prisma.contextNote.create({
-        data: {
-          spaceId: context.spaceId,
-          ownerKey: context.ownerKey,
-          path: dest,
-          content: seed ?? entityStub(node),
-          starred: false,
-          createdBy: actor.id,
-        },
+      await upsertFolderRow(tx, context, folder)
+    }
+
+    // Hold the (moved or pre-existing) index to the entity contract — a retype
+    // to `Index` that triggered this conversion is put back to the entity type.
+    const idx = await findLive(context, dest, tx)
+    let content = idx?.content ?? ''
+    if (idx) {
+      const next = enforceEntityIndexFrontmatter(idx.content, entityContractOf(node))
+      if (next !== idx.content) {
+        await tx.contextNote.update({ where: { id: idx.id }, data: { content: next } })
+        content = next
+      }
+    }
+
+    // The node pointer is shared-context state (there is one node); a personal
+    // context converting its own copy just moves the note.
+    let pointerMoved = false
+    if (shared && node.metadata?.notePath !== dest) {
+      const current = await tx.node.findUnique({
+        where: { id: node.id },
+        select: { metadata: true },
       })
-    }
-    await upsertFolderRow(context, folder)
-  }
-  // Hold the (moved or pre-existing) index to the entity contract — a retype
-  // to `Index` that triggered this conversion is put back to the entity type.
-  const idx = await findLive(context, dest)
-  if (idx) {
-    const next = enforceEntityIndexFrontmatter(idx.content, entityContractOf(node))
-    if (next !== idx.content) {
-      await prisma.contextNote.update({ where: { id: idx.id }, data: { content: next } })
-    }
-  }
-  if (context.ownerKey === SHARED_OWNER_KEY) {
-    const pointer = node.metadata?.notePath
-    if (pointer !== dest) {
-      const current = await prisma.node.findUnique({ where: { id: node.id }, select: { metadata: true } })
       const metadata = (current?.metadata as Record<string, unknown> | null) ?? {}
-      await prisma.node.update({
+      await tx.node.update({
         where: { id: node.id },
         data: { metadata: { ...metadata, notePath: dest } as Prisma.InputJsonObject },
       })
-      bustContextData()
+      pointerMoved = true
     }
+
+    return { renamedFrom, content, pointerMoved }
+  })
+
+  // THE DERIVED HALF — replayable, so it belongs outside. Link edges, published
+  // replicas and folder indexes are all rebuildable from the notes as they now
+  // stand; a failure here is a stale projection, which is what the outbox and
+  // `pnpm db:projections:rebuild` exist to repair. Keeping them inside would
+  // hold a transaction open across an esbuild and several cross-context writes.
+  if (moved.renamedFrom) {
+    await syncContextLinksBulk(context, [moved.renamedFrom], [[dest, moved.content]])
+    await syncPublicationsOnRename(context, moved.renamedFrom, dest)
   }
+  if (moved.pointerMoved) bustContextData()
   await refreshFolderIndex(context, folder)
   await refreshFolderIndex(context, folderOf(folder))
   await ensureAncestorIndexes(context, dest, actor)

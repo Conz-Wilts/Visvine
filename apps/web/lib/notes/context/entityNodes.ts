@@ -22,6 +22,7 @@
  * manual edge, so a second pass is a no-op rather than a duplicate.
  */
 import { revalidateTag } from 'next/cache'
+import { purgeNodeObjects } from '@/lib/storage/purge'
 import { Prisma } from '@prisma/client'
 import prisma from '../../prisma'
 import { slugify } from '../../eventUtils'
@@ -383,6 +384,7 @@ export async function removeEntityNode(
   try {
     const nodeId = await findNodeIdByRecord(spaceId, type, recordId)
     if (!nodeId) return false
+    await purgeNodeObjects([nodeId]).catch(() => {})
     await prisma.node.delete({ where: { id: nodeId } })
     bustContextCache()
     return true

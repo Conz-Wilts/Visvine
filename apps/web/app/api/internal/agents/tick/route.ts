@@ -10,7 +10,7 @@ export const maxDuration = 1320
 export const dynamic = 'force-dynamic'
 
 /**
- * The scheduler tick. One Cloud Scheduler job every 5 minutes, OIDC-verified
+ * The scheduler tick. One Cloud Scheduler job every minute, OIDC-verified
  * here (Cloud Run is --allow-unauthenticated so IAM can't do it). Carries no
  * user session — /api/internal/ is listed in proxy.ts PUBLIC_PATHS and this
  * route authenticates itself. See lib/agents/schedule.ts.

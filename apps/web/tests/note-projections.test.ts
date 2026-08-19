@@ -227,3 +227,101 @@ test('backoff grows exponentially and is capped', () => {
   // Defensive: attempts 0 must not produce a half-interval.
   assert.equal(backoffMs(0), 60_000)
 })
+
+// ─── write-path durability guards ───────────────────────────────────────────
+//
+// The outbox made every replayable PROJECTION durable. These guard the two
+// things on the same path that a replay cannot reconstruct, and which were
+// therefore the ones that most needed the transaction — and did not have it.
+
+import { readFileSync as _readFileSync } from 'node:fs'
+import { join as _join } from 'node:path'
+
+const storeSrc = _readFileSync(_join(__dirname, '..', 'lib/notes/store.ts'), 'utf8')
+const projectionsSrc = _readFileSync(_join(__dirname, '..', 'lib/notes/projections.ts'), 'utf8')
+
+/** One top-level function's source, from its signature to its closing brace. */
+function functionBody(signature: string): string {
+  const start = storeSrc.indexOf(signature)
+  assert.ok(start > 0, `${signature} not found`)
+  // The first brace at column 0 after the signature closes the function.
+  const end = storeSrc.indexOf('\n}\n', start)
+  assert.ok(end > start, `${signature} has no top-level closing brace`)
+  return storeSrc.slice(start, end)
+}
+
+test('the revision ledger is written inside the note transaction', () => {
+  // docs/data-architecture.md §1 classes ContextNoteRevision as a LEDGER —
+  // "dropping a ledger loses history permanently". It used to be appended AFTER
+  // the commit, so a crash in between saved the new content and lost the record
+  // of who changed it, forever. The outbox protected the six replayable
+  // projections and left the one unreplayable table bare.
+  const body = functionBody('export async function writeNote(')
+  const txStart = body.indexOf('prisma.$transaction')
+  const txEnd = body.indexOf('await settleProjection')
+  assert.ok(txStart > 0 && txEnd > txStart, 'expected the write transaction then settleProjection')
+
+  const inTx = body.slice(txStart, txEnd)
+  const afterTx = body.slice(txEnd)
+  assert.match(inTx, /recordRevision\(tx,/, 'the revision must be recorded on the transaction client')
+  assert.doesNotMatch(
+    afterTx,
+    /recordRevision\(/,
+    'no revision may be recorded after the transaction commits — that window loses history for good',
+  )
+})
+
+test('recordRevision cannot reach for the global client', () => {
+  const start = storeSrc.indexOf('async function recordRevision(')
+  assert.ok(start > 0)
+  const end = storeSrc.indexOf('\nexport ', start)
+  const body = storeSrc.slice(start, end === -1 ? undefined : end)
+  assert.doesNotMatch(
+    body,
+    /prisma\.contextNoteRevision/,
+    'recordRevision must use its `db` argument so it rides the caller transaction',
+  )
+})
+
+test('an index note commits with the folder row that makes it a folder', () => {
+  // An index note IS a folder, so its ContextFolder row is structural, not
+  // derived — nothing on the outbox would ever notice it missing, because a
+  // folder row is not projected from anything.
+  const start = storeSrc.indexOf('export async function createNote(')
+  const end = storeSrc.indexOf('\nexport ', start + 10)
+  const body = storeSrc.slice(start, end === -1 ? undefined : end)
+  assert.match(body, /upsertFolderRow\(tx,/, 'createNote must write the folder row on the transaction')
+})
+
+test('a deleted or renamed note drops its embedding', () => {
+  // context_note_embeddings is keyed by (space_id, owner_key, path) and cannot
+  // carry a foreign key, so nothing in the database prunes it. Before this,
+  // nothing in the code did either — the sweep only ever upserted.
+  assert.match(projectionsSrc, /kind === 'delete'[\s\S]*?dropEmbedding\(context, path\)/)
+  assert.match(projectionsSrc, /kind === 'rename'[\s\S]*?dropEmbedding\(context, from\)/)
+})
+
+test('a parked job tells the space admins, not just the log', () => {
+  // A parked job is the ONE failure the outbox cannot recover from: eight
+  // attempts exhausted, so this note's links, agent state or Tool build stay
+  // stale until a person intervenes. Every comparable giving-up in this codebase
+  // writes a notification — a broken connection, a deactivated agent, a failed
+  // run — and this one only ever wrote a log line, so the single unrecoverable
+  // case was also the only silent one.
+  assert.match(projectionsSrc, /kind: 'projection_stalled'/)
+  assert.match(projectionsSrc, /notifyParked\(job\.spaceId/)
+  // Deduped per (space, path): a note that parks on every drain pass must
+  // produce one unread line, not one per pass.
+  assert.match(projectionsSrc, /dedupeKey: `projection:\$\{spaceId\}:\$\{path\}`/)
+})
+
+test('notifying about a parked job cannot stop the drain', () => {
+  // The drain's job is to keep draining. A notification failure must not
+  // prevent it claiming the next row.
+  const start = projectionsSrc.indexOf('async function notifyParked(')
+  assert.ok(start > 0)
+  const body = projectionsSrc.slice(start, projectionsSrc.indexOf('\n}\n', start))
+  assert.match(body, /try \{/, 'notifyParked must swallow its own failures')
+  assert.match(body, /catch/)
+  assert.match(projectionsSrc, /void notifyParked\(/, 'the call must not be awaited')
+})

@@ -26,7 +26,10 @@ async function main() {
   const only = process.argv[2];
   console.log(`Embedding with ${config.model}${only ? ` for ${only}` : ' (all spaces)'}…`);
   const result = await embedSweep(only);
-  console.log(`Done: ${result.notes} notes, ${result.chunks} source chunks.`);
+  console.log(
+    `Done: ${result.notes} notes, ${result.chunks} source chunks, ` +
+      `${result.pruned} orphaned vector(s) pruned.`
+  );
 }
 
 main()

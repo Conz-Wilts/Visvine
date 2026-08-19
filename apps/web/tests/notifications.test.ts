@@ -18,10 +18,19 @@ import {
 } from '../lib/notifications/types'
 import { isForeignKeyFailure } from '../lib/notifications/service'
 
-test('kinds: the seven writers are all present and nothing else passes', () => {
+test('kinds: every writer is present and nothing else passes', () => {
   assert.deepEqual(
     [...NOTIFICATION_KINDS],
-    ['connection_broken', 'agent_deactivated', 'agent_run_failed', 'agent_notify', 'agent_question', 'tool_review', 'access_request'],
+    [
+      'connection_broken',
+      'agent_deactivated',
+      'agent_run_failed',
+      'agent_notify',
+      'agent_question',
+      'tool_review',
+      'access_request',
+      'projection_stalled',
+    ],
   )
   assert.ok(isNotificationKind('tool_review'))
   assert.equal(isNotificationKind('email'), false)

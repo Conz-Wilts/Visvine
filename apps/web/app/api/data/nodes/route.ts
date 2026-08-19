@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
+import { purgeNodeObjects } from '@/lib/storage/purge';
 import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { getSession, isAdmin, spaceMemberForbidden, directoryAccessForbidden } from '@/lib/auth';
@@ -242,6 +244,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    // Bytes before the row: a node's images are addressed by its id, so once
+    // the row is gone only the reconciliation sweep can attribute them.
+    await purgeNodeObjects([id]).catch((err) =>
+      logger.error('api.data.nodes.delete.purge_failed', { id, spaceId, err })
+    );
     await prisma.node.deleteMany({ where: { id, spaceId } });
 
     revalidateTag('context-data-v2', { expire: 0 });

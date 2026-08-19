@@ -3,6 +3,7 @@ import { revalidateTag } from 'next/cache';
 import prisma from '@/lib/prisma';
 import { requireSession, isSuperAdmin } from '@/lib/session';
 import { isAdmin } from '@/lib/auth';
+import { purgeSpaceObjects } from '@/lib/storage/purge';
 import {
   mergeNodeTypeList,
   type Space,
@@ -259,14 +260,19 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Space not found' }, { status: 404 });
     }
 
-    // Deleting the space cascades through every FK-backed relation (nodes,
-    // links, notes, members, channels, grants…). These tables carry a
-    // spaceId without a foreign key, so they must be swept by hand or
-    // they'd survive as orphans.
-    await prisma.$transaction([
-      prisma.resource.deleteMany({ where: { spaceId: id } }),
-      prisma.space.delete({ where: { id } }),
-    ]);
+    // Bytes first: the media bucket is keyed by ENTITY id, so a node's images
+    // are only findable while the node still exists. Best-effort by design —
+    // an orphaned object costs storage, a failed purge that aborted the delete
+    // would cost the admin their delete. scripts/gc-orphan-objects.ts reconciles.
+    await purgeSpaceObjects(id).catch((err) =>
+      logger.error('api.data.spaces.delete.purge_failed', { spaceId: id, err })
+    );
+
+    // Then the rows. Everything cascades from the space now — `resources` grew
+    // its foreign key in 20260823120100_resources_drive, so the hand-sweep that
+    // used to stand here is gone (and it was the very thing that skipped the
+    // bucket, since deleteMany never reaches the service that owns the bytes).
+    await prisma.space.delete({ where: { id } });
 
     revalidateTag('context-data', { expire: 0 });
 

@@ -14,6 +14,11 @@ export const NOTIFICATION_KINDS = [
   'agent_question',
   'tool_review',
   'access_request',
+  // A note's derived state is permanently stale: its projection job exhausted
+  // every retry and was parked. Everything else on this list is something a
+  // person did or a connection did; this one is the machinery reporting that it
+  // gave up, which is exactly the case nobody would otherwise hear about.
+  'projection_stalled',
 ] as const
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]

@@ -245,6 +245,9 @@ Migration `20260817120000_agents` adds `spaces.timezone`, `spaces.agent_config`,
 `prisma migrate deploy` in the deploy workflow. The Scheduler job's cadence is the one thing not in
 a migration: existing deployments should be updated to `--schedule="* * * * *"`
 (`gcloud scheduler jobs update http visvine-agent-tick --schedule="* * * * *" …`).
+**Applied in production 2026-08-19** — `visvine-agent-tick` (australia-southeast1) moved from
+`*/5 * * * *` to `* * * * *`; everything else on the job (OIDC SA + audience, 1500s attempt
+deadline, UTC) was already correct and was left untouched.
 
 ## Surfaces
 

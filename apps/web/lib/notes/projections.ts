@@ -153,6 +153,30 @@ async function liveContent(context: Context, path: string): Promise<string | nul
 }
 
 /**
+ * Drop the vector for a path that no longer holds a live note.
+ *
+ * `ContextNoteEmbedding` is keyed by (space_id, owner_key, path) with no foreign
+ * key — it cannot have one, since a note's identity is a unique constraint
+ * rather than its primary key. So nothing in the database removes these, and
+ * before this nothing in the code did either: the sweep only ever upserted, so
+ * every delete and every rename left a vector behind permanently.
+ *
+ * It was contained rather than dangerous — the vector stage intersects its
+ * results with the live candidate paths, so a stale row could never surface a
+ * deleted note — but a folder rename meant paying to embed every note again
+ * while the old vectors stayed forever.
+ *
+ * A projection, and idempotent, so it belongs on this path: deleting a row that
+ * is already gone is a no-op, and a delete that never ran is repaired by the
+ * nightly sweep's orphan pass (lib/notes/embedSweep.ts) rather than lost.
+ */
+async function dropEmbedding(context: Context, path: string): Promise<void> {
+  await prisma.contextNoteEmbedding.deleteMany({
+    where: { spaceId: context.spaceId, ownerKey: context.ownerKey, path },
+  })
+}
+
+/**
  * Rebuild every projection derived from one note mutation. Idempotent by
  * construction — this is the function a retry, a drain and a full reconcile all
  * call, and calling it twice in a row must be indistinguishable from calling it
@@ -173,6 +197,7 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
     await store.refreshIndexesForNote(context, path)
     await agentNoteDeleted(context, path)
     await toolNoteDeleted(context, path)
+    await dropEmbedding(context, path)
     return
   }
 
@@ -189,6 +214,7 @@ async function applyProjections(input: ProjectionInput): Promise<void> {
     await store.refreshIndexesForNote(context, path)
     await agentNoteRenamed(context, from, path, actor, { origin, model })
     await toolNoteRenamed(context, from, path)
+    await dropEmbedding(context, from)
     return
   }
 
@@ -290,6 +316,40 @@ export interface DrainReport {
 }
 
 /**
+ * Tell the space's admins that a note's projections have stopped converging.
+ *
+ * Best-effort and fire-and-forget: the drain's job is to keep draining, and a
+ * notification failure must not stop it claiming the next row. `dedupeKey` is
+ * per (space, path), so a note that parks repeatedly produces one unread line
+ * rather than one per drain pass.
+ */
+async function notifyParked(
+  spaceId: string,
+  path: string,
+  lastError: string | null,
+): Promise<void> {
+  try {
+    const { notify } = await import('@/lib/notifications/service')
+    const { spaceAdminUserIds } = await import('@/lib/auth')
+    const recipients = await spaceAdminUserIds(spaceId)
+    if (recipients.length === 0) return
+    await notify(recipients, {
+      spaceId,
+      kind: 'projection_stalled',
+      title: `Derived data for “${path}” is out of date`,
+      body:
+        `Its rebuild failed ${MAX_ATTEMPTS} times and has been parked, so links, ` +
+        `agent state or the Tool build for this note may be stale. ` +
+        (lastError ? `Last error: ${lastError.slice(0, 300)}` : ''),
+      href: '/admin',
+      dedupeKey: `projection:${spaceId}:${path}`,
+    })
+  } catch (err) {
+    logger.error('notes.projection.parked.notify_failed', { spaceId, path, err })
+  }
+}
+
+/**
  * Retry the projections nobody settled — the crash-recovery half of the outbox.
  *
  * Claims each due row by compare-and-swap on `attempts`, so two instances
@@ -321,6 +381,14 @@ export async function drainProjections(limit = DRAIN_BATCH): Promise<DrainReport
           attempts: job.attempts,
           err: job.lastError,
         })
+        // …and tell somebody. A parked job means this note's derived state —
+        // its directory edges, its agent schedule, its Tool build — is stale
+        // and will now stay stale until a person intervenes. Every comparable
+        // giving-up in this codebase writes a notification (a broken
+        // connection, a deactivated agent, a failed run); this one only ever
+        // wrote a log line, so the single failure mode the outbox cannot
+        // recover from was also the only one nobody was told about.
+        void notifyParked(job.spaceId, job.path, job.lastError)
       }
       continue
     }

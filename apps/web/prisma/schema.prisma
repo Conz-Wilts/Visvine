@@ -113,7 +113,7 @@ model ContextNoteRevision {
   at          DateTime    @default(now())
   editor      String // display name of who saved it (from the session)
   editorEmail String?     @map("editor_email")
-  origin      String      @default("edit") // edit | ai-refactor | ai-enrich | agent | maintenance | restore | baseline
+  origin      String      @default("edit") // NoteRevisionOrigin: edit | ai-refactor | ai-enrich | agent | maintenance | restore | baseline | publish
   model       String? // LLM model (or agent client) name when AI-originated
   content     String // full snapshot (frontmatter + body) at this save
   note        ContextNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
@@ -340,7 +340,7 @@ model AgentState {
   currentRunId        String?   @map("current_run_id") // the AgentRun holding the `running` claim; release is a CAS on it
   scheduleHash        String?   @map("schedule_hash")
   budgetMonthlyCents  Int?      @map("budget_monthly_cents") // null = uncapped
-  deactivatedReason   String?   @map("deactivated_reason") // brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin
+  deactivatedReason   String?   @map("deactivated_reason") // DeactivationReason: brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin | config
   deactivatedDetail   String?   @map("deactivated_detail") // e.g. who edited the brief
   consecutiveFailures Int       @default(0) @map("consecutive_failures")
   triggersJson        Json?     @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
@@ -364,7 +364,7 @@ model AgentRun {
   stateId          String    @map("state_id")
   spaceId          String    @map("space_id")
   name             String
-  trigger          String // scheduled | manual
+  trigger          String // RunTrigger: scheduled | manual | event | webhook | interval
   status           String    @default("running") // running | succeeded | failed
   startedAt        DateTime  @default(now()) @map("started_at")
   endedAt          DateTime? @map("ended_at")
@@ -572,6 +572,8 @@ model UserAlias {
   createdAt DateTime @default(now()) @map("created_at")
   space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([spaceId, userId, aliasId], name: "user_alias_identity")
   @@index([userId])
   @@index([spaceId, aliasId])
@@ -623,6 +625,7 @@ model ContextAccessRequest {
   resolvedAt   DateTime? @map("resolved_at")
   grantedLevel Int?      @map("granted_level") // what the resolver actually gave
   space        Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([spaceId, status])
   @@index([userId])
@@ -715,6 +718,15 @@ model ContextAuditEntry {
   @@map("context_audit_entries")
 }
 
+/// The pgvector projection of a note, keyed like the note itself.
+///
+/// No foreign key to `ContextNote` and there cannot be one: a note's identity is
+/// (space_id, owner_key, path), which is a unique constraint rather than the
+/// primary key, and the path moves on rename. So the row's LIFECYCLE is code's
+/// job, not the database's — pruned on delete and rename by the note write path
+/// (lib/notes/projections.ts) and reconciled by the nightly sweep
+/// (lib/notes/embedSweep.ts). Before both existed nothing pruned them at all and
+/// every deleted or renamed note left its vector behind for good.
 model ContextNoteEmbedding {
   id        String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId   String                      @map("space_id")
@@ -742,7 +754,7 @@ model ContextSource {
   ownerKey   String               @map("owner_key") // 'shared' or a userId, same as ContextNote
   path       String // context-relative POSIX path incl. filename, e.g. "deals/pricing.csv"
   name       String // display filename
-  kind       String // 'csv' | 'markdown' | 'text' (extension point: 'pdf' | 'xlsx')
+  kind       String // SourceKind: csv | markdown | text | json | docx | spreadsheet
   mimeType   String               @map("mime_type")
   sizeBytes  Int                  @map("size_bytes")
   gcsPath    String               @map("gcs_path") // object in GCS_RESOURCES_BUCKET
@@ -780,6 +792,11 @@ model ContextSourceChunk {
 
   @@unique([sourceId, seq])
   @@index([spaceId, ownerKey, model])
+  /// The chunk stages filter (space_id, owner_key, model, path IN <visible>).
+  /// The index above reaches the context; this one also cuts to the visible
+  /// files, which is the selective half — see migration
+  /// 20260824120000_retrieval_index_correction.
+  @@index([spaceId, ownerKey, path])
   @@map("context_source_chunks")
 }
 
@@ -884,6 +901,29 @@ model EventAttendee {
   @@map("event_attendees")
 }
 
+/// A registered account.
+///
+/// WHICH COLUMNS POINT AT A USER, AND WHY MOST OF THEM ARE NOT FOREIGN KEYS.
+/// `space_id` is foreign-keyed on 27 of the 28 tables that carry it; user
+/// identity is not, and the asymmetry is deliberate rather than an oversight —
+/// but only for three specific reasons, and everything outside them is a real
+/// reference and now really a key (see the relation list below).
+///
+///  1. **Polymorphic keys.** `owner_key` on every personal-context table is
+///     `'shared'` OR a userId; `ConnectorConnection.userId` is `''` for a
+///     space-owned connection. A column with a sentinel value cannot be a
+///     foreign key at all.
+///  2. **Provenance stamps, not references.** `created_by`, `uploaded_by`,
+///     `granted_by`, `proposed_by`, `editor` record WHO DID a thing, and the
+///     answer is sometimes `'system'`, an agent, or a seed script. They also
+///     must survive the person: cascading `Resource.uploaded_by` would delete a
+///     SPACE's files because the member who uploaded them closed their account,
+///     which is the opposite of correct.
+///  3. **Deliberate tombstones.** `ContextAuditEntry.userId` is REDACTED rather
+///     than deleted, because an audit log you can erase by closing your account
+///     is not an audit log.
+///
+/// What is left after those three is access and credentials, and those cascade.
 model User {
   id            String        @id @default(dbgenerated("(gen_random_uuid())::text"))
   name          String
@@ -911,6 +951,18 @@ model User {
 
   appToolVersionsAuthored AppToolVersion[]     @relation("AppToolVersionAuthor")
   notifications           Notification[]
+
+  // Deleting a person must take their ACCESS and their CREDENTIALS with it. Each
+  // of these was a bare scalar that only lib/account/deleteAccount.ts knew to
+  // sweep, so a bug or a new caller could leave an owner alias or an
+  // exchangeable refresh token behind a deleted account. They are real
+  // references — not provenance stamps — so they are foreign keys now, and the
+  // sweep and the database agree instead of only the sweep knowing.
+  aliasesHeld             UserAlias[]
+  accessRequests          ContextAccessRequest[]
+  identity                Identity?
+  oauthAuthCodes          OAuthAuthCode[]
+  oauthRefreshTokens      OAuthRefreshToken[]
 
   @@map("users")
 }
@@ -1007,6 +1059,7 @@ model Identity {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
   nodes          Node[]
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([kind, email])
   @@index([kind, linkedinHandle])
@@ -1023,7 +1076,10 @@ model IdentityResolution {
   id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
   nodeId      String   @map("node_id")
   identityId  String?  @map("identity_id") // candidate or chosen identity
-  decision    String // auto_strong | auto_name_company | suggested | confirmed | rejected | split | merged
+  decision    String // auto_strong | auto_name_company | suggested | created | confirmed | rejected | split | merged
+  //          ^ resolver decisions, then review decisions. Enforced by a CHECK
+  //            constraint (20260824120200_enum_check_constraints) so this list
+  //            cannot drift from what the code writes again.
   confidence  Float    @default(0)
   reason      String // human-readable, e.g. "email match" | "name+company"
   actorUserId String?  @map("actor_user_id")
@@ -1144,6 +1200,7 @@ model OAuthAuthCode {
   expiresAt           DateTime  @map("expires_at")
   consumedAt          DateTime? @map("consumed_at")
   createdAt           DateTime  @default(now()) @map("created_at")
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
   @@map("oauth_auth_codes")
@@ -1161,6 +1218,7 @@ model OAuthRefreshToken {
   expiresAt DateTime  @map("expires_at")
   revokedAt DateTime? @map("revoked_at")
   createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("oauth_refresh_tokens")
