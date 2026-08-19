@@ -5,6 +5,15 @@ import { findMemberNode } from '@/lib/identity/connection'
 import { logger } from '@/lib/logger'
 
 /**
+ * What an audit entry's actor becomes when that person deletes their account.
+ * A tombstone rather than a blank so the trail still reads as "somebody did
+ * this", and so the rows are findable if a real erasure request ever needs to
+ * go further.
+ */
+const DELETED_ACTOR_ID = 'deleted-user'
+const DELETED_ACTOR_NAME = 'Deleted user'
+
+/**
  * Permanent account deletion, run by the account holder from Settings → Account.
  *
  * Deleting the `User` row alone is not enough, and that is the whole reason this
@@ -75,6 +84,12 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.contextNoteEmbedding.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSourceChunk.deleteMany({ where: { ownerKey: userId } })
     await tx.contextSource.deleteMany({ where: { ownerKey: userId } })
+    // Outbox rows for the personal context above. Deleted rather than redacted:
+    // a projection job is a note to self about work still owed on notes that no
+    // longer exist, so there is nothing left for it to rebuild and nothing about
+    // it worth keeping. (The audit entries below are the opposite case, and are
+    // redacted instead — see the note there.)
+    await tx.noteProjectionJob.deleteMany({ where: { ownerKey: userId } })
 
     // Access, in every space at once — what `removeMemberAccess` does per
     // space, plus the requests that outlive a denial.
@@ -82,10 +97,38 @@ export async function deleteAccount(userId: string): Promise<DeleteAccountResult
     await tx.userAlias.deleteMany({ where: { userId } })
     await tx.contextAccessRequest.deleteMany({ where: { userId } })
 
+    // Queued publish/promotion proposals. `content` is a full snapshot of a
+    // note from their PERSONAL context, so the row carries their data even
+    // though it sits in a space — it goes with them. (Not caught by the
+    // delete-account coverage guard: the column is `proposedBy`, not `userId`.)
+    await tx.contextMoveProposal.deleteMany({ where: { proposedBy: userId } })
+
+    // The audit trail is REDACTED, not deleted — the one deliberate exception
+    // on this list. Every other row here is the person's own data; an audit
+    // entry is the SPACE's record that something happened to its data (a
+    // restricted note was read, a grant changed, a connector ran). If deleting
+    // an account erased those, deleting an account would be how you erase your
+    // own trail, which is the one thing an audit log exists to prevent. The
+    // event survives; the person in it does not.
+    await tx.contextAuditEntry.updateMany({
+      where: { userId },
+      data: { userId: DELETED_ACTOR_ID, name: DELETED_ACTOR_NAME },
+    })
+
     // MCP/OAuth credentials issued to them. Nothing cascades these, and an
     // outstanding refresh token would otherwise still be exchangeable.
     await tx.oAuthAuthCode.deleteMany({ where: { userId } })
     await tx.oAuthRefreshToken.deleteMany({ where: { userId } })
+
+    // Their PERSONAL connector connections — tokens Visvine holds against
+    // somebody else's service on their behalf. These outlive the account
+    // otherwise, and each one is a live credential to a third party.
+    //
+    // Space connections (userId '') are deliberately untouched: they belong to
+    // the space, not to whoever happened to click Connect, and deleting them
+    // would break every other member and every scheduled agent. `connectedBy`
+    // keeps the record of who set one up.
+    await tx.connectorConnection.deleteMany({ where: { userId } })
 
     if (nodeIds.length) await tx.node.deleteMany({ where: { id: { in: nodeIds } } })
     await tx.identity.deleteMany({ where: { userId } })

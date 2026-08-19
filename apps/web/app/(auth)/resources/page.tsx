@@ -9,7 +9,8 @@ import PDFViewer from '@/features/resources/components/PDFViewer';
 import CommentsPanel from '@/features/resources/components/CommentsPanel';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
-  FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, getPinned, togglePin, DocxViewer,
+  FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, INDEX_STATE_LABEL,
+  getPinned, togglePin, DocxViewer, FileUnavailable,
 } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
 import type { Resource } from '@/lib/types';
@@ -75,7 +76,7 @@ function ResourceCard({
         </button>
 
         {/* Preview area */}
-        {resource.fileType === 'image' ? (
+        {resource.fileType === 'image' && resource.fileUrl ? (
           <div className="aspect-[4/3] overflow-hidden">
             <img src={resource.fileUrl} alt={resource.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           </div>
@@ -104,9 +105,30 @@ function ResourceCard({
               </button>
             </div>
           </div>
-          <p className="mt-1.5 text-xs text-text-muted">
-            {new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <p className="text-xs text-text-muted">
+              {new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
+            {/* Where the file got to in the RAG pipeline. Shown on the card
+                because "the AI can't find my document" is otherwise invisible. */}
+            {(() => {
+              const state = INDEX_STATE_LABEL[resource.indexState];
+              if (!state) return null;
+              return (
+                <span
+                  title={
+                    resource.indexError ??
+                    (resource.indexState === 'indexed'
+                      ? `${resource.chunkCount ?? 0} passage${resource.chunkCount === 1 ? '' : 's'} indexed for search`
+                      : undefined)
+                  }
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${state.className}`}
+                >
+                  {state.label}
+                </span>
+              );
+            })()}
+          </div>
         </div>
       </div>
     </div>
@@ -217,7 +239,7 @@ function ResourceDetailDrawer({
                   <button
                     type="button"
                     onClick={() => setShowPropose(true)}
-                    className="flex items-center gap-1.5 rounded-full border border-brand-green/40 bg-brand-green/5 px-3 py-1.5 text-xs font-semibold text-brand-green hover:bg-brand-green/10 transition-colors"
+                    className="flex items-center gap-1.5 rounded-md border border-brand-green/40 bg-brand-green/5 px-3 py-1.5 text-xs font-semibold text-brand-green hover:bg-brand-green/10 transition-colors"
                   >
                     Propose Change
                   </button>
@@ -257,7 +279,11 @@ function ResourceDetailDrawer({
 
             {/* Drawer body */}
             <div className="flex flex-1 overflow-hidden">
-              {displayResource.fileType === 'pdf' ? (
+              {displayResource.fileType === 'docx' ? (
+                <DocxViewer resourceId={displayResource.id} />
+              ) : !displayResource.fileUrl ? (
+                <FileUnavailable />
+              ) : displayResource.fileType === 'pdf' ? (
                 <PDFViewer fileUrl={displayResource.fileUrl} />
               ) : displayResource.fileType === 'image' ? (
                 <div className="flex flex-1 items-center justify-center overflow-auto bg-surface-2 p-8">
@@ -267,8 +293,6 @@ function ResourceDetailDrawer({
                     className="max-w-full max-h-full object-contain rounded-xl shadow"
                   />
                 </div>
-              ) : displayResource.fileType === 'docx' ? (
-                <DocxViewer resourceId={displayResource.id} />
               ) : (
                 <>
                   <div className="flex-1 overflow-hidden flex flex-col">

@@ -85,7 +85,7 @@ export default function AccessRequests() {
                   disabled={busy}
                 />
                 <Button
-                  variant="pill-primary"
+                  variant="brand"
                   onClick={() => void resolveRequest(request, true)}
                   disabled={busy}
                   className="!px-3 !py-1.5 !text-xs"
@@ -93,7 +93,7 @@ export default function AccessRequests() {
                   Approve
                 </Button>
                 <Button
-                  variant="pill-secondary"
+                  variant="neutral"
                   onClick={() => setDenyRequest(request)}
                   disabled={busy}
                   className="!px-3 !py-1.5 !text-xs"
@@ -114,9 +114,9 @@ export default function AccessRequests() {
             {resolved.map((request) => (
               <div key={request.id} className="flex items-center gap-2 text-xs text-text-muted">
                 <span
-                  className={`inline-flex h-5 shrink-0 items-center rounded-full px-2 font-semibold ${
+                  className={`inline-flex h-5 shrink-0 items-center rounded-md px-2 font-semibold ${
                     request.status === 'approved'
-                      ? 'bg-brand-green/15 text-brand-green'
+                      ? 'bg-brand-green text-white'
                       : 'bg-surface-2 text-text-muted'
                   }`}
                 >

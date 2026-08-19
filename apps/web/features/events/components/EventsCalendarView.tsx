@@ -205,7 +205,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
               <button
                 type="button"
                 onClick={goToToday}
-                className="rounded-full px-3 h-9 text-sm font-medium text-brand-dark-green hover:bg-brand-light-bg transition-colors"
+                className="rounded-lg px-3 h-9 text-sm font-medium text-brand-dark-green hover:bg-brand-light-bg transition-colors"
               >
                 Today
               </button>
@@ -370,7 +370,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
                       <div className="text-sm font-medium text-text-primary truncate">{event.title}</div>
                       {meta && <div className="mt-0.5 text-xs text-text-muted truncate">{meta}</div>}
                       {status === 'live' && (
-                        <span className="mt-1 inline-block text-[10px] font-medium text-brand-dark-green bg-brand-light-bg rounded-full px-2 py-0.5">
+                        <span className="mt-1 inline-block text-[10px] font-medium text-white bg-brand-green rounded-md px-2 py-0.5">
                           Live
                         </span>
                       )}

@@ -51,6 +51,8 @@ export async function GET(
 const actionSchema = z.object({
   action: z.literal('publish'),
   note: z.string().max(4000).optional(),
+  /** The author's "what changed" — shown on the marketplace card and the version history. */
+  releaseNotes: z.string().max(4000).optional(),
 })
 
 /**
@@ -85,7 +87,10 @@ export async function POST(
     return NextResponse.json(blocked, { status: 409 })
   }
 
-  const result = await publishTool(ctx.principal, ctx.resolved, name, { note: body.note })
+  const result = await publishTool(ctx.principal, ctx.resolved, name, {
+    note: body.note,
+    releaseNotes: body.releaseNotes,
+  })
   if (!result.ok) return bad(result.error, result.status)
 
   const answer: PublishResponse = { version: result.version, warning: result.warning }

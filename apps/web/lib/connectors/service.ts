@@ -24,8 +24,15 @@ import {
   interpolateSecrets,
   parseConnectorPerimeter,
   perimeterSecretRefs,
+  type ConnectorAction,
   type ConnectorPerimeter,
 } from './config'
+import { connectorCryptoCapabilities } from './hostCrypto'
+import { connectorStateCapabilities } from './hostState'
+import { acquireConnectorRun, takeConnectorRun } from './quota'
+import { identitySecretName, type ResolvedIdentity } from './identity'
+import { resolveConnection } from './connections'
+import { connectorConnectUrl } from './connectUrl'
 import { runInIsolate, type IsolateRunResult } from './isolate'
 import { connectorKind, modelConnectorInfo, parseModelConnector, type ConnectorKind, type ModelConnectorInfo } from './model'
 
@@ -53,7 +60,21 @@ export interface ConnectorSummary {
   warnings: string[]
   /** Secret NAMES this connector references — never values. */
   secrets: string[]
+  /** Named actions callers can run by name instead of writing code. */
+  actions: ConnectorActionSummary[]
   docs: string
+}
+
+/** One action as list_connectors reports it — everything but the code. */
+export interface ConnectorActionSummary {
+  name: string
+  description: string | null
+  params: unknown | null
+}
+
+/** The actions of a perimeter, in declaration order, code omitted. */
+function summariseActions(actions: Record<string, ConnectorAction>): ConnectorActionSummary[] {
+  return Object.entries(actions).map(([name, a]) => ({ name, description: a.description, params: a.params }))
 }
 
 function connectorName(path: string): string {
@@ -102,6 +123,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
       invalid: parsed.ok ? null : parsed.error,
       warnings: [],
       secrets: info ? [info.keySecret] : [],
+      actions: [],
     }
   }
   const parsed = parseConnectorPerimeter(fm)
@@ -115,6 +137,7 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     invalid: parsed.ok ? null : parsed.error,
     warnings: parsed.ok ? parsed.warnings : [],
     secrets: parsed.ok ? perimeterSecretRefs(parsed.perimeter) : [],
+    actions: parsed.ok ? summariseActions(parsed.perimeter.actions) : [],
   }
 }
 
@@ -261,6 +284,28 @@ export async function runnableConnectorNames(
   return out
 }
 
+/**
+ * The actions each of these runnable connectors declares — for a tool
+ * description that lists them by name. Absent, invisible or invalid notes
+ * contribute an empty list; the run reports the real problem.
+ */
+export async function connectorActionsFor(
+  p: ContextPrincipal,
+  context: Context,
+  names: readonly string[],
+): Promise<Record<string, ConnectorActionSummary[]>> {
+  const out: Record<string, ConnectorActionSummary[]> = {}
+  for (const name of names) {
+    out[name] = []
+    if (!NAME_RE.test(name)) continue
+    const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
+    if (content === null) continue
+    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+    if (parsed.ok) out[name] = summariseActions(parsed.perimeter.actions)
+  }
+  return out
+}
+
 /** Decrypt the named secrets for a space; every name must exist. */
 async function resolveSecretValues(
   spaceId: string,
@@ -301,27 +346,96 @@ async function resolveSecretValues(
 // the v2 command cap would now bite on ordinary connector code.
 const CODE_MAX_CHARS = 32_768
 const AUDIT_CODE_CHARS = 200
+/** Largest `args` payload an action call accepts, serialised. */
+const ARGS_MAX_CHARS = 64 * 1024
+
+/**
+ * What to run: caller-written JavaScript, or one of the note's named actions
+ * with the caller's arguments. A bare string is `{ code }` — the shape every
+ * pre-actions caller passes.
+ */
+export type ConnectorRun = { code: string; action?: undefined } | { action: string; args?: unknown; code?: undefined }
+
+/**
+ * Resolve a run request against the loaded connector: the code that will
+ * actually execute, the globals it needs, and the audit summary. Throws
+ * ConnectorError('config') for an unknown action or a malformed request.
+ */
+function resolveRun(
+  loaded: LoadedConnector,
+  run: string | ConnectorRun,
+): { code: string; globals: Record<string, unknown> | undefined; summary: string } {
+  const req: { code?: unknown; action?: unknown; args?: unknown } = typeof run === 'string' ? { code: run } : run
+  if (typeof req.action === 'string') {
+    if (typeof req.code === 'string' && req.code.trim()) {
+      throw new ConnectorError('config', 'Pass either `action` or `code`, not both')
+    }
+    const action = Object.prototype.hasOwnProperty.call(loaded.perimeter.actions, req.action)
+      ? loaded.perimeter.actions[req.action]
+      : null
+    if (!action) {
+      const known = Object.keys(loaded.perimeter.actions)
+      throw new ConnectorError(
+        'config',
+        known.length > 0
+          ? `No action named "${req.action}" — this connector declares: ${known.join(', ')}`
+          : `No action named "${req.action}" — this connector declares no actions; pass \`code\` instead`,
+      )
+    }
+    const args = req.args === undefined ? {} : req.args
+    const json = JSON.stringify(args)
+    if (json === undefined) throw new ConnectorError('config', '`args` must be JSON-serialisable')
+    if (json.length > ARGS_MAX_CHARS) throw new ConnectorError('config', `\`args\` is too large (max ${ARGS_MAX_CHARS} characters)`)
+    const shown = json.length > AUDIT_CODE_CHARS ? json.slice(0, AUDIT_CODE_CHARS) + '…' : json
+    return { code: action.code, globals: { args: JSON.parse(json) as unknown }, summary: `action ${req.action} ${shown}` }
+  }
+  const code = typeof req.code === 'string' ? req.code : ''
+  if (!code.trim()) throw new ConnectorError('config', 'Nothing to run — pass JavaScript to evaluate, or an action name')
+  if (code.length > CODE_MAX_CHARS) {
+    throw new ConnectorError('config', `Script too long (max ${CODE_MAX_CHARS} characters)`)
+  }
+  return { code, globals: undefined, summary: code.slice(0, AUDIT_CODE_CHARS).replace(/\s+/g, ' ').trim() }
+}
 
 /**
  * Run one connector script inside its perimeter — the whole execution path,
- * shared by the agent tool and the console terminal: secrets resolve
- * server-side into the isolate's `env`, the isolate's only egress is the
- * capability functions gated on the note's hosts, secret values are redacted
- * from everything that comes back, and the run is audited win or lose.
+ * shared by the agent tool, the MCP tool, the Tools bridge and the console
+ * terminal: the space's quota is charged, secrets resolve server-side into the
+ * isolate's `env`, the isolate's only egress is the capability functions gated
+ * on the note's hosts, secret values are redacted from everything that comes
+ * back, and the run is audited win or lose.
+ *
+ * `run` is either JavaScript (a string, or `{ code }`) or a named action from
+ * the note's `actions:` block (`{ action, args }`), whose fixed code runs with
+ * `args` installed as a frozen global.
  */
 export async function executeConnectorScript(
   p: ContextPrincipal,
   context: Context,
   spaceId: string,
   loaded: LoadedConnector,
-  code: string,
+  run: string | ConnectorRun,
 ): Promise<IsolateRunResult> {
-  if (!code.trim()) throw new ConnectorError('config', 'Nothing to run — pass JavaScript to evaluate')
-  if (code.length > CODE_MAX_CHARS) {
-    throw new ConnectorError('config', `Script too long (max ${CODE_MAX_CHARS} characters)`)
+  const { code, globals, summary } = resolveRun(loaded, run)
+
+  // Quota BEFORE any secret leaves the store, and per space rather than per
+  // caller: the runtime is shared, and this is the one line every path crosses.
+  const budget = takeConnectorRun(spaceId)
+  if (!budget.ok) {
+    const e = new ConnectorError(
+      'rate_limited',
+      `This space is over its connector run budget — try again in ${Math.ceil(budget.retryAfterMs / 1000)}s`,
+    )
+    auditConnectorCall(p, loaded.path, `run [${summary}] → ${e.code}: ${e.message}`)
+    throw e
+  }
+  const releaseSlot = acquireConnectorRun(spaceId)
+  if (!releaseSlot) {
+    const e = new ConnectorError('rate_limited', 'This space already has its maximum number of connector runs in flight — try again shortly')
+    auditConnectorCall(p, loaded.path, `run [${summary}] → ${e.code}: ${e.message}`)
+    throw e
   }
 
-  const summary = code.slice(0, AUDIT_CODE_CHARS).replace(/\s+/g, ' ').trim()
   try {
     const secrets = await resolveSecretValues(spaceId, perimeterSecretRefs(loaded.perimeter))
     const env: Record<string, string> = {}
@@ -333,10 +447,49 @@ export async function executeConnectorScript(
       env[key] = resolved.value
     }
 
+    // Identity is assembled OUTSIDE `env` on purpose. Isolate code reads `env`;
+    // if the signing key were in there, connector code could mint an assertion
+    // naming anyone, which is exactly the forgery this feature exists to
+    // prevent. It still joins the redact list, so it cannot come back out
+    // through a log line or a reflected header either.
+    const identity = resolveRunIdentity(p, loaded.perimeter, secrets)
+
+    // An `auth:` connector resolves a stored OAuth token here. A missing or
+    // dead connection throws a step-up ConnectorError naming the connect link,
+    // which reaches the caller as readable text rather than a bare 401 — the
+    // only useful answer for someone sitting in an MCP client with no browser
+    // we can open.
+    const auth = loaded.perimeter.auth
+    const bearer = auth
+      ? await (async () => {
+          const connection = await resolveConnection({
+            spaceId,
+            auth,
+            userId: p.userId,
+            connectUrl: connectorConnectUrl(spaceId, connectorName(loaded.path)),
+          })
+          return { token: connection.accessToken, hosts: auth.hosts }
+        })()
+      : null
+
     const result = await runInIsolate(
       { ...loaded.perimeter, env, allowPrivate: allowPrivateHosts() },
       code,
-      { redact: [...secrets.values()] },
+      {
+        // The bearer joins the redact list for the same reason secrets do: an
+        // upstream that echoes its Authorization header back must not hand the
+        // model a live access token.
+        redact: [...secrets.values(), ...(bearer ? [bearer.token] : [])],
+        identity,
+        bearer,
+        // `visvine.crypto.*` (sigv4 reads AWS keys from `env` by NAME, host-side)
+        // and `visvine.state.*` (this connector's memory between runs).
+        capabilities: {
+          ...connectorCryptoCapabilities(env),
+          ...connectorStateCapabilities({ spaceId, path: loaded.path }),
+        },
+        globals,
+      },
     )
     auditConnectorCall(
       p,
@@ -351,6 +504,57 @@ export async function executeConnectorScript(
       auditConnectorCall(p, loaded.path, `run [${summary}] → ${e.code}: ${e.message}`)
     }
     throw e
+  } finally {
+    releaseSlot()
+  }
+}
+
+/**
+ * Assemble the run's caller identity, or null when there is nothing to attest.
+ *
+ * Null in three cases, all of which leave the upstream seeing an unattributed
+ * call — its most restrictive path, and therefore safe to reach silently:
+ *   • the note declares no `identity:` block (the overwhelming majority);
+ *   • the run is a system/maintenance pass, which is not acting for a person;
+ *   • the principal has no email, so there is no name to put in the claim.
+ *
+ * A SCHEDULED AGENT RUN IS NOT ONE OF THOSE CASES. An agent already acts as a
+ * named person — its author, or whoever the admin-only live note names in
+ * `runs_as` — for every note it reads, so stamping that same person here is
+ * what keeps the upstream's view consistent with Visvine's. The consequence is
+ * worth stating plainly: the far side's audit log will name that person for
+ * work the agent did while they were asleep. Repoint `runs_as` at a service
+ * account where the provider offers one.
+ *
+ * A declared block whose secret is missing is NOT silent — that is a
+ * misconfiguration an admin needs to see, and resolveSecretValues has already
+ * thrown by the time we get here.
+ */
+function resolveRunIdentity(
+  p: ContextPrincipal,
+  perimeter: ConnectorPerimeter,
+  secrets: Map<string, string>,
+): ResolvedIdentity | null {
+  const declared = perimeter.identity
+  if (!declared) return null
+  if (p.system) return null
+
+  const actorEmail = p.email?.trim().toLowerCase() ?? ''
+  if (!actorEmail) return null
+
+  const name = identitySecretName(declared)
+  const secret = secrets.get(name)
+  if (!secret) {
+    throw new ConnectorError('missing_secret', `Secret ${name} not set`)
+  }
+
+  return {
+    header: declared.header,
+    audience: declared.audience,
+    secret,
+    ttlSeconds: declared.ttlSeconds,
+    hosts: declared.hosts,
+    actorEmail,
   }
 }
 

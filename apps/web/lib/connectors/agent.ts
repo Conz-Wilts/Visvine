@@ -59,16 +59,20 @@ Customers, charges and invoices are readable. Amounts are in cents.
 
 The runtime, exactly:
 - Code is the body of an async function. \`return\` the answer; top-level await works.
-- \`fetch(url, init)\` resolves to { status, ok, headers, body, truncated }. \`body\` is a STRING — call JSON.parse yourself; there is no .json(). Redirects are NOT followed; a 3xx comes back with \`location\`.
+- \`fetch(url, init)\` resolves to { status, ok, headers, body, truncated, hops }. \`body\` is a STRING — call JSON.parse yourself; there is no .json(). Redirects are NOT followed by default; a 3xx comes back with \`location\`. Pass \`follow: n\` (1..3) in init to follow, each hop re-checked against hosts/allow.
 - \`sql(dsn, query)\` runs ONE read-only Postgres/MySQL statement, e.g. \`await sql(env.DATABASE_URL, 'select count(*) from users')\`.
 - \`mcp(url).listTools()\` and \`mcp(url).callTool(name, args)\` for MCP servers.
 - \`env\` holds the connector's values. \`console.log\` is captured.
+- \`visvine.crypto\` for signing: \`hmac(alg, key, data, { keyEncoding?, encoding? })\` (alg sha256|sha1|sha512; encodings hex|base64), \`hash(alg, data)\`, \`randomHex(n)\`, \`base64.encode(s)\` / \`base64.decode(s)\`, \`timingSafeEqual(a, b)\`, and \`sigv4({ accessKeyEnv, secretEnv, sessionTokenEnv?, region, service, method, url, headers?, body? })\` → { headers } for AWS — it reads the keys from env by NAME (e.g. accessKeyEnv: 'AWS_ACCESS_KEY_ID'), so pass the returned headers straight to fetch. All async; strings in and out.
+- \`visvine.state.get(key)\` / \`visvine.state.set(key, value)\` remember small values between runs (cursors, etags; 64KB a value, 100 keys; set null to clear).
+- Optional \`actions:\` in the frontmatter names fixed entry points: \`actions: { list_customers: { description: "...", params: { limit: { type: "integer" } }, code: "const r = await fetch(...); return JSON.parse(r.body)" } }\`. Action code sees \`args\` (frozen). Callers run them by name instead of writing code — prefer declaring the common calls as actions.
 - There is NO filesystem, no process, no require/import, no shell, and no curl. \`Promise.all\` works if you want calls to overlap.
 
 Rules:
 - hosts: bare hostnames (or host:port), written literally. The isolate can ONLY reach these. Include every host the code needs (API host, auth host).
 - env: values may be literals or {{secret:NAME}} references (UPPER_SNAKE names). NEVER write a real credential value anywhere — if the service needs a key, reference a secret and tell the admin to store it.
 - Optional allow: list of "METHOD /path" rules (trailing * = prefix). These ARE enforced on every call, including HTTPS. Omit for host-gated only.
+- Optional identity: only when the upstream applies PER-USER permissions and has agreed to verify an assertion from us. Shape: \`identity: { audience: <what the upstream checks>, secret: "{{secret:NAME}}", hosts: [only these], ttl_s: 120 }\`. The RUNTIME signs a short-lived statement naming whoever triggered the run and stamps it on matching requests — your code cannot read the key, set that header, or choose the name, which is exactly what makes the upstream able to trust it. Omit it for every ordinary connector; a service that authenticates only the caller does not want it.
 - The body is the ONLY documentation agents get. Write working example code using the env var names, list useful endpoints/tables, note formats and gotchas. Be concise and concrete.
 
 Workflow:

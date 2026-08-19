@@ -48,6 +48,8 @@ export interface VersionHistoryEntry {
   version: number
   status: ToolVersionStatus
   reviewedAt: string | null
+  /** The author's release notes for that version, or null. */
+  releaseNotes: string | null
 }
 
 /**
@@ -143,6 +145,27 @@ export interface InstallUpdatedResponse {
 
 export interface AuthoredToolsResponse {
   tools: AuthoredToolSummary[]
+}
+
+/** `POST …/tools/authoring` — the Create panel's Tool tile. */
+export interface CreateToolRequest {
+  name: string
+  title?: string
+  description?: string
+  /** A sidebar row label; omitted = no rail row yet. */
+  railLabel?: string
+}
+
+/**
+ * What a scaffold answers with: the new working copy, where to look at it, and
+ * the creator MCP server address the success screen hands to a coding agent
+ * (the same value Settings → MCP shows — `mcpResourceUrl('creator')`).
+ */
+export interface CreateToolResponse {
+  tool: { name: string; path: string; nodeId: string; title: string }
+  build: BuildSummary
+  previewUrl: string
+  creatorMcpUrl: string
 }
 
 /**

@@ -11,8 +11,35 @@
 import prisma from '@/lib/prisma'
 import type { AgentRun } from '@prisma/client'
 import { monthBounds } from './budget'
+import { pruneEvents } from './events'
 
-export type RunTrigger = 'scheduled' | 'manual'
+/** scheduled = clock (hourly/daily/weekly), interval = `every:`, event = note events, webhook = only webhook events, manual = Run now. */
+export type RunTrigger = 'scheduled' | 'manual' | 'event' | 'webhook' | 'interval'
+
+/** What a run was handed (agent_runs.input) — the transcript's "Triggered by …" block. */
+export interface RunInput {
+  /** `depth` = hops from a human (lib/agents/events EventChain); absent on rows from before chains = 0. */
+  events: { kind: string; source: string; summary: string; at: string; depth?: number }[]
+  /** Set when a run_agent call started this run: the parent run and how deep the chain is (root = 0). */
+  chain?: { parent: string; depth: number }
+  /** Note paths write_context / append_context changed this run (filled in at run end). */
+  writes?: string[]
+  /** The brief had `dry_run: true`: nothing above was actually written. */
+  dryRun?: boolean
+  /** A write this run made was refused as a trigger (chain deeper than MAX_EVENT_CHAIN_DEPTH); audited once. */
+  loopCut?: boolean
+}
+
+/** Merge run-end facts (writes, dryRun) into agent_runs.input without clobbering what dispatch stored. */
+export async function recordRunInput(runId: string, patch: Pick<RunInput, 'writes' | 'dryRun'>): Promise<void> {
+  const row = await prisma.agentRun.findUnique({ where: { id: runId }, select: { input: true } })
+  const current = (row?.input as RunInput | null) ?? null
+  const next: RunInput = { events: current?.events ?? [], ...(current ?? {}), ...patch }
+  if (!patch.writes?.length) delete next.writes
+  if (!patch.dryRun) delete next.dryRun
+  if (!next.chain && !next.writes && !next.dryRun && next.events.length === 0) return
+  await prisma.agentRun.update({ where: { id: runId }, data: { input: next as unknown as object } })
+}
 export type RunStatus = 'running' | 'succeeded' | 'failed'
 export type TerminalReason =
   | 'finished'
@@ -67,6 +94,8 @@ export async function createRun(input: {
   trigger: RunTrigger
   startedBy?: string | null
   model?: string | null
+  eventCount?: number
+  input?: RunInput | null
 }): Promise<AgentRun> {
   return prisma.agentRun.create({
     data: {
@@ -78,6 +107,8 @@ export async function createRun(input: {
       startedBy: input.startedBy ?? null,
       model: input.model ?? null,
       status: 'running',
+      eventCount: input.eventCount ?? 0,
+      input: input.input ? (input.input as unknown as object) : undefined,
     },
   })
 }
@@ -145,6 +176,8 @@ export interface RunListItem {
   terminalReason: TerminalReason | null
   summary: string | null
   errorMessage: string | null
+  eventCount: number
+  input: RunInput | null
 }
 
 const LIST_SELECT = {
@@ -162,6 +195,8 @@ const LIST_SELECT = {
   terminalReason: true,
   summary: true,
   errorMessage: true,
+  eventCount: true,
+  input: true,
 } as const
 
 export async function listRuns(spaceId: string, name: string, limit = 25): Promise<RunListItem[]> {
@@ -197,6 +232,7 @@ export async function spendForMonth(spaceId: string, name: string | null, at: Da
 
 /** Retention: drop runs older than RUN_RETENTION_DAYS, keeping the newest RUN_KEEP_PER_AGENT per agent. */
 export async function pruneRuns(now = new Date()): Promise<number> {
+  await pruneEvents(now)
   const cutoff = new Date(now.getTime() - RUN_RETENTION_DAYS * 86_400_000)
   const old = await prisma.agentRun.findMany({
     where: { startedAt: { lt: cutoff }, status: { not: 'running' } },

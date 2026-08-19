@@ -25,6 +25,10 @@ const PUBLIC_PATHS = [
   // nature. "Public" only means "no cookie" — each route authenticates itself
   // (Cloud Scheduler OIDC for the tick, an internal HS256 token for the run).
   "/api/internal/",
+  // Inbound connector webhooks: a provider posts here with no session. The
+  // route authenticates itself — a per-connector URL token plus the note's
+  // declared signature scheme (lib/connectors/webhookInbound.ts).
+  "/api/hooks/",
   // The sandboxed Tool runtime (frame document, compiled bundles, vendor ESM).
   // Served from a cookie-less origin, so it authenticates with the short-lived
   // frame token minted by the host page (lib/tools/frameToken.ts), never a

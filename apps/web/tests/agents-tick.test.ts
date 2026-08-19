@@ -21,6 +21,10 @@
  *     second claim while the first is running (per-agent CAS).
  *   • canTriggerRun (transcript + Run-now gate): author yes, admin yes,
  *     other member no.
+ *   • agent_events: 50 enqueues → the pending cap, one tick claim carrying
+ *     them all (trigger `event`, oldest first), dedupe by key; an event during
+ *     a run doesn't pull next_run_at but release re-arms it; glob/webhook
+ *     recipient lookups and the no-self-loop rule.
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -102,6 +106,8 @@ async function setup() {
 
 async function teardown() {
   const p = prisma!
+  await p.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+  await p.connectorSecret.deleteMany({ where: { spaceId: SPACE } })
   await p.agentRun.deleteMany({ where: { spaceId: SPACE } })
   await p.agentState.deleteMany({ where: { spaceId: SPACE } })
   await p.contextNote.deleteMany({ where: { spaceId: SPACE } })
@@ -293,6 +299,277 @@ test('canTriggerRun (transcript + Run-now gate): author and admin yes, other mem
     assert.equal(await canTriggerRun(principal(MEMBER, false), SPACE, 'gated'), false)
     assert.equal(await canTriggerRun(principal(MEMBER, false), SPACE, 'no-such-agent'), false)
   } finally {
+    await teardown()
+  }
+})
+
+// ── events: the mailbox behind reactive agents ──────────────────────────────
+
+test('enqueueAgentEvent: 50 enqueues → one claim of ≤ cap; dedupe collapses; pull-forward only when idle', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const { enqueueAgentEvent, claimEvents, MAX_PENDING_EVENTS, MAX_EVENTS_PER_RUN } = await import('@/lib/agents/events')
+  const { tick } = await import('@/lib/agents/schedule')
+  process.env.AGENT_DISPATCH = 'inline'
+  await setup()
+  try {
+    // An event-only agent: active, idle, no clock (next_run_at null), listening on people/**.
+    const st = await prisma!.agentState.create({
+      data: { spaceId: SPACE, name: 'listener', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000 },
+    })
+    const before = Date.now()
+    let ok = 0
+    let capped = 0
+    for (let i = 0; i < 50; i++) {
+      const r = await enqueueAgentEvent({ spaceId: SPACE, agentName: 'listener', kind: 'note_written', source: `people/p${i}.md`, summary: `saved #${i}`, payload: { i } })
+      if (r.ok) ok++
+      else if ('capped' in r) capped++
+    }
+    assert.equal(ok, MAX_PENDING_EVENTS, 'pending cap holds')
+    assert.equal(capped, 50 - MAX_PENDING_EVENTS)
+    // The first enqueue pulled next_run_at to now + debounce (5s); later ones didn't push it out.
+    const armed = await state(st.id)
+    assert.ok(armed.nextRunAt, 'next_run_at armed by the first event')
+    const delta = armed.nextRunAt!.getTime() - before
+    assert.ok(delta >= 0 && delta <= 5_000 + 60_000, `armed within debounce (got ${delta}ms)`)
+
+    // Dedupe: while a key is pending, a second enqueue with it is a no-op.
+    const d1 = await enqueueAgentEvent({ spaceId: SPACE, agentName: 'dup', kind: 'note_written', source: 'people/a.md', summary: 's', dedupeKey: 'note_written:people/a.md' })
+    const d2 = await enqueueAgentEvent({ spaceId: SPACE, agentName: 'dup', kind: 'note_written', source: 'people/a.md', summary: 's', dedupeKey: 'note_written:people/a.md' })
+    assert.ok(d1.ok)
+    assert.ok(!d2.ok && 'deduped' in d2)
+
+    // The tick, at a time past the debounce, claims ONE run and stamps every pending event with it.
+    const later = new Date(armed.nextRunAt!.getTime() + 1_000)
+    // No brief note exists → the tick's re-derive path would sync (and deactivate) — give it a brief + live note.
+    await prisma!.contextNote.createMany({
+      data: [
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/listener.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/live/listener.md', content: '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n', createdBy: ADMIN },
+      ],
+    })
+    // Match the hash the tick will compute so it claims without re-deriving.
+    const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
+    const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
+    const parsed = parseAgentActivation(parseFrontmatter('---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n'))
+    assert.ok(parsed.ok)
+    if (!parsed.ok) return
+    await prisma!.agentState.update({ where: { id: st.id }, data: { scheduleHash: scheduleHash(parsed.activation, 'UTC') } })
+
+    // The tick is global: refuse to run it if some other due agent in this DB would be claimed and dispatched.
+    const otherDue = await prisma!.agentState.count({ where: { active: true, status: 'idle', nextRunAt: { lte: later }, NOT: { spaceId: SPACE } } })
+    if (otherDue > 0) return t.skip(`${otherDue} other due agent(s) in the local DB — not running the global tick`)
+    const report = await tick(later)
+    assert.equal(report.claimed.length, 1, 'one run for the whole burst')
+    const runId = report.claimed[0]
+    const run = await prisma!.agentRun.findUniqueOrThrow({ where: { id: runId } })
+    assert.equal(run.trigger, 'event')
+    assert.equal(run.eventCount, MAX_PENDING_EVENTS)
+    const input = run.input as { events: { kind: string; source: string }[] }
+    assert.equal(input.events.length, MAX_PENDING_EVENTS)
+    assert.equal(input.events[0].source, 'people/p0.md', 'oldest first')
+    const consumed = await prisma!.agentEvent.count({ where: { spaceId: SPACE, agentName: 'listener', consumedBy: runId } })
+    assert.equal(consumed, MAX_PENDING_EVENTS)
+    assert.equal(await prisma!.agentEvent.count({ where: { spaceId: SPACE, agentName: 'listener', consumedBy: null } }), 0)
+    assert.ok(MAX_EVENTS_PER_RUN >= MAX_PENDING_EVENTS)
+    // A second claim finds nothing.
+    assert.equal((await claimEvents(SPACE, 'listener', 'nope')).length, 0)
+    // The inline run failed fast (no key) and released; the row is idle with no clock.
+    const after = await state(st.id)
+    assert.equal(after.status, 'idle')
+    assert.equal(after.nextRunAt, null, 'event-only agent goes back to no clock once the mail is taken')
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+    await teardown()
+  }
+})
+
+test('an event that arrives while the agent is running does not pull next_run_at; release re-arms it', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const { enqueueAgentEvent } = await import('@/lib/agents/events')
+  const { executeRun } = await import('@/lib/agents/runner')
+  await setup()
+  try {
+    const before = Date.now()
+    const st2 = await makeAgent('busy2', { status: 'running', runningSince: new Date(), failures: 0 })
+    await prisma!.agentState.update({ where: { id: st2.id }, data: { triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000, nextRunAt: null } })
+    await prisma!.contextNote.create({
+      data: { spaceId: SPACE, ownerKey: 'shared', path: 'agents/busy2.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
+    })
+    // An undecryptable key row makes the run fail with `bad_key` (config, counts as a failure) WITHOUT deactivating.
+    await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'garbage' } })
+    // The brief was inserted behind the store's back, and the space was rebuilt under a process that already
+    // memoised its access seeding: drop the cached vault and grant the author root access by hand.
+    ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
+    const running2 = await makeRun(st2.id, 'busy2', new Date())
+    await prisma!.agentState.update({ where: { id: st2.id }, data: { currentRunId: running2.id } })
+    await enqueueAgentEvent({ spaceId: SPACE, agentName: 'busy2', kind: 'webhook', source: 'hubspot', summary: 'contact.created' })
+    assert.equal((await state(st2.id)).nextRunAt, null, 'a running row is not pulled forward')
+    // executeRun fails at the undecryptable key (config) — counts as a failure, no deactivation, row released idle.
+    const outcome = await executeRun(running2.id)
+    assert.equal(outcome.status, 'failed')
+    const re = await state(st2.id)
+    assert.equal(re.status, 'idle')
+    assert.equal(re.active, true)
+    assert.ok(re.nextRunAt, 'release re-armed next_run_at for the mail that arrived mid-run')
+    const delta = re.nextRunAt!.getTime() - before
+    assert.ok(delta >= 0 && delta <= 5_000 + 60_000, `re-armed within debounce (got ${delta}ms)`)
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+    await teardown()
+  }
+})
+
+test('matchNoteTriggers / webhookRecipients / fireNoteTriggers (self-loop excluded)', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const { matchNoteTriggers, webhookRecipients, fireNoteTriggers } = await import('@/lib/agents/events')
+  await setup()
+  try {
+    await prisma!.agentState.createMany({
+      data: [
+        { spaceId: SPACE, name: 'people-watcher', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null } },
+        { spaceId: SPACE, name: 'hub', runAsUserId: AUTHOR, active: true, triggersJson: { context: [], webhook: 'hubspot' } },
+        { spaceId: SPACE, name: 'off', runAsUserId: AUTHOR, active: false, triggersJson: { context: ['people/**'], webhook: 'hubspot' } },
+        { spaceId: SPACE, name: 'clock', runAsUserId: AUTHOR, active: true },
+      ],
+    })
+    assert.deepEqual(await matchNoteTriggers(SPACE, 'people/alice.md'), ['people-watcher'])
+    assert.deepEqual(await matchNoteTriggers(SPACE, 'reports/x.md'), [])
+    assert.deepEqual(await matchNoteTriggers(SPACE, 'agents/people-watcher.md'), [])
+    assert.deepEqual(await webhookRecipients(SPACE, 'hubspot'), ['hub'])
+    assert.deepEqual(await webhookRecipients(SPACE, 'stripe'), [])
+
+    const fired = await fireNoteTriggers(SPACE, 'people/alice.md', { id: AUTHOR, name: 'Author' }, 'edit')
+    assert.deepEqual(fired, ['people-watcher'])
+    // Same path again while pending: deduped (one row per path).
+    assert.deepEqual(await fireNoteTriggers(SPACE, 'people/alice.md', { id: AUTHOR, name: 'Author' }, 'edit'), [])
+    assert.equal(await prisma!.agentEvent.count({ where: { spaceId: SPACE, agentName: 'people-watcher', consumedBy: null } }), 1)
+    // The agent's own write does not wake itself.
+    assert.deepEqual(await fireNoteTriggers(SPACE, 'people/bob.md', { id: AUTHOR, name: 'Author' }, 'agent', { exceptAgent: 'people-watcher' }), [])
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+    await teardown()
+  }
+})
+
+test('claimManualRun resets next_run_at once it takes the mail; a trigger-only agent with no mail is released by the tick without a run', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  process.env.AGENT_DISPATCH = 'inline'
+  const { enqueueAgentEvent } = await import('@/lib/agents/events')
+  const { claimManualRun, tick } = await import('@/lib/agents/schedule')
+  const { parseAgentActivation, scheduleHash } = await import('@/lib/agents/config')
+  const { parseFrontmatter } = await import('@/lib/notes/shared/markdown')
+  await setup()
+  try {
+    const live = '---\ntype: agent-activation\nactive: true\non:\n  context: ["people/**"]\ndebounce: 5s\n---\n'
+    const parsed = parseAgentActivation(parseFrontmatter(live))
+    assert.ok(parsed.ok)
+    if (!parsed.ok) return
+    await prisma!.contextNote.createMany({
+      data: [
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/only.md', content: '---\ntype: agent\nmodel: openai/gpt-4o-mini\n---\nReact.\n', createdBy: AUTHOR },
+        { spaceId: SPACE, ownerKey: 'shared', path: 'agents/live/only.md', content: live, createdBy: ADMIN },
+      ],
+    })
+    // The inline run must fail WITHOUT deactivating (as in the mid-run test): an undecryptable key + root access for the author.
+    await prisma!.connectorSecret.create({ data: { spaceId: SPACE, name: 'MODEL_KEY_OPENAI', ciphertext: 'garbage' } })
+    ;(await import('@/lib/notes/vaultCache')).invalidateVault({ spaceId: SPACE, ownerKey: 'shared' })
+    await prisma!.contextGrant.create({ data: { spaceId: SPACE, subjectType: 'user', subjectId: AUTHOR, resourcePath: '', level: 40, grantedBy: 'system' } })
+    const st = await prisma!.agentState.create({
+      data: { spaceId: SPACE, name: 'only', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null }, debounceMs: 5_000, scheduleHash: scheduleHash(parsed.activation, 'UTC') },
+    })
+    // An event pulls next_run_at forward …
+    assert.ok((await enqueueAgentEvent({ spaceId: SPACE, agentName: 'only', kind: 'note_written', source: 'people/a.md', summary: 's' })).ok)
+    const armed = await state(st.id)
+    assert.ok(armed.nextRunAt, 'armed by the event')
+    // … "Run now" takes the mail, and with it the reason for that deadline.
+    const manual = await claimManualRun(SPACE, 'only', AUTHOR)
+    assert.equal(manual.ok, true)
+    if (!manual.ok) return
+    assert.equal((await state(st.id)).nextRunAt, null, 'a trigger-only agent has no clock once its mail is consumed')
+    assert.equal((await run(manual.runId)).eventCount, 1)
+    await manual.dispatch
+    assert.equal((await state(st.id)).status, 'idle')
+
+    // The phantom: a pulled-forward deadline with no mail behind it (what the
+    // old manual claim left). The tick gives the claim back — idle, no clock,
+    // NO run row.
+    const past = new Date(Date.now() - 1_000)
+    await prisma!.agentState.update({ where: { id: st.id }, data: { nextRunAt: past, lastRunAt: past } })
+    const otherDue = await prisma!.agentState.count({ where: { active: true, status: 'idle', nextRunAt: { lte: new Date() }, NOT: { spaceId: SPACE } } })
+    if (otherDue > 0) return t.skip(`${otherDue} other due agent(s) in the local DB — not running the global tick`)
+    const runsBefore = await prisma!.agentRun.count({ where: { spaceId: SPACE, name: 'only' } })
+    const report = await tick(new Date())
+    assert.equal(report.claimed.length, 0, 'nothing dispatched')
+    const after = await state(st.id)
+    assert.equal(after.status, 'idle')
+    assert.equal(after.currentRunId, null)
+    assert.equal(after.nextRunAt, null)
+    assert.equal(after.lastRunAt?.getTime(), past.getTime(), 'last_run_at is not moved by a run that did not happen')
+    assert.equal(await prisma!.agentRun.count({ where: { spaceId: SPACE, name: 'only' } }), runsBefore, 'no run row either')
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
+    await teardown()
+  }
+})
+
+test('event chains: depth rides payload → run input → next hop, and chains stop after MAX_EVENT_CHAIN_DEPTH', async (t) => {
+  const reason = await probe()
+  if (reason) return t.skip(reason)
+  const { enqueueAgentEvent, fireNoteTriggers, claimEvents, MAX_EVENT_CHAIN_DEPTH } = await import('@/lib/agents/events')
+  const { agentNoteWritten, agentNoteRenamed } = await import('@/lib/agents/hooks')
+  const { listAudit } = await import('@/lib/notes/audit')
+  await setup()
+  try {
+    // A and B both listen on people/**: each one's writes wake the other.
+    const a = await prisma!.agentState.create({ data: { spaceId: SPACE, name: 'a', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null } } })
+    await prisma!.agentState.create({ data: { spaceId: SPACE, name: 'b', runAsUserId: AUTHOR, active: true, triggersJson: { context: ['people/**'], webhook: null } } })
+    const shared = { spaceId: SPACE, ownerKey: 'shared' }
+    const human = { id: AUTHOR, name: 'Author' }
+
+    // Refused outright above the ceiling; a human's event is depth 0.
+    const looped = await enqueueAgentEvent({ spaceId: SPACE, agentName: 'a', kind: 'note_written', source: 'people/z.md', summary: 's', chain: { depth: MAX_EVENT_CHAIN_DEPTH + 1, via: 'b' } })
+    assert.deepEqual(looped, { ok: false, looped: true })
+    await agentNoteWritten(shared, 'people/h.md', human, { changed: true, origin: 'edit' })
+    const [h] = await claimEvents(SPACE, 'a', 'run-h0')
+    assert.deepEqual((h.payload as { chain: unknown }).chain, { depth: 0, via: null })
+    await claimEvents(SPACE, 'b', 'run-h0b')
+
+    // A's run consumed events at depth 2 (recorded on the run row the way the tick does).
+    const runA = await prisma!.agentRun.create({
+      data: { stateId: a.id, spaceId: SPACE, name: 'a', trigger: 'event', status: 'running', startedAt: new Date(), input: { events: [{ kind: 'note_written', source: 'people/x.md', summary: 's', at: new Date().toISOString(), depth: 2 }] } },
+    })
+    await prisma!.agentState.update({ where: { id: a.id }, data: { status: 'running', currentRunId: runA.id } })
+    // A's own write: never to itself; to B at depth 3 (the last allowed hop).
+    assert.deepEqual(await fireNoteTriggers(SPACE, 'people/y.md', human, 'agent', { exceptAgent: 'a' }), ['b'])
+    const [toB] = await claimEvents(SPACE, 'b', 'run-b1')
+    assert.deepEqual((toB.payload as { chain: unknown }).chain, { depth: 3, via: 'a' })
+
+    // A run that consumed depth 3 is at the ceiling: its writes wake nobody, and the cut is audited once per run.
+    await prisma!.agentRun.update({ where: { id: runA.id }, data: { input: { events: [{ kind: 'note_written', source: 'people/y.md', summary: 's', at: new Date().toISOString(), depth: 3 }] } } })
+    assert.deepEqual(await fireNoteTriggers(SPACE, 'people/y2.md', human, 'agent', { exceptAgent: 'a' }), [])
+    // The same through the store-hook stamps, for a write and for a rename.
+    await agentNoteWritten(shared, 'people/y3.md', human, { changed: true, origin: 'agent', model: 'agent:a' })
+    await agentNoteRenamed(shared, 'people/old.md', 'people/y4.md', human, { origin: 'agent', model: 'agent:a' })
+    assert.equal(await prisma!.agentEvent.count({ where: { spaceId: SPACE, consumedBy: null } }), 0, 'nothing enqueued past the ceiling')
+    const cuts = (await listAudit(SPACE)).filter((e) => e.action === 'agent' && /trigger loop cut at depth 3/.test(e.detail ?? ''))
+    assert.equal(cuts.length, 1, 'audited once per run, however many writes')
+    assert.equal(((await run(runA.id)).input as { loopCut?: boolean }).loopCut, true)
+
+    // A rename stamped with an agent excludes that agent (no self-loop) and
+    // wakes the other; with no run in flight it is a fresh hop (depth 1).
+    await prisma!.agentState.update({ where: { id: a.id }, data: { status: 'idle', currentRunId: null } })
+    await agentNoteRenamed(shared, 'people/p.md', 'people/q.md', human, { origin: 'agent', model: 'agent:b' })
+    assert.equal(await prisma!.agentEvent.count({ where: { spaceId: SPACE, agentName: 'b', consumedBy: null } }), 0, 'B does not wake itself by renaming')
+    const [aEv] = await claimEvents(SPACE, 'a', 'run-a2')
+    assert.equal(aEv.source, 'people/q.md')
+    assert.deepEqual((aEv.payload as { chain: unknown }).chain, { depth: 1, via: 'b' })
+  } finally {
+    await prisma!.agentEvent.deleteMany({ where: { spaceId: SPACE } })
     await teardown()
   }
 })

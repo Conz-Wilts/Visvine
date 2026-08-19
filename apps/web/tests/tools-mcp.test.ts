@@ -57,6 +57,8 @@ function config(over: Partial<ToolConfig> = {}): ToolConfig {
     version: 0,
     surfaces: { rail: { label: 'Board', icon: 'kanban' }, types: [] },
     perimeter: { ...EMPTY_PERIMETER, read: ['deals/**'], write: ['deals/**'] },
+    tags: [],
+    previewUrl: null,
     ...over,
   }
 }
@@ -145,6 +147,9 @@ function version(over: Partial<ToolVersionSummary> = {}): ToolVersionSummary {
     author: { userId: 'user_1', name: 'Ada' },
     perimeter: { ...EMPTY_PERIMETER, read: ['deals/**'] },
     surfaces: { rail: { label: 'Board', icon: 'kanban' }, types: [] },
+    releaseNotes: null,
+    tags: [],
+    previewUrl: null,
     ...over,
   }
 }
@@ -172,6 +177,7 @@ function deps(over: Partial<AppToolDeps> = {}): AppToolDeps {
     latestApprovedVersion: unexpected('latestApprovedVersion'),
     spaceFacts: unexpected('spaceFacts'),
     appOrigin: () => 'https://visvine.test',
+    capturePreview: unexpected('capturePreview'),
     ...over,
   } as AppToolDeps
 }
@@ -691,4 +697,150 @@ test('every space-scoped handler refuses when the tools feature key is off, befo
       `${name} did not refuse with the shared feature-gate message`,
     )
   }
+})
+
+// ── headless render (ticket 3.5) ─────────────────────────────────────────────
+
+test('preview_tool renders only when asked, and passes the image and console errors through', async () => {
+  const requests: unknown[] = []
+  const rendered = await appToolHandlers.previewTool(
+    CTX,
+    { space_id: SPACE, name: 'board', screenshot: true },
+    deps({
+      describeAuthoredTool: async () => detail(),
+      capturePreview: async (req) => {
+        requests.push(req)
+        return {
+          available: true,
+          image_base64: 'aGVsbG8=',
+          mime: 'image/png',
+          width: 1024,
+          height: 768,
+          rendered: true,
+          console_errors: ['console.error: boom'],
+        }
+      },
+    }),
+  )
+  // Rendered as the caller, in the target space, with the image on.
+  assert.deepEqual(requests, [
+    {
+      appOrigin: 'https://visvine.test',
+      spaceId: SPACE,
+      name: 'board',
+      viewer: { userId: 'user_1', name: 'Ada', email: 'ada@local.dev', personId: null },
+      image: true,
+      budgetMs: 10_000,
+    },
+  ])
+  assert.equal(rendered.screenshot?.available, true)
+  assert.equal(rendered.screenshot?.png_base64, 'aGVsbG8=')
+  assert.equal(rendered.screenshot?.jpeg_base64, null)
+  assert.deepEqual(rendered.screenshot?.console_errors, ['console.error: boom'])
+  assert.equal(rendered.preview_url, 'https://visvine.test/tools/preview/board')
+
+  // Without the flag no browser is touched (capturePreview is unstubbed and would throw).
+  const plain = await appToolHandlers.previewTool(
+    CTX,
+    { space_id: SPACE, name: 'board' },
+    deps({ describeAuthoredTool: async () => detail() }),
+  )
+  assert.equal('screenshot' in plain, false)
+})
+
+test('preview_tool says why a screenshot is unavailable and keeps the links', async () => {
+  const result = await appToolHandlers.previewTool(
+    CTX,
+    { space_id: SPACE, name: 'board', screenshot: true },
+    deps({
+      describeAuthoredTool: async () => detail(),
+      capturePreview: async () => ({ available: false, reason: 'Headless rendering is off in this deployment' }),
+    }),
+  )
+  assert.equal(result.screenshot?.available, false)
+  assert.match(result.screenshot?.reason ?? '', /off in this deployment/)
+  assert.equal(result.desktop_deep_link, 'visvine-desktop://open/tools/preview/board')
+})
+
+test('check_tool { render } folds runtime console errors into the warnings, image-free', async () => {
+  const requests: Array<{ image?: boolean }> = []
+  const result = await appToolHandlers.checkTool(
+    CTX,
+    { space_id: SPACE, name: 'board', render: true },
+    deps({
+      describeAuthoredTool: async () => detail(),
+      rebuild: async () => build(),
+      spaceFacts: async () => ({ available: { connectors: [], types: [], agents: [] }, customTypes: [] }),
+      capturePreview: async (req) => {
+        requests.push(req)
+        return {
+          available: true,
+          image_base64: null,
+          mime: null,
+          width: 1024,
+          height: 768,
+          rendered: false,
+          console_errors: ['uncaught: TypeError: x is undefined'],
+        }
+      },
+    }),
+  )
+  assert.equal(requests[0]?.image, false)
+  assert.equal(result.runtime?.available, true)
+  assert.equal(result.runtime?.rendered, false)
+  assert.ok(result.warnings.some((w) => /Runtime: uncaught: TypeError/.test(w)))
+  assert.ok(result.warnings.some((w) => /did not mount/.test(w)))
+  assert.equal(result.ready_to_publish, false)
+
+  // A broken build never launches a browser — there is nothing to render.
+  const broken = await appToolHandlers.checkTool(
+    CTX,
+    { space_id: SPACE, name: 'board', render: true },
+    deps({
+      describeAuthoredTool: async () => detail(),
+      rebuild: async () => brokenBuild(),
+      spaceFacts: async () => ({ available: { connectors: [], types: [], agents: [] }, customTypes: [] }),
+    }),
+  )
+  assert.equal('runtime' in broken, false)
+})
+
+// ── marketplace metadata + trusted publishers (tickets 4.1, 4.2) ─────────────
+
+test('publish_tool passes release_notes through and echoes tags and notes back', async () => {
+  const seen: unknown[] = []
+  const result = await appToolHandlers.publishTool(
+    CTX,
+    { space_id: SPACE, name: 'board', release_notes: 'Adds the archive column' },
+    deps({
+      publishTool: async (_p, _c, name, opts) => {
+        seen.push([name, opts])
+        return {
+          ok: true,
+          version: version({ tags: ['crm', 'kanban'], releaseNotes: 'Adds the archive column' }),
+          warning: null,
+        }
+      },
+    }),
+  )
+  assert.deepEqual(seen, [['board', { note: undefined, releaseNotes: 'Adds the archive column' }]])
+  assert.deepEqual(result.tags, ['crm', 'kanban'])
+  assert.equal(result.release_notes, 'Adds the archive column')
+})
+
+test('publish_tool explains an auto-approved version instead of promising a review', async () => {
+  const result = await appToolHandlers.publishTool(
+    CTX,
+    { space_id: SPACE, name: 'board' },
+    deps({
+      publishTool: async () => ({
+        ok: true,
+        version: version({ status: 'approved', reviewNote: 'auto-approved: trusted publisher, unchanged perimeter' }),
+        warning: null,
+      }),
+    }),
+  )
+  assert.equal(result.status, 'approved')
+  assert.match(result.review, /AUTO-APPROVED/)
+  assert.doesNotMatch(result.review, /PENDING/)
 })

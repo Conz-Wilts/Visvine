@@ -181,6 +181,21 @@ export const TYPE_OPTIONS: TypeOption[] = [
       </svg>
     ),
   },
+  {
+    id: 'tool',
+    label: 'Tool',
+    description: 'A mini-app that runs over your space’s context',
+    color: '#f59e0b',
+    inGrid: true,
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <rect x="4" y="4" width="7" height="7" rx="1.5" strokeWidth={1.8} />
+        <rect x="13" y="4" width="7" height="7" rx="1.5" strokeWidth={1.8} />
+        <rect x="4" y="13" width="7" height="7" rx="1.5" strokeWidth={1.8} />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M16.5 13.5v6M13.5 16.5h6" />
+      </svg>
+    ),
+  },
 ];
 
 // ─── Shared styles ──────────────────────────────────────────────────────────
@@ -264,7 +279,7 @@ function TypeRow({
         <span className="block text-xs text-text-muted truncate">{opt.description}</span>
       </span>
       {suggested && (
-        <Chip tone="soft" color={opt.color} className="flex-shrink-0">{reason}</Chip>
+        <Chip tone="solid" color={opt.color} className="flex-shrink-0">{reason}</Chip>
       )}
     </button>
   );
@@ -1129,6 +1144,104 @@ export function AgentForm({
   );
 }
 
+// ─── Tool Form ──────────────────────────────────────────────────────────────
+
+export interface ToolFormData {
+  /** The slug — `tools/<name>/`, `/t/<name>`, `tool:<name>`. */
+  name: string;
+  title: string;
+  description: string;
+  /** Sidebar row label; empty = no rail row (the Tool has no page of its own yet). */
+  railLabel: string;
+}
+
+/** Same rule as lib/tools/config.ts#TOOL_NAME_RE — lower-case, digits, hyphens; no underscores. */
+const TOOL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+export function toolSlug(name: string): string {
+  return slugify(name).replace(/_/g, '-').slice(0, 63);
+}
+
+function toolFormError(data: ToolFormData): string | null {
+  const name = data.name.trim();
+  if (!name) return null;
+  const slug = toolSlug(name);
+  if (!slug || !TOOL_NAME_RE.test(slug)) return 'Use lower-case letters, digits and hyphens — that name has none.';
+  return null;
+}
+
+export function toolFormReady(data: ToolFormData): boolean {
+  return !!toolSlug(data.name) && !toolFormError(data);
+}
+
+export function ToolForm({
+  data,
+  onChange,
+  nameRef,
+}: {
+  data: ToolFormData;
+  onChange: (d: ToolFormData) => void;
+  nameRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const error = toolFormError(data);
+  const slug = toolSlug(data.name);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Field label="Name" required>
+        <input
+          ref={nameRef as React.RefObject<HTMLInputElement>}
+          className={`${inputClass} font-mono`}
+          placeholder="e.g. deal-pipeline"
+          maxLength={63}
+          value={data.name}
+          onChange={(e) => onChange({ ...data, name: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Title">
+        <input
+          className={inputClass}
+          placeholder="Deal Pipeline — shown on the rail row and the marketplace card"
+          value={data.title}
+          onChange={(e) => onChange({ ...data, title: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Description">
+        <input
+          className={inputClass}
+          placeholder="One sentence — the marketplace card and the install checklist."
+          value={data.description}
+          onChange={(e) => onChange({ ...data, description: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Sidebar label">
+        <input
+          className={inputClass}
+          placeholder="Optional — give the tool a row in the sidebar and its own page"
+          maxLength={40}
+          value={data.railLabel}
+          onChange={(e) => onChange({ ...data, railLabel: e.target.value })}
+        />
+      </Field>
+
+      {slug && (
+        <p className="text-xs text-text-muted">
+          Creates <span className="font-mono text-text-secondary">tools/{slug}/</span> — index.md, ui.tsx and data.js
+          scaffolds that already compile and render.
+        </p>
+      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <p className="text-xs text-text-muted">
+        Anyone in the space can write a tool; a space admin publishes it. Finish it with your coding agent over
+        the Visvine Creator MCP server — the next screen has the address.
+      </p>
+    </div>
+  );
+}
+
 // ─── File (context source) Form ─────────────────────────────────────────────
 
 type FileUploadStatus = 'queued' | 'uploading' | 'done' | 'failed';
@@ -1323,22 +1436,22 @@ export function AliasSelector({
         {aliases.map((alias) => {
           const active = selected === alias.name;
           return (
-            // Picked is the chip as the directory will show it; unpicked is the
-            // same chip tinted — one alias in two states, same shape as every
-            // other alias in the app.
+            // An alias keeps its own colour either way; picked is the same
+            // chip with a ring around it. Same two states as the invite form's
+            // alias toggles, drawn the same way.
             <button
               key={alias.name}
               onClick={() => onSelect(active ? null : alias.name)}
               className={chipClass({
-                tone: active ? 'solid' : 'soft',
+                tone: 'solid',
                 size: 'lg',
                 color: alias.color,
                 interactive: true,
                 className: 'transition-all duration-150',
               })}
               style={{
-                ...chipStyle(alias.color, active ? 'solid' : 'soft'),
-                boxShadow: active ? `0 0 0 3px ${alias.color}40` : 'none',
+                ...chipStyle(alias.color, 'solid'),
+                boxShadow: active ? `0 0 0 3px ${alias.color}55` : 'none',
               }}
             >
               {alias.name}
@@ -1362,6 +1475,7 @@ export function SuccessScreen({
   label,
   onClose,
   detail,
+  next,
   verb = 'created',
   actionLabel,
   onAction,
@@ -1372,6 +1486,8 @@ export function SuccessScreen({
   verb?: string;
   /** Replaces the generic "All done!" line (e.g. "3 files added to deals"). */
   detail?: string;
+  /** An extra "what now" block under the detail — the Tool tile's MCP pointer. */
+  next?: React.ReactNode;
   /** Optional primary follow-through — "Open note" / "Open file". */
   actionLabel?: string;
   onAction?: () => void;
@@ -1387,19 +1503,20 @@ export function SuccessScreen({
       <div>
         <p className="font-semibold text-text-primary text-lg">{`${label} ${verb}`}</p>
         <p className="text-sm text-text-muted mt-1">{detail ?? 'All done!'}</p>
+        {next && <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-text-muted">{next}</div>}
       </div>
       <div className="mt-2 flex items-center gap-2">
         {actionLabel && onAction && (
           <button
             onClick={onAction}
-            className="px-6 py-2 rounded-full bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+            className="px-6 py-2 rounded-lg bg-brand-green text-white text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             {actionLabel}
           </button>
         )}
         <button
           onClick={onClose}
-          className={`px-6 py-2 rounded-full text-sm font-semibold transition-opacity hover:opacity-90 ${
+          className={`px-6 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 ${
             actionLabel && onAction
               ? 'border border-border-default text-text-secondary'
               : 'bg-brand-green text-white'

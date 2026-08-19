@@ -13,6 +13,13 @@ export interface NoteFrontmatter {
   tags?: string[]
   timestamp?: string // ISO 8601 last-modified datetime
   author?: string // display name of the user who created the note
+  // Memory lifecycle (shared/lifecycle.ts). Every field is optional: a note
+  // with none of them reads as active, current, and permanent.
+  status?: string // NoteStatus — active | proposed | accepted | stale | superseded | deprecated | expired | archived | rejected
+  confidence?: string // Confidence — certain | likely | speculative
+  expires?: string // ISO date/datetime after which the claim is no longer current
+  supersedes?: string | string[] // note path(s) this note replaces
+  superseded_by?: string // note path that replaced this one (set by the clean pass)
   [key: string]: unknown
 }
 

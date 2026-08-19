@@ -13,7 +13,8 @@
  *
  *   handlers   the object data.js assigns onto (`handlers.summary = …`)
  *   args       the marshalled call arguments
- *   visvine    the bridge capabilities, as `visvine.context.read(path)` etc.
+ *   visvine    the bridge capabilities, as `visvine.context.read(path)` etc.,
+ *              plus the pure `visvine.crypto.*` helpers (lib/connectors/hostCrypto.ts)
  *   subject    what the Tool is being shown about, or null
  *   install    which Tool this is
  *   sleep      the isolate's own bounded pause; `fetch`/`sql`/`mcp` are ABSENT
@@ -28,6 +29,7 @@
  * `context.read`.
  */
 import { runInIsolate, type IsolateRunResult } from '@/lib/connectors/isolate'
+import { cryptoCapabilities } from '@/lib/connectors/hostCrypto'
 import { marshalValue } from '@/lib/connectors/marshal'
 import { BRIDGE_LIMITS, type BridgeResponse } from './protocol'
 import type { ResolvedTarget } from './target'
@@ -152,7 +154,10 @@ export async function runDataHandler(
       isolateSource(t.dataBundle, fn, marshalValue(args)),
       {
         omitDefaults: ['fetch', 'sql', 'mcp'],
-        capabilities: deps.capabilities ?? {},
+        // The pure `visvine.crypto.*` helpers (hmac/hash/base64/…) ride along:
+        // they touch nothing but their arguments. `sigv4` does not — it reads a
+        // connector's env, and a Tool has none.
+        capabilities: { ...cryptoCapabilities(), ...(deps.capabilities ?? {}) },
         globals: { subject: t.subject, install: t.install },
       },
     )

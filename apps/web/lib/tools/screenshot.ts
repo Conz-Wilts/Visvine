@@ -1,0 +1,340 @@
+/**
+ * A headless render of a Tool's working copy, for the authoring agent that
+ * cannot open a browser: `preview_tool { screenshot: true }` and
+ * `check_tool { render: true }` (lib/mcp/appTools.ts).
+ *
+ * The render is the REAL preview page — `${appOrigin}/tools/preview/<name>` —
+ * driven through Playwright's bundled Chromium as the calling principal, not
+ * the bare frame document. The frame renders nothing until the host page's
+ * handshake lands (`visvine:init`, features/tools/kit/runtime.ts) and every
+ * read a Tool makes goes back through the host to the bridge, so a screenshot
+ * of the frame URL alone would be an error card, and a fake host would be a
+ * second bridge to keep honest. Instead this mints an ordinary session for the
+ * caller (lib/session.ts — same JWT the login flow sets), drops it into a
+ * throwaway browser context as the `auth_session` cookie, points the space
+ * switcher at the target space, and reads back exactly what that person would
+ * see: same grants, same perimeter, same refusals.
+ *
+ * Availability, not failure, is the contract. Playwright is a devDependency and
+ * Chromium is a separate download, so this returns `{ available: false, reason }`
+ * whenever it cannot run — module missing, browser not installed, production
+ * without `TOOLS_SCREENSHOT=on` — and the MCP tools fall back to link-only, as
+ * they were before this existed. `import('playwright')` is deliberately dynamic
+ * (through a variable, so the bundler leaves it alone): a production image built
+ * without the package must still boot.
+ *
+ * The session is the caller's, but it is minted SHORT (`PREVIEW_SESSION_TTL_S`)
+ * and the page is PINNED to the preview URL: a Tool's own code can ask the host
+ * to navigate (`visvine.navigate`, features/tools/lib/hostBridge.ts honours any
+ * in-app path), and `preview_tool` needs only `tools:author` — so without the
+ * pin a narrow-scope token could screenshot any page the caller's session can
+ * see. Main-frame navigation requests to anything but the preview URL are
+ * aborted at the network layer (`page.route`), and if the main frame still ends
+ * up elsewhere the capture answers `navigated_away` rather than an image.
+ * Sub-resources, `/api/*` and the Tool's frame (which lives on the tools origin)
+ * are untouched — the predicate is `previewNavigationAllowed`, tested on its own.
+ *
+ * Budget: one wall-clock allowance covers launch, navigation, the frame's mount
+ * and the capture. Console errors and uncaught page errors are collected from
+ * every frame — the Tool's frame included — because a Tool that mounts and then
+ * throws in an effect is what an author most needs told.
+ */
+
+/** Viewport the capture is taken at — a laptop pane, not a phone. */
+export const SCREENSHOT_WIDTH = 1024
+export const SCREENSHOT_HEIGHT = 768
+
+/** Wall clock for the whole capture, launch to close. */
+export const SCREENSHOT_BUDGET_MS = 10_000
+
+/** Past this the PNG is retaken as a JPEG — the answer rides in an MCP result. */
+export const SCREENSHOT_MAX_BYTES = 300_000
+const JPEG_QUALITY = 70
+
+/**
+ * How long the minted preview session lives. The whole capture is bounded by
+ * `SCREENSHOT_BUDGET_MS`, so anything past a couple of minutes is a token that
+ * outlives its only job.
+ */
+export const PREVIEW_SESSION_TTL_S = 120
+
+/** How many console lines come back, and how long each may be. */
+const MAX_CONSOLE_ERRORS = 50
+const MAX_CONSOLE_LINE = 500
+
+/** The localStorage key the space switcher reads (features/shared/contexts/SpaceContext.tsx). */
+const CURRENT_SPACE_KEY = 'nb_current_community'
+
+interface ScreenshotViewer {
+  userId: string
+  name: string
+  email: string
+  personId?: string | null
+}
+
+export interface ScreenshotRequest {
+  appOrigin: string
+  spaceId: string
+  name: string
+  viewer: ScreenshotViewer
+  /** Skip the image and just collect console errors — `check_tool { render }`. */
+  image?: boolean
+  budgetMs?: number
+}
+
+export type ScreenshotResult =
+  | { available: false; reason: string }
+  /** The page left the preview URL (a Tool called `visvine.navigate`, say) — no image is taken. */
+  | { available: true; navigated_away: true; url: string; console_errors: string[] }
+  | {
+      available: true
+      navigated_away?: false
+      /** Base64 image, or null when `image: false` was asked for. */
+      image_base64: string | null
+      mime: 'image/png' | 'image/jpeg' | null
+      width: number
+      height: number
+      /** Whether the Tool's frame mounted something into its root before the budget ran out. */
+      rendered: boolean
+      /** `console.error` lines and uncaught errors from the page and every frame, in order. */
+      console_errors: string[]
+    }
+
+/**
+ * Whether a capture may even be attempted here. Dev is always allowed; a
+ * production deployment opts in with `TOOLS_SCREENSHOT=on`, because launching
+ * a browser per call is a cost an operator should choose.
+ */
+export function screenshotEnabled(env: NodeJS.ProcessEnv = process.env): { ok: true } | { ok: false; reason: string } {
+  if (env.NODE_ENV === 'production' && env.TOOLS_SCREENSHOT !== 'on') {
+    return { ok: false, reason: 'Headless rendering is off in this deployment (set TOOLS_SCREENSHOT=on to enable it).' }
+  }
+  return { ok: true }
+}
+
+/**
+ * The URL of the preview page for one Tool — what the browser is pointed at
+ * and the only main-frame destination it may reach.
+ */
+export function previewPageUrl(appOrigin: string, name: string): string {
+  return `${appOrigin.replace(/\/+$/, '')}/tools/preview/${encodeURIComponent(name)}`
+}
+
+/**
+ * Whether the main frame may load `requestUrl` while capturing `previewUrl`.
+ * Pure: same origin and same path (query and hash are the page's own business —
+ * a reload with `?x` is still the preview). Anything else — another route on
+ * the app, another host, a scheme that is not http(s) — is refused. Only ever
+ * asked about MAIN-FRAME NAVIGATIONS; sub-resources and child frames never
+ * come here.
+ */
+export function previewNavigationAllowed(previewUrl: string, requestUrl: string): boolean {
+  let want: URL
+  let got: URL
+  try {
+    want = new URL(previewUrl)
+    got = new URL(requestUrl)
+  } catch {
+    return false
+  }
+  if (got.protocol !== 'http:' && got.protocol !== 'https:') return false
+  const strip = (p: string) => p.replace(/\/+$/, '') || '/'
+  return want.origin === got.origin && strip(want.pathname) === strip(got.pathname)
+}
+
+/** The slice of Playwright this file touches — typed locally so the package stays optional. */
+interface PlaywrightLike {
+  chromium: {
+    launch(opts: { headless: boolean }): Promise<BrowserLike>
+  }
+}
+interface BrowserLike {
+  newContext(opts: { viewport: { width: number; height: number }; ignoreHTTPSErrors?: boolean }): Promise<ContextLike>
+  close(): Promise<void>
+}
+interface ContextLike {
+  addCookies(cookies: Array<{ name: string; value: string; url: string; httpOnly?: boolean; sameSite?: 'Lax' | 'Strict' | 'None' }>): Promise<void>
+  addInitScript(script: string): Promise<void>
+  newPage(): Promise<PageLike>
+}
+interface FrameLike {
+  url(): string
+  waitForFunction(fn: string, arg?: unknown, opts?: { timeout?: number }): Promise<unknown>
+}
+interface RouteLike {
+  request(): { url(): string; isNavigationRequest(): boolean; frame(): FrameLike }
+  abort(errorCode?: string): Promise<void>
+  continue(): Promise<void>
+}
+interface PageLike {
+  on(event: 'console', handler: (msg: { type(): string; text(): string }) => void): void
+  on(event: 'pageerror', handler: (err: Error) => void): void
+  on(event: 'framenavigated', handler: (frame: FrameLike) => void): void
+  route(url: string, handler: (route: RouteLike) => Promise<void> | void): Promise<void>
+  mainFrame(): FrameLike
+  goto(url: string, opts: { waitUntil: 'load' | 'domcontentloaded'; timeout: number }): Promise<unknown>
+  frames(): FrameLike[]
+  waitForSelector(selector: string, opts: { timeout: number; state?: 'attached' }): Promise<unknown>
+  waitForTimeout(ms: number): Promise<void>
+  screenshot(opts: { type: 'png' } | { type: 'jpeg'; quality: number }): Promise<Buffer>
+}
+
+async function loadPlaywright(): Promise<PlaywrightLike | null> {
+  // A variable specifier keeps Turbopack/webpack from bundling or tracing the
+  // package: this must resolve at runtime or not at all.
+  const specifier = 'playwright'
+  try {
+    return (await import(/* webpackIgnore: true */ specifier)) as PlaywrightLike
+  } catch {
+    return null
+  }
+}
+
+function clip(text: string): string {
+  return text.length > MAX_CONSOLE_LINE ? `${text.slice(0, MAX_CONSOLE_LINE)}…` : text
+}
+
+/**
+ * Render one Tool preview and read back what a person would see. Never
+ * throws: a browser that will not launch, a page that never loads, a frame that
+ * never mounts all come back as a result an agent can read.
+ */
+export async function captureToolPreview(req: ScreenshotRequest): Promise<ScreenshotResult> {
+  const enabled = screenshotEnabled()
+  if (!enabled.ok) return { available: false, reason: enabled.reason }
+  const playwright = await loadPlaywright()
+  if (!playwright) {
+    return {
+      available: false,
+      reason: 'Playwright is not installed here — `pnpm add -D playwright` and `playwright install chromium` to enable headless previews.',
+    }
+  }
+
+  const budgetMs = Math.max(2000, req.budgetMs ?? SCREENSHOT_BUDGET_MS)
+  const started = Date.now()
+  const remaining = () => Math.max(250, budgetMs - (Date.now() - started))
+  const wantImage = req.image !== false
+
+  const consoleErrors: string[] = []
+  const record = (line: string) => {
+    if (consoleErrors.length < MAX_CONSOLE_ERRORS) consoleErrors.push(clip(line))
+  }
+
+  let browser: BrowserLike | null = null
+  try {
+    browser = await playwright.chromium.launch({ headless: true })
+    const context = await browser.newContext({
+      viewport: { width: SCREENSHOT_WIDTH, height: SCREENSHOT_HEIGHT },
+      ignoreHTTPSErrors: true,
+    })
+
+    // The caller's own session, exactly as the login flow would set it — the
+    // preview then renders under their grants and nobody else's. Imported lazily:
+    // lib/session pulls in next/headers, which the tests that import this
+    // module's callers (lib/mcp/appTools.ts) have no request scope for.
+    const { COOKIE_NAME, createSession } = await import('@/lib/session')
+    // Short-lived on purpose: this token exists for one capture and nothing
+    // else — see the header. Never the 30-day default.
+    const token = await createSession(
+      {
+        userId: req.viewer.userId,
+        name: req.viewer.name,
+        email: req.viewer.email,
+        personId: req.viewer.personId ?? null,
+      },
+      { maxAgeSeconds: PREVIEW_SESSION_TTL_S },
+    )
+    await context.addCookies([{ name: COOKIE_NAME, value: token, url: req.appOrigin, httpOnly: true, sameSite: 'Lax' }])
+    // The space switcher remembers its choice in localStorage; seed it so the
+    // preview page resolves the right space instead of the user's last one.
+    await context.addInitScript(
+      `try { localStorage.setItem(${JSON.stringify(CURRENT_SPACE_KEY)}, ${JSON.stringify(req.spaceId)}) } catch {}`,
+    )
+
+    const page = await context.newPage()
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') record(`console.error: ${msg.text()}`)
+    })
+    page.on('pageerror', (err) => record(`uncaught: ${err.message}`))
+
+    const url = previewPageUrl(req.appOrigin, req.name)
+
+    // Pin the top-level document to the preview URL. Only main-frame
+    // navigations are judged; every sub-resource, /api/* call and child frame
+    // (the Tool's frame on the tools origin included) continues untouched.
+    let navigatedAway: string | null = null
+    const main = page.mainFrame()
+    await page.route('**/*', async (route) => {
+      const request = route.request()
+      if (request.isNavigationRequest() && request.frame() === main && !previewNavigationAllowed(url, request.url())) {
+        navigatedAway = request.url()
+        await route.abort('blockedbyclient')
+        return
+      }
+      await route.continue()
+    })
+    // Belt and braces: an aborted request leaves the page where it was, but a
+    // navigation that slipped past the route (a same-document route change, a
+    // race with the handler) is caught here.
+    page.on('framenavigated', (frame) => {
+      if (frame === main && !previewNavigationAllowed(url, frame.url())) navigatedAway = frame.url()
+    })
+
+    await page.goto(url, { waitUntil: 'load', timeout: remaining() })
+
+    // Wait for the Tool's frame to appear, then for it to mount something.
+    // Both are best-effort within the budget: an unmounted frame is a finding
+    // (rendered: false), not a failure of the capture.
+    let rendered = false
+    try {
+      await page.waitForSelector('iframe', { timeout: Math.min(remaining(), 6000), state: 'attached' })
+      const frame = page.frames().find((f) => f.url().includes('/api/tools/runtime/frame'))
+      if (frame) {
+        await frame.waitForFunction(
+          '() => { const r = document.getElementById("root"); return !!r && r.childElementCount > 0 }',
+          undefined,
+          { timeout: Math.min(remaining(), 6000) },
+        )
+        rendered = true
+        // One more beat for effects and first data to paint.
+        await page.waitForTimeout(Math.min(remaining(), 500))
+      }
+    } catch {
+      rendered = false
+    }
+
+    if (navigatedAway !== null || !previewNavigationAllowed(url, main.url())) {
+      return { available: true, navigated_away: true, url: navigatedAway ?? main.url(), console_errors: consoleErrors }
+    }
+
+    let image: Buffer | null = null
+    let mime: 'image/png' | 'image/jpeg' | null = null
+    if (wantImage) {
+      image = await page.screenshot({ type: 'png' })
+      mime = 'image/png'
+      if (image.byteLength > SCREENSHOT_MAX_BYTES) {
+        image = await page.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
+        mime = 'image/jpeg'
+      }
+    }
+
+    return {
+      available: true,
+      image_base64: image ? image.toString('base64') : null,
+      mime,
+      width: SCREENSHOT_WIDTH,
+      height: SCREENSHOT_HEIGHT,
+      rendered,
+      console_errors: consoleErrors,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    // A missing browser binary is the common first-run failure; say what to do.
+    const hint = /executable doesn't exist|browserType.launch/i.test(message)
+      ? ' Run `pnpm --filter @visvine/web exec playwright install chromium`.'
+      : ''
+    return { available: false, reason: `Headless render failed: ${clip(message)}.${hint}` }
+  } finally {
+    await browser?.close().catch(() => undefined)
+  }
+}

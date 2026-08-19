@@ -442,13 +442,13 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         onPointerCancel={endDrag}
         // Even padding on every row — trimming the first and last would leave
         // the dividers unevenly spaced.
-        className={`cursor-grab select-none py-3 ${
+        className={`cursor-grab select-none py-4 ${
           isDragging
             ? 'relative z-10 -mx-3 cursor-grabbing rounded-xl !border-transparent bg-surface-1 px-3 shadow-xl ring-1 ring-border-subtle'
             : ''
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3.5">
           {/* Grip. Cosmetic for the mouse — the whole row drags — but it's a
               real button so the list stays operable by keyboard, which native
               drag has no equivalent for. */}
@@ -468,11 +468,13 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
           >
             <GripIcon />
           </button>
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3.5">
             <span className="shrink-0 text-text-secondary">
               {feature.icon}
             </span>
-            <span className="min-w-0 truncate text-sm font-medium text-text-primary">
+            {/* Sized like a Types row's name: this list IS the page, so a tool
+                reads as a heading rather than as a settings line. */}
+            <span className="min-w-0 truncate text-base font-semibold text-text-primary">
               {feature.label}
             </span>
           </div>
@@ -538,7 +540,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       {/* The sidebar rail, in order. Drag a row to reorder it or to move it
           into the More section below, lock to restrict it to admins, × to
           remove it. */}
-      {/* No heading here — the console shell already titles the pane "Tools".
+      {/* No heading here — the console's tab bar already names the section.
           Only the Add tool button sits above the list. */}
       <section>
         {/* Always shown, even with nothing left to add — the picker says so
@@ -553,10 +555,10 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
             Add tool
           </button>
         </div>
-        {/* -mt-3 cancels the first row's top padding so the gap above the list
+        {/* -mt-4 cancels the first row's top padding so the gap above the list
             matches every other section, while the rows themselves stay evenly
             padded. */}
-        <div className="-mt-3 divide-y divide-border-subtle">
+        <div className="-mt-4 divide-y divide-border-subtle">
         {railKeys.length === 0 && (
           <p className="py-3 text-sm text-text-muted">
             Every tool is in More. Drag one back up here to give it a sidebar row.
@@ -608,11 +610,11 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
               </p>
             ) : (
               enabledUnplaceable.map(feature => (
-                <div key={feature.key} className="flex items-center gap-3 py-3">
+                <div key={feature.key} className="flex items-center gap-3.5 py-4">
                   <span className="shrink-0 text-text-secondary">{feature.icon}</span>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium text-text-primary">{feature.label}</div>
-                    <div className="truncate text-xs text-text-muted">{feature.description}</div>
+                    <div className="truncate text-base font-semibold text-text-primary">{feature.label}</div>
+                    <div className="truncate text-sm text-text-muted">{feature.description}</div>
                   </div>
                   <Toggle
                     checked

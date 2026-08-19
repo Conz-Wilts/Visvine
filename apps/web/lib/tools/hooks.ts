@@ -25,11 +25,18 @@
  *  2. **It only acts on the SHARED context.** A personal copy of a Tool note is
  *     someone's own draft; it compiles nothing and installs nothing.
  *
+ * These hooks are also where the note CHANGE BUS (lib/notes/changes.ts) is
+ * fed: they already run after every write/rename/delete in every context, so
+ * each one publishes the path first — for personal contexts too, with the
+ * ownerKey on the event so a subscriber can filter — before deciding whether
+ * the write concerns a Tool build at all.
+ *
  * lib/tools/builds.ts is reached by dynamic import, the same discipline
  * agents/hooks.ts uses for the store: the store imports this module, and builds
  * imports the store back.
  */
 import { logger } from '@/lib/logger'
+import { publishChange } from '@/lib/notes/changes'
 import type { Context } from '@/lib/notes/store'
 import { isToolPath, toolFileKindOfPath, toolNameOfPath } from './config'
 
@@ -91,6 +98,7 @@ async function settleRenamedFrom(spaceId: string, name: string): Promise<void> {
 
 /** After a note write (create or save) anywhere under `tools/`. */
 export async function toolNoteWritten(context: Context, path: string): Promise<void> {
+  publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'write' })
   const name = toolOf(context, path)
   if (!name) return
   await rebuild(context.spaceId, name)
@@ -102,6 +110,7 @@ export async function toolNoteWritten(context: Context, path: string): Promise<v
  * one, and one moved in leaves only the new.
  */
 export async function toolNoteRenamed(context: Context, from: string, to: string): Promise<void> {
+  if (from !== to) publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path: to, kind: 'rename', from })
   if (!isSharedContext(context) || from === to) return
   const fromName = isToolPath(from) ? toolNameOfPath(from) : null
   const toName = isToolPath(to) ? toolNameOfPath(to) : null
@@ -111,6 +120,7 @@ export async function toolNoteRenamed(context: Context, from: string, to: string
 
 /** After a note is trashed. Losing the index note ends the Tool. */
 export async function toolNoteDeleted(context: Context, path: string): Promise<void> {
+  publishChange({ spaceId: context.spaceId, ownerKey: context.ownerKey, path, kind: 'delete' })
   const name = toolOf(context, path)
   if (!name) return
   if (toolFileKindOfPath(path) === 'index') {

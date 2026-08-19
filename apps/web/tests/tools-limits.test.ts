@@ -30,8 +30,12 @@ test('the rate key is per viewer AND per install', () => {
   assert.notEqual(bridgeRateKey('u1', 'i1'), bridgeRateKey('u1', 'i2'))
 })
 
-test('a preview has its own bucket rather than sharing an install id', () => {
-  assert.equal(bridgeRateKey('u1', null), 'u1:preview')
+test('each preview gets its own bucket, not one shared "preview" bucket', () => {
+  // The caller passes targetKey(resolved), which is `preview:<space>/<name>`.
+  // Two drafts one author is working on must not spend each other's budget.
+  assert.equal(bridgeRateKey('u1', 'preview:space-1/deals'), 'u1:preview:space-1/deals')
+  assert.notEqual(bridgeRateKey('u1', 'preview:space-1/deals'), bridgeRateKey('u1', 'preview:space-1/roster'))
+  assert.notEqual(bridgeRateKey('u1', 'preview:space-1/deals'), bridgeRateKey('u1', 'preview:space-2/deals'))
 })
 
 // ── the sliding window ────────────────────────────────────────────────────────

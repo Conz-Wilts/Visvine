@@ -34,7 +34,7 @@ import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { EMPTY_PERIMETER, parseToolPerimeter, type ToolPerimeter } from './perimeter'
-import { parseToolConfig, toolIndexPath, TOOL_NAME_RE, type ToolConfig } from './config'
+import { parseToolConfig, parseToolPreviewUrl, parseToolTags, toolIndexPath, TOOL_NAME_RE, type ToolConfig } from './config'
 import type { BridgeError, BridgeTarget, ToolDegraded, ToolInstallInfo, ToolSubject } from './protocol'
 
 /** The stored shape `resolveBridgeTarget` needs off an install row. */
@@ -180,6 +180,9 @@ function configOfJson(raw: unknown, name: string, perimeter: ToolPerimeter): Too
         : [],
     },
     perimeter,
+    // Marketplace metadata; a hostile value falls back to none, like the rest.
+    tags: ((t) => (t.ok ? t.tags : []))(parseToolTags(record.tags)),
+    previewUrl: ((p) => (p.ok ? p.previewUrl : null))(parseToolPreviewUrl(record.previewUrl)),
   }
 }
 

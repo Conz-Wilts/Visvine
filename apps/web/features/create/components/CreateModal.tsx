@@ -26,6 +26,7 @@ import {
   ContextForm, type ContextFormData,
   ConnectorForm, type ConnectorFormData, connectorSlug, connectorFormReady,
   AgentForm, type AgentFormData, agentSlug, agentFormReady, agentConnectorList,
+  ToolForm, type ToolFormData, toolSlug, toolFormReady,
   FileForm, type FileFormData, type FileEntry,
   AliasSelector,
   SuccessScreen,
@@ -41,6 +42,7 @@ import { newAgentNote } from '@/lib/agents/config';
 import { fetchJsonBody } from '@/lib/fetchJson';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
+import { createTool as createToolRequest } from '@/features/tools/lib/client';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -113,11 +115,15 @@ export default function CreateModal() {
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
   const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
   const [agentData, setAgentData] = useState<AgentFormData>({ name: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
+  const [toolData, setToolData] = useState<ToolFormData>({ name: '', title: '', description: '', railLabel: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
   // Where the just-created note/file lives, so the success screen can offer to
   // open it (null for types that have no viewer to jump to).
   const [createdHref, setCreatedHref] = useState<string | null>(null);
   const [createdDetail, setCreatedDetail] = useState<string | null>(null);
+  // Extra "what now" lines under the success detail — the Tool tile uses it to
+  // point at the creator MCP server; everything else leaves it null.
+  const [createdNext, setCreatedNext] = useState<React.ReactNode | null>(null);
   // Sections for the channel form's "file into section" dropdown, loaded lazily when
   // the Channel form opens.
   const [sections, setSections] = useState<ChannelSectionEntry[]>([]);
@@ -213,9 +219,11 @@ export default function CreateModal() {
     setSpaceData({ name: '', context: '' });
     setContextData({ title: '', folder: '', tags: '', body: '' });
     setConnectorData({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
+    setToolData({ name: '', title: '', description: '', railLabel: '' });
     setFileData({ files: [], folder: '' });
     setCreatedHref(null);
     setCreatedDetail(null);
+    setCreatedNext(null);
   }, []);
 
   // Load the space's sections once the Channel form is showing, so the user can
@@ -292,6 +300,7 @@ export default function CreateModal() {
       // the connectors layer would immediately call invalid.
       if (selectedType === 'connector') return connectorFormReady(connectorData);
       if (selectedType === 'agent') return agentFormReady(agentData);
+      if (selectedType === 'tool') return toolFormReady(toolData);
       // Only files that passed the pick-time check can be uploaded.
       if (selectedType === 'file') return fileData.files.some((f) => f.status === 'queued');
     }
@@ -330,6 +339,9 @@ export default function CreateModal() {
         setStep(3);
       } else if (selectedType === 'agent') {
         await createAgentNote();
+        setStep(3);
+      } else if (selectedType === 'tool') {
+        await createToolScaffold();
         setStep(3);
       } else if (selectedType === 'file') {
         await uploadFiles();
@@ -462,6 +474,41 @@ export default function CreateModal() {
     );
     setCreatedHref(`/directory/${encodeURIComponent(`agent:${name}`)}`);
     setCreatedDetail(`Saved to ${path} — a space admin activates it from Agents.`);
+  };
+
+  // ── Tool ──────────────────────────────────────────────────────────────────
+  // A Tool is a folder of notes plus a directory node, all made together by
+  // lib/tools/service.ts#createTool — so this goes through its route rather
+  // than writing notes one at a time. The scaffold compiles and renders as-is;
+  // the success screen points at the preview and at the creator MCP server,
+  // which is where the real authoring happens.
+  const createToolScaffold = async () => {
+    if (!currentSpace) throw new Error('Select a space first');
+    const name = toolSlug(toolData.name);
+    const { tool, creatorMcpUrl } = await createToolRequest(currentSpace.id, {
+      name,
+      title: toolData.title.trim() || undefined,
+      description: toolData.description.trim() || undefined,
+      railLabel: toolData.railLabel.trim() || undefined,
+    });
+    invalidateContextCache(contextKeys.tree(currentSpace.id), contextKeys.list(currentSpace.id));
+    // Relative on purpose: router.push wants an app path, and the route IS the
+    // deep-link target (`visvine-desktop://open/tools/preview/<name>`).
+    setCreatedHref(`/tools/preview/${encodeURIComponent(tool.name)}`);
+    setCreatedDetail(`Scaffolded tools/${tool.name}/ — index.md, ui.tsx and data.js.`);
+    setCreatedNext(
+      <span className="block text-left">
+        Finish it with your coding agent — connect it to the Visvine Creator MCP server (Settings → MCP)
+        {creatorMcpUrl && (
+          <>
+            :{' '}
+            <code className="break-all font-mono text-[11px] text-text-secondary">{creatorMcpUrl}</code>
+          </>
+        )}
+        . Then <span className="font-mono">get_tool_sdk</span> and{' '}
+        <span className="font-mono">write_tool {`{ name: "${tool.name}" }`}</span>.
+      </span>,
+    );
   };
 
   // ── Files (context sources) ───────────────────────────────────────────────
@@ -617,6 +664,8 @@ export default function CreateModal() {
       ? connectorSlug(connectorData.name) || 'Connector'
       : selectedType === 'agent'
       ? agentSlug(agentData.name) || 'Agent'
+      : selectedType === 'tool'
+      ? toolSlug(toolData.name) || 'Tool'
       : selectedType === 'file'
       ? `${uploadedCount} file${uploadedCount === 1 ? '' : 's'}`
       : typeOpt.label
@@ -801,6 +850,9 @@ export default function CreateModal() {
                 models={PROVIDERS.flatMap((p) => p.models.map((m) => ({ value: `${p.id}/${m.id}`, label: `${p.label} — ${m.label}` })))}
               />
             )}
+            {step === 1 && selectedType === 'tool' && (
+              <ToolForm data={toolData} onChange={setToolData} nameRef={nameRef} />
+            )}
             {step === 1 && selectedType === 'file' && (
               <FileForm
                 data={fileData}
@@ -824,6 +876,7 @@ export default function CreateModal() {
                 label={successLabel}
                 onClose={handleClose}
                 detail={createdDetail ?? undefined}
+                next={createdNext ?? undefined}
                 verb={selectedType === 'file' ? 'added' : 'created'}
                 actionLabel={
                   createdHref
@@ -833,6 +886,8 @@ export default function CreateModal() {
                       ? 'Open connector'
                       : selectedType === 'agent'
                       ? 'Open agent'
+                      : selectedType === 'tool'
+                      ? 'Open preview'
                       : 'Open note'
                     : undefined
                 }
@@ -861,7 +916,7 @@ export default function CreateModal() {
               <button
                 onClick={handleSubmit}
                 disabled={!canAdvance() || saving}
-                className="px-5 py-2 rounded-full text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                 style={{ background: 'var(--color-brand-green, #78d870)' }}
               >
                 {saving ? (

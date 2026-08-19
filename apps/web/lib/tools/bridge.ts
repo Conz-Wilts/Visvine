@@ -127,16 +127,54 @@ function parseParams<T>(
 
 const PATH_MAX = 512
 
+/**
+ * Paging. A cursor is opaque to the Tool but plain here: base64url of the
+ * last path handed out (list, which is path-ordered) or of the offset (search,
+ * which is rank-ordered). Nothing in it is secret — the perimeter and grants
+ * are re-applied on every page — so a forged cursor can only ever skip rows.
+ */
+const CURSOR_MAX = 1_024
+/** How far a paged search will go in total; ranking past this is noise. */
+const SEARCH_PAGE_MAX_TOTAL = 1_000
+
+function encodeCursor(value: string): string {
+  return Buffer.from(value, 'utf8').toString('base64url')
+}
+
+function decodeCursor(cursor: string): string | null {
+  try {
+    const text = Buffer.from(cursor, 'base64url').toString('utf8')
+    return encodeCursor(text) === cursor ? text : null
+  } catch {
+    return null
+  }
+}
+
 const P = {
-  list: z.object({ glob: z.string().max(PATH_MAX).optional() }),
+  list: z.object({
+    glob: z.string().max(PATH_MAX).optional(),
+    cursor: z.string().min(1).max(CURSOR_MAX).optional(),
+    page: z.boolean().optional(),
+  }),
   read: z.object({ path: z.string().min(1).max(PATH_MAX) }),
   search: z.object({
     query: z.string().min(1).max(2_000),
     k: z.number().int().min(1).max(BRIDGE_LIMITS.maxRows).optional(),
+    cursor: z.string().min(1).max(CURSOR_MAX).optional(),
+    page: z.boolean().optional(),
   }),
   write: z.object({ path: z.string().min(1).max(PATH_MAX), content: z.string() }),
   append: z.object({ path: z.string().min(1).max(PATH_MAX), text: z.string().min(1) }),
-  connector: z.object({ name: z.string().min(1).max(64), code: z.string().min(1) }),
+  connector: z
+    .object({
+      name: z.string().min(1).max(64),
+      code: z.string().min(1).optional(),
+      action: z.string().min(1).max(64).optional(),
+      args: z.unknown().optional(),
+    })
+    .refine((v) => (v.code === undefined) !== (v.action === undefined), {
+      message: 'pass exactly one of code or action',
+    }),
   agent: z.object({ name: z.string().min(1).max(64) }),
   data: z.object({ fn: z.string().min(1).max(64), args: z.unknown() }),
   stateGet: z.object({ key: z.string().min(1).max(200) }),
@@ -179,6 +217,13 @@ function normalizeNotePath(raw: string): string | null {
  * ONE exception, in {@link agentBriefExemption}: creating the brief of an agent
  * the Tool's own perimeter names. See that comment for why the brief is not the
  * thing that runs.
+ *
+ * That exception has a second-order effect worth stating, because it looks like a
+ * hole and is not: creating `agents/<name>.md` also creates or updates
+ * `agents/index.md`, since the note store maintains a folder index beside every
+ * folder. So an exempt write does touch a second path inside a sealed namespace.
+ * It is benign — the index is a generated children listing, and it can only ever
+ * name briefs this Tool was already permitted to create.
  */
 const SEALED_WRITE_DIRS = ['tools', 'agents', 'connectors'] as const
 
@@ -265,7 +310,10 @@ function toolLabel(t: ResolvedTarget): string {
 async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.list, params)
   if (!parsed.ok) return parsed.response
-  const { glob } = parsed.value
+  const { glob, cursor, page } = parsed.value
+  const paged = page === true || cursor !== undefined
+  const after = cursor === undefined ? null : decodeCursor(cursor)
+  if (cursor !== undefined && after === null) return err('invalid', 'That cursor is not one this Tool was given.')
 
   // A caller-supplied glob gets no more trust than an author's declared one:
   // it must pass the same grammar and backtracking cap before it ever reaches
@@ -281,9 +329,20 @@ async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
 
   const { metas } = await deps.visibleVault(t.principal, t.context)
   const rows: ContextEntry[] = []
-  for (const meta of [...metas].sort((a, b) => a.path.localeCompare(b.path))) {
+  let more = false
+  // Path order (not localeCompare) so the cursor's "after this path" test and
+  // the sort agree byte for byte.
+  for (const meta of [...metas].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) {
+    if (after !== null && meta.path <= after) continue
     if (glob && !globMatch(glob, meta.path)) continue
     if (refuseRead(t.perimeter, meta.path)) continue
+    // Truncate rather than refuse — the SDK documents a capped list, so a Tool
+    // over a big folder degrades to a page instead of failing outright. A paged
+    // caller learns there is more; an unpaged one gets the first page as before.
+    if (rows.length >= BRIDGE_LIMITS.maxRows) {
+      more = true
+      break
+    }
     const type = meta.frontmatter.type
     rows.push({
       path: meta.path,
@@ -291,11 +350,10 @@ async function contextList(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
       type: typeof type === 'string' ? type : null,
       updatedAt: new Date(meta.mtime).toISOString(),
     })
-    // Truncate rather than refuse — the SDK documents a capped list, so a Tool
-    // over a big folder degrades to a page instead of failing outright.
-    if (rows.length >= BRIDGE_LIMITS.maxRows) break
   }
-  return ok(rows)
+  if (!paged) return ok(rows)
+  const last = rows[rows.length - 1]
+  return ok({ items: rows, nextCursor: more && last ? encodeCursor(last.path) : null })
 }
 
 async function contextRead(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
@@ -326,23 +384,38 @@ async function contextRead(t: ResolvedTarget, params: unknown, deps: BridgeDeps)
 async function contextSearch(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.search, params)
   if (!parsed.ok) return parsed.response
-  const { query, k } = parsed.value
+  const { query, k, cursor, page } = parsed.value
   if (t.perimeter.read.length === 0) return err('perimeter', refuseRead(t.perimeter, query)!)
+  const paged = page === true || cursor !== undefined
+  let offset = 0
+  if (cursor !== undefined) {
+    const decoded = decodeCursor(cursor)
+    offset = decoded === null ? Number.NaN : Number(decoded)
+    if (!Number.isInteger(offset) || offset < 0 || offset > SEARCH_PAGE_MAX_TOTAL) {
+      return err('invalid', 'That cursor is not one this Tool was given.')
+    }
+  }
+  const pageSize = Math.min(k ?? BRIDGE_LIMITS.maxRows, BRIDGE_LIMITS.maxRows)
 
   // Ask for the full cap and narrow afterwards: search ranks over everything the
   // VIEWER can read, and cutting to `k` first would spend the budget on hits the
-  // perimeter is about to drop.
-  const { hits } = await deps.searchContext(t.principal, t.context, query, {}, BRIDGE_LIMITS.maxRows)
-  const rows: ContextHit[] = hits
-    .filter((hit) => refuseRead(t.perimeter, hit.path) === null)
-    .slice(0, Math.min(k ?? BRIDGE_LIMITS.maxRows, BRIDGE_LIMITS.maxRows))
-    .map((hit) => ({
-      path: hit.path,
-      title: hit.title || null,
-      snippet: hit.snippet ?? '',
-      score: hit.score,
-    }))
-  return ok(rows)
+  // perimeter is about to drop. A later page asks for everything up to its end
+  // (ranking is not offset-able) and skips the pages already handed out; the
+  // one extra hit past the page is how the caller learns there is a next one.
+  const want = Math.min(Math.max(BRIDGE_LIMITS.maxRows, offset + pageSize + 1), SEARCH_PAGE_MAX_TOTAL + 1)
+  const { hits } = await deps.searchContext(t.principal, t.context, query, {}, want)
+  const inPerimeter = hits.filter((hit) => refuseRead(t.perimeter, hit.path) === null)
+  const slice = inPerimeter.slice(offset, offset + pageSize)
+  const rows: ContextHit[] = slice.map((hit) => ({
+    path: hit.path,
+    title: hit.title || null,
+    snippet: hit.snippet ?? '',
+    score: hit.score,
+  }))
+  if (!paged) return ok(rows)
+  const end = offset + rows.length
+  const more = inPerimeter.length > end && end < SEARCH_PAGE_MAX_TOTAL
+  return ok({ items: rows, nextCursor: more ? encodeCursor(String(end)) : null })
 }
 
 /** The shared front half of write and append: same path rules, same caps. */
@@ -474,6 +547,7 @@ const CONNECTOR_CODES: Record<ConnectorErrorCode, BridgeErrorCode> = {
   ssrf: 'forbidden',
   timeout: 'timeout',
   upstream: 'internal',
+  rate_limited: 'rate_limited',
 }
 
 /** Is this name one the install's requirements marked missing? */
@@ -484,7 +558,7 @@ function missingHere(list: string[] | undefined, name: string): boolean {
 async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDeps): Promise<BridgeResponse> {
   const parsed = parseParams(P.connector, params)
   if (!parsed.ok) return parsed.response
-  const { name, code } = parsed.value
+  const { name, code, action, args } = parsed.value
 
   const refusal = refuseConnector(t.perimeter, name)
   if (refusal) return err('perimeter', refusal)
@@ -498,7 +572,13 @@ async function connectorsCall(t: ResolvedTarget, params: unknown, deps: BridgeDe
     // execute under the viewer's principal. No admin widening, no thinner path.
     const loaded = await deps.loadConnector(t.principal, t.context, name)
     if (!loaded) return err('not_found', `No connector named "${name}" here.`)
-    const result = await deps.executeConnectorScript(t.principal, t.context, t.spaceId, loaded, code)
+    const result = await deps.executeConnectorScript(
+      t.principal,
+      t.context,
+      t.spaceId,
+      loaded,
+      action !== undefined ? { action, args: args ?? {} } : { code: code! },
+    )
     return ok({
       ok: result.ok,
       value: result.value,
@@ -663,13 +743,26 @@ export function bridgeCapabilities(t: ResolvedTarget, deps: BridgeDeps = REAL_DE
     throw new Error(response.error.message)
   }
   return {
-    'context.list': (args) => call('context.list', args[0] === undefined ? {} : { glob: args[0] }),
+    'context.list': (args) =>
+      call('context.list', {
+        ...(args[0] === undefined ? {} : { glob: args[0] }),
+        ...(args[1] === undefined ? {} : { cursor: args[1] }),
+      }),
     'context.read': (args) => call('context.read', { path: args[0] }),
     'context.search': (args) =>
-      call('context.search', args[1] === undefined ? { query: args[0] } : { query: args[0], k: args[1] }),
+      call('context.search', {
+        query: args[0],
+        ...(args[1] === undefined ? {} : { k: args[1] }),
+        ...(args[2] === undefined ? {} : { cursor: args[2] }),
+      }),
     'context.write': (args) => call('context.write', { path: args[0], content: args[1] }),
     'context.append': (args) => call('context.append', { path: args[0], text: args[1] }),
-    'connectors.call': (args) => call('connectors.call', { name: args[0], code: args[1] }),
+    // `connectors.call(name, code)` or `connectors.call(name, { action, args } | { code })`.
+    'connectors.call': (args) =>
+      call('connectors.call', {
+        name: args[0],
+        ...(typeof args[1] === 'string' ? { code: args[1] } : (args[1] as object | undefined) ?? {}),
+      }),
     'agents.run': (args) => call('agents.run', { name: args[0] }),
     'state.get': (args) => call('state.get', { key: args[0] }),
     'state.set': (args) => call('state.set', { key: args[0], value: args[1] }),

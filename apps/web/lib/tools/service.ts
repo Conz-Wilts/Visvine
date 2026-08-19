@@ -338,7 +338,7 @@ function starterData(): string {
 export async function createTool(
   p: ContextPrincipal,
   context: Context,
-  input: { name: string; title?: string; description?: string },
+  input: { name: string; title?: string; description?: string; railLabel?: string },
 ): Promise<CreateToolResult> {
   const name = input.name.trim().toLowerCase()
   if (!TOOL_NAME_RE.test(name)) return badName(name)
@@ -393,7 +393,7 @@ export async function createTool(
     await store.createIndexFolder(
       context,
       toolFolderPath(name),
-      newToolIndexNote({ name, title, description }),
+      newToolIndexNote({ name, title, description, railLabel: input.railLabel }),
       actorOf(p),
     )
   } catch (err) {

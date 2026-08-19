@@ -6,6 +6,7 @@ import { KeyRoundIcon, PlugIcon, TriangleAlertIcon } from '@/features/shared/ico
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { PageTitle, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
+import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
 /**
  * The Connectors tool: one page listing every connectors/<name>.md note in the
@@ -89,12 +90,6 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
   return { label: 'Ready', detail: connector.hosts.join(', '), tone: 'ok' };
 }
 
-const TONE_CLASSES: Record<Tone, string> = {
-  ok: 'bg-brand-light-bg text-brand-dark-green',
-  warn: 'bg-amber-50 text-amber-700',
-  bad: 'bg-red-50 text-red-700',
-};
-
 function ConnectorCard({ connector }: { connector: ConnectorRow }) {
   const status = statusOf(connector);
 
@@ -115,7 +110,7 @@ function ConnectorCard({ connector }: { connector: ConnectorRow }) {
         {/* A healthy connector says nothing: the badge is there to flag the
             three ways one fails, not to congratulate the working ones. */}
         {status.tone !== 'ok' && (
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+          <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
         )}

@@ -10,7 +10,7 @@
  * It is NOT private to a viewer and NOT a database. A Tool storing a person's
  * notes here instead of writing context notes would be putting space data
  * somewhere the space cannot search, share or audit — the perimeter and
- * `context.write` are for that, and the 16KB cap is the nudge.
+ * `context.write` are for that, and the 64KB cap is the nudge.
  *
  * Preview targets have no install row to key against, so their state lives in a
  * per-process map: an author's preview keeps its state for as long as the server
@@ -21,7 +21,7 @@ import prisma from '@/lib/prisma'
 import { targetKey, type ResolvedTarget } from './target'
 
 /** Largest single value, serialized. Small on purpose — see the file comment. */
-export const STATE_MAX_BYTES = 16 * 1024
+export const STATE_MAX_BYTES = 64 * 1024
 
 /**
  * Keys one Tool may hold before it must clear one to add another. A preview
@@ -115,7 +115,16 @@ export async function setToolState(
   if (updated.count === 0) {
     const rows = await prisma.appToolState.count({ where: { installId: t.installId } })
     if (rows >= STATE_MAX_KEYS) return { ok: false, reason: 'key_limit' }
-    await prisma.appToolState.create({ data: { ...identity, value: stored } })
+    // `upsert`, not `create`: two concurrent first writes to the same key both
+    // see `count === 0`, and the loser of that race would hit the
+    // `app_tool_state_identity` unique constraint and surface to the Tool as an
+    // opaque `internal` failure. The cap check above can race the same way, but
+    // the cost of that is one extra row rather than a lost write.
+    await prisma.appToolState.upsert({
+      where: { app_tool_state_identity: identity },
+      create: { ...identity, value: stored },
+      update: { value: stored },
+    })
   }
   return { ok: true }
 }

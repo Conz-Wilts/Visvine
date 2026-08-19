@@ -45,12 +45,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ver
   const detail: VersionDetail = {
     ...publicFields,
     perimeterDiff: diff?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
-    previousVersion: diff?.previous ?? null,
+    previousVersion: diff?.previous ? { id: diff.previous.id, version: diff.previous.version } : null,
     history: history.map(
       (entry): VersionHistoryEntry => ({
         version: entry.version,
         status: entry.status,
         reviewedAt: entry.reviewedAt,
+        releaseNotes: entry.releaseNotes,
       }),
     ),
     ...(privileged ? { uiSource, dataSource } : {}),

@@ -64,6 +64,8 @@ function target(over: Partial<ResolvedTarget> = {}): ResolvedTarget {
       version: 1,
       surfaces: { rail: null, types: [] },
       perimeter: p,
+      tags: [],
+      previewUrl: null,
     },
     dataBundle: '',
     installId: 'install-1',
@@ -544,7 +546,7 @@ test('preview state round-trips in memory and is scoped to the tool', async () =
   assert.equal(valueOf(await handleBridgeCall(preview, 'state.get', { key: 'sort' }, stateDeps)), null)
 })
 
-test('a state value over 16KB is refused', async () => {
+test('a state value over STATE_MAX_BYTES (64KB) is refused', async () => {
   const preview = target({ installId: null, install: { preview: true, name: 'deals' } })
   const error = errorOf(
     await handleBridgeCall(
@@ -836,4 +838,118 @@ test('a preview author who is an admin of a tools-disabled space is still allowe
   const t = response as ResolvedTarget
   assert.equal(t.isAdmin, true)
   assert.equal(t.installId, null)
+})
+
+// ── paging ────────────────────────────────────────────────────────────────────
+
+test('context.list without a cursor still answers a plain array (backwards compatible)', async () => {
+  const metas = [note('deals/a.md'), note('deals/b.md')]
+  const response = await handleBridgeCall(
+    target({ perimeter: perimeter({ read: ['deals/**'] }) }),
+    'context.list',
+    {},
+    deps({ visibleVault: async () => ({ raws: [], metas }) }),
+  )
+  assert.equal(Array.isArray(valueOf(response)), true)
+})
+
+test('context.list pages by path with an opaque cursor, and the last page has nextCursor null', async () => {
+  const metas = [
+    ...Array.from({ length: BRIDGE_LIMITS.maxRows + 50 }, (_, i) => note(`deals/${String(i).padStart(4, '0')}.md`)),
+    note('salaries/pay.md'),
+  ]
+  const t = target({ perimeter: perimeter({ read: ['deals/**'] }) })
+  const d = deps({ visibleVault: async () => ({ raws: [], metas }) })
+
+  const first = valueOf(await handleBridgeCall(t, 'context.list', { page: true }, d)) as {
+    items: Array<{ path: string }>
+    nextCursor: string | null
+  }
+  assert.equal(first.items.length, BRIDGE_LIMITS.maxRows)
+  assert.equal(typeof first.nextCursor, 'string')
+  assert.equal(first.items[0].path, 'deals/0000.md')
+
+  const second = valueOf(await handleBridgeCall(t, 'context.list', { cursor: first.nextCursor! }, d)) as {
+    items: Array<{ path: string }>
+    nextCursor: string | null
+  }
+  assert.equal(second.items.length, 50)
+  assert.equal(second.items[0].path, `deals/${String(BRIDGE_LIMITS.maxRows).padStart(4, '0')}.md`)
+  assert.equal(second.nextCursor, null)
+  // No overlap, nothing skipped, nothing outside the perimeter.
+  const all = [...first.items, ...second.items].map((r) => r.path)
+  assert.equal(new Set(all).size, BRIDGE_LIMITS.maxRows + 50)
+  assert.equal(all.every((p) => p.startsWith('deals/')), true)
+})
+
+test('an exact page boundary reports no next page rather than an empty one', async () => {
+  const metas = Array.from({ length: BRIDGE_LIMITS.maxRows }, (_, i) => note(`deals/${String(i).padStart(4, '0')}.md`))
+  const t = target({ perimeter: perimeter({ read: ['deals/**'] }) })
+  const first = valueOf(
+    await handleBridgeCall(t, 'context.list', { page: true }, deps({ visibleVault: async () => ({ raws: [], metas }) })),
+  ) as { items: unknown[]; nextCursor: string | null }
+  assert.equal(first.items.length, BRIDGE_LIMITS.maxRows)
+  assert.equal(first.nextCursor, null)
+})
+
+test('a forged cursor is refused as invalid', async () => {
+  const error = errorOf(
+    await handleBridgeCall(
+      target({ perimeter: perimeter({ read: ['deals/**'] }) }),
+      'context.list',
+      { cursor: 'not base64url!!' },
+      deps({ visibleVault: async () => ({ raws: [], metas: [] }) }),
+    ),
+  )
+  assert.equal(error.code, 'invalid')
+})
+
+test('context.search pages by rank: k is the page size and the cursor is the offset', async () => {
+  const hits = Array.from({ length: 7 }, (_, i) => ({
+    path: `deals/${i}.md`,
+    title: `D${i}`,
+    score: 10 - i,
+    kind: 'note' as const,
+    snippet: '',
+  }))
+  const t = target({ perimeter: perimeter({ read: ['deals/**'] }) })
+  const d = deps({ searchContext: async () => ({ hits, semantic: 'no-key' }) })
+
+  const first = valueOf(await handleBridgeCall(t, 'context.search', { query: 'd', k: 3, page: true }, d)) as {
+    items: Array<{ path: string }>
+    nextCursor: string | null
+  }
+  assert.deepEqual(first.items.map((h) => h.path), ['deals/0.md', 'deals/1.md', 'deals/2.md'])
+  assert.equal(typeof first.nextCursor, 'string')
+
+  const second = valueOf(
+    await handleBridgeCall(t, 'context.search', { query: 'd', k: 3, cursor: first.nextCursor! }, d),
+  ) as { items: Array<{ path: string }>; nextCursor: string | null }
+  assert.deepEqual(second.items.map((h) => h.path), ['deals/3.md', 'deals/4.md', 'deals/5.md'])
+
+  const third = valueOf(
+    await handleBridgeCall(t, 'context.search', { query: 'd', k: 3, cursor: second.nextCursor! }, d),
+  ) as { items: Array<{ path: string }>; nextCursor: string | null }
+  assert.deepEqual(third.items.map((h) => h.path), ['deals/6.md'])
+  assert.equal(third.nextCursor, null)
+
+  // Unpaged is unchanged: a plain array, first k.
+  const plain = valueOf(await handleBridgeCall(t, 'context.search', { query: 'd', k: 2 }, d)) as unknown[]
+  assert.equal(Array.isArray(plain) && plain.length === 2, true)
+})
+
+test('the isolate capabilities pass a cursor through positionally', async () => {
+  const metas = Array.from({ length: BRIDGE_LIMITS.maxRows + 1 }, (_, i) => note(`deals/${String(i).padStart(4, '0')}.md`))
+  const caps = bridgeCapabilities(
+    target({ perimeter: perimeter({ read: ['deals/**'] }) }),
+    deps({ visibleVault: async () => ({ raws: [], metas }) }),
+  )
+  const plain = (await caps['context.list']([undefined])) as unknown[]
+  assert.equal(Array.isArray(plain), true)
+  // A cursor makes it paged: after the last path of an unpaged first page.
+  const lastPath = (plain[plain.length - 1] as { path: string }).path
+  const cursor = Buffer.from(lastPath, 'utf8').toString('base64url')
+  const paged = (await caps['context.list'](['deals/**', cursor])) as { items: unknown[]; nextCursor: string | null }
+  assert.equal(paged.items.length, 1)
+  assert.equal(paged.nextCursor, null)
 })

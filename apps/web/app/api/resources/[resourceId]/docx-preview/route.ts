@@ -36,6 +36,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ res
     return NextResponse.json({ error: 'Not a docx' }, { status: 400 });
   }
 
+  // This preview only ever served the LEGACY local-uploads layout, where
+  // `fileUrl` was a path under public/. Files stored in GCS (everything uploaded
+  // since) are previewed client-side from their signed URL instead, so a row
+  // without a local path simply has no local preview to render.
+  if (!resource.fileUrl || resource.fileUrl.startsWith('http')) {
+    return NextResponse.json({ error: 'No local preview for this file' }, { status: 404 });
+  }
   // `fileUrl` is a DB value that becomes a filesystem path — refuse traversal so
   // it can never resolve outside the public assets root even if a write path
   // ever lets a `../` into the column.

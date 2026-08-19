@@ -173,7 +173,7 @@ export default function ThreadPanel({
             <button
               type="button"
               onClick={onShowChannelForm}
-              className="mt-2 flex items-center gap-2 rounded-full bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
+              className="mt-2 flex items-center gap-2 rounded-lg bg-brand-green px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
             >
               <PlusIcon className="h-4 w-4" strokeWidth={2.5} />
               New channel
@@ -503,7 +503,7 @@ export default function ThreadPanel({
                           <button
                             type="button"
                             onClick={() => void onLoadOlder()}
-                            className="rounded-full bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
+                            className="rounded-md bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
                           >
                             Load earlier messages
                           </button>
@@ -537,7 +537,7 @@ export default function ThreadPanel({
                   virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth' });
                   setNewMessagesPending(0);
                 }}
-                className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-float hover:opacity-90"
+                className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-float hover:opacity-90"
               >
                 ↓ {newMessagesPending} new message{newMessagesPending > 1 ? 's' : ''}
               </button>

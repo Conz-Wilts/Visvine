@@ -15,7 +15,8 @@
  * do not cross into the isolate — see marshal.ts.
  */
 import { ConnectorError, redactSecrets, SANDBOX_LIMITS } from './config'
-import { refuseHost, refusePath, type GatePerimeter } from './perimeter'
+import { hostAllowed, refuseHost, refusePath, type GatePerimeter } from './perimeter'
+import { identityAppliesTo, mintActorAssertion, type ResolvedIdentity } from './identity'
 
 /** Longest a single request may take, independent of the run's total budget. */
 const PER_REQUEST_TIMEOUT_MS = 15_000
@@ -24,6 +25,8 @@ const MAX_HEADERS = 32
 const MAX_HEADER_BYTES = 8 * 1024
 const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'])
 const BODYLESS = new Set(['GET', 'HEAD'])
+/** Most redirects one call may follow when it opts in with `follow`. */
+const MAX_FOLLOW = 3
 
 /**
  * Headers a caller may not set: they describe the connection rather than the
@@ -39,7 +42,9 @@ export interface HostFetchResult {
   headers: Record<string, string>
   body: string
   truncated: boolean
-  /** Present only on a 3xx, since redirects are not followed. */
+  /** Redirects followed to reach this response — 0 unless `follow` was set. */
+  hops: number
+  /** Present on a 3xx that was not followed (the default, or the hop budget ran out). */
   location?: string
 }
 
@@ -47,6 +52,12 @@ export interface HostFetchInit {
   method?: unknown
   headers?: unknown
   body?: unknown
+  /**
+   * Opt-in redirect following: how many 3xx hops to follow (0..MAX_FOLLOW).
+   * Every hop is judged against the perimeter exactly like the first request,
+   * so a redirect cannot lead anywhere the code could not have gone directly.
+   */
+  follow?: unknown
 }
 
 /**
@@ -88,6 +99,20 @@ export interface HostContext {
   signal: AbortSignal
   /** Records a refusal for the run result. Returns the same text. */
   deny(reason: string): string
+  /**
+   * Runtime-stamped caller identity, when the note declares one and the run
+   * has a person to name. Held here rather than on the perimeter because it
+   * carries a resolved secret — run material, not a gate rule.
+   */
+  identity?: ResolvedIdentity | null
+  /**
+   * An OAuth bearer Visvine holds on someone's behalf (lib/connectors/auth.ts).
+   * Stamped on outbound requests to `hosts`, and deliberately NOT placed in
+   * `env`: a per-person access token handed to isolate code could be logged,
+   * returned, or posted somewhere else inside the perimeter. Held here so the
+   * only thing that can spend it is the host.
+   */
+  bearer?: { token: string; hosts: readonly string[] } | null
 }
 
 /**
@@ -124,7 +149,7 @@ function budgetFor(ctx: HostContext): number {
   return Math.min(PER_REQUEST_TIMEOUT_MS, remaining)
 }
 
-function normaliseHeaders(raw: unknown): Record<string, string> {
+function normaliseHeaders(raw: unknown, reserved?: ReadonlySet<string>): Record<string, string> {
   if (raw === undefined || raw === null) return {}
   if (typeof raw !== 'object') {
     throw new ConnectorError('config', 'fetch headers must be an object of string values')
@@ -134,6 +159,11 @@ function normaliseHeaders(raw: unknown): Record<string, string> {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const name = key.trim().toLowerCase()
     if (FORBIDDEN_HEADERS.has(name) || name.startsWith('proxy-')) continue
+    // Runtime-managed headers — the identity assertion and, when the note has
+    // an `auth:` block, Authorization. Dropping a caller-supplied one silently
+    // rather than erroring keeps the isolate from probing for whether either is
+    // configured, and matches how FORBIDDEN_HEADERS behaves.
+    if (reserved?.has(name)) continue
     if (!/^[a-z0-9!#$%&'*+.^_`|~-]+$/.test(name)) {
       throw new ConnectorError('config', `fetch header name is not valid: ${key}`)
     }
@@ -167,20 +197,90 @@ export async function hostFetch(
   if (typeof rawUrl !== 'string' || rawUrl.length === 0) {
     throw new ConnectorError('config', 'fetch needs a URL string')
   }
+  const follow = followBudget(init.follow)
 
-  let url: URL
-  try {
-    url = new URL(rawUrl)
-  } catch {
-    throw new ConnectorError('config', `fetch could not parse the URL: ${rawUrl}`)
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new ConnectorError('denied', ctx.deny(`egress denied: ${url.protocol} is not an allowed scheme`))
-  }
-
-  const method = (typeof init.method === 'string' ? init.method : 'GET').toUpperCase()
+  let url = parseUrl(rawUrl)
+  let method = (typeof init.method === 'string' ? init.method : 'GET').toUpperCase()
   if (!METHODS.has(method)) {
     throw new ConnectorError('config', `fetch method is not allowed: ${method}`)
+  }
+
+  let body: string | undefined
+  if (init.body !== undefined && init.body !== null) {
+    if (BODYLESS.has(method)) {
+      throw new ConnectorError('config', `a ${method} request cannot carry a body`)
+    }
+    body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body)
+    if (body.length > REQUEST_BODY_CAP_BYTES) {
+      throw new ConnectorError('config', 'fetch body is too large')
+    }
+  }
+
+  for (let hops = 0; ; hops++) {
+    const res = await fetchOnce(ctx, url, method, init.headers, body)
+    const location = res.headers.get('location')
+    const redirected = res.status >= 300 && res.status < 400 && location !== null
+    if (redirected && hops < follow) {
+      // The body of the 3xx itself is of no interest; drop it before moving on.
+      await res.body?.cancel().catch(() => {})
+      const next = parseUrl(location, url)
+      // The same method change every browser makes: 303 always becomes GET;
+      // 301/302 do too for anything but GET/HEAD; 307/308 keep the method and
+      // body — and the body only re-goes when the method survives.
+      if (res.status === 303 || ((res.status === 301 || res.status === 302) && !BODYLESS.has(method))) {
+        method = 'GET'
+        body = undefined
+      }
+      url = next
+      continue
+    }
+
+    const { text, truncated } = await readCapped(res, SANDBOX_LIMITS.outputCapBytes)
+    const outHeaders: Record<string, string> = {}
+    for (const [key, value] of res.headers) outHeaders[key] = redactSecrets(value, ctx.redact)
+    const result: HostFetchResult = {
+      status: res.status,
+      ok: res.ok,
+      headers: outHeaders,
+      body: redactSecrets(text, ctx.redact),
+      truncated,
+      hops,
+    }
+    if (location) result.location = redactSecrets(location, ctx.redact)
+    return result
+  }
+}
+
+/** `follow` as an integer 0..MAX_FOLLOW; absent/false is 0, true is the max. */
+function followBudget(raw: unknown): number {
+  if (raw === true) return MAX_FOLLOW
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 0
+  return Math.min(MAX_FOLLOW, Math.max(0, Math.floor(raw)))
+}
+
+function parseUrl(raw: string, base?: URL): URL {
+  try {
+    return base ? new URL(raw, base) : new URL(raw)
+  } catch {
+    throw new ConnectorError('config', `fetch could not parse the URL: ${raw}`)
+  }
+}
+
+/**
+ * One request to one URL — the whole gate, then the socket. Called once per
+ * hop, so a redirect target is judged exactly as the first URL was: scheme,
+ * host (with the SSRF check), method+path rules, and the identity/bearer
+ * stamps re-decided for the host it actually reaches.
+ */
+async function fetchOnce(
+  ctx: HostContext,
+  url: URL,
+  method: string,
+  rawHeaders: unknown,
+  body: string | undefined,
+): Promise<Response> {
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new ConnectorError('denied', ctx.deny(`egress denied: ${url.protocol} is not an allowed scheme`))
   }
 
   // Host before path, so the denial names the more fundamental fact. A call to
@@ -194,30 +294,40 @@ export async function hostFetch(
   const pathDenial = refusePath(ctx.perimeter, method, url.pathname)
   if (pathDenial) throw new ConnectorError('denied', ctx.deny(pathDenial))
 
-  const headers = normaliseHeaders(init.headers)
+  const reserved = new Set<string>()
+  if (ctx.identity) reserved.add(ctx.identity.header)
+  if (ctx.bearer) reserved.add('authorization')
+  const headers = normaliseHeaders(rawHeaders, reserved)
 
-  let body: string | undefined
-  if (init.body !== undefined && init.body !== null) {
-    if (BODYLESS.has(method)) {
-      throw new ConnectorError('config', `a ${method} request cannot carry a body`)
-    }
-    body = typeof init.body === 'string' ? init.body : JSON.stringify(init.body)
-    if (body.length > REQUEST_BODY_CAP_BYTES) {
-      throw new ConnectorError('config', 'fetch body is too large')
-    }
+  // Stamped AFTER normalisation, so nothing the isolate passed can shadow it.
+  // Skipped silently when there is no person to name (an agent or maintenance
+  // run) or the host is outside the identity block's reach — in both cases the
+  // upstream simply sees an unattributed call, which is its restrictive path.
+  if (ctx.identity && identityAppliesTo(ctx.identity, url.hostname, port, defaultPort)) {
+    headers[ctx.identity.header] = await mintActorAssertion(ctx.identity)
+  }
+
+  // Same rule for the OAuth bearer, and the host scoping matters more here: an
+  // access token is a credential, so sending it to the wrong host in the
+  // perimeter is a leak rather than a privacy slip. An empty host list means
+  // the note reaches one service and the whole perimeter is that service.
+  if (ctx.bearer) {
+    const scoped =
+      ctx.bearer.hosts.length === 0 || hostAllowed(ctx.bearer.hosts, url.hostname, port, defaultPort)
+    if (scoped) headers.authorization = `Bearer ${ctx.bearer.token}`
   }
 
   const timeout = AbortSignal.timeout(budgetFor(ctx))
-  let res: Response
   try {
-    res = await fetch(url, {
+    return await fetch(url, {
       method,
       headers,
       body,
-      // Manual, not 'error': the 3xx comes back with a readable `location` and
-      // code that re-issues goes through this whole gate again. That is the
-      // per-hop re-judgement the proxy gave us, without following anything to
-      // a host that never passed the check.
+      // Manual, not 'follow': a 3xx comes back with a readable `location`, and
+      // whether code re-issues it by hand or opts in with `follow`, the next
+      // hop goes through this whole gate again. That is the per-hop
+      // re-judgement the proxy gave us, without following anything to a host
+      // that never passed the check.
       redirect: 'manual',
       cache: 'no-store',
       signal: AbortSignal.any([ctx.signal, timeout]),
@@ -229,20 +339,4 @@ export async function hostFetch(
     const message = e instanceof Error ? e.message : String(e)
     throw new ConnectorError('upstream', redactSecrets(message, ctx.redact))
   }
-
-  const { text, truncated } = await readCapped(res, SANDBOX_LIMITS.outputCapBytes)
-
-  const outHeaders: Record<string, string> = {}
-  for (const [key, value] of res.headers) outHeaders[key] = redactSecrets(value, ctx.redact)
-
-  const result: HostFetchResult = {
-    status: res.status,
-    ok: res.ok,
-    headers: outHeaders,
-    body: redactSecrets(text, ctx.redact),
-    truncated,
-  }
-  const location = res.headers.get('location')
-  if (location) result.location = redactSecrets(location, ctx.redact)
-  return result
 }

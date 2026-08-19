@@ -39,11 +39,14 @@ export async function GET(req: NextRequest) {
 
   const pending = await listReviewQueue()
   const diffs = await Promise.all(pending.map((version) => perimeterDiffForVersion(version.id)))
-  const queue: ReviewQueueItem[] = pending.map((version, at) => ({
-    ...version,
-    perimeterDiff: diffs[at]?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
-    previousVersion: diffs[at]?.previous ?? null,
-  }))
+  const queue: ReviewQueueItem[] = pending.map((version, at) => {
+    const previous = diffs[at]?.previous
+    return {
+      ...version,
+      perimeterDiff: diffs[at]?.diff ?? diffPerimeter(EMPTY_PERIMETER, version.perimeter),
+      previousVersion: previous ? { id: previous.id, version: previous.version } : null,
+    }
+  })
 
   const body: ReviewQueueResponse = { queue }
   return NextResponse.json(body)

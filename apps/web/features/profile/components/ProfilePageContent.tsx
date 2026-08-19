@@ -233,7 +233,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
               <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
-              {aliasName && <Chip tone="soft" color={aliasColor}>{aliasName}</Chip>}
+              {aliasName && <Chip tone="solid" color={aliasColor}>{aliasName}</Chip>}
             </div>
 
             {profile.subtitle ? (
@@ -346,7 +346,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             {profile.tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {profile.tags.map((tag, i) => (
-                  <Chip key={tag} tone="soft" size="lg" color={theme.base}
+                  <Chip key={tag} tone="solid" size="lg" color={theme.base}
                         className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
                         style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}

@@ -133,7 +133,7 @@ const CommentRow = memo(function CommentRow({
                 key={r.emoji}
                 type="button"
                 onClick={() => void onReaction(comment.id, r.emoji)}
-                className={`flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] transition-colors ${
+                className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors ${
                   r.reacted
                     ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
                     : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'
@@ -241,12 +241,12 @@ const PostCard = memo(function PostCard({
             <span className="text-[15px] font-semibold text-text-primary">{post.isOwn ? 'You' : post.sender.name}</span>
             <span className="text-[11px] text-text-muted">{formatChatTimestamp(post.createdAt)}</span>
             {post.pinnedAt && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-brand-green/10 px-2 py-0.5 text-[10px] font-medium text-brand-dark-green">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-brand-green px-2 py-0.5 text-[10px] font-medium text-white">
                 <PinIcon className="h-2.5 w-2.5" /> Pinned
               </span>
             )}
             {post.starred && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
                 <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
@@ -305,7 +305,7 @@ const PostCard = memo(function PostCard({
               key={r.emoji}
               type="button"
               onClick={() => void onReaction(post.id, r.emoji)}
-              className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+              className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
                 r.reacted
                   ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
                   : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'
@@ -318,7 +318,7 @@ const PostCard = memo(function PostCard({
           <button
             type="button"
             onClick={() => setShowCommentInput((v) => !v)}
-            className="flex items-center gap-1 rounded-full border border-border-subtle bg-surface-1 px-2 py-0.5 text-xs text-text-muted transition-colors hover:bg-surface-2"
+            className="flex items-center gap-1 rounded-md border border-border-subtle bg-surface-1 px-2 py-0.5 text-xs text-text-muted transition-colors hover:bg-surface-2"
           >
             <MessageCircleIcon className="h-3 w-3" />
             {comments.length > 0
@@ -352,7 +352,7 @@ const PostCard = memo(function PostCard({
             type="button"
             onClick={() => void submitComment()}
             disabled={!commentText.trim() || sendingComment}
-            className="shrink-0 rounded-full bg-brand-green px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40"
+            className="shrink-0 rounded-md bg-brand-green px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40"
           >
             Reply
           </button>
@@ -505,7 +505,7 @@ export default function FeedView({
               <button
                 type="button"
                 onClick={() => void onLoadOlder()}
-                className="rounded-full bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
+                className="rounded-md bg-surface-2 px-4 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3"
               >
                 Load older posts
               </button>

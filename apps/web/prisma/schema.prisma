@@ -47,21 +47,30 @@ model Space {
   noteFolders     ContextFolder[]
   contextState    ContextState[]
   secrets         ConnectorSecret[]
+  oauthClients    ConnectorOAuthClient[]
+  connections     ConnectorConnection[]
+  connectorState  ConnectorState[]
   noteEmbeddings  ContextNoteEmbedding[]
   contextSources  ContextSource[]
   userAliases     UserAlias[]
   contextGrants   ContextGrant[]
   accessRequests  ContextAccessRequest[]
+  auditEntries    ContextAuditEntry[]
+  moveProposals   ContextMoveProposal[]
   publicationsOut ContextPublication[]   @relation("PublicationSource")
   publicationsIn  ContextPublication[]   @relation("PublicationTarget")
   agentStates     AgentState[]
   agentRuns       AgentRun[]
+  agentEvents     AgentEvent[]
 
   channels        Conversation[]
   channelSections ChannelSection[]
 
   appToolBuilds   AppToolBuild[]
   appToolInstalls AppToolInstall[]
+  notifications   Notification[]
+  resources       Resource[]
+  projectionJobs  NoteProjectionJob[]
 
   @@index([personalOwnerId])
   @@map("spaces")
@@ -111,6 +120,67 @@ model ContextNoteRevision {
 
   @@index([noteId, at])
   @@map("context_note_revisions")
+}
+
+/// The note write-path OUTBOX: one row per note mutation, enqueued in the SAME
+/// transaction as the note row itself, and settled once that write's projections
+/// have been rebuilt (directory links, agent state, Tool builds, space-config
+/// columns, published replicas, folder indexes).
+///
+/// Why it exists: the projections in docs/data-architecture.md are "rebuildable
+/// by replaying tier 1" — but until this table nothing replayed them. A note was
+/// committed and its six side effects then ran as bare awaits, so a crash, a
+/// deploy, or a single throwing hook left the declaration saved and its
+/// projections silently stale, with no record that they were owed.
+///
+/// A row here IS that record. `doneAt` null = the projections for this write are
+/// still owed; the drain (lib/notes/projections.ts#drainProjections) claims due
+/// rows by compare-and-swap and re-runs them, which is safe because every hook
+/// on the path is idempotent — re-running one is at worst wasted compute.
+///
+/// This is a ledger by the §1 test (one row per event) but a self-pruning one:
+/// settled rows are deleted, since the durable record of the write is the note
+/// revision, not the job.
+model NoteProjectionJob {
+  id       String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId  String @map("space_id")
+  ownerKey String @map("owner_key")
+  /// Post-mutation path: the new path for a rename, the trashed note's path for
+  /// a delete. Together with `kind` this is everything applyProjections needs —
+  /// the note CONTENT is re-read from the row, never carried here, so a retry
+  /// always projects what the note says NOW rather than replaying a stale copy.
+  path     String
+  kind     String // write | rename | delete
+  fromPath String? @map("from_path") // rename only: the path it moved off
+
+  /// The write's origin + actor, needed because two projections branch on them:
+  /// the agent hook must not wake an agent for its own run's write, and the
+  /// publication sync must not replicate a replica.
+  origin     String  @default("edit")
+  actorId    String  @map("actor_id")
+  actorName  String  @map("actor_name")
+  actorEmail String? @map("actor_email")
+  model      String?
+  /// Whether the save actually changed the content — the agent hook's
+  /// auto-deactivate rule fires on a real edit, not on a no-op re-save.
+  changed    Boolean @default(true)
+
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  /// Not before this instant. Set to now() on enqueue and pushed out by an
+  /// exponential backoff on each failure.
+  runAfter    DateTime  @default(now()) @map("run_after")
+  /// Non-null = settled. Rows are deleted on success; this column exists so a
+  /// drain can mark-then-delete without a second lookup, and so a poisoned row
+  /// that exhausted its attempts can be parked rather than retried forever.
+  doneAt      DateTime? @map("done_at")
+  space       Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  /// The drain's only query: due, unsettled, oldest first.
+  @@index([doneAt, runAfter])
+  @@index([spaceId, ownerKey, path])
+  @@map("note_projection_jobs")
 }
 
 /// Explicitly-created folders for a context. Notes already imply their ancestor
@@ -171,6 +241,83 @@ model ConnectorSecret {
   @@map("connector_secrets")
 }
 
+/// A connector's registered OAuth client, per Space. Usually obtained by
+/// dynamic registration (RFC 7591) at first connect — which is what lets an MCP
+/// server be added without anyone signing up for a developer account — but a
+/// note may also name a client_id it registered by hand.
+model ConnectorOAuthClient {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId      String   @map("space_id")
+  /// Matches ConnectorAuth.provider from the note's `auth:` block.
+  provider     String
+  /// Authorization-server issuer the client is registered with. A note that
+  /// repoints at a different issuer must re-register, so this is part of the key.
+  issuer       String
+  clientId     String   @map("client_id")
+  /// aes256gcm$iv$tag$cipher, or null for a public client.
+  clientSecret String?  @map("client_secret")
+  createdAt    DateTime @default(now()) @map("created_at")
+  space        Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, provider, issuer], name: "oauth_client_identity")
+  @@map("connector_oauth_clients")
+}
+
+/// One stored OAuth connection: the tokens Visvine holds on someone's behalf.
+///
+/// `userId` is the empty string for a `mode: space` connection and the
+/// member's id for `mode: user`. Empty string rather than NULL because Postgres treats
+/// NULLs as distinct in a unique index, which would let two space connections
+/// exist for the same connector.
+model ConnectorConnection {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId      String    @map("space_id")
+  provider     String
+  /// '' for space mode; the member's User id for user mode.
+  userId       String    @default("") @map("user_id")
+  /// 'user' | 'space' — recorded so a mode change in the note is detectable.
+  mode         String
+  /// What the far side calls this account, shown as "acts as …". Never a secret.
+  accountLabel String?   @map("account_label")
+  /// aes256gcm$iv$tag$cipher
+  accessToken  String    @map("access_token")
+  /// aes256gcm$iv$tag$cipher. Absent when the provider issues no refresh token.
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime? @map("expires_at")
+  scopes       String[]  @default([])
+  /// Set when a refresh has failed unrecoverably — the connection needs a human
+  /// to reconnect. Kept rather than deleted so the UI can say which, and why.
+  brokenAt     DateTime? @map("broken_at")
+  brokenReason String?   @map("broken_reason")
+  connectedBy  String?   @map("connected_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  space        Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, provider, userId], name: "connection_identity")
+  @@index([spaceId, provider])
+  @@map("connector_connections")
+}
+
+/// A connector's small memory between runs — `visvine.state.get/set` inside
+/// the isolate (lib/connectors/hostState.ts). Keyed by the connector NOTE path
+/// rather than a connector id because a connector is a note; renaming the note
+/// starts fresh, which is the honest outcome. Same caps as a Tool's state:
+/// 16KB a value, 100 keys a connector.
+model ConnectorState {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String   @map("space_id")
+  /// `connectors/<name>.md`
+  path      String
+  key       String
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, path, key], name: "connector_state_identity")
+  @@map("connector_state")
+}
+
 /// The scheduler's index of one Space agent (lib/agents). The NOTES stay
 /// authoritative — `agents/<name>.md` is the brief, `agents/live/<name>.md`
 /// holds `active` and the schedule — and this row is derived from them on
@@ -196,6 +343,8 @@ model AgentState {
   deactivatedReason   String?   @map("deactivated_reason") // brief_changed | key_rejected | repeated_failure | author_gone | renamed | deleted | admin
   deactivatedDetail   String?   @map("deactivated_detail") // e.g. who edited the brief
   consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  triggersJson        Json?     @map("triggers_json") // the live note's parsed `on:` map — { context: [globs], webhook: name }
+  debounceMs          Int       @default(60000) @map("debounce_ms") // how far forward an event pulls next_run_at
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
   space               Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
@@ -229,12 +378,37 @@ model AgentRun {
   summary          String? // the model's final answer, capped
   errorMessage     String?   @map("error_message") // redacted
   events           Json      @default("[]") // AgentEvent[] trace
+  eventCount       Int       @default(0) @map("event_count") // agent_events rows this run consumed
+  input            Json? // { events: [{ kind, source, summary, at }] } — the "Triggered by …" block
   state            AgentState @relation(fields: [stateId], references: [id], onDelete: Cascade)
   space            Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
 
   @@index([stateId, startedAt(sort: Desc)])
   @@index([spaceId, startedAt])
   @@map("agent_runs")
+}
+
+/// The payload mailbox behind reactive agents (lib/agents/events.ts). A note
+/// save under an `on.context` glob, an inbound webhook, or a human reply
+/// inserts one row and pulls the agent's next_run_at forward; the tick's claim
+/// then stamps `consumedBy` with the run id and the run reads them as input.
+/// The partial indexes (pending per agent; unique dedupe_key while pending)
+/// live in the hand-written migration — Prisma can't express WHERE clauses.
+model AgentEvent {
+  id         String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId    String    @map("space_id")
+  agentName  String    @map("agent_name")
+  kind       String // note_written | webhook | reply
+  source     String // note path / connector name / who replied
+  summary    String
+  payload    Json      @default("{}")
+  dedupeKey  String?   @map("dedupe_key")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  consumedBy String?   @map("consumed_by") // AgentRun.id once claimed
+  space      Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([consumedBy])
+  @@map("agent_events")
 }
 
 /// Single-row liveness record for the agent scheduler tick. If it stops
@@ -312,6 +486,12 @@ model AppToolVersion {
   reviewedBy    String?   @map("reviewed_by")
   reviewedAt    DateTime? @map("reviewed_at")
   reviewNote    String?   @map("review_note")
+  /// Marketplace metadata, snapshotted at publish (migration 20260821130000):
+  /// the author's own "what changed" text, the index.md `tags:` list and the
+  /// `preview:` image URL. Immutable like every other snapshot column.
+  releaseNotes  String?   @map("release_notes")
+  tags          String[]  @default([])
+  previewUrl    String?   @map("preview_url")
   createdAt     DateTime  @default(now()) @map("created_at")
   author        User?     @relation("AppToolVersionAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
   installs      AppToolInstall[]
@@ -478,6 +658,63 @@ model ContextPublication {
 /// Keyed by the note's context + path; `mtime` is the note's updatedAt epoch-ms at
 /// embed time, so a stale row (mtime mismatch) is lazily re-embedded on the next
 /// search. `embedding` is written/read via raw SQL (Prisma can't type vector).
+/// A queued publish/promotion proposal: someone wants a note of theirs to live
+/// in a shared folder they cannot write to, and a folder admin approves or
+/// denies it (lib/notes/promote.ts). Same shape and same reason as
+/// ContextAccessRequest — a pending queue with an in-place resolution — which
+/// is why it stopped being the "move-proposals.jsonl" sidecar blob: resolving
+/// one used to rewrite every proposal in the space, so two admins acting at
+/// once lost one of the decisions.
+///
+/// `content` is the markdown snapshot taken at proposal time. For a 'publish'
+/// proposal it is only the preview: approval reads the proposer's CURRENT note
+/// and creates a live publication instead of copying this.
+model ContextMoveProposal {
+  id           String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId      String    @map("space_id")
+  fromPath     String    @map("from_path") // in the proposer's PERSONAL context
+  toPath       String    @map("to_path") // in this space's SHARED context
+  folderId     String    @map("folder_id")
+  content      String
+  kind         String    @default("copy") // 'copy' | 'publish'
+  proposedBy   String    @map("proposed_by")
+  proposerName String    @map("proposer_name")
+  proposedAt   DateTime  @default(now()) @map("proposed_at")
+  status       String    @default("pending") // 'pending' | 'approved' | 'denied'
+  resolvedBy   String?   @map("resolved_by")
+  resolvedAt   DateTime? @map("resolved_at")
+  space        Space     @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, status])
+  @@index([proposedBy])
+  @@map("context_move_proposals")
+}
+
+/// LEDGER (docs/data-architecture.md). One row per audited context event: a read
+/// inside a restricted boundary, or any governance mutation (folder registry
+/// changes, grants, promotions, gated moves/deletes, connector calls, agent
+/// activations, secret changes, Tool lifecycle). First-hand and NOT derivable
+/// from anything — losing a row loses history.
+///
+/// Replaced the "audit.jsonl" ContextState sidecar, where every append rewrote
+/// the whole blob and concurrent appends silently dropped entries. `name` is
+/// the actor's display name captured at the time of the event, deliberately
+/// denormalized so the trail still reads correctly after a rename or deletion.
+model ContextAuditEntry {
+  id      String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId String   @map("space_id")
+  at      DateTime @default(now())
+  userId  String   @map("user_id")
+  name    String
+  action  String
+  path    String
+  detail  String?
+  space   Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([spaceId, at(sort: Desc)])
+  @@map("context_audit_entries")
+}
+
 model ContextNoteEmbedding {
   id        String                      @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId   String                      @map("space_id")
@@ -673,8 +910,32 @@ model User {
   messageStars            MessageStar[]        @relation("StarAuthor")
 
   appToolVersionsAuthored AppToolVersion[]     @relation("AppToolVersionAuthor")
+  notifications           Notification[]
 
   @@map("users")
+}
+
+/// One line in a person's inbox (lib/notifications). Written by the machinery
+/// that has something to tell a human — a connection broke, an agent was
+/// deactivated, a Tool review landed, someone asked for access — and read by
+/// the Navbar bell. `dedupeKey` collapses repeats while the previous one is
+/// still unread (partial unique index in the migration). Cascades with the user and with the space it points at.
+model Notification {
+  id        String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String    @map("user_id")
+  spaceId   String?   @map("space_id")
+  kind      String
+  title     String
+  body      String?
+  href      String?
+  dedupeKey String?   @map("dedupe_key")
+  createdAt DateTime  @default(now()) @map("created_at")
+  readAt    DateTime? @map("read_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  space     Space?    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 /// A person's membership of a space. Deliberately carries no role — what
@@ -774,20 +1035,48 @@ model IdentityResolution {
   @@map("identity_resolutions")
 }
 
+/// A file in a space's Drive: bytes in GCS, a record here, and — when the kind
+/// is text-extractable — a ContextSource beside it holding the chunked, embedded
+/// contents that make the file searchable. The Drive is deliberately NOT an
+/// editor: a Resource is stored, described and retrieved, never mutated in place.
+///
+/// The three tiers meet on this row (docs/data-architecture.md): `gcsPath` is the
+/// tier-3 pointer, this row is the tier-2 record, and `sourcePath` addresses the
+/// tier-1 context entry whose chunks carry the contents into retrieval.
 model Resource {
   id         String            @id @default(dbgenerated("(gen_random_uuid())::text"))
   spaceId    String            @map("space_id")
   name       String
   fileType   String            @map("file_type")
-  fileUrl    String            @map("file_url")
+  /// The object in GCS_RESOURCES_BUCKET. SERVER-MINTED, never accepted from a
+  /// client: this is the string the API signs a download URL for, so a
+  /// client-supplied one would sign any object in the bucket — including another
+  /// space's. It used to live in the `metadata` blob and be posted by the
+  /// browser, which is exactly that hole. Null only for legacy/link-only rows.
+  gcsPath    String?           @map("gcs_path")
+  /// Legacy column. It stored a 15-MINUTE SIGNED URL, which is expired for every
+  /// row older than a quarter hour — a URL is not an identifier and this is why.
+  /// Nothing writes it any more; `gcsPath` is signed fresh on each read. Kept
+  /// nullable so pre-migration rows that hold a real static link still render.
+  fileUrl    String?           @map("file_url")
   fileSize   Int?              @map("file_size")
   uploadedBy String            @map("uploaded_by")
+  /// The ContextSource path holding this file's extracted chunks, or null when
+  /// the kind carries no text (images). The source row is the RAG projection of
+  /// this record and is rebuildable from the GCS object by re-ingesting.
+  sourcePath String?           @map("source_path")
+  /// pending | indexed | unsupported | failed — where this file got to in the
+  /// RAG pipeline, surfaced in the Drive so "why can't the AI see my file" has a
+  /// visible answer instead of silence.
+  indexState String            @default("pending") @map("index_state")
+  indexError String?           @map("index_error")
   metadata   Json              @default("{}")
   createdAt  DateTime          @default(now()) @map("created_at")
+  space      Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
   changes    ResourceChange[]
   comments   ResourceComment[]
 
-  @@index([spaceId])
+  @@index([spaceId, createdAt(sort: Desc)])
   @@map("resources")
 }
 

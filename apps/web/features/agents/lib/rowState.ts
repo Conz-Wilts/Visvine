@@ -1,14 +1,7 @@
 import type { AgentRowState, AgentSummary } from '@/lib/agents/service';
 
-export type Tone = 'ok' | 'warn' | 'bad' | 'muted' | 'live';
-
-export const TONE_CLASSES: Record<Tone, string> = {
-  ok: 'bg-brand-light-bg text-brand-dark-green',
-  warn: 'bg-amber-50 text-amber-700',
-  bad: 'bg-red-50 text-red-700',
-  muted: 'bg-surface-2 text-text-muted',
-  live: 'bg-sky-50 text-sky-700',
-};
+// The status palette is shared with connectors and Tools — see statusTone.
+import type { Tone } from '@/features/shared/lib/statusTone';
 
 export interface RowStateView {
   label: string;
@@ -106,7 +99,7 @@ export function rowStateView(a: AgentSummary, now = Date.now()): RowStateView {
       };
     case 'scheduled':
     default:
-      return { label: 'Scheduled', detail: a.state.nextRunAt ? `next ${until(a.state.nextRunAt, now)}` : a.activation.scheduleLabel, tone: 'ok' };
+      return { label: 'Scheduled', detail: a.state.nextRunAt ? `next ${until(a.state.nextRunAt, now)}` : a.activation.schedule ? a.activation.scheduleLabel : (a.activation.triggersLabel ?? 'waiting for a trigger'), tone: 'ok' };
   }
 }
 

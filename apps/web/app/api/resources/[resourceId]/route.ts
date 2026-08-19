@@ -33,15 +33,15 @@ export async function GET(
   }
   const canManage = await isAdmin(session.userId, resource.spaceId, session.email);
 
-  // Signed URLs stored in DB expire after 15 min — regenerate from gcsPath.
-  const meta = resource.metadata as Record<string, unknown> | null;
+  // A download URL is signed per read and never stored — see the note on
+  // Resource.gcsPath. `fileUrl` survives only to serve pre-migration rows that
+  // hold a real static link rather than one of our expired signatures.
   let fileUrl = resource.fileUrl;
-  const gcsPath = meta?.gcsPath as string | undefined;
-  if (gcsPath) {
+  if (resource.gcsPath && process.env.GCS_RESOURCES_BUCKET) {
     try {
-      fileUrl = await getSignedUrl(RESOURCES_BUCKET(), gcsPath);
+      fileUrl = await getSignedUrl(RESOURCES_BUCKET(), resource.gcsPath);
     } catch {
-      // fall back to the stored (possibly stale) URL
+      // fall back to the stored value rather than failing the page
     }
   }
 

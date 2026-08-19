@@ -80,6 +80,8 @@ import {
   updateTypeAlias,
 } from '@/lib/notes/typeAliases'
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
+import { lifecycleOf, type NoteLifecycle } from '@/lib/notes/shared/lifecycle'
+import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { readFields } from '@/lib/create/typeFields'
 import { createEntity, CREATABLE_TYPES } from '@/lib/directory/createEntity'
 import { normalizeImageUrl } from '@/lib/mediaUrl'
@@ -123,6 +125,23 @@ const MENTION_RULE =
   "path without one is resolved from the mentioning note's own folder and will silently link to " +
   'nothing. Every tool that returns an entity also returns a ready-to-paste `mention` string; ' +
   'use it verbatim. Mentions in your personal space do not create edges.'
+
+/**
+ * The memory-lifecycle contract, told to the write tools — the frontmatter that
+ * keeps a context honest as it ages. Lives in a tool description because that is
+ * the only place an agent reads it. The vocabulary itself is
+ * lib/notes/shared/lifecycle.ts; clean_context maintains it.
+ */
+const LIFECYCLE_RULE =
+  'MEMORY LIFECYCLE — a note that is no longer true is worse than a missing note, so say so in ' +
+  'frontmatter rather than deleting or silently rewriting. `status:` is one of active (default) | ' +
+  'proposed | accepted | stale | superseded | deprecated | expired | archived | rejected. When a note ' +
+  'REPLACES an earlier one, do not delete the old one: add `supersedes: /old/path.md` to the new note ' +
+  'and the next clean pass records the back-pointer and retires the old one, so the history of the ' +
+  'decision survives. Add `expires: YYYY-MM-DD` to anything with a known shelf life (a quarterly plan, ' +
+  'a temporary workaround) and it retires itself. Add `confidence: certain|likely|speculative` when you ' +
+  'are recording something you inferred rather than confirmed. Retired notes still rank in search, below ' +
+  'current ones, and their `status` is reported on every hit.'
 
 /**
  * The index-note contract, told to the write tools. Like MENTION_RULE this
@@ -239,7 +258,9 @@ async function loadConnectorOr404(principal: ContextPrincipal, context: Context,
 /** ConnectorError codes → tool-facing statuses. Messages are pre-redacted. */
 function mapConnectorError(e: unknown): unknown {
   if (!(e instanceof ConnectorError)) return e
-  const status = { denied: 403, ssrf: 403, config: 400, missing_secret: 400, timeout: 504, upstream: 502 }[e.code]
+  const status = {
+    denied: 403, ssrf: 403, config: 400, missing_secret: 400, timeout: 504, upstream: 502, rate_limited: 429,
+  }[e.code]
   return new McpError(status, e.message)
 }
 
@@ -298,6 +319,51 @@ function describeNode(row: NodeRow) {
  * `space_id` comes from, and the creator server needs it as much as the
  * context server does.
  */
+/**
+ * The parsed memory lifecycle of a note, returned alongside its markdown so a
+ * reader is TOLD when what it is holding is no longer current, instead of
+ * having to notice a YAML key. Omitted entirely for a plain active note, which
+ * is most of them — the field's presence is itself the signal.
+ */
+function lifecycleBlock(content: string | null): { lifecycle: WireLifecycle } | Record<string, never> {
+  if (!content) return {}
+  const lc: NoteLifecycle = lifecycleOf(parseFrontmatter(content))
+  if (
+    lc.status === 'active' &&
+    !lc.confidence &&
+    lc.expires === null &&
+    !lc.supersedes.length &&
+    !lc.supersededBy
+  ) {
+    return {}
+  }
+  return {
+    lifecycle: {
+      status: lc.status,
+      ...(lc.confidence ? { confidence: lc.confidence } : {}),
+      ...(lc.expires !== null ? { expires: new Date(lc.expires).toISOString() } : {}),
+      ...(lc.supersedes.length ? { supersedes: lc.supersedes } : {}),
+      ...(lc.supersededBy
+        ? {
+            superseded_by: lc.supersededBy,
+            // The single most useful thing to do next: go read the note that
+            // replaced this one before acting on anything in it.
+            read_instead: { tool: 'read_context', note_path: lc.supersededBy },
+          }
+        : {}),
+    },
+  }
+}
+
+interface WireLifecycle {
+  status: string
+  confidence?: string
+  expires?: string
+  supersedes?: string[]
+  superseded_by?: string
+  read_instead?: { tool: string; note_path: string }
+}
+
 function registerListSpaces(server: McpServer): void {
   server.registerTool(
     'list_spaces',
@@ -489,7 +555,11 @@ export function registerTools(server: McpServer): void {
         'or path+seq for read_file. Only what you are allowed to read is searched. ' +
         'The `semantic` field reports whether the meaning-based stages ran — "no-key" means these results are ' +
         'keyword-only, so prefer literal terms and try more phrasings. Filters beat ranking: narrow with ' +
-        'type/tags/folder/updated_after when you can.',
+        'type/tags/folder/updated_after when you can. ' +
+        'A note hit carries `status` when it is NOT current (superseded, expired, stale, deprecated, ' +
+        'rejected, archived) — such notes are ranked below current ones but still returned, because the ' +
+        'record of what changed is often the answer. Do not act on one as present truth: read its ' +
+        '`superseded_by` note first.',
       inputSchema: {
         space_id: z.string(),
         query: z.string().describe('Natural-language or keyword query'),
@@ -571,6 +641,8 @@ export function registerTools(server: McpServer): void {
             path: h.path,
             title: h.title,
             snippet: h.snippet ?? null,
+            // Present only when the note is not current — see shared/lifecycle.ts.
+            ...(h.status ? { status: h.status } : {}),
             ...(h.kind === 'source'
               ? { seq: h.seq, read_with: { tool: 'read_file', path: h.path } }
               : { read_with: { tool: 'read_context', note_path: h.path } }),
@@ -651,7 +723,14 @@ export function registerTools(server: McpServer): void {
           if (!path) throw new McpError(404, `No entity '${args.node_id}' in this space`)
           const content = await readVisible(principal, context, path)
           if (!content) throw new McpError(404, `No accessible note or entity at '${path}'`)
-          return { entity: null, note_path: path, note: content, links: [], mentioned_by: [] }
+          return {
+            entity: null,
+            note_path: path,
+            note: content,
+            ...lifecycleBlock(content),
+            links: [],
+            mentioned_by: [],
+          }
         }
 
         const notePath = entityNotePath(nodeLike(row))
@@ -701,6 +780,7 @@ export function registerTools(server: McpServer): void {
           ...(subNotePath ? { sub_note_of: notePath, owner_node_id: row.id } : {}),
           sub_notes: subNotes,
           note: note ?? '(no context note yet — edit_context at note_path creates one)',
+          ...lifecycleBlock(note),
           links: linkRows.map((l) => {
             const otherId = l.sourceId === row!.id ? l.targetId : l.sourceId
             const other = others.get(otherId)
@@ -921,7 +1001,7 @@ export function registerTools(server: McpServer): void {
         "space admins and you can see it — pass visibility:'inherit' to make it visible to whoever can see " +
         'its folder (list_context shows each folder\'s audience). Writes are attributed to the authenticated ' +
         'caller — list_context\'s `you` says who that is here. Read the note first when editing, or you will ' +
-        `clobber it; use append_context when you only want to add. ${INDEX_RULE} ${MENTION_RULE}`,
+        `clobber it; use append_context when you only want to add. ${INDEX_RULE} ${MENTION_RULE} ${LIFECYCLE_RULE}`,
       inputSchema: {
         space_id: z.string(),
         path: z.string().describe("Context-relative path ending in .md, e.g. 'people/craig-piggott.md'"),
@@ -1052,13 +1132,18 @@ export function registerTools(server: McpServer): void {
       description:
         'Analyze and clean up context, scoped to your role. The default action (analyze) is READ-ONLY: it ' +
         'returns (a) safe mechanical fixes this tool can apply itself — missing frontmatter, uniquely ' +
-        'resolvable broken links, unambiguous mention linking, staling of long-untouched notes — and (b) a ' +
+        'resolvable broken links, unambiguous mention linking, staling of long-untouched notes, retiring notes ' +
+        'whose own `expires:` date has passed, and recording the `superseded_by` back-pointer on a note that ' +
+        'another note declares it `supersedes:` — and (b) a ' +
         'prioritized worklist of judgment calls for YOU to execute with the ordinary write tools (each item ' +
         'says how). Recommended loop: analyze → apply_fixes → work the worklist with read/edit/append/' +
         "move_context → re-analyze to confirm the counts dropped. Members clean the notes THEY authored; " +
         'space admins clean the whole space (and get a `structure` block — folder sizes, empties, outliers, ' +
         'tag/type mixes — to reason about better organisation); pass `path` to target one folder. ' +
-        "mode:'full' adds duplicate detection and oversized-note flags. Folders frozen for AI are reported " +
+        "mode:'full' adds duplicate detection, CONTRADICTION detection (related notes that assert different " +
+        'numbers, dates or opposite claims) and oversized-note flags. A contradiction is not a duplicate: do ' +
+        'not merge one away. Establish which note is current and add `supersedes: /<path>` to it, or make the ' +
+        'distinction between them explicit in both. Folders frozen for AI are reported ' +
         "but never touched. action:'trash' soft-deletes notes you are allowed to remove (author, admin, or " +
         'full access; restorable for 7 days) — use it for confirmed duplicates and empties only, AFTER ' +
         'reading them. While cleaning, also normalise any index note whose prose uses tables/columns to the ' +
@@ -1078,7 +1163,9 @@ export function registerTools(server: McpServer): void {
         mode: z
           .enum(['light', 'full'])
           .optional()
-          .describe("'light' (default) | 'full' adds duplicate + oversized-note detection (slower)"),
+          .describe(
+            "'light' (default) | 'full' adds duplicate, contradiction and oversized-note detection (slower)",
+          ),
         paths: z
           .array(z.string())
           .max(50)
@@ -1241,7 +1328,8 @@ export function registerTools(server: McpServer): void {
       description:
         "List the space's connectors — admin-configured gateways to external APIs, databases and services. " +
         'Each entry carries its docs (what the system is and how to call it), the hosts it may reach, ' +
-        'and the env var names its code can read. Run one with run_connector; a connector with no hosts is ' +
+        'and the env var names its code can read. `actions` lists named entry points (name, description, params) ' +
+        'you can run with run_connector by name instead of writing code. Run one with run_connector; a connector with no hosts is ' +
         "documentation-only. Entries with kind 'model' are LLM providers the space's agents run on (their key " +
         "is the space's) — they are listed for context but never runnable. Executing needs the 'connectors:use' scope.",
       inputSchema: { space_id: z.string() },
@@ -1258,33 +1346,54 @@ export function registerTools(server: McpServer): void {
     'run_connector',
     {
       description:
-        "Run JavaScript inside a connector's isolate (see list_connectors; the connector's docs say what calls " +
-        'make sense). Write the body of an async function and `return` the answer — top-level await works. ' +
-        'Available: `fetch(url, init)` which resolves to {status, ok, headers, body, truncated} with body as a ' +
-        'STRING (call JSON.parse yourself, there is no .json()); `sql(dsn, query)` for read-only Postgres/MySQL; ' +
+        "Run a connector (see list_connectors; the connector's docs say what calls make sense) — either one of " +
+        'its named `actions` with `args`, or JavaScript you write in `code` (exactly one of the two). Code is the ' +
+        'body of an async function: `return` the answer — top-level await works. ' +
+        'Available: `fetch(url, init)` which resolves to {status, ok, headers, body, truncated, hops} with body as a ' +
+        'STRING (call JSON.parse yourself, there is no .json()); redirects are not followed unless init.follow (1..3) ' +
+        'is set, and every hop is re-checked against the perimeter; `sql(dsn, query)` for read-only Postgres/MySQL; ' +
         '`mcp(url).listTools()` / `mcp(url).callTool(name, args)`; `sleep(ms)` for backing off a 429 (bounded ' +
-        "by the run deadline); `env` holding the connector's secrets; and " +
-        '`console.log`. There is no filesystem, no process, no require/import, and no network beyond the hosts ' +
+        "by the run deadline); `env` holding the connector's secrets; `console.log`; " +
+        '`visvine.crypto.{hmac(alg,key,data,{keyEncoding?,encoding?}), hash(alg,data), randomHex(n), ' +
+        'base64.encode/decode, timingSafeEqual(a,b), sigv4({accessKeyEnv, secretEnv, sessionTokenEnv?, region, service, ' +
+        'method, url, headers?, body?}) → {headers}}` for request signing (sigv4 reads the AWS keys from env by NAME); and ' +
+        "`visvine.state.get(key)` / `visvine.state.set(key, value)` — the connector's memory between runs (64KB a value, " +
+        '100 keys; set null to clear). Action code additionally sees `args`, frozen. There is no filesystem, no process, ' +
+        'no require/import, and no network beyond the hosts ' +
         "the connector declares — a refused call throws with the reason. Use secrets by name (e.g. " +
         '`{ Authorization: `Bearer ${env.API_KEY}` }`), never ask for or supply credential values; they are ' +
-        'redacted from everything that comes back. Output is capped at 256KB.',
+        'redacted from everything that comes back. Output is capped at 256KB; each space has a per-minute run budget (429).',
       inputSchema: {
         space_id: z.string(),
         connector: z.string().describe("The connector's name, e.g. 'stripe' for connectors/stripe.md"),
         code: z
           .string()
+          .optional()
           .describe(
             'JavaScript to evaluate, e.g. `const r = await fetch("https://api.stripe.com/v1/customers", ' +
-              '{ headers: { Authorization: `Bearer ${env.STRIPE_KEY}` } }); return JSON.parse(r.body)`',
+              '{ headers: { Authorization: `Bearer ${env.STRIPE_KEY}` } }); return JSON.parse(r.body)`. Omit when passing action.',
           ),
+        action: z.string().optional().describe("One of the connector's declared actions (see list_connectors). Omit when passing code."),
+        args: z.record(z.string(), z.unknown()).optional().describe('Arguments for the action, per its params'),
       },
     },
     (args, extra) =>
       withCtx(extra, 'run_connector', async (ctx) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
+        const hasCode = typeof args.code === 'string' && args.code.trim().length > 0
+        const hasAction = typeof args.action === 'string' && args.action.trim().length > 0
+        if (hasCode === hasAction) {
+          throw new McpError(400, 'Pass exactly one of `code` (JavaScript) or `action` (a declared action name, with `args`)')
+        }
         const loaded = await loadConnectorOr404(principal, context, args.connector)
         try {
-          const result = await executeConnectorScript(principal, context, args.space_id, loaded, args.code)
+          const result = await executeConnectorScript(
+            principal,
+            context,
+            args.space_id,
+            loaded,
+            hasAction ? { action: args.action!.trim(), args: args.args ?? {} } : { code: args.code! },
+          )
           return {
             ok: result.ok,
             value: result.value,
@@ -1341,6 +1450,8 @@ export function registerTools(server: McpServer): void {
             invalid: a.invalid ?? a.activation.invalid,
             active: a.activation.active,
             schedule: a.activation.scheduleLabel,
+            every: a.activation.every,
+            triggers: a.activation.triggersLabel,
             state: a.rowState,
             next_run_at: a.state.nextRunAt,
             last_run: a.lastRun

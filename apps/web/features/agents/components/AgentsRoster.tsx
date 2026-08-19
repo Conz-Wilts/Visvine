@@ -6,7 +6,8 @@ import { BotIcon, PlayIcon } from '@/features/shared/icons';
 import Toggle from '@/components/ui/Toggle';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
-import { fmtAgo, fmtCents, rowStateView, terminalLabel, TONE_CLASSES } from '../lib/rowState';
+import { fmtAgo, fmtCents, rowStateView, terminalLabel } from '../lib/rowState';
+import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import ActivateAgentDialog from './ActivateAgentDialog';
 
 /**
@@ -124,10 +125,10 @@ export default function AgentsRoster({
                     </Link>
                   </td>
                   <td className="px-3 py-3">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
+                    <span className={`${TONE_CHIP} ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
                     {view.detail && <p className="mt-1 max-w-[220px] text-[12px] leading-snug text-text-muted">{view.detail}</p>}
                   </td>
-                  <td className="px-3 py-3 text-[13px] text-text-muted">{a.activation.schedule ? a.activation.scheduleLabel : '—'}</td>
+                  <td className="px-3 py-3 text-[13px] text-text-muted">{[a.activation.schedule ? a.activation.scheduleLabel : null, a.activation.triggersLabel].filter(Boolean).join('; ') || '—'}</td>
                   <td className="px-3 py-3 text-[13px] text-text-muted">
                     {a.lastRun ? (
                       <>
@@ -157,7 +158,7 @@ export default function AgentsRoster({
                   <td className="px-3 py-3 text-right">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-full border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={!runnable || busy === a.name}
                       onClick={() => runNow(a)}
                       title={

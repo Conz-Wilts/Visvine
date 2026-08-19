@@ -281,12 +281,16 @@ function buildOne(name: VendorFileName): Promise<string> {
         plugins: [externalViaEsm(['react'], root)],
       })
     case 'tool-kit.js':
+      // The kit bundles recharts and react-markdown, whose CommonJS
+      // dependencies `require('react')` — so the same ESM-stub plugin the
+      // renderer uses, for the same reason: every Tool, the kit and the
+      // charts must share the one React the import map serves.
       return buildModule({
         contents: KIT_ENTRY,
         resolveDir: join(root, KIT_DIR),
         sourcefile: 'tool-kit.ts',
         loader: 'ts',
-        external: ['react', 'react-dom/client'],
+        plugins: [externalViaEsm(['react', 'react-dom/client'], root)],
       })
   }
 }

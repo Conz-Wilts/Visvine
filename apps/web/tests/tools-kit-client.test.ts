@@ -91,6 +91,26 @@ test('the frame waits longer for data.call than the server does', () => {
   )
 })
 
+// ── changed ──
+
+test('visvine:changed reaches onChanged listeners, and only well-formed paths do', () => {
+  const win = new FakeWindow()
+  const client = clientFor(win)
+  const seen: string[][] = []
+  const off = client.onChanged((paths) => seen.push(paths))
+
+  win.deliver({ type: 'visvine:changed', paths: ['deals/acme.md'] })
+  win.deliver({ type: 'visvine:changed', paths: 'deals/acme.md' })
+  win.deliver({ type: 'visvine:changed', paths: [1, 2] })
+  win.deliver({ type: 'visvine:changed', paths: ['deals/b.md'] }, OTHER)
+  assert.deepEqual(seen, [['deals/acme.md']])
+
+  off()
+  win.deliver({ type: 'visvine:changed', paths: ['deals/c.md'] })
+  assert.deepEqual(seen, [['deals/acme.md']])
+  client.close()
+})
+
 // ── posting ──
 
 test('ready and the notifications post to the parent at the exact origin', () => {

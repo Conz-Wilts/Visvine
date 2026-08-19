@@ -59,7 +59,7 @@ export default function EventsToolbar({
             onFilterChange('upcoming');
             onLocationFilterChange?.('all');
           }}
-          className="flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
+          className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-text-muted hover:text-text-secondary hover:bg-surface-3 transition-colors"
         >
           <XIcon className="h-3.5 w-3.5" />
           Clear

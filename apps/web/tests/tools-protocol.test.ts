@@ -61,7 +61,7 @@ test('isBridgeMethod refuses anything not on the list', () => {
 
 // ── host → frame ──
 
-test('isHostMessage accepts the four host messages', () => {
+test('isHostMessage accepts the five host messages', () => {
   const messages: HostMessage[] = [
     INIT,
     { ...INIT, subject: { kind: 'note', path: 'deals/acme.md', type: 'deal', title: 'Acme' } },
@@ -72,6 +72,8 @@ test('isHostMessage accepts the four host messages', () => {
     { type: 'visvine:result', id: 'c1', ok: false, error: { code: 'perimeter', message: 'not declared' } },
     { type: 'visvine:theme', theme: {} },
     { type: 'visvine:subject', subject: null },
+    { type: 'visvine:changed', paths: [] },
+    { type: 'visvine:changed', paths: ['deals/acme.md', 'deals/other.md'] },
   ]
   for (const m of messages) assert.ok(isHostMessage(m), JSON.stringify(m))
 })
@@ -95,6 +97,9 @@ test('isHostMessage rejects malformed host messages', () => {
     { type: 'visvine:result', id: 'c1', ok: false, error: { code: 'nope', message: 'x' } },
     { type: 'visvine:result', id: 1, ok: true, value: null },
     { type: 'visvine:theme', theme: null },
+    { type: 'visvine:changed' },
+    { type: 'visvine:changed', paths: 'deals/acme.md' },
+    { type: 'visvine:changed', paths: [1] },
   ]
   for (const m of bad) assert.equal(isHostMessage(m), false, JSON.stringify(m))
 })

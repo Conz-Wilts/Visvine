@@ -187,7 +187,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 /** Node columns the property rows may write. Everything else is metadata, and
  *  identity/type stay off-limits here — retyping an entity is a four-sided
- *  migration (link FKs, the Person mirror, identity attachment, note frontmatter)
+ *  migration (link FKs, identity attachment, note frontmatter)
  *  and belongs to a dedicated endpoint, not an incidental field edit. `name` IS
  *  patchable: node ids and note paths are minted once and never re-derived, so
  *  a rename is pure display metadata. */
@@ -272,20 +272,21 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     };
   }
 
-  // Update the context node; keep the Person mirror in sync so the person
-  // profile's Skills section and avatar stay consistent with the same
-  // underlying values. `name` deliberately stays OUT of the mirror — the node
-  // name is a space-local display label, the Person name is the member's own.
-  const personMirror: Record<string, unknown> = {};
-  if (tags !== null) personMirror.tags = tags;
-  if ('image_url' in body) personMirror.imageUrl = data.imageUrl;
-
-  await prisma.$transaction([
-    prisma.node.update({ where: { id: nodeId }, data }),
-    ...(nodeId.startsWith('person:') && Object.keys(personMirror).length > 0
-      ? [prisma.person.updateMany({ where: { id: nodeId }, data: personMirror })]
-      : []),
-  ]);
+  // Update the context node. NOTHING is mirrored onto the Person row.
+  //
+  // This used to copy `tags` and `imageUrl` across, so that a person card edited
+  // in one space's directory rewrote that member's GLOBAL profile — their photo
+  // and their skills — everywhere, for everyone. The gate on this route is
+  // active membership of the node's own space, so any member of any space you
+  // belonged to could change your profile picture. That is not a doctrine
+  // violation so much as an authorization hole, and the mirror was the hole.
+  //
+  // The two are different things and now say so: a `Person` is the member's own
+  // cross-space profile, edited only by them at PATCH /api/profile/[personId],
+  // and a person NODE is one space's card for them, collaborative like every
+  // other node in that space's directory. The profile page reads Person; this
+  // route writes the node. Neither reaches across.
+  await prisma.node.update({ where: { id: nodeId }, data });
 
   if (name !== null && node.spaceId) {
     await syncNoteTitle(

@@ -134,7 +134,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
         )}
         {source.truncated && (
           <span
-            className="rounded-full bg-amber-100 px-2 py-px text-[11px] font-semibold text-amber-700"
+            className="rounded-md bg-amber-500 px-2 py-px text-[11px] font-semibold text-white"
             title="The file exceeded the indexing caps — only its head is searchable."
           >
             partially indexed
@@ -206,12 +206,12 @@ export function SourcePreviewPanel({ path }: { path: string }) {
 function StatusBadge({ status }: { status: ContextSourceMeta['status'] }) {
   const styles =
     status === 'ready'
-      ? 'bg-emerald-100 text-emerald-700'
+      ? 'bg-emerald-600 text-white'
       : status === 'failed'
-        ? 'bg-red-100 text-red-700'
+        ? 'bg-red-600 text-white'
         : 'bg-surface-2 text-text-muted'
   return (
-    <span className={`rounded-full px-2 py-px text-[11px] font-semibold uppercase tracking-wide ${styles}`}>
+    <span className={`rounded-md px-2 py-px text-[11px] font-semibold uppercase tracking-wide ${styles}`}>
       {status}
     </span>
   )

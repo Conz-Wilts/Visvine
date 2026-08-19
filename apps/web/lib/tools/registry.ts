@@ -27,6 +27,7 @@
 import prisma from '@/lib/prisma'
 import { isSuperAdmin } from '@/lib/session'
 import { logAudit } from '@/lib/notes/audit'
+import { notify } from '@/lib/notifications/service'
 import { writeGated } from '@/lib/notes/contextService'
 import { principalIsSuperAdmin } from '@/lib/notes/shared/permissions'
 import { splitFrontmatter } from '@/lib/notes/shared/markdown'
@@ -41,6 +42,8 @@ import {
 } from './builds'
 import {
   TOOL_NAME_RE,
+  parseToolPreviewUrl,
+  parseToolTags,
   toolIndexPath,
   unwrapSource,
   type ToolConfig,
@@ -96,6 +99,12 @@ export interface ToolVersionSummary {
    * sanitized at build time. Null means it picked a built-in shape.
    */
   iconSvg: string | null
+  /** The author's own "what changed" for this version, or null. */
+  releaseNotes: string | null
+  /** `tags:` from index.md at publish time — marketplace facets. */
+  tags: string[]
+  /** `preview:` from index.md at publish time — a card image, or null. */
+  previewUrl: string | null
 }
 
 /** A version opened: the summary plus everything a reviewer or a diff reads. */
@@ -204,6 +213,8 @@ export function decodeToolConfig(raw: unknown, name: string): ToolConfig {
     version: typeof value.version === 'number' && Number.isInteger(value.version) ? value.version : 0,
     surfaces: { rail: decodeRail(surfaces.rail), types: decodeTypeSurfaces(surfaces.types) },
     perimeter: decodeToolPerimeter(value.perimeter),
+    tags: ((t) => (t.ok ? t.tags : []))(parseToolTags(value.tags)),
+    previewUrl: ((p) => (p.ok ? p.previewUrl : null))(parseToolPreviewUrl(value.previewUrl)),
   }
 }
 
@@ -231,6 +242,9 @@ const SUMMARY_SELECT = {
   config: true,
   perimeter: true,
   iconSvg: true,
+  releaseNotes: true,
+  tags: true,
+  previewUrl: true,
   author: { select: { id: true, name: true } },
 } as const
 
@@ -258,6 +272,9 @@ type SummaryRow = {
   config: unknown
   perimeter: unknown
   iconSvg: string | null
+  releaseNotes: string | null
+  tags: string[]
+  previewUrl: string | null
   author: { id: string; name: string } | null
 }
 
@@ -284,6 +301,9 @@ function toSummary(row: SummaryRow): ToolVersionSummary {
     perimeter: decodeToolPerimeter(row.perimeter),
     surfaces: config.surfaces,
     iconSvg: row.iconSvg,
+    releaseNotes: row.releaseNotes,
+    tags: row.tags,
+    previewUrl: row.previewUrl,
   }
 }
 
@@ -319,6 +339,86 @@ export function nextVersionNumber(existing: readonly number[]): number {
 /** `<spaceId>/<name>` — the marketplace identity of a Tool, across versions. */
 export function toolKey(spaceId: string, name: string): string {
   return `${spaceId}/${name}`
+}
+
+/** Longest `releaseNotes` a publish stores; anything past it is clipped. */
+const RELEASE_NOTES_MAX = 2048
+
+// ── trusted publishers (pure) ────────────────────────────────────────────────
+
+/** What `reviewedBy` reads on a version nobody looked at — a marker, not a user id. */
+export const AUTO_REVIEWER = 'auto'
+export const AUTO_APPROVE_NOTE = 'auto-approved: trusted publisher, unchanged perimeter and surfaces'
+
+/**
+ * `TOOLS_TRUSTED_PUBLISHERS` — space ids whose re-publishes may skip the queue,
+ * comma-separated. Read at call time, never at module load, so a test (or an
+ * operator's restart-free change) is seen. Unset means nobody is trusted.
+ */
+export function trustedPublishers(raw: string | undefined = process.env.TOOLS_TRUSTED_PUBLISHERS): Set<string> {
+  return new Set(
+    (raw ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
+  )
+}
+
+/** True when a diff adds and removes nothing in any of the five lists. */
+export function perimeterDiffIsEmpty(diff: PerimeterDiff): boolean {
+  return (['read', 'write', 'types', 'connectors', 'agents'] as const).every(
+    (key) => diff[key].added.length === 0 && diff[key].removed.length === 0,
+  )
+}
+
+/**
+ * The `surfaces` half of a config, in a canonical shape for comparison: rail
+ * (label + icon, or none) and the type claims sorted by type. Order of claims
+ * is not a change; anything else is.
+ */
+function normalizeSurfaces(surfaces: ToolConfig['surfaces']): string {
+  return JSON.stringify({
+    rail: surfaces.rail ? { label: surfaces.rail.label, icon: surfaces.rail.icon } : null,
+    types: [...surfaces.types].map((t) => ({ type: t.type, mode: t.mode })).sort((a, b) => a.type.localeCompare(b.type)),
+  })
+}
+
+/** True when the two versions claim the same UI surfaces (rail, type pages/tabs). */
+export function surfacesUnchanged(previous: ToolConfig['surfaces'], next: ToolConfig['surfaces']): boolean {
+  return normalizeSurfaces(previous) === normalizeSurfaces(next)
+}
+
+/**
+ * Whether a freshly published version may be approved without a super-admin.
+ *
+ * Four conditions, all required, and each one is a real half of the review:
+ *   • the publishing space is TRUSTED (an operator put its id in the env) —
+ *     code from a stranger is always read by a person;
+ *   • an EARLIER APPROVED version exists — the first version of anything is
+ *     read by a person, because there is nothing to diff it against; and
+ *   • the perimeter diff against that version is EMPTY — the review's real
+ *     question is "what does this reach that the last one didn't?", and a
+ *     re-publish that reaches nothing new from a trusted space is a code
+ *     update the space is entitled to ship to its own installs; and
+ *   • the SURFACES are unchanged — a new rail entry or a claim on a node
+ *     type's page is new real estate in every installing space, and a person
+ *     reads that even when the reach is the same.
+ *
+ * Code changes are NOT inspected: what an install of a trusted publisher's
+ * Tool can do is bounded by the perimeter and the viewer's own grants, and
+ * that bound is exactly what this checks has not moved.
+ */
+export function shouldAutoApprove(input: {
+  trustedPublishers: ReadonlySet<string>
+  sourceSpaceId: string
+  previous: { id: string; version: number; surfaces: ToolConfig['surfaces'] } | null
+  diff: PerimeterDiff
+  surfaces: ToolConfig['surfaces']
+}): boolean {
+  if (!input.trustedPublishers.has(input.sourceSpaceId)) return false
+  if (!input.previous) return false
+  if (!surfacesUnchanged(input.previous.surfaces, input.surfaces)) return false
+  return perimeterDiffIsEmpty(input.diff)
 }
 
 // ── publish ──────────────────────────────────────────────────────────────────
@@ -363,7 +463,7 @@ export async function publishTool(
   p: ContextPrincipal,
   context: Context,
   name: string,
-  opts: { note?: string } = {},
+  opts: { note?: string; releaseNotes?: string } = {},
 ): Promise<PublishResult> {
   if (!principalIsSuperAdmin(p)) {
     return { ok: false, status: 403, error: 'Only space admins can publish a tool.' }
@@ -454,6 +554,12 @@ export async function publishTool(
         dataBundle: buildRow.dataBundle ?? '',
         sizeBytes: build.sizeBytes,
         reviewNote: opts.note?.trim() ? opts.note.trim() : null,
+        // Marketplace metadata: the author's release notes (clipped, never
+        // refused — a long changelog is not a reason to fail a publish) and
+        // the tags/preview the config declared, frozen with the snapshot.
+        releaseNotes: opts.releaseNotes?.trim() ? opts.releaseNotes.trim().slice(0, RELEASE_NOTES_MAX) : null,
+        tags: config.tags,
+        previewUrl: config.previewUrl,
       },
       select: SUMMARY_SELECT,
     })
@@ -474,6 +580,41 @@ export async function publishTool(
     detail: `published v${created.version}`,
   })
 
+  // The trusted-publisher fast path (see shouldAutoApprove). Decided AFTER the
+  // row exists so the diff is computed exactly the way a human reviewer's
+  // screen computes it — against the same previousApprovedVersion.
+  let published = created
+  const diffed = await perimeterDiffForVersion(created.id)
+  if (
+    diffed &&
+    shouldAutoApprove({
+      trustedPublishers: trustedPublishers(),
+      sourceSpaceId: spaceId,
+      previous: diffed.previous,
+      diff: diffed.diff,
+      surfaces: config.surfaces,
+    })
+  ) {
+    published = await prisma.appToolVersion.update({
+      where: { id: created.id },
+      data: {
+        status: 'approved',
+        reviewedBy: AUTO_REVIEWER,
+        reviewedAt: new Date(),
+        reviewNote: AUTO_APPROVE_NOTE,
+      },
+      select: SUMMARY_SELECT,
+    })
+    void logAudit(spaceId, {
+      userId: p.userId,
+      name: p.name,
+      action: 'tool',
+      path: indexPath,
+      detail: `approved v${created.version} by ${AUTO_REVIEWER} — ${AUTO_APPROVE_NOTE}`,
+    })
+    await flagStaleInstalls(created.key, created.id, created.version)
+  }
+
   // Human origin on purpose: a person pressed Publish. 'agent'/'maintenance'
   // would hit the tools/ AI freeze in contextService.lockedDenial.
   const bumped = bumpIndexVersion(indexNote, created.version)
@@ -486,7 +627,7 @@ export async function publishTool(
       warning = `Published as version ${created.version}, but ${indexPath} could not be updated: ${written.reason}`
     }
   }
-  return { ok: true, version: toSummary(created), warning }
+  return { ok: true, version: toSummary(published), warning }
 }
 
 /** An author taking back a version nobody has reviewed yet. */
@@ -576,7 +717,7 @@ export async function reviewVersion(
   }
   const row = await prisma.appToolVersion.findUnique({
     where: { id: versionId },
-    select: { id: true, key: true, name: true, version: true, status: true, sourceSpaceId: true },
+    select: { id: true, key: true, name: true, title: true, version: true, status: true, sourceSpaceId: true, authorUserId: true },
   })
   if (!row) return { ok: false, status: 404, error: 'No such tool version.' }
   if (row.status !== 'pending') {
@@ -600,28 +741,73 @@ export async function reviewVersion(
     path: toolIndexPath(row.name),
     detail: `${decision} v${row.version} by ${reviewer.email}${note?.trim() ? ` — ${note.trim()}` : ''}`,
   })
-
-  let upgraded = 0
-  if (decision === 'approved') {
-    // AppToolInstall pins a version by id, not by number, so "older than this"
-    // is a question about the joined row.
-    const installs = await prisma.appToolInstall.findMany({
-      where: { key: row.key },
-      select: { id: true, version: { select: { version: true } } },
+  // Tell the author. The review queue is the one super-admin surface, so this is
+  // the only way a submitter hears back without polling /tools.
+  if (row.authorUserId) {
+    void notify([row.authorUserId], {
+      spaceId: row.sourceSpaceId,
+      kind: 'tool_review',
+      title: `Your Tool ${row.title} v${row.version} was ${decision}`,
+      body: note?.trim() ? note.trim() : null,
+      href: '/tools',
     })
-    const stale = installs.filter((install) => install.version.version < row.version).map((i) => i.id)
-    if (stale.length > 0) {
-      const result = await prisma.appToolInstall.updateMany({
-        where: { id: { in: stale } },
-        data: { pendingVersionId: versionId },
-      })
-      upgraded = result.count
-    }
   }
+
+  const upgraded = decision === 'approved' ? await flagStaleInstalls(row.key, versionId, row.version) : 0
   return { ok: true, version: toSummary(updated), upgraded }
 }
 
+/**
+ * Offer an approved version to every install of the same Tool pinned to an
+ * OLDER one, by setting `pendingVersionId`. AppToolInstall pins a version by
+ * id, not by number, so "older than this" is a question about the joined row.
+ * Returns how many installs were flagged.
+ */
+async function flagStaleInstalls(key: string, versionId: string, version: number): Promise<number> {
+  const installs = await prisma.appToolInstall.findMany({
+    where: { key },
+    select: { id: true, version: { select: { version: true } } },
+  })
+  const stale = installs.filter((install) => install.version.version < version).map((i) => i.id)
+  if (stale.length === 0) return 0
+  const result = await prisma.appToolInstall.updateMany({
+    where: { id: { in: stale } },
+    data: { pendingVersionId: versionId },
+  })
+  return result.count
+}
+
 // ── browse and history ───────────────────────────────────────────────────────
+
+/**
+ * Take one page out of the folded listing, keyed by the last key of the previous
+ * page.
+ *
+ * The case worth naming: a cursor key can leave the fold between pages — the
+ * version is withdrawn, rejected, or the Tool is renamed. Indexing by key then
+ * finds nothing, and treating "not found" as "start of list" would serve page one
+ * again with a non-null cursor, so a client paging the marketplace never
+ * terminates. An unfindable cursor ends the listing instead: better to stop one
+ * page early than to loop.
+ *
+ * Pure, so the rule is tested without a database (tests/tools-registry.test.ts).
+ */
+export function pageByCursor<T extends { key: string }>(
+  rows: T[],
+  cursor: string | null,
+  limit?: number,
+): { page: T[]; nextCursor: string | null } {
+  const size = Math.max(1, Math.min(limit ?? BROWSE_PAGE, 100))
+  const found = cursor ? rows.findIndex((row) => row.key === cursor) : -1
+  if (cursor && found === -1) return { page: [], nextCursor: null }
+  const start = found + 1
+  const page = rows.slice(start, start + size)
+  return {
+    page,
+    nextCursor: start + size < rows.length ? (page[page.length - 1]?.key ?? null) : null,
+  }
+}
+
 
 /**
  * The marketplace listing: the newest APPROVED version of each Tool, newest
@@ -663,9 +849,7 @@ export async function browseVersions(
   }
   latest.sort((a, b) => b.submittedAt.getTime() - a.submittedAt.getTime() || a.key.localeCompare(b.key))
 
-  const start = opts.cursor ? latest.findIndex((row) => row.key === opts.cursor) + 1 : 0
-  const limit = Math.max(1, Math.min(opts.limit ?? BROWSE_PAGE, 100))
-  const page = latest.slice(start, start + limit)
+  const { page, nextCursor } = pageByCursor(latest, opts.cursor ?? null, opts.limit)
 
   const counts = page.length
     ? await prisma.appToolInstall.groupBy({
@@ -678,7 +862,7 @@ export async function browseVersions(
 
   return {
     items: page.map((row) => ({ ...toSummary(row), installs: byKey.get(row.key) ?? 0 })),
-    nextCursor: start + limit < latest.length ? (page[page.length - 1]?.key ?? null) : null,
+    nextCursor,
   }
 }
 
@@ -774,7 +958,7 @@ export async function previousApprovedVersion(
  * against EMPTY_PERIMETER, so everything it wants reads as added.
  */
 export async function perimeterDiffForVersion(versionId: string): Promise<{
-  previous: { id: string; version: number } | null
+  previous: { id: string; version: number; surfaces: ToolConfig['surfaces'] } | null
   diff: PerimeterDiff
 } | null> {
   const row = await prisma.appToolVersion.findUnique({
@@ -784,7 +968,7 @@ export async function perimeterDiffForVersion(versionId: string): Promise<{
   if (!row) return null
   const previous = await previousApprovedVersion(row.key, row.version)
   return {
-    previous: previous ? { id: previous.id, version: previous.version } : null,
+    previous: previous ? { id: previous.id, version: previous.version, surfaces: previous.config.surfaces } : null,
     diff: diffPerimeter(previous?.perimeter ?? EMPTY_PERIMETER, decodeToolPerimeter(row.perimeter)),
   }
 }

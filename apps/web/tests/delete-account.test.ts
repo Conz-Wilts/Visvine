@@ -74,12 +74,42 @@ test('every userId-scoped model without a cascading User FK is cleared by delete
   assert.ok(orphans.length > 0, 'expected at least UserAlias / Person / Identity here')
 
   for (const m of orphans) {
+    if (REDACTED_BY_DESIGN.has(m.name)) {
+      assert.match(
+        service,
+        new RegExp(`\\.${delegate(m.name)}\\.updateMany`),
+        `${m.name} is on the redaction list but deleteAccount never redacts it`,
+      )
+      continue
+    }
     assert.match(
       service,
       new RegExp(`\\.${delegate(m.name)}\\.delete(Many)?`),
       `${m.name} keys a userId with no cascading FK but deleteAccount never clears it`,
     )
   }
+})
+
+/**
+ * Models where the person is scrubbed OUT of the row but the row survives.
+ * An allowlist, not a loophole: a new table cannot opt out of deletion by
+ * accident, only by being named here deliberately.
+ */
+const REDACTED_BY_DESIGN = new Set(['ContextAuditEntry'])
+
+test('the audit trail is redacted on account deletion, never deleted', () => {
+  // If deleting an account erased its audit entries, deleting an account would
+  // be how you erase your own trail — the one thing an audit log exists to
+  // prevent. The event stays; the person in it goes.
+  assert.match(service, /\.contextAuditEntry\.updateMany/)
+  assert.doesNotMatch(service, /\.contextAuditEntry\.delete/)
+})
+
+test('queued move proposals are deleted with the account', () => {
+  // The coverage guard above structurally cannot see this one: the column is
+  // `proposedBy`, not `userId`. The row holds a full snapshot of a note from
+  // the person's PERSONAL context, so it is their data wherever it sits.
+  assert.match(service, /\.contextMoveProposal\.deleteMany/)
 })
 
 test('deleteAccount deletes the User row last', () => {

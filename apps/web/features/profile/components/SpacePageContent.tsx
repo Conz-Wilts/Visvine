@@ -145,7 +145,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
 
           <div className="pt-[4.5rem] sm:pt-20 flex flex-col">
             <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <Chip tone="soft" size="md" color={theme.base}>{typeLabel}</Chip>
+              <Chip tone="solid" size="md" color={theme.base}>{typeLabel}</Chip>
               {node.location && (
                 <Chip tone="muted" size="md">
                   <MapPinIcon className="w-3 h-3" /> {node.location}
@@ -229,7 +229,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
             <SectionCard id="tags" title="Tags">
               <div className="flex flex-wrap gap-2">
                 {tags.map((tag, i) => (
-                  <Chip key={tag} tone="soft" size="lg" color={theme.base}
+                  <Chip key={tag} tone="solid" size="lg" color={theme.base}
                         className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
                         style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}

@@ -1,4 +1,5 @@
 import type { ConversationMemberRole, ConversationType } from '@prisma/client';
+import type { NotificationDTO } from '@/lib/notifications/types';
 
 /** How a channel renders: classic chat thread or social-feed post cards. */
 export type ChannelViewMode = 'CHAT' | 'FEED';
@@ -178,7 +179,18 @@ interface RealtimeReactionEvent {
   userId: string;
 }
 
+/**
+ * A fresh inbox line for the Navbar bell (lib/notifications). Rides the same
+ * per-user SSE stream as messages: one connection per tab, every kind of
+ * "something happened to you" on it.
+ */
+interface RealtimeNotificationEvent {
+  type: 'notification.new';
+  notification: NotificationDTO;
+}
+
 export type RealtimeEvent =
+  | RealtimeNotificationEvent
   | RealtimeMessageEvent
   | RealtimeMessageUpdatedEvent
   | RealtimeMessageDeletedEvent

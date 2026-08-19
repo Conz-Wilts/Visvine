@@ -102,7 +102,7 @@ export default function ToolDetail({
               {item.installs} {item.installs === 1 ? 'space runs it' : 'spaces run it'}
             </p>
             {installed ? (
-              <Chip tone="soft" size="sm" color="#16a34a">
+              <Chip tone="solid" size="sm" color="#16a34a">
                 Installed in this space
               </Chip>
             ) : canInstall ? (
@@ -131,6 +131,27 @@ export default function ToolDetail({
 
           {version && (
             <>
+              {version.previewUrl && (
+                // The author's own image of the Tool. `preview:` is validated
+                // at parse time to a same-origin /api/media/… path only,
+                // so this is never a data:/javascript: source.
+                <img
+                  src={version.previewUrl}
+                  alt={`${version.title} preview`}
+                  className="w-full rounded-xl border border-border-subtle object-cover"
+                />
+              )}
+
+              {version.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {version.tags.map((tag) => (
+                    <Chip key={tag} tone="solid" size="sm">
+                      {tag}
+                    </Chip>
+                  ))}
+                </div>
+              )}
+
               <section>
                 <ToolDocs source={version.indexSource} />
               </section>
@@ -183,14 +204,21 @@ export default function ToolDetail({
                 </h3>
                 <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle">
                   {version.history.map((entry) => (
-                    <li key={entry.version} className="flex items-center gap-3 px-3 py-2 text-sm">
-                      <span className="w-12 shrink-0 font-mono text-[13px] text-text-primary">v{entry.version}</span>
-                      <Chip tone="soft" size="sm" color={STATUS_COLOR[entry.status]}>
-                        {STATUS_LABEL[entry.status]}
-                      </Chip>
-                      <span className="ml-auto text-xs text-text-muted">
-                        {entry.reviewedAt ? new Date(entry.reviewedAt).toLocaleDateString() : 'Not reviewed'}
-                      </span>
+                    <li key={entry.version} className="px-3 py-2 text-sm">
+                      <div className="flex items-center gap-3">
+                        <span className="w-12 shrink-0 font-mono text-[13px] text-text-primary">v{entry.version}</span>
+                        <Chip tone="solid" size="sm" color={STATUS_COLOR[entry.status]}>
+                          {STATUS_LABEL[entry.status]}
+                        </Chip>
+                        <span className="ml-auto text-xs text-text-muted">
+                          {entry.reviewedAt ? new Date(entry.reviewedAt).toLocaleDateString() : 'Not reviewed'}
+                        </span>
+                      </div>
+                      {entry.releaseNotes && (
+                        <p className="mt-1 whitespace-pre-line pl-[3.75rem] text-xs text-text-secondary">
+                          {entry.releaseNotes}
+                        </p>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -43,12 +43,7 @@ import type { AuthoredToolDetail } from '@/lib/tools/service';
 import { fetchAuthoredTool } from '../lib/client';
 import BuildDiagnostics from './BuildDiagnostics';
 import ToolFrame from './ToolFrame';
-
-const TONE_CLASSES = {
-  ok: 'bg-brand-light-bg text-brand-dark-green',
-  warn: 'bg-amber-50 text-amber-700',
-  bad: 'bg-red-50 text-red-700',
-} as const;
+import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
 const STRIP_BUTTON =
   'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border-default px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2';
@@ -134,7 +129,7 @@ export default function ToolPreview({ name }: { name: string }) {
         <div className="flex min-w-0 flex-wrap items-baseline gap-2">
           <h1 className="truncate font-title text-lg font-semibold text-text-primary">{tool.title}</h1>
           <span className="font-mono text-[12px] text-text-muted">{tool.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+          <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
           <span className="text-[12px] text-text-muted">preview · working copy</span>

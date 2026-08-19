@@ -53,16 +53,21 @@ export const TOOL_BUNDLE_LIMITS = {
 export const EXTERNALS = [
   'react',
   'react/jsx-runtime',
-  'react-dom',
   'react-dom/client',
   '@visvine/tool-kit',
 ] as const
+
+//  (the legacy root API) is deliberately NOT here. The frame's
+// import map (lib/tools/frameDocument.ts) only serves , so
+// allowing the bare specifier would compile cleanly and then fail to resolve
+// at runtime — the worst kind of error for an author. Refusing it here gives
+// them the rule and the fix in one line. Pinned by tests/tools-compile.test.ts.
 
 const ALLOWED_IMPORTS: ReadonlySet<string> = new Set(EXTERNALS)
 
 /** Named in every refusal, so the author learns the whole rule from one error. */
 const IMPORT_RULE =
-  'Only react, react/jsx-runtime, react-dom, react-dom/client and @visvine/tool-kit may be imported'
+  'Only react, react/jsx-runtime, react-dom/client and @visvine/tool-kit may be imported (use react-dom/client, not react-dom)'
 
 const UI_FILENAME = 'ui.tsx'
 const DATA_FILENAME = 'data.js'

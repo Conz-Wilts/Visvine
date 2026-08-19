@@ -17,9 +17,10 @@ import prisma from '@/lib/prisma'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import { agentActivationPath, nextOccurrence, parseAgentActivation, scheduleHash } from './config'
 import { dispatchRun, type DispatchResult } from './dispatch'
+import { claimEvents, eventDepthOf, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
 import { MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS, MAX_RUNS_PER_TICK, RECLAIM_GRACE_MS } from './limits'
-import { createRun, failStaleRun, pruneRuns } from './runs'
+import { createRun, failStaleRun, pruneRuns, type RunInput, type RunTrigger } from './runs'
 
 export interface TickReport {
   reclaimed: number
@@ -77,8 +78,8 @@ export async function reclaimStale(now: Date): Promise<number> {
 /**
  * Atomic claim. `scheduled` requires the row to be due and ADVANCES
  * next_run_at (never `+ interval`: always the next occurrence after now);
- * `manual` requires only active+idle and leaves next_run_at alone (a manual
- * run is extra, not a replacement). Returns true iff exactly one row moved.
+ * `manual` requires only active+idle; claimManualRun then resets next_run_at to
+ * the clock (the mail it takes had pulled it forward). Returns true iff exactly one row moved.
  */
 async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, nextRunAt: Date | null, runId: string): Promise<boolean> {
   const changed =
@@ -94,8 +95,26 @@ async function claim(stateId: string, mode: 'scheduled' | 'manual', now: Date, n
   return changed === 1
 }
 
+/** The agent's next clock occurrence after `now` from its activation note, or null (trigger-only / no note). */
+async function nextClockOccurrence(spaceId: string, name: string, now: Date): Promise<Date | null> {
+  const live = await prisma.contextNote.findFirst({
+    where: { spaceId, ownerKey: 'shared', path: agentActivationPath(name), deletedAt: null },
+    select: { content: true },
+  })
+  const parsed = live ? parseAgentActivation(parseFrontmatter(live.content)) : null
+  if (!parsed?.ok || !parsed.activation.schedule) return null
+  const tz = await effectiveTimezone(spaceId, parsed.activation.timezone)
+  return nextOccurrence(parsed.activation.schedule, now, tz)
+}
+
 /** The run id is minted BEFORE the claim so the claim can name it (release is a CAS on it). */
 const newRunId = () => crypto.randomUUID()
+
+/** The claimed events as the run row's `input` (kept with the run after the events prune). */
+function runInputOf(events: ClaimedEvent[]): RunInput | null {
+  if (events.length === 0) return null
+  return { events: events.map((e) => ({ kind: e.kind, source: e.source, summary: e.summary, at: e.createdAt.toISOString(), depth: eventDepthOf(e.payload) })) }
+}
 
 /** Which spaces already have a run in flight — one at a time per space. */
 async function busySpaces(): Promise<Set<string>> {
@@ -132,7 +151,7 @@ export async function tick(now = new Date()): Promise<TickReport> {
       select: { content: true },
     })
     const parsed = live ? parseAgentActivation(parseFrontmatter(live.content)) : null
-    if (!parsed || !parsed.ok || !parsed.activation.active || !parsed.activation.schedule) {
+    if (!parsed || !parsed.ok || !parsed.activation.active || (!parsed.activation.schedule && !parsed.activation.on)) {
       await syncAgentState(row.spaceId, row.name, { now })
       continue
     }
@@ -142,11 +161,35 @@ export async function tick(now = new Date()): Promise<TickReport> {
       const fresh = await syncAgentState(row.spaceId, row.name, { activation: parsed.activation, now })
       if (!fresh.active || !fresh.nextRunAt || fresh.nextRunAt > now) continue
     }
-    const next = nextOccurrence(parsed.activation.schedule, now, tz)
+    // Event-only agents have no clock: next_run_at goes back to null until the
+    // next event pulls it forward (or release re-arms it for mail that arrived
+    // mid-run).
+    const schedule = parsed.activation.schedule
+    const next = schedule ? nextOccurrence(schedule, now, tz) : null
     const runId = newRunId()
     if (!(await claim(row.id, 'scheduled', now, next, runId))) continue
 
-    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger: 'scheduled' })
+    // The claim is ours: take the mail with it. What the run is FOR is named by
+    // what woke it — events if any arrived, else the clock that was due.
+    const events = await claimEvents(row.spaceId, row.name, runId)
+    // A trigger-only agent whose mail was taken by a manual run in between (or
+    // whose event pull-forward outlived its events) is due for nothing: give
+    // the claim straight back — no run row, no paid model call about nothing.
+    if (!schedule && events.length === 0) {
+      await prisma.agentState.updateMany({
+        where: { id: row.id, currentRunId: runId },
+        data: { status: 'idle', runningSince: null, currentRunId: null, nextRunAt: null, lastRunAt: row.lastRunAt },
+      })
+      continue
+    }
+    const trigger: RunTrigger = events.length
+      ? events.every((e) => e.kind === 'webhook')
+        ? 'webhook'
+        : 'event'
+      : schedule?.kind === 'interval' || schedule?.kind === 'cron'
+        ? 'interval'
+        : 'scheduled'
+    const run = await createRun({ id: runId, stateId: row.id, spaceId: row.spaceId, name: row.name, trigger, eventCount: events.length, input: runInputOf(events) })
     claimed.push({ runId: run.id, stateId: row.id })
     busy.add(row.spaceId)
   }
@@ -172,15 +215,33 @@ export async function claimManualRun(
   name: string,
   startedBy: string,
   now = new Date(),
+  opts: {
+    /**
+     * Set by the run_agent tool: the run that asked and how deep the chain
+     * already is. The parent run holds the space's "one at a time" slot, so a
+     * chained run only checks that the TARGET agent is idle — otherwise
+     * chaining could never start (the parent is always running).
+     */
+    chain?: { parent: string; depth: number }
+  } = {},
 ): Promise<RunNowResult & { dispatch?: Promise<DispatchResult> }> {
   const row = await prisma.agentState.findUnique({ where: { agent_identity: { spaceId, name } } })
   if (!row) return { ok: false, code: 'unknown', message: 'No such agent.' }
   if (!row.active) return { ok: false, code: 'inactive', message: 'The agent must be active before it can be run — ask a space admin to activate it.' }
   if (row.status === 'running') return { ok: false, code: 'busy', message: 'The agent is already running.' }
-  if ((await busySpaces()).has(spaceId)) return { ok: false, code: 'busy', message: 'Another agent in this space is running; try again shortly.' }
+  if (!opts.chain && (await busySpaces()).has(spaceId)) return { ok: false, code: 'busy', message: 'Another agent in this space is running; try again shortly.' }
   const runId = newRunId()
   if (!(await claim(row.id, 'manual', now, null, runId))) return { ok: false, code: 'busy', message: 'The agent was just claimed by another run.' }
-  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy })
+  // A manual run takes any waiting mail too — otherwise "Run now" would do the
+  // work and the debounce would fire a second run for the same events. The
+  // events had pulled next_run_at forward; with them consumed, it goes back to
+  // the clock's next occurrence (or to nothing for a trigger-only agent) —
+  // otherwise the tick would claim a run for mail that is no longer there.
+  const events = await claimEvents(spaceId, name, runId)
+  const next = await nextClockOccurrence(spaceId, name, now)
+  await prisma.agentState.updateMany({ where: { id: row.id, currentRunId: runId }, data: { nextRunAt: next } })
+  const input: RunInput | null = opts.chain ? { events: runInputOf(events)?.events ?? [], chain: opts.chain } : runInputOf(events)
+  const run = await createRun({ id: runId, stateId: row.id, spaceId, name, trigger: 'manual', startedBy, eventCount: events.length, input })
   const dispatch = dispatchRun(run.id)
   return { ok: true, runId: run.id, dispatch }
 }

@@ -1,0 +1,260 @@
+/**
+ * The agent tool surface (lib/agents/tools.ts) against fakes — which tools a
+ * brief is offered, the per-run caps on notify / ask_human, the run_agent
+ * depth guard, dry-run capture and the write collector. No DB, no model: the
+ * handlers are called directly (and once through the shared loop with a
+ * scripted model, as the runner does).
+ *
+ * Run: pnpm --filter @visvine/web exec node --import tsx --test tests/agents-tools.test.ts
+ */
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { agentTools, ASK_PER_RUN_CAP, MAX_CHAIN_DEPTH, NOTIFY_PER_RUN_CAP, type AgentToolContext, type AgentToolDeps } from '@/lib/agents/tools'
+import { agentPageHref, type AgentBrief } from '@/lib/agents/config'
+import { parseModelRef } from '@/lib/agents/registry'
+import { OPEN_ACCESS } from '@/lib/notes/shared/authz'
+import { runToolLoop, type ChatFn, type ToolLoopEvent } from '@/lib/notes/toolLoop'
+import type { ChatWithToolsResult } from '@/lib/notes/ai'
+import type { NotifyInput } from '@/lib/notifications/types'
+
+const SPACE = 'space-1'
+
+function brief(over: Partial<AgentBrief> = {}): AgentBrief {
+  return {
+    title: 'Weekly digest',
+    description: null,
+    model: 'gemini/x',
+    modelRef: (() => {
+      const r = parseModelRef('gemini/x')
+      if (!r.ok) throw new Error(r.error)
+      return r.ref
+    })(),
+    connectors: [],
+    tools: [],
+    agents: [],
+    dryRun: false,
+    maxTurns: 8,
+    body: 'do the thing',
+    ...over,
+  }
+}
+
+interface Fakes {
+  deps: AgentToolDeps
+  notified: { userIds: string[]; input: NotifyInput }[]
+  posts: { userId: string; conversationId: string; text: string }[]
+  claims: { name: string; startedBy: string; chain: { parent: string; depth: number } }[]
+  writes: { path: string; content: string }[]
+  appends: { path: string; text: string }[]
+  created: { type: string; name: string; stamp?: { origin?: string; model?: string } }[]
+  links: { from: string; to: string; relationship: string }[]
+}
+
+function fakes(): Fakes {
+  const f: Fakes = {
+    notified: [],
+    posts: [],
+    claims: [],
+    writes: [],
+    appends: [],
+    created: [],
+    links: [],
+    deps: {
+      writeGated: (async (_p, _c, path: string, content: string) => {
+        f.writes.push({ path, content })
+        return { status: 'applied', path }
+      }) as AgentToolDeps['writeGated'],
+      appendLogGated: (async (_p, _c, path: string, text: string) => {
+        f.appends.push({ path, text })
+        return { status: 'applied', path }
+      }) as AgentToolDeps['appendLogGated'],
+      notify: async (userIds, input) => {
+        f.notified.push({ userIds, input })
+        return { created: userIds.length }
+      },
+      spaceAdminUserIds: async () => ['admin-1', 'admin-2'],
+      listChannels: async () => [{ id: 'conv-general', name: 'general' }],
+      postToChannel: async (userId, conversationId, text) => {
+        f.posts.push({ userId, conversationId, text })
+      },
+      claimManualRun: async (_space, name, startedBy, opts) => {
+        f.claims.push({ name, startedBy, chain: opts.chain })
+        return { ok: true, runId: `run-${name}`, dispatch: Promise.resolve() }
+      },
+      createEntity: (async (_ctx: unknown, input: { type: string; name: string; stamp?: { origin?: string; model?: string } }) => {
+        f.created.push({ type: input.type, name: input.name, stamp: input.stamp })
+        return { ok: true, node: { id: `${input.type}:${input.name}` }, notePath: `people/${input.name}.md`, resolution: null, noteError: null }
+      }) as unknown as AgentToolDeps['createEntity'],
+      linkNodes: async ({ from, to, relationship }) => {
+        f.links.push({ from, to, relationship })
+        return null
+      },
+    },
+  }
+  return f
+}
+
+function ctx(f: Fakes, over: Partial<AgentToolContext> = {}): AgentToolContext {
+  return {
+    principal: { userId: 'author-1', email: 'a@x', name: 'Author', spaceId: SPACE, spaceAdmin: false, access: OPEN_ACCESS },
+    context: { spaceId: SPACE, ownerKey: 'shared' },
+    spaceId: SPACE,
+    agentName: 'weekly-digest',
+    brief: brief(),
+    runId: 'run-root',
+    deps: f.deps,
+    ...over,
+  }
+}
+
+const tool = (tools: ReturnType<typeof agentTools>, name: string) => {
+  const t = tools.find((x) => x.spec.name === name)
+  assert.ok(t, `tool ${name} offered`)
+  return t
+}
+const names = (tools: ReturnType<typeof agentTools>) => tools.map((t) => t.spec.name)
+
+test('the surface: always-on tools, and extras only when the brief asks', () => {
+  const f = fakes()
+  const base = names(agentTools(ctx(f)))
+  assert.deepEqual(base, ['list_context', 'search_context', 'read_context', 'write_context', 'append_context', 'notify', 'ask_human'])
+  const full = names(
+    agentTools(ctx(f, { brief: brief({ tools: ['web', 'messages', 'directory'], agents: ['other'], connectors: ['hubspot'] }) })),
+  )
+  for (const n of ['run_connector', 'fetch_url', 'run_agent', 'create_node', 'link_nodes']) assert.ok(full.includes(n), n)
+  assert.ok(!base.includes('run_agent') && !base.includes('create_node'), 'no chaining / directory without opt-in')
+})
+
+test('notify: author by default, admins on request, capped per run', async () => {
+  const f = fakes()
+  const notify = tool(agentTools(ctx(f)), 'notify')
+  assert.match(await notify.run({ message: 'hello' }), /notified author \(1 recipient\)/)
+  assert.deepEqual(f.notified[0].userIds, ['author-1'])
+  assert.equal(f.notified[0].input.kind, 'agent_notify')
+  assert.equal(f.notified[0].input.title, 'Weekly digest')
+  assert.equal(f.notified[0].input.href, agentPageHref('weekly-digest'))
+  assert.match(await notify.run({ message: 'admins!', to: 'admins', title: 'Heads up' }), /notified admins \(2 recipients\)/)
+  assert.deepEqual(f.notified[1].userIds, ['admin-1', 'admin-2'])
+  assert.equal(f.notified[1].input.title, 'Heads up')
+  assert.match(await notify.run({ message: 'x'.repeat(2001) }), /^error: message is longer/)
+  assert.match(await notify.run({ message: 'y', to: 'channel:general' }), /needs `tools: \[messages\]`/)
+  // Cap: two spent so far (errors do not count).
+  for (let i = f.notified.length; i < NOTIFY_PER_RUN_CAP; i++) assert.match(await notify.run({ message: `n${i}` }), /^notified/)
+  assert.match(await notify.run({ message: 'one more' }), /^error: notify cap reached/)
+  assert.equal(f.notified.length, NOTIFY_PER_RUN_CAP)
+})
+
+test('notify to a channel posts as the run principal with the agent title, and needs tools: [messages]', async () => {
+  const f = fakes()
+  const notify = tool(agentTools(ctx(f, { brief: brief({ tools: ['messages'] }) })), 'notify')
+  assert.equal(await notify.run({ message: 'digest is out', to: 'channel:#General' }), 'posted to #general')
+  assert.deepEqual(f.posts, [{ userId: 'author-1', conversationId: 'conv-general', text: 'Weekly digest: digest is out' }])
+  assert.match(await notify.run({ message: 'x', to: 'channel:nope' }), /no channel named "nope" \(known: general\)/)
+  assert.equal(f.notified.length, 0, 'channel posts are not bell notifications')
+})
+
+test('ask_human: agent_question to the author, capped at two per run', async () => {
+  const f = fakes()
+  const ask = tool(agentTools(ctx(f, { authorUserId: 'the-author' })), 'ask_human')
+  assert.match(await ask.run({ question: 'Which quarter?' }), /^asked author/)
+  assert.deepEqual(f.notified[0].userIds, ['the-author'])
+  assert.equal(f.notified[0].input.kind, 'agent_question')
+  assert.equal(f.notified[0].input.title, 'Weekly digest asks')
+  assert.equal(f.notified[0].input.body, 'Which quarter?')
+  assert.equal(f.notified[0].input.href, agentPageHref('weekly-digest'))
+  assert.equal(f.notified[0].input.dedupeKey, undefined)
+  assert.match(await ask.run({ question: 'And which year?', to: 'admins' }), /^asked admins/)
+  assert.match(await ask.run({ question: 'third?' }), /^error: ask_human cap reached/)
+  assert.equal(f.notified.length, ASK_PER_RUN_CAP)
+  assert.match(await ask.run({ question: '', to: 'author' }), /^error: question is required/)
+})
+
+test('run_agent: only names in agents:, never itself, and refused past the depth limit', async () => {
+  const f = fakes()
+  const at = (depth: number) => tool(agentTools(ctx(f, { brief: brief({ agents: ['digest', 'weekly-digest'] }), chainDepth: depth })), 'run_agent')
+  assert.match(await at(0).run({ name: 'unknown' }), /not in this brief's `agents:` list/)
+  assert.match(await at(0).run({ name: 'weekly-digest' }), /cannot start itself/)
+  assert.equal(await at(0).run({ name: 'digest' }), 'started agent digest — run run-digest')
+  assert.deepEqual(f.claims, [{ name: 'digest', startedBy: 'author-1', chain: { parent: 'run-root', depth: 1 } }])
+  assert.equal(await at(1).run({ name: 'digest' }), 'started agent digest — run run-digest')
+  assert.equal(f.claims[1].chain.depth, 2)
+  assert.match(await at(MAX_CHAIN_DEPTH).run({ name: 'digest' }), /chain depth limit/)
+  assert.equal(f.claims.length, 2)
+  // The claim's own refusal comes back with its code.
+  f.deps.claimManualRun = async () => ({ ok: false, code: 'inactive', message: 'not active' })
+  assert.equal(await at(0).run({ name: 'digest' }), 'error (inactive): not active')
+})
+
+test('write_context / append_context report every path to onWrite; dry_run captures instead of writing', async () => {
+  const f = fakes()
+  const written: string[] = []
+  const live = agentTools(ctx(f, { onWrite: (p) => written.push(p) }))
+  assert.equal(await tool(live, 'write_context').run({ path: 'reports/weekly.md', content: '# hi' }), 'written reports/weekly.md')
+  assert.equal(await tool(live, 'append_context').run({ path: 'log.md', text: 'entry' }), 'appended to log.md')
+  assert.deepEqual(written, ['reports/weekly.md', 'log.md'])
+  assert.equal(f.writes.length, 1)
+  assert.equal(f.appends.length, 1)
+
+  const g = fakes()
+  const dryWritten: string[] = []
+  const dry = agentTools(ctx(g, { brief: brief({ dryRun: true, tools: ['messages', 'directory'], agents: ['digest'] }), onWrite: (p) => dryWritten.push(p) }))
+  assert.equal(await tool(dry, 'write_context').run({ path: 'reports/weekly.md', content: '# hi' }), 'DRY RUN — would write reports/weekly.md (4 bytes)')
+  assert.equal(await tool(dry, 'append_context').run({ path: 'log.md', text: 'entry' }), 'DRY RUN — would append to log.md (5 bytes)')
+  assert.match(await tool(dry, 'notify').run({ message: 'm', to: 'channel:general' }), /^DRY RUN — would post to #general/)
+  assert.match(await tool(dry, 'create_node').run({ type: 'person', name: 'Jane' }), /^DRY RUN — would create person "Jane"/)
+  assert.match(await tool(dry, 'link_nodes').run({ from: 'person:a', to: 'person:b' }), /^DRY RUN — would link/)
+  assert.match(await tool(dry, 'run_agent').run({ name: 'digest' }), /^DRY RUN — would start agent digest/)
+  assert.deepEqual(dryWritten, ['reports/weekly.md', 'log.md'])
+  assert.equal(g.writes.length + g.appends.length + g.posts.length + g.created.length + g.links.length + g.claims.length, 0, 'nothing executed')
+  // People are still told — a dry run is a rehearsal, not silence.
+  assert.match(await tool(dry, 'notify').run({ message: 'still here' }), /^notified author/)
+  assert.equal(g.notified.length, 1)
+})
+
+test('directory tools go through createEntity / linkNodes as the author', async () => {
+  const f = fakes()
+  const tools = agentTools(ctx(f, { brief: brief({ tools: ['directory'] }) }))
+  const written: string[] = []
+  const withWrites = agentTools(ctx(f, { brief: brief({ tools: ['directory'] }), onWrite: (p) => written.push(p) }))
+  assert.equal(await tool(withWrites, 'create_node').run({ type: 'person', name: 'Jane', description: 'CEO', tags: ['founder'] }), 'created person:Jane (note people/Jane.md)')
+  assert.deepEqual(written, ['people/Jane.md'])
+  // Stamped like write_context: Freeze-for-AI applies and the create can't wake this agent.
+  assert.deepEqual(f.created, [{ type: 'person', name: 'Jane', stamp: { origin: 'agent', model: 'agent:weekly-digest' } }])
+  assert.equal(await tool(tools, 'link_nodes').run({ from: 'person:jane', to: 'space:halter', type: 'works_at' }), 'linked person:jane → space:halter (works_at)')
+  assert.deepEqual(f.links, [{ from: 'person:jane', to: 'space:halter', relationship: 'works_at' }])
+  assert.match(await tool(tools, 'link_nodes').run({ from: 'a', to: 'a' }), /must differ/)
+  f.deps.linkNodes = async () => 'no such node in this space: space:nope'
+  const refusing = agentTools(ctx(f, { brief: brief({ tools: ['directory'] }) }))
+  assert.equal(await tool(refusing, 'link_nodes').run({ from: 'person:jane', to: 'space:nope' }), 'error: no such node in this space: space:nope')
+})
+
+/** A model that plays back a fixed list of replies, then answers plainly. */
+function scripted(replies: Partial<ChatWithToolsResult>[]): ChatFn {
+  let i = 0
+  return async (): Promise<ChatWithToolsResult> => {
+    const r = replies[i++] ?? { content: 'done', toolCalls: [] }
+    return { content: r.content ?? null, toolCalls: r.toolCalls ?? [], usage: r.usage ?? null }
+  }
+}
+
+test('through the loop: a dry-run write shows up as a tool_result line and the notify cap as an error the model sees', async () => {
+  const f = fakes()
+  const written: string[] = []
+  const tools = agentTools(ctx(f, { brief: brief({ dryRun: true }), onWrite: (p) => written.push(p) }))
+  const events: ToolLoopEvent[] = []
+  const chatFn = scripted([
+    { content: 'writing', toolCalls: [{ id: 'c1', name: 'write_context', arguments: JSON.stringify({ path: 'reports/x.md', content: 'body' }) }] },
+    {
+      content: 'telling',
+      toolCalls: Array.from({ length: NOTIFY_PER_RUN_CAP + 1 }, (_, i) => ({ id: `n${i}`, name: 'notify', arguments: JSON.stringify({ message: `m${i}` }) })),
+    },
+    { content: 'all done' },
+  ])
+  const result = await runToolLoop({ messages: [{ role: 'user', content: 'go' }], tools, maxTurns: 6, chatFn, onEvent: (e) => events.push(e) })
+  assert.equal(result.reason, 'finished')
+  const results = events.filter((e): e is Extract<ToolLoopEvent, { type: 'tool_result' }> => e.type === 'tool_result')
+  assert.equal(results[0].text, 'DRY RUN — would write reports/x.md (4 bytes)')
+  assert.deepEqual(written, ['reports/x.md'])
+  assert.equal(results.filter((r) => r.tool === 'notify' && r.text.startsWith('notified')).length, NOTIFY_PER_RUN_CAP)
+  assert.equal(results.filter((r) => r.tool === 'notify' && r.text.startsWith('error: notify cap')).length, 1)
+})

@@ -31,7 +31,7 @@ export default function SpacesPage() {
           <PageTitle title="My Spaces" />
           <Link
             href="/discover"
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-end"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-lg bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] shadow-sm transition-all duration-200 shrink-0 justify-self-end"
             style={{ color: '#ffffff' }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -82,7 +82,7 @@ export default function SpacesPage() {
                         {space.name}
                       </Link>
                       {isActive && (
-                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-brand-light-bg text-brand-dark-green">
+                        <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-brand-green text-white">
                           Active
                         </span>
                       )}
@@ -114,14 +114,14 @@ export default function SpacesPage() {
                     {!isActive && (
                       <button
                         onClick={() => setCurrentSpace(space.id)}
-                        className="px-4 py-2 text-sm font-semibold rounded-full border border-border-default text-text-secondary hover:bg-surface-2 transition-all duration-200"
+                        className="px-4 py-2 text-sm font-semibold rounded-lg border border-border-default text-text-secondary hover:bg-surface-2 transition-all duration-200"
                       >
                         Switch
                       </button>
                     )}
                     <Link
                       href="/directory"
-                      className="px-4 py-2 text-sm font-semibold rounded-full bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] transition-all duration-200"
+                      className="px-4 py-2 text-sm font-semibold rounded-lg bg-brand-green hover:bg-brand-green/90 active:scale-[0.98] transition-all duration-200"
                       style={{ color: '#ffffff' }}
                     >
                       View Network

@@ -94,13 +94,13 @@ test('refuses any other import, wherever it points', async () => {
     const text = errorText(result)
     assert.match(
       text,
-      /Only react, react\/jsx-runtime, react-dom, react-dom\/client and @visvine\/tool-kit may be imported/,
+      /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/,
       `${label} should be refused with the import rule`,
     )
   }
 })
 
-test('names all five allowed specifiers in the refusal, react-dom included', async () => {
+test('names all four allowed specifiers in the refusal', async () => {
   const result = await compileToolUi(`import _ from 'lodash'\nexport default () => null`)
   const text = errorText(result)
   for (const specifier of EXTERNALS) {
@@ -121,7 +121,7 @@ test('refuses a dynamic import whose specifier is not a literal, even though it 
   assert.match(text, /Cannot import a non-literal value/)
   assert.match(
     text,
-    /Only react, react\/jsx-runtime, react-dom, react-dom\/client and @visvine\/tool-kit may be imported/,
+    /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/,
   )
 })
 
@@ -266,4 +266,19 @@ test('sourceHash is a stable sha256 over the parts, boundaries included', () => 
   assert.notEqual(hash, sourceHash(['b', 'a']))
   // The separator is what keeps a moved boundary from hashing the same.
   assert.notEqual(hash, sourceHash(['ab']))
+})
+
+test('refuses a bare react-dom import — the import map has no entry for it, so it would fail at runtime', async () => {
+  // Pins the fix for the import-map bug: react-dom used to be allowed at
+  // compile time but absent from IMPORT_MAP_ENTRIES, so the Tool built clean
+  // and then failed to resolve in the browser. Now the compiler refuses it and
+  // names the fix.
+  assert.ok(!(EXTERNALS as readonly string[]).includes('react-dom'))
+  const result = await compileToolUi(
+    `import { render } from 'react-dom'\nexport default function App() { return <b>{String(render)}</b> }`,
+  )
+  assert.equal(result.ok, false)
+  const text = errorText(result)
+  assert.match(text, /Only react, react\/jsx-runtime, react-dom\/client and @visvine\/tool-kit may be imported/)
+  assert.match(text, /use react-dom\/client, not react-dom/)
 })

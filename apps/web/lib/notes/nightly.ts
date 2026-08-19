@@ -17,6 +17,7 @@ import { aiConfigured } from '@/lib/notes/ai'
 import { semanticConfigured } from '@/lib/notes/embeddings'
 import { embedSweep } from '@/lib/notes/embedSweep'
 import { generateLinkReasons } from '@/lib/notes/linkReasons'
+import { drainProjections, projectionBacklog } from '@/lib/notes/projections'
 import { msUntilNextRun, nightlyEnabled, nightlyRunHour } from './shared/nightly'
 
 let sweeping = false
@@ -32,6 +33,15 @@ async function runNightlyMaintenance(): Promise<void> {
   sweeping = true
   const startedAt = Date.now()
   try {
+    // Drain first, and unconditionally: the sweeps below read derived state, so
+    // running them over projections that were never rebuilt would embed the
+    // staleness (an un-synced mention has no edge for the link-reason pass to
+    // explain). Unlike the two AI stages this needs no API key.
+    const drained = await drainProjections(500)
+    const backlog = await projectionBacklog()
+    if (drained.claimed || backlog.pending) {
+      logger.info('notes.nightly.projections', { ...drained, ...backlog })
+    }
     if (semanticConfigured()) {
       const embedded = await embedSweep()
       logger.info('notes.nightly.embeddings', {

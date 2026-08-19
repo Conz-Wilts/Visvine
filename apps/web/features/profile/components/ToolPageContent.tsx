@@ -43,17 +43,10 @@ import type { ToolVersionSummary } from '@/lib/tools/registry';
 import { describeRequirements } from '@/lib/tools/requirements';
 import BuildDiagnostics from '@/features/tools/components/BuildDiagnostics';
 import PerimeterSummary from '@/features/tools/components/PerimeterSummary';
+import { TONE_CHIP, TONE_CLASSES, type Tone } from '@/features/shared/lib/statusTone';
 import { fetchAuthoredTool, publishTool } from '@/features/tools/lib/client';
 
 // ── Chrome ───────────────────────────────────────────────────────────────────
-
-const TONE_CLASSES = {
-  ok: 'bg-brand-light-bg text-brand-dark-green',
-  warn: 'bg-amber-50 text-amber-700',
-  bad: 'bg-red-50 text-red-700',
-} as const;
-
-type Tone = keyof typeof TONE_CLASSES;
 
 /**
  * Title, an optional one-word meta, and at most one action, over a rule — the
@@ -155,7 +148,7 @@ function VersionTrail({ versions }: { versions: ToolVersionSummary[] }) {
         <li key={version.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
             <span className="font-mono font-semibold text-text-primary">v{version.version}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[VERSION_TONES[version.status]]}`}>
+            <span className={`${TONE_CHIP} ${TONE_CLASSES[VERSION_TONES[version.status]]}`}>
               {version.status}
             </span>
             <span className="text-text-muted">
@@ -413,7 +406,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h1 className="truncate font-title text-xl font-semibold text-text-primary">{tool.title}</h1>
           <span className="font-mono text-[12px] text-text-muted">{tool.name}</span>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+          <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
         </div>
@@ -583,7 +576,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
               </Link>
               <span className="text-[12px] text-text-muted">{blurb}</span>
               {tool.sources[file] === null && (
-                <span className="ml-auto shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                <span className="ml-auto shrink-0 rounded-md bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">
                   not written
                 </span>
               )}

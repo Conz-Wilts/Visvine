@@ -17,6 +17,8 @@ import type {
   AuthoredToolsResponse,
   AuthoredToolView,
   BrowseResponse,
+  CreateToolRequest,
+  CreateToolResponse,
   InstallCreatedResponse,
   InstallUpdatedResponse,
   InstallsResponse,
@@ -123,13 +125,30 @@ export function fetchAuthoredTool(
   )
 }
 
+/**
+ * Scaffold a new Tool in a space — the Create panel's Tool tile. Any member with
+ * write grants under `tools/`; the server refuses a taken or malformed name.
+ */
+export function createTool(spaceId: string, input: CreateToolRequest): Promise<CreateToolResponse> {
+  return fetchJsonBody<CreateToolResponse>(
+    `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring`,
+    'POST',
+    input,
+  )
+}
+
 /** Publish the working copy as the next version, pending review (admin). A
  *  working copy that does not compile comes back 409 with its diagnostics. */
-export function publishTool(spaceId: string, name: string, note?: string): Promise<PublishResponse> {
+export function publishTool(
+  spaceId: string,
+  name: string,
+  note?: string,
+  releaseNotes?: string,
+): Promise<PublishResponse> {
   return fetchJsonBody<PublishResponse>(
     `/api/communities/${encodeURIComponent(spaceId)}/tools/authoring/${encodeURIComponent(name)}`,
     'POST',
-    { action: 'publish', ...(note ? { note } : {}) },
+    { action: 'publish', ...(note ? { note } : {}), ...(releaseNotes ? { releaseNotes } : {}) },
   )
 }
 

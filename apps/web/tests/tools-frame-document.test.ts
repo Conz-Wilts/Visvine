@@ -62,16 +62,17 @@ test('the import map names every specifier a Tool may import, pointed at vendorB
   }
 })
 
-test('every external the compiler allows resolves, except react-dom', () => {
+test('every external the compiler allows has an import-map entry, and vice versa', () => {
   const imports = importMap(renderFrameDocument(BASE))
-  // `react-dom` is compile-time-allowed but has no map entry on purpose: the
-  // frame only ever needs the client entry, and a Tool importing the package
-  // root would otherwise pull a second copy of the renderer.
-  const mappable = EXTERNALS.filter((e) => e !== 'react-dom')
-  for (const specifier of mappable) {
+  // The two lists must agree exactly: an external without a map entry compiles
+  // clean and then fails to resolve in the browser (the old `react-dom` bug),
+  // and a map entry without an external is dead weight nobody can import.
+  for (const specifier of EXTERNALS) {
     assert.ok(specifier in imports, `${specifier} is in the import map`)
   }
+  assert.deepEqual(Object.keys(imports).sort(), [...EXTERNALS].sort())
   assert.ok(!('react-dom' in imports))
+  assert.ok(!(EXTERNALS as readonly string[]).includes('react-dom'))
 })
 
 test('vendor versions become ?v= cache busters, and are optional', () => {

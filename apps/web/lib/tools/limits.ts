@@ -38,9 +38,15 @@ export const DATA_CALL_CONCURRENCY = 2
  */
 const MAX_TRACKED_KEYS = 5_000
 
-/** The bucket key: a viewer's budget is per install, not per space. */
-export function bridgeRateKey(viewerId: string, installId: string | null): string {
-  return `${viewerId}:${installId ?? 'preview'}`
+/**
+ * The bucket key: a viewer's budget is per TARGET, not per space — pass
+ * `targetKey(resolved)` from lib/tools/target.ts, which is the install id for an
+ * install and `preview:<space>/<name>` for a preview. Keying previews on the
+ * bare word "preview" would give every draft one author is working on a single
+ * shared budget, so one chatty draft would rate-limit all the others.
+ */
+export function bridgeRateKey(viewerId: string, targetKey: string): string {
+  return `${viewerId}:${targetKey}`
 }
 
 export type RateDecision = { ok: true; remaining: number } | { ok: false; retryAfterMs: number }

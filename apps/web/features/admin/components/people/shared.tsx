@@ -87,16 +87,18 @@ export function AliasToggle({ name, color, owner, on, onClick, disabled }: {
       disabled={disabled}
       aria-pressed={on}
       title={owner ? `${name} — owns the space` : name}
-      // Held is the chip as it appears everywhere else; not held is the same
-      // chip tinted, so the row reads as one alias in two states rather than
-      // two different controls.
+      // An alias is painted in its own colour whichever way it is flipped —
+      // the colour IS the alias, and draining it out of the unheld state made
+      // the row read as six different controls. Held is the same chip with a
+      // ring around it, the way the Create modal's alias picker marks its
+      // choice.
       className={chipClass({
-        tone: on ? 'solid' : 'soft',
+        tone: 'solid',
         size: 'md',
         color,
         interactive: true,
       })}
-      style={chipStyle(color, on ? 'solid' : 'soft')}
+      style={{ ...chipStyle(color, 'solid'), boxShadow: on ? `0 0 0 3px ${color}55` : 'none' }}
     >
       {name}
     </button>
@@ -386,7 +388,7 @@ export function GrantEditor({
         />
         <LevelSelect value={grantLevel} onChange={setGrantLevel} disabled={busy} />
         <Button
-          variant="pill-secondary"
+          variant="brand"
           onClick={addGrant}
           disabled={busy || grantPath === null}
           className="!px-3 !py-1.5 !text-xs"

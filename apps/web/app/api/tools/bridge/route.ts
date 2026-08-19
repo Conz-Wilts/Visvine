@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireSession } from '@/lib/session'
 import { handleBridgeCall } from '@/lib/tools/bridge'
 import { bridgeRateKey, takeBridgeCall } from '@/lib/tools/limits'
-import { resolveBridgeTarget } from '@/lib/tools/target'
+import { resolveBridgeTarget, targetKey } from '@/lib/tools/target'
 import { appOrigin } from '@/lib/tools/origin'
 import { BRIDGE_LIMITS, isBridgeMethod, type BridgeResponse } from '@/lib/tools/protocol'
 
@@ -96,9 +96,10 @@ export async function POST(req: NextRequest) {
   const resolved = await resolveBridgeTarget(session, target)
   if ('code' in resolved) return json({ ok: false, error: resolved })
 
-  // Rate limited AFTER resolution, so the budget is per install rather than
-  // per unauthenticated guess, and a viewer's two Tools cannot starve each other.
-  const decision = takeBridgeCall(bridgeRateKey(session.userId, resolved.installId))
+  // Rate limited AFTER resolution, so the budget is per resolved TARGET rather
+  // than per unauthenticated guess, and a viewer's two Tools — two installs, or
+  // two drafts being previewed — cannot starve each other.
+  const decision = takeBridgeCall(bridgeRateKey(session.userId, targetKey(resolved)))
   if (!decision.ok) {
     return json({
       ok: false,

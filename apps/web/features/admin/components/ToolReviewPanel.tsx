@@ -328,7 +328,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                     </span>
                   )}
                   <h2 className="text-base font-semibold text-text-primary">{version.title}</h2>
-                  <Chip tone="soft" size="sm" color={STATUS_COLOR[version.status]}>
+                  <Chip tone="solid" size="sm" color={STATUS_COLOR[version.status]}>
                     {version.status}
                   </Chip>
                   {version.iconSvg && (
@@ -356,6 +356,26 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
                   <dd>{formatBytes(version.sizeBytes)}</dd>
                 </dl>
               </header>
+
+              {/* What the author says changed — read before the diff, because
+                  it is the claim the diff either bears out or doesn't. */}
+              {version.releaseNotes && (
+                <section>
+                  <h3 className="mb-1 text-sm font-semibold text-text-primary">Release notes</h3>
+                  <p className="whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+                    {version.releaseNotes}
+                  </p>
+                </section>
+              )}
+              {version.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {version.tags.map((tag) => (
+                    <Chip key={tag} tone="solid" size="sm">
+                      {tag}
+                    </Chip>
+                  ))}
+                </div>
+              )}
 
               <section>
                 <h3 className="mb-2 text-sm font-semibold text-text-primary">

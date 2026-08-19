@@ -28,12 +28,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { CheckIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
+import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 import { timeAgo } from '@/lib/date';
 import { SANDBOX_LIMITS, type AllowRule, type ConnectorPerimeter } from '@/lib/connectors/config';
 import { PROVIDERS } from '@/lib/agents/registry';
+import { connectorConnectUrl } from '@/lib/connectors/connectUrl';
 import { Skeleton } from '@/components/ui';
 
 interface SecretStatus {
@@ -620,6 +622,421 @@ function ModelSection({
   );
 }
 
+// ── Connections ──────────────────────────────────────────────────────────────
+
+/** One row of GET …/connectors/[name]/connections. */
+interface ConnectionRow {
+  mode: 'user' | 'space';
+  /** What the far side calls the account — the point of the list. */
+  actsAs: string | null;
+  isMine: boolean;
+  isShared: boolean;
+  scopes: string[];
+  expiresAt: string | null;
+  broken: { at: string; reason: string | null } | null;
+  connectedAt: string;
+  connectedBy: string | null;
+  /** DELETE target; the server only tells admins. */
+  userId: string | null;
+}
+
+/**
+ * The accounts this connector is connected to, and the door to add or revoke
+ * one. Rendered only for a connector with an `auth:` block. Every row names the
+ * account it acts as, because a `mode: space` connection lends whoever set it up
+ * to everyone who can run the note — and the only honest way to do that is to
+ * say so.
+ */
+function ConnectionsSection({
+  spaceId,
+  name,
+  auth,
+  isAdmin,
+}: {
+  spaceId: string;
+  name: string;
+  auth: { provider: string; mode: 'user' | 'space' };
+  isAdmin: boolean;
+}) {
+  const [rows, setRows] = useState<ConnectionRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Which row's Disconnect is awaiting confirmation, by row key.
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await fetchJson<{ connections: ConnectionRow[] }>(
+        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections`,
+      );
+      setRows(data.connections);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+      setRows([]);
+    }
+  }, [spaceId, name]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /** The `?user=` the DELETE route wants: '' for the shared row, 'me' for the caller's own. */
+  const targetOf = (row: ConnectionRow): string | null =>
+    row.isShared ? '' : row.isMine ? 'me' : row.userId;
+
+  const disconnect = async (row: ConnectionRow, key: string) => {
+    const target = targetOf(row);
+    if (target === null) return;
+    setBusy(key);
+    setError(null);
+    try {
+      const qs = target === 'me' ? '' : `?user=${encodeURIComponent(target)}`;
+      await fetchJson(
+        `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/connections${qs}`,
+        { method: 'DELETE' },
+      );
+      setConfirming(null);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const shared = auth.mode === 'space';
+  const canConnect = shared ? isAdmin : true;
+  const explainer = shared
+    ? 'Everyone who can run this connector acts as the connected account. An admin connects once and the whole space shares it.'
+    : 'Each person connects their own account. Runs use the caller\u2019s connection, never anyone else\u2019s.';
+  const connectHref = connectorConnectUrl(spaceId, name);
+  const alreadyConnected = shared
+    ? (rows ?? []).some((r) => r.isShared)
+    : (rows ?? []).some((r) => r.isMine);
+
+  return (
+    <Section
+      title="Connections"
+      meta={`${auth.provider} · ${auth.mode}`}
+      action={
+        canConnect ? (
+          <a href={connectHref} className={GHOST_BUTTON}>
+            {alreadyConnected ? 'Reconnect' : 'Connect'}
+          </a>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-text-muted">{explainer}</p>
+        {rows === null ? (
+          <Skeleton className="h-10 w-full rounded-lg" />
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-text-muted">No account connected.</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border-subtle">
+            {rows.map((row, i) => {
+              const target = targetOf(row);
+              const canRevoke = row.isMine || (isAdmin && target !== null);
+              const key = target ?? `row-${i}`;
+              const who = row.isShared ? 'Space' : row.isMine ? 'You' : (row.connectedBy ?? 'Member');
+              return (
+                <li key={key} className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                      <span className="font-medium text-text-primary">{who}</span>
+                      <span className="text-text-muted">
+                        acts as{' '}
+                        <span className="font-mono text-[12px] text-text-secondary">
+                          {row.actsAs ?? 'unknown account'}
+                        </span>
+                      </span>
+                      {row.isShared && row.connectedBy && (
+                        <span className="text-text-muted">· connected by {row.connectedBy}</span>
+                      )}
+                      <span className="text-text-muted">
+                        · {timeAgo(new Date(row.connectedAt).getTime(), { style: 'short' })}
+                      </span>
+                      {row.broken && (
+                        <span
+                          className="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white"
+                          title={row.broken.reason ?? undefined}
+                        >
+                          broken
+                        </span>
+                      )}
+                    </div>
+                    {canRevoke && confirming !== key && (
+                      <button type="button" onClick={() => setConfirming(key)} className={GHOST_BUTTON}>
+                        Disconnect
+                      </button>
+                    )}
+                    {canRevoke && confirming === key && (
+                      <span className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-text-muted">
+                          {row.isShared
+                            ? 'Every member and agent loses this account.'
+                            : 'Disconnect this account?'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setConfirming(null)}
+                          disabled={busy === key}
+                          className={GHOST_BUTTON}
+                        >
+                          Keep
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void disconnect(row, key)}
+                          disabled={busy === key}
+                          className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                        >
+                          {busy === key ? 'Disconnecting…' : 'Disconnect'}
+                        </button>
+                      </span>
+                    )}
+                  </div>
+                  {row.broken && (
+                    <p className="flex items-start gap-1.5 text-xs text-red-600">
+                      <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
+                      <span className="min-w-0 break-words">
+                        {row.broken.reason ?? 'The connection stopped working.'} Reconnect to repair it.
+                      </span>
+                    </p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <FormError message={error} />
+      </div>
+    </Section>
+  );
+}
+
+// ── Webhook ──────────────────────────────────────────────────────────────────
+
+/** GET …/connectors/[name]/webhook — the address and what guards it. */
+interface WebhookInfo {
+  url: string;
+  signature: string;
+  header: string | null;
+  idHeader: string | null;
+  eventField: string | null;
+  maxBytes: number;
+  secretName: string | null;
+  hasSignatureSecret: boolean;
+  /** Active agents whose live note says `on.webhook: <this connector>`. */
+  recipients: string[];
+}
+
+/** One row of GET …/webhook/events. */
+interface WebhookEventRow {
+  id: string;
+  agentName: string;
+  summary: string;
+  createdAt: string;
+  consumedBy: string | null;
+}
+
+const SIGNATURE_LABELS: Record<string, string> = {
+  none: 'URL token only — no signature',
+  token: 'shared token in a header',
+  'hmac-sha256': 'HMAC-SHA256 of the body',
+  'hmac-sha1': 'HMAC-SHA1 of the body',
+  github: 'GitHub (sha256= HMAC)',
+  stripe: 'Stripe (t=/v1=, 5-min tolerance)',
+  slack: 'Slack (v0= HMAC, 5-min tolerance)',
+  hubspot: 'HubSpot v3 (base64 HMAC, 5-min tolerance)',
+  linear: 'Linear (HMAC of the body)',
+};
+
+/**
+ * The inbound address of a connector with a `webhook:` block, for admins.
+ * The URL is a credential — anyone holding it can post into this space's
+ * agents — so it is shown here and nowhere else, and Rotate is one click
+ * (with a confirm) away. Below it, the last deliveries: the honest answer to
+ * "is the provider actually reaching us, and who heard it".
+ */
+function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
+  const [info, setInfo] = useState<WebhookInfo | null>(null);
+  const [events, setEvents] = useState<WebhookEventRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [rotating, setRotating] = useState(false);
+
+  const base = `/api/communities/${spaceId}/connectors/${encodeURIComponent(name)}/webhook`;
+
+  const load = useCallback(async () => {
+    try {
+      const [detail, list] = await Promise.all([
+        fetchJson<WebhookInfo>(base),
+        fetchJson<{ events: WebhookEventRow[] }>(`${base}/events`),
+      ]);
+      setInfo(detail);
+      setEvents(list.events.slice(0, 10));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+      setEvents([]);
+    }
+  }, [base]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const copy = async () => {
+    if (!info) return;
+    try {
+      await navigator.clipboard.writeText(info.url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('Could not copy — select the URL and copy it by hand.');
+    }
+  };
+
+  const rotate = async () => {
+    setRotating(true);
+    setError(null);
+    try {
+      const next = await fetchJson<WebhookInfo & { rotated: boolean }>(base, { method: 'DELETE' });
+      setInfo(next);
+      setConfirming(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setRotating(false);
+    }
+  };
+
+  const signatureLabel = info ? (SIGNATURE_LABELS[info.signature] ?? info.signature) : '';
+  const secretMissing = Boolean(info && info.secretName && !info.hasSignatureSecret);
+
+  return (
+    <Section
+      title="Webhook"
+      meta={info ? info.signature : undefined}
+      action={
+        info && !confirming ? (
+          <button type="button" onClick={() => setConfirming(true)} className={GHOST_BUTTON}>
+            <span className="inline-flex items-center gap-1.5">
+              <RefreshCwIcon className="h-3.5 w-3.5" />
+              Rotate
+            </span>
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <p className="text-xs text-text-muted">
+          Point the provider at this address. Every delivery it accepts becomes an event for each
+          active agent whose live note says <span className="font-mono">on.webhook: {name}</span>.
+          The URL is a credential — anyone holding it can post here.
+        </p>
+
+        {info === null && !error ? (
+          <Skeleton className="h-10 w-full rounded-lg" />
+        ) : info ? (
+          <>
+            <div className="flex items-center gap-2">
+              <input
+                readOnly
+                value={info.url}
+                onFocus={(e) => e.currentTarget.select()}
+                className={`${FIELD} select-all`}
+                aria-label="Webhook URL"
+              />
+              <button type="button" onClick={() => void copy()} className={GHOST_BUTTON} title="Copy URL">
+                <span className="inline-flex items-center gap-1.5">
+                  {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </span>
+              </button>
+            </div>
+
+            {confirming && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="text-text-muted">
+                  Rotating mints a new URL; the provider must be re-pointed and the old one stops at once.
+                </span>
+                <button type="button" onClick={() => setConfirming(false)} disabled={rotating} className={GHOST_BUTTON}>
+                  Keep
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void rotate()}
+                  disabled={rotating}
+                  className="rounded-lg bg-red-600 px-2.5 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                >
+                  {rotating ? 'Rotating…' : 'Rotate URL'}
+                </button>
+              </div>
+            )}
+
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+              <dt className="text-text-muted">Verified by</dt>
+              <dd className="text-text-primary">
+                {signatureLabel}
+                {info.header && <span className="ml-1 font-mono text-[11px] text-text-muted">{info.header}</span>}
+              </dd>
+              {info.secretName && (
+                <>
+                  <dt className="text-text-muted">Secret</dt>
+                  <dd className={secretMissing ? 'text-red-600' : 'text-text-primary'}>
+                    <span className="font-mono text-[12px]">{info.secretName}</span>
+                    {secretMissing ? ' — not set; every delivery will be refused' : ' — set'}
+                  </dd>
+                </>
+              )}
+              {info.idHeader && (
+                <>
+                  <dt className="text-text-muted">Dedupe on</dt>
+                  <dd className="font-mono text-[12px] text-text-primary">{info.idHeader}</dd>
+                </>
+              )}
+              <dt className="text-text-muted">Listening</dt>
+              <dd className="text-text-primary">
+                {info.recipients.length === 0
+                  ? 'No active agent names this connector in on.webhook — deliveries are accepted and dropped.'
+                  : info.recipients.map((r) => (
+                      <span key={r} className="mr-2 font-mono text-[12px]">{r}</span>
+                    ))}
+              </dd>
+            </dl>
+
+            <div>
+              <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">Recent deliveries</p>
+              {events === null ? (
+                <Skeleton className="h-6 w-full rounded" />
+              ) : events.length === 0 ? (
+                <p className="text-sm text-text-muted">Nothing received yet.</p>
+              ) : (
+                <ul className="flex flex-col divide-y divide-border-subtle">
+                  {events.map((ev) => (
+                    <li key={ev.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 py-1.5 text-xs">
+                      <span className="min-w-0 truncate font-mono text-[12px] text-text-primary">{ev.summary}</span>
+                      <span className="shrink-0 text-text-muted">
+                        → {ev.agentName} · {ev.consumedBy ? 'run' : 'pending'} ·{' '}
+                        {timeAgo(new Date(ev.createdAt).getTime(), { style: 'short' })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        ) : null}
+        <FormError message={error} />
+      </div>
+    </Section>
+  );
+}
+
 // ── Console ──────────────────────────────────────────────────────────────────
 
 /**
@@ -845,15 +1262,9 @@ function statusOf(connector: ConnectorDetail): { label: string; tone: 'ok' | 'wa
   };
 }
 
-const TONE_CLASSES = {
-  ok: 'bg-brand-light-bg text-brand-dark-green',
-  warn: 'bg-amber-50 text-amber-700',
-  bad: 'bg-red-50 text-red-700',
-} as const;
-
 export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
   const name = nodeId.startsWith('connector:') ? nodeId.slice('connector:'.length) : nodeId;
-  const { currentSpace, loading: spaceLoading } = useSpace();
+  const { currentSpace, loading: spaceLoading, isAdmin } = useSpace();
   const spaceId = currentSpace?.id;
 
   const [connector, setConnector] = useState<ConnectorDetail | null>(null);
@@ -983,13 +1394,13 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           {connector.alias && (
             <span className="font-mono text-[12px] text-text-muted">{connector.alias}</span>
           )}
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[status.tone]}`}>
+          <span className={`${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
             {status.label}
           </span>
         </div>
         {/* A model connector has no isolate to test — the key is proven at
             agent activation (probeModelKey), not here. */}
-        {connector.kind !== 'model' && (
+        {isAdmin && connector.kind !== 'model' && (
           <button
             type="button"
             onClick={runTest}
@@ -1062,7 +1473,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
           title="Perimeter"
           meta={`${Math.round(connector.perimeter.timeoutMs / 1000)}s timeout`}
           action={
-            editing === 'perimeter' ? undefined : (
+            editing === 'perimeter' || !isAdmin ? undefined : (
               <EditButton onClick={() => openEditor('perimeter')} label="Edit perimeter" />
             )
           }
@@ -1109,7 +1520,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
       )}
 
       {/* ══ ENV — the variables a command sees, and the secrets behind them ══ */}
-      {connector.perimeter && (
+      {isAdmin && connector.perimeter && (
         <Section
           title="Environment"
           meta={
@@ -1165,8 +1576,23 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         </Section>
       )}
 
+      {/* ══ CONNECTIONS — the OAuth accounts an `auth:` connector acts as ══ */}
+      {connector.perimeter?.auth && spaceId && (
+        <ConnectionsSection
+          spaceId={spaceId}
+          name={connector.name}
+          auth={connector.perimeter.auth}
+          isAdmin={isAdmin}
+        />
+      )}
+
+      {/* ══ WEBHOOK — the inbound address, for admins ══ */}
+      {isAdmin && connector.perimeter?.webhook && spaceId && (
+        <WebhookSection spaceId={spaceId} name={connector.name} />
+      )}
+
       {/* ══ TERMINAL — the same path an agent's run_connector takes ══ */}
-      {connector.perimeter && spaceId && (
+      {isAdmin && connector.perimeter && spaceId && (
         <Section title="Console" meta="runs for real">
           {!runnable ? (
             <p className="flex items-start gap-2 text-sm text-text-muted">
@@ -1183,10 +1609,12 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
         </Section>
       )}
 
-      {/* ══ CALLS — who ran this, and what came back ══ */}
-      <Section title="Activity" meta={calls.length > 0 ? `last ${calls.length}` : undefined}>
-        <CallLog calls={calls} />
-      </Section>
+      {/* ══ CALLS — who ran this, and what came back (admins: the audit trail) ══ */}
+      {isAdmin && (
+        <Section title="Activity" meta={calls.length > 0 ? `last ${calls.length}` : undefined}>
+          <CallLog calls={calls} />
+        </Section>
+      )}
     </div>
   );
 }

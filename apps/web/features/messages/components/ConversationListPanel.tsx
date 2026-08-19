@@ -250,14 +250,14 @@ export default function ConversationListPanel({
           <button
             type="button"
             onClick={() => { setShowChannelForm(false); setChannelName(''); setChannelDescription(''); setChannelIcon(null); setChannelViewMode('CHAT'); setChannelSectionId(''); setShowIconPicker(false); }}
-            className="rounded-full px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
+            className="rounded-md px-3 py-1.5 text-xs font-medium text-text-muted hover:text-text-secondary"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={!channelName.trim() || creatingChannel}
-            className="rounded-full bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
           >
             {creatingChannel ? 'Creating…' : 'Create channel'}
           </button>
@@ -422,7 +422,7 @@ export default function ConversationListPanel({
                                   type="button"
                                   onClick={() => void onJoinChannel(channel.id)}
                                   disabled={joiningChannelId === channel.id}
-                                  className="shrink-0 rounded-full border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
+                                  className="shrink-0 rounded-md border border-brand-green/40 px-3 py-1 text-xs font-semibold text-brand-dark-green transition-colors hover:bg-brand-green/10 disabled:opacity-50"
                                 >
                                   {joiningChannelId === channel.id ? 'Joining…' : 'Join'}
                                 </button>

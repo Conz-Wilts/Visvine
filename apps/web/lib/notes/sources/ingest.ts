@@ -21,6 +21,18 @@ export interface IngestInput {
   mimeType: string
   buffer: Buffer
   createdBy: string
+  /**
+   * Whether this source OWNS the original bytes in GCS (default true).
+   *
+   * False when the caller already stored them and keeps the pointer — the Drive
+   * (lib/resources/service.ts) uploads once and holds `Resource.gcsPath`, so
+   * re-uploading here would double every file's storage, and `deleteSource`
+   * deleting "its" object would break the Drive's download link. The source is
+   * then exactly what it should be: the chunked PROJECTION of bytes somebody
+   * else owns. gcsPath stays '' — its existing meaning of "the original is not
+   * mine to serve" — and the owner provides its own re-index path.
+   */
+  storeOriginal?: boolean
 }
 
 function gcsObjectPath(context: Context, sourceId: string, name: string): string {
@@ -91,7 +103,7 @@ export async function ingestSource(context: Context, input: IngestInput): Promis
     gcsPath: '', // '' = original not stored (set after upload when configured)
     createdBy: input.createdBy,
   })
-  if (gcsConfigured()) {
+  if (input.storeOriginal !== false && gcsConfigured()) {
     // Best-effort, exactly like the unconfigured case: the extracted text is what
     // retrieval needs, so a storage failure (expired credentials, bucket
     // permissions) must not throw away an otherwise good ingest. gcsPath stays
@@ -107,6 +119,23 @@ export async function ingestSource(context: Context, input: IngestInput): Promis
   // An uploaded file is content in the context, not a node in the graph: it is
   // retrievable through the context surfaces and nothing else stands for it.
   return processSource(context, { id: created.id, path: created.path, kind: input.kind }, input.buffer)
+}
+
+/**
+ * Re-run extract-onward from bytes the CALLER holds, for a source whose original
+ * it does not own (`storeOriginal: false`). The Drive's re-index uses this: it
+ * downloads from `Resource.gcsPath` and hands the buffer over, which is the same
+ * retry `reingestSource` performs for sources that own their object.
+ */
+export async function reingestSourceFrom(
+  context: Context,
+  path: string,
+  buffer: Buffer,
+): Promise<ContextSourceMeta | null> {
+  const row = await sourceStore.findSource(context, path)
+  if (!row) return null
+  await sourceStore.updateSourceStatus(row.id, { status: 'pending', error: null })
+  return processSource(context, { id: row.id, path: row.path, kind: row.kind as SourceKind }, buffer)
 }
 
 /** Re-run extract-onward from the stored GCS object (retry / embedding-model change). */

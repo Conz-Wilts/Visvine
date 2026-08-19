@@ -41,8 +41,11 @@ function isPersonNode(node: { type: string }): boolean {
  * Throws when the email-matched Identity is already claimed by a DIFFERENT
  * user — that's a data conflict a human has to untangle, not something to
  * silently reassign.
+ *
+ * Module-private: `connectNode` below is the only caller. It was exported for a
+ * one-off backfill script that has since been deleted.
  */
-export async function ensureUserIdentity(userId: string): Promise<{ id: string }> {
+async function ensureUserIdentity(userId: string): Promise<{ id: string }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, name: true, email: true },

@@ -8,6 +8,7 @@
 import type { NoteMeta } from './types'
 import { bm25Search, snippetFor } from './bm25'
 import { folderIdOfPath } from './placement'
+import { retrievalWeight, statusOf, type NoteStatus } from './lifecycle'
 
 export interface SearchFilters {
   /** Frontmatter `type`. */
@@ -35,6 +36,12 @@ export interface FusedResult {
   kind: 'note' | 'source'
   /** Chunk index within the source — set only when kind is 'source'. */
   seq?: number
+  /**
+   * The note's memory lifecycle state, present only when it is NOT `active` —
+   * so a caller (and an agent) is told when a hit is superseded, expired or
+   * stale, and never has to assume a result is current. Sources have none.
+   */
+  status?: NoteStatus
 }
 
 /** One ranked context-source chunk from the injected source stage. */
@@ -225,6 +232,18 @@ export async function fusedSearch(
     }
   }
 
+  // Lifecycle weighting, applied AFTER fusion and only to notes: a superseded
+  // decision is exactly as relevant to the query as its replacement — that is
+  // why every matcher ranks it — and the only thing that separates them is that
+  // one of them is no longer true. Nothing is filtered out; "why did we stop
+  // doing X" must still find the note that says so. See shared/lifecycle.ts.
+  for (const [key, score] of fused) {
+    const note = byPath.get(key)
+    if (!note) continue // source chunk — no frontmatter, no lifecycle
+    const weight = retrievalWeight(note.meta)
+    if (weight !== 1) fused.set(key, score * weight)
+  }
+
   const snippetByPath = new Map(bm25.map((r) => [r.path, r.snippet]))
   return [...fused.entries()]
     .sort((a, b) => {
@@ -245,10 +264,12 @@ export async function fusedSearch(
         }
       }
       const note = byPath.get(key)!
+      const status = statusOf(note.meta.frontmatter)
       return {
         path: key,
         title: note.meta.title,
         score,
+        ...(status === 'active' ? {} : { status }),
         // A note surfaced only by the vector or link-context stage never passed
         // through BM25, so it has no snippet of its own — build one rather than
         // returning a result the caller can't preview.

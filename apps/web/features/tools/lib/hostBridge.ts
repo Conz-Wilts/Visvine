@@ -142,6 +142,12 @@ export interface HostBridge {
   setTheme(theme: Record<string, string>): void
   /** Push a new subject. No-op when it matches what the frame already has. */
   setSubject(subject: ToolSubject | null): void
+  /**
+   * Tell the frame these note paths changed (from the changes stream). Dropped
+   * before the handshake — the Tool has nothing to refresh yet — and when
+   * empty. Paths only; the Tool re-reads through the bridge.
+   */
+  notifyChanged(paths: string[]): void
   /** Stop listening and stop posting. Safe to call twice. */
   dispose(): void
 }
@@ -326,6 +332,11 @@ export function createHostBridge(options: HostBridgeOptions): HostBridge {
       if (sameSubject(subject, next)) return
       subject = next
       if (handshakeDone) post({ type: 'visvine:subject', subject: next })
+    },
+
+    notifyChanged(paths) {
+      if (!handshakeDone || paths.length === 0) return
+      post({ type: 'visvine:changed', paths })
     },
 
     dispose() {

@@ -10,10 +10,11 @@
 // already used.
 //
 // Tones, not variants: `solid` is the chip painted in its own colour (the
-// directory card, the note header — the colour IS the identity), `soft` is the
-// same colour tinted behind dark text for chips sitting inside prose (profile
-// heroes, rail lists), `muted` is a chip with no colour of its own, `dashed` is
-// the empty slot that invites one ("+ Add tag").
+// colour IS the identity, and the label is white on top of it), `muted` is a
+// chip with no colour of its own, `dashed` is the empty slot that invites one
+// ("+ Add tag"). There is deliberately no tinted tone — a pale wash behind a
+// darker shade of the same hue was a second look for one idea, so a coloured
+// chip is painted, full stop.
 //
 // `chipClass`/`chipStyle` are exported for the handful of places that need the
 // look on markup they must own themselves (a dropdown trigger with a chevron,
@@ -22,9 +23,8 @@
 import { clsx } from 'clsx';
 import { XIcon } from '@/features/shared/icons';
 import type { CSSProperties, ReactNode } from 'react';
-import { hexToPalette } from '@/lib/profileTheme';
 
-export type ChipTone = 'solid' | 'soft' | 'muted' | 'dashed';
+export type ChipTone = 'solid' | 'muted' | 'dashed';
 export type ChipSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const BASE =
@@ -54,7 +54,6 @@ const ICON_CLASS: Record<ChipSize, string> = {
 
 const TONE_CLASS: Record<ChipTone, string> = {
   solid: 'text-white',
-  soft: 'border',
   muted: 'border border-border-default bg-surface-2 text-text-secondary',
   // Hover is left to the caller: some empty slots brighten to the surface's own
   // accent, others just to the text colour, and two competing `hover:text-*`
@@ -69,16 +68,13 @@ const TONE_CLASS: Record<ChipTone, string> = {
 export const CHIP_ACCENT_HOVER =
   'hover:border-[color:var(--accent)] hover:text-[color:var(--accent)]';
 
-/** Only a plain 6-digit hex can carry the `${color}1a` alpha suffixes below. */
-const isHex = (color: string) => /^#[0-9a-f]{6}$/i.test(color.trim());
-
 /**
  * A tone with nothing to colour it falls back to the neutral chip rather than
  * rendering invisibly — callers pass `color` straight from data that may not
  * have one (a node type the console never configured, an alias-less member).
  */
 function resolveTone(tone: ChipTone, color?: string | null): ChipTone {
-  if ((tone === 'solid' || tone === 'soft') && !color) return 'muted';
+  if (tone === 'solid' && !color) return 'muted';
   return tone;
 }
 
@@ -105,12 +101,6 @@ export function chipClass(options?: {
 export function chipStyle(color?: string | null, tone: ChipTone = 'solid'): CSSProperties | undefined {
   if (!color) return undefined;
   if (resolveTone(tone, color) === 'solid') return { background: color };
-  if (tone === 'soft') {
-    // Non-hex colours (CSS vars, rgba) can't take an alpha suffix, so they get
-    // the outline treatment instead of a tint — same shape, same weight.
-    if (!isHex(color)) return { borderColor: color, color };
-    return { background: `${color}1a`, color: hexToPalette(color).dark, borderColor: `${color}55` };
-  }
   return undefined;
 }
 

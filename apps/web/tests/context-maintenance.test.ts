@@ -19,18 +19,31 @@ import {
   applyAutoFix,
   buildReviewReport,
   checkBrokenLinks,
+  checkContradictions,
+  checkExpiry,
+  checkLifecycleFields,
   checkOrphans,
   checkSchema,
   checkStaleness,
+  checkSupersession,
+  extractClaims,
+  nearPairs,
   DEFAULT_THRESHOLDS,
 } from '../lib/notes/shared/review'
+import {
+  expiresAtOf,
+  normalizeNoteRef,
+  statusOf,
+  supersededByOf,
+  supersedesOf,
+} from '../lib/notes/shared/lifecycle'
 import {
   coerceEnrichmentOutput,
   selectEnrichmentCandidates,
   type EnrichmentSource,
 } from '../lib/notes/shared/enrichment'
 import { buildNoteIndex } from '../lib/notes/shared/context'
-import { parseFrontmatter } from '../lib/notes/shared/markdown'
+import { parseFrontmatter, splitFrontmatter } from '../lib/notes/shared/markdown'
 import type { RawNote } from '../lib/notes/shared/types'
 
 const note = (path: string, content: string, mtime = 0): RawNote => ({ path, content, mtime })
@@ -262,7 +275,7 @@ test('buildReviewReport full mode adds duplicates and oversized findings', () =>
     note('big.md', `---\ntitle: Big\ndescription: d\n---\n\n${'## Section\n\nrecipe filler words '.repeat(10)}`, now),
   ]
   const metas = buildNoteIndex(raws)
-  const thresholds = { staleDays: 180, oversizeChars: 100, duplicateSim: 0.65 }
+  const thresholds = { staleDays: 180, oversizeChars: 100, duplicateSim: 0.65, contradictionSim: 0.35 }
 
   const light = buildReviewReport({ raws, metas, now, thresholds, mode: 'light' })
   assert.ok(!light.issues.some((i) => i.kind === 'duplicate' || i.kind === 'oversized'))
@@ -340,4 +353,214 @@ test('coerceEnrichmentOutput accepts new_note incl. legacy new_context, defaulti
   )
   assert.equal(legacy?.action, 'new_note')
   assert.deepEqual(legacy?.newNote, { type: 'concept', title: 'T' })
+})
+
+// lifecycle: the frontmatter vocabulary
+
+test('statusOf defaults to active and ignores unknown spellings', () => {
+  assert.equal(statusOf({}), 'active')
+  assert.equal(statusOf({ status: 'Superseded' }), 'superseded') // case-insensitive
+  assert.equal(statusOf({ status: 'in-flight' }), 'active') // unknown = current, never silently retired
+})
+
+test('expiresAtOf reads a bare date as the END of that day', () => {
+  assert.equal(expiresAtOf({ expires: '2026-09-01' }), Date.parse('2026-09-01T23:59:59.999Z'))
+  assert.equal(expiresAtOf({ expires: '2026-09-01T09:00:00Z' }), Date.parse('2026-09-01T09:00:00Z'))
+  assert.equal(expiresAtOf({ expires: 'whenever' }), null)
+  assert.equal(expiresAtOf({}), null)
+})
+
+test('note refs normalize regardless of leading slash or .md suffix', () => {
+  assert.equal(normalizeNoteRef('/decisions/pricing.md'), 'decisions/pricing.md')
+  assert.equal(normalizeNoteRef('decisions/pricing'), 'decisions/pricing.md')
+  assert.deepEqual(supersedesOf({ supersedes: '/a.md' }), ['a.md']) // scalar or list
+  assert.deepEqual(supersedesOf({ supersedes: ['a', '/a.md', 'b.md'] }), ['a.md', 'b.md']) // deduped
+  assert.equal(supersededByOf({ superseded_by: '/new.md' }), 'new.md')
+})
+
+// review: expiry
+
+test('checkExpiry retires notes past their own expires date, once', () => {
+  const now = Date.parse('2026-08-19T00:00:00Z')
+  const metas = buildNoteIndex([
+    note('past.md', '---\ntitle: Past\nexpires: 2026-07-01\n---\n\nHi', now),
+    note('today.md', '---\ntitle: Today\nexpires: 2026-08-19\n---\n\nHi', now), // end of day = not yet
+    note('future.md', '---\ntitle: Future\nexpires: 2027-01-01\n---\n\nHi', now),
+    note('done.md', '---\ntitle: Done\nexpires: 2026-07-01\nstatus: expired\n---\n\nHi', now),
+    note('none.md', '---\ntitle: None\n---\n\nHi', now),
+  ])
+  assert.deepEqual(checkExpiry(metas, now), [{ kind: 'setExpired', path: 'past.md' }])
+})
+
+test('checkStaleness leaves already-retired notes alone', () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const now = 1_800_000_000_000
+  const metas = buildNoteIndex([
+    note('superseded.md', '---\ntitle: S\nstatus: superseded\n---\n\nHi', now - 400 * DAY),
+    note('expired.md', '---\ntitle: E\nstatus: expired\n---\n\nHi', now - 400 * DAY),
+    note('plain.md', '---\ntitle: P\n---\n\nHi', now - 400 * DAY),
+  ])
+  assert.deepEqual(checkStaleness(metas, now, 180), [{ kind: 'setStale', path: 'plain.md' }])
+})
+
+// review: supersession integrity
+
+test('checkSupersession records the back-pointer on the replaced note', () => {
+  const metas = buildNoteIndex([
+    note('new.md', '---\ntitle: New\nsupersedes: /old.md\n---\n\nHi'),
+    note('old.md', '---\ntitle: Old\n---\n\nHi'),
+  ])
+  const { fixes, issues } = checkSupersession(metas)
+  assert.deepEqual(fixes, [{ kind: 'linkSupersession', path: 'old.md', byPath: 'new.md' }])
+  assert.deepEqual(issues, [])
+})
+
+test('checkSupersession resolves a bare ref by basename and stops once recorded', () => {
+  const metas = buildNoteIndex([
+    note('d/new.md', '---\ntitle: New\nsupersedes: pricing\n---\n\nHi'),
+    note('d/pricing.md', '---\ntitle: Pricing\nstatus: superseded\nsuperseded_by: /d/pricing-new\n---\n\nHi'),
+  ])
+  // The back-pointer above resolves to nothing, so the pass still has work to do;
+  // the point here is that `supersedes: pricing` found d/pricing.md by basename.
+  const { fixes } = checkSupersession(metas)
+  assert.deepEqual(fixes, [{ kind: 'linkSupersession', path: 'd/pricing.md', byPath: 'd/new.md' }])
+})
+
+test('checkSupersession is idempotent once the back-pointer is recorded', () => {
+  const metas = buildNoteIndex([
+    note('new.md', '---\ntitle: New\nsupersedes: /old.md\n---\n\nHi'),
+    note('old.md', '---\ntitle: Old\nstatus: superseded\nsuperseded_by: /new.md\n---\n\nHi'),
+  ])
+  const { fixes, issues } = checkSupersession(metas)
+  assert.deepEqual(fixes, [])
+  assert.deepEqual(issues, [])
+})
+
+test('checkSupersession reports unresolvable, self- and mutual supersession', () => {
+  const metas = buildNoteIndex([
+    note('ghost.md', '---\ntitle: Ghost\nsupersedes: /nope.md\n---\n\nHi'),
+    note('self.md', '---\ntitle: Self\nsupersedes: /self.md\n---\n\nHi'),
+    note('a.md', '---\ntitle: A\nsupersedes: /b.md\n---\n\nHi'),
+    note('b.md', '---\ntitle: B\nsupersedes: /a.md\n---\n\nHi'),
+    note('orphaned.md', '---\ntitle: O\nsuperseded_by: /gone.md\n---\n\nHi'),
+  ])
+  const { fixes, issues } = checkSupersession(metas)
+  assert.deepEqual(fixes, []) // nothing here is safe to fix mechanically
+  const detail = (path: string) => issues.find((i) => i.path === path)?.detail ?? ''
+  assert.match(detail('ghost.md'), /matches no note/)
+  assert.match(detail('self.md'), /supersedes itself/)
+  assert.equal(issues.filter((i) => /mutually supersedes/.test(i.detail)).length, 1) // reported once
+  assert.match(detail('orphaned.md'), /superseded_by .* matches no note/)
+})
+
+// review: applyAutoFix for the lifecycle fixes
+
+test('applyAutoFix setExpired and linkSupersession stamp frontmatter only', () => {
+  const expired = applyAutoFix('---\ntitle: T\nexpires: 2026-01-01\n---\n\nBody.', {
+    kind: 'setExpired',
+    path: 't.md',
+  })
+  assert.equal(parseFrontmatter(expired).status, 'expired')
+  assert.ok(expired.includes('Body.'))
+
+  const linked = applyAutoFix('---\ntitle: Old\n---\n\nBody.', {
+    kind: 'linkSupersession',
+    path: 'old.md',
+    byPath: 'decisions/new.md',
+  })
+  const fm = parseFrontmatter(linked)
+  assert.equal(fm.status, 'superseded')
+  assert.equal(fm.superseded_by, '/decisions/new.md') // leading slash: clickable as a link
+  assert.ok(linked.includes('Body.'))
+})
+
+// review: contradictions
+
+const contradictionInput = (raws: RawNote[]) => {
+  const metas = buildNoteIndex(raws)
+  const bodyByPath = new Map(raws.map((r) => [r.path, splitFrontmatter(r.content).body]))
+  const docs = metas.map((m) => ({ path: m.path, title: m.title, body: bodyByPath.get(m.path) ?? '' }))
+  return { metas, bodyByPath, pairs: nearPairs(docs, 0.1, 3) }
+}
+
+test('extractClaims keys lines by their opening topic words and skips code fences', () => {
+  const claims = extractClaims(
+    'The onboarding trial period lasts 14 days for new spaces.\n\n```\ntrial = 30 days in this config sample\n```\n\ntiny\n',
+  )
+  assert.equal(claims.length, 1)
+  assert.equal(claims[0].key, 'onboarding trial period lasts')
+  assert.ok(claims[0].numbers.includes('14'))
+})
+
+test('checkContradictions catches divergent numbers between related notes', () => {
+  const { metas, bodyByPath, pairs } = contradictionInput([
+    note('a.md', '---\ntitle: Trial Policy\ndescription: d\n---\n\nThe onboarding trial period lasts 14 days for new spaces.'),
+    note('b.md', '---\ntitle: Trial Rules\ndescription: d\n---\n\nThe onboarding trial period lasts 30 days for new spaces.'),
+  ])
+  const issues = checkContradictions(pairs, metas, bodyByPath, 0.1)
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0].kind, 'contradiction')
+  assert.match(issues[0].detail, /14 days/)
+  assert.match(issues[0].detail, /30 days/)
+})
+
+test('checkContradictions catches an opposite claim and a divergent frontmatter field', () => {
+  const { metas, bodyByPath, pairs } = contradictionInput([
+    note('a.md', '---\ntitle: Billing Policy\ndescription: d\nowner: ana\n---\n\nSpaces on the free plan support connector webhooks today.'),
+    note('b.md', '---\ntitle: Billing Notes\ndescription: d\nowner: sam\n---\n\nSpaces on the free plan cannot support connector webhooks today.'),
+  ])
+  const issues = checkContradictions(pairs, metas, bodyByPath, 0.1)
+  assert.equal(issues.length, 1)
+  assert.match(issues[0].detail, /owner: "ana" vs "sam"/)
+})
+
+test('checkContradictions stays quiet on agreement, declared supersession and retired notes', () => {
+  const agree = contradictionInput([
+    note('a.md', '---\ntitle: Trial Policy\ndescription: d\n---\n\nThe onboarding trial period lasts 14 days for new spaces.'),
+    note('b.md', '---\ntitle: Trial Rules\ndescription: d\n---\n\nThe onboarding trial period lasts 14 days for new spaces.'),
+  ])
+  assert.deepEqual(checkContradictions(agree.pairs, agree.metas, agree.bodyByPath, 0.1), [])
+
+  const settled = contradictionInput([
+    note('a.md', '---\ntitle: Trial Policy\ndescription: d\nsupersedes: /b.md\n---\n\nThe onboarding trial period lasts 14 days for new spaces.'),
+    note('b.md', '---\ntitle: Trial Rules\ndescription: d\n---\n\nThe onboarding trial period lasts 30 days for new spaces.'),
+  ])
+  assert.deepEqual(checkContradictions(settled.pairs, settled.metas, settled.bodyByPath, 0.1), [])
+
+  const retired = contradictionInput([
+    note('a.md', '---\ntitle: Trial Policy\ndescription: d\n---\n\nThe onboarding trial period lasts 14 days for new spaces.'),
+    note('b.md', '---\ntitle: Trial Rules\ndescription: d\nstatus: archived\n---\n\nThe onboarding trial period lasts 30 days for new spaces.'),
+  ])
+  assert.deepEqual(checkContradictions(retired.pairs, retired.metas, retired.bodyByPath, 0.1), [])
+})
+
+test('buildReviewReport runs supersession in light mode and contradictions only in full', () => {
+  const now = 1_800_000_000_000
+  const raws = [
+    note('new.md', '---\ntitle: Trial Policy\ntype: doc\ntimestamp: x\ndescription: d\nsupersedes: /gone.md\n---\n\nThe onboarding trial period lasts 14 days for new spaces.', now),
+    note('other.md', '---\ntitle: Trial Rules\ntype: doc\ntimestamp: x\ndescription: d\n---\n\nThe onboarding trial period lasts 30 days for new spaces.', now),
+  ]
+  const metas = buildNoteIndex(raws)
+  const light = buildReviewReport({ raws, metas, now, thresholds: DEFAULT_THRESHOLDS, mode: 'light' })
+  assert.ok(light.issues.some((i) => i.kind === 'supersession')) // exact check, always on
+  assert.ok(!light.issues.some((i) => i.kind === 'contradiction'))
+
+  const full = buildReviewReport({ raws, metas, now, thresholds: DEFAULT_THRESHOLDS, mode: 'full' })
+  assert.ok(full.issues.some((i) => i.kind === 'contradiction'))
+})
+
+test('checkLifecycleFields flags values the system does not understand', () => {
+  const metas = buildNoteIndex([
+    note('typo.md', '---\ntitle: T\nstatus: superceded\n---\n\nHi'), // misspelled: silently reads as active
+    note('conf.md', '---\ntitle: C\nconfidence: pretty-sure\n---\n\nHi'),
+    note('when.md', '---\ntitle: W\nexpires: end of quarter\n---\n\nHi'),
+    note('fine.md', '---\ntitle: F\nstatus: accepted\nconfidence: likely\nexpires: 2027-01-01\n---\n\nHi'),
+  ])
+  const issues = checkLifecycleFields(metas)
+  assert.deepEqual(
+    issues.map((i) => i.path),
+    ['typo.md', 'conf.md', 'when.md'],
+  )
+  assert.ok(issues.every((i) => i.kind === 'lifecycle'))
+  assert.match(issues[0].detail, /reads as active/)
 })

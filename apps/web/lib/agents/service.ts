@@ -16,13 +16,16 @@ import {
   AGENT_NAME_RE,
   agentActivationPath,
   agentBriefPath,
+  DEFAULT_DEBOUNCE_MS,
   describeSchedule,
+  describeTriggers,
   newActivationNote,
   parseAgentActivation,
   parseAgentBrief,
   type AgentActivation,
   type AgentBrief,
   type AgentSchedule,
+  type AgentTriggers,
 } from './config'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
@@ -58,6 +61,12 @@ export interface AgentSummary {
     active: boolean
     schedule: AgentSchedule | null
     scheduleLabel: string
+    /** The raw `every:` (interval or cron) when the clock came from it. */
+    every: string | null
+    /** Event triggers from the `on:` map, or null. */
+    on: AgentTriggers | null
+    triggersLabel: string | null
+    debounceMs: number
     timezone: string | null
     invalid: string | null
   }
@@ -172,6 +181,10 @@ async function summarise(
       active: !!activation?.active,
       schedule: activation?.schedule ?? null,
       scheduleLabel: describeSchedule(activation?.schedule ?? null, tz),
+      every: activation?.every ?? null,
+      on: activation?.on ?? null,
+      triggersLabel: describeTriggers(activation?.on ?? null),
+      debounceMs: activation?.debounceMs ?? DEFAULT_DEBOUNCE_MS,
       timezone: tz,
       invalid: parsedLive && !parsedLive.ok ? parsedLive.error : null,
     },
@@ -247,8 +260,11 @@ export async function activateAgent(
   p: ContextPrincipal,
   context: Context,
   name: string,
-  input: { schedule: AgentSchedule; timezone: string | null },
+  input: { schedule: AgentSchedule | null; on?: AgentTriggers | null; debounceMs?: number | null; timezone: string | null },
 ): Promise<ActivateResult> {
+  if (!input.schedule && !(input.on && (input.on.context.length || input.on.webhook))) {
+    return { ok: false, status: 400, error: 'An active agent needs a schedule, an interval or a trigger.' }
+  }
   if (!principalIsSuperAdmin(p)) return { ok: false, status: 403, error: 'Only space admins can activate an agent.' }
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
   const content = await readVisible(p, context, agentBriefPath(name))
@@ -262,7 +278,11 @@ export async function activateAgent(
   if (!probe.ok && probe.kind === 'auth') return { ok: false, status: 400, error: probe.message }
   const warning = probe.ok ? null : probe.message
 
-  const note = newActivationNote({ active: true, schedule: input.schedule, timezone: input.timezone })
+  const note = newActivationNote({ active: true, schedule: input.schedule, on: input.on ?? null, debounceMs: input.debounceMs ?? null, timezone: input.timezone })
+  // The template is authoritative only once it parses: round-trip it so a bad
+  // glob or interval is refused here, not discovered by the tick.
+  const check = parseAgentActivation(parseFrontmatter(note))
+  if (!check.ok) return { ok: false, status: 400, error: check.error }
   const written = await writeGated(p, context, agentActivationPath(name), note)
   if (written.status === 'denied') return { ok: false, status: 403, error: written.reason }
   await syncAgentState(context.spaceId, name)
@@ -271,7 +291,7 @@ export async function activateAgent(
     name: p.name,
     action: 'agent',
     path: agentBriefPath(name),
-    detail: `activated: ${describeSchedule(input.schedule, input.timezone ?? (await effectiveTimezone(context.spaceId, null)))}`,
+    detail: `activated: ${[describeSchedule(input.schedule, input.timezone ?? (await effectiveTimezone(context.spaceId, null))), describeTriggers(input.on ?? null)].filter(Boolean).join('; ')}`,
   })
   return { ok: true, warning }
 }

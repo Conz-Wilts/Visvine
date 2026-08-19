@@ -114,11 +114,11 @@ export default function ConfirmDialog({
         )}
 
         <div className="mt-6 flex justify-end gap-2">
-          <Button variant="pill-secondary" onClick={onClose} disabled={busy}>
+          <Button variant="neutral" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button
-            variant={destructive ? 'pill-danger' : 'pill-primary'}
+            variant={destructive ? 'danger' : 'brand'}
             onClick={() => void handleConfirm()}
             disabled={locked}
             loading={busy}

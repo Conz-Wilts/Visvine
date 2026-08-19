@@ -120,7 +120,7 @@ function PublicationChip({ publication }: { publication: AuthoredToolSummary['pu
     withdrawn: '#6b7280',
   };
   return (
-    <Chip tone="soft" size="sm" color={color[publication.status]}>
+    <Chip tone="solid" size="sm" color={color[publication.status]}>
       v{publication.version} · {label[publication.status]}
     </Chip>
   );
@@ -156,11 +156,11 @@ function AuthoredRow({
                 Not built
               </Chip>
             ) : build.ok ? (
-              <Chip tone="soft" size="sm" color="#16a34a">
+              <Chip tone="solid" size="sm" color="#16a34a">
                 Builds
               </Chip>
             ) : (
-              <Chip tone="soft" size="sm" color="#dc2626">
+              <Chip tone="solid" size="sm" color="#dc2626">
                 {errors.length} {errors.length === 1 ? 'error' : 'errors'}
               </Chip>
             )}
@@ -256,6 +256,7 @@ function PublishDialog({
   onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void;
 }) {
   const [note, setNote] = useState('');
+  const [releaseNotes, setReleaseNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const perimeter = tool.build?.config?.perimeter ?? null;
@@ -264,7 +265,7 @@ function PublishDialog({
     setBusy(true);
     setFailure(null);
     try {
-      const body = await publishTool(spaceId, tool.name, note.trim() || undefined);
+      const body = await publishTool(spaceId, tool.name, note.trim() || undefined, releaseNotes.trim() || undefined);
       if (body.warning) onToast('warning', body.warning);
       onPublished(body.version.version, body.version.status);
     } catch (err) {
@@ -309,6 +310,17 @@ function PublishDialog({
             <p className="text-sm text-text-muted">This tool hasn&rsquo;t built, so it declares nothing yet.</p>
           )}
         </section>
+
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-medium text-text-primary">Release notes</span>
+          <Textarea
+            value={releaseNotes}
+            onChange={(event) => setReleaseNotes(event.target.value)}
+            rows={3}
+            maxLength={2048}
+            placeholder="Optional — what this version changes, for the people who install it."
+          />
+        </label>
 
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-text-primary">Note for the reviewer</span>

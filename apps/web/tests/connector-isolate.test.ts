@@ -490,3 +490,133 @@ test('the visvine namespace itself is frozen', async () => {
   })
   assert.equal(called.value, 'original')
 })
+
+// ── visvine.crypto (lib/connectors/hostCrypto.ts) ─────────────────────────────
+
+test('visvine.crypto: hmac, hash, base64 and timingSafeEqual are strings in, strings out', async () => {
+  const { cryptoCapabilities } = await import('@/lib/connectors/hostCrypto')
+  const r = await runInIsolate(
+    perimeter(),
+    `const c = visvine.crypto
+     return {
+       hmac: await c.hmac('sha256', 'key', 'The quick brown fox jumps over the lazy dog'),
+       hmacB64: await c.hmac('sha256', 'key', 'The quick brown fox jumps over the lazy dog', { encoding: 'base64' }),
+       hexKey: await c.hmac('sha256', '6b6579', 'The quick brown fox jumps over the lazy dog', { keyEncoding: 'hex' }),
+       sha1: await c.hash('sha1', 'abc'),
+       b64: await c.base64.encode('hi there'),
+       plain: await c.base64.decode('aGkgdGhlcmU='),
+       same: await c.timingSafeEqual('abc', 'abc'),
+       diff: await c.timingSafeEqual('abc', 'abd'),
+       rnd: (await c.randomHex(8)).length,
+     }`,
+    { capabilities: cryptoCapabilities() },
+  )
+  assert.equal(r.ok, true, r.error?.message)
+  const v = r.value as Record<string, unknown>
+  assert.equal(v.hmac, 'f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8')
+  assert.equal(v.hmacB64, '97yD9DBThCSxMpjmqm+xQ+9NWaFJRhdZl0edvC0aPNg=')
+  assert.equal(v.hexKey, v.hmac)
+  assert.equal(v.sha1, 'a9993e364706816aba3e25717850c26c9cd0d89d')
+  assert.equal(v.b64, 'aGkgdGhlcmU=')
+  assert.equal(v.plain, 'hi there')
+  assert.equal(v.same, true)
+  assert.equal(v.diff, false)
+  assert.equal(v.rnd, 16)
+})
+
+test('visvine.crypto refuses unknown algorithms and oversize randomness with a catchable error', async () => {
+  const { cryptoCapabilities } = await import('@/lib/connectors/hostCrypto')
+  const r = await runInIsolate(
+    perimeter(),
+    `const out = []
+     try { await visvine.crypto.hash('md5', 'x') } catch (e) { out.push(e.message) }
+     try { await visvine.crypto.randomHex(65) } catch (e) { out.push(e.message) }
+     return out`,
+    { capabilities: cryptoCapabilities() },
+  )
+  assert.equal(r.ok, true, r.error?.message)
+  assert.match(String((r.value as string[])[0]), /alg must be one of/)
+  assert.match(String((r.value as string[])[1]), /1\.\.64 bytes/)
+})
+
+test('visvine.crypto.sigv4 signs with keys read from env by NAME and matches the AWS reference vector', async () => {
+  const { signSigV4, connectorCryptoCapabilities } = await import('@/lib/connectors/hostCrypto')
+  // The canonical example from the SigV4 documentation (GET /?Action=ListUsers&Version=2010-05-08 to IAM).
+  const env = { AK: 'AKIDEXAMPLE', SK: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' }
+  const { headers } = signSigV4(
+    {
+      accessKeyEnv: 'AK',
+      secretEnv: 'SK',
+      region: 'us-east-1',
+      service: 'iam',
+      method: 'GET',
+      url: 'https://iam.amazonaws.com/?Action=ListUsers&Version=2010-05-08',
+      headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' },
+    },
+    env,
+    new Date('2015-08-30T12:36:00Z'),
+  )
+  assert.equal(headers['x-amz-date'], '20150830T123600Z')
+  assert.equal(headers.host, 'iam.amazonaws.com')
+  assert.equal(headers['x-amz-content-sha256'], 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+  assert.equal(
+    headers.authorization,
+    'AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/20150830/us-east-1/iam/aws4_request, ' +
+      'SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, ' +
+      'Signature=' + 'dd479fa8a80364edf2119ec24bebde66712ee9c9cb2b0d92eb3ab9ccdc0c3947',
+  )
+
+  // Inside the isolate: the secret never has to be a local; a wrong NAME is a readable error.
+  const r = await runInIsolate(
+    perimeter({ env }),
+    `try { await visvine.crypto.sigv4({ accessKeyEnv: 'NOPE', secretEnv: 'SK', region: 'us-east-1', service: 's3', url: 'https://x.amazonaws.com/' }) } catch (e) { return e.message }`,
+    { capabilities: connectorCryptoCapabilities(env), redact: Object.values(env) },
+  )
+  assert.match(String(r.value), /env has no NOPE/)
+})
+
+// ── fetch follow (lib/connectors/hostFetch.ts) ────────────────────────────────
+
+test('fetch follows redirects only when asked, counts hops, and re-gates every hop', async () => {
+  const server = await upstream((req, res) => {
+    if (req.url === '/a') {
+      res.writeHead(302, { location: '/b' })
+      res.end()
+      return
+    }
+    if (req.url === '/b') {
+      res.writeHead(301, { location: '/c' })
+      res.end()
+      return
+    }
+    if (req.url === '/away') {
+      res.writeHead(302, { location: 'https://elsewhere.example/landed' })
+      res.end()
+      return
+    }
+    res.end(`landed at ${req.url} via ${req.method}`)
+  })
+  try {
+    const r = await runInIsolate(
+      perimeter({ hosts: [server.host], allowPrivate: true }),
+      `const base = 'http://${server.host}'
+       const none = await fetch(base + '/a')
+       const one = await fetch(base + '/a', { follow: 1 })
+       const all = await fetch(base + '/a', { follow: 3 })
+       const post = await fetch(base + '/a', { method: 'POST', body: 'x', follow: 3 })
+       let away
+       try { await fetch(base + '/away', { follow: 2 }) } catch (e) { away = e.message }
+       return { none: [none.status, none.hops, none.location], one: [one.status, one.hops, one.location], all: [all.status, all.hops, all.body], post: all.body === post.body, away }`,
+    )
+    assert.equal(r.ok, true, r.error?.message)
+    const v = r.value as Record<string, unknown>
+    assert.deepEqual(v.none, [302, 0, '/b'])
+    assert.deepEqual(v.one, [301, 1, '/c'])
+    assert.deepEqual(v.all, [200, 2, 'landed at /c via GET'])
+    assert.equal(v.post, true)
+    assert.match(String(v.away), /egress denied/)
+    assert.equal(r.denials.length, 1)
+  } finally {
+    await server.close()
+  }
+})

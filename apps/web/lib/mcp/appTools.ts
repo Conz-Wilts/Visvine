@@ -43,6 +43,12 @@ import { BRIDGE_METHODS } from '@/lib/tools/protocol'
 import { computeRequirements, describeRequirements, isDegraded } from '@/lib/tools/requirements'
 import { TOOL_AUTHOR_GUIDE, TOOL_KIT_DTS } from '@/lib/tools/sdkDocs'
 import {
+  captureToolPreview,
+  SCREENSHOT_BUDGET_MS,
+  type ScreenshotRequest,
+  type ScreenshotResult,
+} from '@/lib/tools/screenshot'
+import {
   createTool as createToolService,
   describeAuthoredTool as describeAuthoredToolService,
   listAuthoredTools as listAuthoredToolsService,
@@ -126,7 +132,7 @@ export interface AppToolDeps {
     p: ContextPrincipal,
     context: Context,
     name: string,
-    opts: { note?: string },
+    opts: { note?: string; releaseNotes?: string },
   ): Promise<PublishResult>
   installVersion(
     spaceId: string,
@@ -145,6 +151,12 @@ export interface AppToolDeps {
    */
   spaceFacts(p: ContextPrincipal, context: Context): Promise<SpaceFacts>
   appOrigin(): string
+  /**
+   * A headless render of the preview page as the caller (lib/tools/screenshot.ts).
+   * Answers `{ available: false }` wherever it cannot run; the handlers then
+   * fall back to links, which is what they returned before this existed.
+   */
+  capturePreview(req: ScreenshotRequest): Promise<ScreenshotResult>
 }
 
 const liveDeps: AppToolDeps = {
@@ -166,6 +178,7 @@ const liveDeps: AppToolDeps = {
   },
   spaceFacts: spaceFactsService,
   appOrigin: liveAppOrigin,
+  capturePreview: captureToolPreview,
 }
 
 // ── shared shapes ─────────────────────────────────────────────────────────────
@@ -288,15 +301,20 @@ interface WriteToolArgs {
 interface CheckToolArgs {
   space_id: string
   name: string
+  /** Also render the preview headlessly and include its console errors (no image). */
+  render?: boolean
 }
 interface PreviewToolArgs {
   space_id: string
   name: string
+  /** Render the preview headlessly and return the image + console errors. */
+  screenshot?: boolean
 }
 interface PublishToolArgs {
   space_id: string
   name: string
   note?: string
+  release_notes?: string
 }
 interface InstallToolArgs {
   space_id: string
@@ -424,6 +442,18 @@ async function checkTool(ctx: McpContext, args: CheckToolArgs, deps: AppToolDeps
       'index.md has no `description:` — it is what the marketplace card and the install checklist show.',
     )
   }
+  // A write glob under `agents/` buys nothing on its own: the seal is create-only
+  // and scoped to the briefs of agents the config DECLARES. Without that list the
+  // glob is inert, and the author gets no other signal that it is.
+  if (
+    config &&
+    config.perimeter.agents.length === 0 &&
+    config.perimeter.write.some((glob) => glob.split('/')[0] === 'agents')
+  ) {
+    warnings.push(
+      '`perimeter.write` names a path under `agents/` but `perimeter.agents` is empty, so the glob grants nothing. The only permitted write there is CREATING the brief of an agent this tool declares.',
+    )
+  }
 
   const facts = await deps.spaceFacts(target.principal, target.context)
   const custom = new Set(facts.customTypes)
@@ -441,9 +471,24 @@ async function checkTool(ctx: McpContext, args: CheckToolArgs, deps: AppToolDeps
     ? computeRequirements(config.perimeter, facts.available)
     : { connectors: [], types: [], agents: [] }
 
+  // Optional runtime check: mount the working copy in a headless browser and
+  // report what the console said. Only when it compiles — an error card has no
+  // runtime errors worth reading — and never an image here (that is preview_tool).
+  let runtime: RuntimeReport | undefined
+  if (args.render && build.ok) {
+    runtime = runtimeReport(
+      await deps.capturePreview(previewRequest(ctx, target, args.name, deps, { image: false })),
+    )
+    for (const line of runtime.console_errors) warnings.push(`Runtime: ${line}`)
+    if (runtime.available && !runtime.rendered) {
+      warnings.push('Runtime: the tool did not mount anything within the render budget.')
+    }
+  }
+
   return {
     name: args.name,
     build: buildReport(build),
+    ...(runtime ? { runtime } : {}),
     perimeter: config ? describePerimeter(config.perimeter) : [],
     surfaces: describeSurfaces(config),
     requirements: {
@@ -476,18 +521,93 @@ async function getToolSdk(_ctx: McpContext, _args: Record<string, never>) {
 }
 
 async function previewTool(ctx: McpContext, args: PreviewToolArgs, deps: AppToolDeps = liveDeps) {
-  const { detail } = await requireTool(ctx, args.space_id, args.name, deps)
+  const { target, detail } = await requireTool(ctx, args.space_id, args.name, deps)
   const report = buildReport(detail.build)
+  // The screenshot is opt-in and best-effort: it launches a browser, and where
+  // that cannot happen (no Playwright, production without TOOLS_SCREENSHOT=on)
+  // the answer says so and the links still stand.
+  const screenshot = args.screenshot
+    ? screenshotReport(await deps.capturePreview(previewRequest(ctx, target, detail.name, deps, { image: true })))
+    : undefined
   return {
     name: detail.name,
     title: detail.title,
     ...previewLinks(detail.name, deps.appOrigin()),
     build: report,
-    // Nothing is rendered here — a preview link is the feedback channel, not a
-    // screenshot. A tool that does not compile will render an error card.
+    // Without `screenshot: true` nothing is rendered here — the link is the
+    // feedback channel. A tool that does not compile will render an error card.
     renders: report.ok
       ? 'Opening either link renders the working copy in a sandboxed frame.'
       : 'This tool does not compile, so the preview will show an error card. Fix the build first — check_tool lists the errors.',
+    ...(screenshot ? { screenshot } : {}),
+  }
+}
+
+/** What both render-capable tools hand `capturePreview`: the caller, as themselves. */
+function previewRequest(
+  ctx: McpContext,
+  target: Target,
+  name: string,
+  deps: AppToolDeps,
+  opts: { image: boolean },
+): ScreenshotRequest {
+  return {
+    appOrigin: deps.appOrigin(),
+    spaceId: target.context.spaceId,
+    name,
+    viewer: { userId: ctx.userId, name: ctx.name, email: ctx.email, personId: ctx.personId },
+    image: opts.image,
+    budgetMs: SCREENSHOT_BUDGET_MS,
+  }
+}
+
+interface RuntimeReport {
+  available: boolean
+  reason?: string
+  rendered: boolean
+  console_errors: string[]
+}
+
+/** The console half of a capture — check_tool's `runtime` block. */
+function runtimeReport(result: ScreenshotResult): RuntimeReport {
+  if (!result.available) return { available: false, reason: result.reason, rendered: false, console_errors: [] }
+  if (result.navigated_away) {
+    return {
+      available: true,
+      rendered: false,
+      console_errors: [...result.console_errors, `The page navigated away from the preview to ${result.url}; nothing was rendered.`],
+    }
+  }
+  return { available: true, rendered: result.rendered, console_errors: result.console_errors }
+}
+
+/** The whole capture — preview_tool's `screenshot` block. */
+function screenshotReport(result: ScreenshotResult) {
+  if (!result.available) {
+    return { available: false as const, reason: result.reason, console_errors: [] as string[] }
+  }
+  if (result.navigated_away) {
+    // The Tool (or the page) left the preview URL. The capture is pinned to
+    // that URL — see lib/tools/screenshot.ts — so there is no image to give.
+    return {
+      available: true as const,
+      navigated_away: true as const,
+      url: result.url,
+      reason: `The page navigated away from the preview to ${result.url}; the capture only renders /tools/preview/<name>.`,
+      console_errors: result.console_errors,
+    }
+  }
+  return {
+    available: true as const,
+    // Named for what it is: PNG unless the capture had to fall back to JPEG to
+    // stay under the size cap — `mime` says which.
+    png_base64: result.mime === 'image/png' ? result.image_base64 : null,
+    jpeg_base64: result.mime === 'image/jpeg' ? result.image_base64 : null,
+    mime: result.mime,
+    width: result.width,
+    height: result.height,
+    rendered: result.rendered,
+    console_errors: result.console_errors,
   }
 }
 
@@ -496,6 +616,7 @@ async function publishTool(ctx: McpContext, args: PublishToolArgs, deps: AppTool
   await requireToolsFeature(ctx, target, deps)
   const result = await deps.publishTool(target.principal, target.context, args.name, {
     note: args.note,
+    releaseNotes: args.release_notes,
   })
   if (!result.ok) refuse(result)
   return {
@@ -505,10 +626,16 @@ async function publishTool(ctx: McpContext, args: PublishToolArgs, deps: AppTool
     status: result.version.status,
     submitted_at: result.version.submittedAt,
     perimeter: describePerimeter(result.version.perimeter),
+    tags: result.version.tags,
+    release_notes: result.version.releaseNotes,
     // The review gate, stated because an author will otherwise wait for a
-    // marketplace entry that is not coming yet.
+    // marketplace entry that is not coming yet — unless the trusted-publisher
+    // fast path already approved it (same perimeter as the last approved
+    // version, from a space the operator trusts).
     review:
-      'This snapshot is immutable and now PENDING review by a Visvine super-admin, who sees the declared perimeter and a diff of the code against the last approved version. It is not installable by anyone until it is approved, and publishing again is refused while this one is in the queue.',
+      result.version.status === 'approved'
+        ? 'This snapshot is immutable and was AUTO-APPROVED: this space is a trusted publisher and the declared perimeter is unchanged from the last approved version. It is installable now; spaces running an older version are offered the upgrade.'
+        : 'This snapshot is immutable and now PENDING review by a Visvine super-admin, who sees the declared perimeter and a diff of the code against the last approved version. It is not installable by anyone until it is approved, and publishing again is refused while this one is in the queue.',
     ...(result.warning ? { warning: result.warning } : {}),
   }
 }
@@ -693,8 +820,18 @@ export function registerAppTools(
         'summary of the reach its perimeter declares, which of the connectors/types/agents it names this ' +
         "space actually has (it still installs when they're missing — it just runs degraded), what surfaces " +
         'it asks to occupy, and warnings worth fixing (an empty perimeter, a page claim that will be ' +
-        'downgraded to a tab, a missing description). `ready_to_publish` is the one-line verdict.',
-      inputSchema: { space_id: spaceArg, name: nameArg },
+        'downgraded to a tab, a missing description). `ready_to_publish` is the one-line verdict. Pass ' +
+        '`render: true` to also mount the working copy in a headless browser and get back its console ' +
+        'errors and whether it rendered (`runtime`) — no image; that is preview_tool. Where headless ' +
+        'rendering is unavailable, `runtime.available` is false and says why.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        render: z
+          .boolean()
+          .optional()
+          .describe('Also render the preview headlessly and report runtime console errors (slower — a browser launches)'),
+      },
     },
     (args, extra) => withCtx(extra, 'check_tool', (ctx) => checkTool(ctx, args, deps)),
   )
@@ -720,10 +857,20 @@ export function registerAppTools(
     {
       description:
         'Where to look at a tool: a `visvine-desktop://` deep link that opens it in the desktop app and the ' +
-        'equivalent web URL, plus its current build status. Hand these to the person you are working for — ' +
-        'nothing is rendered back to you, so the build diagnostics from write_tool and check_tool are your ' +
-        'own feedback channel.',
-      inputSchema: { space_id: spaceArg, name: nameArg },
+        'equivalent web URL, plus its current build status. Hand these to the person you are working for. ' +
+        'Pass `screenshot: true` to also render the preview headlessly AS YOU (1024×768, ~10s budget) and get ' +
+        'back the image (`screenshot.png_base64`, or `jpeg_base64` when it had to shrink — `mime` says which), ' +
+        'whether the tool mounted, and every console error the page and the frame logged. Where headless ' +
+        'rendering is unavailable (no Playwright, or production without TOOLS_SCREENSHOT=on) `screenshot.available` ' +
+        'is false with a reason and the links still stand.',
+      inputSchema: {
+        space_id: spaceArg,
+        name: nameArg,
+        screenshot: z
+          .boolean()
+          .optional()
+          .describe('Render the preview headlessly and return the image plus console errors (slower — a browser launches)'),
+      },
       annotations: { readOnlyHint: true },
     },
     (args, extra) => withCtx(extra, 'preview_tool', (ctx) => previewTool(ctx, args, deps)),
@@ -738,11 +885,19 @@ export function registerAppTools(
         'Publish the working copy as an immutable version and queue it for review. SPACE ADMINS ONLY, and ' +
         'only when the tool compiles. It does NOT go live: a Visvine super-admin reviews the declared ' +
         'perimeter and a code diff first, and only an approved version can be installed anywhere. One ' +
-        'pending version per tool — withdraw it in the app before publishing again. Run check_tool first.',
+        'pending version per tool — withdraw it in the app before publishing again. Run check_tool first. ' +
+        'The marketplace card also shows `tags:` and `preview:` from index.md and the release notes you pass ' +
+        'here. Exception to the queue: a space listed as a trusted publisher whose new version declares the ' +
+        'SAME perimeter as its last approved one is auto-approved.',
       inputSchema: {
         space_id: spaceArg,
         name: nameArg,
         note: z.string().optional().describe('A note for the reviewer — what changed and why'),
+        release_notes: z
+          .string()
+          .max(2048)
+          .optional()
+          .describe('Release notes for the people who install it — what this version changes (≤2KB; shown on the card and in the version history)'),
       },
     },
     (args, extra) => withCtx(extra, 'publish_tool', (ctx) => publishTool(ctx, args, deps)),

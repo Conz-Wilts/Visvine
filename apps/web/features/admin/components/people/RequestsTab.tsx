@@ -46,7 +46,7 @@ export default function RequestsTab() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Button
-                    variant="pill-primary"
+                    variant="brand"
                     onClick={() => void approve(member.userId)}
                     disabled={busy}
                     className="!px-3 !py-1.5 !text-xs"
@@ -54,7 +54,7 @@ export default function RequestsTab() {
                     Approve
                   </Button>
                   <Button
-                    variant="pill-secondary"
+                    variant="neutral"
                     onClick={() => setDeny({ userId: member.userId, name: member.user.name })}
                     disabled={busy}
                     className="!px-3 !py-1.5 !text-xs"

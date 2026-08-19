@@ -23,6 +23,7 @@ const STATUS_BY_CODE: Record<ConnectorErrorCode, number> = {
   ssrf: 400,
   timeout: 504,
   upstream: 502,
+  rate_limited: 429,
 };
 
 export async function POST(
@@ -39,15 +40,23 @@ export async function POST(
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  let body: { code?: unknown };
+  let body: { code?: unknown; action?: unknown; args?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  if (typeof body.code !== 'string' || !body.code.trim()) {
-    return NextResponse.json({ error: 'Send { code } — JavaScript to evaluate' }, { status: 400 });
+  const hasCode = typeof body.code === 'string' && body.code.trim().length > 0;
+  const hasAction = typeof body.action === 'string' && body.action.trim().length > 0;
+  if (hasCode === hasAction) {
+    return NextResponse.json(
+      { error: 'Send { code } — JavaScript to evaluate — or { action, args } for a declared action' },
+      { status: 400 },
+    );
   }
+  const run = hasAction
+    ? { action: (body.action as string).trim(), args: body.args ?? {} }
+    : { code: body.code as string };
 
   const principal = await principalOf(resolved);
   let loaded;
@@ -62,7 +71,7 @@ export async function POST(
   if (!loaded) return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
 
   try {
-    const result = await executeConnectorScript(principal, resolved, spaceId, loaded, body.code);
+    const result = await executeConnectorScript(principal, resolved, spaceId, loaded, run);
     return NextResponse.json({
       result: {
         ok: result.ok,

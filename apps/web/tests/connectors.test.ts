@@ -543,3 +543,53 @@ test('newModelConnectorNote round-trips through parseModelConnector', () => {
   assert.match(custom, /model: custom\/<model-id>/)
   assert.throws(() => newModelConnectorNote({ name: 'x', provider: 'nope' }), /unknown model provider/)
 })
+
+// ── actions: (wave 1) ─────────────────────────────────────────────────────────
+
+test('actions parse into the perimeter: name, description, params verbatim, code', () => {
+  const fm = parseFrontmatter(`---
+type: connector
+hosts: [api.example.com]
+actions:
+  list_things:
+    description: "List things"
+    params: { limit: { type: integer, default: 10 } }
+    code: "const r = await fetch('https://api.example.com/things?limit=' + (args.limit ?? 10)); return JSON.parse(r.body)"
+  ping:
+    code: "return 'pong'"
+---`)
+  const parsed = parseConnectorPerimeter(fm)
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error)
+  assert.deepEqual(Object.keys(parsed.perimeter.actions), ['list_things', 'ping'])
+  const list = parsed.perimeter.actions.list_things
+  assert.equal(list.description, 'List things')
+  assert.deepEqual(list.params, { limit: { type: 'integer', default: 10 } })
+  assert.match(list.code, /args\.limit/)
+  assert.equal(parsed.perimeter.actions.ping.description, null)
+  assert.equal(parsed.perimeter.actions.ping.params, null)
+})
+
+test('actions validation: bad names, missing code, oversize code, too many, wrong shapes', () => {
+  const parse = (actions: string) =>
+    parseConnectorPerimeter(parseFrontmatter(`---\ntype: connector\nhosts: []\nactions:\n${actions}\n---`))
+  const bad = (actions: string, re: RegExp) => {
+    const r = parse(actions)
+    assert.equal(r.ok, false)
+    if (!r.ok) assert.match(r.error, re)
+  }
+  bad('  ListThings:\n    code: "return 1"', /Bad action name 'ListThings'/)
+  bad('  "1st":\n    code: "return 1"', /Bad action name/)
+  bad('  ok:\n    description: "no code"', /actions\.ok\.code/)
+  bad('  ok: "return 1"', /actions\.ok. must be a map/)
+  bad(`  ok:\n    code: "${'x'.repeat(32 * 1024 + 1)}"`, /too long/)
+  bad('  ok:\n    code: "return 1"\n    params: [1, 2]', /params. must be an object/)
+  bad('  ok:\n    code: "return 1"\n    description: 3', /description. must be a string/)
+  const many = Array.from({ length: 33 }, (_, i) => `  a${i}:\n    code: "return ${i}"`).join('\n')
+  bad(many, /Too many actions/)
+  // A list, not a map.
+  const listy = parseConnectorPerimeter(parseFrontmatter(`---\ntype: connector\nhosts: []\nactions:\n  - ping\n---`))
+  assert.equal(listy.ok, false)
+  // No actions at all is the ordinary case.
+  const none = parseConnectorPerimeter(parseFrontmatter(`---\ntype: connector\nhosts: []\n---`))
+  assert.ok(none.ok && Object.keys(none.perimeter.actions).length === 0)
+})

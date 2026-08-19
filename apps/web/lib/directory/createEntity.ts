@@ -14,8 +14,8 @@ import { Prisma } from '@prisma/client'
 import prisma from '@/lib/prisma'
 import type { ResolvedContext } from '@/lib/notes/resolve'
 import { principalOf } from '@/lib/notes/resolve'
-import { writeDenial } from '@/lib/notes/contextService'
-import { createNote, readNoteOrNull } from '@/lib/notes/store'
+import { lockedDenial, writeDenial } from '@/lib/notes/contextService'
+import { createNote, readNoteOrNull, type WriteStamp } from '@/lib/notes/store'
 import { entityDraftContent, entityIndexPathOf, entityNotePath } from '@/lib/notes/entities'
 import { applyFields } from '@/lib/create/typeFields'
 import { attachIdentity } from '@/lib/identity/attachIdentity'
@@ -72,6 +72,13 @@ export interface CreateEntityInput {
   /** Markdown body appended under the generated frontmatter. */
   body?: string
   tags?: string[]
+  /**
+   * How the create arose, when not a person at a keyboard: an agent run passes
+   * `{ origin: 'agent', model: 'agent:<name>' }`. An AI origin is held to the
+   * Freeze-for-AI gate (`lockedDenial`) like any other AI write, and the stamp
+   * rides into the note hook so the run's own create never wakes its agent.
+   */
+  stamp?: WriteStamp
 }
 
 export type CreateEntityResult =
@@ -175,7 +182,9 @@ export async function createEntity(
   }
 
   const principal = await principalOf(context)
-  const denial = writeDenial(principal, context, basePath)
+  const denial =
+    writeDenial(principal, context, basePath) ??
+    (input.stamp?.origin ? lockedDenial(principal, context, basePath, input.stamp.origin) : null)
   if (denial) return { ok: false, status: 403, error: denial }
 
   // Collision check against the NOTE, not just the node id. `entityNotePath` is
@@ -281,7 +290,7 @@ export async function createEntity(
 
   let noteError: string | null = null
   try {
-    await createNote(context, notePath, content, context.actor)
+    await createNote(context, notePath, content, context.actor, input.stamp)
   } catch (err) {
     // "already exists" is benign (a concurrent create won). Anything else is
     // reported but NOT fatal — the node is real, and the context tab seeds the

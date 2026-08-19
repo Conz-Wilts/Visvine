@@ -20,17 +20,18 @@ export default function ResourceUploadDialog({
     setUploading(true);
     setError(null);
     try {
+      // One call: the server stores the bytes, records the file and runs it
+      // through the RAG pipeline. The browser used to compose the record itself
+      // — object path included — which is how a client came to control what the
+      // server would later sign a download URL for.
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('spaceId', spaceId);
       const uploadRes = await fetch('/api/resources/upload', { method: 'POST', body: fd });
-      if (!uploadRes.ok) throw new Error('Upload failed');
-      const { fileUrl, fileSize, fileType, originalFilename, gcsPath } = await uploadRes.json();
-      const createRes = await fetch('/api/resources', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spaceId, name: file.name, fileType, fileUrl, fileSize, metadata: { originalFilename, gcsPath } }),
-      });
-      if (!createRes.ok) throw new Error('Failed to create resource record');
+      if (!uploadRes.ok) {
+        const body = await uploadRes.json().catch(() => null);
+        throw new Error(body?.error ?? 'Upload failed');
+      }
       onUploaded();
       onClose();
     } catch (e: unknown) {
@@ -60,7 +61,15 @@ export default function ResourceUploadDialog({
           onClick={() => inputRef.current?.click()}
           className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
         >
-          {uploading ? <p className="text-gray-500">Uploading...</p> : <p className="text-gray-500">Drag & drop a file here, or click to browse<br /><span className="text-xs text-gray-400">PDF, Excel, CSV, DOCX, or image</span></p>}
+          {uploading ? (
+            <p className="text-gray-500">Uploading and indexing...</p>
+          ) : (
+            <p className="text-gray-500">
+              Drag &amp; drop a file here, or click to browse
+              <br />
+              <span className="text-xs text-gray-400">PDF, Excel, CSV, DOCX, Markdown, JSON, text, or image</span>
+            </p>
+          )}
         </div>
         <input ref={inputRef} type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
         {error && <p className="mt-2 text-sm text-red-500">{error}</p>}

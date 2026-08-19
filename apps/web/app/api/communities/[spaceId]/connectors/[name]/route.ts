@@ -26,8 +26,12 @@ import { describeConnector, listConnectorCalls } from '@/lib/connectors/service'
  * and key order survive, and Raw remains a full-power escape hatch rather than
  * a second way to say the same thing.
  *
- * Admin-only, matching the list route: connector frontmatter is infrastructure
- * config (hosts, header shapes, secret names), not space content.
+ * PATCH is admin-only, matching the list route: connector frontmatter is
+ * infrastructure config (hosts, header shapes, secret names), not space
+ * content. GET is open to any member who can READ the note (the same
+ * visibility lens the service uses), because a `mode: user` connector's page
+ * is where a member connects their own account — but a member's response
+ * carries no env templates, no secret status and no call log.
  */
 
 /** Session → admin-resolved context, or the response that says why not. */
@@ -45,13 +49,28 @@ export async function GET(
   { params }: { params: Promise<{ spaceId: string; name: string }> }
 ) {
   const { spaceId, name } = await params;
-  const resolved = await requireConnectorAdmin(spaceId);
+  const session = await requireSession();
+  if (session instanceof Response) return session;
+  const resolved = await resolveContext(session, spaceId);
   if (resolved instanceof Response) return resolved;
 
   const principal = await principalOf(resolved);
   const connector = await describeConnector(principal, resolved, decodeURIComponent(name));
   if (!connector) {
     return NextResponse.json({ error: 'Connector not found' }, { status: 404 });
+  }
+
+  if (!resolved.isAdmin) {
+    // A member sees the shape (hosts, rules, auth mode) — enough for the
+    // Connections card — and nothing an admin would call configuration.
+    return NextResponse.json({
+      connector: {
+        ...connector,
+        secrets: [],
+        perimeter: connector.perimeter ? { ...connector.perimeter, env: {} } : null,
+      },
+      calls: [],
+    });
   }
 
   const stored = connector.secrets.length

@@ -30,7 +30,12 @@ export type CreateableType =
   | 'connector'
   // A scheduled agent, written as agents/<name>.md — any member may author one;
   // an admin activates it (lib/agents/config.ts).
-  | 'agent';
+  | 'agent'
+  // A Tool — a folder of notes under tools/<name>/ scaffolded by
+  // lib/tools/service.ts#createTool; any member may author one, an admin
+  // publishes it. Not note-first: the scaffold writes three notes and a node
+  // at once, so it stays in the docked panel.
+  | 'tool';
 
 /**
  * Types that are created on the note-first surface (/directory/new) rather than

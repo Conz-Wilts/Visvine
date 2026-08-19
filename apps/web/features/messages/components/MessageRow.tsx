@@ -319,7 +319,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
               </span>
             )}
             {message.starred && (
-              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+              <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
                 <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
               </span>
             )}
@@ -328,7 +328,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Saved badge for grouped messages (the header line carries it otherwise) */}
         {!showHeader && message.starred && (
-          <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+          <span className="inline-flex items-center gap-0.5 rounded-md bg-amber-500 px-2 py-0.5 text-[10px] font-medium text-white">
             <StarIcon className="h-2.5 w-2.5 fill-current" /> Saved
           </span>
         )}
@@ -396,7 +396,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 key={r.emoji}
                 type="button"
                 onClick={() => onReaction(message.id, r.emoji)}
-                className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
                   r.reacted
                     ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
                     : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'

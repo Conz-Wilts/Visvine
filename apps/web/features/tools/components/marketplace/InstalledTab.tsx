@@ -164,7 +164,7 @@ function InstallRow({
               </Chip>
             )}
             {install.degraded && (
-              <Chip tone="soft" size="sm" color="#b45309">
+              <Chip tone="solid" size="sm" color="#b45309">
                 Degraded
               </Chip>
             )}

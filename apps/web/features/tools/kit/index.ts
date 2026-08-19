@@ -9,8 +9,17 @@
  */
 export * from './components';
 
-export { useQuery, useSubject, useTheme, useVisvine, VisvineProvider } from './hooks';
-export type { QueryResult, VisvineApi } from './hooks';
+export {
+  LIVE_QUERY_POLL_MS,
+  useLiveQuery,
+  usePagedList,
+  useQuery,
+  useSubject,
+  useTheme,
+  useVisvine,
+  VisvineProvider,
+} from './hooks';
+export type { LiveQueryOptions, PagedListOptions, PagedListResult, QueryResult, VisvineApi } from './hooks';
 
 export { BridgeCallError } from './client';
 
@@ -20,6 +29,7 @@ export type {
   ContextEntry,
   ContextHit,
   ContextNote,
+  ContextPage,
   ToolDegraded,
   ToolInstallInfo,
   ToolSubject,

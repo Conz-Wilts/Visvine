@@ -1062,7 +1062,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                     type="button"
                     onClick={cancelAdd}
                     disabled={busy}
-                    className="h-9 rounded-full px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-2 disabled:opacity-40"
+                    className="h-9 rounded-lg px-4 text-sm font-medium text-text-secondary transition hover:bg-surface-2 disabled:opacity-40"
                   >
                     Cancel
                   </button>
@@ -1070,7 +1070,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                     type="button"
                     disabled={busy}
                     onClick={() => void sharePending()}
-                    className="h-9 rounded-full bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                    className="h-9 rounded-lg bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
                   >
                     Share
                   </button>
@@ -1082,7 +1082,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
                 <button
                   type="button"
                   onClick={onClose}
-                  className="h-9 rounded-full bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90"
+                  className="h-9 rounded-lg bg-brand-green px-5 text-sm font-semibold text-white transition hover:opacity-90"
                 >
                   Done
                 </button>

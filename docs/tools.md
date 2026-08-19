@@ -60,6 +60,8 @@ perimeter:
   types: [deal]
   connectors: [hubspot]
   agents: ["deal-*"]
+tags: [crm, kanban]                          # marketplace facets, ≤8, ^[a-z0-9-]{1,24}$
+preview: /api/media/abc123.png               # card image: same-origin /api/media/… only
 ---
 What this Tool is for, in a paragraph or two — author-facing docs, not config.
 ```
@@ -75,6 +77,15 @@ What this Tool is for, in a paragraph or two — author-facing docs, not config.
 - `perimeter` is five deny-by-default lists (`lib/tools/perimeter.ts`): `read`/`write`
   are context-note globs, `types`/`connectors`/`agents` are name lists. **Empty
   means none** — a Tool that declares nothing can only draw its own UI.
+- `tags` and `preview` are **marketplace metadata** (`parseToolTags` /
+  `parseToolPreviewUrl`): tags are lower-cased, de-duplicated, at most 8 and each
+  `^[a-z0-9-]{1,24}$`; `preview` must be a same-origin `/api/media/...` path
+  (upload it through the media route) — **any absolute URL, `https:` included,
+  is refused** at parse time (a third-party host would learn every marketplace
+  visitor's IP the moment the card rendered), as are `data:` and bare
+  filenames, so the card never renders a source a reviewer didn't see. Both are **snapshotted into the published
+  version** (`AppToolVersion.tags` / `previewUrl`, migration
+  `20260821130000_tool_marketplace_meta`) beside the author's `releaseNotes`.
 
 **Glob grammar**, kept deliberately small so a reviewer reading `deals/**` in a
 note knows exactly what it covers:
@@ -131,7 +142,15 @@ and no move, so it cannot free the path either. See
 ## Authoring loop (over MCP)
 
 An authoring agent (Claude Code, Cursor, …) works entirely through Visvine's
-**creator MCP server** — there is no in-app AI Tool builder. Visvine runs two MCP
+**creator MCP server** — there is no in-app AI Tool builder. The one in-app
+door is the **Create panel's Tool tile** (`features/create`, gated on the
+`tools` feature key through `canCreateType` like every other tile, member-open
+because `tools/` is member-writable): a name, title, description and optional
+sidebar label go to `POST /api/communities/[spaceId]/tools/authoring`, which
+calls the same `createTool` scaffold `create_tool` uses (a `railLabel` becomes
+`surfaces.rail` with the default icon), and the success screen shows the
+preview link plus the creator MCP address from `mcpResourceUrl('creator')` —
+"finish it with your coding agent (Settings → MCP)". Visvine runs two MCP
 servers (`lib/mcp/config.ts#MCP_SERVER_KINDS`), each its own OAuth protected
 resource with its own token audience:
 
@@ -158,9 +177,9 @@ obey the caller's real grants.
 | `read_tool` | creator | `context:read` | One Tool's `index.md`/`ui.tsx`/`data.js` (unwrapped) + parsed config + build diagnostics. |
 | `create_tool` | creator | `tools:author` | Creates the entity folder + scaffolds (`lib/tools/service.ts#createTool`); returns the file list, the preview deep link and web URL, and a pointer to `get_tool_sdk`. |
 | `write_tool` | creator | `tools:author` | Writes one of the three files (`writeToolFile`); the response **always** carries the fresh build result. |
-| `check_tool` | creator | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). |
-| `preview_tool` | creator | `tools:author` | The two preview URLs again, plus current build status — no rendering happens over MCP. |
-| `publish_tool` | creator | `tools:author` | `publishTool` — admin-only; explains the review gate in its response. |
+| `check_tool` | creator | `tools:author` | Rebuilds and returns a lint report: config errors, compile diagnostics, `describePerimeter`, `computeRequirements` against this space, and warnings (empty perimeter, a downgraded page claim, a missing description). `render: true` also mounts the working copy headlessly and folds its console errors into the warnings (`runtime` block, no image). |
+| `preview_tool` | creator | `tools:author` | The two preview URLs plus current build status. `screenshot: true` renders the preview headlessly as the caller and returns the image + console errors — see [Preview](#preview). |
+| `publish_tool` | creator | `tools:author` | `publishTool` — admin-only; accepts `release_notes` (≤2KB); explains the review gate — or the trusted-publisher auto-approval — in its response. |
 | `install_tool` | context | `tools:install` | `installVersion` — admin-only; returns the install plus any type-claim conflicts and unmet requirements. |
 
 Every scope is declared in `lib/mcp/scopes.ts#TOOL_SCOPES`, the single source
@@ -199,23 +218,88 @@ anything is published:
   desktop-specific code needed);
 - the **web URL** `${appOrigin}/tools/preview/<name>`.
 
-There is no headless render/screenshot feedback loop to the authoring agent —
-compile diagnostics plus a live preview link is the whole loop.
+There **is** a headless render, opt-in per call, for the agent that cannot open
+a browser: `preview_tool { screenshot: true }` and `check_tool { render: true }`
+(`lib/tools/screenshot.ts#captureToolPreview`). It drives Playwright's Chromium
+at the **real preview page** — `${appOrigin}/tools/preview/<name>` — **as the
+calling principal**: it mints an ordinary session for the caller (the same JWT
+the login flow sets), drops it into a throwaway browser context as the
+`auth_session` cookie, points the space switcher at the target space, and reads
+back exactly what that person would see — same grants, same perimeter, same
+refusals. It is deliberately not a screenshot of the bare frame URL: the frame
+renders nothing until the host's `visvine:init` handshake lands, and every read
+goes back through the host to the bridge, so a fake host would be a second
+bridge to keep honest.
+
+Two limits keep that session from being worth more than the one capture.
+The minted JWT is **short-lived** — `createSession(payload, { maxAgeSeconds:
+PREVIEW_SESSION_TTL_S })`, 120 s, not the 30-day web default — and the page is
+**pinned to the preview URL**: a Tool's `ui.tsx` can call `visvine.navigate` and
+the host will honour any in-app path, and `preview_tool` needs only
+`tools:author`, so without the pin a narrow-scope token could screenshot any
+page the caller's cookie can see. `page.route('**/*')` aborts every
+*main-frame navigation request* whose URL is not the preview URL
+(`previewNavigationAllowed`: same origin and path; query/hash/trailing slash are
+fine; sub-resources, `/api/*` and child frames — the Tool's frame on the tools
+origin included — are never judged), and a `framenavigated` listener catches
+anything that slips past. If the main frame still ends up elsewhere the capture
+answers `{ navigated_away: true, url }` instead of an image (`preview_tool`
+reports it as `screenshot.navigated_away` + `reason`; `check_tool { render }`
+adds a runtime line and `rendered: false`).
+
+What comes back: `screenshot.png_base64` (or `jpeg_base64` when the PNG was
+over ~300 KB — `mime` says which) at 1024×768, `rendered` (did the frame mount
+anything into its root within the ~10 s budget), and `console_errors` — every
+`console.error` and uncaught error from the page **and** the Tool's frame, in
+order. `check_tool { render }` returns the console half only, as `runtime`, and
+prefixes each line into `warnings` (so `ready_to_publish` goes false on a
+runtime error); a build that doesn't compile never launches a browser — an error
+card has no runtime errors worth reading.
+
+Availability is the contract, not success. `playwright` is a devDependency and
+Chromium is a separate download (`pnpm --filter @visvine/web exec playwright
+install chromium`), so the capture answers `{ available: false, reason }` — and
+the links still stand — whenever it cannot run: module missing, browser not
+installed, or **production without `TOOLS_SCREENSHOT=on`** (a browser per call
+is a cost an operator opts into; dev is always allowed). The import is dynamic
+through a variable so a production image built without the package still boots.
 
 ### Publish → review → install → upgrade
 
 1. **Publish** (`publish_tool` / `lib/tools/registry.ts#publishTool`, space admin
    only) snapshots the working copy — config, perimeter, all three sources, both
-   compiled bundles — into an immutable `AppToolVersion` row and queues it
-   `pending`. Refuses a working copy that doesn't compile, and refuses a second
-   pending version for the same Tool (withdraw the first). Version numbers count
-   from 1 and never repeat, even across a rejection.
+   compiled bundles, plus the marketplace metadata: `tags`/`preview` from the
+   config and the author's **release notes** (`release_notes` over MCP, the
+   "Release notes" box in the publish dialog; ≤2 KB, clipped not refused) —
+   into an immutable `AppToolVersion` row and queues it `pending`. Refuses a
+   working copy that doesn't compile, and refuses a second pending version for
+   the same Tool (withdraw the first). Version numbers count from 1 and never
+   repeat, even across a rejection. Release notes are the author's channel
+   *forward* (the card, `ToolDetail`'s version history, the review panel);
+   `reviewNote` stays the reviewer's channel *back*.
 2. **Review** is a **Visvine super-admin** act (`isSuperAdmin`, env-driven —
    this is the one queue in the app that is not space-scoped). They see the
-   declared perimeter and a code diff against the last approved version
-   (`lib/tools/registry.ts#perimeterDiffForVersion`) and approve or reject.
-   Approving flags every install pinned to an older version with an offered
-   upgrade; it never changes what's running anywhere.
+   declared perimeter, the release notes, and a code diff against the last
+   approved version (`lib/tools/registry.ts#perimeterDiffForVersion`) and
+   approve or reject. Approving flags every install pinned to an older version
+   with an offered upgrade; it never changes what's running anywhere.
+
+   **The one exception — trusted publishers.** `TOOLS_TRUSTED_PUBLISHERS` (env,
+   comma-separated space ids) names spaces whose *re*-publishes may skip the
+   queue: `publishTool` runs the pure `shouldAutoApprove` right after the row
+   lands and, when the space is trusted **and** an earlier approved version
+   exists **and** the perimeter diff against it is empty, marks the version
+   `approved` with `reviewedBy: 'auto'` and the note
+   `auto-approved: trusted publisher, unchanged perimeter and surfaces`, audits
+   it, and flags stale installs exactly as a human approval would. The
+   `surfaces` block (rail label/icon, type page/tab claims — `surfacesUnchanged`,
+   compared after normalising, claim order aside) must match the last approved
+   version too: a new rail entry or a claim on a node type's page is new real
+   estate in every installing space even when the reach is the same. A first
+   version, any perimeter or surfaces change, or any untrusted space stays
+   super-admin. Code changes are
+   not inspected — what an install can do is bounded by the perimeter and the
+   viewer's grants, and that bound is what the check proves has not moved.
 3. **Install** (`install_tool` / `lib/tools/installs.ts#installVersion`, space
    admin only) pins the approved version, picks a free slug
    (`deals` → `deals-2` on a clash), and resolves the declared type surfaces
@@ -306,9 +390,9 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 
 | Method | Does |
 |---|---|
-| `context.list` | List note metadata under an optional glob, perimeter- and grant-filtered. |
+| `context.list` | List note metadata under an optional glob, perimeter- and grant-filtered, path order. With `cursor` or `page: true`, answers `{ items, nextCursor }` instead of a plain array (see [Paging](#paging)). |
 | `context.read` | One note's body + parsed frontmatter. |
-| `context.search` | Ranked search over what the viewer can read, perimeter-filtered after ranking. |
+| `context.search` | Ranked search over what the viewer can read, perimeter-filtered after ranking. Pages the same way (`k` is the page size, the cursor is a rank offset, 1,000 hits deep at most). |
 | `context.write` / `context.append` | Write/append a `.md` note — refused for `tools/`, `agents/`, `connectors/`, except that `write` may CREATE the brief of an agent the perimeter names (see [Frontmatter reference](#frontmatter-reference)). |
 | `connectors.call` | Run a declared connector, exactly the path `run_connector` uses. |
 | `agents.run` | Trigger a declared, active agent (author-or-admin, dispatched not awaited). |
@@ -319,6 +403,53 @@ Methods (`lib/tools/protocol.ts#BridgeMethods`):
 `data.call` and `subject.get` are the two methods **not** re-exposed as isolate
 capabilities (`bridgeCapabilities`) — a handler calling `data.call` would nest
 isolates, and `data.js` gets `subject` as a plain global instead.
+
+#### Paging
+
+`context.list`/`context.search` cap at `BRIDGE_LIMITS.maxRows` (200) per call.
+Passing `cursor` (or `page: true` for the first page) switches the answer to
+`{ items, nextCursor }`; the plain-array shape is kept for calls without either,
+so a Tool written before paging existed is unchanged. A cursor is opaque to the
+Tool but plain on the server — base64url of the last path handed out (list is
+path-ordered) or of the rank offset (search) — carries no authority, and is
+re-checked against the perimeter and the viewer's grants on every page; a forged
+one can only skip rows, and a malformed one is `invalid`. The kit exposes it as
+`visvine.context.listPage(glob, cursor)` / `searchPage(query, { k, cursor })` and
+`usePagedList(glob, { pageSize })` (accumulating `items`, `hasMore`, `loadMore`).
+
+### Live data — the changes stream
+
+`GET /api/tools/changes?target=<BridgeTarget JSON>` (`app/api/tools/changes/route.ts`)
+is an SSE stream of **paths** — never content — that changed inside a Tool's read
+perimeter. The host `ToolFrame` opens it once the handshake lands (same-origin,
+viewer's cookie, like the bridge) and relays each batch to the frame as
+`visvine:changed { paths }`; the kit's `useLiveQuery(fn, deps, { paths?, pollMs? })`
+is `useQuery` that re-runs when a changed path matches its globs (or on any
+change when `paths` is omitted), and re-runs anyway every 30s.
+
+The pipeline: the store's write/rename/delete hooks already call
+`lib/tools/hooks.ts`, which now also publishes to `lib/notes/changes.ts` — a
+per-process bus on `globalThis` keyed by space, carrying `{ spaceId, ownerKey,
+path, kind, from? }` (personal contexts included, with their `ownerKey`). The route
+resolves the target with `resolveBridgeTarget` (exactly as the bridge does),
+subscribes to the space, and forwards a path only when `lib/tools/changes.ts#changedPathsFor`
+says so: shared context, inside the perimeter (`refuseRead`), and readable by the
+viewer (`canReadPath` — deletes and the old half of a rename included: a path is a
+name, and the name of a note the viewer could never read is not theirs to hear;
+a frame may therefore miss the delete of a note it could not read, which it had
+nothing showing to refresh). Streams close themselves after 5 min so
+`EventSource`'s reconnect re-resolves the target — a disabled install or a lost
+membership stops hearing changes at the next reconnect at the latest. One user
+holds at most **8 open streams per process** (`lib/tools/streamLimit.ts`,
+`MAX_STREAMS_PER_USER`); the next `GET` is refused with `429 too_many_streams`
+rather than cutting the oldest, and the slot is released on close or abort.
+
+**Best-effort, per-process — by design.** Like `lib/messages/realtime.ts`, the bus
+does not cross Cloud Run instances: a note saved on instance A is not announced to
+a frame streaming from instance B. That is why `useLiveQuery` polls, and why the
+author guide calls the stream a hint and the poll the guarantee. Cross-instance
+realtime needs an external pub/sub (an explicit non-goal for now); when it
+arrives, `publishChange` is the one seam to fan out through.
 
 ### Limits
 
@@ -343,7 +474,7 @@ of 4 — a chatty Tool can't starve connectors and agents of isolate slots. And
 512,000 bytes of source, 1,000,000 bytes of compiled bundle (JSX expands 2-5×),
 10s compile timeout.
 
-`state.set` has two caps of its own (`lib/tools/state.ts`): **16 KB** per
+`state.set` has two caps of its own (`lib/tools/state.ts`): **64 KB** per
 serialized value (`STATE_MAX_BYTES`) and **100 keys** per install
 (`STATE_MAX_KEYS`). Past the key cap an *install* refuses the new key —
 evicting a row an installed Tool relies on would be silent data loss, where a
@@ -448,7 +579,7 @@ resolved against the installing space by `lib/tools/installs.ts#resolveTypeClaim
 | Author (`create_tool`, `write_tool`, edit any of the three notes) | Any member with normal grants — no admin gate on `tools/` |
 | Publish (`publish_tool`) | Space admins (`isAdmin`) |
 | Install / upgrade / enable / uninstall / type claims | Space admins (`isAdmin`) |
-| Review a pending version | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped |
+| Review a pending version | Visvine **super-admins** only (`isSuperAdmin`, env-driven `SUPER_ADMIN_EMAILS`) — the one queue in the app that is not space-scoped. Exception: an unchanged-perimeter re-publish from a `TOOLS_TRUSTED_PUBLISHERS` space is auto-approved (`shouldAutoApprove`) |
 
 This mirrors agents: member-writable brief, admin-gated activation.
 
@@ -535,6 +666,17 @@ alone — the latter means the image was built without `TOOLS_ORIGIN` (the CI
 gate above exists so that should never reach prod, but this is the direct
 check if it ever does).
 
+### `TOOLS_SCREENSHOT` and `TOOLS_TRUSTED_PUBLISHERS`
+
+Both documented in `apps/web/.env.example`. `TOOLS_SCREENSHOT=on` lets a
+production deployment answer `preview_tool { screenshot }` / `check_tool
+{ render }` with a real headless render (the image must carry `playwright`
+and a Chromium — it is a devDependency and is **not** in the standalone image
+today, so the flag alone is not enough there); unset, production is link-only
+and dev is always on. `TOOLS_TRUSTED_PUBLISHERS=space_a,space_b` names the
+spaces whose unchanged-perimeter re-publishes are auto-approved (see the
+review step above); unset means every version is read by a person.
+
 ### Local dev
 
 ```
@@ -543,7 +685,16 @@ TOOLS_ORIGIN=http://127.0.0.1:3000
 
 Vendor ESM (`react.js`, `react-jsx-runtime.js`, `react-dom-client.js`,
 `tool-kit.js`) is built on demand by esbuild in dev
-(`lib/tools/vendorBundle.ts`) and memoised per process. In production the same
+(`lib/tools/vendorBundle.ts`) and memoised per process. `tool-kit.js` bundles
+the kit **and its batteries** — recharts (charts), react-markdown + remark-gfm +
+rehype-sanitize (`Markdown`) — so a Tool imports `LineChart` from
+`@visvine/tool-kit` and never names a library; the compiler's `EXTERNALS` and
+the frame's import map stay at four entries (`react`, `react/jsx-runtime`,
+`react-dom/client`, `@visvine/tool-kit`), and `tests/tools-frame-document.test.ts`
+pins the two lists to each other (bare `react-dom` is refused at compile time for
+exactly that reason). The kit bundle is ~775 KB minified with a 1.5 MB budget
+enforced by `tests/tools-kit-batteries.test.ts`, which also checks that
+`TOOL_KIT_DTS` declares every export the bundle has. In production the same
 four files are prebuilt by `scripts/build-tool-vendor.ts` (wired into
 `apps/web`'s `build` script) into `public/tool-runtime/`, because Next's
 standalone output tracer cannot reach `react-dom`'s client entry through
@@ -587,15 +738,28 @@ to get back to a known board.
 > **Local gotcha.** If this box's `apps/web/.env` still carries a
 > `CLOUD_SQL_CONNECTION_NAME` from a `dev:cloud` session,
 > `scripts/guard-local-db.mjs` refuses on sight even when `DATABASE_URL` points
-> at Docker. Prefix the run with `CLOUD_SQL_CONNECTION_NAME= ` to clear it for
-> that command rather than editing `.env`.
+> at Docker. Clear it for the one command rather than editing `.env`:
+>
+> ```bash
+> CLOUD_SQL_CONNECTION_NAME= pnpm --filter @visvine/web verify:tools   # bash
+> ```
+>
+> That prefix form is **bash only**. In PowerShell `$env:X = ''` sets the
+> variable to an empty string but leaves it defined, which the guard still
+> refuses; remove it from the environment instead:
+>
+> ```powershell
+> Remove-Item Env:\CLOUD_SQL_CONNECTION_NAME -ErrorAction SilentlyContinue
+> pnpm --filter @visvine/web verify:tools
+> ```
 
 ## Code map
 
 `lib/tools/{config,perimeter,protocol,compile,builds,hooks,service,target,bridge,
 dataRun,limits,state,requirements,registry,installs,origin,csp,frameToken,
-frameDocument,vendorBundle,sdkDocs}.ts`, runtime routes under
-`app/api/tools/runtime/*` and `app/api/tools/{bridge,frame-token}/route.ts`, REST
+frameDocument,vendorBundle,sdkDocs,screenshot,changes}.ts`, the change bus
+`lib/notes/changes.ts`, runtime routes under `app/api/tools/runtime/*` and
+`app/api/tools/{bridge,frame-token,changes}/route.ts`, REST
 routes under `app/api/tools/{registry,review}/*` and
 `app/api/communities/[spaceId]/tools/*`, MCP tools in `lib/mcp/appTools.ts`,
 scopes in `lib/mcp/scopes.ts#TOOL_SCOPES`, entity sync (`lib/notes/entities.ts`,

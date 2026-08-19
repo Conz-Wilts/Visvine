@@ -14,6 +14,7 @@ import {
   TOOL_NAME_RE,
   TOOL_RAIL_ICONS,
   TOOL_SOURCE_FILES,
+  TOOL_TAGS_MAX,
   TOOLS_DIR,
   toolDataPath,
   toolFileKindOfPath,
@@ -313,4 +314,66 @@ test('a starter note with no title or description still parses', () => {
     assert.equal(r.config.description, '')
   }
   assert.match(md, /^# scratch$/m)
+})
+
+// ── marketplace metadata: `tags:` and `preview:` (ticket 4.1) ────────────────
+
+test('tags are lower-cased, de-duplicated and capped at TOOL_TAGS_MAX', () => {
+  const r = parseToolConfig({ type: 'tool', tags: ['CRM', 'crm', ' kanban '] }, 'deals')
+  assert.ok(r.ok)
+  assert.deepEqual(r.config.tags, ['crm', 'kanban'])
+  // A bare string is one tag — `tags: crm` is what people write.
+  const one = parseToolConfig({ type: 'tool', tags: 'crm' as unknown as string[] }, 'deals')
+  assert.ok(one.ok)
+  assert.deepEqual(one.config.tags, ['crm'])
+  // Absent means none, not an error.
+  const none = parseToolConfig({ type: 'tool' }, 'deals')
+  assert.ok(none.ok)
+  assert.deepEqual(none.config.tags, [])
+  assert.equal(none.config.previewUrl, null)
+
+  const nine = parseToolConfig({ type: 'tool', tags: Array.from({ length: TOOL_TAGS_MAX + 1 }, (_, i) => `t${i}`) }, 'deals')
+  assert.ok(!nine.ok)
+  assert.match(nine.error, /Too many `tags`/)
+})
+
+test('a tag is short, lower-case, hyphenated — or refused with the rule', () => {
+  for (const bad of ['has space', 'UPPER_CASE_underscore', 'x'.repeat(25), 7, '']) {
+    const r = parseToolConfig({ type: 'tool', tags: [bad] as unknown as string[] }, 'deals')
+    assert.ok(!r.ok, String(bad))
+    assert.match(r.error, /Bad tag|tags are strings/)
+  }
+})
+
+test('preview accepts a same-origin media path and nothing else — not even https', () => {
+  for (const good of ['/api/media/abc123.png', '/api/media/x/y.jpg?v=2']) {
+    const r = parseToolConfig({ type: 'tool', preview: good }, 'deals')
+    assert.ok(r.ok, good)
+    assert.equal(r.config.previewUrl, good)
+  }
+  for (const bad of [
+    // A third-party host would see every marketplace visitor's IP.
+    'https://cdn.example.com/shot.png',
+    'http://cdn.example.com/shot.png',
+    'https://visvine.com/api/media/abc.png',
+    'data:image/png;base64,AAAA',
+    'javascript:alert(1)',
+    'shot.png',
+    '/uploads/shot.png',
+    { url: 'x' },
+  ]) {
+    const r = parseToolConfig({ type: 'tool', preview: bad }, 'deals')
+    assert.ok(!r.ok, JSON.stringify(bad))
+    assert.match(r.error, /`preview`/)
+  }
+})
+
+test('newToolIndexNote can scaffold a rail row from a label', () => {
+  const md = newToolIndexNote({ name: 'deals', title: 'Deals', railLabel: 'Deals' })
+  const r = parseToolConfig(parseFrontmatter(md), 'deals')
+  assert.ok(r.ok)
+  assert.deepEqual(r.config.surfaces.rail, { label: 'Deals', icon: 'grid' })
+  const plain = parseToolConfig(parseFrontmatter(newToolIndexNote({ name: 'deals' })), 'deals')
+  assert.ok(plain.ok)
+  assert.equal(plain.config.surfaces.rail, null)
 })

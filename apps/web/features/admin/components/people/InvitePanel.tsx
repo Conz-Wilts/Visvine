@@ -24,7 +24,6 @@ import {
 } from '@/components/ui';
 import { useConsoleAction } from '@/features/admin/components/console/ConsoleSaveContext';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
-import { McpServerUrlRow, useMcpConnectInfo } from '@/features/settings/components/ConnectClaudePanel';
 import { usePeopleSection } from './PeopleDataContext';
 import { AliasToggle, type PeopleData } from './shared';
 
@@ -81,7 +80,7 @@ function InviteLinkRow({ spaceId }: { spaceId: string }) {
           aria-label="Invite link"
           className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 text-xs text-text-secondary"
         />
-        <Button variant="pill-secondary" onClick={copy} disabled={!url}>
+        <Button variant="brand" onClick={copy} disabled={!url}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>
@@ -179,7 +178,7 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
         </Alert>
       )}
       <div>
-        <Button type="submit" variant="pill-primary" loading={loading} loadingText="Adding…">
+        <Button type="submit" variant="brand" loading={loading} loadingText="Adding…">
           <span className="inline-flex items-center gap-1.5">
             <UserPlusIcon size={14} />
             Add to space
@@ -187,30 +186,6 @@ function InviteByEmail({ spaceId, aliases, onDone }: {
         </Button>
       </div>
     </form>
-  );
-}
-
-/**
- * A pointer, not a control. An MCP connection is per-person — the token belongs
- * to whoever authorises it, and access is re-derived from their membership on
- * every call — so there is nothing an admin can set up here on a member's
- * behalf. Surfacing the address next to the invite link just means admins have
- * it to hand when they onboard someone.
- */
-function ConnectClaudeRow() {
-  const { info } = useMcpConnectInfo();
-
-  return (
-    <div>
-      <McpServerUrlRow url={info?.url ?? null} />
-      <p className="mt-2 text-xs text-text-muted">
-        Each member connects their own Claude from{' '}
-        <a href="/settings?section=mcp" className="font-medium text-text-secondary underline underline-offset-2 hover:text-text-primary">
-          Settings → MCP
-        </a>
-        , where the full instructions live.
-      </p>
-    </div>
   );
 }
 
@@ -241,13 +216,6 @@ export default function InvitePanel() {
             onDone={() => run(async () => {})}
           />
         )}
-      </SettingsSection>
-
-      <SettingsSection
-        title="Connect Claude"
-        description="Members can point Claude at this space's context over MCP. Claude only ever sees what that person can already see here — their spaces, their notes, their permissions."
-      >
-        <ConnectClaudeRow />
       </SettingsSection>
     </div>
   );

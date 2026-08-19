@@ -405,7 +405,7 @@ export default function SpaceSettingsPanel({ space, onSaved }: Props) {
         {deleteError && <Alert variant="error" className="mb-4">{deleteError}</Alert>}
         <Button
           variant="danger"
-          className="inline-flex items-center gap-2 px-4 py-2.5 text-base font-semibold"
+          className="inline-flex items-center gap-2 text-base"
           onClick={() => { setDeleteError(''); setConfirmDelete(true); }}
         >
           <Trash2Icon size={18} aria-hidden />

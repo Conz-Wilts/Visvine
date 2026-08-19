@@ -31,7 +31,7 @@ const STOP_WORDS = new Set([
 // Split text into lowercase word tokens (length >= 3, no stop-words, no digits-
 // only). Markdown punctuation is treated as a separator, so links and formatting
 // don't pollute the vocabulary.
-function tokenize(text: string): string[] {
+export function tokenize(text: string): string[] {
   const out: string[] = []
   for (const raw of text.toLowerCase().split(/[^a-z0-9]+/)) {
     if (raw.length < 3) continue

@@ -10,9 +10,22 @@ import { prefersReducedMotion } from '@/lib/motion'
 
 const GRID_STYLE: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, 260px)',
-  gap: '24px',
-  justifyContent: 'space-evenly',
+  // Fluid columns, not a fixed 260px: a fixed track left whatever the row
+  // couldn't use as dead air between cards (space-evenly spread ~200px of it at
+  // 1440), which reads as a broken grid. `minmax(230px, 1fr)` picks the column
+  // count from the width and then divides the row exactly. The card's height
+  // follows from its width (square media + a fixed-line content block), so every
+  // cell in the grid is still the same size.
+  gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+  gap: '20px',
+  // Scopes the cards' hover z-index to the grid. A hovered card lifts above its
+  // neighbours via `hover:z-10`, but the sticky toolbar is *also* z-10 and shares
+  // a stacking context with the cards — and the reveal wrapper drops its
+  // `card-rise` class (and with it its own stacking context) once the entrance
+  // animation ends, so after that a hovered card would win on DOM order and slide
+  // over the search bar. Isolating here keeps card-over-card working while the
+  // whole grid stays behind the toolbar it scrolls under.
+  isolation: 'isolate',
 }
 
 // useLayoutEffect on the client so the entrance state is set before paint (no
@@ -24,17 +37,13 @@ const STAGGER_STEP_MS = 45
 
 function NodeCardSkeleton() {
   return (
-    <div className="rounded-xl overflow-hidden h-[360px] w-full flex flex-col bg-surface-1 border-4 border-surface-3">
-      <Skeleton className="h-[180px] shrink-0 rounded-none" />
-      <div className="px-4 pt-3 pb-3 flex flex-col flex-1 gap-2 items-center">
-        <Skeleton className="h-3.5 w-3/4" />
-        <Skeleton className="h-5 rounded-md w-20" />
-        <Skeleton className="h-3 w-2/3" />
-        <Skeleton className="h-3 w-1/2" />
-        <div className="mt-auto pt-3 border-t border-surface-3 flex gap-2 w-full">
-          <Skeleton className="flex-1 h-8 rounded-full" />
-          <Skeleton className="flex-1 h-8 rounded-full" />
-        </div>
+    <div className="rounded-2xl overflow-hidden w-full flex flex-col bg-surface-1 border-4 border-surface-3">
+      <Skeleton className="aspect-square w-full shrink-0 rounded-none" />
+      <div className="px-4 pt-3 pb-4 flex flex-col flex-1 items-center">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="mt-2 h-3 w-full" />
+        <Skeleton className="mt-1.5 h-3 w-2/3" />
+        <Skeleton className="mt-3.5 h-5 w-20 rounded-md" />
       </div>
     </div>
   )

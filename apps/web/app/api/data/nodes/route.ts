@@ -211,13 +211,11 @@ export async function PUT(request: NextRequest) {
       data,
     });
 
-    // Keep Person.imageUrl in sync when a person node's image changes
-    if ('image_url' in node && node.id.startsWith('person:')) {
-      await prisma.person.updateMany({
-        where: { id: node.id },
-        data: { imageUrl: node.image_url ?? null },
-      });
-    }
+    // The Person row is deliberately NOT touched. A person node is one space's
+    // card; a Person is that member's own cross-space profile, editable only by
+    // them at PATCH /api/profile/[personId]. Mirroring the image across let any
+    // member of the space replace someone's global profile photo — see the note
+    // in app/api/nodes/[nodeId]/route.ts.
 
     revalidateTag('context-data-v2', { expire: 0 });
     return NextResponse.json({ node: nodeRowToNBNode(row) });

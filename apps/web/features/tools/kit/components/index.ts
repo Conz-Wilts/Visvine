@@ -26,3 +26,15 @@ export { Tabs } from './Tabs';
 export type { TabItem, TabsProps } from './Tabs';
 export { Textarea } from './Textarea';
 export type { TextareaProps } from './Textarea';
+
+// ── batteries (2026-08) ──
+export { AreaChart, BarChart, CHART_COLOR_SLOTS, LineChart, PieChart, Recharts, useChartColors } from './charts';
+export type { ChartProps, ChartSeries, PieChartProps } from './charts';
+export { DataTable } from './DataTable';
+export type { DataTableColumn, DataTableProps, DataTableSort, SortDirection } from './DataTable';
+export { DatePicker } from './DatePicker';
+export type { DatePickerProps } from './DatePicker';
+export { Markdown } from './Markdown';
+export type { MarkdownProps } from './Markdown';
+export { KanbanBoard, KanbanCard, KanbanColumn } from './Kanban';
+export type { KanbanBoardProps, KanbanCardProps, KanbanColumnProps, KanbanMove } from './Kanban';

@@ -19,9 +19,18 @@ import type {
 } from './shared/types'
 import { TRASH_RETENTION_DAYS } from './shared/types'
 import { joinFrontmatter, parseFrontmatter, splitFrontmatter } from './shared/markdown'
-import { ensureToolNode, syncContextLinks, syncContextLinksBulk } from './entityLinks'
-import { agentNoteDeleted, agentNoteRenamed, agentNoteWritten } from '@/lib/agents/hooks'
-import { toolNoteDeleted, toolNoteRenamed, toolNoteWritten } from '@/lib/tools/hooks'
+import { ensureToolNode, syncContextLinksBulk } from './entityLinks'
+import { agentNoteDeleted, agentNoteRenamed } from '@/lib/agents/hooks'
+import { toolNoteDeleted, toolNoteRenamed } from '@/lib/tools/hooks'
+// The write path's outbox. Every mutator below enqueues the rebuild its write
+// owes IN THE SAME TRANSACTION as the write, then settles it inline — see
+// lib/notes/projections.ts for why the fan-out moved there and what it buys.
+import {
+  enqueueProjection,
+  settleBatch,
+  settleProjection,
+  type ProjectionInput,
+} from './projections'
 import {
   entityFlatPath,
   entityIndexPathOf,
@@ -37,11 +46,7 @@ import { revalidateTag } from 'next/cache'
 // writes replicas via writeNote; we call its hooks) are benign: both sides
 // only call each other inside function bodies, never at module init.
 import { invalidateVault } from './vaultCache'
-import {
-  syncPublicationsOnDelete,
-  syncPublicationsOnRename,
-  syncPublicationsOnWrite,
-} from './publications'
+import { syncPublicationsOnDelete, syncPublicationsOnRename } from './publications'
 import {
   INDEX_BASENAME,
   ancestorFolders,
@@ -178,6 +183,12 @@ export async function getNoteCreatedBy(context: Context, path: string): Promise<
 
 // writes
 
+/** The revision-style origin/model stamps a create or rename carries into the agent hook. */
+export interface WriteStamp {
+  origin?: NoteRevisionOrigin
+  model?: string
+}
+
 // Create a note, refusing to overwrite an existing one. Records no revision —
 // the first revision (baseline + edit) is seeded on the first save, matching the
 // source app where note:create is separate from note:write.
@@ -186,6 +197,12 @@ export async function createNote(
   path: string,
   content: string,
   actor: Actor,
+  /**
+   * How the create arose, for the agent hook only (a create records no
+   * revision): an agent run's own creates are stamped `agent` / `agent:<name>`
+   * so they never wake that agent (lib/agents/hooks).
+   */
+  stamp?: WriteStamp,
 ): Promise<RawNote> {
   const requested = await canonicalEntityWritePath(context, path)
   assertMarkdown(requested)
@@ -204,9 +221,19 @@ export async function createNote(
       const dest = await ensureEntityFolderFor(context, requested, actor, content)
       const row = await findLive(context, dest)
       if (!row) throw new Error(`Note not found: ${dest}`)
-      await syncContextLinks(context, dest, row.content)
-      await agentNoteWritten(context, dest, actor, { changed: true })
-      await toolNoteWritten(context, dest)
+      // The folder was built by helpers that own their own writes, so there is
+      // no note transaction left to ride; enqueue the rebuild on its own and
+      // settle it the same way. The row is still what carries a failure forward.
+      const projection: ProjectionInput = {
+        context,
+        path: dest,
+        kind: 'write',
+        origin: stamp?.origin ?? 'edit',
+        actor,
+        model: stamp?.model,
+        changed: true,
+      }
+      await settleProjection(await enqueueProjection(prisma, projection), projection)
       return toRaw(row)
     }
   }
@@ -218,23 +245,31 @@ export async function createNote(
   // frontmatter says, so the Index type is enforced rather than trusted.
   if (isIndexPath(p)) content = await enforceIndexContract(context, p, content)
   if (await findLive(context, p)) throw new Error(`A note already exists at: ${p}`)
-  const row = await prisma.contextNote.create({
-    data: {
-      spaceId: context.spaceId,
-      ownerKey: context.ownerKey,
-      path: p,
-      content,
-      starred: isStarred(content),
-      createdBy: actor.id,
-    },
-    select: { path: true, content: true, updatedAt: true },
+  const projection: ProjectionInput = {
+    context,
+    path: p,
+    kind: 'write',
+    origin: stamp?.origin ?? 'edit',
+    actor,
+    model: stamp?.model,
+    changed: true,
+  }
+  const { row, jobId } = await prisma.$transaction(async (tx) => {
+    const row = await tx.contextNote.create({
+      data: {
+        spaceId: context.spaceId,
+        ownerKey: context.ownerKey,
+        path: p,
+        content,
+        starred: isStarred(content),
+        createdBy: actor.id,
+      },
+      select: { path: true, content: true, updatedAt: true },
+    })
+    return { row, jobId: await enqueueProjection(tx, projection) }
   })
   if (isIndexPath(p)) await upsertFolderRow(context, folderOf(p))
-  await syncContextLinks(context, p, content)
-  await agentNoteWritten(context, p, actor, { changed: true })
-  await toolNoteWritten(context, p)
-  await ensureAncestorIndexes(context, p, actor)
-  await refreshIndexesForNote(context, p)
+  await settleProjection(jobId, projection)
   invalidateVault(context)
   return toRaw(row)
 }
@@ -305,7 +340,7 @@ export async function refreshFolderIndex(context: Context, folder: string): Prom
  * Refresh the indexes that list `notePath`: the folder it lives in, and — when
  * the note IS a folder's index — the parent folder that lists that folder.
  */
-async function refreshIndexesForNote(context: Context, notePath: string): Promise<void> {
+export async function refreshIndexesForNote(context: Context, notePath: string): Promise<void> {
   const own = folderOf(notePath)
   await refreshFolderIndex(context, own)
   if (isIndexPath(notePath) && own) await refreshFolderIndex(context, folderOf(own))
@@ -465,45 +500,51 @@ export async function writeNote(
     content = applyChildrenBlock(content, [])
   }
 
-  const note = existing
-    ? await prisma.contextNote.update({
-        where: { id: existing.id },
-        data: { content, starred: isStarred(content) },
-      })
-    : await prisma.contextNote.create({
-        data: {
-          spaceId: context.spaceId,
-          ownerKey: context.ownerKey,
-          path: p,
-          content,
-          starred: isStarred(content),
-          createdBy: actor.id,
-        },
-      })
+  // The note row and the record that its projections are owed commit together.
+  // Before the outbox these were the same statement plus six bare awaits, so a
+  // crash between them left a stored declaration with stale derived state and
+  // nothing anywhere saying so. See lib/notes/projections.ts.
+  const { note, jobId } = await prisma.$transaction(async (tx) => {
+    const note = existing
+      ? await tx.contextNote.update({
+          where: { id: existing.id },
+          data: { content, starred: isStarred(content) },
+        })
+      : await tx.contextNote.create({
+          data: {
+            spaceId: context.spaceId,
+            ownerKey: context.ownerKey,
+            path: p,
+            content,
+            starred: isStarred(content),
+            createdBy: actor.id,
+          },
+        })
+    const jobId = await enqueueProjection(tx, {
+      context,
+      path: p,
+      kind: 'write',
+      origin,
+      actor,
+      model,
+      changed: prev !== content,
+    })
+    return { note, jobId }
+  })
 
-  // Entity notes drive directory links: re-derive this note's 'mentioned' edges
-  // from its [[mentions]]. Best-effort (no-op for personal contexts / non-entity
-  // paths); runs even on no-op saves so a missed sync self-heals on next save.
-  await syncContextLinks(context, p, content)
-
-  // Agent notes drive the scheduler's state row (activation → nextRunAt; a
-  // member's edit to a live brief → auto-deactivate). No-op elsewhere.
-  await agentNoteWritten(context, p, actor, { changed: prev !== content })
-
-  // Tool notes drive the compiled working copy: every save recompiles the
-  // Tool's sources so the author sees compile errors on the write itself.
-  // No-op elsewhere, and skipped by hash when nothing actually changed.
-  await toolNoteWritten(context, p)
-
-  // Refresh this note's published replicas in other contexts. Origin 'publish'
-  // IS a replica write — skipping it is what stops replication cascades and
-  // publish cycles dead. Best-effort like the link sync; self-heals on no-op
-  // saves the same way.
-  if (origin !== 'publish') await syncPublicationsOnWrite(context, p, content, actor)
-
-  // Upsert-created notes (e.g. an entity note's first save) get folder indexes too.
-  if (existing === null) await ensureAncestorIndexes(context, p, actor)
-  await refreshIndexesForNote(context, p)
+  // Rebuild what this write derives — directory links, agent state, the Tool
+  // build, space-config columns, published replicas, folder indexes. Runs inline
+  // so the author still sees a compile error on save; the difference the outbox
+  // makes is that a failure is now recorded and retried rather than swallowed.
+  await settleProjection(jobId, {
+    context,
+    path: p,
+    kind: 'write',
+    origin,
+    actor,
+    model,
+    changed: prev !== content,
+  })
 
   // Even a no-op save bumped updatedAt above, so the memo's stamp is stale.
   invalidateVault(context)
@@ -605,6 +646,8 @@ export async function renameNote(
   from: string,
   to: string,
   actor?: Actor,
+  /** How the rename arose (agent hook only): an agent's own moves never wake it. */
+  stamp?: WriteStamp,
 ): Promise<string> {
   const f = sanitizePath(from)
   const t = sanitizePath(to)
@@ -621,13 +664,20 @@ export async function renameNote(
       throw new Error(`"${entityOwnerPathOf(t)}" is not a folder yet — open the entity and add a note first`)
     }
   }
-  await prisma.contextNote.update({ where: { id: row.id }, data: { path: t } })
-  // A rename changes which entity (if any) the note is canonical for: drop the
-  // old path's context links, derive the new path's. Publications and any
-  // note-level grants follow the note to its new path.
+  const mover: Actor = actor ?? { id: 'system', name: 'System', email: null }
+  const projection: ProjectionInput =
+    { context, path: t, kind: 'rename', fromPath: f, origin: stamp?.origin ?? 'edit', actor: mover, model: stamp?.model }
+  const jobId = await prisma.$transaction(async (tx) => {
+    await tx.contextNote.update({ where: { id: row.id }, data: { path: t } })
+    return t === f ? null : await enqueueProjection(tx, projection)
+  })
+
+  // A rename changes which entity (if any) the note is canonical for: the old
+  // path's context links are dropped and the new path's derived. That, the
+  // publication follow and both folder indexes are projections and live on the
+  // job. Grants and boundary flags do NOT: they are the structural half of the
+  // move, must apply exactly once, and so stay here with the path update.
   if (t !== f) {
-    await syncContextLinksBulk(context, [f], [[t, row.content]])
-    await syncPublicationsOnRename(context, f, t)
     if (context.ownerKey === SHARED_OWNER_KEY) {
       await prisma.contextGrant.updateMany({
         where: { spaceId: context.spaceId, resourcePath: f },
@@ -635,11 +685,7 @@ export async function renameNote(
       })
     }
     await moveFolderFlags(context, f, t)
-    // Both ends list the note: the folder it left and the folder it landed in.
-    await refreshIndexesForNote(context, f)
-    await refreshIndexesForNote(context, t)
-    await agentNoteRenamed(context, f, t)
-    await toolNoteRenamed(context, f, t)
+    if (jobId) await settleProjection(jobId, projection)
   }
   invalidateVault(context)
   return t // revisions stay attached by noteId
@@ -650,16 +696,23 @@ export async function renameNote(
 export async function deleteNote(context: Context, path: string): Promise<void> {
   const row = await findLive(context, sanitizePath(path))
   if (!row) return
-  await prisma.contextNote.update({
-    where: { id: row.id },
-    data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
+  const projection: ProjectionInput = {
+    context,
+    path: row.path,
+    kind: 'delete',
+    origin: 'edit',
+    actor: { id: 'system', name: 'System', email: null },
+  }
+  const jobId = await prisma.$transaction(async (tx) => {
+    await tx.contextNote.update({
+      where: { id: row.id },
+      data: { deletedAt: new Date(), deletedPath: row.path, path: `:trash:${row.id}` },
+    })
+    return enqueueProjection(tx, projection)
   })
-  await syncContextLinks(context, row.path, null) // trashed note owns no context links
-  // Trashing either end of a publication deactivates it (replica stays a copy).
-  await syncPublicationsOnDelete(context, [row.path])
-  await refreshIndexesForNote(context, row.path)
-  await agentNoteDeleted(context, row.path)
-  await toolNoteDeleted(context, row.path)
+  // Drops the note's context links, deactivates its publications, relists the
+  // folder that held it, and tells the agent/Tool hooks it is gone.
+  await settleProjection(jobId, projection)
   invalidateVault(context)
 }
 
@@ -705,12 +758,26 @@ export async function restoreTrash(context: Context, id: string): Promise<string
   while (await findLive(context, dest)) {
     dest = row.deletedPath.replace(/\.md$/i, '') + `-${n++}.md`
   }
-  await prisma.contextNote.update({
-    where: { id: row.id },
-    data: { deletedAt: null, deletedPath: null, path: dest },
+  // A restore is a write as far as everything downstream is concerned: the note
+  // re-owns its context links, relists in its folder, and — this is what the old
+  // two-hook version missed — a restored agent brief or Tool source rebuilds its
+  // state instead of coming back as a note nothing is watching.
+  const projection: ProjectionInput = {
+    context,
+    path: dest,
+    kind: 'write',
+    origin: 'restore',
+    actor: { id: row.createdBy, name: 'System', email: null },
+    changed: true,
+  }
+  const jobId = await prisma.$transaction(async (tx) => {
+    await tx.contextNote.update({
+      where: { id: row.id },
+      data: { deletedAt: null, deletedPath: null, path: dest },
+    })
+    return enqueueProjection(tx, projection)
   })
-  await syncContextLinks(context, dest, row.content) // restored entity note re-owns its links
-  await refreshIndexesForNote(context, dest)
+  await settleProjection(jobId, projection)
   invalidateVault(context)
   return dest
 }
@@ -1059,30 +1126,49 @@ export async function renameFolder(
     },
     select: { id: true, path: true, content: true },
   })
-  for (const note of notes) {
-    await prisma.contextNote.update({
-      where: { id: note.id },
-      data: { path: t + note.path.slice(f.length) },
-    })
-  }
-  // Moving into/out of the people|companies namespaces changes which notes are
-  // canonical entity notes — resync both sides (no-op when neither is involved).
-  await syncContextLinksBulk(
-    context,
-    notes.map((n) => n.path),
-    notes.map((n) => [t + n.path.slice(f.length), n.content]),
-  )
-  // Publications follow every moved note (independent rows — overlap the round-trips).
-  await Promise.all(
-    notes.map((note) => syncPublicationsOnRename(context, note.path, t + note.path.slice(f.length))),
-  )
-  // Agent briefs moved by a folder rename deactivate like a single rename does;
-  // a Tool folder moved this way rebuilds under its new name and drops the old.
-  for (const note of notes) {
-    const to = t + note.path.slice(f.length)
-    await agentNoteRenamed(context, note.path, to)
-    await toolNoteRenamed(context, note.path, to)
-  }
+  // Every moved note's path update and its rebuild-owed row commit together, so
+  // a crash part-way through a large folder move leaves the drain a complete
+  // list of what still needs projecting rather than a silent half-migration.
+  const mover: Actor = actor ?? { id: 'system', name: 'System', email: null }
+  const jobIds = await prisma.$transaction(async (tx) => {
+    const ids: string[] = []
+    for (const note of notes) {
+      const to = t + note.path.slice(f.length)
+      await tx.contextNote.update({ where: { id: note.id }, data: { path: to } })
+      ids.push(
+        await enqueueProjection(tx, {
+          context,
+          path: to,
+          kind: 'rename',
+          fromPath: note.path,
+          origin: 'edit',
+          actor: mover,
+        }),
+      )
+    }
+    return ids
+  })
+
+  await settleBatch(jobIds, async () => {
+    // Moving into/out of the people|companies namespaces changes which notes are
+    // canonical entity notes — resync both sides (no-op when neither is involved).
+    await syncContextLinksBulk(
+      context,
+      notes.map((n) => n.path),
+      notes.map((n) => [t + n.path.slice(f.length), n.content]),
+    )
+    // Publications follow every moved note (independent rows — overlap the round-trips).
+    await Promise.all(
+      notes.map((note) => syncPublicationsOnRename(context, note.path, t + note.path.slice(f.length))),
+    )
+    // Agent briefs moved by a folder rename deactivate like a single rename does;
+    // a Tool folder moved this way rebuilds under its new name and drops the old.
+    for (const note of notes) {
+      const to = t + note.path.slice(f.length)
+      await agentNoteRenamed(context, note.path, to, actor)
+      await toolNoteRenamed(context, note.path, to)
+    }
+  })
   // Grants ride the rename too — a moved team subtree keeps its access rows.
   if (context.ownerKey === SHARED_OWNER_KEY) {
     await prisma.contextGrant.updateMany({
@@ -1158,18 +1244,34 @@ export async function deleteFolder(context: Context, path: string): Promise<void
     },
     select: { id: true, path: true },
   })
-  for (const note of notes) {
-    await prisma.contextNote.update({
-      where: { id: note.id },
-      data: { deletedAt: new Date(), deletedPath: note.path, path: `:trash:${note.id}` },
-    })
-  }
-  await syncContextLinksBulk(context, notes.map((n) => n.path)) // trashed entity notes drop their links
-  await syncPublicationsOnDelete(context, notes.map((n) => n.path))
-  for (const note of notes) {
-    await agentNoteDeleted(context, note.path)
-    await toolNoteDeleted(context, note.path)
-  }
+  const jobIds = await prisma.$transaction(async (tx) => {
+    const ids: string[] = []
+    for (const note of notes) {
+      await tx.contextNote.update({
+        where: { id: note.id },
+        data: { deletedAt: new Date(), deletedPath: note.path, path: `:trash:${note.id}` },
+      })
+      ids.push(
+        await enqueueProjection(tx, {
+          context,
+          path: note.path,
+          kind: 'delete',
+          origin: 'edit',
+          actor: { id: 'system', name: 'System', email: null },
+        }),
+      )
+    }
+    return ids
+  })
+
+  await settleBatch(jobIds, async () => {
+    await syncContextLinksBulk(context, notes.map((n) => n.path)) // trashed entity notes drop their links
+    await syncPublicationsOnDelete(context, notes.map((n) => n.path))
+    for (const note of notes) {
+      await agentNoteDeleted(context, note.path)
+      await toolNoteDeleted(context, note.path)
+    }
+  })
   await prisma.contextFolder.deleteMany({
     where: {
       spaceId: context.spaceId,

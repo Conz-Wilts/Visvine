@@ -53,7 +53,7 @@ export default function EditSkillsModal({ open, onClose, tags, onSave }: Props) 
         <p className="text-xs text-brand-grey">Type a skill and press Enter to add it.</p>
         <div className="min-h-[80px] flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-brand-dark-green/30">
           {items.map((tag) => (
-            <span key={tag} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-dark-green bg-brand-light-bg rounded-full">
+            <span key={tag} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-brand-green rounded-md">
               {tag}
               <button type="button" onClick={() => removeTag(tag)} className="text-brand-grey hover:text-red-500 transition-colors">
                 <XIcon className="w-3 h-3" />

@@ -15,6 +15,7 @@
  * numbers an author reads are the numbers the server enforces.
  */
 import { BRIDGE_LIMITS } from './protocol'
+import { STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
 
 /**
  * Ambient declarations for the bare specifier a Tool imports. An authoring
@@ -27,6 +28,7 @@ export const TOOL_KIT_DTS = `// Type definitions for @visvine/tool-kit
 
 declare module '@visvine/tool-kit' {
   import type { ButtonHTMLAttributes, InputHTMLAttributes, JSX, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react'
+  import type * as RechartsNamespace from 'recharts'
 
   // ── data shapes ──
 
@@ -72,6 +74,12 @@ declare module '@visvine/tool-kit' {
     score: number
   }
 
+  /** One page of a paged list/search. nextCursor is opaque; null on the last page. */
+  export interface ContextPage<T> {
+    items: T[]
+    nextCursor: string | null
+  }
+
   export type BridgeErrorCode =
     | 'perimeter'
     | 'forbidden'
@@ -97,14 +105,23 @@ declare module '@visvine/tool-kit' {
 
   export interface VisvineApi {
     context: {
+      /** Notes in the read perimeter, path order, capped at one page (${BRIDGE_LIMITS.maxRows} rows). */
       list(glob?: string): Promise<ContextEntry[]>
+      /** One page of list; pass the previous nextCursor for the next page. */
+      listPage(glob?: string, cursor?: string | null): Promise<ContextPage<ContextEntry>>
       read(path: string): Promise<ContextNote>
       search(query: string, k?: number): Promise<ContextHit[]>
+      /** One page of search; k is the page size. */
+      searchPage(query: string, opts?: { k?: number; cursor?: string | null }): Promise<ContextPage<ContextHit>>
       write(path: string, content: string): Promise<{ path: string }>
       append(path: string, text: string): Promise<{ path: string }>
     }
     connectors: {
-      call<T = unknown>(name: string, code: string): Promise<T>
+      /**
+       * Run a declared connector: JavaScript in its isolate, or one of the
+       * connector's named actions with args.
+       */
+      call<T = unknown>(name: string, codeOrOpts: string | { action: string; args?: unknown } | { code: string }): Promise<T>
     }
     agents: {
       run(name: string): Promise<{ runId: string }>
@@ -143,6 +160,41 @@ declare module '@visvine/tool-kit' {
 
   /** Runs fn when deps change, drops superseded results, hands back a reload. */
   export function useQuery<T>(fn: () => Promise<T>, deps: unknown[]): QueryResult<T>
+
+  export interface LiveQueryOptions {
+    /** Reload only when a changed note path matches one of these globs. Omit = any change. */
+    paths?: string[]
+    /** Poll fallback interval in ms (default 30000; 0 disables). */
+    pollMs?: number
+  }
+  /**
+   * useQuery that re-runs when notes change: Visvine tells the frame which
+   * paths changed (best-effort, may be missed) and a poll every pollMs catches
+   * the rest. Refreshes do not flip loading; refreshing says one is in flight.
+   */
+  /** The poll interval useLiveQuery falls back to (30s). */
+  export const LIVE_QUERY_POLL_MS: number
+  export function useLiveQuery<T>(
+    fn: () => Promise<T>,
+    deps: unknown[],
+    opts?: LiveQueryOptions,
+  ): QueryResult<T> & { refreshing: boolean }
+
+  export interface PagedListOptions {
+    /** Rows per loadMore; at most the bridge row cap. */
+    pageSize?: number
+  }
+  export interface PagedListResult<T> {
+    items: T[]
+    loading: boolean
+    loadingMore: boolean
+    error: Error | null
+    hasMore: boolean
+    loadMore: () => void
+    reload: () => void
+  }
+  /** Page through context.list(glob); items accumulate across loadMore. */
+  export function usePagedList(glob: string | undefined, opts?: PagedListOptions): PagedListResult<ContextEntry>
 
   // ── components ──
   // Styled from Visvine's theme tokens. Use these before writing your own CSS,
@@ -263,6 +315,142 @@ declare module '@visvine/tool-kit' {
     children?: ReactNode
   }
   export function Banner(props: BannerProps): JSX.Element
+
+  // ── data table ──
+  // Table plus sorting, a sticky header and windowing for large sets.
+
+  export type SortDirection = 'asc' | 'desc'
+  export interface DataTableSort {
+    key: string
+    direction: SortDirection
+  }
+  export interface DataTableColumn<T> extends TableColumn<T> {
+    /** true sorts by value(row) ?? row[key]; a function is the comparator. */
+    sortable?: boolean | ((a: T, b: T) => number)
+    value?: (row: T) => unknown
+  }
+  export interface DataTableProps<T> {
+    columns: Array<DataTableColumn<T>>
+    rows: T[]
+    rowKey: (row: T, index: number) => string
+    onRowClick?: (row: T) => void
+    empty?: ReactNode
+    defaultSort?: DataTableSort
+    sort?: DataTableSort | null
+    onSortChange?: (sort: DataTableSort | null) => void
+    /** Cap the body height (px): the header sticks and the body scrolls. */
+    maxHeight?: number
+    /** Render only visible rows (needs maxHeight). true = 40px rows. */
+    virtualize?: boolean | { rowHeight: number; overscan?: number }
+    className?: string
+  }
+  export function DataTable<T>(props: DataTableProps<T>): JSX.Element
+
+  // ── charts ──
+  // Built on recharts with the space's theme colours. For anything the wrappers
+  // do not expose, use the raw primitives under Recharts.
+
+  export interface ChartSeries {
+    key: string
+    label?: string
+    color?: string
+  }
+  export interface ChartProps {
+    data: Array<Record<string, unknown>>
+    /** Key of the x (category/time) axis. */
+    x: string
+    series: Array<string | ChartSeries>
+    height?: number
+    legend?: boolean
+    grid?: boolean
+    tooltip?: boolean
+    /** Bar/Area: stack the series. */
+    stacked?: boolean
+    formatValue?: (value: number) => string
+    formatX?: (value: unknown) => string
+    className?: string
+    children?: ReactNode
+  }
+  export function LineChart(props: ChartProps): JSX.Element
+  export function BarChart(props: ChartProps): JSX.Element
+  export function AreaChart(props: ChartProps): JSX.Element
+  export interface PieChartProps {
+    data: Array<Record<string, unknown>>
+    nameKey: string
+    valueKey: string
+    height?: number
+    legend?: boolean
+    tooltip?: boolean
+    donut?: boolean
+    colors?: string[]
+    formatValue?: (value: number) => string
+    className?: string
+    children?: ReactNode
+  }
+  export function PieChart(props: PieChartProps): JSX.Element
+  /** The theme's chart palette (--vv-chart-1..8), resolved to colour strings. */
+  export function useChartColors(): string[]
+  export const CHART_COLOR_SLOTS: number
+  /** The whole recharts API (ResponsiveContainer, ComposedChart, ReferenceLine, …). */
+  export const Recharts: typeof RechartsNamespace
+
+  // ── date picker ──
+
+  export interface DatePickerProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange' | 'min' | 'max'> {
+    /** YYYY-MM-DD or null. */
+    value: string | null
+    onChange: (value: string | null) => void
+    min?: string
+    max?: string
+  }
+  export function DatePicker(props: DatePickerProps): JSX.Element
+
+  // ── markdown ──
+
+  export interface MarkdownProps {
+    /** Markdown source — a note's content, say. Sanitised; http(s) links only. */
+    source: string
+    className?: string
+    /** Every link click, with the raw href. Return false to also let the default happen. */
+    onLinkClick?: (href: string) => void | boolean
+  }
+  /** Renders markdown safely (GFM: tables, task lists). In-app links navigate. */
+  export function Markdown(props: MarkdownProps): JSX.Element | null
+
+  // ── kanban ──
+  // Headless about data: you own columns and cards; the board reports moves.
+
+  export interface KanbanMove {
+    cardId: string
+    fromColumnId: string
+    toColumnId: string
+    /** Position in the destination column after the move. */
+    index: number
+  }
+  export interface KanbanBoardProps {
+    onMove: (move: KanbanMove) => void
+    className?: string
+    children: ReactNode
+  }
+  export function KanbanBoard(props: KanbanBoardProps): JSX.Element
+  export interface KanbanColumnProps {
+    id: string
+    title: ReactNode
+    count?: number
+    actions?: ReactNode
+    empty?: ReactNode
+    className?: string
+    children?: ReactNode
+  }
+  export function KanbanColumn(props: KanbanColumnProps): JSX.Element
+  export interface KanbanCardProps {
+    id: string
+    onClick?: () => void
+    className?: string
+    children: ReactNode
+  }
+  /** Drag with the pointer to move; click still fires when there was no drag. */
+  export function KanbanCard(props: KanbanCardProps): JSX.Element
 }
 `
 
@@ -305,6 +493,9 @@ perimeter:
   types: [deal]
   connectors: [hubspot]
   agents: ["deal-*"]
+tags: [crm, kanban]                        # optional marketplace tags: ≤8, [a-z0-9-]{1,24}
+preview: /api/media/…                      # optional marketplace preview image (same-origin
+                                           # /api/media/… path only — upload it first)
 ---
 
 What this Tool is for, in a paragraph or two.
@@ -394,8 +585,9 @@ Rules:
 
 - \`export default\` a component named \`Tool\`. It takes no props — everything
   arrives through \`useVisvine()\`.
-- Import only \`react\` and \`@visvine/tool-kit\`. There is no package install
-  step and no npm at runtime; any other import fails to compile.
+- Import only \`react\`, \`react-dom/client\` and \`@visvine/tool-kit\`. There is no
+  package install step and no npm at runtime; any other import — including bare
+  \`react-dom\` and \`recharts\` — fails to compile. Charts come from the kit.
 - Do not render your own page chrome. The app supplies the navbar, the sidebar
   and the page frame. Your Tool is the content.
 - The frame is sized to your content automatically. Do not use
@@ -403,6 +595,62 @@ Rules:
   a Tool cannot escape it anyway.
 - \`visvine.subject\` is set when your Tool owns a type page: it is the note or
   node whose page is being rendered. It is null on your Tool's own page.
+
+## What the kit gives you
+
+Layout and chrome: \`PageHeader\`, \`Card\`, \`Stack\`, \`Tabs\`, \`Banner\`, \`Chip\`,
+\`EmptyState\`, \`Spinner\`. Forms: \`Field\`, \`Input\`, \`Textarea\`, \`Select\`,
+\`DatePicker\` (\`YYYY-MM-DD\` strings), \`Button\`. Data: \`Table\` for a few rows,
+\`DataTable\` for many (sortable columns, sticky header, \`maxHeight\` +
+\`virtualize\` for thousands of rows). Content: \`Markdown\` renders a note body
+safely. Charts: \`LineChart\`, \`BarChart\`, \`AreaChart\`, \`PieChart\` — recharts
+underneath, already themed; the raw recharts API is on \`Recharts\` for anything
+else (\`<Recharts.ComposedChart>\`, \`<Recharts.ReferenceLine>\`). Boards:
+\`KanbanBoard\` / \`KanbanColumn\` / \`KanbanCard\` — you own the data, the board
+calls \`onMove\` and you write the note.
+
+\`\`\`tsx
+<BarChart data={rows} x="month" series={['won', 'lost']} stacked height={220} />
+<DataTable
+  columns={[{ key: 'title', header: 'Deal', render: (r) => r.title, sortable: true, value: (r) => r.title }]}
+  rows={deals} rowKey={(r) => r.path} maxHeight={480} virtualize
+/>
+<KanbanBoard onMove={({ cardId, toColumnId }) => visvine.context.write(cardId, withStage(toColumnId))}>
+  {stages.map((s) => (
+    <KanbanColumn key={s} id={s} title={s} count={byStage[s].length}>
+      {byStage[s].map((d) => <KanbanCard key={d.path} id={d.path}>{d.title}</KanbanCard>)}
+    </KanbanColumn>
+  ))}
+</KanbanBoard>
+\`\`\`
+
+## Live data
+
+\`useLiveQuery\` is \`useQuery\` that stays current:
+
+\`\`\`tsx
+const deals = useLiveQuery(() => visvine.context.list('deals/**'), [], { paths: ['deals/**'] })
+\`\`\`
+
+When a note inside your read perimeter is written, renamed or deleted, Visvine
+tells the frame which paths changed and the query re-runs if one matches
+\`paths\` (or on any change when \`paths\` is omitted). This is **best-effort**:
+the change feed is per server process and a change on another instance, or a
+dropped connection, is not delivered — so the hook also re-runs every 30
+seconds (\`pollMs\`), which is the guarantee. Refreshes never flip \`loading\`
+back on; read \`refreshing\` if you want a subtle indicator. Do not build your
+own poll on top of it, and do not expect to see your own write echo faster than
+the bridge call that made it returns.
+
+## Paging
+
+\`context.list\` and \`context.search\` cap at ${BRIDGE_LIMITS.maxRows} rows. For more, page:
+\`visvine.context.listPage(glob, cursor)\` / \`searchPage(query, { k, cursor })\`
+answer \`{ items, nextCursor }\`; hand \`nextCursor\` back until it is null. In the
+UI, \`usePagedList(glob, { pageSize })\` accumulates \`items\` and gives you
+\`hasMore\` / \`loadMore\` for a "Load more" button or an infinite scroll. Paging
+is by path order for lists and by rank for search, and the same perimeter and
+grants apply to every page.
 
 ## data.js
 
@@ -423,6 +671,14 @@ Call it from the UI with \`visvine.data.call('summary', { ... })\`.
 Handlers run in a sandboxed isolate with the same \`visvine\` object the UI has
 and the same perimeter. There is no filesystem, no socket and no \`process\`; a
 handler that has not returned within ${Math.round(BRIDGE_LIMITS.dataCallTimeoutMs / 1000)} seconds is killed.
+Handlers also get \`visvine.crypto\` — \`hmac(alg, key, data)\`, \`hash(alg, data)\`,
+\`randomHex(n)\`, \`base64.encode/decode\`, \`timingSafeEqual(a, b)\` — for the odd
+signature or digest; strings in, strings out.
+
+\`visvine.connectors.call(name, code)\` runs JavaScript inside a declared
+connector's isolate; \`visvine.connectors.call(name, { action, args })\` runs one
+of the connector's named actions instead (see its page for the list) — the
+reviewable choice when the connector offers one.
 
 ## Limits
 
@@ -434,9 +690,14 @@ handler that has not returned within ${Math.round(BRIDGE_LIMITS.dataCallTimeoutM
 | Bytes of params in one call | ${BRIDGE_LIMITS.maxParamsBytes.toLocaleString('en-US')} |
 | Calls per minute, per viewer | ${BRIDGE_LIMITS.callsPerMinute} |
 | One \`data.call\` | ${Math.round(BRIDGE_LIMITS.dataCallTimeoutMs / 1000)}s |
+| One \`state.set\` value, serialized | ${STATE_MAX_BYTES.toLocaleString('en-US')} bytes |
+| Keys in \`visvine.state\`, per install | ${STATE_MAX_KEYS} |
 
-Paginate rather than asking for everything: a list that would exceed the row cap
-comes back truncated, not as an error.
+Page rather than asking for everything: an unpaged list that would exceed the
+row cap comes back truncated, not as an error — use \`listPage\` / \`usePagedList\`
+to see the rest. \`visvine.state\` is for UI preferences (a chosen filter, a column
+order), not for space data — that belongs in notes, where it is searchable and
+shared.
 
 ## Failure
 
@@ -477,7 +738,8 @@ broken instead of incomplete.
   all four either fail or do nothing. \`visvine.state\` replaces the first two.
 - Don't import a UI library or a CSS framework. Nothing resolves at runtime and
   the bundle has a size cap.
-- Don't poll. Query on mount and after a write, and give the reader a refresh.
+- Don't poll. Query on mount and after a write, give the reader a refresh, and
+  use \`useLiveQuery\` where staying current matters — it already polls, gently.
 - Don't put a secret in \`ui.tsx\` or \`data.js\`. Both are readable by anyone who
   can read the note, and a published Tool ships its source into the registry.
 `

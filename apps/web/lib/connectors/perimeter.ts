@@ -13,7 +13,12 @@
  * without a port" means 443 for an HTTPS call and 5432 for a Postgres DSN.
  */
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
-import { matchAllowlist, normalizeRequestPath, type AllowRule } from './config'
+import { hostAllowed, matchAllowlist, normalizeRequestPath, type AllowRule } from './config'
+
+// `hostAllowed` lives in config.ts (pure, client-safe: identity.ts needs it and
+// config.ts is bundled into client components, so it cannot reach this module's
+// SSRF import). Re-exported for the callers that find it here.
+export { hostAllowed }
 
 export interface GatePerimeter {
   /** `host` or `host:port` entries. Empty means no network at all. */
@@ -26,36 +31,6 @@ export interface GatePerimeter {
 
 /** The most denials one run will collect before it stops recording them. */
 export const MAX_DENIALS = 50
-
-function normalizeHost(host: string): string {
-  return host.trim().toLowerCase().replace(/\.$/, '')
-}
-
-/**
- * Does the perimeter list this host+port? An entry without a port pins the
- * caller's default; an explicit `host:port` entry allows exactly that port.
- */
-export function hostAllowed(
-  hosts: readonly string[],
-  hostname: string,
-  port: number,
-  defaultPort: number,
-): boolean {
-  const wanted = normalizeHost(hostname)
-  return hosts.some((entry) => {
-    const [entryHost, entryPort] = splitHostPort(entry)
-    if (normalizeHost(entryHost) !== wanted) return false
-    return entryPort === null ? port === defaultPort : port === entryPort
-  })
-}
-
-/** `host[:port]` → parts; a bad port reads as null (host-only entry). */
-function splitHostPort(entry: string): [string, number | null] {
-  const m = entry.match(/^(.*):(\d{1,5})$/)
-  if (!m) return [entry, null]
-  const port = Number(m[2])
-  return port >= 1 && port <= 65535 ? [m[1], port] : [entry, null]
-}
 
 /**
  * The host gate: listed, then publicly routable. Returns null when allowed and

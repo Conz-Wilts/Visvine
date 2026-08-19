@@ -17,7 +17,8 @@ import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import PDFViewer from '@/features/resources/components/PDFViewer';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
-  FileTypeIcon, FILE_BADGE, FILE_LABEL, getPinned, togglePin, DocxViewer,
+  FileTypeIcon, FILE_BADGE, FILE_LABEL, INDEX_STATE_LABEL,
+  getPinned, togglePin, DocxViewer, FileUnavailable,
 } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
 import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
@@ -70,6 +71,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const [selectedCellValue, setSelectedCellValue] = useState('');
   const [showPropose, setShowPropose] = useState(false);
   const [changeKey, setChangeKey] = useState(0);
+  const [reindexing, setReindexing] = useState(false);
 
   const [comments, setComments] = useState<ResourceComment[]>([]);
   const [changes, setChanges] = useState<ResourceChange[]>([]);
@@ -85,6 +87,17 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       setLoading(false);
     }
   }, [resourceId]);
+
+  /** Re-run extraction, chunking and embedding for this file, then reload it. */
+  const handleReindex = useCallback(async () => {
+    setReindexing(true);
+    try {
+      await fetch(`/api/resources/${encodeURIComponent(resourceId)}/reindex`, { method: 'POST' });
+      await fetchDetail();
+    } finally {
+      setReindexing(false);
+    }
+  }, [resourceId, fetchDetail]);
 
   const fetchComments = useCallback(() => {
     fetch(`/api/resources/${encodeURIComponent(resourceId)}/comments`)
@@ -170,16 +183,47 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
         </div>
 
         <div className="flex items-center gap-1.5 flex-none">
+          {/* The file's RAG state, and the repair for it. A file the pipeline
+              could not read is stored but invisible to search, which is worth
+              saying out loud next to the one button that fixes it. */}
+          {(() => {
+            const state = INDEX_STATE_LABEL[resource.indexState];
+            if (!state) return null;
+            const retryable = resource.indexState === 'failed' || resource.indexState === 'pending';
+            return (
+              <span
+                title={resource.indexError ?? undefined}
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium border ${state.className}`}
+              >
+                {state.label}
+                {resource.indexState === 'indexed' && resource.chunkCount
+                  ? ` · ${resource.chunkCount}`
+                  : null}
+                {retryable && (
+                  <button
+                    type="button"
+                    onClick={handleReindex}
+                    disabled={reindexing}
+                    className="font-bold underline underline-offset-2 disabled:opacity-50"
+                  >
+                    {reindexing ? 'Indexing…' : 'Re-index'}
+                  </button>
+                )}
+              </span>
+            );
+          })()}
           {isSpreadsheet && selectedCell && (
             <button onClick={() => setShowPropose(true)}
                     className="hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-xl text-[13px] font-bold text-brand-dark-green bg-brand-light-bg border border-brand-green/40 hover:bg-brand-green/15 transition">
               <GitPullRequestIcon className="w-4 h-4" /> Propose change · {selectedCell}
             </button>
           )}
-          <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
-             className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-[13px] font-bold text-white bg-brand-green hover:opacity-95 active:scale-[0.99] transition">
-            <DownloadIcon className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
-          </a>
+          {resource.fileUrl && (
+            <a href={resource.fileUrl} target="_blank" rel="noopener noreferrer"
+               className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl text-[13px] font-bold text-white bg-brand-green hover:opacity-95 active:scale-[0.99] transition">
+              <DownloadIcon className="w-4 h-4" /> <span className="hidden sm:inline">Download</span>
+            </a>
+          )}
           <IconBtn title={pinned ? 'Unpin' : 'Pin'} onClick={handlePin} active={pinned}>
             <BookmarkIcon className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} />
           </IconBtn>
@@ -229,14 +273,16 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
       <div className="flex flex-1 min-h-0 flex-col lg:flex-row overflow-y-auto lg:overflow-hidden border-t border-border-subtle">
         {/* viewer */}
         <div className="flex flex-col flex-1 min-w-0 min-h-[60vh] lg:min-h-0 bg-surface-2">
-          {resource.fileType === 'pdf' ? (
+          {resource.fileType === 'docx' ? (
+            <div className="flex flex-1 overflow-hidden bg-surface-1"><DocxViewer resourceId={resource.id} /></div>
+          ) : !resource.fileUrl ? (
+            <FileUnavailable />
+          ) : resource.fileType === 'pdf' ? (
             <PDFViewer fileUrl={resource.fileUrl} />
           ) : resource.fileType === 'image' ? (
             <div className="flex flex-1 items-center justify-center overflow-auto p-8">
               <img src={resource.fileUrl} alt={resource.name} className="max-w-full max-h-full object-contain rounded-xl shadow" />
             </div>
-          ) : resource.fileType === 'docx' ? (
-            <div className="flex flex-1 overflow-hidden bg-surface-1"><DocxViewer resourceId={resource.id} /></div>
           ) : isSpreadsheet ? (
             <div className="flex-1 overflow-hidden flex flex-col bg-surface-1">
               <SpreadsheetViewer
@@ -256,6 +302,11 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
                  className="mt-1 inline-flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-bold text-white bg-brand-green hover:opacity-95 transition">
                 <DownloadIcon className="w-4 h-4" /> Download
               </a>
+              {resource.indexState === 'indexed' && (
+                <p className="text-xs text-text-tertiary">
+                  Its contents are indexed and searchable from the context.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -335,7 +386,7 @@ function PanelTabBtn({ active, onClick, icon, label, count, highlight }: {
       {icon} {label}
       {count != null && count > 0 && (
         <span className={`inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10.5px] font-bold ${
-          highlight ? 'bg-amber-100 text-amber-700' : 'bg-surface-3 text-text-muted'
+          highlight ? 'bg-amber-500 text-white' : 'bg-surface-3 text-text-muted'
         }`}>
           {count}
         </span>
@@ -392,7 +443,7 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
               </div>
               {c.cellRef && (
                 <button onClick={() => onSelectCell?.(c.cellRef ?? null)} disabled={!onSelectCell}
-                        className="mt-1.5 inline-flex items-center h-5 px-2 rounded-full text-[10.5px] font-bold bg-brand-light-bg text-brand-dark-green border border-brand-green/40 disabled:cursor-default">
+                        className="mt-1.5 inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-brand-green text-white disabled:cursor-default">
                   {c.cellRef}
                 </button>
               )}
@@ -442,7 +493,7 @@ function ChangesTab({ changes, canReview, onReview }: {
       {changes.map((c) => (
         <div key={c.id} className="rounded-2xl border border-border-subtle p-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center h-5 px-2 rounded-full text-[10.5px] font-bold bg-brand-light-bg text-brand-dark-green border border-brand-green/40">
+            <span className="inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-bold bg-brand-green text-white">
               {c.cellRef}
             </span>
             <StatusBadge status={c.status} />
@@ -475,12 +526,12 @@ function ChangesTab({ changes, canReview, onReview }: {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    approved: 'bg-green-50 text-green-700 border-green-200',
-    rejected: 'bg-rose-50 text-rose-700 border-rose-200',
+    pending: 'bg-amber-500 text-white border-amber-500',
+    approved: 'bg-green-600 text-white border-green-600',
+    rejected: 'bg-rose-600 text-white border-rose-600',
   };
   return (
-    <span className={`inline-flex items-center h-5 px-2 rounded-full text-[10.5px] font-semibold border capitalize ${styles[status] ?? 'bg-surface-2 text-text-muted border-border-default'}`}>
+    <span className={`inline-flex items-center h-5 px-2 rounded-md text-[10.5px] font-semibold border capitalize ${styles[status] ?? 'bg-surface-2 text-text-muted border-border-default'}`}>
       {status}
     </span>
   );

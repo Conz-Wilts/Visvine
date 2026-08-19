@@ -447,10 +447,8 @@ export default function MessageComposer({
                     <p className="text-xs text-text-muted truncate">{result.subtitle}</p>
                   )}
                 </div>
-                <span className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                  result.type === 'event'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-blue-100 text-blue-700'
+                <span className={`ml-auto shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white ${
+                  result.type === 'event' ? 'bg-red-600' : 'bg-blue-600'
                 }`}>
                   {result.type === 'event' ? 'Event' : 'Person'}
                 </span>

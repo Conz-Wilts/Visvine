@@ -287,7 +287,7 @@ export default function AddMembersModal({
                     <button
                       type="button"
                       onClick={() => handleInvite(person)}
-                      className={`shrink-0 flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-150 ${
+                      className={`shrink-0 flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-semibold transition-all duration-150 ${
                         isCopied
                           ? 'border-brand-green bg-brand-green/10 text-brand-green'
                           : 'border-border-default text-text-muted hover:border-brand-green hover:bg-brand-green/5 hover:text-brand-green'

@@ -65,6 +65,8 @@ export interface BridgeClient {
   onInit(fn: (init: ToolInitMessage) => void): Unsubscribe;
   onTheme(fn: (theme: Record<string, string>) => void): Unsubscribe;
   onSubject(fn: (subject: ToolSubject | null) => void): Unsubscribe;
+  /** Note paths inside the perimeter changed. Best-effort; see useLiveQuery. */
+  onChanged(fn: (paths: string[]) => void): Unsubscribe;
   /** Tell the host the frame is listening. The host replies with `visvine:init`. */
   ready(): void;
   /** Report an uncaught error so the host can render its error card. */
@@ -88,7 +90,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * A local, structural read of the four host messages this client acts on.
+ * A local, structural read of the five host messages this client acts on.
  * Deliberately not `isHostMessage` from lib/tools/protocol — importing it as a
  * value would drag app code into the sandbox bundle. The origin check above is
  * the security boundary; this is only here so a malformed message is dropped
@@ -103,6 +105,7 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
   const initListeners = new Set<(init: ToolInitMessage) => void>();
   const themeListeners = new Set<(theme: Record<string, string>) => void>();
   const subjectListeners = new Set<(subject: ToolSubject | null) => void>();
+  const changedListeners = new Set<(paths: string[]) => void>();
 
   let lastInit: ToolInitMessage | null = null;
   let seq = 0;
@@ -148,6 +151,13 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       case 'visvine:subject': {
         const subject = (data as { subject: ToolSubject | null }).subject ?? null;
         subjectListeners.forEach((fn) => fn(subject));
+        break;
+      }
+      case 'visvine:changed': {
+        const paths = (data as { paths?: unknown }).paths;
+        if (Array.isArray(paths) && paths.every((p) => typeof p === 'string')) {
+          changedListeners.forEach((fn) => fn(paths as string[]));
+        }
         break;
       }
       default:
@@ -207,6 +217,10 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       return subscribe(subjectListeners, fn);
     },
 
+    onChanged(fn) {
+      return subscribe(changedListeners, fn);
+    },
+
     ready() {
       post({ type: 'visvine:ready', version: PROTOCOL_VERSION });
     },
@@ -236,6 +250,7 @@ export function createBridgeClient(win: Window, parentOrigin: string): BridgeCli
       initListeners.clear();
       themeListeners.clear();
       subjectListeners.clear();
+      changedListeners.clear();
     },
   };
 }

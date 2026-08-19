@@ -11,7 +11,10 @@
  *   description: One line, shown on the roster
  *   model: gemini/gemma-4-31b-it      # <provider>/<model-id>, registry name never a URL
  *   connectors: [hubspot]             # declared reach — names under connectors/
- *   tools: [web]                      # optional extras: web (fetch_url), sandbox (stage 2)
+ *   tools: [web]                      # optional extras: web (fetch_url), sandbox (run_code),
+ *                                     #   messages (notify to a channel), directory (create_node/link_nodes)
+ *   agents: [digest]                  # optional — agents this one may chain into with run_agent
+ *   dry_run: true                     # optional — writes are captured in the transcript, not applied
  *   max_turns: 16                     # optional, 1..40
  *   ---
  *   The body is the brief. It is WRAPPED (a fixed preamble + the body), not
@@ -21,11 +24,18 @@
  *   ---
  *   type: agent-activation
  *   active: true
- *   schedule: daily                   # hourly | daily | weekly
+ *   schedule: daily                   # hourly | daily | weekly   (XOR with `every`)
  *   at: "07:00"                       # daily / weekly
- *   on: monday                        # weekly
+ *   on: monday                        # weekly (a bare string is the weekday)
+ *   every: 15m                        # Nm | Nh (5m..24h) or a 5-field cron
+ *   on:                               # a MAP declares event triggers
+ *     context: ["people/**"]          #   note created/saved/renamed-to under a glob
+ *     webhook: hubspot                #   connector whose inbound hook feeds this agent
+ *     weekday: monday                 #   only with schedule: weekly (the bare string, moved here)
+ *   debounce: 2m                      # coalesce window: Ns | Nm, default 60s, max 30m
  *   timezone: Pacific/Auckland        # optional → Space.timezone → UTC
  *   ---
+ *   An active agent needs at least one of `schedule`, `every` or `on`.
  *
  * Budget is deliberately NOT here: it lives on the AgentState row because
  * money is admin-read while notes are member-read.
@@ -41,11 +51,30 @@ const AGENT_TYPE = 'agent'
 const ACTIVATION_TYPE = 'agent-activation'
 const DEFAULT_MAX_TURNS = 16
 const MAX_MAX_TURNS = 40
-const AGENT_TOOL_EXTRAS = ['web', 'sandbox'] as const
+const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory'] as const
 type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
 
 export function agentBriefPath(name: string): string {
   return `agents/${name}.md`
+}
+
+/** The href of an agent's page — where notifications about it point. */
+export function agentPageHref(name: string): string {
+  return `/directory/${encodeURIComponent(`agent:${name}`)}`
+}
+
+/** The agent name an agent-page href names, or null. Inverse of agentPageHref (either encoding). */
+export function agentNameOfHref(href: string | null | undefined): string | null {
+  if (!href) return null
+  const m = /^\/directory\/(agent(?::|%3A)[^/?#]+)/i.exec(href)
+  if (!m) return null
+  let id: string
+  try {
+    id = decodeURIComponent(m[1])
+  } catch {
+    return null
+  }
+  return id.startsWith('agent:') ? id.slice('agent:'.length) || null : null
 }
 export function agentActivationPath(name: string): string {
   return `agents/live/${name}.md`
@@ -61,6 +90,10 @@ export interface AgentBrief {
   modelRef: ModelRef
   connectors: string[]
   tools: AgentToolExtra[]
+  /** Agents (by name) this one may start with run_agent — empty means the tool is not offered. */
+  agents: string[]
+  /** `dry_run: true` — writes are recorded in the transcript instead of applied. */
+  dryRun: boolean
   maxTurns: number
   /** The system-prompt body (markdown after the frontmatter), trimmed. */
   body: string
@@ -107,6 +140,19 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
     extras.push(key as AgentToolExtra)
   }
 
+  const agents = stringList(fm.agents, 'agents')
+  if (!agents.ok) return agents
+  for (const a of agents.list) {
+    if (!AGENT_NAME_RE.test(a)) return { ok: false, error: `agent name "${a}" in \`agents\` is not valid` }
+  }
+
+  let dryRun = false
+  if (fm.dry_run !== undefined && fm.dry_run !== null && fm.dry_run !== '') {
+    const raw = typeof fm.dry_run === 'string' ? fm.dry_run.trim().toLowerCase() : fm.dry_run
+    if (raw === true || raw === 'true') dryRun = true
+    else if (raw !== false && raw !== 'false') return { ok: false, error: '`dry_run` must be true or false' }
+  }
+
   let maxTurns = DEFAULT_MAX_TURNS
   if (fm.max_turns !== undefined && fm.max_turns !== null) {
     const n = typeof fm.max_turns === 'number' ? fm.max_turns : Number(fm.max_turns)
@@ -128,6 +174,8 @@ export function parseAgentBrief(fm: NoteFrontmatter, body: string): ParseBriefRe
       modelRef: model.ref,
       connectors: connectors.list,
       tools: extras,
+      agents: agents.list,
+      dryRun,
       maxTurns,
       body: trimmedBody,
     },
@@ -142,17 +190,59 @@ export type AgentSchedule =
   | { kind: 'hourly' }
   | { kind: 'daily'; hour: number; minute: number }
   | { kind: 'weekly'; hour: number; minute: number; weekday: number } // 0 = Sunday
+  | { kind: 'interval'; minutes: number } // `every: 15m`
+  | { kind: 'cron'; expr: string; fields: CronFields } // `every: "*/10 9-17 * * 1-5"`
+
+/** The `on:` map — what, besides the clock, wakes the agent. */
+export interface AgentTriggers {
+  /** Note globs (`**` any depth, `*` one segment); never matches under agents/. */
+  context: string[]
+  /** Connector name whose inbound webhook feeds this agent. */
+  webhook: string | null
+}
 
 export interface AgentActivation {
   active: boolean
+  /**
+   * The clock: hourly/daily/weekly from `schedule`, interval/cron from `every`.
+   * Null for a purely event-driven agent.
+   */
   schedule: AgentSchedule | null
+  /** The raw `every:` value as written (`15m`, a cron line), or null. */
+  every: string | null
+  /** Event triggers from an `on:` map, or null when `on` is absent / a weekday. */
+  on: AgentTriggers | null
+  /** Coalesce window for events (`debounce:`), in ms. Default 60 s. */
+  debounceMs: number
   /** IANA zone named by the note, or null to fall back to the Space's. */
   timezone: string | null
+  /**
+   * Whose stored connections this agent spends, for connectors with an `auth:`
+   * block (lib/connectors/auth.ts). A run has no person of its own, so one has
+   * to be named — and it lives HERE, on the admin-only live note, rather than in
+   * the member-writable brief. Writing your own agent must not be a way to make
+   * it act as somebody with more access than you.
+   *
+   *   null            space connections only. An agent that reaches a
+   *                   `mode: user` connector fails with a clear message rather
+   *                   than silently borrowing whoever's token is nearest.
+   *   <user id>       run as that member. Their access becomes the agent's
+   *                   access, and the far side's audit log will name them.
+   */
+  runsAs: string | null
 }
 
 export type ParseActivationResult = { ok: true; activation: AgentActivation } | { ok: false; error: string }
 
 const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/
+const EVERY_RE = /^(\d{1,4})\s*([mh])$/i
+const DEBOUNCE_RE = /^(\d{1,5})\s*([sm])$/i
+const WEBHOOK_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+const MIN_INTERVAL_MINUTES = 5
+const MAX_INTERVAL_MINUTES = 24 * 60
+export const DEFAULT_DEBOUNCE_MS = 60_000
+const MAX_DEBOUNCE_MS = 30 * 60_000
+const MIN_DEBOUNCE_MS = 5_000
 
 export function isValidTimeZone(tz: string): boolean {
   try {
@@ -185,6 +275,8 @@ export function parseAgentActivation(fm: NoteFrontmatter): ParseActivationResult
     timezone = fm.timezone.trim()
   }
 
+  const onIsMap = fm.on !== null && typeof fm.on === 'object' && !Array.isArray(fm.on)
+
   let schedule: AgentSchedule | null = null
   if (fm.schedule !== undefined && fm.schedule !== null && fm.schedule !== '') {
     const kind = typeof fm.schedule === 'string' ? fm.schedule.trim().toLowerCase() : ''
@@ -196,7 +288,9 @@ export function parseAgentActivation(fm: NoteFrontmatter): ParseActivationResult
       if (kind === 'daily') {
         schedule = { kind: 'daily', ...at }
       } else {
-        const on = typeof fm.on === 'string' ? fm.on.trim().toLowerCase() : ''
+        // `on: monday`, or — when `on` is a trigger map — `on: { weekday: monday, … }`.
+        const onRaw = onIsMap ? (fm.on as Record<string, unknown>).weekday : fm.on
+        const on = typeof onRaw === 'string' ? onRaw.trim().toLowerCase() : ''
         const weekday = (WEEKDAYS as readonly string[]).indexOf(on)
         if (weekday === -1) return { ok: false, error: '`on` must name a weekday (monday … sunday) for a weekly schedule' }
         schedule = { kind: 'weekly', ...at, weekday }
@@ -206,13 +300,238 @@ export function parseAgentActivation(fm: NoteFrontmatter): ParseActivationResult
     }
   }
 
-  if (active && !schedule) return { ok: false, error: 'an active agent needs a `schedule`' }
-  return { ok: true, activation: { active, schedule, timezone } }
+  let every: string | null = null
+  if (fm.every !== undefined && fm.every !== null && fm.every !== '') {
+    if (schedule) return { ok: false, error: '`schedule` and `every` are exclusive — use one or the other' }
+    const parsed = parseEvery(fm.every)
+    if (!parsed.ok) return parsed
+    schedule = parsed.schedule
+    every = String(fm.every).trim()
+  }
+
+  let on: AgentTriggers | null = null
+  if (onIsMap) {
+    const parsed = parseTriggers(fm.on as Record<string, unknown>)
+    if (!parsed.ok) return parsed
+    on = parsed.triggers
+  } else if (fm.on !== undefined && fm.on !== null && fm.on !== '' && schedule?.kind !== 'weekly') {
+    if (typeof fm.on !== 'string' || !(WEEKDAYS as readonly string[]).includes(fm.on.trim().toLowerCase())) {
+      return { ok: false, error: '`on` must be a weekday (for a weekly schedule) or a map with `context` / `webhook`' }
+    }
+  }
+
+  let debounceMs = DEFAULT_DEBOUNCE_MS
+  if (fm.debounce !== undefined && fm.debounce !== null && fm.debounce !== '') {
+    const parsed = parseDebounce(fm.debounce)
+    if (parsed === null) return { ok: false, error: '`debounce` must be like "30s" or "2m" (5s … 30m)' }
+    debounceMs = parsed
+  }
+
+  let runsAs: string | null = null
+  if (fm.runs_as !== undefined && fm.runs_as !== null && fm.runs_as !== '') {
+    if (typeof fm.runs_as !== 'string' || !fm.runs_as.trim()) {
+      return { ok: false, error: '`runs_as` must be the user id of the member whose connections this agent may spend' }
+    }
+    runsAs = fm.runs_as.trim()
+  }
+
+  if (active && !schedule && !on) return { ok: false, error: 'an active agent needs a `schedule`, an `every` interval or an `on` trigger' }
+  return { ok: true, activation: { active, schedule, every, on, debounceMs, timezone, runsAs } }
+}
+
+/** `every:` → an interval (`15m`, `2h`) or a cron schedule. */
+export function parseEvery(raw: unknown): { ok: true; schedule: AgentSchedule } | { ok: false; error: string } {
+  const text = typeof raw === 'string' ? raw.trim() : typeof raw === 'number' ? String(raw) : ''
+  if (!text) return { ok: false, error: '`every` must be an interval like "15m" / "2h" or a 5-field cron expression' }
+  const m = EVERY_RE.exec(text)
+  if (m) {
+    const n = Number(m[1])
+    const minutes = m[2].toLowerCase() === 'h' ? n * 60 : n
+    if (minutes < MIN_INTERVAL_MINUTES || minutes > MAX_INTERVAL_MINUTES) {
+      return { ok: false, error: `\`every\` must be between ${MIN_INTERVAL_MINUTES}m and 24h` }
+    }
+    return { ok: true, schedule: { kind: 'interval', minutes } }
+  }
+  const cron = parseCron(text)
+  if (!cron.ok) return { ok: false, error: `\`every\` is not a valid interval or cron expression: ${cron.error}` }
+  if (cronMinGapMinutes(cron.fields.minutes) < MIN_INTERVAL_MINUTES) {
+    return { ok: false, error: `cron fires more often than every ${MIN_INTERVAL_MINUTES} minutes` }
+  }
+  return { ok: true, schedule: { kind: 'cron', expr: text, fields: cron.fields } }
+}
+
+/**
+ * The smallest gap (minutes) between two firings a cron minute set allows
+ * inside one hour, wrapping the hour boundary — `*` is 1, `0,30` is 30, `0`
+ * is 60. The floor `every: 5m` enforces applies to crons too, or
+ * `"* * * * *"` would be a way round it.
+ */
+function cronMinGapMinutes(minutes: number[]): number {
+  const sorted = [...new Set(minutes)].sort((a, b) => a - b)
+  if (sorted.length <= 1) return 60
+  let min = 60
+  for (let i = 0; i < sorted.length; i++) {
+    const next = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + 60
+    min = Math.min(min, next - sorted[i])
+  }
+  return min
+}
+
+/** `debounce:` → ms, or null when malformed / out of range. */
+export function parseDebounce(raw: unknown): number | null {
+  const text = typeof raw === 'string' ? raw.trim() : typeof raw === 'number' ? `${raw}s` : ''
+  const m = DEBOUNCE_RE.exec(text)
+  if (!m) return null
+  const ms = Number(m[1]) * (m[2].toLowerCase() === 'm' ? 60_000 : 1_000)
+  if (ms < MIN_DEBOUNCE_MS || ms > MAX_DEBOUNCE_MS) return null
+  return ms
+}
+
+/** The `on:` map. */
+export function parseTriggers(raw: Record<string, unknown>): { ok: true; triggers: AgentTriggers } | { ok: false; error: string } {
+  for (const key of Object.keys(raw)) {
+    if (key !== 'context' && key !== 'webhook' && key !== 'weekday') {
+      return { ok: false, error: `\`on.${key}\` is not a trigger — use \`context\` (note globs) or \`webhook\` (connector name)` }
+    }
+  }
+  const globs = stringList(raw.context, 'on.context')
+  if (!globs.ok) return globs
+  for (const g of globs.list) {
+    const problem = globProblem(g)
+    if (problem) return { ok: false, error: `\`on.context\` glob "${g}" ${problem}` }
+  }
+  let webhook: string | null = null
+  if (raw.webhook !== undefined && raw.webhook !== null && raw.webhook !== '') {
+    if (typeof raw.webhook !== 'string' || !WEBHOOK_NAME_RE.test(raw.webhook.trim())) {
+      return { ok: false, error: '`on.webhook` must be a connector name (lowercase letters, digits, - and _)' }
+    }
+    webhook = raw.webhook.trim()
+  }
+  if (globs.list.length === 0 && !webhook) return { ok: false, error: '`on` must declare `context` globs and/or a `webhook` connector' }
+  return { ok: true, triggers: { context: globs.list, webhook } }
 }
 
 /** A stable fingerprint of what dispatch derives from — the note is authoritative. */
 export function scheduleHash(activation: AgentActivation, effectiveTz: string): string {
-  return JSON.stringify([activation.active, activation.schedule, effectiveTz])
+  // `runsAs` is deliberately absent: it changes whose credentials a run spends,
+  // not when the run happens, and folding it in would reschedule every agent
+  // whenever an admin repointed one.
+  return JSON.stringify([activation.active, activation.schedule, effectiveTz, activation.every, activation.on, activation.debounceMs])
+}
+
+// ── Globs ────────────────────────────────────────────────────────────────────
+
+const GLOB_MAX = 200
+
+/**
+ * `**` matches any number of path segments (including none), `*` matches
+ * within one segment, everything else is literal. Anchored to the whole path.
+ */
+export function globToRegExp(glob: string): RegExp {
+  let out = '^'
+  const g = glob.trim().replace(/^\/+/, '')
+  for (let i = 0; i < g.length; i++) {
+    const c = g[i]
+    if (c === '*') {
+      if (g[i + 1] === '*') {
+        // `**/` swallows the slash too, so `people/**` matches `people/x.md`
+        // and `**/x.md` matches `x.md`.
+        const slash = g[i + 2] === '/'
+        out += slash ? '(?:.*/)?' : '.*'
+        i += slash ? 2 : 1
+      } else {
+        out += '[^/]*'
+      }
+    } else if (/[.+?^${}()|[\]\\]/.test(c)) {
+      out += `\\${c}`
+    } else {
+      out += c
+    }
+  }
+  return new RegExp(out + '$')
+}
+
+/** Why a trigger glob is refused, or null when it is fine. */
+export function globProblem(glob: string): string | null {
+  const g = glob.trim()
+  if (!g) return 'is empty'
+  if (g.length > GLOB_MAX) return `is longer than ${GLOB_MAX} characters`
+  if (g.includes('..')) return 'may not contain ".."'
+  const re = globToRegExp(g)
+  // A trigger may never fire on the agents' own notes: an agent that reacts to
+  // a brief or an activation note is a loop waiting to happen.
+  for (const probe of ['agents/probe.md', 'agents/live/probe.md', 'agents/probe/index.md']) {
+    if (re.test(probe)) return 'could match under agents/ — name a folder such as people/** instead'
+  }
+  return null
+}
+
+/** Does `path` match any of the globs? Paths under agents/ never match. */
+export function matchesAnyGlob(path: string, globs: string[]): boolean {
+  if (path === 'agents' || path.startsWith('agents/')) return false
+  return globs.some((g) => globToRegExp(g).test(path))
+}
+
+// ── Cron (5 fields, minimal: `*`, `*\/n`, lists, ranges, `a-b/n`) ────────────
+
+interface CronFields {
+  minutes: number[]
+  hours: number[]
+  daysOfMonth: number[] | null // null = every
+  months: number[] | null
+  daysOfWeek: number[] | null // 0 = Sunday (7 folded to 0)
+}
+
+const CRON_RANGES: [number, number][] = [
+  [0, 59],
+  [0, 23],
+  [1, 31],
+  [1, 12],
+  [0, 7],
+]
+
+function parseCronField(field: string, min: number, max: number): number[] | null {
+  const out = new Set<number>()
+  for (const part of field.split(',')) {
+    const m = /^(\*|\d{1,2}(?:-\d{1,2})?)(?:\/(\d{1,2}))?$/.exec(part.trim())
+    if (!m) return null
+    let lo = min
+    let hi = max
+    if (m[1] !== '*') {
+      const [a, b] = m[1].split('-').map(Number)
+      lo = a
+      hi = b === undefined ? (m[2] ? max : a) : b
+      if (lo < min || hi > max || lo > hi) return null
+    }
+    const step = m[2] ? Number(m[2]) : 1
+    if (step < 1) return null
+    for (let v = lo; v <= hi; v += step) out.add(v)
+  }
+  return [...out].sort((a, b) => a - b)
+}
+
+function parseCron(expr: string): { ok: true; fields: CronFields } | { ok: false; error: string } {
+  const parts = expr.trim().split(/\s+/)
+  if (parts.length !== 5) return { ok: false, error: 'expected 5 fields (minute hour day-of-month month day-of-week)' }
+  const parsed: number[][] = []
+  for (let i = 0; i < 5; i++) {
+    const [min, max] = CRON_RANGES[i]
+    const values = parseCronField(parts[i], min, max)
+    if (!values) return { ok: false, error: `field ${i + 1} ("${parts[i]}") is not valid` }
+    parsed.push(values)
+  }
+  const every = (values: number[], min: number, max: number) => values.length === max - min + 1
+  const dow = [...new Set(parsed[4].map((d) => (d === 7 ? 0 : d)))].sort((a, b) => a - b)
+  return {
+    ok: true,
+    fields: {
+      minutes: parsed[0],
+      hours: parsed[1],
+      daysOfMonth: every(parsed[2], 1, 31) ? null : parsed[2],
+      months: every(parsed[3], 1, 12) ? null : parsed[3],
+      daysOfWeek: dow.length === 7 ? null : dow,
+    },
+  }
 }
 
 // ── Schedule math (Intl only, no tz library) ─────────────────────────────────
@@ -323,6 +642,13 @@ export function nextOccurrence(schedule: AgentSchedule, after: Date, tz: string)
     const ms = after.getTime()
     return new Date((Math.floor(ms / 3_600_000) + 1) * 3_600_000)
   }
+  if (schedule.kind === 'interval') {
+    // Aligned to epoch multiples so `every: 15m` fires at :00/:15/:30/:45 and a
+    // late tick doesn't drift the grid.
+    const step = schedule.minutes * 60_000
+    return new Date((Math.floor(after.getTime() / step) + 1) * step)
+  }
+  if (schedule.kind === 'cron') return nextCronOccurrence(schedule.fields, after, tz)
   const now = wallClockAt(after, tz)
   const horizon = schedule.kind === 'daily' ? 3 : 9
   for (let d = 0; d < horizon; d++) {
@@ -338,12 +664,45 @@ export function nextOccurrence(schedule: AgentSchedule, after: Date, tz: string)
   return new Date(after.getTime() + 24 * 3_600_000)
 }
 
+/**
+ * The next wall-clock minute in `tz` matching the cron fields, strictly after
+ * `after`. Day-of-month and day-of-week are ANDed when both are restricted
+ * (simpler to reason about than vixie-cron's OR; documented). Scans up to 400
+ * days, minute candidates only on matching days.
+ */
+function nextCronOccurrence(f: CronFields, after: Date, tz: string): Date {
+  const now = wallClockAt(after, tz)
+  for (let d = 0; d < 400; d++) {
+    const cal = addDays(now.year, now.month, now.day, d)
+    if (f.months && !f.months.includes(cal.month)) continue
+    if (f.daysOfMonth && !f.daysOfMonth.includes(cal.day)) continue
+    if (f.daysOfWeek) {
+      const wd = new Date(Date.UTC(cal.year, cal.month - 1, cal.day)).getUTCDay()
+      if (!f.daysOfWeek.includes(wd)) continue
+    }
+    for (const hour of f.hours) {
+      if (d === 0 && hour < now.hour) continue
+      for (const minute of f.minutes) {
+        if (d === 0 && hour === now.hour && minute <= now.minute) continue
+        const instant = zonedWallToInstant(tz, cal.year, cal.month, cal.day, hour, minute)
+        if (instant.getTime() > after.getTime()) return instant
+      }
+    }
+  }
+  return new Date(after.getTime() + 400 * 86_400_000)
+}
+
 /** Human label for the roster ("Daily at 07:00", "Weekly on Monday at 09:30"). */
 export function describeSchedule(schedule: AgentSchedule | null, tz: string | null): string {
   if (!schedule) return 'No schedule'
   const hhmm = (h: number, m: number) => `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
   const suffix = tz ? ` (${tz})` : ''
   if (schedule.kind === 'hourly') return 'Every hour'
+  if (schedule.kind === 'interval') {
+    const m = schedule.minutes
+    return m % 60 === 0 ? `Every ${m / 60 === 1 ? 'hour' : `${m / 60} hours`}` : `Every ${m} minutes`
+  }
+  if (schedule.kind === 'cron') return `Cron ${schedule.expr}${suffix}`
   if (schedule.kind === 'daily') return `Daily at ${hhmm(schedule.hour, schedule.minute)}${suffix}`
   const day = WEEKDAYS[schedule.weekday]
   return `Weekly on ${day[0].toUpperCase()}${day.slice(1)} at ${hhmm(schedule.hour, schedule.minute)}${suffix}`
@@ -381,21 +740,61 @@ export function newAgentNote(input: {
   return `${lines.join('\n')}${body}\n`
 }
 
+/** Human label for the `on:` triggers ("when people/** changes · webhook hubspot"). */
+export function describeTriggers(on: AgentTriggers | null): string | null {
+  if (!on) return null
+  const parts: string[] = []
+  if (on.context.length) parts.push(`when ${on.context.join(', ')} changes`)
+  if (on.webhook) parts.push(`webhook ${on.webhook}`)
+  return parts.join(' · ') || null
+}
+
+/** An interval/cron schedule back to its `every:` text (null for the clock kinds). */
+function everyText(schedule: AgentSchedule | null): string | null {
+  if (!schedule) return null
+  if (schedule.kind === 'interval') return schedule.minutes % 60 === 0 ? `${schedule.minutes / 60}h` : `${schedule.minutes}m`
+  if (schedule.kind === 'cron') return schedule.expr
+  return null
+}
+
 export function newActivationNote(input: {
   active: boolean
   schedule: AgentSchedule | null
+  on?: AgentTriggers | null
+  /** ms; omitted or the default writes no `debounce:` line. */
+  debounceMs?: number | null
   timezone?: string | null
 }): string {
   const lines = ['---', `type: ${ACTIVATION_TYPE}`, `active: ${input.active ? 'true' : 'false'}`]
   const s = input.schedule
-  if (s) {
+  if (s?.kind === 'interval' || s?.kind === 'cron') {
+    lines.push(`every: ${yamlString(everyText(s) ?? '')}`)
+  } else if (s) {
     lines.push(`schedule: ${s.kind}`)
     if (s.kind !== 'hourly') {
       lines.push(`at: "${String(s.hour).padStart(2, '0')}:${String(s.minute).padStart(2, '0')}"`)
     }
     if (s.kind === 'weekly') lines.push(`on: ${WEEKDAYS[s.weekday]}`)
   }
+  const on = input.on
+  if (on && (on.context.length || on.webhook)) {
+    // A weekly schedule's weekday moves INTO the map (`on.weekday`) so both fit.
+    if (s?.kind === 'weekly') lines.pop()
+    lines.push('on:')
+    if (s?.kind === 'weekly') lines.push(`  weekday: ${WEEKDAYS[s.weekday]}`)
+    if (on.context.length) lines.push(`  context: [${on.context.map(yamlString).join(', ')}]`)
+    if (on.webhook) lines.push(`  webhook: ${on.webhook}`)
+  }
+  const d = input.debounceMs
+  if (typeof d === 'number' && d !== DEFAULT_DEBOUNCE_MS) {
+    lines.push(`debounce: ${d % 60_000 === 0 ? `${d / 60_000}m` : `${Math.round(d / 1000)}s`}`)
+  }
   if (input.timezone) lines.push(`timezone: ${input.timezone}`)
-  lines.push('---', '', 'Activation for this agent — written by a space admin. Only `active`, `schedule`, `at`, `on` and `timezone` are read.', '')
+  lines.push(
+    '---',
+    '',
+    'Activation for this agent — written by a space admin. Only `active`, `schedule`, `at`, `on`, `every`, `debounce`, `timezone` and `runs_as` are read.',
+    '',
+  )
   return lines.join('\n')
 }

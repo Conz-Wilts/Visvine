@@ -61,3 +61,16 @@ test('the note-first types stay open to everyone', () => {
     assert.equal(canCreateType(type, off('channels', 'notes')), true, type)
   }
 })
+
+test('the Tool tile follows the tools feature and is open to members', () => {
+  assert.equal(canCreateType('tool', ADMIN), true)
+  // tools/ has no admin clause (lib/tools/service.ts) — members author, admins publish.
+  assert.equal(canCreateType('tool', MEMBER), true)
+  assert.equal(
+    canCreateType('tool', {
+      featureConfig: { enabled: { channels: true, notes: true, resources: true, connectors: true, tools: false } } as SpaceFeatureConfig,
+      isAdmin: true,
+    }),
+    false,
+  )
+})

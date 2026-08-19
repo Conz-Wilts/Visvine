@@ -39,6 +39,16 @@ export const KIT_CSS = `
   --vv-gap-lg: 20px;
   --vv-font: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --vv-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  /* Chart palette: accent first, then hues that stay apart in both themes.
+     Resolved by useChartColors(); override any slot in your own CSS. */
+  --vv-chart-1: var(--vv-accent-strong);
+  --vv-chart-2: #1d4ed8;
+  --vv-chart-3: #b45309;
+  --vv-chart-4: #7c3aed;
+  --vv-chart-5: #0e7490;
+  --vv-chart-6: #be185d;
+  --vv-chart-7: #4d7c0f;
+  --vv-chart-8: #6b7280;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -203,6 +213,111 @@ a { color: var(--vv-accent-strong); }
 .vv-table__cell--right { text-align: right; }
 .vv-table__row--clickable { cursor: pointer; }
 .vv-table__row--clickable:hover td { background: var(--vv-surface-2); }
+
+/* ── data table ── */
+
+.vv-datatable__wrap { width: 100%; }
+.vv-datatable__wrap--scroll { overflow: auto; }
+.vv-datatable--sticky thead th { position: sticky; top: 0; z-index: 1; background: var(--vv-surface); }
+.vv-datatable__th--sortable { padding: 0; }
+.vv-datatable__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vv-text-muted);
+  text-align: inherit;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+.vv-table__cell--right .vv-datatable__sort { justify-content: flex-end; }
+.vv-datatable__sort:hover { color: var(--vv-text); }
+.vv-datatable__arrow { font-size: 9px; opacity: 0.35; }
+.vv-datatable__arrow--asc, .vv-datatable__arrow--desc { opacity: 1; color: var(--vv-accent-strong); }
+.vv-datatable__spacer td { padding: 0; border: 0; }
+
+/* ── charts ── */
+
+.vv-chart { width: 100%; min-width: 0; color: var(--vv-text-muted); font-size: 11px; }
+.vv-chart .recharts-legend-item-text { color: var(--vv-text-secondary) !important; }
+.vv-chart .recharts-default-tooltip { box-shadow: var(--vv-shadow); }
+
+/* ── date picker ── */
+
+.vv-datepicker { width: auto; min-width: 160px; }
+.vv-datepicker::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+
+/* ── markdown ── */
+
+.vv-md { font-size: 14px; line-height: 1.6; color: var(--vv-text-secondary); overflow-wrap: anywhere; }
+.vv-md > :first-child { margin-top: 0; }
+.vv-md > :last-child { margin-bottom: 0; }
+.vv-md h1, .vv-md h2, .vv-md h3, .vv-md h4, .vv-md h5, .vv-md h6 { color: var(--vv-text); font-weight: 600; margin: 1.2em 0 0.4em; line-height: 1.3; }
+.vv-md h1 { font-size: 20px; }
+.vv-md h2 { font-size: 17px; }
+.vv-md h3 { font-size: 15px; }
+.vv-md h4, .vv-md h5, .vv-md h6 { font-size: 14px; }
+.vv-md p, .vv-md ul, .vv-md ol, .vv-md blockquote, .vv-md pre { margin: 0.6em 0; }
+.vv-md ul, .vv-md ol { padding-left: 1.4em; }
+.vv-md li + li { margin-top: 0.2em; }
+.vv-md li.task-list-item { list-style: none; margin-left: -1.4em; }
+.vv-md a, .vv-md__link { color: var(--vv-accent-strong); text-decoration: underline; cursor: pointer; }
+.vv-md strong { color: var(--vv-text); font-weight: 600; }
+.vv-md code { font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--vv-surface-3); border-radius: 4px; padding: 1px 5px; color: var(--vv-text); }
+.vv-md pre { background: var(--vv-surface-3); border-radius: var(--vv-radius); padding: 10px 12px; overflow-x: auto; }
+.vv-md pre code { background: transparent; padding: 0; }
+.vv-md blockquote { border-left: 3px solid var(--vv-border-strong); padding-left: 12px; color: var(--vv-text-muted); }
+.vv-md hr { border: 0; border-top: 1px solid var(--vv-border); margin: 1.2em 0; }
+.vv-md__table-wrap { overflow-x: auto; margin: 0.6em 0; }
+
+/* ── kanban ── */
+
+.vv-kanban { display: flex; gap: var(--vv-gap); align-items: flex-start; overflow-x: auto; padding-bottom: 4px; }
+.vv-kanban--dragging { cursor: grabbing; user-select: none; }
+.vv-kanban__column {
+  flex: 0 0 260px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  background: var(--vv-surface-2);
+  border: 1px solid var(--vv-border);
+  border-radius: var(--vv-radius-lg);
+  max-height: 100%;
+}
+.vv-kanban__column--over { border-color: var(--vv-accent); background: var(--vv-accent-soft); }
+.vv-kanban__column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--vv-gap-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--vv-text);
+}
+.vv-kanban__column-title { display: inline-flex; align-items: center; gap: 6px; }
+.vv-kanban__count { font-size: 11px; font-weight: 600; color: var(--vv-text-muted); background: var(--vv-surface-3); border-radius: var(--vv-radius-pill); padding: 0 7px; }
+.vv-kanban__cards { display: flex; flex-direction: column; gap: 8px; padding: 0 8px 8px; min-height: 40px; }
+.vv-kanban__card {
+  background: var(--vv-surface);
+  border: 1px solid var(--vv-border);
+  border-radius: var(--vv-radius);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--vv-text);
+  cursor: grab;
+}
+.vv-kanban__card--clickable:hover { border-color: var(--vv-border-strong); }
+.vv-kanban__card--dragging { opacity: 0.35; }
+.vv-kanban__card--ghost { opacity: 0.95; box-shadow: var(--vv-shadow); transform: rotate(1.5deg); cursor: grabbing; }
+.vv-kanban__empty { font-size: 12px; color: var(--vv-text-muted); text-align: center; padding: 12px 8px; border: 1px dashed var(--vv-border-strong); border-radius: var(--vv-radius); }
 
 /* ── feedback ── */
 

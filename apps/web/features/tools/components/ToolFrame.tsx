@@ -218,6 +218,32 @@ export default function ToolFrame({
     bridgeRef.current?.setSubject(subject);
   }, [subject, status]);
 
+  // The changes stream: note paths inside the Tool's perimeter that changed,
+  // relayed to the frame as `visvine:changed`. Same-origin with the cookie,
+  // like the bridge; the server re-resolves the target on every (re)connect
+  // and filters each event by perimeter and viewer grants. Best-effort — the
+  // kit's useLiveQuery also polls, so a missed event costs at most 30s.
+  useEffect(() => {
+    if (status !== 'ready' || typeof EventSource !== 'function') return;
+    const source = new EventSource(`/api/tools/changes?target=${encodeURIComponent(targetKey)}`);
+    const onChanged = (event: MessageEvent) => {
+      let paths: unknown;
+      try {
+        paths = (JSON.parse(String(event.data)) as { paths?: unknown }).paths;
+      } catch {
+        return;
+      }
+      if (Array.isArray(paths) && paths.every((path) => typeof path === 'string')) {
+        bridgeRef.current?.notifyChanged(paths as string[]);
+      }
+    };
+    source.addEventListener('changed', onChanged);
+    return () => {
+      source.removeEventListener('changed', onChanged);
+      source.close();
+    };
+  }, [status, targetKey, attempt]);
+
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   // A page-mode Tool owns the pane, so it takes all of it and scrolls inside

@@ -101,6 +101,17 @@ export interface ContextNote {
   frontmatter: Record<string, unknown>
 }
 
+/**
+ * One page of a paged `context.list`/`context.search`. Only returned when the
+ * caller passed `cursor` or `page: true` — the unpaged call still answers a
+ * plain (capped) array, so a Tool written before paging existed keeps working.
+ * `nextCursor` is opaque; hand it back unchanged. Null means the last page.
+ */
+export interface ContextPage<T> {
+  items: T[]
+  nextCursor: string | null
+}
+
 /** One `context.search` hit. `snippet` is already excerpted server-side. */
 export interface ContextHit {
   path: string
@@ -115,12 +126,22 @@ export interface ContextHit {
  * the host relay and the server handler map all key off it.
  */
 export interface BridgeMethods {
-  'context.list': { params: { glob?: string }; result: ContextEntry[] }
+  'context.list': {
+    params: { glob?: string; cursor?: string; page?: boolean }
+    result: ContextEntry[] | ContextPage<ContextEntry>
+  }
   'context.read': { params: { path: string }; result: ContextNote }
-  'context.search': { params: { query: string; k?: number }; result: ContextHit[] }
+  'context.search': {
+    params: { query: string; k?: number; cursor?: string; page?: boolean }
+    result: ContextHit[] | ContextPage<ContextHit>
+  }
   'context.write': { params: { path: string; content: string }; result: { path: string } }
   'context.append': { params: { path: string; text: string }; result: { path: string } }
-  'connectors.call': { params: { name: string; code: string }; result: unknown }
+  'connectors.call': {
+    /** Exactly one of `code` (JavaScript) or `action` (a declared action name, with `args`). */
+    params: { name: string; code?: string; action?: string; args?: unknown }
+    result: unknown
+  }
   'agents.run': { params: { name: string }; result: { runId: string } }
   'data.call': { params: { fn: string; args: unknown }; result: unknown }
   'state.get': { params: { key: string }; result: unknown }
@@ -200,6 +221,12 @@ export type HostMessage =
   | { type: 'visvine:result'; id: string; ok: false; error: BridgeError }
   | { type: 'visvine:theme'; theme: Record<string, string> }
   | { type: 'visvine:subject'; subject: ToolSubject | null }
+  /**
+   * Notes inside the Tool's read perimeter changed (written, renamed to,
+   * deleted). Best-effort and per-process — see lib/notes/changes.ts. A Tool
+   * that cares re-reads; the message carries paths, never content.
+   */
+  | { type: 'visvine:changed'; paths: string[] }
 
 export type FrameMessage =
   | { type: 'visvine:ready'; version: number }
@@ -335,6 +362,8 @@ export function isHostMessage(value: unknown): value is HostMessage {
       return isStringMap(value.theme)
     case 'visvine:subject':
       return isSubjectOrNull(value.subject)
+    case 'visvine:changed':
+      return isStringArray(value.paths)
     default:
       return false
   }

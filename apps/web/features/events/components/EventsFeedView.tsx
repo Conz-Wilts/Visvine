@@ -115,7 +115,7 @@ function FeedCard({
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
             {rel && status !== 'past' && (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-brand-light-bg text-brand-dark-green">
+              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md bg-brand-green text-white">
                 {rel}
               </span>
             )}

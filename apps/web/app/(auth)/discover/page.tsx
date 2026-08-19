@@ -53,7 +53,7 @@ function SpaceCard({
         />
         {isFeatured && (
           <div className="absolute top-3 right-3">
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 shadow-sm">
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm">
               ⭐ Featured
             </span>
           </div>
@@ -96,7 +96,7 @@ function SpaceCard({
           <button
             onClick={() => onJoin(space)}
             disabled={joined}
-            className={`w-full flex items-center justify-center gap-1 rounded-full text-xs font-semibold py-2 transition-all ${
+            className={`w-full flex items-center justify-center gap-1 rounded-lg text-xs font-semibold py-2 transition-all ${
               joined
                 ? 'bg-brand-light-bg text-brand-green cursor-default'
                 : 'bg-brand-green text-white hover:opacity-90 shadow-sm active:scale-[0.98]'
@@ -258,14 +258,14 @@ export default function DiscoverPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setPendingSpace(null); setSelectedAlias(''); }}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-full border border-border-default text-text-secondary hover:bg-surface-2 transition-all duration-200"
+                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg border border-border-default text-text-secondary hover:bg-surface-2 transition-all duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={() => doJoin(pendingSpace.id, selectedAlias || undefined)}
                 disabled={joining}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-full bg-brand-green text-white hover:opacity-90 shadow-sm transition-all duration-200 disabled:opacity-60"
+                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-lg bg-brand-green text-white hover:opacity-90 shadow-sm transition-all duration-200 disabled:opacity-60"
               >
                 {joining ? 'Joining…' : 'Join'}
               </button>

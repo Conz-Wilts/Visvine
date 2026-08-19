@@ -154,6 +154,24 @@ pnpm desktop:pack    # unpacked build in apps/desktop/release/;  pnpm desktop:di
 
 See `apps/desktop/README.md` and `docs/desktop-electron-plan.md`.
 
+## Documentation
+
+Feature guides live in `docs/`. Each one is the full reference for a subsystem
+this README only names:
+
+| Doc | Covers |
+|---|---|
+| [`docs/data-architecture.md`](docs/data-architecture.md) | **Read this first when adding storage.** When something becomes a context note, a Postgres table, or a GCS blob — and the note-write outbox that keeps derived state honest. |
+| [`docs/agents.md`](docs/agents.md) | Scheduled and event-driven agents: the brief/activation note pair, the trigger mailbox, the tool set, the Cloud Scheduler tick. |
+| [`docs/connectors.md`](docs/connectors.md) | Connector notes: the declared perimeter, the JS isolate, secrets vs identity vs OAuth connections, inbound webhooks. |
+| [`docs/tools.md`](docs/tools.md) | User-created Tools: the note layout, the bridge, the sandboxed iframe, the marketplace and its review queue. |
+| [`docs/notifications.md`](docs/notifications.md) | Notification kinds, the navbar bell, and why there is deliberately no email channel. |
+| [`docs/icons.md`](docs/icons.md) | The owned icon set and its three codegen targets. No icon library — importing one is a lint error. |
+| [`docs/entity-folders.md`](docs/entity-folders.md) | How a directory node binds to its context note by path, and what happens when one node needs several notes. |
+| [`docs/wayfinder-tool.md`](docs/wayfinder-tool.md) | The Wayfinder Tool that ships as a worked example of the Tools feature. |
+| [`docs/tools-known-issues.md`](docs/tools-known-issues.md) | What is still open on Tools: two deployment steps that need a person, and a short list of accepted defects. |
+| [`docs/desktop-electron-plan.md`](docs/desktop-electron-plan.md) | The Electron desktop shell. |
+
 ## Production debugging escape hatch
 
 `pnpm db:proxy:cloud` still starts the Cloud SQL Auth Proxy if you need to inspect prod data. Connect with a read-only IAM identity and a separate SQL client — do not point the local app at production.

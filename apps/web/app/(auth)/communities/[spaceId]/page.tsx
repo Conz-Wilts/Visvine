@@ -239,15 +239,15 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
         <div className="pt-20 sm:pt-24 flex flex-col">
           {/* badges */}
           <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <Chip tone="soft" size="md" color={theme.base}>Space</Chip>
+            <Chip tone="solid" size="md" color={theme.base}>Space</Chip>
             {space.location && (
               <Chip tone="muted" size="md">
                 <MapPinIcon className="w-3 h-3" /> {space.location}
               </Chip>
             )}
             {isActive && (
-              <span className={chipClass({ tone: 'soft', size: 'md', color: theme.base, className: 'gap-1.5' })}
-                    style={{ ...chipStyle(theme.base, 'soft'), borderColor: `${theme.base}80` }}>
+              <span className={chipClass({ tone: 'solid', size: 'md', color: theme.base, className: 'gap-1.5' })}
+                    style={chipStyle(theme.base, 'solid')}>
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
@@ -434,7 +434,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                     <div className="text-xs text-text-muted mb-1.5">Network of</div>
                     <div className="flex flex-wrap gap-1.5">
                       {space.nodeTypes!.slice(0, 6).map((nt) => (
-                        <Chip key={nt.name} tone="soft" size="md" color={nt.color}>{nt.name}</Chip>
+                        <Chip key={nt.name} tone="solid" size="md" color={nt.color}>{nt.name}</Chip>
                       ))}
                     </div>
                   </div>
@@ -604,7 +604,7 @@ function MemberRow({ member, theme, badge }: { member: OverviewMember; theme: Th
         {member.subtitle && <span className="block text-xs text-text-muted truncate">{member.subtitle}</span>}
       </span>
       {badge && (
-        <Chip tone="soft" size="xs" color={theme.base} className="flex-none">{badge}</Chip>
+        <Chip tone="solid" size="xs" color={theme.base} className="flex-none">{badge}</Chip>
       )}
     </>
   );

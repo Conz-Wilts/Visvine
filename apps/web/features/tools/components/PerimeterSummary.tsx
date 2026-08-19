@@ -73,7 +73,7 @@ export default function PerimeterSummary({
               row.entries.map((entry) => (
                 <Chip
                   key={`${entry.state}:${entry.value}`}
-                  tone={entry.state === 'same' ? 'muted' : 'soft'}
+                  tone={entry.state === 'same' ? 'muted' : 'solid'}
                   size="sm"
                   color={
                     entry.state === 'added'

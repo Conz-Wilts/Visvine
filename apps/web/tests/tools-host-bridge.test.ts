@@ -408,6 +408,24 @@ test('subject is pushed only when it changed, including to null', () => {
   assert.deepEqual(h.frame.types(), ['visvine:init', 'visvine:subject', 'visvine:subject'])
 })
 
+test('changed paths are relayed only after the handshake, and never empty', () => {
+  const h = harness()
+  h.bridge.notifyChanged(['deals/acme.md'])
+  assert.equal(h.frame.posted.length, 0, 'a Tool that has not started has nothing to refresh')
+
+  h.fromFrame(READY)
+  h.bridge.notifyChanged([])
+  assert.deepEqual(h.frame.types(), ['visvine:init'])
+
+  h.bridge.notifyChanged(['deals/acme.md', 'deals/other.md'])
+  assert.deepEqual(h.frame.types(), ['visvine:init', 'visvine:changed'])
+  assert.deepEqual(h.frame.messages[1].paths, ['deals/acme.md', 'deals/other.md'])
+
+  h.bridge.dispose()
+  h.bridge.notifyChanged(['deals/acme.md'])
+  assert.equal(h.frame.posted.length, 2)
+})
+
 // ── teardown ──
 
 test('dispose unhooks the listener and silences the bridge', () => {

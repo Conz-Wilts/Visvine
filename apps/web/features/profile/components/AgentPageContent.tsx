@@ -10,7 +10,8 @@ import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import RunTranscript from '@/features/agents/components/RunTranscript';
-import { fmtAgo, fmtCents, rowStateView, terminalLabel, TONE_CLASSES } from '@/features/agents/lib/rowState';
+import { fmtAgo, fmtCents, rowStateView, terminalLabel } from '@/features/agents/lib/rowState';
+import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
 /**
  * The first tab of an agent's node page: what the note alone can't say. The
@@ -167,7 +168,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         aside={
           <button
             type="button"
-            className="inline-flex items-center gap-1 rounded-full border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
             disabled={!runnable || busy}
             onClick={runNow}
             title={!agent.activation.active ? 'Activate the agent first' : !canRun ? 'Only the author or an admin can run it' : 'Run now'}
@@ -177,7 +178,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         }
       >
         <div className="flex flex-wrap items-center gap-3">
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
+          <span className={`${TONE_CHIP} ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
           <span className="text-[13px] text-text-muted">{view.detail}</span>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
@@ -195,8 +196,19 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
           </div>
           <div>
             <dt className="text-text-muted">Schedule</dt>
-            <dd>{agent.activation.schedule ? agent.activation.scheduleLabel : 'not set'}</dd>
+            <dd>{agent.activation.schedule ? agent.activation.scheduleLabel : agent.activation.on ? 'triggers only' : 'not set'}</dd>
           </div>
+          {agent.activation.on && (
+            <div>
+              <dt className="text-text-muted">Triggers</dt>
+              <dd className="font-mono text-[12px]">
+                {agent.activation.on.context.length ? `on ${agent.activation.on.context.join(', ')}` : null}
+                {agent.activation.on.context.length && agent.activation.on.webhook ? ' · ' : null}
+                {agent.activation.on.webhook ? `webhook ${agent.activation.on.webhook}` : null}
+                <span className="text-text-muted"> · debounce {Math.round(agent.activation.debounceMs / 1000)}s</span>
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="text-text-muted">Next run</dt>
             <dd>{agent.state.nextRunAt ? new Date(agent.state.nextRunAt).toLocaleString() : '—'}</dd>
@@ -230,7 +242,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       >
         <p className="text-[13px] text-text-muted">
           {agent.activation.active
-            ? `Active — ${agent.activation.scheduleLabel}${agent.activation.timezone ? '' : ` (space timezone${spaceTimezone ? `: ${spaceTimezone}` : ''})`}. A member's edit to the brief switches it off until an admin re-activates.`
+            ? `Active — ${[agent.activation.schedule ? agent.activation.scheduleLabel : null, agent.activation.triggersLabel].filter(Boolean).join('; ')}${agent.activation.timezone ? '' : ` (space timezone${spaceTimezone ? `: ${spaceTimezone}` : ''})`}. A member's edit to the brief switches it off until an admin re-activates.`
             : isAdmin
               ? 'Off. Activating means: runs unattended on this space\'s model key, with the connector reach declared in the brief.'
               : 'Off. A space admin activates agents.'}
@@ -294,6 +306,14 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
                   </span>
                   <span className="text-text-muted">{new Date(r.startedAt).toLocaleString()}</span>
                   <span className="text-text-muted">{r.trigger}</span>
+                  {r.input?.dryRun && (
+                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">dry run</span>
+                  )}
+                  {r.input?.writes?.length ? (
+                    <span className="text-[11px] text-text-muted">
+                      {r.input.writes.length} note{r.input.writes.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
                   <span className="ml-auto tabular-nums text-text-muted">
                     {r.turns}t · {isAdmin ? fmtCents(r.costCents) : ''}
                   </span>

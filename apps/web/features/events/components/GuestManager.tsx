@@ -50,13 +50,13 @@ function matchesFilter(a: AttendeeRow, f: FilterKey): boolean {
 }
 
 const STATUS_BADGE: Partial<Record<RSVPStatus, { label: string; cls: string; icon: React.ReactNode }>> = {
-  going: { label: 'Going', cls: 'bg-brand-green/10 text-brand-green', icon: <CheckIcon className="w-3 h-3" /> },
-  waitlisted: { label: 'Waitlist', cls: 'bg-orange-100 text-orange-700', icon: <ClockIcon className="w-3 h-3" /> },
-  pending: { label: 'Pending', cls: 'bg-amber-100 text-amber-700', icon: <ClockIcon className="w-3 h-3" /> },
-  checked_in: { label: 'Checked in', cls: 'bg-brand-green/15 text-brand-green', icon: <UserCheckIcon className="w-3 h-3" /> },
-  cancelled: { label: 'Cancelled', cls: 'bg-gray-100 text-brand-grey', icon: <XIcon className="w-3 h-3" /> },
-  no_show: { label: 'No show', cls: 'bg-gray-100 text-brand-grey', icon: <BanIcon className="w-3 h-3" /> },
-  invited: { label: 'Invited', cls: 'bg-blue-100 text-blue-700', icon: <ClockIcon className="w-3 h-3" /> },
+  going: { label: 'Going', cls: 'bg-brand-green text-white', icon: <CheckIcon className="w-3 h-3" /> },
+  waitlisted: { label: 'Waitlist', cls: 'bg-orange-500 text-white', icon: <ClockIcon className="w-3 h-3" /> },
+  pending: { label: 'Pending', cls: 'bg-amber-500 text-white', icon: <ClockIcon className="w-3 h-3" /> },
+  checked_in: { label: 'Checked in', cls: 'bg-brand-green text-white', icon: <UserCheckIcon className="w-3 h-3" /> },
+  cancelled: { label: 'Cancelled', cls: 'bg-gray-500 text-white', icon: <XIcon className="w-3 h-3" /> },
+  no_show: { label: 'No show', cls: 'bg-gray-500 text-white', icon: <BanIcon className="w-3 h-3" /> },
+  invited: { label: 'Invited', cls: 'bg-blue-600 text-white', icon: <ClockIcon className="w-3 h-3" /> },
 };
 
 export function GuestManager({ event, spaceId }: GuestManagerProps) {
@@ -238,7 +238,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+            className={`px-3.5 py-1.5 rounded-md text-sm font-medium border transition-colors ${
               filter === f.key
                 ? 'bg-brand-green text-white border-brand-green'
                 : 'bg-brand-white text-brand-grey border-gray-200 hover:border-brand-green hover:text-brand-black'

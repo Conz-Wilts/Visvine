@@ -99,7 +99,7 @@ export default function DeleteAccountPanel() {
           />
           {error && <Alert variant="error">{error}</Alert>}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={close} disabled={busy}>
+            <Button variant="neutral" onClick={close} disabled={busy}>
               Cancel
             </Button>
             <Button

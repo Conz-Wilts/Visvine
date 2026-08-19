@@ -223,7 +223,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
                 type="button"
                 disabled={busy}
                 onClick={() => setAdding((o) => !o)}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-border-default px-2.5 py-1 text-xs font-medium text-text-muted transition hover:text-text-primary disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-default px-2.5 py-1 text-xs font-medium text-text-muted transition hover:text-text-primary disabled:opacity-40"
               >
                 <PlusIcon className="h-3 w-3" /> Give to
               </button>
@@ -328,7 +328,7 @@ export function NewAliasRow({ spaceId, taken, busy, run }: {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-border-default px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+        className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-border-default px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
       >
         <PlusIcon className="h-3 w-3" /> New alias
       </button>
@@ -367,14 +367,14 @@ export function NewAliasRow({ spaceId, taken, busy, run }: {
           }}
         />
         <Button
-          variant="pill-primary"
+          variant="brand"
           onClick={create}
           disabled={!name.trim() || problem !== null || busy}
           className="!px-3 !py-1.5 !text-xs"
         >
           Create
         </Button>
-        <Button variant="pill-secondary" onClick={reset} className="!px-3 !py-1.5 !text-xs">
+        <Button variant="brand" onClick={reset} className="!px-3 !py-1.5 !text-xs">
           Cancel
         </Button>
       </div>

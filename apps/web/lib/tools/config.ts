@@ -232,7 +232,25 @@ export interface ToolConfig {
     types: ToolTypeSurface[]
   }
   perimeter: ToolPerimeter
+  /**
+   * Marketplace tags from `tags:` — at most {@link TOOL_TAGS_MAX}, each
+   * matching {@link TOOL_TAG_RE}, lower-cased and de-duplicated. Snapshotted
+   * into the published version so a card can be filtered by them.
+   */
+  tags: string[]
+  /**
+   * `preview:` — an image of the Tool for its marketplace card: a same-origin
+   * `/api/media/...` path (uploaded through the media route) or an `https://`
+   * URL. Null when the author gave none.
+   */
+  previewUrl: string | null
 }
+
+/** How many `tags:` an index note may carry. */
+export const TOOL_TAGS_MAX = 8
+
+/** What one tag looks like: short, lower-case, hyphenated — a facet, not a sentence. */
+const TOOL_TAG_RE = /^[a-z0-9-]{1,24}$/
 
 /**
  * The built-in rail icons a Tool may choose from.
@@ -304,6 +322,56 @@ function isBuiltInType(type: string): boolean {
 }
 
 export type ParseToolConfigResult = { ok: true; config: ToolConfig } | { ok: false; error: string }
+
+/**
+ * `tags:` → a clean list. A single string is accepted as one tag (`tags: crm`
+ * is what people write). Lower-cased because tags are facets, and a facet
+ * spelled two ways is two facets to a filter.
+ */
+export function parseToolTags(raw: unknown): { ok: true; tags: string[] } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, tags: [] }
+  const list = Array.isArray(raw) ? raw : [raw]
+  const tags: string[] = []
+  for (const entry of list) {
+    if (typeof entry !== 'string') {
+      return { ok: false, error: `Bad \`tags\` entry ${JSON.stringify(entry)} — tags are strings` }
+    }
+    const tag = entry.trim().toLowerCase()
+    if (!TOOL_TAG_RE.test(tag)) {
+      return {
+        ok: false,
+        error: `Bad tag ${JSON.stringify(entry)} — use 1-24 lower-case letters, digits and hyphens`,
+      }
+    }
+    if (!tags.includes(tag)) tags.push(tag)
+  }
+  if (tags.length > TOOL_TAGS_MAX) {
+    return { ok: false, error: `Too many \`tags\` — ${TOOL_TAGS_MAX} at most` }
+  }
+  return { ok: true, tags }
+}
+
+/**
+ * `preview:` → a URL the marketplace may put in an <img>. One shape only: a
+ * same-origin media path (`/api/media/...`, which is where the upload route
+ * puts things). An absolute URL of any scheme is refused too — the card is
+ * rendered to every marketplace visitor, so a third-party host would learn each
+ * viewer's IP the moment they browsed. `data:`, `javascript:`, a bare filename:
+ * refused rather than rendered.
+ */
+export function parseToolPreviewUrl(
+  raw: unknown,
+): { ok: true; previewUrl: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, previewUrl: null }
+  if (typeof raw !== 'string') return { ok: false, error: '`preview` must be a URL string' }
+  const value = raw.trim()
+  if (value.length > 2048) return { ok: false, error: '`preview` URL is too long (2048 max)' }
+  if (/^\/api\/media\/[^\s?#]+(\?[^\s#]*)?$/.test(value)) return { ok: true, previewUrl: value }
+  return {
+    ok: false,
+    error: '`preview` must be a same-origin /api/media/... path (upload the image first); external URLs are not allowed',
+  }
+}
 
 function trimmedString(raw: unknown): string {
   return typeof raw === 'string' ? raw.trim() : ''
@@ -429,6 +497,11 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
   const perimeter = parseToolPerimeter(fm.perimeter)
   if (!perimeter.ok) return { ok: false, error: perimeter.error }
 
+  const tags = parseToolTags(fm.tags)
+  if (!tags.ok) return tags
+  const preview = parseToolPreviewUrl(fm.preview)
+  if (!preview.ok) return preview
+
   return {
     ok: true,
     config: {
@@ -438,6 +511,8 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
       version: version.version,
       surfaces: { rail, types },
       perimeter: perimeter.perimeter,
+      tags: tags.tags,
+      previewUrl: preview.previewUrl,
     },
   }
 }
@@ -451,16 +526,25 @@ export function parseToolConfig(fm: NoteFrontmatter, name: string): ParseToolCon
  * filling blanks in rather than guessing the shape, and a Tool that has declared
  * nothing yet reaches nothing rather than defaulting open.
  */
-export function newToolIndexNote(input: { name: string; title?: string; description?: string }): string {
+export function newToolIndexNote(input: {
+  name: string
+  title?: string
+  description?: string
+  /** A sidebar row label — set, the scaffold gets a rail row with the default icon. */
+  railLabel?: string
+}): string {
   const title = trimmedString(input.title) || input.name
   const description = trimmedString(input.description)
+  const railLabel = trimmedString(input.railLabel)
   const front = [
     `type: ${TOOL_TYPE}`,
     `title: ${JSON.stringify(title)}`,
     ...(description ? [`description: ${JSON.stringify(description)}`] : []),
     `version: 0`,
     `surfaces:`,
-    `  rail: null`,
+    railLabel
+      ? `  rail: { label: ${JSON.stringify(railLabel)}, icon: ${DEFAULT_RAIL_ICON} }`
+      : `  rail: null`,
     `  types: []`,
     `perimeter:`,
     `  read: []`,

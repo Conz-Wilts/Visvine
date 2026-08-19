@@ -51,6 +51,12 @@ export function canCreateType(type: CreateableType, { featureConfig, isAdmin }: 
     case 'resource':
       return isFeatureEnabled(featureConfig, 'resources')
 
+    // A Tool's working copy is member-writable (lib/tools/service.ts — no admin
+    // clause on tools/); only publishing it is admin-gated, on a different
+    // path. The feature key is re-checked server-side at every Tools door.
+    case 'tool':
+      return isFeatureEnabled(featureConfig, 'tools')
+
     // The remaining note-first types: person, space, context, index. An
     // index is a folder written as a note, so it follows the note rule. A space
     // here is a directory record — recording that a group or organisation

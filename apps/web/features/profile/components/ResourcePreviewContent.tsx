@@ -77,7 +77,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
       <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
-            <Chip tone="soft" color={theme.base}>
+            <Chip tone="solid" color={theme.base}>
               {nodeTypeLabel(node.type, node.alias, currentSpace?.aliases, currentSpace?.nodeTypes)}
             </Chip>
 
@@ -97,7 +97,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-4">
                 {tags.map((tag, i) => (
-                  <Chip key={tag} tone="soft" size="lg" color={theme.base}
+                  <Chip key={tag} tone="solid" size="lg" color={theme.base}
                         className="chip-pop transition-transform duration-150 hover:-translate-y-0.5"
                         style={{ animationDelay: `${Math.min(i, 20) * 35}ms` }}>
                     {tag}

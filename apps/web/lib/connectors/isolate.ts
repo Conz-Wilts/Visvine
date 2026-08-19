@@ -37,6 +37,7 @@ import { ConnectorError, redactSecrets, SANDBOX_LIMITS } from './config'
 import { MAX_DENIALS, type GatePerimeter } from './perimeter'
 import { marshalValue, redactDeep, type MarshalReport } from './marshal'
 import { hostFetch, hostSleep, type HostContext } from './hostFetch'
+import type { ResolvedIdentity } from './identity'
 import { hostSql } from './hostSql'
 import { mcpCallTool, mcpListTools } from './hostMcp'
 import type { AllowRule } from './config'
@@ -83,6 +84,18 @@ export interface IsolateRunOptions {
    * output with holes).
    */
   redact?: readonly string[]
+  /**
+   * Runtime-stamped caller identity (lib/connectors/identity.ts). Its signing
+   * key must also appear in `redact`, and must NOT appear in `perimeter.env` —
+   * the whole point is that isolate code cannot mint one of these itself.
+   */
+  identity?: ResolvedIdentity | null
+  /**
+   * An OAuth bearer held on someone's behalf (lib/connectors/auth.ts). Like the
+   * identity key it belongs in `redact` and never in `perimeter.env`: the whole
+   * point is that only the host can spend it.
+   */
+  bearer?: { token: string; hosts: readonly string[] } | null
   /**
    * Extra host capabilities, installed under a single frozen `visvine` global
    * rather than as top-level names — so a caller adding capabilities can never
@@ -399,6 +412,10 @@ export async function runInIsolate(
       if (denials.length < MAX_DENIALS) denials.push(reason)
       return reason
     },
+    // Neither is exposed to the isolate: both are read only by hostFetch, on
+    // the host side of the boundary, and both are in `redact` besides.
+    identity: options.identity ?? null,
+    bearer: options.bearer ?? null,
   }
 
   try {

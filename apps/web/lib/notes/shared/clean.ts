@@ -57,6 +57,10 @@ export function scopeIssues(issues: Issue[], scope: CleanScope): Issue[] {
  * Entity cards are long-lived reference notes — a context full of people would
  * otherwise get blanket-staled on its first deep clean; an index note IS a
  * folder and never goes stale. The web review route keeps its own behaviour.
+ *
+ * `setExpired` and `linkSupersession` are NOT filtered here even on entity and
+ * index notes: unlike staleness they are not an inference about neglect, they
+ * carry out something the author wrote down (`expires:`, `supersedes:`).
  */
 export function filterCleanFixes(fixes: AutoFix[]): AutoFix[] {
   return fixes.filter((f) => {
@@ -161,6 +165,18 @@ const SUGGESTED_ACTIONS: Record<string, { tool: string; hint: string }> = {
     hint: 'Mention it with a leading-slash markdown link from a relevant hub or index note so it becomes navigable.',
   },
   schema: { tool: 'edit_context', hint: 'Add the missing frontmatter (a one-line description helps search most).' },
+  contradiction: {
+    tool: 'read_context → edit_context',
+    hint: "Read both notes and establish which is current. If one replaced the other, add `supersedes: /<path>` to the winner — the next clean pass retires the loser and records why. If both are true, they are about different things: say so explicitly in each. Never merge them blindly; a conflict usually means a real distinction went unrecorded.",
+  },
+  lifecycle: {
+    tool: 'edit_context',
+    hint: 'Correct the frontmatter value to one the system understands, or remove it — an unrecognised status silently reads as active.',
+  },
+  supersession: {
+    tool: 'read_context → edit_context',
+    hint: 'Fix the supersedes/superseded_by claim: point it at a note that exists, or drop it. Mutual supersession needs a person to decide which note is current.',
+  },
   'unlinked-mention': { tool: 'edit_context', hint: 'Turn the ambiguous plain-text mention into an explicit link to the right note.' },
 }
 

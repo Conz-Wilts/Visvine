@@ -24,7 +24,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, SettingsSection } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
-export interface McpConnectInfo {
+interface McpConnectInfo {
   /** The context server. */
   url: string;
   /** The Tool creator server. */
@@ -34,7 +34,7 @@ export interface McpConnectInfo {
 }
 
 /** Load the server-truth MCP endpoint once. `null` while in flight. */
-export function useMcpConnectInfo() {
+function useMcpConnectInfo() {
   const [info, setInfo] = useState<McpConnectInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,7 +56,7 @@ export function useMcpConnectInfo() {
  * Read-only address + Copy, mirroring the invite-link row in the console so the
  * two "copy this and hand it over" affordances look the same.
  */
-export function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | null; label?: string }) {
+function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | null; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {

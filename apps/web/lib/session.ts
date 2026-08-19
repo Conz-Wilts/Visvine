@@ -24,11 +24,21 @@ export interface SessionPayload {
   personId?: string | null;
 }
 
-export async function createSession(payload: SessionPayload): Promise<string> {
+/**
+ * Mint a session JWT. `maxAgeSeconds` defaults to the 30-day web session; a
+ * caller minting a session for its own short-lived use (the headless Tool
+ * preview in lib/tools/screenshot.ts) passes something far smaller so the
+ * token is worthless minutes after the job it was minted for.
+ */
+export async function createSession(
+  payload: SessionPayload,
+  opts: { maxAgeSeconds?: number } = {},
+): Promise<string> {
+  const maxAge = Math.min(MAX_AGE, Math.max(1, Math.floor(opts.maxAgeSeconds ?? MAX_AGE)));
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE}s`)
+    .setExpirationTime(`${maxAge}s`)
     .sign(getSecret());
 }
 

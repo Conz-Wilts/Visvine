@@ -105,7 +105,11 @@ function DirectoryPane() {
       <div id="panel-grid" role="tabpanel">
         <DirectoryToolbar browse={browse} />
 
-        <div className="w-full px-6 pt-4 pb-8">
+        {/* pt-7, not pt-4: a hovered card lifts 6px and throws a soft glow about
+            14px past its own edge, and the toolbar it scrolls under is opaque —
+            with less clearance the top row's raised shadow was sliced off by the
+            toolbar's bottom edge. */}
+        <div className="w-full px-6 pt-7 pb-8">
           <div className="flex flex-col gap-5">
             {error && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import SpaceSelector from "@/features/spaces/components/SpaceSelector";
 import UserMenu from "@/features/auth/components/UserMenu";
+import NotificationBell from "@/features/shared/components/layout/NotificationBell";
 import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
@@ -131,6 +132,7 @@ export default function Navbar() {
               </svg>
             </Link>
           )}
+          <NotificationBell />
           <UserMenu />
         </div>
       </div>

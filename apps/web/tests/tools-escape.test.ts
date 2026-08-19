@@ -77,6 +77,8 @@ function target(over: Partial<ResolvedTarget> = {}): ResolvedTarget {
       version: 1,
       surfaces: { rail: null, types: [] },
       perimeter: p,
+      tags: [],
+      previewUrl: null,
     },
     dataBundle: '',
     installId: 'install-1',
@@ -482,7 +484,7 @@ test('the rate limiter trips on call callsPerMinute + 1 and recovers when the wi
   assert.equal(takeBridgeCall(key, start + RATE_WINDOW_MS + 1).ok, true)
 })
 
-test('a state value over 16KB is refused rather than stored', async () => {
+test('a state value over STATE_MAX_BYTES (64KB) is refused rather than stored', async () => {
   const t = target({ installId: null, install: { preview: true, name: 'hostile' } })
   const stateDeps = deps({ getToolState, setToolState })
   const error = errorOf(

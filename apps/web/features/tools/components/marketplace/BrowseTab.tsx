@@ -143,7 +143,7 @@ function ToolCard({ item, onOpen }: { item: BrowseItem; onOpen: () => void }) {
           </p>
         </div>
         {item.installedInSpace && (
-          <Chip tone="soft" size="sm" color="#16a34a">
+          <Chip tone="solid" size="sm" color="#16a34a">
             Installed
           </Chip>
         )}
@@ -152,6 +152,22 @@ function ToolCard({ item, onOpen }: { item: BrowseItem; onOpen: () => void }) {
       <p className="mt-2 line-clamp-2 min-h-[2.5rem] text-sm text-text-secondary">
         {item.description || 'No description.'}
       </p>
+
+      {item.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {item.tags.map((tag) => (
+            <Chip key={tag} tone="solid" size="sm">
+              {tag}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      {item.releaseNotes && (
+        <p className="mt-2 line-clamp-2 text-xs text-text-muted">
+          <span className="font-medium text-text-secondary">v{item.version}:</span> {item.releaseNotes}
+        </p>
+      )}
 
       <PerimeterSummary perimeter={item.perimeter} className="mt-3" />
 

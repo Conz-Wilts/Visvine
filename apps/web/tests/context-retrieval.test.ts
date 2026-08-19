@@ -292,3 +292,27 @@ test('two chunks of the same source fuse as distinct results', async () => {
   const seqs = res.filter((r) => r.kind === 'source').map((r) => r.seq)
   assert.deepEqual(seqs.sort(), [0, 1])
 })
+
+// fusedSearch: memory lifecycle weighting
+
+test('fusedSearch ranks a superseded note below its live replacement and flags it', async () => {
+  const body = 'the onboarding trial period lasts for new spaces on the free plan'
+  const notes = toRetrieval([
+    note('old.md', `---\ntitle: Trial Policy\nstatus: superseded\nsuperseded_by: /new.md\n---\n\n${body}`),
+    note('new.md', `---\ntitle: Trial Policy\n---\n\n${body}`),
+  ])
+  const hits = await fusedSearch(notes, 'onboarding trial period', {}, { contextExpand: false })
+  assert.deepEqual(hits.map((h) => h.path), ['new.md', 'old.md'])
+  assert.equal(hits[0].status, undefined) // active notes carry no status
+  assert.equal(hits[1].status, 'superseded') // retired ones always say so
+})
+
+test('fusedSearch never filters a retired note out of the results', async () => {
+  const notes = toRetrieval([
+    note('why.md', '---\ntitle: Why We Dropped Kafka\nstatus: deprecated\n---\n\nwe dropped kafka because the ops burden outweighed the throughput'),
+    note('other.md', '---\ntitle: Unrelated\n---\n\nlunch menu for the offsite'),
+  ])
+  const hits = await fusedSearch(notes, 'kafka', {}, { contextExpand: false })
+  assert.equal(hits[0].path, 'why.md') // the record of a reversal is often the answer
+  assert.equal(hits[0].status, 'deprecated')
+})

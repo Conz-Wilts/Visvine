@@ -167,14 +167,14 @@ export default function ConsoleShell({
         </div>
 
         {/* <main> supplies no horizontal gutter (see AuthLayoutClient) — the bar
-            bleeds into the sidebar seam, the content keeps the page's own px. */}
-        <div className="w-full max-w-[1600px] mx-auto pt-6 pb-10 px-6 sm:px-8">
-          {/* The tab bar above already names the active section, so the page
-              heading is the label alone — no restatement underneath it. */}
-          <header className="mb-6">
-            <h1 className="text-lg font-bold text-text-primary">{activeSection.label}</h1>
-          </header>
-
+            bleeds into the sidebar seam, the content keeps the page's own px.
+            Left-aligned, not centred: on a wide pane the content stays anchored
+            to the same left edge as the tab bar above it. */}
+        <div className="w-full max-w-[1600px] pt-10 pb-10 px-6 sm:px-8">
+          {/* No page heading — the pane-top tab bar above already names the
+              active section. The heading's absence is why the top padding is
+              larger than the bottom gutter's rhythm would suggest: content still
+              needs air under the pinned bar, just not a restated title. */}
           <main id={`panel-${active}`} role="tabpanel" aria-labelledby={`tab-${active}`} className="min-w-0">
             {/* 'form' sections get a comfortable single-column width like profile settings. */}
             <div className={clsx(activeSection.width === 'form' && 'max-w-4xl')}>

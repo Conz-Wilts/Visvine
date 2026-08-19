@@ -745,7 +745,7 @@ export function EntityContextPanel({
             type="button"
             onClick={() => subPath !== null && router.replace(entityContextHref(nodeId), { scroll: false })}
             aria-current={subPath === null ? 'page' : undefined}
-            className={chipClass({ tone: subPath === null ? 'solid' : 'soft', size: 'lg', className: subPath === null ? '' : CHIP_ACCENT_HOVER })}
+            className={chipClass({ tone: subPath === null ? 'solid' : 'muted', size: 'lg', className: subPath === null ? '' : CHIP_ACCENT_HOVER })}
             style={{ ['--accent' as string]: theme.dark, ...(subPath === null ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
           >
             Context
@@ -758,7 +758,7 @@ export function EntityContextPanel({
                 type="button"
                 onClick={() => !active && folder && router.replace(entityContextHref(nodeId, n.path.slice(folder.length + 1)), { scroll: false })}
                 aria-current={active ? 'page' : undefined}
-                className={chipClass({ tone: active ? 'solid' : 'soft', size: 'lg', className: active ? '' : CHIP_ACCENT_HOVER })}
+                className={chipClass({ tone: active ? 'solid' : 'muted', size: 'lg', className: active ? '' : CHIP_ACCENT_HOVER })}
                 style={{ ['--accent' as string]: theme.dark, ...(active ? { backgroundColor: theme.dark, color: '#fff' } : {}) }}
               >
                 {n.title}

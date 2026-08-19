@@ -19,6 +19,13 @@
  *     past the egress gate — and empty `hosts` means no network at all.
  */
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
+import {
+  identitySecretName,
+  parseConnectorIdentity,
+  type ConnectorIdentity,
+} from './identity'
+import { authSecretRefs, parseConnectorAuth, type ConnectorAuth } from './auth'
+import { parseConnectorWebhook, type ConnectorWebhook } from './webhookConfig'
 
 export type ConnectorErrorCode =
   | 'denied'
@@ -27,6 +34,8 @@ export type ConnectorErrorCode =
   | 'ssrf'
   | 'timeout'
   | 'upstream'
+  /** The space is over its per-minute run budget or its concurrency cap (lib/connectors/quota.ts). */
+  | 'rate_limited'
 
 export class ConnectorError extends Error {
   code: ConnectorErrorCode
@@ -140,6 +149,42 @@ export function normalizeRequestPath(path: string): string | null {
   if (/%2e|%2f|%5c/i.test(path)) return null
   if (path.split('/').some((seg) => seg === '.' || seg === '..')) return null
   return path
+}
+
+// ── Host matching ────────────────────────────────────────────────────────────
+// Pure and dependency-free on purpose: this module is imported by client
+// components (the connector page, the Create panel), so nothing reachable from
+// it — including identity.ts, which needs `hostAllowed` — may touch a Node-only
+// module. The SSRF half of the host gate stays in perimeter.ts.
+
+function normalizeHost(host: string): string {
+  return host.trim().toLowerCase().replace(/\.$/, '')
+}
+
+/**
+ * Does the perimeter list this host+port? An entry without a port pins the
+ * caller's default; an explicit `host:port` entry allows exactly that port.
+ */
+export function hostAllowed(
+  hosts: readonly string[],
+  hostname: string,
+  port: number,
+  defaultPort: number,
+): boolean {
+  const wanted = normalizeHost(hostname)
+  return hosts.some((entry) => {
+    const [entryHost, entryPort] = splitHostPort(entry)
+    if (normalizeHost(entryHost) !== wanted) return false
+    return entryPort === null ? port === defaultPort : port === entryPort
+  })
+}
+
+/** `host[:port]` → parts; a bad port reads as null (host-only entry). */
+function splitHostPort(entry: string): [string, number | null] {
+  const m = entry.match(/^(.*):(\d{1,5})$/)
+  if (!m) return [entry, null]
+  const port = Number(m[2])
+  return port >= 1 && port <= 65535 ? [m[1], port] : [entry, null]
 }
 
 /**
@@ -505,7 +550,49 @@ export interface ConnectorPerimeter {
   /** Env var templates — values may hold `{{secret:NAME}}` refs, resolved at run time. */
   env: Record<string, string>
   timeoutMs: number
+  /**
+   * Optional runtime-stamped caller identity (lib/connectors/identity.ts).
+   * Null for the overwhelming majority of connectors. Its signing key is
+   * resolved server-side and deliberately never joins `env`, so isolate code
+   * can neither read it nor forge the header it produces.
+   */
+  identity: ConnectorIdentity | null
+  /**
+   * Optional OAuth connection (lib/connectors/auth.ts) — for a service that
+   * authenticates PEOPLE rather than callers. Visvine holds the tokens and
+   * stamps the bearer; the isolate never sees one.
+   */
+  auth: ConnectorAuth | null
+  /**
+   * Named, reviewable entry points (`actions:` in the frontmatter). Each is a
+   * body of JavaScript the runtime evaluates in place of caller-written code,
+   * with the caller's `args` installed as a frozen global. Empty for the
+   * common code-only connector.
+   */
+  actions: Record<string, ConnectorAction>
+  /**
+   * Optional inbound address (`webhook:` in the frontmatter, lib/connectors/webhook.ts).
+   * Its signing secret is resolved only by the inbound route and is NOT part
+   * of `perimeterSecretRefs` — connector code never sees the key that
+   * authenticates its own inbox.
+   */
+  webhook: ConnectorWebhook | null
 }
+
+/** One named action: fixed code an author wrote, run with the caller's `args`. */
+export interface ConnectorAction {
+  description: string | null
+  /** A JSON-schema-ish description of `args`, stored verbatim for the caller's benefit. */
+  params: unknown | null
+  code: string
+}
+
+/** Limits on the `actions:` block. */
+const ACTION_LIMITS = {
+  nameRe: /^[a-z][a-z0-9_]{0,63}$/,
+  maxActions: 32,
+  maxCodeChars: 32 * 1024,
+} as const
 
 /** Limits the isolate runtime clamps to; exported so editors can refuse out-of-range values up front. */
 export const SANDBOX_LIMITS = {
@@ -544,7 +631,13 @@ export type ParsePerimeterResult =
 
 /** Every secret NAME a perimeter's env references — the set the runtime resolves. */
 export function perimeterSecretRefs(perimeter: ConnectorPerimeter): string[] {
-  return [...new Set(Object.values(perimeter.env).flatMap(findSecretRefs))]
+  const refs = Object.values(perimeter.env).flatMap(findSecretRefs)
+  // The identity signing key and any OAuth client credentials resolve on the
+  // SAME pass as env secrets, but are kept out of `env` afterwards — see
+  // executeConnectorScript.
+  if (perimeter.identity) refs.push(identitySecretName(perimeter.identity))
+  if (perimeter.auth) refs.push(...authSecretRefs(perimeter.auth))
+  return [...new Set(refs)]
 }
 
 function parseHostsList(raw: unknown): { ok: true; hosts: string[] } | { ok: false; error: string } {
@@ -584,6 +677,56 @@ function parsePerimeterEnv(raw: unknown): { ok: true; env: Record<string, string
   return { ok: true, env }
 }
 
+/**
+ * The `actions:` block — a map of name → { description?, params?, code }.
+ *
+ * Actions are the reviewable alternative to model-written JavaScript: an admin
+ * writes the code once, in the note, and callers pick it by name with `args`.
+ * The perimeter still applies unchanged — an action is convenience and review,
+ * not a wider door. `params` is not validated against `args` at run time; it is
+ * documentation for the caller, stored as written.
+ */
+function parseActions(
+  raw: unknown,
+): { ok: true; actions: Record<string, ConnectorAction> } | { ok: false; error: string } {
+  if (raw === undefined || raw === null) return { ok: true, actions: {} }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, error: '`actions` must map action names to { description?, params?, code }' }
+  }
+  const entries = Object.entries(raw as Record<string, unknown>)
+  if (entries.length > ACTION_LIMITS.maxActions) {
+    return { ok: false, error: `Too many actions (max ${ACTION_LIMITS.maxActions})` }
+  }
+  const actions: Record<string, ConnectorAction> = {}
+  for (const [name, value] of entries) {
+    if (!ACTION_LIMITS.nameRe.test(name)) {
+      return { ok: false, error: `Bad action name '${name}' — use lowercase letters, digits and _ (max 64 chars)` }
+    }
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return { ok: false, error: `\`actions.${name}\` must be a map with a \`code\` string` }
+    }
+    const action = value as Record<string, unknown>
+    if (typeof action.code !== 'string' || !action.code.trim()) {
+      return { ok: false, error: `\`actions.${name}.code\` must be a non-empty JavaScript string` }
+    }
+    if (action.code.length > ACTION_LIMITS.maxCodeChars) {
+      return { ok: false, error: `\`actions.${name}.code\` is too long (max ${ACTION_LIMITS.maxCodeChars} characters)` }
+    }
+    if (action.description !== undefined && action.description !== null && typeof action.description !== 'string') {
+      return { ok: false, error: `\`actions.${name}.description\` must be a string` }
+    }
+    if (action.params !== undefined && action.params !== null && (typeof action.params !== 'object' || Array.isArray(action.params))) {
+      return { ok: false, error: `\`actions.${name}.params\` must be an object` }
+    }
+    actions[name] = {
+      description: typeof action.description === 'string' && action.description.trim() ? action.description.trim() : null,
+      params: action.params === undefined ? null : action.params,
+      code: action.code,
+    }
+  }
+  return { ok: true, actions }
+}
+
 /** The v1 alias → v2 perimeter mapping — the back-compat shim, pure and testable. */
 export function perimeterFromLegacy(config: ConnectorConfig): {
   perimeter: ConnectorPerimeter
@@ -609,12 +752,12 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
       // paths, so a base_url with a path prefix must be folded into each rule.
       const prefix = new URL(config.baseUrl).pathname.replace(/\/$/, '')
       const allow = config.allow.map((rule) => ({ ...rule, path: prefix + rule.path }))
-      return { perimeter: { hosts, allow, env, timeoutMs }, warnings: [] }
+      return { perimeter: { hosts, allow, env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null }, warnings: [] }
     }
     case 'postgres':
     case 'mysql':
       return {
-        perimeter: { hosts: [], allow: [], env, timeoutMs },
+        perimeter: { hosts: [], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null },
         warnings: [
           `This legacy ${config.alias} note keeps its database host inside the DSN secret, so the ` +
             'perimeter cannot allow it — add `hosts:` (e.g. "db.example.com:5432") or run the v2 migration',
@@ -627,7 +770,7 @@ export function perimeterFromLegacy(config: ConnectorConfig): {
               'Legacy per-tool allow rules cannot be tunnel-enforced under v2 — they become guidance in the note body after migration',
             ]
           : []
-      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs }, warnings }
+      return { perimeter: { hosts: [hostOf(config.url)], allow: [], env, timeoutMs, identity: null, auth: null, actions: {}, webhook: null }, warnings }
     }
   }
 }
@@ -669,10 +812,31 @@ export function parseConnectorPerimeter(fm: NoteFrontmatter): ParsePerimeterResu
     allow.push(rule)
   }
 
+  const identity = parseConnectorIdentity((fm as Record<string, unknown>).identity)
+  if (!identity.ok) return { ok: false, error: identity.error }
+
+  const auth = parseConnectorAuth((fm as Record<string, unknown>).auth)
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const actions = parseActions((fm as Record<string, unknown>).actions)
+  if (!actions.ok) return { ok: false, error: actions.error }
+
+  const webhook = parseConnectorWebhook((fm as Record<string, unknown>).webhook)
+  if (!webhook.ok) return { ok: false, error: webhook.error }
+
   const { min, max, default: dflt } = SANDBOX_LIMITS.timeoutMs
   return {
     ok: true,
-    perimeter: { hosts: hosts.hosts, allow, env: env.env, timeoutMs: clamp(fm.timeout_ms, dflt, min, max) },
+    perimeter: {
+      hosts: hosts.hosts,
+      allow,
+      env: env.env,
+      timeoutMs: clamp(fm.timeout_ms, dflt, min, max),
+      identity: identity.identity,
+      auth: auth.auth,
+      actions: actions.actions,
+      webhook: webhook.webhook,
+    },
     legacy: null,
     warnings: [],
   }

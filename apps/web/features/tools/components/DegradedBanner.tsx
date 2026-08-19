@@ -46,7 +46,7 @@ export default function DegradedBanner({
         <span key={key} className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs uppercase tracking-wide text-amber-700">{label}</span>
           {degraded.missing[key].map((name) => (
-            <Chip key={name} tone="soft" size="sm" color="#b45309">
+            <Chip key={name} tone="solid" size="sm" color="#b45309">
               {name}
             </Chip>
           ))}
