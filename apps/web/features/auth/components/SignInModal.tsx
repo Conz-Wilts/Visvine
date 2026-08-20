@@ -49,7 +49,7 @@ export default function SignInModal({
         type="button"
         onClick={onClose}
         aria-label="Close"
-        className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-md hover:text-gray-900 active:scale-95 transition-all"
+        className="absolute -top-3 -right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface-1 text-text-muted shadow-float hover:text-text-primary active:scale-95 transition-all"
       >
         <svg viewBox="0 0 20 20" fill="none" className="h-4 w-4">
           <path

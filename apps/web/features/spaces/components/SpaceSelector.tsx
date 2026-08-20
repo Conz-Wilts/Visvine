@@ -96,27 +96,19 @@ export default function SpaceSelector({
           <div className="w-10 h-10 rounded-[10px] bg-surface-3 flex-shrink-0" />
         )}
         {!iconOnly && (
-          <>
-            <span className="hidden md:inline font-open-sauce">{currentSpace?.name || 'Select Space'}</span>
-            <svg
-              className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </>
+          <span className="hidden md:inline font-open-sauce">{currentSpace?.name || 'Select Space'}</span>
         )}
       </button>
 
       {isOpen && typeof document !== 'undefined' && createPortal(
         <div
           ref={menuRef}
-          className="fixed w-80 bg-surface-1 rounded-2xl shadow-xl border border-border-subtle z-[60] overflow-hidden"
+          className="fixed w-80 bg-surface-1 rounded-2xl shadow-float border border-border-subtle z-[60] overflow-hidden"
           style={{ top: menuPos.top, left: menuPos.left }}
         >
             {/* Search Input */}
             <div className="p-3 border-b border-border-subtle">
-              <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 shadow-sm focus-within:border-brand-green transition-colors">
+              <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 focus-within:border-brand-green transition-colors">
                 <svg className="h-3.5 w-3.5 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
                 </svg>

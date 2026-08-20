@@ -71,7 +71,6 @@
   --color-brand-bg: #ffffff;
   /* The built-in Owner alias — the one thing in People & access you cannot change. */
   --color-brand-gold: #b4881b;
-  --shadow-soft: 0 8px 24px rgba(0,0,0,0.06);
   --font-brand: 'ABC Ginto Rounded', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-open-sauce: 'Open Sauce One', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
@@ -127,11 +126,19 @@ html, body {
      (not @theme) — Tailwind v4 inlines @theme shadow values into utilities.
      (there is no tailwind.config.js — Tailwind v4 is configured here). */
   --shadow-float: 0 1px 2px rgba(16,24,40,0.10), 0 4px 10px rgba(16,24,40,0.10), 0 16px 32px -8px rgba(16,24,40,0.14);
+  /* Docked chrome that sits ON the page rather than over it — the editor
+     toolbar strip. Enough lift to read as its own surface, none of the wide
+     cast a menu needs to clear the content under it. */
+  --shadow-strip: 0 1px 2px rgba(16,24,40,0.05), 0 2px 6px -2px rgba(16,24,40,0.08);
 }
 
-/* Plain class (not @utility): reads the var at paint time */
+/* Plain classes (not @utility): read the var at paint time */
 .shadow-float {
   box-shadow: var(--shadow-float);
+}
+
+.shadow-strip {
+  box-shadow: var(--shadow-strip);
 }
 
 /* ── Shell chrome buttons (navbar icons, community selector) ──────────────
@@ -275,6 +282,38 @@ html, body {
   animation: tabbar-label-exit 0.3s ease-out forwards;
 }
 
+/* Context tree branch expansion (see NoteSidebar.tsx). The branch wrapper
+   animates its grid row from 0fr to 1fr, giving a real height tween without
+   measuring anything, and the rows inside drop out of the folder one after the
+   other. The wrapper stays mounted for the collapse so shutting a folder folds
+   away instead of vanishing. */
+@keyframes ctx-row-drop {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Direct children only: a nested branch runs its own cascade from its own first
+   row rather than inheriting the parent's delays. Scoped to `.ctx-branch-enter`,
+   which Branch sets only on a real open — the tree re-mounts on every
+   navigation, and an unscoped rule replayed the whole cascade each time. */
+.ctx-branch-enter .ctx-branch > * {
+  animation: ctx-row-drop 0.19s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ctx-branch-enter .ctx-branch > *:nth-child(1) { animation-delay: 0s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(2) { animation-delay: 0.015s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(3) { animation-delay: 0.03s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(4) { animation-delay: 0.045s; }
+.ctx-branch-enter .ctx-branch > *:nth-child(5) { animation-delay: 0.06s; }
+/* The cascade stops growing after the fifth row: a folder of two hundred notes
+   would otherwise hold the tail at opacity 0 long enough to read as an empty
+   panel — the exact stall the animation is supposed to remove. */
+.ctx-branch-enter .ctx-branch > *:nth-child(n + 6) { animation-delay: 0.07s; }
+/* Past two dozen rows there is nothing on screen to animate — a long folder
+   runs off the bottom of the panel — so those rows skip the animation instead
+   of paying for a composited layer each. */
+.ctx-branch-enter .ctx-branch > *:nth-child(n + 25) {
+  animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse,
   .profile-enter,
@@ -285,8 +324,12 @@ html, body {
   .dot-pulse,
   .dropdown-pop,
   .tabbar-label-enter,
-  .tabbar-label-exit {
+  .tabbar-label-exit,
+  .ctx-branch-enter .ctx-branch > * {
     animation: none !important;
+  }
+  .ctx-branch-wrap {
+    transition: none !important;
   }
 }
 
@@ -347,13 +390,7 @@ html {
    masked behaviour. */
 main::-webkit-scrollbar-track {
   margin-top: var(--scrollbar-track-inset, 0px);
-  /* A pinned bar's seam line, continued across the scrollbar's own lane.
-     A fixed strip outside <main> always paints OVER the native scrollbar, so
-     a seam drawn that way slices the thumb; the track background paints UNDER
-     the thumb, so the line stays continuous and the thumb passes in front.
-     Set as a positioned gradient by the bar that owns the seam (see
-     DirectoryToolbar). */
-  background: var(--scrollbar-track-seam, transparent);
+  background: transparent;
 }
 
 /* The global thumb is translucent, which lets the track seam above show

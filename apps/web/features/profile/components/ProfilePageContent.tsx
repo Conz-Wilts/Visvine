@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { CalendarIcon, CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LinkedinIcon, LoaderCircleIcon, MailIcon, MapPinIcon, PencilIcon, PhoneIcon, PlusIcon, Share2Icon, TwitterIcon } from '@/features/shared/icons';
+import { CalendarIcon, CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LinkedinIcon, LoaderCircleIcon, MailIcon, MapPinIcon, PencilIcon, PhoneIcon, Share2Icon, TwitterIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
 import { useMemberConnection } from '@/features/profile/hooks/useMemberConnection';
@@ -15,13 +15,13 @@ import Chip, { chipClass } from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import ProfileConnectPrompt from './ProfileConnectPrompt';
 import {
-  computeProfileCompletion, getExperience, sortExperience,
+  getExperience, sortExperience,
   formatYearMonth, formatDuration, type ExperienceEntry,
 } from '@/lib/types/profile';
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from './CountryFlag';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import { StatItem, SectionCard, RailCard, AddPrompt, cssVars } from './profileCards';
+import { StatItem, SectionCard, cssVars } from './profileCards';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
@@ -31,12 +31,6 @@ import EditExperienceModal from './edit/EditExperienceModal';
 import SpacesModal, { type ProfileSpace } from './SpacesModal';
 
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'experience' | 'communities' | null;
-/** Which edit modal completes each profile-strength item. */
-const COMPLETION_MODAL: Record<string, Exclude<ModalState, null>> = {
-  photo: 'basicInfo', headline: 'basicInfo', about: 'about',
-  location: 'basicInfo', experience: 'experience', skills: 'skills', contact: 'contact',
-};
-
 /** Your own space: no member list to connect to, so the link isn't offered. */
 const PERSONAL_ID_PREFIX = 'me:';
 
@@ -192,8 +186,6 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
     : null;
   const hasCountry = !!matchCountryInLocation(profile.location);
-  const { score, sections: completionSections } = computeProfileCompletion(profile);
-  const missing = Object.entries(completionSections).filter(([, s]) => !s.complete);
   const hasContact = !!(profile.email || profile.phone || profile.linkedinUrl || profile.twitterUrl);
 
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -205,10 +197,10 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
-      {/* ══ IDENTITY HERO — avatar and identity as separate floating cards ══ */}
+      {/* ══ IDENTITY HERO — avatar beside the identity block, both on the page ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* avatar card */}
-        <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
+        <div className="relative w-48 h-48 sm:w-60 sm:h-60 aspect-square flex-none rounded-lg overflow-hidden bg-surface-2">
           {profile.imageUrl ? (
             <Image src={profile.imageUrl} alt={profile.name} width={240} height={240} className="w-full h-full object-cover" />
           ) : (
@@ -225,24 +217,18 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         {isOwner && <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={changeAvatar} />}
 
         {/* identity card */}
-        <section className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
+        <section className="flex-1 min-w-0 sm:min-h-60 flex flex-col">
           {/* my-auto centers the identity block against the tall avatar card,
               pushing the stat strip to the bottom edge */}
-          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto py-4">
           {/* identity — every fact appears exactly once on this page */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-x-2.5 gap-y-1 flex-wrap">
-              <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
-              {aliasName && <Chip tone="solid" color={aliasColor}>{aliasName}</Chip>}
-            </div>
+            <h1 className="text-[26px] sm:text-3xl font-bold text-text-primary leading-tight tracking-tight font-open-sauce">{profile.name}</h1>
+            {aliasName && <div className="mt-2"><Chip tone="solid" color={aliasColor}>{aliasName}</Chip></div>}
 
-            {profile.subtitle ? (
+            {profile.subtitle && (
               <p className="mt-1.5 text-[15px] text-text-secondary max-w-[60ch]">{profile.subtitle}</p>
-            ) : isOwner ? (
-              <button onClick={() => setModal('basicInfo')} className="mt-1.5 text-sm font-medium hover:underline" style={{ color: theme.dark }}>
-                + Add a headline
-              </button>
-            ) : null}
+            )}
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3 text-sm text-text-muted">
               {profile.location && (
@@ -267,7 +253,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
 
           <div className="flex flex-wrap items-center gap-2 flex-none">
             <button onClick={shareProfile}
-              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
+              className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors">
               {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
               <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
             </button>
@@ -281,7 +267,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
           </div>
           </div>
 
-          {/* stat strip — pinned to the card's bottom edge */}
+          {/* stat strip — pinned to the hero's bottom edge */}
           <div className="flex flex-wrap items-center gap-x-7 gap-y-2 pt-4 border-t border-border-subtle">
             <StatItem value={spaceCount} label={spaceCount === 1 ? 'Space' : 'Spaces'}
                       onClick={spacesClickable ? () => setModal('communities') : undefined} accent={theme.dark} />
@@ -297,7 +283,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
             {/* The member behind this profile. Only the people who can undo the
                 link see it — for everyone else the connection is just what the
                 page is. */}
-            {memberConnection.connection && memberConnection.canManage && !isPersonalSpace && (
+            {!isOwner && memberConnection.connection && memberConnection.canManage && !isPersonalSpace && (
               <div className="ml-auto flex items-center gap-2">
                 <span className="text-[13px] text-text-muted">Member</span>
                 <Chip size="lg">{memberConnection.connection.name}</Chip>
@@ -314,7 +300,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
         </section>
       </div>
 
-      {/* ══ TWO-COLUMN BODY — separate floating cards ══ */}
+      {/* ══ TWO-COLUMN BODY — sections stacked on hairlines ══ */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_320px] gap-5 xl:gap-6">
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
@@ -323,9 +309,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('about')}>
             {profile.bio
               ? <BioText bio={profile.bio} theme={theme} />
-              : isOwner
-                ? <AddPrompt theme={theme} label="Add a bio to introduce yourself" onClick={() => setModal('about')} />
-                : <p className="text-sm text-text-muted italic">No bio yet.</p>}
+              : <p className="text-sm text-text-muted">No bio yet.</p>}
           </SectionCard>
 
           {/* Experience */}
@@ -336,7 +320,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                          addLabel={experience.length === 0} onEdit={() => setModal('experience')}>
               {experience.length > 0
                 ? <ExperienceTimeline entries={experience} theme={theme} />
-                : <AddPrompt theme={theme} label="Add your career history" onClick={() => setModal('experience')} />}
+                : <p className="text-sm text-text-muted">No experience listed.</p>}
             </SectionCard>
           )}
 
@@ -353,39 +337,13 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   </Chip>
                 ))}
               </div>
-            ) : isOwner
-              ? <AddPrompt theme={theme} label="Add skills & expertise" onClick={() => setModal('skills')} />
-              : <p className="text-sm text-text-muted italic">No skills listed.</p>}
+            ) : <p className="text-sm text-text-muted">No skills listed.</p>}
           </SectionCard>
 
         </div>
 
         {/* RAIL */}
         <div className={`flex flex-col gap-4 lg:sticky ${railStick} self-start`}>
-          {/* Owner: profile strength with quick-fix shortcuts */}
-          {isOwner && score < 100 && (
-            <RailCard title="Profile strength">
-              <div className="flex items-center gap-3.5">
-                <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
-                     style={{ background: `conic-gradient(${theme.base} ${score}%, var(--surface-3,#f3f4f6) 0)` }}>
-                  <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
-                  <b className="relative text-[13px] font-bold font-open-sauce text-text-primary">{score}%</b>
-                </div>
-                <p className="text-[13px] text-text-secondary leading-snug">Complete profiles rank higher in your space’s directory.</p>
-              </div>
-              {missing.length > 0 && (
-                <div className="flex flex-col gap-0.5 mt-3 pt-3 border-t border-border-subtle">
-                  {missing.slice(0, 3).map(([key, s]) => (
-                    <button key={key} onClick={() => setModal(COMPLETION_MODAL[key] ?? 'basicInfo')}
-                            className="flex items-center gap-2 px-2 py-1.5 -mx-2 rounded-lg text-[13px] text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors text-left">
-                      <PlusIcon className="w-3.5 h-3.5 text-text-muted flex-none" /> Add {s.label.toLowerCase()}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </RailCard>
-          )}
-
           {/* Contact — email/phone/socials only; location, website & joined live in the hero */}
           <SectionCard id="contact" title="Contact"
                        scrollMargin={sectionScrollMargin} isOwner={isOwner} onEdit={() => setModal('contact')}>
@@ -402,9 +360,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
                   </div>
                 )}
               </>
-            ) : isOwner
-              ? <AddPrompt theme={theme} label="Add contact info" onClick={() => setModal('contact')} />
-              : <p className="text-sm text-text-muted italic">No contact info listed.</p>}
+            ) : <p className="text-sm text-text-muted">No contact info listed.</p>}
           </SectionCard>
         </div>
       </div>

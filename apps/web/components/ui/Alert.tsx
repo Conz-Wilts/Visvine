@@ -6,23 +6,19 @@ interface AlertProps {
   variant?: AlertVariant;
   children: React.ReactNode;
   onDismiss?: () => void;
-  /** Use `inline` for compact inline alerts without a border (e.g. inside modal footers) */
+  /** Use `inline` for a single compact line (e.g. inside modal footers) */
   inline?: boolean;
   className?: string;
 }
 
-const BLOCK_CLASSES: Record<AlertVariant, string> = {
-  error: 'bg-red-50 border border-red-200 text-red-700',
-  info: 'bg-blue-50 border border-blue-200 text-blue-700',
-  warning: 'bg-amber-50 border border-amber-200 text-amber-700',
-  success: 'bg-green-50 border border-green-200 text-green-700',
-};
-
-const INLINE_CLASSES: Record<AlertVariant, string> = {
-  error: 'bg-red-50 text-red-600',
-  info: 'bg-blue-50 text-blue-600',
-  warning: 'bg-amber-50 text-amber-600',
-  success: 'bg-green-50 text-green-600',
+// A notice is a line of text with a 2px rule in its colour down the left, not
+// a tinted box: it sits in the flow of the page and says one thing. The rule
+// carries the severity; the text carries the message.
+const RULE_CLASSES: Record<AlertVariant, string> = {
+  error: 'border-red-500 text-red-700',
+  info: 'border-blue-500 text-blue-700',
+  warning: 'border-amber-500 text-amber-700',
+  success: 'border-green-600 text-green-700',
 };
 
 const DISMISS_CLASSES: Record<AlertVariant, string> = {
@@ -32,30 +28,23 @@ const DISMISS_CLASSES: Record<AlertVariant, string> = {
   success: 'text-green-600 hover:text-green-800',
 };
 
-const AlertIcon = () => (
-  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-  </svg>
-);
-
 export default function Alert({ variant = 'error', children, onDismiss, inline = false, className }: AlertProps) {
   if (inline) {
     return (
-      <div className={clsx('flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm', INLINE_CLASSES[variant], className)}>
-        <AlertIcon />
+      <div className={clsx('border-l-2 pl-3 py-0.5 text-sm', RULE_CLASSES[variant], className)}>
         {children}
       </div>
     );
   }
 
   return (
-    <div className={clsx('rounded-md p-3', BLOCK_CLASSES[variant], className)}>
+    <div className={clsx('border-l-2 pl-4 py-1', RULE_CLASSES[variant], className)}>
       <p className="text-sm">{children}</p>
       {onDismiss && (
         <button
           type="button"
           onClick={onDismiss}
-          className={clsx('mt-2 text-xs underline', DISMISS_CLASSES[variant])}
+          className={clsx('mt-1.5 text-xs underline', DISMISS_CLASSES[variant])}
         >
           Dismiss
         </button>

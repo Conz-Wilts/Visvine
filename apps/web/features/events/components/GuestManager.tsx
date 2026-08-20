@@ -224,7 +224,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
 
       {/* capacity bar */}
       {event.capacity ? (
-        <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
           <div
             className="h-full bg-brand-green transition-all"
             style={{ width: `${Math.min(100, (occupied / event.capacity) * 100)}%` }}
@@ -241,7 +241,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
             className={`px-3.5 py-1.5 rounded-md text-sm font-medium border transition-colors ${
               filter === f.key
                 ? 'bg-brand-green text-white border-brand-green'
-                : 'bg-brand-white text-brand-grey border-gray-200 hover:border-brand-green hover:text-brand-black'
+                : 'bg-brand-white text-brand-grey border-border-subtle hover:border-brand-green hover:text-brand-black'
             }`}
           >
             {f.label} <span className="opacity-70">({counts[f.key]})</span>
@@ -251,7 +251,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
 
       {/* bulk bar */}
       {selected.size > 0 && (
-        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-xl bg-brand-light-bg border border-brand-green/30">
+        <div className="flex flex-wrap items-center gap-2.5 p-3 rounded-lg bg-surface-2">
           <span className="text-sm font-medium text-brand-black">{selected.size} selected</span>
           <button onClick={() => bulk('approve')} disabled={busy} className={bulkBtn}><CircleCheckIcon className="w-4 h-4" /> Approve</button>
           <button onClick={() => bulk('promote')} disabled={busy} className={bulkBtn}><CircleArrowUpIcon className="w-4 h-4" /> Promote</button>
@@ -262,7 +262,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
       )}
 
       {/* list */}
-      <div className="rounded-xl border border-gray-200 overflow-hidden">
+      <div className="border-t border-border-subtle">
         {loading ? (
           <div className="py-16 flex items-center justify-center text-brand-grey"><LoaderCircleIcon className="w-5 h-5 animate-spin" /></div>
         ) : visible.length === 0 ? (
@@ -271,7 +271,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
             No guests {filter !== 'all' ? 'in this view' : 'yet'}.
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-border-subtle">
             {visible.map((a) => {
               const status = norm(a.status);
               const badge = STATUS_BADGE[status];
@@ -284,7 +284,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
                       type="checkbox"
                       checked={selected.has(a.id)}
                       onChange={() => toggleSel(a.id)}
-                      className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                      className="w-4 h-4 rounded border-border-default text-brand-green focus:ring-brand-green"
                     />
                     <div
                       className={`min-w-0 flex-1 ${details.length > 0 ? 'cursor-pointer' : ''}`}
@@ -351,13 +351,13 @@ function RowActions({
 
 function IconBtn({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
-    <button title={title} onClick={onClick} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+    <button title={title} onClick={onClick} className="p-1.5 rounded-lg hover:bg-surface-3 transition-colors">
       {children}
     </button>
   );
 }
 
 const actionBtn =
-  'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all';
+  'inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all';
 const bulkBtn =
-  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green transition-all disabled:opacity-50';
+  'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green transition-all disabled:opacity-50';

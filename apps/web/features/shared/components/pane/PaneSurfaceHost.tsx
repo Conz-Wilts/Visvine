@@ -1,6 +1,6 @@
 'use client';
 
-// The shell-rendered note surface: docked context tree + note/entity panel,
+// The shell-rendered note surface: context tree column + note/entity panel,
 // mounted once in directory/layout.tsx and re-pointed by the pages via
 // PaneShellContext rather than remounted per navigation.
 //
@@ -22,7 +22,6 @@ import {
   useConnectionsRailVisible,
   useContextPanel,
 } from '@/features/shared/contexts/ContextPanelContext';
-import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import ContentReveal from '@/components/ui/ContentReveal';
 import { TabBarSlotGate } from '@/features/shared/contexts/TabBarSlotContext';
 import { entityOwnerPathOf } from '@/lib/notes/entities';
@@ -71,15 +70,14 @@ function identityOf(s: PaneSurface): string {
   return `entity:${s.nodeId}${sub}`;
 }
 
-/** Insets for the note content so neither side panel covers it: the docked tree
- *  on the left, the connections rail on the right. Both are on THIS element
- *  rather than on the shell's <main> — the pane's tab row lives in <main> too
- *  and must keep the full width of the card, so narrowing the scroller itself
- *  would drag the row (and the navbar seam it continues) across with it. */
-function useDockInsetStyle(railVisible: boolean): React.CSSProperties {
-  const { dockRequested, contextOpen } = useContextPanel();
+/** Inset for the note content so the connections rail doesn't cover it. On
+ *  THIS element rather than on the shell's <main> — the pane's tab row lives in
+ *  <main> too and must keep the full width of the card, so narrowing the
+ *  scroller itself would drag the row (and the navbar seam it continues)
+ *  across with it. The tree needs no inset: it is a flex column beside the
+ *  note, not a panel over it. */
+function useRailInsetStyle(railVisible: boolean): React.CSSProperties {
   return {
-    paddingLeft: dockRequested && contextOpen ? CONTEXT_PANEL_W : undefined,
     paddingRight: railVisible ? CONNECTIONS_RAIL_W : undefined,
     transition: 'padding 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
   };
@@ -89,7 +87,7 @@ export default function PaneSurfaceHost() {
   const { chrome } = usePaneChromeState();
   const target = chrome?.surface ?? null;
   const { connectionsOpen } = useContextPanel();
-  const dockInsetStyle = useDockInsetStyle(useConnectionsRailVisible());
+  const railInsetStyle = useRailInsetStyle(useConnectionsRailVisible());
 
   // The rail slides rather than popping, so closing can't unmount it in the
   // same commit — it stays mounted (open=false, sliding offscreen) until the
@@ -173,8 +171,11 @@ export default function PaneSurfaceHost() {
 
   if (!active) return null;
   if (active.kind === 'tree-only') {
-    // The tree portals into the Sidebar, so this renders no in-flow markup.
-    return <ContextSidebar currentPath={active.notePath} />;
+    return (
+      <div className="flex w-full items-start pb-10">
+        <ContextSidebar currentPath={active.notePath} />
+      </div>
+    );
   }
 
   const treePath = active.kind === 'note' ? active.path : active.notePath;
@@ -188,15 +189,17 @@ export default function PaneSurfaceHost() {
     active.kind === 'entity' ? active : crossKind && target?.kind === 'entity' ? target : null;
 
   return (
-    // The rail's inset is this element's padding-right (see useDockInsetStyle),
-    // so the note body makes room for it while the pane's tab row above keeps
-    // the full width of the card.
+    // The tree sits outside the reveal: it is already on screen from the last
+    // surface, so only the note fades in. The rail's inset is the reveal's
+    // padding-right (see useRailInsetStyle), so the note body makes room for it
+    // while the pane's tab row above keeps the full width of the card.
+    <div className="flex w-full items-start">
+    <ContextSidebar currentPath={treePath} />
     <ContentReveal
       ready={revealReady}
-      className="w-full pb-10 motion-reduce:[transition:none!important]"
-      style={dockInsetStyle}
+      className="min-w-0 flex-1 pb-10 motion-reduce:[transition:none!important]"
+      style={railInsetStyle}
     >
-      <ContextSidebar currentPath={treePath} />
       {railMounted && <ConnectionsRail path={treePath} open={connectionsOpen} />}
       {noteSurface && (
         <div hidden={active.kind !== 'note'}>
@@ -218,5 +221,6 @@ export default function PaneSurfaceHost() {
         </div>
       )}
     </ContentReveal>
+    </div>
   );
 }

@@ -1030,7 +1030,7 @@ export function SharePanel({ spaceId, path, kind, title, onClose }: SharePanelPr
 
           <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-3">
             {error && (
-              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
                 {error}
               </div>
             )}

@@ -12,14 +12,15 @@ import { UnderlineTabs, type UnderlineTab } from '@/components/ui';
 export type EventScope = 'discover' | 'space' | 'mine';
 
 const SCOPES: UnderlineTab<EventScope>[] = [
-  { id: 'discover', label: 'Discover Events', icon: <CompassIcon className="h-3.5 w-3.5" /> },
-  { id: 'space', label: 'Space Events', icon: <UsersIcon className="h-3.5 w-3.5" /> },
-  { id: 'mine', label: 'My Events', icon: <CalendarCheckIcon className="h-3.5 w-3.5" /> },
+  { id: 'discover', label: 'Discover', icon: <CompassIcon className="h-3.5 w-3.5" /> },
+  { id: 'space', label: 'Space', icon: <UsersIcon className="h-3.5 w-3.5" /> },
+  { id: 'mine', label: 'Mine', icon: <CalendarCheckIcon className="h-3.5 w-3.5" /> },
 ];
 
-export default function EventsScopeSelector({ scope, onScopeChange }: {
+export default function EventsScopeSelector({ scope, onScopeChange, className }: {
   scope: EventScope;
   onScopeChange: (scope: EventScope) => void;
+  className?: string;
 }) {
   return (
     <UnderlineTabs
@@ -27,6 +28,8 @@ export default function EventsScopeSelector({ scope, onScopeChange }: {
       value={scope}
       onChange={onScopeChange}
       ariaLabel="Event scope"
+      idPrefix="events"
+      className={className}
     />
   );
 }

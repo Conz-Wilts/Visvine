@@ -269,7 +269,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
       className={
         feed
           ? `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-2/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
-          : `group relative flex gap-3 px-3 py-1 ${showHeader ? 'mt-2' : ''}`
+          : `group relative flex gap-3 rounded-xl px-3 transition-colors hover:bg-surface-2/40 ${showHeader ? 'pb-1 pt-2' : 'py-0.5'}`
       }
       onMouseLeave={() => setShowEmojiPicker(false)}
     >
@@ -287,14 +287,10 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
       )}
 
       <div className="min-w-0 flex-1">
-        {/* Bubble card (DMs) hugs its content; feed rows (Channels) sit flat. */}
-        <div
-          className={
-            feed
-              ? 'relative'
-              : 'relative w-fit max-w-full rounded-2xl border border-border-subtle/70 bg-surface-1 px-4 py-2.5 shadow-[0_2px_12px_rgba(16,24,40,0.06)]'
-          }
-        >
+        {/* Every row sits flat on the page — DMs and channels alike. The
+            avatar gutter and the name line are what separate one message
+            from the next; there is no bubble. */}
+        <div className="relative">
         {/* Header line: name · time · receipts */}
         {showHeader && (
           <div className="flex flex-wrap items-baseline gap-x-2">
@@ -349,7 +345,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
 
         {/* Body: rich text or edit mode */}
         {isEditing ? (
-          <div className="mt-1 w-full section-y-2 rounded-xl border border-brand-green/30 bg-surface-2/60 px-3 py-2">
+          <div className="mt-1 w-full section-y-2 rounded-lg bg-surface-2 px-3 py-2">
             <textarea
               ref={editRef}
               value={editText}
@@ -396,10 +392,10 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
                 key={r.emoji}
                 type="button"
                 onClick={() => onReaction(message.id, r.emoji)}
-                className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs transition-colors ${
                   r.reacted
-                    ? 'border-brand-green/30 bg-brand-green/10 text-text-primary'
-                    : 'border-border-subtle bg-surface-1 text-text-muted hover:bg-surface-2'
+                    ? 'bg-brand-green/15 text-text-primary'
+                    : 'bg-surface-2 text-text-muted hover:bg-surface-3'
                 }`}
               >
                 <span>{r.emoji}</span>
@@ -411,7 +407,7 @@ function MessageRow({ message, showHeader = true, variant = 'bubble', onReply, o
           {/* Hover actions — floating toolbar pinned to the bubble (CSS
               group-hover so a mouse pass doesn't re-render the row) */}
           {!isEditing && (
-            <div className={`absolute z-10 hidden items-center gap-0.5 rounded-xl border border-border-subtle bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex ${feed ? '-top-3 right-1' : '-top-4 right-3'}`}>
+            <div className="absolute -top-3 right-1 z-10 hidden items-center gap-0.5 rounded-lg bg-surface-1 px-1 py-0.5 shadow-float group-hover:flex">
           <button
             type="button"
             onClick={() => setShowEmojiPicker(true)}

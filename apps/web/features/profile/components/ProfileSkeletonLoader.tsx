@@ -17,13 +17,13 @@ const block = 'rounded bg-surface-3';
 export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps) {
   return (
     <div className="flex flex-col gap-5 animate-pulse">
-      {/* ══ IDENTITY HERO — avatar card + identity card ══ */}
+      {/* ══ IDENTITY HERO — avatar + identity block ══ */}
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* avatar card */}
-        <div className="w-48 h-48 sm:w-60 flex-none rounded-2xl bg-surface-3 border border-border-subtle" />
+        <div className="w-48 h-48 sm:w-60 flex-none rounded-lg bg-surface-3" />
 
         {/* identity card */}
-        <section className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
+        <section className="flex-1 min-w-0 py-1 flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
             {/* identity */}
             <div className="min-w-0 flex-1 space-y-3">
@@ -114,10 +114,10 @@ export default function ProfileSkeletonLoader(_props: ProfileSkeletonLoaderProps
   );
 }
 
-/** A floating section card matching SectionCard/RailCard chrome, with a title bar. */
+/** A section matching SectionCard/RailCard — a title on a hairline, then lines. */
 function SkeletonCard({ children }: { children: React.ReactNode }) {
   return (
-    <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft p-5 sm:p-6">
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <div className={`h-5 w-32 mb-4 ${block}`} />
       <div className="space-y-2.5">{children}</div>
     </section>

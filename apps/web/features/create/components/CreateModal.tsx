@@ -904,7 +904,7 @@ export default function CreateModal() {
             )}
 
             {error && (
-              <p className="mt-3 text-sm text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <p className="mt-3 text-sm text-red-500 border-l-2 border-red-500 pl-3 py-1">
                 {error}
               </p>
             )}

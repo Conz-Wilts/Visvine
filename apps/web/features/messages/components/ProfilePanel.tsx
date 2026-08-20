@@ -6,6 +6,7 @@
  * actions.
  */
 
+import { ViewToggle } from '@/components/ui';
 import { HashIcon, LogOutIcon, MessageCircleIcon, NewspaperIcon, PencilIcon, UserPlusIcon, XIcon } from '@/features/shared/icons';
 import type { ChannelViewMode, ConversationSummary } from '@/lib/messages/types';
 import Avatar from '@/components/ui/Avatar';
@@ -52,27 +53,15 @@ function ChannelDetails({ conversation, currentUserId, isAdmin, onAddMembers, on
       {isAdmin && onChangeViewMode && (
         <div className="section-y-1.5 px-5 pb-4">
           <SectionLabel>View style</SectionLabel>
-          <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
-            {([
-              { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircleIcon },
-              { mode: 'FEED' as const, label: 'Feed', icon: NewspaperIcon },
-            ]).map(({ mode, label, icon: Icon }) => {
-              const active = viewMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => { if (!active) onChangeViewMode(mode); }}
-                  className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <ViewToggle
+            size="sm"
+            value={viewMode}
+            onChange={(mode) => { if (mode !== viewMode) onChangeViewMode(mode); }}
+            options={[
+              { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
+              { id: 'FEED' as const, label: 'Feed', icon: <NewspaperIcon className="h-3.5 w-3.5" /> },
+            ]}
+          />
         </div>
       )}
 

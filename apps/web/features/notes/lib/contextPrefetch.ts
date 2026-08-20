@@ -95,8 +95,39 @@ export function swrFetch<T>(key: string, fn: () => Promise<T>, onData: (data: T)
   })
 }
 
+// Subscribers per key. Invalidation is a mutation signal, not just an eviction:
+// a live surface holding the key's data in React state (the docked tree's note
+// index) has no other way to learn a save elsewhere changed it, and would keep
+// painting the pre-save titles and stars until it remounted.
+const watchers = new Map<string, Set<() => void>>()
+
+/** Watch a cache key for invalidation. Returns the unsubscribe. */
+export function watchContextCache(keys: string[], onInvalidate: () => void): () => void {
+  for (const key of keys) {
+    const set = watchers.get(key) ?? new Set()
+    set.add(onInvalidate)
+    watchers.set(key, set)
+  }
+  return () => {
+    for (const key of keys) {
+      const set = watchers.get(key)
+      if (!set) continue
+      set.delete(onInvalidate)
+      if (set.size === 0) watchers.delete(key)
+    }
+  }
+}
+
 export function invalidateContextCache(...keys: string[]) {
-  for (const key of keys) cache.delete(key)
+  const notify = new Set<() => void>()
+  for (const key of keys) {
+    cache.delete(key)
+    const set = watchers.get(key)
+    if (set) for (const fn of set) notify.add(fn)
+  }
+  // One pass over the union, so invalidating list + tree together wakes a
+  // watcher of both exactly once.
+  for (const fn of notify) fn()
 }
 
 /**

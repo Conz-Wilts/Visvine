@@ -5,7 +5,7 @@ interface LoadingTextProps {
 
 export default function LoadingText({ text = 'Loading…', className = '' }: LoadingTextProps) {
   return (
-    <div className={`text-center py-12 text-gray-600 ${className}`}>
+    <div className={`text-center py-12 text-text-muted ${className}`}>
       {text}
     </div>
   );

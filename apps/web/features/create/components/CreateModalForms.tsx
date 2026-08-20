@@ -407,7 +407,7 @@ export function LocationAutocomplete({
         autoComplete="off"
       />
       {open && (
-        <ul className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-1 border border-border-default rounded-lg shadow-lg overflow-hidden max-h-52 overflow-y-auto">
+        <ul className="absolute left-0 right-0 top-full mt-1 z-50 bg-surface-1 border border-border-default rounded-lg shadow-float overflow-hidden max-h-52 overflow-y-auto">
           {suggestions.map((loc, i) => {
             const [city, country] = loc.includes(', ') ? loc.split(/, (.+)/) : [loc, ''];
             return (
@@ -674,7 +674,7 @@ export function ChannelForm({
                 title={title}
                 onClick={() => onChange({ ...data, viewMode: mode })}
                 className={`flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
+                  active ? 'bg-brand-green text-white' : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />

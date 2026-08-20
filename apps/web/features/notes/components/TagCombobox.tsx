@@ -102,7 +102,7 @@ export function TagCombobox({
       />
 
       {(rows.length > 0 || showCreate) && (
-        <div className="absolute left-0 top-[34px] z-20 w-56 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-lg">
+        <div className="absolute left-0 top-[34px] z-20 w-56 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float">
           <ul role="listbox" className="max-h-52 overflow-auto py-1">
             {rows.map((row, i) => {
               const pal = row.kind === 'tag' ? tagPalette(row.value, registry) : null

@@ -89,22 +89,3 @@ export function sortExperience(entries: ExperienceEntry[]): ExperienceEntry[] {
     return b.start.localeCompare(a.start);
   });
 }
-
-export function computeProfileCompletion(profile: FullProfile): {
-  score: number;
-  sections: Record<string, { complete: boolean; label: string }>;
-} {
-  const sections = {
-    photo: { label: 'Profile photo', complete: !!profile.imageUrl },
-    headline: { label: 'Headline', complete: !!profile.subtitle },
-    about: { label: 'About / Bio', complete: !!profile.bio },
-    location: { label: 'Location', complete: !!profile.location },
-    experience: { label: 'Experience', complete: getExperience(profile).length > 0 },
-    skills: { label: 'Skills', complete: profile.tags.length > 0 },
-    contact: { label: 'Contact info', complete: !!(profile.website || profile.linkedinUrl || profile.phone) },
-  };
-
-  const completed = Object.values(sections).filter((s) => s.complete).length;
-  const score = Math.round((completed / Object.keys(sections).length) * 100);
-  return { score, sections };
-}

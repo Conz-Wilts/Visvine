@@ -51,7 +51,7 @@ export default function EditSkillsModal({ open, onClose, tags, onSave }: Props) 
     <EditModal title="Edit skills" open={open} onClose={onClose}>
       <form onSubmit={handleSubmit} className="p-6 space-y-4">
         <p className="text-xs text-brand-grey">Type a skill and press Enter to add it.</p>
-        <div className="min-h-[80px] flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-brand-dark-green/30">
+        <div className="min-h-[80px] flex flex-wrap gap-2 p-3 border border-border-subtle rounded-xl focus-within:ring-2 focus-within:ring-brand-dark-green/30">
           {items.map((tag) => (
             <span key={tag} className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-white bg-brand-green rounded-md">
               {tag}

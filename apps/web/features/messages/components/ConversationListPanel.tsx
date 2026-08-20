@@ -3,6 +3,7 @@
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from 'react';
+import { ViewToggle } from '@/components/ui';
 import { ChevronDownIcon, ChevronRightIcon, HashIcon, Icon, MessageCircleIcon, NewspaperIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon, XIcon } from '@/features/shared/icons';
 import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { ChannelIcon, ChannelIconPicker } from './ChannelIcon';
@@ -141,13 +142,12 @@ export default function ConversationListPanel({
     }
   };
 
-  // The docked panel's own header: channel search up top. Channel creation
-  // lives in the global sidebar "+" (Create new → Channel), not here. Only
-  // rendered inside the Sidebar dock (the page's centered controls cover the
-  // un-docked cases).
+  // The list's own header: channel search up top, wherever the list lives.
+  // Channel creation lives in the global sidebar "+" (Create new → Channel),
+  // not here.
   const channelControls = (
     <div className="px-3 pb-2 pt-3">
-      <div className="flex items-center gap-2 rounded-xl border border-border-default bg-surface-1 px-3 py-2 transition-colors focus-within:border-brand-green/40">
+      <div className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 transition-colors focus-within:bg-surface-1 focus-within:ring-1 focus-within:ring-border-default">
         <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
         <input
           ref={sidebarSearchRef}
@@ -167,8 +167,7 @@ export default function ConversationListPanel({
 
   const inbox = (
     <>
-    {/* Docked panel gets its own search up top */}
-    {docked && channelControls}
+    {channelControls}
 
     {/* Channel creation (space admins only) */}
     {showChannelForm && (
@@ -179,7 +178,7 @@ export default function ConversationListPanel({
               type="button"
               onClick={() => setShowIconPicker((v) => !v)}
               title="Channel icon (default #)"
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border-default bg-surface-1 text-text-secondary transition-colors hover:border-brand-green/40"
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-2 text-text-secondary transition-colors hover:bg-surface-3"
             >
               <ChannelIcon icon={channelIcon} className="h-4 w-4" />
             </button>
@@ -199,7 +198,7 @@ export default function ConversationListPanel({
             placeholder="Channel name"
             autoFocus
             maxLength={80}
-            className="min-w-0 flex-1 rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
           />
         </div>
         <input
@@ -207,36 +206,23 @@ export default function ConversationListPanel({
           onChange={(e) => setChannelDescription(e.target.value)}
           placeholder="Description (optional)"
           maxLength={500}
-          className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none"
+          className="w-full rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
         />
-        {/* View style: classic chat thread vs social-feed post cards */}
-        <div className="flex items-center gap-1 rounded-xl bg-surface-2 p-1">
-          {([
-            { mode: 'CHAT' as const, label: 'Chat', icon: MessageCircleIcon, title: 'Classic channel thread' },
-            { mode: 'FEED' as const, label: 'Feed', icon: NewspaperIcon, title: 'Post cards with comments' },
-          ]).map(({ mode, label, icon: Icon, title }) => {
-            const active = channelViewMode === mode;
-            return (
-              <button
-                key={mode}
-                type="button"
-                title={title}
-                onClick={() => setChannelViewMode(mode)}
-                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                  active ? 'bg-brand-green text-white shadow-sm' : 'text-text-muted hover:text-text-secondary'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" />
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {/* View style: classic chat thread vs social-feed posts */}
+          <ViewToggle
+          size="sm"
+          value={channelViewMode}
+          onChange={setChannelViewMode}
+          options={[
+            { id: 'CHAT' as const, label: 'Chat', icon: <MessageCircleIcon className="h-3.5 w-3.5" /> },
+            { id: 'FEED' as const, label: 'Feed', icon: <NewspaperIcon className="h-3.5 w-3.5" /> },
+          ]}
+        />
         {channelSections.length > 0 && (
           <select
             value={channelSectionId}
             onChange={(e) => setChannelSectionId(e.target.value)}
-            className="w-full rounded-xl border border-border-default bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-brand-green/40 focus:outline-none"
+            className="w-full rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-primary focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default"
           >
             <option value="">No section</option>
             {channelSections.map((section) => (
@@ -257,7 +243,7 @@ export default function ConversationListPanel({
           <button
             type="submit"
             disabled={!channelName.trim() || creatingChannel}
-            className="rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-brand-green px-4 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
           >
             {creatingChannel ? 'Creating…' : 'Create channel'}
           </button>
@@ -377,17 +363,16 @@ export default function ConversationListPanel({
                               type="button"
                               onClick={() => onSelectConversation(conversation.id)}
                               className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors duration-150 ${
-                                isActive ? 'bg-brand-green text-white' : 'hover:bg-surface-2'
+                                isActive ? 'bg-surface-3' : 'hover:bg-surface-2'
                               }`}
                             >
                               <ChannelIcon
                                 icon={conversation.icon}
                                 fallback={conversation.viewMode === 'FEED' ? 'feed' : 'hash'}
-                                className={`h-[18px] w-[18px] ${isActive ? 'text-white' : hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
+                                className={`h-[18px] w-[18px] ${isActive || hasUnread ? 'text-text-primary' : 'text-text-muted'}`}
                               />
                               <p className={`min-w-0 flex-1 truncate text-[15px] ${
-                                isActive ? 'font-semibold text-white'
-                                : hasUnread ? 'font-semibold text-text-primary'
+                                isActive || hasUnread ? 'font-semibold text-text-primary'
                                 : 'font-normal text-text-secondary'}`}>
                                 {conversation.name}
                               </p>
@@ -484,7 +469,7 @@ export default function ConversationListPanel({
         host as HTMLElement,
       )
     : (
-      <aside className="flex w-full min-h-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float md:w-80 md:shrink-0">
+      <aside className="flex w-full min-h-0 flex-col overflow-hidden border-r border-border-subtle bg-surface-1 md:w-80 md:shrink-0">
         {inbox}
       </aside>
     );

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { KeyRoundIcon, PlugIcon, TriangleAlertIcon } from '@/features/shared/icons';
+import { PlugIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { PageTitle, Skeleton } from '@/components/ui';
+import { Skeleton, Alert } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
@@ -90,52 +90,35 @@ function statusOf(connector: ConnectorRow): { label: string; detail: string; ton
   return { label: 'Ready', detail: connector.hosts.join(', '), tone: 'ok' };
 }
 
-function ConnectorCard({ connector }: { connector: ConnectorRow }) {
+function ConnectorRowItem({ connector }: { connector: ConnectorRow }) {
   const status = statusOf(connector);
 
   return (
     <Link
       href={`/directory/${encodeURIComponent(`connector:${connector.name}`)}`}
-      className="group flex flex-col gap-3 rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft transition-all hover:-translate-y-0.5 hover:border-brand-green"
+      className="group -mx-3 flex items-center gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-surface-2"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-text-primary">{connector.name}</p>
-            <p className="truncate font-mono text-[11px] text-text-muted">
-              {connector.alias ?? 'no alias'}
-            </p>
-          </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="truncate text-sm font-semibold text-text-primary">{connector.name}</p>
+          <p className="truncate font-mono text-[11px] text-text-muted">{connector.alias ?? 'no alias'}</p>
         </div>
-        {/* A healthy connector says nothing: the badge is there to flag the
-            three ways one fails, not to congratulate the working ones. */}
-        {status.tone !== 'ok' && (
-          <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
-            {status.label}
-          </span>
-        )}
+        <p className="mt-0.5 truncate text-[13px] text-text-muted">
+          {connector.description ? `${connector.description} · ` : ''}
+          {status.tone === 'ok' ? (
+            status.detail
+          ) : (
+            <span className={status.tone === 'bad' ? 'text-red-600' : 'text-amber-700'}>{status.detail}</span>
+          )}
+        </p>
       </div>
-
-      {connector.description && (
-        <p className="line-clamp-2 text-[13px] leading-snug text-text-muted">{connector.description}</p>
+      {/* A healthy connector says nothing: the chip is there to flag the
+          three ways one fails, not to congratulate the working ones. */}
+      {status.tone !== 'ok' && (
+        <span className={`shrink-0 ${TONE_CHIP} ${TONE_CLASSES[status.tone]}`}>
+          {status.label}
+        </span>
       )}
-
-      <div className="mt-auto flex items-center gap-2 text-xs text-text-muted">
-        {status.tone === 'ok' ? (
-          <span className="truncate">{status.detail}</span>
-        ) : (
-          <span className="flex min-w-0 items-center gap-1.5">
-            <TriangleAlertIcon className={`h-3.5 w-3.5 shrink-0 ${status.tone === 'bad' ? 'text-red-500' : 'text-amber-500'}`} />
-            <span className="truncate">{status.detail}</span>
-          </span>
-        )}
-        {connector.secrets.length > 0 && connector.missingSecrets.length === 0 && (
-          <span className="ml-auto flex shrink-0 items-center gap-1">
-            <KeyRoundIcon className="h-3.5 w-3.5" />
-            {connector.secrets.length}
-          </span>
-        )}
-      </div>
     </Link>
   );
 }
@@ -176,24 +159,20 @@ export default function ConnectorsPage() {
   const body = () => {
     if (spaceLoading || loading) {
       return (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)}
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
         </div>
       );
     }
     if (error) {
       return (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-          {error}
-        </div>
+        <Alert>{error}</Alert>
       );
     }
     if (connectors.length === 0) {
       return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border-default px-6 py-14 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-light-bg text-brand-dark-green">
-            <PlugIcon className="h-5 w-5" />
-          </span>
+        <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+          <PlugIcon className="h-6 w-6 text-text-muted" />
           <div>
             <p className="text-sm font-semibold text-text-primary">No connectors yet</p>
             <p className="mt-1 text-sm text-text-muted">
@@ -205,18 +184,16 @@ export default function ConnectorsPage() {
       );
     }
     return (
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="divide-y divide-border-subtle">
         {connectors.map(connector => (
-          <ConnectorCard key={connector.path} connector={connector} />
+          <ConnectorRowItem key={connector.path} connector={connector} />
         ))}
       </div>
     );
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl pb-16">
-      <PageTitle title="Connectors" />
-
+    <div className="mx-auto w-full max-w-4xl pt-6 pb-16">
       <div className="mt-4">{body()}</div>
     </div>
   );

@@ -13,9 +13,6 @@ import { SpaceDesignProvider } from "@/features/shared/contexts/SpaceDesignConte
 import { ProfileProvider } from "@/features/shared/contexts/ProfileContext";
 import {
   ThemeProvider,
-  SHELL_FRAME_GAP,
-  SHELL_FRAME_MARGIN,
-  SHELL_FRAME_RADIUS,
 } from "@/features/shared/contexts/ThemeContext";
 import { CreateModalProvider } from "@/features/shared/contexts/CreateModalContext";
 import { SidebarProvider, useSidebar } from "@/features/shared/contexts/SidebarContext";
@@ -70,12 +67,6 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   // bounce down while the fixed navbar stays put — the bar visibly unsticks.
   // Killing the bounce keeps every page's sticky top bar welded to the navbar.
 
-  // Colour frame: the shell stays white and a grey rounded box sits in the
-  // content region (below the navbar, right of the rail, inset from the
-  // viewport right/bottom by SHELL_FRAME_MARGIN of white — mirroring the white
-  // the navbar/rail provide on the other two sides). <main> becomes a white
-  // rounded card INSIDE that box (its padding), so the grey is a background the
-  // body floats on, not margins the body can rubber-band out of.
   const railW = expanded ? EXPANDED_W : COLLAPSED_W;
 
   const mainInner = fullBleed ? (
@@ -93,51 +84,39 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
       {/* Sidebar floats fixed over content — shadow not clipped */}
       <Sidebar />
 
-      {/* Main content: the frame box sits right of the rail (marginLeft: railW)
-          and below the navbar (marginTop: 64). <main> is the scroll container,
-          so its scrollbar starts under the navbar rather than at the viewport
-          top. Each page supplies its own 24px horizontal padding (px-6). */}
+      {/* Main content: one flat white surface right of the rail (marginLeft:
+          railW) and below the navbar (marginTop: 64). <main> is the scroll
+          container, so its scrollbar starts under the navbar rather than at
+          the viewport top. Each page supplies its own 24px horizontal padding
+          (px-6). */}
       <div
         className="flex-1 min-h-0"
         style={{
           marginTop: 64,
           marginLeft: railW,
-          marginRight: SHELL_FRAME_MARGIN,
-          marginBottom: SHELL_FRAME_MARGIN,
-          padding: SHELL_FRAME_GAP,
-          background: "var(--shell-frame, #ffffff)",
-          // Concentric with the card: outer radius = card radius + the gap.
-          borderRadius: SHELL_FRAME_RADIUS + SHELL_FRAME_GAP,
           transition: "margin-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)",
         }}
       >
-        {/* The clip wrapper owns the radius: <main>'s scrollbar paints a
-            square track inside <main>'s own border box, so a radius on
-            <main> itself leaves the track's corners poking square notches
-            past the card. A rounded overflow-hidden parent clips the
-            scrollbar along with the content. */}
-        <div className="h-full overflow-hidden" style={{ borderRadius: SHELL_FRAME_RADIUS }}>
-          <main
-            className={fullBleed ? "h-full overflow-hidden" : "h-full pt-4 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
-            style={{
-              // Full 24px like the classic shell: pane bars bleed into the
-              // gutter with -ml-6 (24px), so a smaller padding here makes
-              // them overshoot the card edge and clip (the Grid underline
-              // lost its left inset).
-              paddingLeft: fullBleed ? 0 : 24,
-              background: "var(--color-surface-1, #ffffff)",
-              // No horizontal scrolling: a sideways drag would slide content
-              // under the fixed rail / docked panel, which read as broken.
-              overflowX: "hidden",
-              // Nothing is reserved for the connections rail: it's a pure
-              // overlay over the card's right edge, so opening it never narrows
-              // <main> and never shifts the pane's tab row across.
-              ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
-            }}
-          >
-            {mainInner}
-          </main>
-        </div>
+        <main
+          className={fullBleed ? "h-full overflow-hidden" : "h-full pt-4 pb-6 scroll-pt-32 overflow-y-auto overscroll-y-none"}
+          style={{
+            // Full 24px like the classic shell: pane bars bleed into the
+            // gutter with -ml-6 (24px), so a smaller padding here makes
+            // them overshoot the surface edge and clip (the Grid underline
+            // lost its left inset).
+            paddingLeft: fullBleed ? 0 : 24,
+            background: "var(--color-surface-1, #ffffff)",
+            // No horizontal scrolling: a sideways drag would slide content
+            // under the fixed rail / docked panel, which read as broken.
+            overflowX: "hidden",
+            // Nothing is reserved for the connections rail: it's a pure
+            // overlay over the surface's right edge, so opening it never
+            // narrows <main> and never shifts the pane's tab row across.
+            ...(fullBleed ? {} : { scrollbarGutter: 'stable' as const }),
+          }}
+        >
+          {mainInner}
+        </main>
       </div>
 
       {/* The Create panel is NOT here — it lives inside the Sidebar's docked

@@ -9,8 +9,6 @@ import { useHeader } from "@/features/shared/contexts/HeaderContext";
 import { useSpace } from "@/features/shared/contexts/SpaceContext";
 import { useContextPanel } from "@/features/shared/contexts/ContextPanelContext";
 import { useSession } from "@/features/auth/lib/auth-client";
-import { canAccessFeature } from "@/features/shared/lib/features";
-import type { SpaceFeatureConfig } from "@/lib/types";
 
 export default function Navbar() {
   const { headerContent, headerRight } = useHeader();
@@ -19,21 +17,8 @@ export default function Navbar() {
   const { data: session } = useSession();
   const pathname = usePathname();
   const eventsActive = pathname.startsWith("/events");
-  const toolsActive = pathname.startsWith("/tools");
   const adminActive = pathname.startsWith("/admin");
   const canAccessAdmin = isAdmin || session?.user?.isSuperAdmin === true;
-  // The marketplace is a member surface — installing is what's admin-gated, and
-  // that happens inside. What does hide the icon is the space switching Tools
-  // off (or locking the key to admins), the same `featureConfig` decision the
-  // rail obeys; with no space chosen the catalogue is still browsable, since the
-  // registry itself is global.
-  const canAccessTools =
-    !currentSpace ||
-    canAccessFeature(
-      (currentSpace.featureConfig as SpaceFeatureConfig | undefined) ?? null,
-      "tools",
-      isAdmin,
-    );
 
   return (
     <header
@@ -42,11 +27,12 @@ export default function Navbar() {
     >
       <div className="h-full grid grid-cols-[auto_1fr_auto] items-center px-6 gap-6">
         {/* Left: space selector + space management cog. The selector's avatar
-            is pulled left to sit directly ABOVE the sidebar rail's icon column: the
-            rail centers a 40px icon at ICON_LEFT (17px) from the viewport edge, and the
-            selector button's own px-3 (12px) + the grid's px-6 (24px) would otherwise
-            land the avatar at 36px — so a -19px nudge aligns the two icon columns. */}
-        <div className="flex items-center gap-3" style={{ marginLeft: -19 }}>
+            is pulled left to sit directly ABOVE the sidebar rail's square column:
+            the rail centres a 48px row 34px from the viewport edge, and the
+            selector button's own px-3 (12px) + the grid's px-6 (24px) would
+            otherwise land the 40px avatar's centre at 56px — so a -22px nudge
+            puts the avatar and the rail's glyphs on one centre line. */}
+        <div className="flex items-center gap-3" style={{ marginLeft: -22 }}>
           <SpaceSelector />
           {canAccessAdmin && (
             <Link
@@ -111,27 +97,6 @@ export default function Navbar() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </Link>
-          {/* Tools sit beside the calendar for the same reason: the marketplace
-              is global — one shelf every space installs from — so it belongs in
-              the shell chrome rather than in a per-space sidebar rail. (An
-              INSTALLED tool does get a rail row; this is the shop, not a tool.) */}
-          {canAccessTools && (
-            <Link
-              href="/tools"
-              aria-label="Tools"
-              title="Tools"
-              className={`w-12 h-12 rounded-xl flex items-center justify-center shell-icon-btn ${
-                toolsActive ? "shell-icon-btn--active" : ""
-              }`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                <path d="M17 13v8M13 17h8" />
-              </svg>
-            </Link>
-          )}
           <NotificationBell />
           <UserMenu />
         </div>

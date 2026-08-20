@@ -137,7 +137,7 @@ function NodeCard({ item, onClick, nodeTypes, aliases }: DirectoryCardProps) {
           {displaySubtitle ?? ''}
         </p>
 
-        <Chip color={typeColor} size="xs" className="mt-3.5">
+        <Chip color={typeColor} size="sm" className="mt-3.5">
           {nodeTypeLabel(item.type, item.alias, aliases, nodeTypes)}
         </Chip>
       </div>

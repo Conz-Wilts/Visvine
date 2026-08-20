@@ -2,8 +2,6 @@
 
 import React, { useRef, useEffect, useLayoutEffect, useState } from 'react';
 import { useTabBarSlot } from '@/features/shared/contexts/TabBarSlotContext';
-import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
-import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION } from '@/components/ui/tabMotion';
 
@@ -62,13 +60,6 @@ export default function PageTabBar({
   handoffKey,
 }: PageTabBarProps) {
   const { setHost } = useTabBarSlot();
-  // The toolbar tray centres over the note COLUMN, not the pane: while the
-  // notes tree is docked into the Sidebar the content insets by its width
-  // (useDockInsetStyle on the pages), so the attached region insets the same
-  // amount — otherwise the tray hangs left of the column it belongs to. Same
-  // transition as the content inset so they move together.
-  const { dockRequested, contextOpen } = useContextPanel();
-  const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
   // Transitions are ARMED only after the bar's first frame is on screen. This bar
@@ -208,12 +199,9 @@ export default function PageTabBar({
             }`}
             style={{
               height: TAB_ROW_H,
-              paddingLeft: trayInset || undefined,
               // `translate`, not `transform`: Tailwind v4's translate-y-*
               // utilities set the standalone CSS translate property.
-              transition: armed
-                ? 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                : 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)',
+              transition: armed ? 'translate 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
             }}
           />
         </div>

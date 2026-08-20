@@ -34,6 +34,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { OWNER_ALIAS, OWNER_ALIAS_ID, OWNER_ALIAS_NAME } from "../lib/types/context";
+import { nameKey } from "../lib/identity/normalize";
 
 assertLocalTarget();
 
@@ -211,7 +212,9 @@ async function wipeData() {
     prisma.resource.deleteMany({}),
     prisma.spaceMember.deleteMany({}),
     prisma.person.deleteMany({}),
+    prisma.identityResolution.deleteMany({}),
     prisma.node.deleteMany({}),
+    prisma.identity.deleteMany({}),
     prisma.user.deleteMany({}),
     prisma.space.deleteMany({}),
   ]);
@@ -327,6 +330,21 @@ async function createAnchorUsers() {
         },
       });
     }
+    // The member connection. A person node carries a profile only when it is
+    // linked to a registered User through an Identity — that link, not the
+    // Person row, is what the Profile tab reads (lib/identity/connection.ts).
+    // Seeding the node without it left every anchor looking at "Not connected
+    // to a member yet" on their own profile.
+    const identity = await prisma.identity.create({
+      data: {
+        kind: "person",
+        canonicalName: a.name,
+        nameKey: nameKey(a.name),
+        email: a.email,
+        verified: true,
+        userId: a.id,
+      },
+    });
     await prisma.node.create({
       data: {
         id: a.personNodeId,
@@ -335,6 +353,16 @@ async function createAnchorUsers() {
         spaceId: SPACE_ID,
         alias: a.aliases.find((n) => n !== OWNER_ALIAS_NAME) ?? null,
         metadata: { seeded: true, anchor: true },
+        identityId: identity.id,
+      },
+    });
+    await prisma.identityResolution.create({
+      data: {
+        nodeId: a.personNodeId,
+        identityId: identity.id,
+        decision: "confirmed",
+        confidence: 1,
+        reason: "seeded anchor",
       },
     });
     await prisma.person.create({

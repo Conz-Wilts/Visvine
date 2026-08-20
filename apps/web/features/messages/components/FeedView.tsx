@@ -229,7 +229,7 @@ const PostCard = memo(function PostCard({
 
   return (
     <article
-      className="group relative rounded-2xl border border-border-subtle bg-surface-1 px-4 py-3 shadow-[0_2px_12px_rgba(16,24,40,0.06)]"
+      className="group relative border-b border-border-subtle px-4 py-4 last:border-b-0"
       onMouseLeave={() => setShowEmojiPicker(false)}
       data-message-id={post.id}
     >
@@ -346,13 +346,13 @@ const PostCard = memo(function PostCard({
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submitComment(); } }}
             placeholder="Write a comment…"
             disabled={sendingComment}
-            className="min-w-0 flex-1 rounded-full border border-border-default bg-surface-1 px-3.5 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-green/40 focus:outline-none disabled:opacity-50"
+            className="min-w-0 flex-1 rounded-lg bg-surface-2 px-3.5 py-1.5 text-sm text-text-primary placeholder:text-text-muted focus:bg-surface-1 focus:outline-none focus:ring-1 focus:ring-border-default disabled:opacity-50"
           />
           <button
             type="button"
             onClick={() => void submitComment()}
             disabled={!commentText.trim() || sendingComment}
-            className="shrink-0 rounded-md bg-brand-green px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:opacity-40"
+            className="shrink-0 rounded-md bg-brand-green px-3.5 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-40"
           >
             Reply
           </button>

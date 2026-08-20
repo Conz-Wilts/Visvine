@@ -279,6 +279,8 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     searchType,
     fields.email ?? '',
   )
+  const showMatches =
+    !!searchType && !dismissedMatches && title.trim().length >= 2 && (matches.length > 0 || matchesLoading)
 
   useEffect(() => {
     titleRef.current?.focus()
@@ -802,25 +804,42 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
     <div className="mx-auto mb-1 w-full max-w-[760px] px-7 pt-10">
       {/* An upload has no name of its own to type — each file keeps its own —
           so File is the one type that drops the title line entirely. */}
-      <input
-        ref={titleRef}
-        hidden={type === 'file'}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={(e) => {
-          // Enter and the Create button are the ONLY commit boundaries. Blur is
-          // deliberately not one: property rows typed before commit are sent with
-          // the create, so committing the moment the title loses focus would fire
-          // before the user has filled anything in.
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            requestCommit()
-          }
-        }}
-        placeholder="Untitled"
-        aria-label="Title"
-        className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
-      />
+      <div className="relative">
+        <input
+          ref={titleRef}
+          hidden={type === 'file'}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter and the Create button are the ONLY commit boundaries. Blur is
+            // deliberately not one: property rows typed before commit are sent with
+            // the create, so committing the moment the title loses focus would fire
+            // before the user has filled anything in.
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              requestCommit()
+            }
+            // Escape answers the suggestion popover without touching the title.
+            if (e.key === 'Escape' && showMatches) {
+              e.preventDefault()
+              setDismissedMatches(true)
+            }
+          }}
+          placeholder="Untitled"
+          aria-label="Title"
+          className="w-full bg-transparent font-open-sauce text-[2.5rem] font-semibold leading-[1.25] tracking-[-0.02em] text-text-primary placeholder:text-text-muted/50 focus:outline-none"
+        />
+
+        {/* Matches hang off the title as a suggestion popover, the way any
+            autocomplete does — the question "is this already here?" is about the
+            name you are typing, so the rows answer it on their own. No heading,
+            no empty line: it only exists when there is something to show. */}
+        {showMatches && (
+          <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-border-subtle bg-surface-1 p-1.5 shadow-float">
+            <MatchPanel results={matches} loading={matchesLoading} onSelect={handlePickMatch} />
+          </div>
+        )}
+      </div>
 
       {/* Type and Tags ONLY. `type={null}` withholds the per-type field rows
           (email, location, photo…): those describe a thing that exists, and
@@ -865,7 +884,7 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       )}
 
       {conflict && (
-        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-l-2 border-amber-500 pl-3 py-1 text-sm text-amber-800">
           <span>{conflict.message}</span>
           <button
             type="button"
@@ -884,30 +903,12 @@ export function DraftContextPanel({ mode = 'wysiwyg', initialFolder = '', initia
       )}
 
       {error && (
-        <div className="mt-4 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-4 flex items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
         </div>
       )}
 
-      {searchType && !dismissedMatches && title.trim().length >= 2 && (matches.length > 0 || matchesLoading) && (
-        <div className="mt-5 rounded-lg border border-border-subtle bg-surface-1 p-3">
-          <MatchPanel
-            results={matches}
-            loading={matchesLoading}
-            onSelect={handlePickMatch}
-            title="Already in Visvine?"
-            emptyHint="No existing matches — this will be a new entry."
-          />
-          <button
-            type="button"
-            onClick={() => setDismissedMatches(true)}
-            className="mt-2 text-xs font-medium text-text-muted transition hover:text-text-secondary"
-          >
-            None of these — keep going
-          </button>
-        </div>
-      )}
     </div>
   )
 
@@ -1139,7 +1140,7 @@ function TypeMenu({
            flat "More specific" section could only ever show the ALREADY-picked
            type's aliases: you had to choose twice to find out what was on
            offer. */
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-64 overflow-hidden rounded-lg border border-border-default bg-surface-1 shadow-float">
           <div className="border-b border-border-subtle p-1.5">
             <input
               ref={inputRef}
@@ -1190,7 +1191,7 @@ function TypeMenu({
                       Create type <span className="font-medium text-text-primary">“{row.name}”</span>
                     </span>
                     <span
-                      className="h-3.5 w-3.5 shrink-0 rounded shadow-sm"
+                      className="h-3.5 w-3.5 shrink-0 rounded"
                       style={{ background: defaultNodeTypeColor(row.name) }}
                     />
                   </button>
@@ -1214,7 +1215,7 @@ function TypeMenu({
                       {row.config.name}
                     </span>
                     {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
-                    <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.config.color }} />
+                    <span className="h-3.5 w-3.5 shrink-0 rounded" style={{ background: row.config.color }} />
                   </button>
                 )
               }
@@ -1239,7 +1240,7 @@ function TypeMenu({
                       {query && <span className="text-text-muted"> · {row.option.label}</span>}
                     </span>
                     {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
-                    <span className="h-3 w-3 shrink-0 rounded shadow-sm" style={{ background: row.alias.color }} />
+                    <span className="h-3 w-3 shrink-0 rounded" style={{ background: row.alias.color }} />
                   </button>
                 )
               }
@@ -1284,7 +1285,7 @@ function TypeMenu({
                     {picked && <CheckIcon className="h-3.5 w-3.5 shrink-0 text-text-muted" />}
                     {/* The same rounded square the console's Types tab paints —
                         a type looks the same wherever you meet it. */}
-                    <span className="h-3.5 w-3.5 shrink-0 rounded shadow-sm" style={{ background: row.color }} />
+                    <span className="h-3.5 w-3.5 shrink-0 rounded" style={{ background: row.color }} />
                   </button>
                 </div>
               )

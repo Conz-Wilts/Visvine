@@ -627,10 +627,10 @@ export function NoteEditor({
         {refactoring ? 'Refactoring…' : 'Refactor'}
       </button>
     ) : null
-  // Floating (workspace) layout wraps the controls in a rounded pill; the
+  // Floating (workspace) layout wraps the controls in a hairline tray; the
   // embedded profile bar renders them flat, attached under the tabs.
   const formatPill = formatControls ? (
-    <div className="pointer-events-auto flex items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-1.5 py-1 shadow-sm">
+    <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-1 px-1.5 py-1">
       {starButton}
       {starButton && <Divider />}
       {formatControls}
@@ -732,7 +732,7 @@ export function NoteEditor({
            of spread across a full-width row. max-w-full + the inner
            overflow-x-auto keep narrow panes scrolling inside the card rather
            than growing it. */
-        <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-md">
+        <div className="relative mt-4 flex h-11 max-w-full items-center gap-1 rounded-xl border border-border-subtle bg-surface-1 px-3 shadow-strip">
           {starButton}
           {starButton && formatControls && <Divider />}
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto">{formatControls}</div>
@@ -757,7 +757,7 @@ export function NoteEditor({
       {embedded ? (
         <div className="relative z-0 pt-4">
           {error && (
-            <div className="mb-3 flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="mb-3 flex items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
               <span>{error}</span>
               <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
             </div>
@@ -796,7 +796,7 @@ export function NoteEditor({
             floating ? 'top-[140px]' : 'top-16'
           }`}
         >
-          <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="pointer-events-auto flex w-full max-w-[760px] items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
             <span>{error}</span>
             <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">
               ✕
@@ -962,7 +962,7 @@ function BlockTypeSelect({ editor }: { editor: Editor | null }) {
         <div
           ref={menuRef}
           style={{ top: menuPos.top, left: menuPos.left }}
-          className="dropdown-pop fixed z-50 w-44 rounded-xl border border-border-subtle bg-surface-1 p-1.5 shadow-lg"
+          className="dropdown-pop fixed z-50 w-44 rounded-xl border border-border-subtle bg-surface-1 p-1.5 shadow-float"
         >
           {BLOCK_TYPES.map((t) => (
             <button

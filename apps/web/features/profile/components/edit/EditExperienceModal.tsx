@@ -106,8 +106,8 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
           <div className="space-y-2">
             {entries.map((entry) => (
               <div key={entry.id}
-                   className={`flex items-start gap-3 p-3 border rounded-xl ${draft?.id === entry.id ? 'border-brand-dark-green/40 bg-brand-light-bg/40' : 'border-gray-200'}`}>
-                <span className="w-9 h-9 flex-none rounded-lg bg-gray-100 text-brand-grey flex items-center justify-center">
+                   className={`flex items-start gap-3 p-3 border rounded-xl ${draft?.id === entry.id ? 'border-brand-dark-green/40 bg-brand-light-bg/40' : 'border-border-subtle'}`}>
+                <span className="w-9 h-9 flex-none rounded-lg bg-surface-3 text-brand-grey flex items-center justify-center">
                   <BriefcaseIcon className="w-4 h-4" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -118,7 +118,7 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
                 </div>
                 <div className="flex gap-1 flex-none">
                   <button type="button" onClick={() => editEntry(entry)} aria-label={`Edit ${entry.title}`}
-                          className="p-1.5 rounded-lg text-brand-grey hover:bg-gray-100 transition-colors">
+                          className="p-1.5 rounded-lg text-brand-grey hover:bg-surface-3 transition-colors">
                     <PencilIcon className="w-3.5 h-3.5" />
                   </button>
                   <button type="button" onClick={() => removeEntry(entry.id)} aria-label={`Remove ${entry.title}`}
@@ -133,35 +133,35 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
 
         {/* Add / edit form */}
         {draft ? (
-          <div className="space-y-3 p-4 border border-dashed border-gray-300 rounded-xl">
+          <div className="space-y-3 p-4 border border-dashed border-border-default rounded-xl">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-brand-grey mb-1">Role / Title *</label>
                 <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })}
                        placeholder="e.g. Product Designer" required={!!(draft.org.trim() || draft.start)}
-                       className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
+                       className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-brand-grey mb-1">Company / Organisation *</label>
                 <input value={draft.org} onChange={(e) => setDraft({ ...draft, org: e.target.value })}
                        placeholder="e.g. Acme Corp" required={!!(draft.title.trim() || draft.start)}
-                       className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
+                       className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-brand-grey mb-1">Start *</label>
                 <input type="month" value={draft.start} onChange={(e) => setDraft({ ...draft, start: e.target.value })}
                        required={!!(draft.title.trim() || draft.org.trim())}
-                       className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
+                       className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-brand-grey mb-1">End</label>
                 <input type="month" value={draft.end} disabled={draft.current} min={draft.start || undefined}
                        onChange={(e) => setDraft({ ...draft, end: e.target.value })}
-                       className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 disabled:bg-gray-50 disabled:text-brand-grey" />
+                       className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 disabled:bg-surface-2 disabled:text-brand-grey" />
                 <label className="flex items-center gap-2 mt-1.5 text-xs text-brand-grey cursor-pointer select-none">
                   <input type="checkbox" checked={draft.current}
                          onChange={(e) => setDraft({ ...draft, current: e.target.checked, end: e.target.checked ? '' : draft.end })}
-                         className="rounded border-gray-300" />
+                         className="rounded border-border-default" />
                   I currently work here
                 </label>
               </div>
@@ -170,17 +170,17 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
               <label className="block text-xs font-medium text-brand-grey mb-1">Location</label>
               <input value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })}
                      placeholder="e.g. Auckland, New Zealand"
-                     className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
+                     className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
             </div>
             <div>
               <label className="block text-xs font-medium text-brand-grey mb-1">Description</label>
               <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                         rows={2} maxLength={600} placeholder="What did you build or own in this role?"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
+                        className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30" />
             </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setDraft(null)}
-                      className="px-3 py-1.5 text-xs font-medium text-brand-grey rounded-lg hover:bg-gray-100 transition-colors">
+                      className="px-3 py-1.5 text-xs font-medium text-brand-grey rounded-lg hover:bg-surface-3 transition-colors">
                 Discard
               </button>
               <button type="button" disabled={!draftValid}
@@ -192,7 +192,7 @@ export default function EditExperienceModal({ open, onClose, profile, onSave }: 
           </div>
         ) : (
           <button type="button" onClick={() => setDraft(emptyDraft())}
-                  className="w-full py-3 border-[1.5px] border-dashed border-gray-300 rounded-xl text-sm text-brand-grey hover:text-brand-black hover:border-gray-400 flex items-center justify-center gap-1.5 transition-colors">
+                  className="w-full py-3 border-[1.5px] border-dashed border-border-default rounded-xl text-sm text-brand-grey hover:text-brand-black hover:border-gray-400 flex items-center justify-center gap-1.5 transition-colors">
             <PlusIcon className="w-4 h-4" /> Add a role
           </button>
         )}

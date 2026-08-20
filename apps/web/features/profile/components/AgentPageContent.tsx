@@ -31,7 +31,7 @@ interface DetailResponse {
 
 function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft">
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
         {aside}
@@ -92,7 +92,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   }, [data, reload]);
 
   if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-2xl" />;
-  if (error || !data) return <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error ?? 'Not found'}</div>;
+  if (error || !data) return <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">{error ?? 'Not found'}</div>;
 
   const { agent, runs, isAdmin, canRun } = data;
   const view = rowStateView(agent);

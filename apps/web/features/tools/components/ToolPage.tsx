@@ -84,7 +84,7 @@ function ToolPageSkeleton() {
 function ToolNotFound({ slug }: { slug: string }) {
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <div className="max-w-md rounded-2xl border border-border-subtle bg-surface-1 px-6 py-8 text-center">
+      <div className="max-w-md px-6 py-8 text-center">
         <h1 className="text-lg font-semibold text-text-primary">No tool here</h1>
         <p className="mt-2 text-sm text-text-secondary">
           This space has no tool at <span className="font-mono text-text-primary">/t/{slug}</span>. It may have

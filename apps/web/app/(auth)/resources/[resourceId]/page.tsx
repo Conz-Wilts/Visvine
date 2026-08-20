@@ -167,7 +167,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
     );
   }
 
-  const badge = FILE_BADGE[resource.fileType] ?? 'bg-gray-50 text-gray-600 border-gray-200';
+  const badge = FILE_BADGE[resource.fileType] ?? 'bg-surface-2 text-text-muted border-border-subtle';
   const label = FILE_LABEL[resource.fileType] ?? resource.fileType.toUpperCase();
 
   return (

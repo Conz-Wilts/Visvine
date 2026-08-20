@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * Toolbar for Events page — filters row below header
- * Grey dropdown-style selectors matching Directory's FilterDropdown pattern
+ * The Events page's filters: Time and Type as text dropdowns, plus Clear once
+ * either is off its default. Sits inline on the toolbar row beside the search.
  */
 
 import { XIcon } from '@/features/shared/icons';
@@ -35,13 +35,14 @@ export default function EventsToolbar({
   const hasFilters = currentFilter !== 'upcoming' || locationFilter !== 'all';
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-1">
       <Dropdown
         label="Time"
         value={currentFilter}
         options={TIME_OPTIONS}
         onChange={onFilterChange}
         active={currentFilter !== 'upcoming'}
+        compact
       />
       {onLocationFilterChange && (
         <Dropdown
@@ -50,6 +51,7 @@ export default function EventsToolbar({
           options={LOCATION_OPTIONS}
           onChange={onLocationFilterChange}
           active={locationFilter !== 'all'}
+          compact
         />
       )}
 

@@ -20,15 +20,19 @@ export default function MatchPanel({
   results: NodeSearchResult[];
   loading: boolean;
   onSelect: (result: NodeSearchResult) => void;
-  title: string;
-  emptyHint: string;
+  // Both optional: a panel anchored under the field it searches needs no
+  // heading, and one shown only when there are hits needs no empty line.
+  title?: string;
+  emptyHint?: string;
   fallbackIcon?: ReactNode;
 }) {
   return (
     <div className="flex flex-col h-full min-h-0">
-      <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider px-1 mb-2">
-        {title}
-      </h3>
+      {title && (
+        <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wider px-1 mb-2">
+          {title}
+        </h3>
+      )}
 
       {loading && (
         <div className="flex items-center gap-2 px-2 py-3 text-sm text-text-muted">
@@ -37,7 +41,7 @@ export default function MatchPanel({
         </div>
       )}
 
-      {!loading && results.length === 0 && (
+      {!loading && results.length === 0 && emptyHint && (
         <p className="text-xs text-text-muted px-1 py-3">
           {emptyHint}
         </p>

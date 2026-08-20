@@ -280,7 +280,7 @@ function TypeSection({ typeName, typeColor, toolLabel, pageOwner, aliases, allAl
           <button
             type="button"
             onClick={e => { e.stopPropagation(); setShowColorPicker(p => !p); }}
-            className="w-5 h-5 rounded shadow-sm transition-transform hover:scale-110"
+            className="w-5 h-5 rounded transition-transform hover:scale-110"
             style={{ background: typeColor }}
             title="Change type colour"
           />

@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { TriangleAlertIcon } from '@/features/shared/icons';
+import { } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { PageTitle, Skeleton } from '@/components/ui';
+import { Skeleton, Alert } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary } from '@/lib/agents/service';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
@@ -72,33 +72,26 @@ export default function AgentsPage() {
       return (
         <div className="flex flex-col gap-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-2xl" />
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
           ))}
         </div>
       );
     }
     if (error) {
-      return <div className="rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>;
+      return <Alert>{error}</Alert>;
     }
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-8">
         {schedulerDelayed && (
-          <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-            <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
-            <p>
-              The scheduler hasn&apos;t ticked{data.heartbeatAt ? ` since ${new Date(data.heartbeatAt).toLocaleString()}` : ' yet'} — active agents will not fire
-              until it does. (In production this is the Cloud Scheduler job; in dev, POST /api/internal/agents/tick.)
-            </p>
-          </div>
+          <Alert variant="warning">
+            The scheduler hasn&apos;t ticked{data.heartbeatAt ? ` since ${new Date(data.heartbeatAt).toLocaleString()}` : ' yet'} — active agents will not fire
+            until it does. (In production this is the Cloud Scheduler job; in dev, POST /api/internal/agents/tick.)
+          </Alert>
         )}
         {notice && (
-          <div
-            className={`rounded-2xl px-4 py-2.5 text-[13px] ${
-              notice.tone === 'ok' ? 'bg-brand-light-bg text-brand-dark-green' : notice.tone === 'warn' ? 'bg-amber-50 text-amber-800' : 'bg-red-50 text-red-700'
-            }`}
-          >
+          <Alert inline variant={notice.tone === 'ok' ? 'success' : notice.tone === 'warn' ? 'warning' : 'error'}>
             {notice.message}
-          </div>
+          </Alert>
         )}
         <AgentsRoster
           spaceId={spaceId!}
@@ -115,8 +108,7 @@ export default function AgentsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-5xl pb-16">
-      <PageTitle title="Agents" />
+    <div className="mx-auto w-full max-w-5xl pt-6 pb-16">
       <div className="mt-4">{body()}</div>
     </div>
   );

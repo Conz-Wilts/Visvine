@@ -91,7 +91,7 @@ export default function ConfirmDialog({
         {body && <div className="mt-2 text-sm leading-relaxed text-text-secondary">{body}</div>}
 
         {error && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600">
+          <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm font-medium text-red-600">
             {error}
           </div>
         )}

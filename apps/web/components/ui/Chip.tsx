@@ -31,7 +31,7 @@ const BASE =
   'inline-flex max-w-full items-center rounded-md font-semibold leading-none whitespace-nowrap';
 
 const SIZE_CLASS: Record<ChipSize, string> = {
-  xs: 'h-5 gap-1 px-1.5 text-[10.5px]',
+  xs: 'h-5 gap-1 px-[7px] text-[10px]',
   sm: 'h-[22px] gap-1 px-2 text-[11px]',
   md: 'h-6 gap-1 px-2 text-[12px]',
   lg: 'h-7 gap-1.5 px-2.5 text-[13px]',
@@ -54,7 +54,7 @@ const ICON_CLASS: Record<ChipSize, string> = {
 
 const TONE_CLASS: Record<ChipTone, string> = {
   solid: 'text-white',
-  muted: 'border border-border-default bg-surface-2 text-text-secondary',
+  muted: 'bg-surface-3 text-text-secondary',
   // Hover is left to the caller: some empty slots brighten to the surface's own
   // accent, others just to the text colour, and two competing `hover:text-*`
   // rules resolve by stylesheet order rather than by the order they're written.

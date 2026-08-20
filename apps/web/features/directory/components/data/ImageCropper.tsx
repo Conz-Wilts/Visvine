@@ -282,15 +282,15 @@ export default function ImageCropper({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className={`bg-white rounded-2xl shadow-2xl w-full mx-4 overflow-hidden ${previewName ? 'max-w-2xl' : 'max-w-md'}`}>
+      <div className={`bg-surface-1 rounded-2xl shadow-float w-full mx-4 overflow-hidden ${previewName ? 'max-w-2xl' : 'max-w-md'}`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">Adjust Photo</h3>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border-subtle">
+          <h3 className="text-lg font-semibold text-text-primary">Adjust Photo</h3>
           <button
             type="button"
             onClick={onCancel}
             disabled={isUploading}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            className="p-2 text-text-muted hover:text-text-muted hover:bg-surface-3 rounded-lg transition-colors disabled:opacity-50"
           >
             <XIcon className="w-5 h-5" />
           </button>
@@ -300,7 +300,7 @@ export default function ImageCropper({
         <div className={`p-5 ${previewName ? 'flex gap-6' : ''}`}>
           {/* Cropper side */}
           <div className={previewName ? 'flex-1 min-w-0' : ''}>
-            <p className="text-sm text-gray-500 mb-4 text-center">
+            <p className="text-sm text-text-muted mb-4 text-center">
               Drag to reposition. Scroll or use buttons to zoom.
             </p>
 
@@ -340,7 +340,7 @@ export default function ImageCropper({
                 type="button"
                 onClick={handleZoomOut}
                 disabled={zoom <= MIN_ZOOM || isUploading}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-3 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ZoomOutIcon className="w-5 h-5" />
               </button>
@@ -362,7 +362,7 @@ export default function ImageCropper({
                 type="button"
                 onClick={handleZoomIn}
                 disabled={zoom >= MAX_ZOOM || isUploading}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-3 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ZoomInIcon className="w-5 h-5" />
               </button>
@@ -371,7 +371,7 @@ export default function ImageCropper({
                 type="button"
                 onClick={handleReset}
                 disabled={isUploading}
-                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                className="p-2 text-text-muted hover:text-text-primary hover:bg-surface-3 rounded-lg transition-colors disabled:opacity-50"
                 title="Reset"
               >
                 <RotateCcwIcon className="w-5 h-5" />
@@ -379,7 +379,7 @@ export default function ImageCropper({
             </div>
 
             {/* Zoom percentage */}
-            <div className="text-center text-sm text-gray-500 mb-4">
+            <div className="text-center text-sm text-text-muted mb-4">
               {Math.round(zoom * 100)}%
             </div>
           </div>
@@ -387,9 +387,9 @@ export default function ImageCropper({
           {/* Live card preview */}
           {previewName && (
             <div className="flex flex-col items-center justify-center w-[180px] shrink-0">
-              <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Preview</p>
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wide mb-3">Preview</p>
               <div
-                className="rounded-xl overflow-hidden w-[160px] bg-white"
+                className="rounded-xl overflow-hidden w-[160px] bg-surface-1"
                 style={{
                   border: `3px solid ${previewColor}`,
                   boxShadow: `0 0 10px 1px ${previewColor}44`,
@@ -403,21 +403,21 @@ export default function ImageCropper({
                   style={{ aspectRatio: `${outputWidth} / ${outputHeight}`, display: 'block' }}
                 />
                 <div className="px-3 py-2.5 text-center">
-                  <p className="text-xs font-semibold text-gray-900 truncate">{previewName}</p>
+                  <p className="text-xs font-semibold text-text-primary truncate">{previewName}</p>
                 </div>
               </div>
-              <p className="text-[10px] text-gray-400 mt-2 text-center">How it appears on cards</p>
+              <p className="text-[10px] text-text-muted mt-2 text-center">How it appears on cards</p>
             </div>
           )}
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 px-5 py-4 bg-gray-50 border-t border-gray-100">
+        <div className="flex gap-3 px-5 py-4 bg-surface-2 border-t border-border-subtle">
           <button
             type="button"
             onClick={onCancel}
             disabled={isUploading}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-text-secondary bg-surface-1 border border-border-default rounded-lg hover:bg-surface-2 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>

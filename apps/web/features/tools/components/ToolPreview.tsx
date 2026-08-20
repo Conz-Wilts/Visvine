@@ -168,7 +168,7 @@ export default function ToolPreview({ name }: { name: string }) {
  */
 function NotBuilding({ tool }: { tool: AuthoredToolDetail }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border-subtle bg-surface-1 px-5 py-4">
+    <div className="flex flex-col gap-3 border-l-2 border-red-500 pl-4 py-1">
       <div className="flex items-center gap-2">
         <TriangleAlertIcon className="h-4 w-4 shrink-0 text-red-600" />
         <h2 className="text-sm font-semibold text-text-primary">
@@ -206,7 +206,7 @@ function PreviewUnavailable({
 }) {
   return (
     <div className="flex items-center justify-center px-6 py-24">
-      <div className="max-w-md rounded-2xl border border-border-subtle bg-surface-1 px-6 py-8 text-center">
+      <div className="max-w-md px-6 py-8 text-center">
         <TriangleAlertIcon className="mx-auto h-5 w-5 text-amber-500" />
         <h1 className="mt-3 text-lg font-semibold text-text-primary">
           {status === 403 ? 'Tools are off for you here' : 'Nothing to preview'}

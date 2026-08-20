@@ -9,12 +9,12 @@ import PDFViewer from '@/features/resources/components/PDFViewer';
 import CommentsPanel from '@/features/resources/components/CommentsPanel';
 import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
 import {
-  FileTypeIcon, FILE_BG, FILE_BADGE, FILE_LABEL, INDEX_STATE_LABEL,
+  FileTypeIcon, FILE_BG, FILE_LABEL, INDEX_STATE_LABEL,
   getPinned, togglePin, DocxViewer, FileUnavailable,
 } from '@/features/resources/components/resourceUi';
+import { EmptyState, SearchInput, UnderlineTabs } from '@/components/ui';
 import { formatBytes } from '@/lib/utils';
 import type { Resource } from '@/lib/types';
-import { PageTitle } from '@/components/ui';
 
 // xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
 const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/SpreadsheetViewer'), { ssr: false });
@@ -22,6 +22,12 @@ const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/
 type ResourceTab = 'all' | 'pinned' | 'new';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const RESOURCE_TABS: { id: ResourceTab; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'pinned', label: 'Pinned' },
+  { id: 'new', label: 'New' },
+];
 
 // ─── Resource grid card ───────────────────────────────────────────────────────
 
@@ -42,29 +48,26 @@ function ResourceCard({
   onTogglePin: () => void;
   onDelete: () => void;
 }) {
-  const bg = (FILE_BG[resource.fileType] ?? 'bg-gray-100 text-gray-400').split(' ')[0];
-  const badge = FILE_BADGE[resource.fileType] ?? 'bg-gray-50 text-gray-600 border-gray-200';
-  const label = FILE_LABEL[resource.fileType] ?? resource.fileType.toUpperCase();
+  const bg = (FILE_BG[resource.fileType] ?? 'bg-surface-3 text-text-muted').split(' ')[0];
+  const date = new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  const facts = [resource.fileSize ? formatBytes(resource.fileSize) : null, date].filter(Boolean).join(' · ');
+  // Where the file got to in the RAG pipeline. Only the exceptions are said:
+  // "the AI can't find my document" is otherwise invisible, but a file that
+  // indexed fine needs no badge.
+  const state = resource.indexState !== 'indexed' ? INDEX_STATE_LABEL[resource.indexState] : undefined;
 
   return (
     <div
       className="transition-all duration-500 ease-out"
       style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
     >
-      <div
-        onClick={onSelect}
-        className={`relative bg-surface-1 rounded-2xl border overflow-hidden shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer group ${
-          selected
-            ? 'border-brand-green ring-2 ring-brand-green/20'
-            : 'border-border-subtle hover:border-border-default'
-        }`}
-      >
-        {/* Pin button */}
+      <div onClick={onSelect} className="group relative cursor-pointer">
+        {/* Pin — floats over the tile's corner; always shown once pinned */}
         <button
           type="button"
           onClick={e => { e.stopPropagation(); onTogglePin(); }}
           title={pinned ? 'Unpin' : 'Pin'}
-          className={`absolute top-2.5 right-2.5 z-10 flex h-7 w-7 items-center justify-center rounded-full shadow-sm transition-all ${
+          className={`absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
             pinned
               ? 'bg-brand-green text-white'
               : 'bg-surface-1/90 text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-green'
@@ -75,60 +78,40 @@ function ResourceCard({
           </svg>
         </button>
 
-        {/* Preview area */}
-        {resource.fileType === 'image' && resource.fileUrl ? (
-          <div className="aspect-[4/3] overflow-hidden">
-            <img src={resource.fileUrl} alt={resource.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-          </div>
-        ) : (
-          <div className={`aspect-[4/3] flex items-center justify-center ${bg} group-hover:brightness-95 transition-all`}>
-            <FileTypeIcon type={resource.fileType} className="h-16 w-16" />
-          </div>
-        )}
-
-        {/* Meta */}
-        <div className="p-4">
-          <h3 className="font-semibold text-text-primary text-sm leading-snug mb-2.5 line-clamp-2">{resource.name}</h3>
-          <div className="flex items-center justify-between">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${badge}`}>{label}</span>
-            <div className="flex items-center gap-2">
-              {resource.fileSize ? <span className="text-xs text-text-muted">{formatBytes(resource.fileSize)}</span> : null}
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); onDelete(); }}
-                className="rounded-md p-1 text-text-muted/40 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
-                title="Delete"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+        {/* The tile IS the card: a square, selected = a ring around it */}
+        <div className={`aspect-square overflow-hidden rounded-lg transition-shadow ${selected ? 'ring-2 ring-brand-green ring-offset-2 ring-offset-surface-1' : ''}`}>
+          {resource.fileType === 'image' && resource.fileUrl ? (
+            <img src={resource.fileUrl} alt={resource.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+          ) : (
+            <div className={`flex h-full w-full items-center justify-center ${bg} transition-all group-hover:brightness-95`}>
+              <FileTypeIcon type={resource.fileType} className="h-14 w-14" />
             </div>
-          </div>
-          <div className="mt-1.5 flex items-center justify-between gap-2">
-            <p className="text-xs text-text-muted">
-              {new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-            </p>
-            {/* Where the file got to in the RAG pipeline. Shown on the card
-                because "the AI can't find my document" is otherwise invisible. */}
-            {(() => {
-              const state = INDEX_STATE_LABEL[resource.indexState];
-              if (!state) return null;
-              return (
-                <span
-                  title={
-                    resource.indexError ??
-                    (resource.indexState === 'indexed'
-                      ? `${resource.chunkCount ?? 0} passage${resource.chunkCount === 1 ? '' : 's'} indexed for search`
-                      : undefined)
-                  }
-                  className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border ${state.className}`}
-                >
-                  {state.label}
+          )}
+        </div>
+
+        {/* Caption — name, then one line of facts; the icon already said the type */}
+        <div className="flex items-start justify-between gap-2 pt-2.5">
+          <div className="min-w-0">
+            <h3 className="truncate text-[14px] font-semibold leading-snug text-text-primary">{resource.name}</h3>
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-muted">
+              {facts}
+              {state && (
+                <span title={resource.indexError ?? undefined} className={state.className.includes('red') ? 'text-red-600' : 'text-amber-700'}>
+                  · {state.label}
                 </span>
-              );
-            })()}
+              )}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onDelete(); }}
+            className="shrink-0 rounded-md p-1 text-text-muted/50 opacity-0 transition-all hover:text-red-500 group-hover:opacity-100"
+            title="Delete"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -203,7 +186,7 @@ function ResourceDetailDrawer({
     <>
       <aside
         ref={drawerRef}
-        className={`fixed top-0 right-0 h-full bg-surface-1 shadow-2xl z-50 transition-all duration-300 ease-in-out
+        className={`fixed top-0 right-0 h-full bg-surface-1 shadow-float z-50 transition-all duration-300 ease-in-out
           flex flex-col overflow-hidden
           w-full sm:w-[520px]
           ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
@@ -363,22 +346,12 @@ function ResourceGrid({
 
   if (!resources.length) {
     return (
-      <div className="flex flex-col items-center justify-center gap-4 text-center px-12 py-24">
-        <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-surface-3">
-          <svg className="h-10 w-10 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
-          </svg>
-        </div>
-        <div>
-          <p className="text-base font-semibold text-text-secondary">No resources here</p>
-          <p className="mt-1 text-sm text-text-muted">Upload a file to get started.</p>
-        </div>
-      </div>
+      <EmptyState title="No resources here" description="No resources here yet — upload a file to get started." />
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
       {resources.map((r, i) => (
         <ResourceCard
           key={r.id}
@@ -396,69 +369,6 @@ function ResourceGrid({
 }
 
 // ─── Show filter ──────────────────────────────────────────────────────────────
-
-const TABS: { id: ResourceTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'pinned', label: 'Pinned' },
-  { id: 'new', label: 'New' },
-];
-
-// Dropdown selector chip matching Directory's FilterDropdown/SortDropdown styling.
-function ShowDropdown({ value, onChange }: { value: ResourceTab; onChange: (v: ResourceTab) => void }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  const currentLabel = TABS.find(t => t.id === value)?.label ?? 'All';
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex h-12 items-center gap-2 rounded-2xl border border-border-default bg-surface-1 px-4 text-sm font-semibold text-text-secondary shadow-sm hover:border-border-default transition-colors"
-      >
-        <span className="font-normal text-text-muted">Show:</span>
-        <span>{currentLabel}</span>
-        <svg
-          className={`h-4 w-4 text-text-muted transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-2 min-w-[140px] rounded-2xl border border-border-subtle bg-surface-1 shadow-xl z-50 py-1.5 overflow-hidden">
-          {TABS.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => { onChange(opt.id); setOpen(false); }}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-surface-2"
-            >
-              <span className={value === opt.id ? 'font-medium text-text-primary' : 'text-text-secondary'}>
-                {opt.label}
-              </span>
-              {value === opt.id && (
-                <svg className="h-4 w-4 text-brand-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -504,40 +414,17 @@ export default function ResourcesPage() {
     <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* ── Page header: centered title ───────── */}
-        <PageTitle title="Resources" />
-
-        {/* ── Search bar — sized to match Directory ───────────────────── */}
-        <div className="flex justify-center pt-6">
-          <div className="w-full max-w-2xl">
-            <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm">
-              <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-              </svg>
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search resources…"
-                className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              {search && (
-                <button type="button" onClick={() => setSearch('')} className="text-text-muted hover:text-text-secondary">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Toolbar: filter dropdown, centered (matches Directory) ──── */}
-        <div className="flex flex-wrap items-center justify-center gap-3 pt-4 pb-1">
-          <ShowDropdown value={tab} onChange={setTab} />
-
-          {/* Count */}
+        {/* ── One toolbar row: the view tabs, the search, the count ───── */}
+        <div className="flex flex-wrap items-center gap-4 pt-2 pb-1">
+          <UnderlineTabs
+            tabs={RESOURCE_TABS}
+            value={tab}
+            onChange={setTab}
+            ariaLabel="Show"
+          />
+          <SearchInput value={search} onChange={setSearch} placeholder="Search resources…" className="w-full max-w-xs" />
           {!loading && (
-            <span className="text-xs text-text-muted ml-1">
+            <span className="ml-auto text-xs text-text-muted">
               {filteredResources.length} {filteredResources.length === 1 ? 'file' : 'files'}
             </span>
           )}
@@ -546,11 +433,11 @@ export default function ResourcesPage() {
         {/* ── Grid ───────────────────────────────────────────────────── */}
         <div className="pt-4 pb-8">
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="rounded-2xl border border-border-subtle overflow-hidden">
-                  <div className="aspect-[4/3] animate-pulse bg-surface-3" />
-                  <div className="p-4 space-y-2">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i}>
+                  <div className="aspect-square animate-pulse rounded-lg bg-surface-3" />
+                  <div className="space-y-2 pt-2.5">
                     <div className="h-3.5 w-3/4 animate-pulse rounded bg-surface-3" />
                     <div className="h-3 w-1/3 animate-pulse rounded bg-surface-3" />
                   </div>

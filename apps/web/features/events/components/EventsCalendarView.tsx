@@ -220,8 +220,8 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
             </div>
           </div>
 
-          {/* Month card — borderless, shadowless; gap separates the tiles */}
-          <div className="rounded-3xl bg-surface-1 p-2 sm:p-3">
+          {/* Month grid — no panel around it; gap separates the tiles */}
+          <div className="py-1">
             {/* Weekday header */}
             <div className="grid grid-cols-7 gap-1 px-1 pb-1">
               {WEEKDAYS.map((wd, i) => (
@@ -312,7 +312,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
         {/* ── Selected-day panel ────────────────────────────────────────── */}
         <div
           ref={panelRef}
-          className="rounded-3xl bg-surface-1 ring-1 ring-border-subtle/70 p-5 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-96px)] lg:overflow-y-auto"
+          className="border-t border-border-subtle pt-5 lg:border-t-0 lg:border-l lg:pl-8 lg:pt-1 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-96px)] lg:overflow-y-auto"
         >
           <div className="border-b border-border-subtle pb-4 mb-4">
             <div className="text-xs font-medium uppercase tracking-wide text-brand-dark-green">
@@ -333,11 +333,11 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
           {loading ? (
             <div className="space-y-2">
               {[0, 1, 2].map(i => (
-                <div key={i} className="rounded-2xl bg-surface-2 animate-pulse h-16" />
+                <div key={i} className="rounded-lg bg-surface-2 animate-pulse h-16" />
               ))}
             </div>
           ) : selectedDayEvents.length === 0 ? (
-            <div className="rounded-2xl bg-surface-2 px-6 py-10 text-center">
+            <div className="py-8 text-center">
               <CalendarIcon className="mx-auto mb-3 h-6 w-6 text-text-muted/60" />
               <p className="text-sm text-text-muted">Nothing on this day.</p>
             </div>
@@ -358,7 +358,7 @@ export default function EventsCalendarView({ events, onEventClick, loading = fal
                     key={event.id}
                     type="button"
                     onClick={() => onEventClick?.(event)}
-                    className={`group flex w-full items-stretch gap-3 rounded-2xl bg-surface-2 p-3 text-left transition-colors hover:bg-surface-3 ${
+                    className={`group flex w-full items-stretch gap-3 rounded-lg p-2.5 text-left transition-colors hover:bg-surface-2 ${
                       status === 'past' ? 'opacity-60' : ''
                     }`}
                   >

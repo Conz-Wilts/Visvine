@@ -51,6 +51,12 @@ export interface ContextTreeState {
   effectiveOpenPaths: Set<string>
   /** Toggle a folder row. Pass its CURRENT open state (from effectiveOpenPaths). */
   toggleFolder: (path: string, isOpen: boolean) => void
+  /** Hold a folder open by hand, whatever it was before. Opening a folder's home
+   *  note goes through here rather than toggleFolder: the folder may already
+   *  LOOK open on a reveal it is about to lose (selecting the folder's note
+   *  moves the reveal off the child chain that was holding it), and only a real
+   *  openPaths entry survives that. */
+  openFolder: (path: string) => void
 }
 
 export function useContextTreeState(
@@ -115,5 +121,15 @@ export function useContextTreeState(
     })
   }, [])
 
-  return { openPaths, effectiveOpenPaths, toggleFolder }
+  const openFolder = useCallback((path: string) => {
+    setOpenPaths((prev) => (prev.has(path) ? prev : new Set(prev).add(path)))
+    setSuppressedPaths((prev) => {
+      if (!prev.has(path)) return prev
+      const next = new Set(prev)
+      next.delete(path)
+      return next
+    })
+  }, [])
+
+  return { openPaths, effectiveOpenPaths, toggleFolder, openFolder }
 }

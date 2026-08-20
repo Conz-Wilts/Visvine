@@ -110,7 +110,7 @@ function CountrySelector({ value, onChange }: { value: string; onChange: (code: 
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-surface-1 border border-border-subtle rounded-xl shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 w-full bg-surface-1 border border-border-subtle rounded-xl shadow-float overflow-hidden">
           {/* Search */}
           <div className="p-2 border-b border-border-subtle">
             <Input

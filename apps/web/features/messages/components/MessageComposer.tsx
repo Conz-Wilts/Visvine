@@ -351,7 +351,7 @@ export default function MessageComposer({
       onDrop={handleDrop}
     >
       {isDragging && (
-        <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-white/80 text-sm font-medium text-brand-green">
+        <div className="pointer-events-none absolute inset-2 z-30 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-surface-1/80 text-sm font-medium text-brand-green">
           Drop images to attach
         </div>
       )}
@@ -430,7 +430,7 @@ export default function MessageComposer({
       <div className="relative">
         {/* Mention suggestions dropdown */}
         {showMentions && mentionSuggestions.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-1 w-72 rounded-lg border border-border-subtle bg-surface-1 shadow-lg z-50 overflow-hidden max-h-48 overflow-y-auto">
+          <div className="absolute bottom-full left-0 mb-1 w-72 rounded-lg border border-border-subtle bg-surface-1 shadow-float z-50 overflow-hidden max-h-48 overflow-y-auto">
             {mentionSuggestions.map((result, i) => (
               <button
                 key={result.id}
@@ -459,7 +459,7 @@ export default function MessageComposer({
 
         {/* Slim feed-style bar (Channels): avatar · photo · text · send */}
         {slim && (
-          <div className="flex items-end gap-2 rounded-2xl border border-border-default bg-surface-1 px-3 py-2 shadow-sm transition-colors focus-within:border-brand-green/40">
+          <div className="flex items-end gap-2 rounded-xl border border-border-subtle bg-surface-1 px-3 py-2 transition-colors focus-within:border-border-default">
             {currentUser && (
               <div className="shrink-0 self-center">
                 <Avatar name={currentUser.name} imageUrl={currentUser.image} size="sm" />
@@ -499,7 +499,7 @@ export default function MessageComposer({
               type="button"
               onClick={handleSubmit}
               disabled={disabled || (!text.trim() && imageUrls.length === 0)}
-              className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white shadow-sm transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
+              className="shrink-0 self-center rounded-full bg-brand-green p-2 text-white transition-all hover:opacity-90 active:scale-95 disabled:opacity-40"
               aria-label="Send"
             >
               <SendIcon className="h-4 w-4" />
@@ -507,9 +507,9 @@ export default function MessageComposer({
           </div>
         )}
 
-        {/* Minimal composer: elevated card with textarea + toolbar row below */}
+        {/* Full composer: one hairline field with the textarea + toolbar row below */}
         {!slim && (
-        <div className="rounded-3xl border border-border-subtle bg-surface-1 shadow-float transition-shadow focus-within:border-brand-green/30">
+        <div className="rounded-xl border border-border-subtle bg-surface-1 transition-colors focus-within:border-border-default">
           {/* Textarea */}
           <textarea
             ref={textareaRef}
@@ -543,7 +543,7 @@ export default function MessageComposer({
 
                 {/* Attachment popup menu */}
                 {showAttachMenu && (
-                  <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-border-subtle bg-surface-1 py-1 shadow-lg z-50">
+                  <div className="absolute bottom-full left-0 mb-1 w-44 rounded-lg border border-border-subtle bg-surface-1 py-1 shadow-float z-50">
                     <button
                       type="button"
                       onClick={() => { fileInputRef.current?.click(); setShowAttachMenu(false); }}
@@ -590,7 +590,7 @@ export default function MessageComposer({
 
                 {showEmojiPicker && (
                   <div className="absolute bottom-full left-0 mb-2 z-50">
-                    <Suspense fallback={<div className="h-[400px] w-[350px] rounded-lg bg-surface-1 shadow-lg" />}>
+                    <Suspense fallback={<div className="h-[400px] w-[350px] rounded-lg bg-surface-1 shadow-float" />}>
                       <EmojiPicker
                         onEmojiClick={(data) => {
                           insertEmoji(data.emoji);

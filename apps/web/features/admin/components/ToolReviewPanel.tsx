@@ -407,7 +407,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
               </section>
 
               {pendingDecision ? (
-                <section className="space-y-3 rounded-xl border border-border-subtle bg-surface-1 p-4">
+                <section className="space-y-3 border-t border-border-subtle pt-4">
                   {/* The note is the author's only channel back — a rejection
                       with nothing in here is a verdict with no reason. */}
                   <Field label="Note to the author (optional)">
@@ -460,7 +460,7 @@ export default function ToolReviewPanel({ queue }: { queue: ToolReviewQueue }) {
         <div
           role="status"
           className={clsx(
-            'fixed bottom-6 right-6 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-lg',
+            'fixed bottom-6 right-6 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-float',
             toast.tone === 'success'
               ? 'bg-green-600 text-white'
               : 'bg-red-600 text-white',

@@ -48,7 +48,7 @@ export default async function InvitePage({
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-0 px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border-default bg-surface-1 p-8 shadow-lg">
+      <div className="w-full max-w-md rounded-xl border border-border-subtle bg-surface-1 p-8">
         {invalid ? (
           <div className="text-center">
             <h1 className="text-lg font-semibold text-text-primary">Invite unavailable</h1>

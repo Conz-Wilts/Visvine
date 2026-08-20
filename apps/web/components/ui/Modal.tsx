@@ -36,7 +36,7 @@ export interface ModalProps {
   /** Overlay layout + scrim classes (default: centered with a black/40 scrim). */
   overlayClassName?: string;
   overlayStyle?: React.CSSProperties;
-  /** Panel chrome classes (default: white rounded card). Width comes from size/maxWidth. */
+  /** Panel chrome classes (default: a floating rounded panel). Width comes from size/maxWidth. */
   panelClassName?: string;
   panelStyle?: React.CSSProperties;
   ariaLabel?: string;
@@ -65,7 +65,7 @@ export default function Modal({
   closeOnEscape = true,
   overlayClassName = 'items-center justify-center p-4 bg-black/40',
   overlayStyle,
-  panelClassName = 'bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh]',
+  panelClassName = 'bg-surface-1 rounded-xl shadow-float flex flex-col max-h-[90vh]',
   panelStyle,
   ariaLabel,
 }: ModalProps) {
@@ -86,12 +86,12 @@ export default function Modal({
     >
       <div className={`w-full ${maxWidth ?? SIZE_CLASSES[size]} ${panelClassName}`} style={panelStyle}>
         {title != null && (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-            <h2 className="text-base font-semibold text-brand-black">{title}</h2>
+          <div className="flex items-center justify-between px-6 py-4 border-b border-border-subtle flex-shrink-0">
+            <h2 className="text-base font-semibold text-text-primary">{title}</h2>
             <button
               onClick={onClose}
               aria-label="Close"
-              className="p-1.5 rounded-lg text-brand-grey hover:bg-gray-100 transition-colors"
+              className="p-1.5 rounded-lg text-text-muted hover:bg-surface-3 hover:text-text-primary transition-colors"
             >
               <XIcon className="w-4 h-4" />
             </button>

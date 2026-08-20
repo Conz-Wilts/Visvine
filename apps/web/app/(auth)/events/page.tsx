@@ -1,8 +1,9 @@
 'use client';
 
 /**
- * Events page - supports Calendar and Feed views
- * Layout matches Directory page pattern: header row + filters row + content
+ * Events page — Calendar and Feed views over one filtered list.
+ * Shape matches the Directory: a pane-top tab bar (the scope), then one toolbar
+ * row (search, filters, view), then content.
  */
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
@@ -20,7 +21,7 @@ import EventsViewSelector from '@/features/events/components/EventsViewSelector'
 import type { EventView } from '@/features/events/components/EventsViewSelector';
 import EventsScopeSelector from '@/features/events/components/EventsScopeSelector';
 import type { EventScope } from '@/features/events/components/EventsScopeSelector';
-import { PageTitle } from '@/components/ui';
+import { SearchInput } from '@/components/ui';
 import PaneTopScrollbarMask from '@/features/shared/components/pane/PaneTopScrollbarMask';
 
 interface EventWithStats extends NBEvent {
@@ -149,69 +150,34 @@ function EventsPageInner() {
 
   return (
     <div className="relative w-full">
-      {/* View switcher pinned flush in the top-left corner — same treatment as
+      {/* Scope tabs pinned flush in the top-left corner — same treatment as
           the Directory's Grid / Context bar (PaneTabBar): the bar full-bleeds
           left into the sidebar seam and its bottom border runs edge to edge.
-          "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush
-          under the navbar (at rest and pinned); "-ml-[23px]" bleeds left to 1px
-          shy of the rail edge so the sidebar's right border stays visible.
+          "-top-4 -mt-4" cancels <main>'s pt-4 so it sits flush under the
+          navbar (at rest and pinned); "-ml-[23px]" bleeds left to 1px shy of
+          the rail edge so the sidebar's right border stays visible.
           UnderlineTabs draws its own bottom border, so the wrapper stays
           borderless. */}
       <div ref={viewBarRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
         {/* Keeps the page scrollbar from running up beside the pinned bar. */}
         <PaneTopScrollbarMask />
-        <EventsViewSelector
-          currentView={currentView}
-          onViewChange={setCurrentView}
-          className="w-full overflow-x-auto px-1"
+        <EventsScopeSelector scope={scope} onScopeChange={setScope} className="w-full overflow-x-auto px-1" />
+      </div>
+
+      {/* One toolbar row: search, filters, and the view at the far end */}
+      <div className="flex flex-wrap items-center gap-3 px-1 pt-3 pb-1">
+        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search events…" className="w-full max-w-xs" />
+        <EventsToolbar
+          currentFilter={timeFilter}
+          onFilterChange={setTimeFilter}
+          locationFilter={locationFilter}
+          onLocationFilterChange={setLocationFilter}
         />
-      </div>
-
-      <PageTitle title="Events" />
-
-      {/* Search bar — sized to match Directory */}
-      <div className="flex justify-center px-4 sm:px-6 pt-6">
-        <div className="w-full max-w-2xl">
-          <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm">
-            <svg className="h-4 w-4 shrink-0 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
-            </svg>
-            <input
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search events…"
-              className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
-            />
-            {searchQuery && (
-              <button type="button" onClick={() => setSearchQuery('')} className="text-text-muted hover:text-text-secondary">
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Scope tabs: discover / space / events I host */}
-      <div className="flex justify-center px-4 sm:px-6 pt-4">
-        <EventsScopeSelector scope={scope} onScopeChange={setScope} />
-      </div>
-
-      {/* Filters row */}
-      <div className="flex justify-center px-4 sm:px-6 pt-4 pb-1">
-        <div className="w-full max-w-2xl">
-          <EventsToolbar
-            currentFilter={timeFilter}
-            onFilterChange={setTimeFilter}
-            locationFilter={locationFilter}
-            onLocationFilterChange={setLocationFilter}
-          />
-        </div>
+        <EventsViewSelector currentView={currentView} onViewChange={setCurrentView} className="ml-auto" />
       </div>
 
       {/* View Content */}
-      <div className="px-4 sm:px-6 pt-4 pb-8">
+      <div className="px-1 pt-5 pb-8">
         {currentView === 'calendar' && (
           <EventsCalendarView events={filteredEvents} onEventClick={handleEventClick} loading={loading} />
         )}

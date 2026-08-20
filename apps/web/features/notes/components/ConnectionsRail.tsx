@@ -147,16 +147,14 @@ export default function ConnectionsRail({ path, open }: { path: string | null; o
   );
 
   return (
-    // The rail lives INSIDE the shell's rounded content card, not at the screen
-    // edge: the clip wrapper pins to the card's right region — below the navbar
-    // (64px) plus the frame gap, and inset from the viewport right/bottom by the
-    // card's own inset (SHELL_FRAME_MARGIN + SHELL_FRAME_GAP). Its
-    // overflow-hidden is what makes the slide emerge from the card's edge
-    // rather than the side of the screen, and it carries the card's right-hand
-    // corner radii so the rail doesn't poke square corners past the frame.
+    // The rail lives inside the shell's content surface: the clip wrapper pins
+    // to the surface's right region — below the navbar (64px) and aligned to
+    // the surface's edges via the SHELL_FRAME_* constants. Its overflow-hidden
+    // is what makes the slide emerge from the surface's edge rather than the
+    // side of the screen.
     //
     // It starts below the pane's pinned tab row (dockTopInset): the row is the
-    // surface's chrome and belongs across the whole card, so nothing about the
+    // surface's chrome and belongs across the whole surface, so nothing about the
     // rail narrows it — the rail simply hangs under it. The note BODY does make
     // room (PaneSurfaceHost pads its content by the rail's width); the shell's
     // <main> deliberately does not, so the row and the navbar seam it continues

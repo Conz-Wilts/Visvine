@@ -14,26 +14,22 @@ import { SHELL_FRAME_GAP, SHELL_FRAME_MARGIN, SHELL_FRAME_RADIUS } from '@/featu
  *
  * A fixed element outside the scroller can, so this parks one over the
  * scrollbar gutter for exactly the bar's height. The scrollbar then reads as
- * starting below the bar, and the strip's bottom border carries the bar's seam
- * the last few pixels to the viewport edge (the gutter is outside <main>'s
- * content box, so the bar's own border stops short of it).
+ * starting below the bar. The strip is plain white by default — the bars it
+ * serves draw no seam, so neither does it; `border` exists for a bar that
+ * does and wants its line carried across the gutter.
  *
  * Render it from any bar pinned flush under the navbar; it mounts and unmounts
  * with that bar.
  */
 export default function PaneTopScrollbarMask({
-  /** Bar height in px — the h-12 tab row PLUS its 1px bottom border by
-      default, so the strip's own border-b lands on exactly the same row of
-      pixels as the bar's. One short reads as a second line hanging 1px high
-      off the seam's right end. */
-  height = 49,
+  /** Bar height in px — the h-12 tab row by default. */
+  height = 48,
   /** Viewport-y of the mask's bottom edge; overrides `height` when set. Lets a
       bar of variable/measured height (e.g. a toolbar that grows a chip row)
       mask exactly down to its own bottom. */
   bottom,
-  /** Bottom seam on the strip — turn off for bars whose own border is
-      conditional, and pass their state instead. */
-  border = true,
+  /** Bottom seam on the strip, for a bar that draws its own border-b. */
+  border = false,
   /** Draw only the seam, not the surface: the strip's background goes clear so
       the scrollbar thumb stays visible behind it, and just the 1px border-b
       carries the bar's line across the gutter. */
@@ -61,9 +57,9 @@ export default function PaneTopScrollbarMask({
     <div
       aria-hidden
       // z-40 keeps it under the navbar (z-50) and under modals. Position and
-      // size are inline throughout: the colour frame insets <main> into a
-      // rounded card (see AuthLayoutClient), so every edge here is derived from
-      // the frame constants rather than a fixed utility.
+      // size are inline throughout: every edge is derived from the shell's
+      // SHELL_FRAME_* geometry (see AuthLayoutClient) rather than a fixed
+      // utility, so the mask tracks the content surface exactly.
       className={`pointer-events-none fixed z-40 ${transparent ? '' : 'bg-surface-1'} ${
         border ? 'border-b border-border-subtle' : ''
       }`}
@@ -74,8 +70,8 @@ export default function PaneTopScrollbarMask({
         // scrollbars are 15px wide, and a sliver of track peeked past the
         // mask's left edge.
         width: 16 - scrollbarW,
-        // Where <main> (and its scrollbar) starts: the navbar's 64px, plus the
-        // frame gap above the card.
+        // Where <main> (and its scrollbar) starts: the navbar's 64px, plus any
+        // gap above the content region.
         top,
         borderTopRightRadius: transparent ? 0 : SHELL_FRAME_RADIUS,
       }}

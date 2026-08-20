@@ -146,7 +146,7 @@ function AuthoredRow({
   const publishable = isAdmin && build !== null && build.ok && tool.invalid === null;
 
   return (
-    <section className="rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft">
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -178,14 +178,14 @@ function AuthoredRow({
           )}
           <Link
             href={`/directory/${encodeURIComponent(`tool:${tool.name}`)}`}
-            className="flex items-center gap-1 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-brand-green hover:text-text-primary"
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3 hover:text-text-primary"
           >
             <ExternalLinkIcon className="h-3.5 w-3.5" aria-hidden />
             Open
           </Link>
           <Link
             href={`/tools/preview/${encodeURIComponent(tool.name)}`}
-            className="flex items-center gap-1 rounded-lg border border-border-default px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:border-brand-green hover:text-text-primary"
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-medium text-text-secondary hover:bg-surface-3 hover:text-text-primary"
           >
             <EyeIcon className="h-3.5 w-3.5" aria-hidden />
             Preview
@@ -199,7 +199,7 @@ function AuthoredRow({
       </header>
 
       {tool.publication?.reviewNote && (
-        <p className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-sm text-text-secondary">
+        <p className="mt-3 border-l-2 border-border-default pl-3 text-sm text-text-secondary">
           <span className="font-medium text-text-primary">Reviewer note</span> — {tool.publication.reviewNote}
         </p>
       )}
@@ -211,7 +211,7 @@ function AuthoredRow({
       )}
 
       {errors.length > 0 && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+        <div className="mt-3 border-l-2 border-red-500 pl-3">
           <p className="text-sm font-medium text-red-700">This tool does not compile</p>
           <ul className="mt-1 space-y-0.5 font-mono text-[12px] text-red-700">
             {errors.slice(0, SHOWN_DIAGNOSTICS).map((error, i) => (
@@ -351,11 +351,9 @@ function NewToolCard({ onToast }: { onToast: (tone: 'success' | 'error' | 'warni
   };
 
   return (
-    <section className="rounded-2xl border border-dashed border-border-default bg-surface-2 p-4">
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-light-bg text-brand-dark-green">
-          <HammerIcon className="h-5 w-5" aria-hidden />
-        </span>
+        <HammerIcon className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-text-primary">New tool</h3>
           <p className="mt-1 text-sm text-text-secondary">
@@ -385,7 +383,7 @@ function RowsSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1].map((i) => (
-        <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 p-4">
+        <div key={i} className="py-2">
           <Skeleton className="h-4 w-1/3 rounded" />
           <Skeleton className="mt-2 h-3 w-1/4 rounded" />
           <Skeleton className="mt-3 h-3 w-3/4 rounded" />

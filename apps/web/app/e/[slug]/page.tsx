@@ -44,7 +44,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
       <div className="max-w-xl mx-auto px-4 py-8 sm:py-12">
         {/* cover */}
         <div
-          className="w-full aspect-[16/9] rounded-2xl overflow-hidden border border-gray-200 flex items-center justify-center text-white"
+          className="w-full aspect-[16/9] rounded-lg overflow-hidden flex items-center justify-center text-white"
           style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
         >
           {event.coverImageUrl ? (
@@ -103,7 +103,7 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
             <h2 className="text-sm font-semibold text-brand-black mb-2">Who&apos;s going</h2>
             <div className="flex flex-wrap gap-2">
               {guestNames.slice(0, 30).map((n, i) => (
-                <span key={i} className="px-3 py-1 rounded-full bg-brand-white border border-gray-200 text-sm text-brand-black">
+                <span key={i} className="px-2.5 py-1 rounded-md bg-surface-2 text-sm text-text-primary">
                   {n}
                 </span>
               ))}

@@ -805,7 +805,7 @@ export function EntityContextPanel({
       {!showEditor && headerCard}
 
       {error && (
-        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mx-auto mb-3 flex max-w-3xl items-center justify-between border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-2 text-red-400 hover:text-red-600">✕</button>
         </div>
@@ -813,7 +813,7 @@ export function EntityContextPanel({
       {loadingNote ? (
         <PanelSkeleton />
       ) : readFailed ? (
-        <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 px-4 py-6 text-center text-sm text-red-700">
+        <div className="mx-auto max-w-3xl border-l-2 border-red-500 pl-3 py-1 text-center text-sm text-red-700">
           {shownRead.status === 'error' ? shownRead.message : null}
         </div>
       ) : showEditor ? (

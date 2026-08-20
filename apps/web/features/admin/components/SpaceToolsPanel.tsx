@@ -444,7 +444,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         // the dividers unevenly spaced.
         className={`cursor-grab select-none py-4 ${
           isDragging
-            ? 'relative z-10 -mx-3 cursor-grabbing rounded-xl !border-transparent bg-surface-1 px-3 shadow-xl ring-1 ring-border-subtle'
+            ? 'relative z-10 -mx-3 cursor-grabbing rounded-xl !border-transparent bg-surface-1 px-3 shadow-float ring-1 ring-border-subtle'
             : ''
         }`}
       >
@@ -581,8 +581,8 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
       >
         <div
           data-flip-key={`row:${MORE_DIVIDER}`}
-          className={`divide-y divide-border-subtle rounded-xl border border-dashed px-3 transition-colors ${
-            draggingKey ? 'border-brand-green/60 bg-brand-green/5' : 'border-border-default'
+          className={`divide-y divide-border-subtle border-y px-3 transition-colors ${
+            draggingKey ? 'border-brand-green/60 bg-brand-green/5' : 'border-border-subtle'
           }`}
         >
           {moreKeys.length === 0 ? (
@@ -637,7 +637,7 @@ export default function SpaceToolsPanel({ space, onSaved }: Props) {
         onClose={() => setPickerOpen(false)}
         title="Add a tool"
         size="sm"
-        panelClassName="bg-surface-1 rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
+        panelClassName="bg-surface-1 rounded-2xl shadow-float flex flex-col max-h-[80vh]"
       >
         <div className="space-y-3 p-4">
           {availableFeatures.length > 0 && (

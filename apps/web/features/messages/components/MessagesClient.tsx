@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VirtuosoHandle } from 'react-virtuoso';
-import { SearchIcon, XIcon } from '@/features/shared/icons';
 import { useHeader } from '@/features/shared/contexts/HeaderContext';
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -22,7 +21,6 @@ import AddMembersModal from './AddMembersModal';
 import { mergeMessages } from './MessageRow';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import ProfilePanel from './ProfilePanel';
-import PageTitle from '@/components/ui/PageTitle';
 import ConversationListPanel, { type ChannelListGroup } from './ConversationListPanel';
 import ThreadPanel from './ThreadPanel';
 import { useConversations } from './useConversations';
@@ -773,7 +771,6 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const showThread = !isMobile || hasOpenThread;
   const showProfile = !isMobile && Boolean(selectedConversation) && detailsOpen;
   // On mobile, give the open thread the full viewport — hide the centered controls.
-  const showCenterControls = !isMobile || !hasOpenThread;
 
   // Whether to dock the channel rail into the Sidebar (wide viewport, host
   // mounted). When docked we hide the page's title/search chrome (it moves into
@@ -849,48 +846,16 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   // only while the panel is actually open (channelsCollapsed animates it away).
   return (
     <div
-      className={`flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''} ${!docked && !channelsCollapsed ? 'px-6 pt-4 pb-6' : ''}`}
+      className={`flex h-full min-h-0 w-full flex-col ${docked && !channelsCollapsed ? 'lg:pl-[300px]' : ''}`}
       style={{ transition: 'padding-left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1)' }}
     >
-
-      {/* ── Page header — centered title (un-docked layouts only). Channel
-             creation lives in the global sidebar "+" (Create new → Channel). ── */}
-      {!docked && !channelsCollapsed && (
-        <div className="flex items-center justify-center pt-0 pb-0">
-          <PageTitle title="Channels" />
-        </div>
-      )}
-
-      {/* ── Centered search (un-docked layouts) ─────────────────────────── */}
-      {showCenterControls && !docked && !channelsCollapsed && (
-        <div className="flex flex-col items-center gap-3 pt-6 pb-5">
-          <div className="w-full max-w-2xl">
-            <div className="flex min-h-[56px] items-center gap-2.5 rounded-2xl border border-border-default bg-surface-1 px-4 shadow-sm transition-colors focus-within:border-brand-green/40">
-              <SearchIcon className="h-4 w-4 shrink-0 text-text-muted" />
-              <input
-                ref={sidebarSearchRef}
-                value={conversationSearch}
-                onChange={(e) => setConversationSearch(e.target.value)}
-                placeholder="Search channels…"
-                className="flex-1 bg-transparent text-base text-text-primary placeholder:text-text-muted focus:outline-none"
-              />
-              {conversationSearch && (
-                <button type="button" onClick={() => setConversationSearch('')} className="text-text-muted hover:text-text-secondary">
-                  <XIcon className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ╭── List box — docked: portals into the Sidebar ──╮ */}
       {docked && listPanel}
 
-      {/* ── List · open channel · details box ───────────────────────────── */}
-      <div className={docked || channelsCollapsed
-        ? "flex min-h-0 w-full flex-1 items-stretch"
-        : "flex min-h-0 w-full flex-1 items-stretch gap-6 pb-2 md:gap-12 md:px-6"}>
+      {/* ── List · open channel · details — three columns on hairlines. The
+             same shape whether the list is docked into the sidebar or inline. */}
+      <div className="flex min-h-0 w-full flex-1 items-stretch">
 
       {/* Un-docked: the list renders inline beside the thread (unless the user
           closed the channels panel from the navbar toggle) */}
@@ -958,9 +923,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* ╭── Details box — the open channel's members and settings ────────╮ */}
       {showProfile && selectedConversation && (
-        <aside className={docked || channelsCollapsed
-          ? "hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-surface-1 xl:flex"
-          : "hidden w-72 shrink-0 flex-col overflow-hidden rounded-3xl bg-surface-1 shadow-float xl:flex"}>
+        <aside className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-surface-1 xl:flex">
           <ProfilePanel
             conversation={selectedConversation}
             currentUserId={currentUser.id}
@@ -993,7 +956,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* Toast error */}
       {error && (
-        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white shadow-lg">
+        <div className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg bg-text-primary px-5 py-2.5 text-sm font-medium text-surface-1 shadow-float">
           {error}
         </div>
       )}

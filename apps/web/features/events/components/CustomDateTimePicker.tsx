@@ -141,7 +141,7 @@ export function CustomDateTimePicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-left font-medium focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all cursor-pointer hover:border-brand-green flex items-center justify-between gap-2"
+        className="w-full px-4 py-3 border border-border-subtle rounded-xl bg-brand-white text-left font-medium focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all cursor-pointer hover:border-brand-green flex items-center justify-between gap-2"
       >
         <span className={selectedDate ? 'text-brand-black' : 'text-brand-grey'}>
           {formatDisplayValue() || placeholder}
@@ -150,7 +150,7 @@ export function CustomDateTimePicker({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 p-4 bg-brand-white border border-gray-200 rounded-xl shadow-2xl w-[300px]">
+        <div className="absolute z-50 mt-2 p-4 bg-brand-white border border-border-subtle rounded-xl shadow-float w-[300px]">
           {/* Calendar */}
           <div className="space-y-3">
             {/* Month navigation */}
@@ -194,7 +194,7 @@ export function CustomDateTimePicker({
                   className={`
                     h-8 rounded-lg text-xs font-semibold transition-all
                     ${!day ? 'invisible' : ''}
-                    ${isSelected(day || 0) ? 'bg-brand-green text-brand-white shadow-sm' : ''}
+                    ${isSelected(day || 0) ? 'bg-brand-green text-brand-white' : ''}
                     ${!isSelected(day || 0) && isToday(day || 0) ? 'bg-brand-light-bg text-brand-green' : ''}
                     ${!isSelected(day || 0) && !isToday(day || 0) ? 'text-brand-black hover:bg-brand-light-bg' : ''}
                   `}
@@ -205,7 +205,7 @@ export function CustomDateTimePicker({
             </div>
 
             {/* Time selection */}
-            <div className="pt-3 border-t border-gray-200">
+            <div className="pt-3 border-t border-border-subtle">
               <div className="flex items-center gap-1.5 mb-2">
                 <ClockIcon className="w-3.5 h-3.5 text-brand-green" />
                 <span className="text-xs font-semibold text-brand-black">Time</span>
@@ -225,7 +225,7 @@ export function CustomDateTimePicker({
                         handleTimeChange(val, selectedTime.minutes);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-gray-200 rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-border-subtle rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
                   />
                   <p className="text-[10px] text-brand-grey text-center mt-0.5">Hour</p>
                 </div>
@@ -245,7 +245,7 @@ export function CustomDateTimePicker({
                         handleTimeChange(selectedTime.hours, val);
                       }
                     }}
-                    className="w-full px-2 py-1.5 border border-gray-200 rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
+                    className="w-full px-2 py-1.5 border border-border-subtle rounded-md bg-brand-white text-brand-black text-center font-bold text-base focus:outline-none focus:ring-1 focus:ring-brand-green focus:border-brand-green"
                   />
                   <p className="text-[10px] text-brand-grey text-center mt-0.5">Min</p>
                 </div>
@@ -287,7 +287,7 @@ export function CustomDateTimePicker({
             </div>
 
             {/* Quick time presets */}
-            <div className="flex gap-1.5 pt-2 border-t border-gray-200">
+            <div className="flex gap-1.5 pt-2 border-t border-border-subtle">
               {[
                 { label: '9 AM', hours: 9 },
                 { label: '12 PM', hours: 12 },
@@ -308,7 +308,7 @@ export function CustomDateTimePicker({
             <button
               type="button"
               onClick={() => setIsOpen(false)}
-              className="w-full px-3 py-2 text-xs font-semibold text-brand-white bg-brand-green rounded-lg hover:opacity-90 transition-all shadow-sm"
+              className="w-full px-3 py-2 text-xs font-semibold text-brand-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
             >
               Done
             </button>

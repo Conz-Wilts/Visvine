@@ -135,7 +135,7 @@ export default function AddMembersModal({
       closeOnEscape={false}
       overlayClassName="items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
       maxWidth="sm:max-w-lg"
-      panelClassName="flex h-[90dvh] flex-col overflow-hidden rounded-t-3xl bg-surface-1 shadow-2xl sm:h-auto sm:max-h-[85dvh] sm:rounded-2xl"
+      panelClassName="flex h-[90dvh] flex-col overflow-hidden rounded-t-3xl bg-surface-1 shadow-float sm:h-auto sm:max-h-[85dvh] sm:rounded-2xl"
     >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4">
@@ -323,7 +323,7 @@ export default function AddMembersModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-border-default py-2.5 text-sm font-semibold text-gray-600 hover:bg-surface-2 transition-colors"
+              className="flex-1 rounded-xl border border-border-default py-2.5 text-sm font-semibold text-text-muted hover:bg-surface-2 transition-colors"
             >
               Cancel
             </button>
@@ -331,7 +331,7 @@ export default function AddMembersModal({
               type="button"
               onClick={() => void handleSubmit()}
               disabled={submitting || selectedMembers.size === 0}
-              className="flex-1 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98]"
+              className="flex-1 rounded-xl bg-brand-green py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98]"
             >
               {submitting ? 'Saving…' : 'Add members'}
             </button>

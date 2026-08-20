@@ -36,8 +36,8 @@ export default function CommentsPanel({
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-200 bg-gray-50 w-72 shrink-0">
-      <div className="p-3 border-b border-gray-200">
+    <div className="flex flex-col h-full border-l border-border-subtle bg-surface-2 w-72 shrink-0">
+      <div className="p-3 border-b border-border-subtle">
         <h3 className="font-medium text-sm">{cellRef ? `Cell ${cellRef}` : 'Document'} Comments</h3>
         {cellRef && (
           <button onClick={onProposeChange} className="mt-1 text-xs text-blue-600 underline">
@@ -46,24 +46,24 @@ export default function CommentsPanel({
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {comments.length === 0 && <p className="text-xs text-gray-400">No comments yet.</p>}
+        {comments.length === 0 && <p className="text-xs text-text-muted">No comments yet.</p>}
         {comments.map(c => (
-          <div key={c.id} className="bg-white rounded p-2 shadow-sm text-xs">
+          <div key={c.id} className="bg-surface-1 rounded p-2 text-xs">
             <p className="font-medium">{c.author}</p>
-            <p className="text-gray-600 mt-1">{c.content}</p>
-            <p className="text-gray-400 mt-1">{new Date(c.createdAt).toLocaleString()}</p>
+            <p className="text-text-muted mt-1">{c.content}</p>
+            <p className="text-text-muted mt-1">{new Date(c.createdAt).toLocaleString()}</p>
           </div>
         ))}
       </div>
-      <div className="p-3 border-t border-gray-200 space-y-2">
+      <div className="p-3 border-t border-border-subtle space-y-2">
         <input
-          className="w-full border border-gray-300 rounded px-2 py-1 text-xs"
+          className="w-full border border-border-default rounded px-2 py-1 text-xs"
           placeholder="Your name"
           value={author}
           onChange={e => setAuthor(e.target.value)}
         />
         <textarea
-          className="w-full border border-gray-300 rounded px-2 py-1 text-xs resize-none"
+          className="w-full border border-border-default rounded px-2 py-1 text-xs resize-none"
           rows={3}
           placeholder="Add a comment..."
           value={newComment}

@@ -25,14 +25,14 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
   const destination = callbackUrl ?? "/directory";
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden">
+    <div className="min-h-screen bg-surface-2 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-surface-1 rounded-xl shadow-float overflow-hidden">
         {/* Header */}
         <div className="px-8 pt-8 pb-6">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-1">
+          <h1 className="text-2xl font-semibold text-text-primary mb-1">
             We found a profile for you
           </h1>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-text-muted">
             Someone has already added you to a space. Claim your profile to
             take control.
           </p>
@@ -55,22 +55,22 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
           )}
 
           <div className="min-w-0">
-            <p className="text-lg font-semibold text-gray-900 truncate">
+            <p className="text-lg font-semibold text-text-primary truncate">
               {profile.name}
             </p>
             {profile.headline && (
-              <p className="text-sm text-gray-500 truncate">
+              <p className="text-sm text-text-muted truncate">
                 {profile.headline}
               </p>
             )}
-            <p className="text-sm text-gray-400 truncate">{profile.email}</p>
+            <p className="text-sm text-text-muted truncate">{profile.email}</p>
           </div>
         </div>
 
         {/* Space membership summary */}
         {profile.spaceCount > 0 && (
-          <div className="mx-8 mb-6 rounded-lg bg-blue-50 px-4 py-3">
-            <p className="text-sm text-blue-800">
+          <div className="mx-8 mb-6">
+            <p className="text-sm text-text-secondary">
               Already a member of{" "}
               <span className="font-semibold">{profile.spaceCount}</span>{" "}
               {profile.spaceCount === 1 ? "space" : "spaces"}
@@ -89,13 +89,13 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
         )}
 
         <div className="px-8 pb-6">
-          <p className="text-sm font-medium text-gray-700 mb-4">Is this you?</p>
+          <p className="text-sm font-medium text-text-secondary mb-4">Is this you?</p>
           <ClaimActions token={token} callbackUrl={destination} />
         </div>
 
         {/* Footer note */}
         <div className="px-8 pb-8">
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-text-muted text-center">
             Claiming this profile will give you full control over your public
             information. Space admins will retain their private notes about
             you.

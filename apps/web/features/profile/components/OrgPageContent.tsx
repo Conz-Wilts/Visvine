@@ -107,7 +107,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
       <div className="flex flex-col sm:flex-row gap-5 items-stretch">
         {/* logo card — an org's mark, never a person silhouette. Contained, not
             cropped: a logo with whitespace must not be zoomed to fill. */}
-        <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-2xl overflow-hidden bg-surface-1 border border-border-subtle shadow-soft">
+        <div className="relative w-48 h-48 sm:w-60 sm:h-auto flex-none rounded-lg overflow-hidden bg-surface-2">
           {node.image_url ? (
             <img src={node.image_url} alt={node.name} className="w-full h-full object-contain p-4" />
           ) : glyph && glyph !== 'person' ? (
@@ -119,7 +119,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
         </div>
 
         {/* identity card */}
-        <section className="flex-1 min-w-0 bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6 flex flex-col">
+        <section className="flex-1 min-w-0 py-1 flex flex-col">
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 my-auto pb-5">
             <div className="min-w-0 flex-1">
               <Chip tone="solid" color={theme.base}>
@@ -147,7 +147,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
                 intro request to a company. */}
             <div className="flex-none">
               <button onClick={sharePage}
-                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-[13px] font-semibold bg-surface-1 text-text-secondary border border-border-default hover:bg-surface-2 hover:text-text-primary transition-colors">
+                className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors">
                 {copied ? <CheckIcon className="w-4 h-4" /> : <Share2Icon className="w-4 h-4" />}
                 <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
               </button>

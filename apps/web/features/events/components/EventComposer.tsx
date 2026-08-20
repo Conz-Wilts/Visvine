@@ -1,5 +1,7 @@
 'use client';
 
+import { Alert } from '@/components/ui';
+
 /**
  * EventComposer — a single-screen, poster-first event creator (replaces the old
  * collapsible EventForm). Four things are needed to publish: cover, title,
@@ -61,7 +63,7 @@ const VISIBILITY_OPTIONS: { value: EventVisibility; label: string; icon: React.R
 ];
 
 function inputClass() {
-  return 'w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all';
+  return 'w-full px-4 py-3 rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors';
 }
 
 function randomId(len: number): string {
@@ -292,9 +294,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       </div>
 
       {error && (
-        <div className="mb-4 p-3.5 rounded-xl bg-red-50 border border-red-200">
-          <p className="text-sm text-red-700 font-medium">{error}</p>
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
 
       {/* poster / cover */}
@@ -308,7 +308,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       <button
         type="button"
         onClick={() => fileInputRef.current?.click()}
-        className="group relative w-full aspect-[16/9] rounded-2xl overflow-hidden border border-gray-200 flex items-center justify-center text-white"
+        className="group relative w-full aspect-[16/9] rounded-lg overflow-hidden flex items-center justify-center text-white"
         style={coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${themeColor}, ${themeColor}cc)` }}
       >
         {coverImageUrl ? (
@@ -392,7 +392,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
               className={`flex items-center gap-2 px-3.5 py-2 rounded-md border text-sm font-medium transition-colors ${
                 eventType === opt.value
                   ? 'bg-brand-green text-white border-brand-green'
-                  : 'bg-brand-white text-brand-grey border-gray-200 hover:border-brand-green hover:text-brand-black'
+                  : 'bg-brand-white text-brand-grey border-border-subtle hover:border-brand-green hover:text-brand-black'
               }`}
             >
               {opt.icon}
@@ -433,31 +433,31 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       </div>
 
       {/* more options */}
-      <div className="mt-5 border border-gray-200 rounded-xl overflow-hidden">
+      <div className="mt-6 border-t border-border-subtle">
         <button
           type="button"
           onClick={() => setDetailsOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-5 py-3.5 bg-brand-light-bg/50 hover:bg-brand-light-bg transition-colors"
+          className="w-full flex items-center justify-between py-3.5 transition-colors hover:text-text-primary"
         >
           <span className="text-sm font-semibold text-brand-black">More options</span>
           {detailsOpen ? <ChevronUpIcon className="w-4 h-4 text-brand-grey" /> : <ChevronDownIcon className="w-4 h-4 text-brand-grey" />}
         </button>
         {detailsOpen && (
-          <div className="px-5 py-5 space-y-5">
+          <div className="pb-5 space-y-5">
             {/* visibility */}
             <div>
               <label className="block text-sm font-medium text-brand-black mb-2.5">Who can RSVP?</label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div className="-mx-3">
                 {VISIBILITY_OPTIONS.map((opt) => (
                   <button
                     key={opt.value}
                     type="button"
                     onClick={() => setVisibility(opt.value)}
-                    className={`flex flex-col items-start gap-1 p-3.5 rounded-xl border-2 text-left transition-all ${
-                      visibility === opt.value ? 'border-brand-green bg-brand-light-bg' : 'border-gray-200 hover:border-brand-green/40'
+                    className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                      visibility === opt.value ? 'bg-surface-3' : 'hover:bg-surface-2'
                     }`}
                   >
-                    <div className={`flex items-center gap-2 font-semibold text-sm ${visibility === opt.value ? 'text-brand-green' : 'text-brand-black'}`}>
+                    <div className={`flex items-center gap-2 text-sm ${visibility === opt.value ? 'font-semibold text-text-primary' : 'font-medium text-text-secondary'}`}>
                       {opt.icon}
                       {opt.label}
                     </div>
@@ -512,19 +512,19 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
             <Toggle label='Allow "Maybe"' hint="Let guests reply Maybe as well as Going" value={allowMaybe} onChange={setAllowMaybe} />
 
             {/* registration questions */}
-            <div className="pt-4 border-t border-gray-100">
+            <div className="pt-4 border-t border-border-subtle">
               <label className="block text-sm font-medium text-brand-black">Registration questions</label>
               <p className="mt-0.5 text-xs text-brand-grey">Guests answer these when they RSVP. Name and email are always collected.</p>
               {questions.length > 0 && (
-                <div className="mt-3 space-y-3">
+                <div className="mt-3 divide-y divide-border-subtle">
                   {questions.map((q) => (
-                    <div key={q.id} className="p-3 rounded-xl border border-gray-200 space-y-2.5">
+                    <div key={q.id} className="py-3 space-y-2.5">
                       <div className="flex items-center gap-2">
                         <input
                           value={q.label}
                           onChange={(e) => updateQuestion(q.id, { label: e.target.value })}
                           placeholder="Your question…"
-                          className="flex-1 min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                          className="flex-1 min-w-0 px-3 py-2 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors"
                         />
                         <button
                           type="button"
@@ -540,7 +540,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
                           value={q.optionsText}
                           onChange={(e) => updateQuestion(q.id, { optionsText: e.target.value })}
                           placeholder="Options, separated by commas"
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all"
+                          className="w-full px-3 py-2 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default transition-colors"
                         />
                       )}
                       <div className="flex items-center justify-between gap-3">
@@ -558,7 +558,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
                             type="checkbox"
                             checked={q.required}
                             onChange={(e) => updateQuestion(q.id, { required: e.target.checked })}
-                            className="w-3.5 h-3.5 rounded border-gray-300 text-brand-green focus:ring-brand-green"
+                            className="w-3.5 h-3.5 rounded border-border-default text-brand-green focus:ring-brand-green"
                           />
                           Required
                         </label>
@@ -580,7 +580,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
       </div>
 
       {/* sticky publish bar */}
-      <div className="fixed bottom-0 inset-x-0 z-30 border-t border-gray-200 bg-brand-white/95 backdrop-blur">
+      <div className="fixed bottom-0 inset-x-0 z-30 border-t border-border-subtle bg-surface-1/95 backdrop-blur">
         <div className="max-w-2xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             {mode === 'edit' && onDelete && (
@@ -598,7 +598,7 @@ export function EventComposer({ spaceId, mode = 'create', initialEvent, onDelete
           <button
             onClick={handlePublish}
             disabled={publishing || uploading}
-            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 disabled:opacity-50 transition-all shadow-sm"
+            className="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 disabled:opacity-50 transition-all"
           >
             {publishing ? <LoaderCircleIcon className="w-4 h-4 animate-spin" /> : <SparklesIcon className="w-4 h-4" />}
             {mode === 'edit' ? 'Save changes' : 'Publish event'}
@@ -636,7 +636,7 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint: string;
         onClick={() => onChange(!value)}
         className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-brand-green' : 'bg-gray-200'}`}
       >
-        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
+        <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-surface-1 rounded-full shadow transition-transform ${value ? 'translate-x-5' : ''}`} />
       </button>
     </label>
   );
@@ -661,7 +661,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
-      <div className="w-full max-w-md bg-brand-white rounded-2xl shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-brand-white rounded-2xl shadow-float p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
             <h2 className="text-xl font-bold text-brand-black">You’re live! 🎉</h2>
@@ -672,7 +672,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
           </button>
         </div>
 
-        <div className="mt-5 flex items-center gap-2 p-3 rounded-xl border border-gray-200 bg-brand-light-bg/40">
+        <div className="mt-5 flex items-center gap-2 p-3 rounded-xl border border-border-subtle bg-brand-light-bg/40">
           <span className="flex-1 text-sm text-brand-black truncate">{publicUrl}</span>
           <button
             onClick={copy}
@@ -688,7 +688,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             href={`/api/events/${event.id}/ics?spaceId=${encodeURIComponent(spaceId)}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
           >
             <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
           </a>
@@ -696,7 +696,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
             href={path}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green hover:bg-brand-light-bg transition-all"
           >
             <ExternalLinkIcon className="w-4 h-4" /> View page
           </a>

@@ -1119,7 +1119,7 @@ function ConnectorConsole({
             {entry.code}
           </pre>
           {entry.error ? (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <div className="flex items-start gap-2 border-l-2 border-red-500 pl-3 py-1 text-xs text-red-700">
               <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
               <span className="min-w-0 break-words">{entry.error}</span>
             </div>
@@ -1148,14 +1148,14 @@ function RunOutput({ result }: { result: RunResult }) {
         {result.truncated && <span className="text-text-muted">· truncated</span>}
       </div>
       {result.denials.length > 0 && (
-        <ul className="flex flex-col gap-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <ul className="flex flex-col gap-1 border-l-2 border-amber-500 pl-3 py-1 text-xs text-amber-800">
           {result.denials.map((denial, i) => (
             <li key={i} className="break-words">{denial}</li>
           ))}
         </ul>
       )}
       {result.error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+        <div className="flex items-start gap-2 border-l-2 border-red-500 pl-3 py-1 text-xs text-red-700">
           <TriangleAlertIcon className="mt-px h-3.5 w-3.5 shrink-0" />
           <span className="min-w-0 break-words font-mono">{result.error.message}</span>
         </div>
@@ -1437,7 +1437,7 @@ export default function ConnectorPageContent({ nodeId }: { nodeId: string }) {
 
       {/* ══ PARSE ERROR — the note exists but nothing below it is live ══ */}
       {connector.invalid && (
-        <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+        <div className="mb-5 flex items-start gap-2.5 border-l-2 border-red-500 pl-3 py-1">
           <TriangleAlertIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
           <div className="min-w-0">
             <p className="break-words text-sm text-red-700">{connector.invalid}</p>

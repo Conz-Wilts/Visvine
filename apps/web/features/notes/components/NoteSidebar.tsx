@@ -7,13 +7,16 @@
 // shows only there and in the Starred section above the tree, never as a glyph
 // on the row. Starring is the same `starred:` frontmatter flag the editor
 // toolbar's star toggles, so both surfaces always agree. Nesting is shown
-// VS Code style: each level is wrapped in an indented container with a left guide
-// line so folder depth reads at a glance. The tree scrolls with its scrollbar on
-// the right (normal) edge. A Trash folder is pinned below everything: deleted
+// with tree guides: each nested row draws its own segment of the vertical line
+// plus an elbow into its icon, and the last child of a folder closes the line
+// off with a rounded corner, so depth reads at a glance. Expanding a folder
+// tweens its branch open and drops the rows in one after another rather than
+// swapping them in on a frame (see `Branch`). The tree scrolls with
+// its scrollbar on the right (normal) edge. A Trash folder is pinned below everything: deleted
 // notes live there for a week (restore or delete-forever from the row menu)
 // before the server purges them.
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Modal, inputBaseClass } from '@/components/ui'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
@@ -36,6 +39,117 @@ import { canMoveInto, moveDenial, parentFolderOf } from '../lib/useContextTree'
 // (and the guide lines it covers) bleed out to the panel edge. The scroll
 // container clips the overhang with overflow-x-hidden.
 const ROW_BLEED = '-ml-[999px] pl-[999px]'
+
+// Tree guides. A nested row draws its OWN piece of the vertical line rather
+// than inheriting one border from the indent container: the last child of a
+// folder then ends the line at its own elbow instead of trailing past it, and
+// the line sits above the row band so a hovered row does not paint over it.
+// `mid` is a T (line through, tick out), `last` is a rounded elbow.
+type Guide = 'mid' | 'last'
+// Indents that keep every level's line centred under its parent's chevron:
+// chevron centre is 6 + 16/2 = 14px into the row content, plus the 12px guide
+// column once the row itself is nested.
+const CHILD_INDENT = 'ml-[14px]'
+const NESTED_CHILD_INDENT = 'ml-[26px]'
+
+function GuideLine({ guide, active = false }: { guide: Guide; active?: boolean }) {
+  // A guide on the path to the open note is tinted, so the branch you are
+  // inside reads as a trail from the root down rather than as identical grey
+  // lines at every level.
+  const line = active ? 'bg-brand-green/60' : 'bg-border-default/70'
+  const edge = active ? 'border-brand-green/60' : 'border-border-default/70'
+  return (
+    <span className="relative flex w-3 shrink-0 self-stretch" aria-hidden="true">
+      {guide === 'last' ? (
+        <span className={`absolute left-0 top-0 h-1/2 w-2.5 rounded-bl-[6px] border-b border-l ${edge}`} />
+      ) : (
+        <>
+          <span className={`absolute left-0 top-0 h-full w-px ${line}`} />
+          <span className={`absolute left-0 top-1/2 h-px w-2.5 ${line}`} />
+        </>
+      )}
+    </span>
+  )
+}
+
+// A folder's children, revealed with a height tween instead of appearing on a
+// single frame. `grid-template-rows: 0fr -> 1fr` on the wrapper animates to the
+// content's natural height with nothing measured, and the rows inside stagger
+// in (`.ctx-branch`, globals.css). Collapsing keeps the subtree mounted for the
+// length of the tween so the fold reads in both directions; `mounted` is what
+// unmounts it afterwards, so a shut folder costs nothing.
+//
+// Two things keep it feeling instant on a big folder:
+//   - The open state is set from a LAYOUT effect after a forced reflow, not
+//     from rAF. Waiting for a frame to establish the 0fr start value put ~45ms
+//     of dead air between the click and the first pixel of movement; reading
+//     scrollHeight establishes it inside the click's own task instead.
+//   - A subtree taller than the panel skips the height tween entirely (see
+//     TALL_BRANCH_PX). Sliding 6000px of rows open takes the full duration to
+//     reveal content that was never going to be on screen, which is exactly the
+//     "opens, sits empty, then the files appear" the tween was meant to fix.
+const BRANCH_MS = 180
+const TALL_BRANCH_PX = 640
+
+function Branch({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(open)
+  // Starts at `open` so a tree that loads with folders already expanded renders
+  // them open rather than playing an entrance for state the user never changed.
+  const [expanded, setExpanded] = useState(open)
+  const [tall, setTall] = useState(false)
+  // The row cascade is an ENTRANCE, not a style: it plays when this folder is
+  // opened, never when the tree re-mounts (which it does on every navigation)
+  // with the folder already open. Marking the branch instead of the rows keeps
+  // the flag where the open transition is known.
+  const [entering, setEntering] = useState(false)
+  const inner = useRef<HTMLDivElement | null>(null)
+
+  // Mounting in an effect would cost a frame before the rows even exist —
+  // adjusting the state during the render that opened the folder puts them in
+  // the same commit, which is what lets the layout effect below measure and
+  // expand without ever painting an empty branch.
+  if (open && !mounted) setMounted(true)
+
+  useEffect(() => {
+    if (open) return
+    setExpanded(false)
+    const timer = setTimeout(() => setMounted(false), tall ? 0 : BRANCH_MS)
+    return () => clearTimeout(timer)
+  }, [open, tall])
+
+  useLayoutEffect(() => {
+    if (!open || expanded || !mounted || !inner.current) return
+    // The read is the point: it flushes layout with the wrapper still at 0fr,
+    // so flipping to 1fr on the next line is a change the transition can run.
+    const height = inner.current.scrollHeight
+    setTall(height > TALL_BRANCH_PX)
+    setEntering(true)
+    setExpanded(true)
+  }, [open, expanded, mounted])
+
+  if (!mounted) return null
+  return (
+    <div
+      className={`ctx-branch-wrap grid ${entering ? 'ctx-branch-enter' : ''} ${
+        tall ? '' : 'transition-[grid-template-rows] duration-[180ms] ease-out'
+      } ${expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+    >
+      {/* Clipped on the vertical axis only: rows bleed 999px to the left to
+          paint their hover band to the panel edge, and `overflow: hidden` here
+          would cut that off. `visible` pairs legally with `clip` where it
+          cannot with `hidden`. */}
+      <div ref={inner} className="min-h-0 overflow-x-visible overflow-y-clip">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** Is `path` the open note, or the folder that contains it? */
+function onSelectedPath(path: string, selectedPath: string | null): boolean {
+  if (!selectedPath) return false
+  return selectedPath === path || selectedPath.startsWith(`${path}/`)
+}
 
 // Where the tree was scrolled to, per scope, kept for the lifetime of the tab.
 // The docked tree re-mounts on every navigation (each page renders its own
@@ -218,7 +332,7 @@ export function NoteSidebar({
 
   // Which folders are expanded â€” persisted per scope, with the reveal peek
   // layered on top (see useContextTreeState for the full story).
-  const { effectiveOpenPaths, toggleFolder } = useContextTreeState(storageKey, revealPath)
+  const { effectiveOpenPaths, toggleFolder, openFolder } = useContextTreeState(storageKey, revealPath)
 
   // Keep the selected row in view when selection changes from outside the tree
   // (context search focus, profile navigation). An off-screen row is centred so it
@@ -266,9 +380,9 @@ export function NoteSidebar({
     <TreeDrag.Provider value={drag}>
     <div
       className={`flex h-full flex-col overflow-hidden ${
-        /* bare = docked into the square-cornered Sidebar card â€” rounding here
-           would carve a curved clip into the card's top edge by the scrollbar */
-        bare ? '' : 'rounded-l-none rounded-r-2xl border border-border-default bg-surface-1 shadow-float'
+        /* bare = docked into the Sidebar column, which draws its own seam;
+           floating = the tree beside a note, divided from it by one hairline */
+        bare ? '' : 'border-r border-border-subtle bg-surface-1'
       }`}
     >
       {/* overscroll-contain: hitting either end of the tree must not chain the
@@ -319,6 +433,7 @@ export function NoteSidebar({
               icon={root.icon ?? null}
               openPaths={effectiveOpenPaths}
               onToggleFolder={toggleFolder}
+              onOpenFolder={openFolder}
               selectedPath={selectedPath}
               starredSet={starredSet}
               glyphFor={glyphFor}
@@ -336,6 +451,7 @@ export function NoteSidebar({
               node={tree}
               openPaths={effectiveOpenPaths}
               onToggleFolder={toggleFolder}
+              onOpenFolder={openFolder}
               selectedPath={selectedPath}
               starredSet={starredSet}
               glyphFor={glyphFor}
@@ -411,19 +527,23 @@ function TrashFolder({
         <button
           type="button"
           aria-label={open ? 'Collapse trash' : 'Expand trash'}
+          aria-expanded={open}
           onClick={onToggle}
-          className="flex shrink-0 items-center self-stretch pl-1.5 pr-1 text-text-secondary hover:text-text-primary"
+          className="relative flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 text-text-muted hover:text-text-primary"
         >
-          <Chevron open={open} />
+          {open && (
+            <span
+              aria-hidden="true"
+              className="absolute bottom-0 left-[14px] top-[calc(50%+10px)] w-px bg-border-default/70"
+            />
+          )}
+          <TrashIcon />
         </button>
         <button
           type="button"
           onClick={onToggle}
-          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px] text-text-secondary"
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] text-text-secondary"
         >
-          <span className="shrink-0 text-text-muted">
-            <TrashIcon />
-          </span>
           <span className="truncate font-medium">Trash</span>
           {entries.length > 0 && (
             <span className="shrink-0 text-[11px] font-semibold text-text-muted">{entries.length}</span>
@@ -439,15 +559,16 @@ function TrashFolder({
           }
         />
       </div>
-      {open && (
-        <div className="ml-[15px] border-l border-border-default/70 pl-[2px]">
+      <Branch open={open}>
+        <div className={`ctx-branch ${CHILD_INDENT}`}>
           {entries.length === 0 ? (
             <div className="py-1.5 pl-3 text-[13px] text-text-muted">Trash is empty.</div>
           ) : (
-            entries.map((entry) => (
+            entries.map((entry, i) => (
               <TrashRow
                 key={entry.id}
                 entry={entry}
+                guide={i === entries.length - 1 ? 'last' : 'mid'}
                 onRestore={onRestore}
                 onPurge={onPurge}
               />
@@ -459,17 +580,19 @@ function TrashFolder({
             </div>
           )}
         </div>
-      )}
+      </Branch>
     </div>
   )
 }
 
 function TrashRow({
   entry,
+  guide,
   onRestore,
   onPurge,
 }: {
   entry: TrashEntry
+  guide: Guide
   onRestore?: (id: string) => void
   onPurge?: (id: string) => void
 }) {
@@ -478,7 +601,8 @@ function TrashRow({
     <div className={`group flex items-center pr-1.5 transition hover:bg-surface-2 ${ROW_BLEED}`}>
       {/* A trashed note has nothing to open â€” the row is a label, and the â‹¯ menu
           carries the only two things you can do with it. */}
-      <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-[15px]" title={entry.path}>
+      <GuideLine guide={guide} />
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-[15px]" title={entry.path}>
         <span className="shrink-0 text-text-muted">
           <FileIcon />
         </span>
@@ -504,6 +628,7 @@ function Tree({
   node,
   openPaths,
   onToggleFolder,
+  onOpenFolder,
   selectedPath,
   starredSet,
   glyphFor,
@@ -519,6 +644,7 @@ function Tree({
   node: TreeNode
   openPaths: Set<string>
   onToggleFolder: (path: string, isOpen: boolean) => void
+  onOpenFolder: (path: string) => void
   selectedPath: string | null
   starredSet: Set<string>
   glyphFor: Map<string, NodeGlyph>
@@ -541,13 +667,16 @@ function Tree({
   )
   return (
     <>
-      {children.map((child) =>
+      {children.map((child, i) =>
         child.kind === 'folder' ? (
           <FolderRow
             key={child.path}
             node={child}
+            guide={i === children.length - 1 ? 'last' : 'mid'}
+            guideActive={onSelectedPath(child.path, selectedPath)}
             openPaths={openPaths}
             onToggleFolder={onToggleFolder}
+            onOpenFolder={onOpenFolder}
             selectedPath={selectedPath}
             starredSet={starredSet}
             glyphFor={glyphFor}
@@ -565,6 +694,8 @@ function Tree({
             key={child.path}
             title={child.title ?? child.name}
             path={child.path}
+            guide={i === children.length - 1 ? 'last' : 'mid'}
+            guideActive={selectedPath === child.path}
             glyph={glyphFor.get(child.path) ?? null}
             selected={selectedPath === child.path}
             starred={starredSet.has(child.path)}
@@ -583,12 +714,17 @@ function Tree({
 
 function FolderRow(props: {
   node: TreeNode
+  /** Tree guide for a nested row; omitted for the tree's root folder row. */
+  guide?: Guide
+  /** The open note is this folder or lives inside it â€” tints the guide. */
+  guideActive?: boolean
   /** Overrides the folder's own name (used for the context-root row). */
   label?: string
   /** Overrides the folder glyph; explicit null renders no glyph (the root row). */
   icon?: React.ReactNode | null
   openPaths: Set<string>
   onToggleFolder: (path: string, isOpen: boolean) => void
+  onOpenFolder: (path: string) => void
   selectedPath: string | null
   starredSet: Set<string>
   glyphFor: Map<string, NodeGlyph>
@@ -665,7 +801,7 @@ function FolderRow(props: {
           if (!open && springRef.current === null) {
             springRef.current = window.setTimeout(() => {
               springRef.current = null
-              props.onToggleFolder(props.node.path, false)
+              props.onOpenFolder(props.node.path)
             }, 600)
           }
         }}
@@ -684,38 +820,66 @@ function FolderRow(props: {
           drag!.move(dragged, props.node.path)
         }}
         className={`group/folder flex items-center pr-1.5 transition ${ROW_BLEED} ${
-          selected ? 'bg-brand-green' : 'hover:bg-surface-2'
+          selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
         } ${isDragged ? 'opacity-50' : ''} ${
           isDropTarget ? 'bg-brand-green/15 ring-1 ring-inset ring-brand-green' : ''
         }`}
       >
-        {/* self-stretch, not py-*: the row is as tall as the label button's
-            15px line-box (~35px) while the chevron's own content is 16px, so
+        {props.guide && <GuideLine guide={props.guide} active={props.guideActive} />}
+        {/* The folder glyph is the expand/collapse control â€” open vs shut is
+            the icon itself, so the row needs no chevron beside the guide lines.
+            self-stretch, not py-*: the row is as tall as the label button's
+            15px line-box (~35px) while the icon's own content is 16px, so
             items-center leaves a ~3px dead strip above and below it where clicks
             land on the row div and nothing expands. Stretching makes the target
             the full row height. */}
         <button
           type="button"
           aria-label={open ? 'Collapse folder' : 'Expand folder'}
+          aria-expanded={open}
           onClick={() => setOpen()}
-          className={`flex shrink-0 items-center self-stretch pl-1.5 pr-1 ${
-            selected ? 'text-white' : 'text-text-secondary hover:text-text-primary'
+          className={`relative flex shrink-0 items-center self-stretch pl-1.5 pr-1.5 ${
+            selected ? 'text-brand-green' : 'text-text-muted hover:text-text-primary'
           }`}
         >
-          <Chevron open={open} />
+          {/* The stem: an open folder's children hang off a line that drops
+              from this glyph rather than starting in mid-air below it. It
+              begins just under the 16px glyph's bottom edge (half the row +
+              8px + a hair of air) so it never draws through the icon, and sits
+              at the glyph's centre â€” exactly where CHILD_INDENT puts the
+              children's guides, so the two read as one line. */}
+          {open && (
+            <span
+              aria-hidden="true"
+              className={`absolute bottom-0 left-[14px] top-[calc(50%+10px)] w-px ${
+                onSelectedPath(props.node.path, props.selectedPath)
+                  ? 'bg-brand-green/60'
+                  : 'bg-border-default/70'
+              }`}
+            />
+          )}
+          {props.icon ?? <FolderIcon open={open} />}
         </button>
         <button
           type="button"
-          onClick={() => (hasIndex ? props.onSelect(indexPath) : setOpen())}
-          className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-1.5 text-left text-[15px] ${
-            selected ? 'text-white' : 'text-text-secondary'
+          onClick={() => {
+            // Opening a folder's home note expands the folder too — and does it
+            // HERE, on the click, rather than waiting for the reveal that the
+            // new route feeds back down. That round trip is a navigation long,
+            // and the folder sitting shut for it is what read as lag.
+            if (!hasIndex) return setOpen()
+            // Pin it open rather than toggling: the row may already LOOK open on
+            // a reveal it is about to lose — selecting the folder's own note
+            // moves the reveal off whatever child chain was holding it — and
+            // only a hand-opened entry survives that. Clicking the name never
+            // folds the folder shut; the glyph is the collapse control.
+            props.onOpenFolder(props.node.path)
+            props.onSelect(indexPath)
+          }}
+          className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
+            selected ? 'text-text-primary' : 'text-text-secondary'
           }`}
         >
-          {props.icon !== null && (
-            <span className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}>
-              {props.icon ?? <FolderIcon open={open} />}
-            </span>
-          )}
           <span className={`truncate font-medium ${selected ? 'font-semibold' : ''}`}>
             {folderLabel}
           </span>
@@ -756,27 +920,41 @@ function FolderRow(props: {
           ]}
         />
       </div>
-      {open && (
-        // Indented child container with a left guide line (VS Code style).
-        <div className="ml-[15px] border-l border-border-default/70 pl-[2px]">
-          <Tree
-            node={props.node}
-            openPaths={props.openPaths}
-            onToggleFolder={props.onToggleFolder}
-            selectedPath={props.selectedPath}
-            starredSet={props.starredSet}
-            glyphFor={props.glyphFor}
-            canEdit={props.canEdit}
-            onSelect={props.onSelect}
-            onToggleStar={props.onToggleStar}
-            onDeleteNote={props.onDeleteNote}
-            folderBadges={props.folderBadges}
-            onFolderAccess={props.onFolderAccess}
-            onShareNote={props.onShareNote}
-            onDeleteFolder={props.onDeleteFolder}
-          />
+      <Branch open={open}>
+        {/* Indented child container; each child row draws its own guide. The
+            wrapper continues THIS row's own guide down past the subtree:
+            without it the parent level's line breaks every time a folder is
+            expanded, leaving a gap between the folder and its next sibling. */}
+        <div className="relative">
+          {props.guide === 'mid' && (
+            <span
+              aria-hidden="true"
+              className={`absolute bottom-0 left-0 top-0 w-px ${
+                props.guideActive ? 'bg-brand-green/60' : 'bg-border-default/70'
+              }`}
+            />
+          )}
+          <div className={`ctx-branch ${props.guide ? NESTED_CHILD_INDENT : CHILD_INDENT}`}>
+            <Tree
+              node={props.node}
+              openPaths={props.openPaths}
+              onToggleFolder={props.onToggleFolder}
+              onOpenFolder={props.onOpenFolder}
+              selectedPath={props.selectedPath}
+              starredSet={props.starredSet}
+              glyphFor={props.glyphFor}
+              canEdit={props.canEdit}
+              onSelect={props.onSelect}
+              onToggleStar={props.onToggleStar}
+              onDeleteNote={props.onDeleteNote}
+              folderBadges={props.folderBadges}
+              onFolderAccess={props.onFolderAccess}
+              onShareNote={props.onShareNote}
+              onDeleteFolder={props.onDeleteFolder}
+            />
+          </div>
         </div>
-      )}
+      </Branch>
     </div>
   )
 }
@@ -860,7 +1038,7 @@ function RowMenu({
         aria-expanded={!!pos}
         onClick={toggle}
         className={`shrink-0 rounded p-1 transition ${
-          selected ? 'text-white' : 'text-text-muted hover:text-text-secondary'
+          selected ? 'text-text-secondary hover:text-text-primary' : 'text-text-muted hover:text-text-secondary'
         } ${pos ? 'opacity-100' : `opacity-0 ${hoverClass}`}`}
       >
         <KebabIcon />
@@ -870,7 +1048,7 @@ function RowMenu({
           <div
             ref={menuRef}
             role="menu"
-            className="dropdown-pop fixed z-[100] rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-xl"
+            className="dropdown-pop fixed z-[100] rounded-xl border border-border-subtle bg-surface-1 py-[5px] shadow-float"
             style={{ top: pos.top, left: pos.left, width: ROW_MENU_W }}
           >
             {items.map((item) => (
@@ -902,6 +1080,8 @@ function NoteRow({
   title,
   path,
   glyph,
+  guide,
+  guideActive,
   selected,
   starred,
   restrictedBadge = false,
@@ -914,6 +1094,9 @@ function NoteRow({
   title: string
   path: string
   glyph: NodeGlyph | null
+  /** Tree guide for a nested row; omitted for the flat Starred list. */
+  guide?: Guide
+  guideActive?: boolean
   selected: boolean
   starred: boolean
   /** The note is privately restricted â€” inherited access is cut at the note. */
@@ -942,23 +1125,28 @@ function NoteRow({
       }}
       onDragEnd={() => drag?.end()}
       className={`group flex items-center pr-1.5 transition ${ROW_BLEED} ${
-        selected ? 'bg-brand-green' : 'hover:bg-surface-2'
+        selected ? 'bg-brand-green/15' : 'hover:bg-surface-2'
       } ${isDragged ? 'opacity-50' : ''}`}
     >
+      {guide && <GuideLine guide={guide} active={guideActive} />}
       <button
         type="button"
         onClick={() => onSelect(path)}
-        className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-2 text-left text-[15px]"
+        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left text-[15px] ${
+          // Notes carry no chevron, so the icon is padded across to sit under
+          // the folder icons above it.
+          guide ? 'pl-1.5' : 'pl-2'
+        }`}
       >
-        <span className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}>
+        <span className={`shrink-0 ${selected ? 'text-brand-green' : 'text-text-muted'}`}>
           {glyph ? <GlyphIcon glyph={glyph} /> : <FileIcon />}
         </span>
-        <span className={`truncate ${selected ? 'font-semibold text-white' : 'text-text-primary'}`}>
+        <span className={`truncate ${selected ? 'font-semibold text-text-primary' : 'text-text-primary'}`}>
           {title}
         </span>
         {restrictedBadge && (
           <span
-            className={`shrink-0 ${selected ? 'text-white' : 'text-text-muted'}`}
+            className={`shrink-0 ${selected ? 'text-brand-green' : 'text-text-muted'}`}
             title="Private note â€” access from its folders is cut off"
           >
             <LockIcon />
@@ -1096,30 +1284,6 @@ function MoveDialog({
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">{children}</div>
-  )
-}
-
-// Expand/collapse chevron. A stroked SVG rather than the â–¸/â–¾ text glyphs those
-// render hairline-thin and sit off the row's optical centre at this size.
-// Rotating one shape keeps the two states visually identical in weight, and
-// animating the rotation shows which way the fold went.
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="block transition-transform duration-150"
-      style={{ transform: open ? 'rotate(90deg)' : 'none' }}
-    >
-      <path d="m9 6 6 6-6 6" />
-    </svg>
   )
 }
 

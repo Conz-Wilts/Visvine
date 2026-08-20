@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   getExperience, sortExperience, formatYearMonth, formatDuration,
-  computeProfileCompletion, type FullProfile, type ExperienceEntry,
+  type FullProfile, type ExperienceEntry,
 } from '../lib/types/profile';
 import { matchCountryInLocation, locationFlag } from '../lib/countries';
 
@@ -54,18 +54,6 @@ describe('formatYearMonth / formatDuration', () => {
 
   it('open-ended roles run to now and never come out empty', () => {
     assert.notEqual(formatDuration('2020-01'), '');
-  });
-});
-
-describe('computeProfileCompletion', () => {
-  it('counts experience as a section', () => {
-    const empty = computeProfileCompletion(baseProfile());
-    assert.equal(empty.sections.experience.complete, false);
-    const withExp = computeProfileCompletion(
-      baseProfile({ experience: [{ id: 'a', title: 'CEO', org: 'Acme', start: '2020-01' }] })
-    );
-    assert.equal(withExp.sections.experience.complete, true);
-    assert.ok(withExp.score > empty.score);
   });
 });
 

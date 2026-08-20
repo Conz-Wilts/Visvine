@@ -28,7 +28,7 @@ interface PublicRsvpFormProps {
 }
 
 const inputCls =
-  'w-full px-4 py-3 border border-gray-200 rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all';
+  'w-full px-4 py-3 border border-border-subtle rounded-xl bg-brand-white text-brand-black placeholder:text-brand-grey focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green transition-all';
 
 export function PublicRsvpForm({
   slug, allowPlusOnes, allowedResponses, formSchema, isFull, waitlistEnabled, requireApproval,
@@ -80,14 +80,14 @@ export function PublicRsvpForm({
 
   if (done) {
     return (
-      <div className="rounded-2xl border border-brand-green/30 bg-brand-light-bg/50 p-6 text-center">
+      <div className="rounded-xl border border-brand-green p-6 text-center">
         <div className="mx-auto w-12 h-12 rounded-full bg-brand-green flex items-center justify-center mb-3">
           <CheckIcon className="w-6 h-6 text-white" />
         </div>
         <p className="text-base font-semibold text-brand-black">{done.message}</p>
         <a
           href={`/api/public/events/${encodeURIComponent(slug)}/ics`}
-          className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-gray-200 rounded-lg hover:border-brand-green transition-all"
+          className="mt-4 inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-brand-black bg-brand-white border border-border-subtle rounded-lg hover:border-brand-green transition-all"
         >
           <CalendarPlusIcon className="w-4 h-4" /> Add to calendar
         </a>
@@ -98,7 +98,7 @@ export function PublicRsvpForm({
   // Sold out, waitlist off, and the host only allows "going" — nothing to submit.
   if (soldOut && responses.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-brand-light-bg/40 p-6 text-center">
+      <div className="rounded-xl border border-border-subtle p-6 text-center">
         <p className="text-base font-semibold text-brand-black">This event is sold out</p>
         <p className="mt-1 text-sm text-brand-grey">All spots have been taken.</p>
       </div>
@@ -106,9 +106,9 @@ export function PublicRsvpForm({
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-gray-200 p-5 space-y-4">
+    <form onSubmit={submit} className="rounded-xl border border-brand-green p-5 space-y-4">
       {soldOut && (
-        <div className="rounded-xl bg-brand-light-bg/40 border border-gray-200 px-4 py-3 text-center">
+        <div className="border-l-2 border-amber-500 pl-3 py-1 text-left">
           <p className="text-sm font-semibold text-brand-black">This event is sold out</p>
           <p className="mt-0.5 text-xs text-brand-grey">Already RSVP&apos;d? You can still update your response below.</p>
         </div>
@@ -121,8 +121,8 @@ export function PublicRsvpForm({
             key={r}
             type="button"
             onClick={() => setResponse(r)}
-            className={`px-3 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
-              response === r ? 'border-brand-green bg-brand-green text-white' : 'border-gray-200 text-brand-black hover:border-brand-green/50'
+            className={`px-3 py-2.5 rounded-lg text-sm font-semibold border transition-all ${
+              response === r ? 'border-brand-green bg-brand-green text-white' : 'border-border-subtle text-brand-black hover:border-brand-green/50'
             }`}
           >
             {RESPONSE_LABELS[r]}
@@ -167,7 +167,7 @@ export function PublicRsvpForm({
                 fieldText: 'block text-sm font-medium text-brand-black mb-1.5',
                 input: inputCls,
                 checkbox: 'flex items-center gap-2.5 text-sm text-brand-black',
-                checkboxInput: 'w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green',
+                checkboxInput: 'w-4 h-4 rounded border-border-default text-brand-green focus:ring-brand-green',
               }}
             />
           ))}

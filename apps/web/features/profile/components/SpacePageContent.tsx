@@ -108,10 +108,11 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
 
   return (
     <div className="profile-content-fade flex flex-col gap-5">
-      {/* ══ COVER + HERO — the space page's shape, inside the pane's gutter
-          so the cover is a rounded card rather than a broken full-bleed band. ══ */}
-      <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft overflow-hidden">
-        <div className="relative h-36 sm:h-44" style={{ background: `linear-gradient(120deg, ${theme.base}, ${theme.dark})` }}>
+      {/* ══ COVER + HERO — the space page's shape. The cover keeps a soft
+          radius because it is an image band inside the pane's gutter; nothing
+          frames it. ══ */}
+      <section>
+        <div className="relative h-36 sm:h-44 rounded-lg overflow-hidden" style={{ background: `linear-gradient(120deg, ${theme.base}, ${theme.dark})` }}>
           <div className="absolute inset-0 opacity-30"
                style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,.25) 1px, transparent 1.4px)', backgroundSize: '18px 18px' }} />
           <div className="absolute top-4 right-4 z-10">
@@ -128,7 +129,7 @@ export default function SpacePageContent({ nodeId, onConnectionsClick }: SpacePa
             {/* Contained, not cropped: a logo with whitespace must not be zoomed
                 to fill, so the object-fit differs from the member-space page
                 whose image is a cover photo. */}
-            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl overflow-hidden bg-surface-1"
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden bg-surface-1"
                  style={{ boxShadow: '0 0 0 5px var(--surface-1, #fff), 0 10px 30px rgba(0,0,0,.18)' }}>
               {node.image_url ? (
                 <img src={node.image_url} alt={node.name} className="w-full h-full object-contain p-3" />

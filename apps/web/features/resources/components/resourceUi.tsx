@@ -64,7 +64,7 @@ export function FileUnavailable() {
 }
 
 export function FileTypeIcon({ type, className = '' }: { type: string; className?: string }) {
-  const colors = FILE_BG[type] ?? 'bg-gray-100 text-gray-500';
+  const colors = FILE_BG[type] ?? 'bg-surface-3 text-text-muted';
   const iconClass = 'h-5 w-5';
   const content = type === 'image' ? (
     <svg className={iconClass} fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -12,7 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { PageTitle, SearchInput, EmptyState, Skeleton } from '@/components/ui';
+import { SearchInput, EmptyState, Skeleton } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 import { formatDate, formatTime } from '@/lib/date';
 
@@ -27,34 +27,34 @@ interface DiscoverEvent {
   spaceName: string | null;
 }
 
-// Matches the Directory grid: fixed-width cards, auto-filled and evenly spread.
-const GRID = 'grid gap-6 justify-center [grid-template-columns:repeat(auto-fill,260px)]';
+// Matches the Directory grid: bare tiles, auto-filled.
+const GRID = 'grid gap-x-6 gap-y-8 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]';
 
 function EventCard({ event }: { event: DiscoverEvent }) {
   return (
     <Link
       href={`/e/${event.slug}`}
-      className="group flex h-[300px] w-full flex-col overflow-hidden rounded-2xl border border-border-default bg-surface-1 shadow-sm transition hover:shadow-md"
+      className="group flex w-full flex-col"
     >
       {event.coverImageUrl ? (
         <img
           src={event.coverImageUrl}
           alt={event.title}
           loading="lazy"
-          className="h-[140px] shrink-0 object-cover transition-transform duration-300 group-hover:scale-105"
+          className="aspect-[4/3] w-full shrink-0 rounded-lg object-cover transition-transform duration-300 group-hover:scale-[1.02]"
         />
       ) : (
-        <div className="flex h-[140px] shrink-0 items-center justify-center bg-surface-2 text-text-muted">
+        <div className="flex aspect-[4/3] w-full shrink-0 items-center justify-center rounded-lg bg-surface-2 text-text-muted">
           <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
         </div>
       )}
-      <div className="flex flex-1 flex-col gap-1 px-4 py-3">
+      <div className="flex flex-1 flex-col gap-0.5 pt-2.5">
         <p className="text-xs font-semibold uppercase tracking-wide text-brand-dark-green">
           {formatDate(event.startAt)} · {formatTime(event.startAt)}
         </p>
-        <h3 className="line-clamp-2 text-sm font-semibold text-text-primary">{event.title}</h3>
+        <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug text-text-primary group-hover:underline">{event.title}</h3>
         {event.locationLabel && (
           <p className="line-clamp-1 text-xs text-text-secondary">{event.locationLabel}</p>
         )}
@@ -99,14 +99,12 @@ export default function DiscoverEventsPage() {
 
   return (
     <div className="w-full px-4 pb-8 sm:px-6">
-      <PageTitle title="Discover events" />
-
-      <div className="flex justify-center pt-6">
+      <div className="pt-2">
         <SearchInput
           value={query}
           onChange={setQuery}
           placeholder="Search public events…"
-          className="w-full max-w-2xl"
+          className="w-full max-w-xs"
         />
       </div>
 
@@ -114,7 +112,7 @@ export default function DiscoverEventsPage() {
         {loading ? (
           <div className={GRID}>
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-[300px] w-full rounded-2xl" />
+              <Skeleton key={i} className="aspect-[4/3] w-full rounded-lg" />
             ))}
           </div>
         ) : filtered.length === 0 ? (

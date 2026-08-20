@@ -228,7 +228,7 @@ export function AliasSettings({ spaceId, alias, data, busy, run }: SettingsProps
                 <PlusIcon className="h-3 w-3" /> Give to
               </button>
               {adding && (
-                <div className="absolute left-0 top-full z-50 mt-1 max-h-64 min-w-[200px] overflow-y-auto rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-xl">
+                <div className="absolute left-0 top-full z-50 mt-1 max-h-64 min-w-[200px] overflow-y-auto rounded-xl border border-border-subtle bg-surface-1 py-1 shadow-float">
                   {candidates.map((m) => (
                     <button
                       key={m.userId}

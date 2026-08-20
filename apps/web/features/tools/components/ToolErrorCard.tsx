@@ -36,13 +36,11 @@ export default function ToolErrorCard({
     <div
       role="alert"
       className={clsx(
-        'flex w-full flex-col items-center justify-center gap-3 rounded-xl border border-border-subtle bg-surface-1 px-6 py-10 text-center',
+        'flex w-full flex-col items-center justify-center gap-3 px-6 py-10 text-center',
         className,
       )}
     >
-      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600">
-        <TriangleAlertIcon className="h-5 w-5" />
-      </span>
+      <TriangleAlertIcon className="h-5 w-5 text-amber-600" />
       <div className="space-y-1">
         <p className="text-sm font-semibold text-text-primary">{title} stopped working</p>
         <p className="mx-auto max-w-[46ch] text-sm text-text-muted">{message}</p>

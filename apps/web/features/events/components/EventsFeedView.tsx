@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { CalendarIcon, MapPinIcon, PencilIcon, UsersIcon, VideoIcon } from '@/features/shared/icons';
+import { CalendarIcon, PencilIcon } from '@/features/shared/icons';
 import { formatEventTime, getEventStatus, isEventUpcoming, startsInLabel } from '@/lib/eventUtils';
 import Avatar from '@/components/ui/Avatar';
 import type { NBEvent } from '@/lib/types';
@@ -68,10 +68,19 @@ function FeedCard({
   const status = getEventStatus(event.startAt, event.endAt);
   const isVirtual = !event.location || event.location.lat == null;
   const attendeeCount = event._stats?.totalAttendees ?? 0;
-  const rel = startsInLabel(event.startAt);
+  const rel = status !== 'past' ? startsInLabel(event.startAt) : null;
+
+  // Everything the old badges said, as one line of text under the title:
+  // when · where · how many. The countdown leads it in the accent when there
+  // is one; a past event just dims.
+  const facts = [
+    formatFullDate(event.startAt, event.endAt),
+    isVirtual ? 'Virtual' : event.location?.label,
+    attendeeCount > 0 ? `${attendeeCount} going` : null,
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className={`group relative rounded-2xl border border-border-default bg-surface-1 overflow-hidden hover:shadow-md transition-all ${status === 'past' ? 'opacity-80' : ''}`}>
+    <div className={`group relative py-5 ${status === 'past' ? 'opacity-70' : ''}`}>
       <button
         type="button"
         onClick={() => onClick?.(event)}
@@ -81,76 +90,37 @@ function FeedCard({
           <img
             src={cover}
             alt={event.title}
-            className={`w-full object-cover ${featured ? 'h-64' : 'h-40'}`}
+            className={`mb-4 w-full rounded-lg object-cover ${featured ? 'h-72' : 'h-44'}`}
           />
         )}
 
-        <div className="p-5 space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <h3 className={`font-semibold text-brand-black group-hover:text-brand-green transition-colors ${featured ? 'text-xl' : 'text-lg'}`}>
-              {event.title}
-            </h3>
-            <span className="flex-shrink-0 px-3 py-1 text-xs font-semibold rounded-full bg-brand-orange text-white">
-              RSVP
-            </span>
-          </div>
+        <h3 className={`font-semibold text-text-primary leading-snug group-hover:underline ${featured ? 'text-xl' : 'text-[17px]'}`}>
+          {event.title}
+        </h3>
 
-          <div className="space-y-0.5">
-            <p className="text-sm font-medium text-text-secondary">
-              {formatFullDate(event.startAt, event.endAt)}
-            </p>
-            {space && (
-              <div className="flex items-center gap-1.5 text-sm text-text-muted">
-                <Avatar name={space.name} imageUrl={space.imageUrl} size="xs" />
-                {space.name} space
-              </div>
-            )}
-          </div>
+        <p className="mt-1 text-sm text-text-secondary">
+          {rel && <span className="font-semibold text-brand-dark-green">{rel} · </span>}
+          {facts}
+        </p>
 
-          {event.description && (
-            <p className={`text-sm text-text-secondary leading-relaxed ${featured ? 'line-clamp-3' : 'line-clamp-2'}`}>
-              {event.description}
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {rel && status !== 'past' && (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md bg-brand-green text-white">
-                {rel}
-              </span>
-            )}
-            {status === 'past' && (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-muted">
-                Past event
-              </span>
-            )}
-            {isVirtual ? (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
-                <VideoIcon className="w-3.5 h-3.5" />
-                Virtual event
-              </span>
-            ) : (
-              event.location && (
-                <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle truncate max-w-[220px]">
-                  <MapPinIcon className="w-3.5 h-3.5 flex-shrink-0" />
-                  {event.location.label}
-                </span>
-              )
-            )}
-            {attendeeCount > 0 && (
-              <span className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full bg-surface-2 text-text-secondary border border-border-subtle">
-                <UsersIcon className="w-3.5 h-3.5" />
-                {attendeeCount} Attendee{attendeeCount === 1 ? '' : 's'}
-              </span>
-            )}
+        {space && (
+          <div className="mt-1 flex items-center gap-1.5 text-[13px] text-text-muted">
+            <Avatar name={space.name} imageUrl={space.imageUrl} size="xs" />
+            {space.name}
           </div>
-        </div>
+        )}
+
+        {event.description && (
+          <p className={`mt-2 text-sm leading-relaxed text-text-secondary ${featured ? 'line-clamp-3' : 'line-clamp-2'}`}>
+            {event.description}
+          </p>
+        )}
       </button>
 
       {onEdit && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit(event.id); }}
-          className="absolute top-3 right-3 p-1.5 text-brand-grey hover:text-brand-green hover:bg-brand-light-bg rounded-lg transition-all opacity-0 group-hover:opacity-100 bg-surface-1/80 backdrop-blur-sm"
+          className="absolute top-5 right-0 rounded-lg p-1.5 text-text-muted opacity-0 transition-all hover:bg-surface-3 hover:text-text-primary group-hover:opacity-100"
           title="Edit event"
         >
           <PencilIcon className="w-4 h-4" />
@@ -186,8 +156,8 @@ export default function EventsFeedView({ events, space, loading = false, onEdit,
   if (loading) {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="h-64 rounded-2xl bg-surface-2 animate-pulse" />
-        <div className="h-48 rounded-2xl bg-surface-2 animate-pulse" />
+        <div className="h-64 rounded-lg bg-surface-2 animate-pulse" />
+        <div className="h-48 rounded-lg bg-surface-2 animate-pulse" />
       </div>
     );
   }
@@ -195,18 +165,18 @@ export default function EventsFeedView({ events, space, loading = false, onEdit,
   if (events.length === 0) {
     return (
       <div className="max-w-3xl mx-auto text-center py-20">
-        <CalendarIcon className="w-14 h-14 text-brand-grey mx-auto mb-4" />
+        <CalendarIcon className="w-6 h-6 text-text-muted mx-auto mb-3" />
         <p className="text-sm text-text-muted">No events found</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-10">
+    <div className="max-w-3xl mx-auto space-y-8">
       {undated.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-brand-black">Date to be set</h2>
-          <div className="space-y-4">
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Date to be set</h2>
+          <div className="divide-y divide-border-subtle">
             {undated.map(ev => (
               <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}
@@ -215,16 +185,16 @@ export default function EventsFeedView({ events, space, loading = false, onEdit,
       )}
 
       {nextEvent && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-brand-black">Next event</h2>
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Next event</h2>
           <FeedCard event={nextEvent} space={space} featured onEdit={onEdit} onClick={onEventClick} />
         </section>
       )}
 
       {Object.entries(upcomingByMonth).map(([month, monthEvents]) => (
-        <section key={month} className="space-y-3">
-          <h2 className="text-lg font-semibold text-brand-black">{month}</h2>
-          <div className="space-y-4">
+        <section key={month}>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">{month}</h2>
+          <div className="divide-y divide-border-subtle">
             {monthEvents.map(ev => (
               <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}
@@ -233,9 +203,9 @@ export default function EventsFeedView({ events, space, loading = false, onEdit,
       ))}
 
       {pastEvents.length > 0 && (
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold text-text-muted">Past events</h2>
-          <div className="space-y-4">
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-text-muted">Past events</h2>
+          <div className="divide-y divide-border-subtle">
             {pastEvents.map(ev => (
               <FeedCard key={ev.id} event={ev} space={space} onEdit={onEdit} onClick={onEventClick} />
             ))}

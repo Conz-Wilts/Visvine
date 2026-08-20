@@ -40,7 +40,7 @@ export default function EditAboutModal({ open, onClose, bio, onSave }: Props) {
             rows={8}
             maxLength={2600}
             placeholder="Tell your network what you're working on, your background, and what you're passionate about."
-            className="w-full min-h-[max(10rem,32vh)] px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 resize-y"
+            className="w-full min-h-[max(10rem,32vh)] px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30 resize-y"
           />
           <p className="text-xs text-brand-grey mt-1">{value.length}/2600</p>
         </div>

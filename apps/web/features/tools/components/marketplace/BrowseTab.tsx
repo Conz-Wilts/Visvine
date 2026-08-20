@@ -126,14 +126,15 @@ export default function BrowseTab({
   );
 }
 
-/** One card. The whole thing is the button — a card with a "View" link in it
- *  reads as two targets for one destination. */
+/** One entry. The whole thing is the button — an entry with a "View" link in
+ *  it reads as two targets for one destination. No box: the grid gap and the
+ *  hover tint are what separate one from the next. */
 function ToolCard({ item, onOpen }: { item: BrowseItem; onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="flex h-full flex-col rounded-2xl border border-border-subtle bg-surface-1 p-4 text-left shadow-soft transition-colors hover:border-brand-green focus:outline-none focus-visible:border-brand-green"
+      className="flex h-full flex-col rounded-lg p-4 text-left transition-colors hover:bg-surface-2 focus:outline-none focus-visible:bg-surface-2"
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
@@ -186,7 +187,7 @@ function CardGridSkeleton() {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
       {[0, 1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 p-4">
+        <div key={i} className="p-4">
           <Skeleton className="h-4 w-1/2 rounded" />
           <Skeleton className="mt-2 h-3 w-1/3 rounded" />
           <Skeleton className="mt-3 h-3 w-full rounded" />

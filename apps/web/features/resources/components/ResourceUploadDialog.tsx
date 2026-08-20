@@ -48,26 +48,26 @@ export default function ResourceUploadDialog({
       closeOnEscape={false}
       overlayClassName="items-center justify-center bg-black/40"
       maxWidth="max-w-md"
-      panelClassName="bg-white rounded-xl shadow-xl p-6"
+      panelClassName="bg-surface-1 rounded-xl shadow-float p-6"
     >
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold">Upload Resource</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+          <button onClick={onClose} className="text-text-muted hover:text-text-muted">✕</button>
         </div>
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true); }}
           onDragLeave={() => setDragging(false)}
           onDrop={e => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
           onClick={() => inputRef.current?.click()}
-          className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${dragging ? 'border-blue-400 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
+          className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${dragging ? 'border-blue-400 bg-blue-50' : 'border-border-default hover:border-gray-400'}`}
         >
           {uploading ? (
-            <p className="text-gray-500">Uploading and indexing...</p>
+            <p className="text-text-muted">Uploading and indexing...</p>
           ) : (
-            <p className="text-gray-500">
+            <p className="text-text-muted">
               Drag &amp; drop a file here, or click to browse
               <br />
-              <span className="text-xs text-gray-400">PDF, Excel, CSV, DOCX, Markdown, JSON, text, or image</span>
+              <span className="text-xs text-text-muted">PDF, Excel, CSV, DOCX, Markdown, JSON, text, or image</span>
             </p>
           )}
         </div>

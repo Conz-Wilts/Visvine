@@ -143,12 +143,12 @@ export function SourcePreviewPanel({ path }: { path: string }) {
       </div>
 
       {source.status === 'failed' && source.error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           Ingestion failed: {source.error}
         </div>
       )}
       {error && (
-        <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-3 border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -158,7 +158,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
           <a
             href={downloadUrl}
             download={source.name}
-            className="rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-2"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-text-secondary transition hover:bg-surface-3 hover:text-text-primary"
           >
             Download original
           </a>
@@ -168,7 +168,7 @@ export function SourcePreviewPanel({ path }: { path: string }) {
             type="button"
             disabled={busy}
             onClick={reingest}
-            className="rounded-lg border border-border-default px-3 py-1.5 text-sm font-medium text-text-secondary transition hover:bg-surface-2 disabled:opacity-50"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-text-secondary transition hover:bg-surface-3 hover:text-text-primary disabled:opacity-50"
           >
             {busy ? 'Retrying…' : 'Retry ingestion'}
           </button>
@@ -177,14 +177,14 @@ export function SourcePreviewPanel({ path }: { path: string }) {
           type="button"
           disabled={busy}
           onClick={remove}
-          className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+          className="rounded-lg px-3 py-1.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
         >
           Delete
         </button>
       </div>
 
       {text ? (
-        <pre className="mt-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-xl border border-border-default bg-surface-1 p-4 text-[13px] leading-relaxed text-text-primary">
+        <pre className="mt-6 max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-4 text-[13px] leading-relaxed text-text-primary">
           {text}
         </pre>
       ) : (

@@ -78,7 +78,7 @@ export default function ColorPicker({ color, onChange, onClose }: {
 
   return (
     <div
-      className="bg-surface-1 border border-border-subtle rounded-xl p-3 shadow-xl flex flex-col gap-3 w-52"
+      className="bg-surface-1 border border-border-subtle rounded-xl p-3 shadow-float flex flex-col gap-3 w-52"
       onClick={e => e.stopPropagation()}
     >
       {/* Saturation / lightness gradient box */}

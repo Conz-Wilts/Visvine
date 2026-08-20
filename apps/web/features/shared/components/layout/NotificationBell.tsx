@@ -167,7 +167,7 @@ export default function NotificationBell() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-80 max-h-[70vh] overflow-y-auto rounded-xl bg-surface-1 border border-border-subtle shadow-lg z-50"
+          className="absolute right-0 mt-2 w-80 max-h-[70vh] overflow-y-auto rounded-xl bg-surface-1 border border-border-subtle shadow-float z-50"
         >
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
             <p className="text-sm font-medium text-text-primary">Notifications</p>

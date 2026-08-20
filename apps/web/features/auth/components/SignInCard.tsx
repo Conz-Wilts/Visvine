@@ -90,9 +90,9 @@ export default function SignInCard({
 
   if (done) {
     return (
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-10 flex flex-col items-center text-center">
-        <Spinner className="h-7 w-7 text-[#78d870]" />
-        <p className="mt-5 text-sm font-medium text-gray-700">
+      <div className="w-full max-w-sm bg-surface-1 rounded-xl shadow-float p-10 flex flex-col items-center text-center">
+        <Spinner className="h-7 w-7 text-brand-green" />
+        <p className="mt-5 text-sm font-medium text-text-secondary">
           {isSignup ? "Account created — setting things up…" : "Signed in — redirecting…"}
         </p>
       </div>
@@ -100,18 +100,18 @@ export default function SignInCard({
   }
 
   return (
-    <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-8 sm:p-10 flex flex-col items-center text-center">
+    <div className="w-full max-w-sm bg-surface-1 rounded-xl shadow-float p-8 sm:p-10 flex flex-col items-center text-center">
       {/* Logo */}
       <span className="inline-flex items-center gap-2">
         <img src="/images/brand-icon.png" alt="" className="w-7 h-7 rounded-lg" />
-        <span className="font-medium text-lg text-[#78d870] tracking-tight">Visvine</span>
+        <span className="font-medium text-lg text-brand-green tracking-tight">Visvine</span>
       </span>
 
       {/* Heading */}
-      <h1 className="mt-6 text-2xl font-bold text-gray-900 leading-tight">
+      <h1 className="mt-6 text-2xl font-bold text-text-primary leading-tight">
         {isSignup ? "Create your account" : "Welcome back"}
       </h1>
-      <p className="mt-2 text-gray-500 text-sm">
+      <p className="mt-2 text-text-muted text-sm">
         {isSignup
           ? "Join Visvine to explore spaces"
           : "Sign in to continue to Visvine"}
@@ -121,7 +121,7 @@ export default function SignInCard({
       <div className="mt-7 w-full">
         <a
           href={`/api/auth/signin/google?callbackUrl=${cb}`}
-          className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all text-sm font-medium text-gray-700 shadow-sm"
+          className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-lg border border-border-subtle bg-surface-1 hover:bg-surface-2 active:scale-[0.98] transition-all text-sm font-medium text-text-secondary"
         >
           <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -136,7 +136,7 @@ export default function SignInCard({
       {/* Divider */}
       <div className="my-5 flex w-full items-center gap-3">
         <span className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-medium text-gray-400">or</span>
+        <span className="text-xs font-medium text-text-muted">or</span>
         <span className="h-px flex-1 bg-gray-200" />
       </div>
 
@@ -156,7 +156,7 @@ export default function SignInCard({
               onChange={(e) => setName(e.target.value)}
               placeholder="Full name"
               disabled={submitting}
-              className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#78d870]/40 focus:border-[#78d870] disabled:bg-gray-50"
+              className="w-full px-4 py-3 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default disabled:opacity-60"
             />
           </div>
         )}
@@ -174,7 +174,7 @@ export default function SignInCard({
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
             disabled={submitting}
-            className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#78d870]/40 focus:border-[#78d870] disabled:bg-gray-50"
+            className="w-full px-4 py-3 text-sm rounded-lg bg-surface-2 text-text-primary placeholder:text-text-muted focus:outline-none focus:bg-surface-1 focus:ring-1 focus:ring-border-default disabled:opacity-60"
           />
         </div>
 
@@ -193,19 +193,19 @@ export default function SignInCard({
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               disabled={submitting}
-              className="w-full px-4 py-3 pr-16 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#78d870]/40 focus:border-[#78d870] disabled:bg-gray-50"
+              className="w-full px-4 py-3 pr-16 text-sm border border-border-subtle rounded-xl focus:outline-none focus:ring-2 focus:ring-[#78d870]/40 focus:border-[#78d870] disabled:bg-surface-2"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-0 px-3 flex items-center text-xs font-medium text-gray-500 hover:text-gray-800"
+              className="absolute inset-y-0 right-0 px-3 flex items-center text-xs font-medium text-text-muted hover:text-text-secondary"
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
           {isSignup && (
-            <p className="mt-1.5 text-xs text-gray-400">
+            <p className="mt-1.5 text-xs text-text-muted">
               At least {MIN_PASSWORD_LENGTH} characters.
             </p>
           )}
@@ -214,7 +214,7 @@ export default function SignInCard({
         {formError && (
           <p
             role="alert"
-            className="text-sm text-red-600 bg-red-50 rounded-lg py-2 px-3"
+            className="w-full border-l-2 border-red-500 pl-3 py-1 text-left text-sm text-red-600"
           >
             {formError}
           </p>
@@ -223,7 +223,7 @@ export default function SignInCard({
         <button
           type="submit"
           disabled={submitting}
-          className="mt-1 w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-[#78d870] hover:brightness-105 active:scale-[0.98] transition-all text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+          className="mt-1 w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl bg-brand-green hover:brightness-105 active:scale-[0.98] transition-all text-sm font-semibold text-white disabled:opacity-60"
         >
           {submitting && <Spinner className="h-4 w-4 text-white" />}
           {isSignup ? "Create account" : "Sign in"}
@@ -231,14 +231,14 @@ export default function SignInCard({
       </form>
 
       {/* Mode toggle */}
-      <p className="mt-5 text-sm text-gray-500">
+      <p className="mt-5 text-sm text-text-muted">
         {isSignup ? (
           <>
             Already have an account?{" "}
             <button
               type="button"
               onClick={() => switchMode("signin")}
-              className="font-semibold text-[#78d870] hover:underline"
+              className="font-semibold text-brand-green hover:underline"
             >
               Sign in
             </button>
@@ -249,7 +249,7 @@ export default function SignInCard({
             <button
               type="button"
               onClick={() => switchMode("signup")}
-              className="font-semibold text-[#78d870] hover:underline"
+              className="font-semibold text-brand-green hover:underline"
             >
               Create one
             </button>
@@ -260,7 +260,7 @@ export default function SignInCard({
       {devAuthEnabled && (
         <a
           href={`/dev/login?callbackUrl=${cb}`}
-          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-gray-300 text-xs font-medium text-gray-500 hover:bg-gray-50 transition-all"
+          className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-xs font-medium text-text-muted hover:bg-surface-2 hover:text-text-secondary transition-all"
         >
           Dev login (skip auth)
         </a>

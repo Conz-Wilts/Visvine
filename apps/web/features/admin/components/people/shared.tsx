@@ -273,7 +273,7 @@ function PathPicker({
         <ChevronDownIcon className={`h-4 w-4 shrink-0 opacity-50 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[260px] overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-xl">
+        <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[260px] overflow-hidden rounded-xl border border-border-subtle bg-surface-1 shadow-float">
           <input
             autoFocus
             value={query}

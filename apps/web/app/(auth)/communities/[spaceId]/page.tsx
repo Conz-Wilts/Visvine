@@ -11,13 +11,14 @@
 import React, { useState, useEffect, useMemo, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { CalendarIcon, CalendarPlusIcon, CheckIcon, ChevronRightIcon, EarthIcon, FolderOpenIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon, SparklesIcon, UserPlusIcon, UsersIcon } from '@/features/shared/icons';
+import { CalendarIcon, CalendarPlusIcon, ChevronRightIcon, EarthIcon, FolderOpenIcon, LoaderCircleIcon, LogOutIcon, MapPinIcon, NetworkIcon, PlusIcon, Share2Icon, SparklesIcon, UserPlusIcon, UsersIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette, type ThemePalette } from '@/lib/profileTheme';
 import { getNodeTypeConfig, type NodeTypeConfig } from '@/lib/types';
 import { getInitials } from '@/lib/avatarUtils';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import { Chip, chipClass, chipStyle } from '@/components/ui';
+import { SectionCard, RailCard } from '@/features/profile/components/profileCards';
 import { formatEventDateShort, formatEventTime } from '@/lib/eventUtils';
 import { FileTypeIcon, FILE_LABEL } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
@@ -196,15 +197,6 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
   const isActive = (lastPostAt && Date.now() - new Date(lastPostAt).getTime() < FOURTEEN_DAYS_MS) || counts.upcomingEvents > 0;
 
   // Admin setup checklist (only shown while the space is still sparse)
-  const checklist = [
-    { label: 'Add a space image', done: !!space.imageUrl },
-    { label: 'Write a description', done: !!space.description },
-    { label: 'Reach 3 members', done: counts.members >= 3 },
-    { label: 'Host your first event', done: counts.totalEvents > 0 },
-    { label: 'Share a resource', done: counts.resources > 0 },
-  ];
-  const checklistDone = checklist.filter((c) => c.done).length;
-  const showChecklist = isAdminViewer && checklistDone < checklist.length;
 
   return (
     <div className="w-full max-w-5xl mx-auto">
@@ -223,7 +215,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
       {/* ── HERO ── */}
       <div className="relative px-6 sm:px-8 pb-6">
         <div className="absolute -top-16 left-6 sm:left-8">
-          <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl overflow-hidden"
+          <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-xl overflow-hidden"
                style={{ boxShadow: '0 0 0 5px var(--surface-1, #fff), 0 10px 30px rgba(0,0,0,.18)' }}>
             {space.imageUrl ? (
               <img src={space.imageUrl} alt={space.name} className="w-full h-full object-cover" />
@@ -332,32 +324,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
       <div className="px-6 sm:px-8 py-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
         {/* MAIN */}
         <div className="min-w-0 flex flex-col gap-5">
-          {showChecklist && (
-            <SectionCard id="checklist" icon={<SparklesIcon className="w-[18px] h-[18px]" />} title="Set up your space" theme={theme}>
-              <div className="flex items-center gap-4 mb-3">
-                <div className="relative w-14 h-14 flex-none rounded-full grid place-items-center"
-                     style={{ background: `conic-gradient(${theme.base} ${(checklistDone / checklist.length) * 100}%, var(--surface-3,#f3f4f6) 0)` }}>
-                  <div className="absolute w-10 h-10 rounded-full bg-surface-1" />
-                  <b className="relative text-[13px] font-bold font-title">{checklistDone}/{checklist.length}</b>
-                </div>
-                <p className="text-[13px] text-text-secondary">A complete page helps new members understand what this space is about.</p>
-              </div>
-              <ul className="flex flex-col gap-1.5">
-                {checklist.map((c) => (
-                  <li key={c.label} className="flex items-center gap-2.5 text-sm">
-                    <span className={`w-5 h-5 rounded-full grid place-items-center flex-none border ${c.done ? 'text-white' : 'border-border-default text-transparent'}`}
-                          style={c.done ? { background: theme.base, borderColor: theme.base } : undefined}>
-                      <CheckIcon className="w-3 h-3" />
-                    </span>
-                    <span className={c.done ? 'text-text-muted line-through' : 'text-text-secondary'}>{c.label}</span>
-                  </li>
-                ))}
-              </ul>
-            </SectionCard>
-          )}
-
           {/* About */}
-          <SectionCard id="overview" icon={<SparklesIcon className="w-[18px] h-[18px]" />} title="About" theme={theme}>
+          <SectionCard id="overview" icon={<SparklesIcon className="w-[18px] h-[18px]" />} title="About" accent={theme.dark}>
             {space.description ? (
               <AboutText text={space.description} theme={theme} />
             ) : isAdminViewer ? (
@@ -369,7 +337,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           {/* Upcoming events */}
           {isMember && (
-            <SectionCard id="events" icon={<CalendarIcon className="w-[18px] h-[18px]" />} title="Upcoming events" theme={theme}
+            <SectionCard id="events" icon={<CalendarIcon className="w-[18px] h-[18px]" />} title="Upcoming events" accent={theme.dark}
                          action={<Link href="/events" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link>}>
               {events.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -390,13 +358,13 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           {/* Resources */}
           {isMember && (
-            <SectionCard id="resources" icon={<FolderOpenIcon className="w-[18px] h-[18px]" />} title="Resources" theme={theme}
+            <SectionCard id="resources" icon={<FolderOpenIcon className="w-[18px] h-[18px]" />} title="Resources" accent={theme.dark}
                          action={resources.length > 0 ? <Link href="/resources" className="text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>View all →</Link> : undefined}>
               {resources.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {resources.map((r) => (
                     <Link key={r.id} href={`/resources/${encodeURIComponent(r.id)}`}
-                          className="flex items-center gap-3 p-2.5 rounded-2xl border border-border-subtle hover:-translate-y-0.5 hover:shadow-soft transition">
+                          className="-mx-2.5 flex items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-surface-2">
                       <FileTypeIcon type={r.fileType} className="h-10 w-10 flex-none" />
                       <span className="min-w-0">
                         <b className="block text-[13.5px] font-bold text-text-primary truncate">{r.name}</b>
@@ -410,7 +378,7 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
                 </div>
               ) : (
                 <Link href="/resources"
-                      className="w-full py-4 border-[1.5px] border-dashed border-border-default rounded-xl text-sm text-text-muted hover:text-text-secondary flex items-center justify-center gap-1.5 transition">
+                      className="inline-flex items-center gap-1.5 py-1 text-sm font-semibold hover:underline" style={{ color: theme.dark }}>
                   <PlusIcon className="w-4 h-4" /> Upload the first resource
                 </Link>
               )}
@@ -480,9 +448,8 @@ export default function SpaceDetailPage({ params }: { params: Promise<{ spaceId:
 
           {isMember && (
             <RailCard title="Network">
-              <NetworkPreview theme={theme} />
               <button onClick={openDirectory}
-                      className="mt-3 flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
+                      className="flex items-center gap-1 text-[13px] font-bold hover:underline" style={{ color: theme.dark }}>
                 Explore the network <ChevronRightIcon className="w-3.5 h-3.5" />
               </button>
             </RailCard>
@@ -505,32 +472,6 @@ function Stat({ value, label, onClick }: { value: number; label: string; onClick
   return onClick
     ? <button onClick={onClick} className="flex flex-col items-start">{inner}</button>
     : <div className="flex flex-col">{inner}</div>;
-}
-
-function SectionCard({ id, icon, title, theme, action, children }: {
-  id: string; icon: React.ReactNode; title: string; theme: ThemePalette;
-  action?: React.ReactNode; children: React.ReactNode;
-}) {
-  return (
-    <section id={id} className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft scroll-mt-16">
-      <div className="flex items-center justify-between px-5 pt-4 pb-2.5">
-        <h2 className="flex items-center gap-2 text-[15px] font-bold font-title text-text-primary">
-          <span style={{ color: theme.dark }}>{icon}</span>{title}
-        </h2>
-        {action}
-      </div>
-      <div className="px-5 pb-5">{children}</div>
-    </section>
-  );
-}
-
-function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 py-4">
-      <div className="text-[12px] font-bold uppercase tracking-wider text-text-muted mb-3.5">{title}</div>
-      {children}
-    </div>
-  );
 }
 
 function KV({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
@@ -566,13 +507,13 @@ function EventMiniCard({ event, theme }: { event: OverviewEvent; theme: ThemePal
   const accent = event.themeColor || theme.base;
   return (
     <Link href={`/events/${encodeURIComponent(event.id)}`}
-          className="group rounded-2xl border border-border-subtle overflow-hidden hover:shadow-soft hover:-translate-y-0.5 transition-all duration-150">
+          className="-mx-2.5 flex items-start gap-3 rounded-lg p-2.5 transition-colors hover:bg-surface-2">
       <div className="relative aspect-[16/9] flex items-center justify-center overflow-hidden"
            style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${accent}, ${accent}99)` }}>
         {event.coverImageUrl
           ? <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           : <CalendarIcon className="w-8 h-8 text-white/70" />}
-        <span className="absolute top-2 left-2 flex flex-col items-center w-10 rounded-lg overflow-hidden bg-surface-1 shadow-sm">
+        <span className="absolute top-2 left-2 flex flex-col items-center w-10 rounded-lg overflow-hidden bg-surface-1">
           <span className="w-full text-center text-[9px] font-bold text-white py-0.5" style={{ background: accent }}>{month}</span>
           <span className="text-sm font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
         </span>
@@ -628,34 +569,12 @@ function MemberAvatar({ member, theme }: { member: OverviewMember; theme: ThemeP
 }
 
 /** Decorative node-cluster illustration in theme colors — the context teaser. */
-function NetworkPreview({ theme }: { theme: ThemePalette }) {
-  const nodes = [
-    { x: 30, y: 38, r: 9 }, { x: 75, y: 22, r: 6 }, { x: 128, y: 40, r: 8 },
-    { x: 58, y: 70, r: 7 }, { x: 105, y: 78, r: 5 }, { x: 160, y: 66, r: 7 },
-    { x: 190, y: 30, r: 5 }, { x: 215, y: 72, r: 6 },
-  ];
-  const links: [number, number][] = [[0, 1], [1, 2], [0, 3], [3, 4], [2, 4], [2, 6], [4, 5], [5, 7], [6, 7]];
-  return (
-    <div className="rounded-xl overflow-hidden border border-border-subtle" style={{ background: theme.light }}>
-      <svg viewBox="0 0 240 100" className="w-full h-auto block" aria-hidden="true">
-        {links.map(([a, b], i) => (
-          <line key={i} x1={nodes[a].x} y1={nodes[a].y} x2={nodes[b].x} y2={nodes[b].y}
-                stroke={theme.base} strokeOpacity="0.45" strokeWidth="1.5" />
-        ))}
-        {nodes.map((n, i) => (
-          <circle key={i} cx={n.x} cy={n.y} r={n.r} fill={i % 3 === 0 ? theme.dark : theme.base} fillOpacity={i % 3 === 0 ? 0.9 : 0.75} />
-        ))}
-      </svg>
-    </div>
-  );
-}
-
 function SpaceSkeleton() {
   return (
     <div className="w-full max-w-5xl mx-auto animate-pulse">
       <div className="h-44 sm:h-48 bg-surface-3" />
       <div className="px-6 sm:px-8 pb-6">
-        <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-3xl bg-surface-3 -mt-16 border-4 border-surface-1" />
+        <div className="w-32 h-32 sm:w-36 sm:h-36 rounded-xl bg-surface-3 -mt-16 border-4 border-surface-1" />
         <div className="mt-4 h-7 w-64 rounded bg-surface-3" />
         <div className="mt-3 h-4 w-96 max-w-full rounded bg-surface-3" />
         <div className="mt-5 flex gap-3">
@@ -665,12 +584,12 @@ function SpaceSkeleton() {
       </div>
       <div className="px-6 sm:px-8 py-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
         <div className="flex flex-col gap-5">
-          <div className="h-40 rounded-2xl bg-surface-3" />
-          <div className="h-56 rounded-2xl bg-surface-3" />
+          <div className="h-40 rounded-lg bg-surface-3" />
+          <div className="h-56 rounded-lg bg-surface-3" />
         </div>
         <div className="flex flex-col gap-4">
-          <div className="h-44 rounded-2xl bg-surface-3" />
-          <div className="h-32 rounded-2xl bg-surface-3" />
+          <div className="h-44 rounded-lg bg-surface-3" />
+          <div className="h-32 rounded-lg bg-surface-3" />
         </div>
       </div>
     </div>

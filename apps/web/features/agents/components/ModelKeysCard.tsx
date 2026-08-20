@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { KeyRoundIcon, Trash2Icon } from '@/features/shared/icons';
-import { Button, Input } from '@/components/ui';
+import { Button, Input, SettingsSection } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
 export interface ProviderInfo {
@@ -73,18 +73,16 @@ export default function ModelKeysCard({
   };
 
   return (
-    <section className="rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft">
-      <div className="flex items-center gap-2">
-        <KeyRoundIcon className="h-4 w-4 text-text-muted" />
-        <h2 className="text-sm font-semibold text-text-primary">Model keys</h2>
-      </div>
-      <p className="mt-1 text-[13px] leading-snug text-text-muted">
+    <SettingsSection
+      title={<span className="flex items-center gap-2"><KeyRoundIcon className="h-4 w-4 text-text-muted" />Model keys</span>}
+      description={<>
         Agents run on this space&apos;s own provider keys — one per provider, stored encrypted and never shown again.
         Where your notes are sent is decided here, by an admin. The same keys back any{' '}
         <Link href="/connectors" className="underline">model connector</Link> (a <span className="font-mono">kind: model</span>{' '}
         note under <span className="font-mono">connectors/</span>) — one store, two doors.
-      </p>
-      <ul className="mt-3 divide-y divide-border-subtle">
+      </>}
+    >
+      <ul className="divide-y divide-border-subtle">
         {providers
           .filter((p) => p.id !== 'custom' || storedByName.has(p.keySecret))
           .map((p) => {
@@ -140,6 +138,6 @@ export default function ModelKeysCard({
           })}
       </ul>
       {error && <p className="mt-2 text-[13px] text-red-700">{error}</p>}
-    </section>
+    </SettingsSection>
   );
 }

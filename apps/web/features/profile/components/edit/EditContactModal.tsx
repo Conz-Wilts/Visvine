@@ -64,7 +64,7 @@ export default function EditContactModal({ open, onClose, profile, onSave }: Pro
               value={value}
               onChange={(e) => set(e.target.value)}
               placeholder={placeholder}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
+              className="w-full px-3 py-2 border border-border-subtle rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-dark-green/30"
             />
           </div>
         ))}

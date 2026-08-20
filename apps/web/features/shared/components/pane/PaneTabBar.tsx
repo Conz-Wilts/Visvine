@@ -15,7 +15,7 @@ import {
   useContextPanel,
   useDockVisuallyOpen,
 } from '@/features/shared/contexts/ContextPanelContext';
-import { CONTEXT_PANEL_W } from '@/features/shared/components/layout/Sidebar';
+import { CONTEXT_PANEL_W, useContextTreeVisible } from '@/features/notes/components/ContextSidebar';
 import { applyTabIndicator, publishTabIndicator, useTabIndicatorHandoff } from '@/components/ui/tabIndicatorHandoff';
 import { TAB_MOTION, TAB_MOTION_EASE, TAB_SET_MOTION_MS } from '@/components/ui/tabMotion';
 import { usePaneChromeState, type PaneChromeState, type PaneTabItem } from '@/features/shared/contexts/PaneShellContext';
@@ -27,7 +27,7 @@ const TAB_ROW_H = 48;
 /** Height the attached region reserves: the floating toolbar card (44px), the
  *  gap detaching it from the nav line, and room below for its shadow — the
  *  region clips (overflow-hidden), so anything unaccounted for is cut off. */
-const TRAY_ROW_H = 72;
+export const TRAY_ROW_H = 72;
 
 /** Top inset for anything docking beside the bar (the notes tree). Only the tab
  *  row spans the docked column — the attached toolbar is a centred pill over
@@ -87,22 +87,20 @@ function PaneTabBarInner({
   const { activeId, attachedOpen } = chrome;
   const edgeClass = useDockEdgeClass();
   const { setHost } = useTabBarSlot();
-  // The tray centres over the note column, not the pane: while the tree is
-  // docked the content insets by its width, so the attached region matches it,
-  // on the same transition. The connections rail narrows the column from the
-  // right the same way, so the tray insets by its width too — otherwise the
-  // toolbar stays centred on the full card while the text it acts on slides
-  // left. The rail only exists at xl, which inline padding can't see, so
-  // useConnectionsRailVisible reads that breakpoint in JS.
-  const { dockRequested, contextOpen, connectionsOpen, setConnectionsOpen, setTabTrailHost } =
-    useContextPanel();
-  const trayInset = dockRequested && contextOpen ? CONTEXT_PANEL_W : 0;
+  // The tray centres over the note column, not the pane: the tree column
+  // takes the left of a note surface, so the attached region insets by its
+  // width. The connections rail narrows the column from the right the same
+  // way, so the tray insets by its width too — otherwise the toolbar stays
+  // centred on the full card while the text it acts on slides left. Both only
+  // exist at a breakpoint inline padding can't see, so each is read in JS.
+  const { connectionsOpen, setConnectionsOpen, setTabTrailHost } = useContextPanel();
+  const surfaceKind = chrome.surface?.kind;
+  const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
+  const trayInset = useContextTreeVisible() && !!surfaceKind ? CONTEXT_PANEL_W : 0;
   const trayInsetRight = useConnectionsRailVisible() ? CONNECTIONS_RAIL_W : 0;
   // The Connections rail toggle rides the bar's right edge whenever a note or
   // entity surface is up — bar-level chrome for a bar-level panel, so it never
   // jumps around with the editor toolbar. Hidden below xl with the rail itself.
-  const surfaceKind = chrome.surface?.kind;
-  const showConnections = surfaceKind === 'note' || surfaceKind === 'entity';
 
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
@@ -264,7 +262,7 @@ function PaneTabBarInner({
       {/* pr-1 only: with a left inset the first tab's underline stopped 4px
           short of the pane's left edge, reading as a chopped line against the
           colour frame. Flush left, the underline meets the edge cleanly. */}
-      <div className="pointer-events-auto flex w-full items-center border-b border-border-subtle bg-surface-1 pr-1">
+      <div className="pointer-events-auto flex w-full items-center bg-surface-1 pr-1">
         <div
           role="tablist"
           aria-label={chrome.ariaLabel ?? 'Sections'}

@@ -74,7 +74,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
   return (
     <div className="profile-content-fade flex flex-col gap-5">
       {/* ══ HEADER — resource identity + link actions ══ */}
-      <section className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 sm:px-8 py-5 sm:py-6">
+      <section className="bg-surface-1 border border-border-subtle rounded-2xl px-5 sm:px-8 py-5 sm:py-6">
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <div className="min-w-0 flex-1">
             <Chip tone="solid" color={theme.base}>
@@ -134,7 +134,7 @@ export default function ResourcePreviewContent({ node }: { node: NBNode }) {
                   title={node.name}
                   sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                   referrerPolicy="no-referrer"
-                  className="w-full h-[70vh] rounded-2xl border border-border-subtle bg-surface-1 shadow-soft"
+                  className="w-full h-[70vh] rounded-2xl border border-border-subtle bg-surface-1"
                 />
                 <p className="text-xs text-text-muted">
                   If the preview doesn&apos;t load, the site blocks embedding — use Open site.

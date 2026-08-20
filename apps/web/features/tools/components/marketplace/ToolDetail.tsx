@@ -202,7 +202,7 @@ export default function ToolDetail({
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-text-muted">
                   Version history
                 </h3>
-                <ul className="divide-y divide-border-subtle rounded-xl border border-border-subtle">
+                <ul className="divide-y divide-border-subtle border-t border-border-subtle">
                   {version.history.map((entry) => (
                     <li key={entry.version} className="px-3 py-2 text-sm">
                       <div className="flex items-center gap-3">

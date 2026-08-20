@@ -41,8 +41,8 @@ export default function ProfileConnectPrompt({
   );
 
   return (
-    <section className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 rounded-2xl border border-border-subtle bg-surface-1 px-6 py-12 text-center shadow-soft sm:py-16">
-      <div className="h-24 w-24 overflow-hidden rounded-2xl border border-border-subtle bg-surface-2">
+    <section className="mx-auto flex w-full max-w-xl flex-col items-center gap-4 px-6 py-12 text-center sm:py-16">
+      <div className="h-24 w-24 overflow-hidden rounded-lg bg-surface-2">
         <PersonSilhouette color={theme.base} />
       </div>
 

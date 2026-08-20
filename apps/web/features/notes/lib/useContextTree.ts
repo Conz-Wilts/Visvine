@@ -14,7 +14,7 @@ import { entityKindOfPath, entityOwnerPathOf, isEntityNamespaceDir, noteHref } f
 import { isIndexPath } from '@/lib/notes/shared/indexNote'
 import type { NoteMeta, TreeNode, TrashEntry } from '@/lib/notes/shared/types'
 import { notesApi, type AccessOverviewResponse } from './notesApi'
-import { contextKeys, invalidateContextCache, swrFetch } from './contextPrefetch'
+import { contextKeys, invalidateContextCache, swrFetch, watchContextCache } from './contextPrefetch'
 
 const EMPTY_TREE: TreeNode = { name: '', path: '', kind: 'folder', children: [] }
 
@@ -107,6 +107,10 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
   const [error, setError] = useState<string | null>(null)
   // Bumped after a tree mutation (delete, restore, purge) to re-run the loads.
   const [treeVersion, setTreeVersion] = useState(0)
+  // Bumped when something outside the tree invalidates the tree/list cache —
+  // a save from the note panel, a create, a share. Separate from treeVersion so
+  // an ordinary save doesn't also re-fetch the trash.
+  const [listVersion, setListVersion] = useState(0)
 
   const active = enabled && !!spaceId
 
@@ -140,7 +144,27 @@ export function useContextTree({ spaceId, enabled, currentPath = null }: Context
     return () => {
       cancelled = true
     }
-  }, [spaceId, active, treeVersion])
+  }, [spaceId, active, treeVersion, listVersion])
+
+  // The tree and the note index live in state here, but every other surface
+  // that writes a note (the note panel, the entity panel, create, share) knows
+  // only to invalidate the cache. Watching those keys is what turns such a write
+  // into a repaint — star a note from the editor toolbar, or retitle it, and the
+  // sidebar follows without a reload.
+  useEffect(() => {
+    if (!spaceId || !active) return
+    // Coalesced: an editor autosave invalidates on every debounced flush, and
+    // one refetch after the typing settles is what the tree needs.
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unwatch = watchContextCache([contextKeys.tree(spaceId), contextKeys.list(spaceId)], () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => setListVersion((v) => v + 1), 300)
+    })
+    return () => {
+      if (timer) clearTimeout(timer)
+      unwatch()
+    }
+  }, [spaceId, active])
 
   // The context's trash, for the folder pinned to the bottom of the tree. Re-runs
   // on treeVersion so a delete lands in the trash row immediately; the GET also

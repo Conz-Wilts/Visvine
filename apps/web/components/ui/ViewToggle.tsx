@@ -25,11 +25,11 @@ function measureBtn(btn: HTMLButtonElement, container: HTMLDivElement) {
 }
 
 /**
- * Segmented view selector with an animated brand-green pill sliding under the
- * active option — the directory's context/grid/table toggle, generalized so other
- * surfaces (e.g. the notes Search/Context/Editor/Raw selector) share one control.
- * The option set may change at runtime (options appearing/disappearing); the
- * pill re-measures and slides to wherever the active option lands.
+ * Segmented view selector drawn as a row of words with a 2px accent underline
+ * sliding beneath the active one — the same signal the pane tab bar uses, at
+ * toolbar scale, so a view switch never reads as a bordered control. The
+ * option set may change at runtime (options appearing/disappearing); the
+ * underline re-measures and slides to wherever the active option lands.
  */
 export default function ViewToggle<T extends string>({ options, value, onChange, className = '', size = 'md' }: ViewToggleProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -61,15 +61,14 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
   return (
     <div
       ref={containerRef}
-      className={`relative flex items-center gap-1 border border-border-default bg-transparent ${
-        size === 'sm' ? 'h-9 rounded-xl p-0.5' : 'h-12 rounded-2xl p-1'
+      className={`relative flex items-center gap-1 ${
+        size === 'sm' ? 'h-9' : 'h-12'
       } ${className}`}
     >
       {pillStyle && (
         <span
-          className={`absolute bg-brand-green shadow-sm ${
-            size === 'sm' ? 'top-0.5 bottom-0.5 rounded-lg' : 'top-1 bottom-1 rounded-xl'
-          }`}
+          className="absolute bottom-0 h-0.5 rounded-full bg-brand-green"
+
           style={{
             left: pillStyle.left,
             width: pillStyle.width,
@@ -87,9 +86,9 @@ export default function ViewToggle<T extends string>({ options, value, onChange,
             buttonRefs.current[i] = el
           }}
           onClick={() => onChange(o.id)}
-          className={`relative z-10 flex items-center gap-1.5 font-semibold transition-colors duration-200 ${
-            size === 'sm' ? 'h-7 rounded-lg px-2.5 text-[11px]' : 'h-10 rounded-xl px-3 text-xs'
-          } ${value === o.id ? 'text-white' : 'text-text-muted hover:text-text-secondary'}`}
+          className={`relative z-10 flex h-full items-center gap-1.5 font-semibold transition-colors duration-200 ${
+            size === 'sm' ? 'px-2.5 text-[11px]' : 'px-3 text-xs'
+          } ${value === o.id ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'}`}
         >
           {o.icon}
           {o.label}

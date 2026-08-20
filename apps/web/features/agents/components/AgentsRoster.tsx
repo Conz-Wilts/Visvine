@@ -77,10 +77,8 @@ export default function AgentsRoster({
 
   if (agents.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border-default px-6 py-14 text-center">
-        <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-light-bg text-brand-dark-green">
-          <BotIcon className="h-5 w-5" />
-        </span>
+      <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+        <BotIcon className="h-6 w-6 text-text-muted" />
         <div>
           <p className="text-sm font-semibold text-text-primary">No agents yet</p>
           <p className="mt-1 text-sm text-text-muted">
@@ -94,7 +92,7 @@ export default function AgentsRoster({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-2xl border border-border-subtle bg-surface-1 shadow-soft">
+      <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-border-subtle text-left text-[11px] uppercase tracking-wide text-text-muted">
@@ -158,7 +156,7 @@ export default function AgentsRoster({
                   <td className="px-3 py-3 text-right">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={!runnable || busy === a.name}
                       onClick={() => runNow(a)}
                       title={

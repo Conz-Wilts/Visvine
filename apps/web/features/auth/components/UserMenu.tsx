@@ -49,7 +49,7 @@ export default function UserMenu() {
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-1 border border-border-subtle shadow-lg z-50 py-1 overflow-hidden">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-surface-1 border border-border-subtle shadow-float z-50 py-1 overflow-hidden">
           {/* User info */}
           <div className="px-4 py-3 border-b border-border-subtle">
             <p className="text-sm font-medium text-text-primary truncate">{user.name}</p>

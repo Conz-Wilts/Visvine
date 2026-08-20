@@ -182,7 +182,6 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   if (!event) {
     return (
       <div className="flex flex-col items-center justify-center py-32 gap-3 text-center">
-        <div className="text-5xl">📅</div>
         <p className="text-base font-semibold text-text-primary">Event not found</p>
         <p className="text-sm text-text-muted">It may have been deleted, or the URL is incorrect.</p>
         <Link href="/events" className="mt-2 text-sm font-bold hover:underline text-brand-dark-green">Back to events</Link>
@@ -239,7 +238,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6">
           {/* ── POSTER COLUMN ── */}
           <div className="lg:sticky lg:top-16 self-start flex flex-col gap-4">
-            <div className="aspect-square rounded-2xl overflow-hidden shadow-float relative"
+            <div className="aspect-square rounded-lg overflow-hidden relative"
                  style={event.coverImageUrl ? undefined : { background: `linear-gradient(135deg, ${theme.base}, ${theme.dark})` }}>
               {event.coverImageUrl ? (
                 <img src={event.coverImageUrl} alt="" className="w-full h-full object-cover" />
@@ -254,8 +253,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
               )}
             </div>
 
-            {/* host toolbar (manage view) / edit entry point (public view) — boxed, above the guest list */}
-            <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft p-2 flex flex-col gap-0.5">
+            {/* host actions (manage view) / edit entry point (public view) — a
+                plain column of text buttons under the poster */}
+            <div className="flex flex-col gap-0.5 -mx-3">
               <ToolbarBtn icon={<PencilIcon className="w-4 h-4" />} label="Edit event"
                           onClick={() => router.push(`/events/${encodeURIComponent(eventId)}/${manage ? 'edit' : 'manage'}`)} />
               {manage && (
@@ -280,7 +280,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                   <div className="flex flex-wrap gap-2">
                     {guests.slice(0, 12).map((g, i) => <GuestChip key={`${g.name}-${i}`} guest={g} />)}
                     {guests.length > 12 && (
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-full text-[13px] font-semibold bg-surface-2 text-text-muted border border-border-default">
+                      <span className="inline-flex items-center py-1.5 text-[13px] font-semibold text-text-muted">
                         +{guests.length - 12} more
                       </span>
                     )}
@@ -297,10 +297,10 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* badges + title */}
             <div>
               {(isDraft || liveStatus === 'live' || isPast || isFull || waitlistOpen) && (
-                <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                  {isDraft && <Pill bg="#fffbeb" fg="#b45309" border="#f59e0b40">Draft</Pill>}
+                <div className="flex flex-wrap items-center gap-3 mb-2">
+                  {isDraft && <Pill fg="#b45309">Draft</Pill>}
                   {liveStatus === 'live' && (
-                    <Pill bg={theme.light} fg={theme.dark} border={`${theme.base}80`}>
+                    <Pill fg={theme.dark}>
                       <span className="relative flex h-1.5 w-1.5 mr-1">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: theme.base }} />
                         <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: theme.base }} />
@@ -308,9 +308,9 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
                       Happening now
                     </Pill>
                   )}
-                  {isPast && <Pill bg="#f8fafc" fg="#334155" border="#64748b40">Past event</Pill>}
-                  {isFull && !isPast && <Pill bg="#fff1f2" fg="#be123c" border="#f43f5e40">Sold out</Pill>}
-                  {waitlistOpen && !isPast && <Pill bg="#fffbeb" fg="#b45309" border="#f59e0b40">Waitlist open</Pill>}
+                  {isPast && <Pill fg="#334155">Past event</Pill>}
+                  {isFull && !isPast && <Pill fg="#be123c">Sold out</Pill>}
+                  {waitlistOpen && !isPast && <Pill fg="#b45309">Waitlist open</Pill>}
                 </div>
               )}
 
@@ -319,7 +319,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
 
             {/* analytics strip (manage view) */}
             {manage && stats && (
-              <div className="flex items-stretch divide-x divide-border-subtle rounded-2xl border border-border-subtle bg-surface-1 shadow-soft py-3">
+              <div className="flex items-stretch divide-x divide-border-subtle py-2">
                 <StatCell value={event.analytics?.views ?? 0} label="Views" />
                 <StatCell value={stats.going ?? stats.registered} label="Going" />
                 <StatCell value={stats.waitlisted} label="Waitlisted" />
@@ -330,7 +330,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {/* WHEN & WHERE */}
             <InfoCard>
               <div className="flex items-center gap-3.5">
-                <div className="flex flex-col items-center w-12 rounded-xl overflow-hidden border border-border-subtle flex-none">
+                <div className="flex flex-col items-center w-12 rounded-lg overflow-hidden bg-surface-2 flex-none">
                   <span className="w-full text-center text-[10px] font-bold text-white py-0.5" style={{ background: theme.base }}>{month}</span>
                   <span className="text-lg font-bold font-title text-text-primary leading-tight py-0.5">{day}</span>
                 </div>
@@ -549,8 +549,9 @@ function RsvpCard({
   };
 
   const card = (children: React.ReactNode) => (
-    <div className="rounded-2xl border-2 shadow-soft px-5 py-4"
-         style={{ borderColor: `${theme.base}40`, background: `linear-gradient(180deg, ${theme.light}, var(--surface-1, #fff) 70%)` }}>
+    // The one box on the page: registration is the primary action, so it is
+    // drawn in the event's colour — a single hairline, no wash.
+    <div className="rounded-xl border px-5 py-4" style={{ borderColor: theme.base }}>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[15px] font-bold font-title text-text-primary">Registration</h2>
         {capacity != null && !isPast && (
@@ -650,7 +651,7 @@ function RsvpCard({
       <div className={`grid gap-2 ${allowed.length === 1 ? 'grid-cols-1' : allowed.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
         {(['going', 'maybe', 'declined'] as RSVPResponse[]).filter((r) => allowed.includes(r)).map((r) => (
           <button key={r} type="button" onClick={() => setResponse(r)}
-                  className="px-3 py-2.5 rounded-xl text-sm font-bold border-2 transition-all"
+                  className="px-3 py-2.5 rounded-lg text-sm font-bold border transition-all"
                   style={response === r
                     ? { borderColor: theme.base, background: theme.base, color: '#fff' }
                     : { borderColor: 'var(--color-border-default, #d1d5db)' }}>
@@ -742,7 +743,7 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
           <ClipboardListIcon className="w-[18px] h-[18px]" style={{ color: theme.dark }} /> RSVP form
         </h2>
         <button onClick={onCopy}
-                className="inline-flex items-center gap-2 h-9 px-3 rounded-xl text-[13px] font-bold bg-surface-2 text-text-primary border border-border-default hover:bg-surface-3 transition">
+                className="inline-flex items-center gap-2 h-9 px-3 rounded-lg text-[13px] font-bold text-text-secondary hover:bg-surface-3 hover:text-text-primary transition">
           <Link2Icon className="w-4 h-4" /> {copyStatus || 'Copy form link'}
         </button>
       </div>
@@ -751,10 +752,8 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-text-primary">Form status</span>
-            <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
-                  style={event.form.enabled
-                    ? { background: theme.light, color: theme.dark, borderColor: `${theme.base}40` }
-                    : { background: 'var(--color-surface-3, #f3f4f6)', color: 'var(--color-text-muted, #6b7280)' }}>
+            <span className="text-[12px] font-semibold"
+                  style={{ color: event.form.enabled ? theme.dark : 'var(--color-text-muted, #6b7280)' }}>
               {event.form.enabled ? 'Enabled' : 'Disabled'}
             </span>
           </div>
@@ -807,13 +806,13 @@ function FormTab({ event, publicSlug, publicUrl, theme, copyStatus, onCopy }: {
 /* ── small presentational helpers ─────────────────────────────────────────── */
 
 function InfoCard({ children }: { children: React.ReactNode }) {
-  return <div className="bg-surface-1 border border-border-subtle rounded-2xl shadow-soft px-5 py-4">{children}</div>;
+  return <div className="border-t border-border-subtle pt-4 first:border-t-0 first:pt-0">{children}</div>;
 }
 
-function Pill({ bg, fg, border, children }: { bg: string; fg: string; border: string; children: React.ReactNode }) {
+/** A status word in its colour — Draft, Happening now, Sold out. No capsule. */
+function Pill({ fg, children }: { fg: string; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center h-6 px-2.5 rounded-full text-[11.5px] font-semibold border"
-          style={{ background: bg, color: fg, borderColor: border }}>
+    <span className="inline-flex items-center text-[12px] font-semibold" style={{ color: fg }}>
       {children}
     </span>
   );

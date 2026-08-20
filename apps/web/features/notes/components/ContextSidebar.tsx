@@ -1,23 +1,22 @@
 'use client'
 
-// The context tree docked into the global Sidebar while a note, a source or a
-// profile's Context tab is open — the same mechanism /channels and /admin use
-// (ContextPanelContext's portal host), so the icon rail + tree read as one
-// connected card rather than a panel floating over the page. It shows the
-// space context's full organised tree — index files, the people/ and
-// communities/ namespaces, and every entity note. Clicking a note that maps to
-// a directory entity opens that entity's profile Context tab;
-// index/organisational notes just highlight. `currentPath` (the profile view)
-// pre-highlights the open entity's note.
+// The context tree beside a note, a source or a profile's Context tab: a
+// sticky column inside the pane, part of the content surface rather than a
+// panel docked into the Sidebar. It shows the space context's full organised
+// tree — index files, the people/ and communities/ namespaces, and every
+// entity note. Clicking a note that maps to a directory entity opens that
+// entity's profile Context tab; index/organisational notes just highlight.
+// `currentPath` (the profile view) pre-highlights the open entity's note.
 //
 // The tree's data and every mutation live in useContextTree — shared with the
-// /context browser's rail. This component is the docking half only.
+// /context browser's rail. This component is the column only.
 
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { useSpace } from '@/features/shared/contexts/SpaceContext'
 import { useContextPanel } from '@/features/shared/contexts/ContextPanelContext'
+import { usePaneChromeState } from '@/features/shared/contexts/PaneShellContext'
+import { TRAY_ROW_H } from '@/features/shared/components/pane/PaneTabBar'
 import { isFeatureEnabled } from '@/lib/featureAccess'
 import type { SpaceFeatureConfig } from '@/lib/types'
 import { entityContextHref, noteHref, resolveEntityOwner } from '@/lib/notes/entities'
@@ -27,9 +26,26 @@ import { useDirectoryEntities } from '../lib/useDirectoryEntities'
 import { NoteSidebar } from './NoteSidebar'
 import { SharePanel } from './SharePanel'
 
-// Below this the docked panel would crowd the page — keep in sync with the
-// Sidebar's DOCK_MIN_WIDTH so the rail and the request agree on when to dock.
-const DOCK_MIN_WIDTH = 1024
+/** Width of the tree column. The pane tab bars inset their toolbar tray by the
+ *  same amount so the tray centres over the note, not the whole pane. */
+export const CONTEXT_PANEL_W = 300
+/** The navbar's height — the column's sticky range starts below it. */
+const NAVBAR_H = 64
+/** Below this the column is hidden (Tailwind lg); anything that lines up with
+ *  it — the tab bar's toolbar tray — reads the same breakpoint through here. */
+const TREE_MIN_W = 1024
+
+export function useContextTreeVisible(): boolean {
+  const [wide, setWide] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${TREE_MIN_W}px)`)
+    const sync = () => setWide(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  return wide
+}
 
 export function ContextSidebar({
   currentPath = null,
@@ -42,7 +58,10 @@ export function ContextSidebar({
 }) {
   const router = useRouter()
   const { currentSpace } = useSpace()
-  const { host, setDockRequested } = useContextPanel()
+  const { dockTopInset } = useContextPanel()
+  // The toolbar tray only centres over the note column, so the tree climbs
+  // past it to sit flush under the tab row whenever it's open.
+  const trayOpen = !!usePaneChromeState().chrome?.attachedOpen
   const spaceId = currentSpace?.id ?? null
   const featureConfig = (currentSpace?.featureConfig as SpaceFeatureConfig | undefined) ?? null
   const notesEnabled = isFeatureEnabled(featureConfig, 'notes')
@@ -52,28 +71,9 @@ export function ContextSidebar({
   const { notes, trash, loading, error, shareTarget, setShareTarget } = ctx
 
   const [selectedPath, setSelectedPath] = useState<string | null>(currentPath)
-  const [wide, setWide] = useState(false)
-
-  // Only mark the tree dockable on wide viewports (matches the Sidebar), and only
-  // while the notes tool is on. The panel column itself stays closed until the
-  // user opens it (contextOpen, toggled from the note toolbar); lowering the flag
-  // on unmount collapses it and hides the toggle.
-  useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${DOCK_MIN_WIDTH}px)`)
-    const sync = () => setWide(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-
-  useEffect(() => {
-    const active = wide && notesEnabled && !!spaceId
-    setDockRequested(active)
-    return () => setDockRequested(false)
-  }, [wide, notesEnabled, spaceId, setDockRequested])
 
   // Keep the highlight on the open entity's note as the profile view navigates
-  // between entities (the sidebar itself survives via the layout portal).
+  // between entities (the column itself survives in the pane shell).
   useEffect(() => {
     if (currentPath) setSelectedPath(currentPath)
   }, [currentPath])
@@ -105,16 +105,25 @@ export function ContextSidebar({
     [entityByPath, router, currentPath, spaceId],
   )
 
-  // Nothing to render until the Sidebar's portal host is mounted and we're docking.
-  if (!host || !wide || !notesEnabled || !spaceId) return null
+  if (!notesEnabled || !spaceId) return null
 
-  return createPortal(
-    // No entrance animation here: this component re-mounts on every navigation
-    // between docked surfaces, so a fade would replay each time and read as a
-    // flash. The Sidebar's column owns the open/close motion instead — when it's
-    // already open the tree swaps in place, pixel-identical (the cache repaints
-    // it synchronously), which is what makes the transition invisible.
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-1">
+  // Sticks under the pane's pinned tab row (dockTopInset, 0 when there is no
+  // bar) and runs to the bottom of the viewport, scrolling on its own while the
+  // note scrolls the page. Hidden below lg, where the column would crowd the
+  // note. No entrance animation: it re-mounts on every navigation between
+  // surfaces, and the cache repaints the tree synchronously, so it swaps in
+  // place pixel-identical.
+  return (
+    <aside
+      className="sticky hidden shrink-0 flex-col overflow-hidden lg:flex"
+      style={{
+        width: CONTEXT_PANEL_W,
+        top: dockTopInset,
+        height: `calc(100dvh - ${NAVBAR_H + dockTopInset}px)`,
+        marginTop: trayOpen ? -TRAY_ROW_H : 0,
+        transition: 'margin-top 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
       <div className="flex min-h-0 flex-1 flex-col">
         {loading && notes.length === 0 ? (
           <div className="px-3 py-4 text-sm text-text-muted">Loading context…</div>
@@ -169,7 +178,6 @@ export function ContextSidebar({
           </>
         )}
       </div>
-    </div>,
-    host,
+    </aside>
   )
 }

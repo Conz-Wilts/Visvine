@@ -153,7 +153,7 @@ function InstallRow({
   const missing = describeRequirements(install.requirements);
 
   return (
-    <section className="rounded-2xl border border-border-subtle bg-surface-1 p-4 shadow-soft">
+    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <header className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -201,7 +201,7 @@ function InstallRow({
       </header>
 
       {missing.length > 0 && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+        <div className="mt-3 border-l-2 border-amber-500 pl-3">
           <p className="flex items-center gap-1.5 text-sm font-medium text-amber-800">
             <TriangleAlertIcon className="h-4 w-4 shrink-0" aria-hidden />
             Running with limits
@@ -346,7 +346,7 @@ function UpgradeCard({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2.5">
+    <div className="mt-3 border-l-2 border-green-600 pl-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="flex items-center gap-1.5 text-sm font-medium text-green-800">
           <CircleArrowUpIcon className="h-4 w-4 shrink-0" aria-hidden />
@@ -376,7 +376,7 @@ function UpgradeCard({
       </div>
 
       {open && (
-        <div className="mt-2 rounded-lg bg-white p-3">
+        <div className="mt-2 rounded-lg bg-surface-2 p-3">
           {loading && <Skeleton className="h-16 w-full rounded" />}
           {detail && <PerimeterSummary perimeter={detail.perimeter} diff={pending.perimeterDiff} />}
           {detail && (
@@ -395,7 +395,7 @@ function RowsSkeleton() {
   return (
     <div className="space-y-4">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="rounded-2xl border border-border-subtle bg-surface-1 p-4">
+        <div key={i} className="py-2">
           <Skeleton className="h-4 w-1/3 rounded" />
           <Skeleton className="mt-2 h-3 w-1/4 rounded" />
           <Skeleton className="mt-3 h-3 w-3/4 rounded" />
