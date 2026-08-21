@@ -35,12 +35,19 @@ export function useSignInModal() {
   return useContext(SignInModalContext);
 }
 
+/**
+ * The marketing site's frame. In the desktop shell (`desktop`) the website
+ * falls away: no nav, no pages — just the vines, the wordmark and a Login
+ * button, since the only thing to do there is sign in.
+ */
 export default function MarketingShell({
   children,
   devAuthEnabled = false,
+  desktop = false,
 }: {
   children: React.ReactNode;
   devAuthEnabled?: boolean;
+  desktop?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -89,6 +96,44 @@ export default function MarketingShell({
   }
 
   const user = session?.user;
+
+  const signInModal = (
+    <SignInModal
+      open={signInOpen}
+      onClose={() => setSignInOpen(false)}
+      devAuthEnabled={devAuthEnabled}
+      callbackUrl={signInCallbackUrl}
+      error={signInError}
+      initialMode={signInMode}
+    />
+  );
+
+  if (desktop) {
+    return (
+      <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col items-center justify-center overflow-hidden">
+        <Vines />
+        <div className="relative z-30 flex flex-col items-center gap-8">
+          <h1
+            className="text-5xl sm:text-6xl font-semibold tracking-tight"
+            style={{ color: BRAND }}
+          >
+            Visvine
+          </h1>
+          {!sessionPending && !user && (
+            <button
+              type="button"
+              onClick={() => openSignIn("signin")}
+              className="rounded-md px-10 py-3.5 text-base font-medium text-white shadow-sm hover:opacity-90 active:scale-[0.99] transition"
+              style={{ backgroundColor: BRAND }}
+            >
+              Login
+            </button>
+          )}
+        </div>
+        {signInModal}
+      </main>
+    );
+  }
 
   return (
     <main className="font-brand relative min-h-[100svh] bg-white text-black flex flex-col overflow-hidden">
@@ -186,14 +231,7 @@ export default function MarketingShell({
       <SignInModalContext.Provider value={openSignIn}>
         {children}
       </SignInModalContext.Provider>
-      <SignInModal
-        open={signInOpen}
-        onClose={() => setSignInOpen(false)}
-        devAuthEnabled={devAuthEnabled}
-        callbackUrl={signInCallbackUrl}
-        error={signInError}
-        initialMode={signInMode}
-      />
+      {signInModal}
     </main>
   );
 }
