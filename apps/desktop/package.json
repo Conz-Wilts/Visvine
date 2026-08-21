@@ -7,7 +7,7 @@
   "author": "Visvine",
   "license": "UNLICENSED",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-resources.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/verify-build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "electron .",
     "dev": "pnpm build && cross-env-shell VISVINE_DESKTOP_DEV=1 electron .",

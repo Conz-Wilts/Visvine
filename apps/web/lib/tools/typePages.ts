@@ -25,6 +25,7 @@ import { entityKindOf } from '@/lib/notes/entities'
 import type { NoteFrontmatter } from '@/lib/notes/shared/types'
 import { isReservedTypeName } from '@/lib/types/nodeTypeRegistry'
 import type { InstalledToolDto, TypeClaimMode } from './installs'
+import { logger } from '@/lib/logger'
 
 /**
  * The types no Tool may own the page for, lower-cased.
@@ -140,11 +141,11 @@ export function resolveTypePage(
   if (pages.length > 1) {
     // Impossible by construction (installs.ts refuses a second page claim), so
     // this is a data fault worth naming rather than silently absorbing.
-    console.warn(
-      `[tools] ${pages.length} installs claim the ${type} page (${pages
-        .map((tool) => tool.slug)
-        .join(', ')}); showing ${pages[0].slug}.`,
-    )
+    logger.warn('tools.type_page.multiple_claims', {
+      type,
+      claimants: pages.map((tool) => tool.slug),
+      showing: pages[0].slug,
+    })
   }
   return { owner: ownerOf(pages[0]), mode: 'page' }
 }

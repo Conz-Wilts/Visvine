@@ -21,6 +21,7 @@ import { oauthRedirectUri } from '@/lib/connectors/connectUrl';
 import { saveConnection } from '@/lib/connectors/connections';
 import { ConnectorError } from '@/lib/connectors/config';
 import { PENDING_COOKIE, readPending } from '@/lib/connectors/pending';
+import { logger } from '@/lib/logger';
 
 function page(message: string, status = 200): NextResponse {
   const response = new NextResponse(message, {
@@ -117,7 +118,7 @@ export async function GET(req: NextRequest) {
     return page(`${who}\n\nYou can close this tab and retry what you were doing.`);
   } catch (e) {
     if (e instanceof ConnectorError) return page(e.message, 400);
-    console.error('[connectors/oauth/callback]', e);
+    logger.error('connectors.oauth.callback_failed', { err: e });
     return page('The connection could not be completed.', 502);
   }
 }

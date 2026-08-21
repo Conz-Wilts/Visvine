@@ -21,6 +21,7 @@ import { authorizeUrl, createPkce, randomState, registerClient, resolveEndpoints
 import { oauthRedirectUri } from '@/lib/connectors/connectUrl';
 import { ConnectorError, findSecretRefs } from '@/lib/connectors/config';
 import { signPending, PENDING_COOKIE, PENDING_TTL_SECONDS } from '@/lib/connectors/pending';
+import { logger } from '@/lib/logger';
 
 function fail(message: string, status = 400): NextResponse {
   return new NextResponse(message, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
     return response;
   } catch (e) {
     if (e instanceof ConnectorError) return fail(e.message);
-    console.error('[connectors/oauth/start]', e);
+    logger.error('connectors.oauth.start_failed', { err: e });
     return fail('Could not start the connection.', 502);
   }
 }

@@ -18,6 +18,7 @@
  */
 
 import { useState } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, EyeIcon, HammerIcon } from '@/features/shared/icons';
 import { Chip, EmptyState, Modal, Skeleton, Textarea } from '@/components/ui';
@@ -338,16 +339,10 @@ function PublishDialog({
 
 /** The authoring path, stated once at the top of the tab. */
 function NewToolCard({ onToast }: { onToast: (tone: 'success' | 'error' | 'warning' | 'info', message: string) => void }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied(2000);
 
-  const copy = () => {
-    navigator.clipboard
-      ?.writeText(SDK_HINT)
-      .then(() => {
-        setCopied(true);
-        window.setTimeout(() => setCopied(false), 2000);
-      })
-      .catch(() => onToast('error', 'Could not copy — the call is get_tool_sdk.'));
+  const copyHint = async () => {
+    if (!(await copy(SDK_HINT))) onToast('error', 'Could not copy — the call is get_tool_sdk.');
   };
 
   return (
@@ -368,7 +363,7 @@ function NewToolCard({ onToast }: { onToast: (tone: 'success' | 'error' | 'warni
             straight back to it.
           </p>
         </div>
-        <Button variant="ghost" size="sm" onClick={copy} className="shrink-0">
+        <Button variant="ghost" size="sm" onClick={copyHint} className="shrink-0">
           <span className="flex items-center gap-1.5">
             {copied ? <CheckIcon className="h-3.5 w-3.5" aria-hidden /> : <CopyIcon className="h-3.5 w-3.5" aria-hidden />}
             {copied ? 'Copied' : `Copy ${SDK_HINT}`}

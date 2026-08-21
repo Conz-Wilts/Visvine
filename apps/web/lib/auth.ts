@@ -42,13 +42,13 @@ export async function isAdmin(
   email?: string | null,
 ): Promise<boolean> {
   if (isSuperAdmin(email)) return true;
-  const owning = (await owningAliasIds([spaceId])).get(spaceId);
+  const [owningBySpace, held] = await Promise.all([
+    owningAliasIds([spaceId]),
+    prisma.userAlias.findMany({ where: { userId, spaceId }, select: { aliasId: true } }),
+  ]);
+  const owning = owningBySpace.get(spaceId);
   if (!owning || owning.size === 0) return false;
-  const held = await prisma.userAlias.findFirst({
-    where: { userId, spaceId, aliasId: { in: [...owning] } },
-    select: { id: true },
-  });
-  return held !== null;
+  return held.some((h) => owning.has(h.aliasId));
 }
 
 /**
@@ -138,15 +138,15 @@ export async function spaceMemberForbidden(
   spaceId: string,
   email?: string | null,
 ): Promise<boolean> {
-  const space = await prisma.space.findUnique({
-    where: { id: spaceId },
-    select: { personalOwnerId: true },
-  });
+  const [space, activeMember] = await Promise.all([
+    prisma.space.findUnique({ where: { id: spaceId }, select: { personalOwnerId: true } }),
+    isActiveMember(userId, spaceId),
+  ]);
   if (!space) return false;
   // Personal space: only its owner may read or write it.
   if (space.personalOwnerId != null) return space.personalOwnerId !== userId;
   // Normal space: an active member or an admin passes.
-  if (await isActiveMember(userId, spaceId)) return false;
+  if (activeMember) return false;
   return !(await isAdmin(userId, spaceId, email));
 }
 

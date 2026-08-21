@@ -9,6 +9,7 @@ import { getEventsData, upsertEvent } from '@/lib/eventRepo';
 import { upsertLink } from '@/lib/notes/context/links';
 import { requireSpaceMember } from '@/lib/eventAuth';
 import { handleApiError } from '@/lib/api/route';
+import prisma from '@/lib/prisma';
 import type { NBEvent } from '@/lib/types';
 
 /**
@@ -80,22 +81,25 @@ export async function POST(request: NextRequest) {
 
     await upsertEvent(input.spaceId, event);
 
-    // Connect each host to the event in the context (idempotent: skip if it exists).
-    const prisma = (await import('@/lib/prisma')).default;
-    for (const hostId of event.hosts) {
-      const hostExists = await prisma.node.findFirst({ where: { id: hostId, spaceId: input.spaceId } });
-      if (!hostExists) continue;
-      await upsertLink({
-        spaceId: input.spaceId,
-        sourceId: hostId,
-        targetId: eventId,
-        relationship: 'hosting',
-        origin: 'event_hosting',
-        originRef: eventId,
-        since: event.analytics.createdAt,
-        metadata: { role: 'host' },
-      });
-    }
+    // Connect each host that exists in this space to the event (idempotent upsert).
+    const hostNodes = await prisma.node.findMany({
+      where: { id: { in: event.hosts }, spaceId: input.spaceId },
+      select: { id: true },
+    });
+    await Promise.all(
+      hostNodes.map((host) =>
+        upsertLink({
+          spaceId: input.spaceId,
+          sourceId: host.id,
+          targetId: eventId,
+          relationship: 'hosting',
+          origin: 'event_hosting',
+          originRef: eventId,
+          since: event.analytics.createdAt,
+          metadata: { role: 'host' },
+        }),
+      ),
+    );
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {

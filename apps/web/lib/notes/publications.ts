@@ -204,7 +204,7 @@ export async function publicationStateFor(
 export async function replicaDenial(spaceId: string, path: string): Promise<string | null> {
   const row = await prisma.contextPublication.findFirst({
     where: { targetSpaceId: spaceId, targetPath: path, active: true },
-    select: { sourceSpaceId: true },
+    select: { id: true },
   })
   if (!row) return null
   return 'This note is a published copy and stays in sync with its source — unlink it to edit here.'

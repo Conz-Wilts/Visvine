@@ -9,6 +9,7 @@
  */
 
 import { useState, useEffect, useCallback, use } from 'react';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -21,6 +22,7 @@ import {
   getPinned, togglePin, DocxViewer, FileUnavailable,
 } from '@/features/resources/components/resourceUi';
 import { formatBytes } from '@/lib/utils';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { formatDate, timeAgo as relativeTimeAgo } from '@/lib/date';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import Chip from '@/components/ui/Chip';
@@ -63,7 +65,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const [tab, setTab] = useState<PanelTab>('comments');
 
   // spreadsheet collaboration state
@@ -78,9 +80,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
 
   const fetchDetail = useCallback(async () => {
     try {
-      const res = await fetch(`/api/resources/${encodeURIComponent(resourceId)}`);
-      if (!res.ok) { setNotFound(true); return; }
-      setDetail(await res.json());
+      setDetail(await fetchJson<ResourceDetail>(`/api/resources/${encodeURIComponent(resourceId)}`));
     } catch {
       setNotFound(true);
     } finally {
@@ -125,11 +125,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
 
   const handlePin = () => { togglePin(resourceId); setPinned(getPinned().includes(resourceId)); };
 
-  const share = () => {
-    navigator.clipboard?.writeText(window.location.href)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-      .catch(() => {});
-  };
+  const share = () => { void copy(window.location.href); };
 
   const handleDelete = async () => {
     if (!resource || !confirm(`Delete "${resource.name}"? This can't be undone.`)) return;
@@ -138,15 +134,11 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
   };
 
   const reviewChange = async (changeId: string, status: 'approved' | 'rejected') => {
-    const res = await fetch(`/api/resources/${encodeURIComponent(resourceId)}/changes/${encodeURIComponent(changeId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      fetchChanges();
-      setChangeKey((k) => k + 1); // re-render the sheet with the applied overlay
-    }
+    try {
+      await fetchJsonBody(`/api/resources/${encodeURIComponent(resourceId)}/changes/${encodeURIComponent(changeId)}`, 'PUT', { status });
+    } catch { return; }
+    fetchChanges();
+    setChangeKey((k) => k + 1); // re-render the sheet with the applied overlay
   };
 
   if (loading) {
@@ -411,13 +403,10 @@ function CommentsTab({ comments, selectedCell, onSelectCell, resourceId, authorN
     if (!text.trim()) return;
     setPosting(true);
     try {
-      const res = await fetch(`/api/resources/${encodeURIComponent(resourceId)}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cellRef: selectedCell, author: authorName, content: text.trim() }),
-      });
-      if (res.ok) { setText(''); onPosted(); }
-    } finally {
+      await fetchJsonBody(`/api/resources/${encodeURIComponent(resourceId)}/comments`, 'POST',
+        { cellRef: selectedCell, author: authorName, content: text.trim() });
+      setText(''); onPosted();
+    } catch { /* the composer keeps the text for a retry */ } finally {
       setPosting(false);
     }
   };

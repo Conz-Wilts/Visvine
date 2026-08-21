@@ -78,8 +78,9 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
         <SearchInput
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Search…"
-          className="w-full max-w-[320px] !py-2"
+          placeholder="Search the directory…"
+          size="lg"
+          className="w-full max-w-[420px] flex-1 sm:min-w-[280px]"
         />
 
         <div className="hidden h-6 w-px shrink-0 bg-border-subtle sm:block" />

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback, ReactNode } from 'react';
 import { Space } from '@/lib/types';
-import { fetchJson } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { createSafeContext } from './createSafeContext';
 
 interface SpaceContextValue {
@@ -114,15 +114,7 @@ export function SpaceProvider({ children, initialSpaces, initialMemberships }: S
   }, []);
 
   const joinSpace = useCallback(async (spaceId: string, alias?: string) => {
-    const res = await fetch(`/api/communities/${spaceId}/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ alias }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || data.error || 'Failed to join space');
-    }
+    await fetchJsonBody(`/api/communities/${spaceId}/join`, 'POST', { alias });
     setMemberships(prev => new Map(prev).set(spaceId, false));
   }, []);
 

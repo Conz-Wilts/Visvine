@@ -21,6 +21,7 @@ import prisma from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import type { Actor } from '@/lib/notes/store'
 import { logAudit } from '@/lib/notes/audit'
+import { logger } from '@/lib/logger'
 import { agentBriefPath, matchesAnyGlob, type AgentTriggers } from './config'
 
 type AgentEventKind = 'note_written' | 'webhook' | 'reply'
@@ -212,7 +213,7 @@ export async function eventsForRun(runId: string): Promise<ClaimedEvent[]> {
 
 /** Are events waiting for this agent? */
 export async function hasPendingEvents(spaceId: string, agentName: string): Promise<boolean> {
-  return (await prisma.agentEvent.count({ where: { spaceId, agentName, consumedBy: null }, take: 1 })) > 0
+  return (await prisma.agentEvent.count({ where: { spaceId, agentName, consumedBy: null } })) > 0
 }
 
 /**
@@ -238,13 +239,17 @@ function triggersOf(row: { triggersJson: unknown }): AgentTriggers | null {
   }
 }
 
-/** Names of active agents in the space whose `on.context` globs match `path`. */
-export async function matchNoteTriggers(spaceId: string, path: string): Promise<string[]> {
-  if (path === 'agents' || path.startsWith('agents/')) return []
-  const rows = await prisma.agentState.findMany({
+function activeTriggerRows(spaceId: string) {
+  return prisma.agentState.findMany({
     where: { spaceId, active: true, triggersJson: { not: Prisma.DbNull } },
     select: { name: true, triggersJson: true },
   })
+}
+
+/** Names of active agents in the space whose `on.context` globs match `path`. */
+export async function matchNoteTriggers(spaceId: string, path: string): Promise<string[]> {
+  if (path === 'agents' || path.startsWith('agents/')) return []
+  const rows = await activeTriggerRows(spaceId)
   const out: string[] = []
   for (const row of rows) {
     const t = triggersOf(row)
@@ -255,10 +260,7 @@ export async function matchNoteTriggers(spaceId: string, path: string): Promise<
 
 /** Names of active agents in the space whose `on.webhook` is `connector` (the inbound route's recipients). */
 export async function webhookRecipients(spaceId: string, connector: string): Promise<string[]> {
-  const rows = await prisma.agentState.findMany({
-    where: { spaceId, active: true, triggersJson: { not: Prisma.DbNull } },
-    select: { name: true, triggersJson: true },
-  })
+  const rows = await activeTriggerRows(spaceId)
   return rows.filter((r) => triggersOf(r)?.webhook === connector).map((r) => r.name)
 }
 
@@ -290,23 +292,23 @@ export async function fireNoteTriggers(
     const action = opts.action ?? 'saved'
     const at = new Date()
     const time = at.toISOString().slice(11, 16)
-    const fired: string[] = []
-    for (const name of names) {
-      const r = await enqueueAgentEvent({
-        spaceId,
-        agentName: name,
-        kind: 'note_written',
-        source: path,
-        summary: `${action} by ${actor.name || 'someone'}${origin && origin !== 'edit' ? ` (${origin})` : ''} at ${time} UTC`,
-        payload: { path, action, actor: { id: actor.id, name: actor.name }, origin, at: at.toISOString() },
-        dedupeKey: `note_written:${path}`,
-        chain,
-      })
-      if (r.ok) fired.push(name)
-    }
-    return fired
-  } catch (e) {
-    console.warn(`[agents] fireNoteTriggers(${spaceId}, ${path}) failed:`, e instanceof Error ? e.message : e)
+    const results = await Promise.all(
+      names.map((name) =>
+        enqueueAgentEvent({
+          spaceId,
+          agentName: name,
+          kind: 'note_written',
+          source: path,
+          summary: `${action} by ${actor.name || 'someone'}${origin && origin !== 'edit' ? ` (${origin})` : ''} at ${time} UTC`,
+          payload: { path, action, actor: { id: actor.id, name: actor.name }, origin, at: at.toISOString() },
+          dedupeKey: `note_written:${path}`,
+          chain,
+        }),
+      ),
+    )
+    return names.filter((_, i) => results[i].ok)
+  } catch (err) {
+    logger.warn('agents.triggers.failed', { spaceId, path, err })
     return []
   }
 }

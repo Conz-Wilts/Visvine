@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { hostname } from './profileCards';
 import { EarthIcon, ExternalLinkIcon, Link2OffIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { hexToPalette } from '@/lib/profileTheme';
@@ -30,10 +31,6 @@ function externalUrlOf(url?: string | null): string | null {
     return null;
   }
 }
-
-const hostname = (url: string) => {
-  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
-};
 
 interface PreviewResponse {
   preview: SerializedLinkPreview | null;

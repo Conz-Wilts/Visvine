@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { fetchJsonBody } from '@/lib/fetchJson';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { CalendarIcon, CameraIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, EarthIcon, LinkedinIcon, LoaderCircleIcon, MailIcon, MapPinIcon, PencilIcon, PhoneIcon, Share2Icon, TwitterIcon } from '@/features/shared/icons';
 import Image from 'next/image';
 import { useProfile } from '@/features/profile/hooks/useProfile';
@@ -21,7 +23,7 @@ import {
 import { matchCountryInLocation } from '@/lib/countries';
 import CountryFlag from './CountryFlag';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import { StatItem, SectionCard, cssVars } from './profileCards';
+import { StatItem, SectionCard, cssVars, hostname } from './profileCards';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
 import EditBasicInfoModal from './edit/EditBasicInfoModal';
 import EditAboutModal from './edit/EditAboutModal';
@@ -33,11 +35,6 @@ import SpacesModal, { type ProfileSpace } from './SpacesModal';
 type ModalState = 'basicInfo' | 'about' | 'skills' | 'contact' | 'experience' | 'communities' | null;
 /** Your own space: no member list to connect to, so the link isn't offered. */
 const PERSONAL_ID_PREFIX = 'me:';
-
-const hostname = (url?: string | null) => {
-  if (!url) return '';
-  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
-};
 
 interface ProfilePageContentProps {
   nodeId: string;
@@ -51,7 +48,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   const { profile, loading, error, updateBasicInfo, reload } = useProfile(nodeId);
   const { data: nodeData } = useNodeProfile(nodeId);
   const [modal, setModal] = useState<ModalState>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSpaces, setProfileSpaces] = useState<ProfileSpace[]>([]);
@@ -70,12 +67,9 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
   }, [nodeId]);
 
   const toggleSpaceVisibility = useCallback(async (spaceId: string, showOnProfile: boolean) => {
-    const res = await fetch(`/api/profile/${encodeURIComponent(nodeId)}/communities`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spaceId, showOnProfile }),
-    });
-    if (!res.ok) return;
+    try {
+      await fetchJsonBody(`/api/profile/${encodeURIComponent(nodeId)}/communities`, 'PATCH', { spaceId, showOnProfile });
+    } catch { return; }
     setProfileSpaces((prev) => prev.map((c) =>
       c.id === spaceId ? { ...c, showOnProfile, visible: c.role === 'admin' || showOnProfile } : c
     ));
@@ -104,11 +98,7 @@ export default function ProfilePageContent({ nodeId, overlay = false }: ProfileP
     (session?.user?.nodeId && session.user.nodeId === nodeId)
   );
 
-  const shareProfile = () => {
-    navigator.clipboard?.writeText(window.location.href)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-      .catch(() => {});
-  };
+  const shareProfile = () => { void copy(window.location.href); };
 
   const changeAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

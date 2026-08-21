@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect, lazy, Suspense } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { AtSignIcon, ImagePlusIcon, Link2Icon, PlusIcon, SendIcon, SmileIcon, XIcon } from '@/features/shared/icons';
 import Avatar from '@/components/ui/Avatar';
 
@@ -171,12 +172,9 @@ export default function MessageComposer({
       try {
         const params = new URLSearchParams({ q: query, type });
         if (spaceId) params.set('spaceId', spaceId);
-        const res = await fetch(`/api/messages/mentions?${params.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          setMentionSuggestions(data.results ?? []);
-          setSelectedMentionIndex(0);
-        }
+        const data = await fetchJson<{ results?: MentionResult[] }>(`/api/messages/mentions?${params.toString()}`);
+        setMentionSuggestions(data.results ?? []);
+        setSelectedMentionIndex(0);
       } catch { /* ignore */ }
     },
     [spaceId],

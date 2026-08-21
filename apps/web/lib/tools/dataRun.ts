@@ -33,6 +33,7 @@ import { cryptoCapabilities } from '@/lib/connectors/hostCrypto'
 import { marshalValue } from '@/lib/connectors/marshal'
 import { BRIDGE_LIMITS, type BridgeResponse } from './protocol'
 import type { ResolvedTarget } from './target'
+import { logger } from '@/lib/logger'
 
 /** The isolate's capability shape: positional args in, a JSON-safe value out. */
 export type IsolateCapabilities = Record<string, (args: unknown[]) => Promise<unknown>>
@@ -163,7 +164,7 @@ export async function runDataHandler(
     )
     return responseOf(result, fn)
   } catch (e) {
-    console.error('[tools] data.call failed', e)
+    logger.error('tools.data_call.failed', { err: e })
     return { ok: false, error: { code: 'internal', message: 'The data handler could not be run.' } }
   }
 }

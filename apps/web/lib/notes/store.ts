@@ -1289,12 +1289,14 @@ export async function renameFolder(
     },
     select: { id: true, path: true },
   })
-  for (const fol of folders) {
-    await prisma.contextFolder.update({
-      where: { id: fol.id },
-      data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
-    })
-  }
+  await Promise.all(
+    folders.map((fol) =>
+      prisma.contextFolder.update({
+        where: { id: fol.id },
+        data: { path: fol.path === f ? t : t + fol.path.slice(f.length) },
+      }),
+    ),
+  )
   // The index note's title is the folder's display name, so a path rename has to
   // decide what happens to it: follow the new path while nobody has named the
   // folder themselves, and keep out of the way once somebody has (see

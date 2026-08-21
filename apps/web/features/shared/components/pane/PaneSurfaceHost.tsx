@@ -83,7 +83,13 @@ function useRailInsetStyle(railVisible: boolean): React.CSSProperties {
   };
 }
 
-export default function PaneSurfaceHost() {
+/**
+ * `children` is the route's own body — today only a Tool-owned type page,
+ * which the route renders itself under a `tree-only` surface. It sits in the
+ * content column beside the docked tree, where the note panel would otherwise
+ * be, rather than under the whole row.
+ */
+export default function PaneSurfaceHost({ children }: { children?: React.ReactNode }) {
   const { chrome } = usePaneChromeState();
   const target = chrome?.surface ?? null;
   const { connectionsOpen } = useContextPanel();
@@ -169,11 +175,14 @@ export default function PaneSurfaceHost() {
     }
   }, [activeIdentity]);
 
-  if (!active) return null;
+  if (!active) return <>{children}</>;
   if (active.kind === 'tree-only') {
     return (
       <div className="flex w-full items-start pb-10">
         <ContextSidebar currentPath={active.notePath} />
+        <div className="min-w-0 flex-1 pr-6" style={railInsetStyle}>
+          {children}
+        </div>
       </div>
     );
   }

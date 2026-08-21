@@ -93,8 +93,8 @@ if (!(await serverUp(APP_URL))) {
       await page.waitForLoadState("domcontentloaded", { timeout: 60_000 });
       const url = page.url();
       assert(url.startsWith(APP_URL), `expected ${APP_URL}, got ${url}`);
-      const title = await page.title();
-      assert(title.length > 0, "page has no title");
+      // Next streams <title> after the first chunk; wait for it rather than sampling once.
+      await page.waitForFunction(() => document.title.length > 0, null, { timeout: 15_000 });
     });
 
     await step("preload bridge + desktop user agent are present", async () => {
@@ -161,7 +161,6 @@ if (!(await serverUp(APP_URL))) {
           globalThis.__opened.push(u);
         };
       });
-      const before = page.url();
       await page.evaluate(() => window.open("https://example.com/from-window-open", "_blank"));
       // Anchor-driven top-level navigation off-origin must also be intercepted.
       await page.evaluate(() => {
@@ -175,7 +174,9 @@ if (!(await serverUp(APP_URL))) {
       const opened = await app.evaluate(() => globalThis.__opened);
       assert(opened.includes("https://example.com/from-window-open"), `window.open not routed externally: ${JSON.stringify(opened)}`);
       assert(opened.includes("https://example.com/from-anchor"), `anchor nav not routed externally: ${JSON.stringify(opened)}`);
-      assert(page.url() === before, `shell navigated away: ${page.url()}`);
+      // The web app may itself route between features meanwhile; what matters is
+      // that the shell never left the app origin.
+      assert(page.url().startsWith(APP_URL), `shell navigated away: ${page.url()}`);
       const windows = app.windows().length;
       assert(windows === 1, `expected 1 window, found ${windows}`);
     });

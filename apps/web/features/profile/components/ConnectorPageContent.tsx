@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, KeyRoundIcon, PencilIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TriangleAlertIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -864,7 +865,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
   const [info, setInfo] = useState<WebhookInfo | null>(null);
   const [events, setEvents] = useState<WebhookEventRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const [confirming, setConfirming] = useState(false);
   const [rotating, setRotating] = useState(false);
 
@@ -889,15 +890,8 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
     void load();
   }, [load]);
 
-  const copy = async () => {
-    if (!info) return;
-    try {
-      await navigator.clipboard.writeText(info.url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setError('Could not copy — select the URL and copy it by hand.');
-    }
+  const copyUrl = async () => {
+    if (info && !(await copy(info.url))) setError('Could not copy — select the URL and copy it by hand.');
   };
 
   const rotate = async () => {
@@ -951,7 +945,7 @@ function WebhookSection({ spaceId, name }: { spaceId: string; name: string }) {
                 className={`${FIELD} select-all`}
                 aria-label="Webhook URL"
               />
-              <button type="button" onClick={() => void copy()} className={GHOST_BUTTON} title="Copy URL">
+              <button type="button" onClick={() => void copyUrl()} className={GHOST_BUTTON} title="Copy URL">
                 <span className="inline-flex items-center gap-1.5">
                   {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <CopyIcon className="h-3.5 w-3.5" />}
                   {copied ? 'Copied' : 'Copy'}

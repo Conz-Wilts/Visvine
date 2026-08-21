@@ -195,7 +195,7 @@ export async function applyCleanFixes(
       'mcp',
     )
     contentByPath.set(fix.path, next) // later fixes on the same note compose
-    if (context.ownerKey === 'shared' && !context.spaceId.startsWith('me:')) {
+    if (context.ownerKey === store.SHARED_OWNER_KEY && !context.spaceId.startsWith('me:')) {
       void logAudit(p.spaceId, {
         userId: p.userId,
         name: p.name,

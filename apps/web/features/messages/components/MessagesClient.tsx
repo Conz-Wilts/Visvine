@@ -188,11 +188,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   const sendTypingState = useCallback(async (conversationId: string, isTyping: boolean) => {
     try {
-      await fetch(`/api/messages/conversations/${conversationId}/typing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isTyping }),
-      });
+      await fetchJsonBody(`/api/messages/conversations/${conversationId}/typing`, 'POST', { isTyping });
       hasTypingSignalRef.current = isTyping;
     } catch { /* best-effort */ }
   }, []);
@@ -209,11 +205,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
   const markConversationRead = useCallback(async (conversationId: string) => {
     try {
-      await fetch(`/api/messages/conversations/${conversationId}/read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
+      await fetchJsonBody(`/api/messages/conversations/${conversationId}/read`, 'POST', {});
     } catch { /* best-effort */ }
   }, []);
 
@@ -222,9 +214,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
   const fetchChannels = useCallback(async () => {
     if (!spaceId) return;
     try {
-      const res = await fetch(`/api/messages/channels?spaceId=${encodeURIComponent(spaceId)}`, { cache: 'no-store' });
-      if (!res.ok) return;
-      const payload = await res.json();
+      const payload = await fetchJson<{ channels?: ChannelDirectoryEntry[]; sections?: ChannelSectionEntry[] }>(`/api/messages/channels?spaceId=${encodeURIComponent(spaceId)}`, { cache: 'no-store' });
       setChannelDirectory(payload.channels ?? []);
       setChannelSections(payload.sections ?? []);
     } catch { /* best-effort */ }
@@ -259,12 +249,8 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
       params.set('limit', '30');
       if (options?.cursor) params.set('cursor', options.cursor);
       if (options?.query?.trim()) params.set('query', options.query.trim());
-      const response = await fetch(`/api/messages/conversations/${conversationId}/messages?${params.toString()}`, { cache: 'no-store' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.error ?? 'Failed to load messages');
-      }
-      const payload = await response.json();
+      const payload = await fetchJson<{ messages?: SerializedMessage[]; conversation?: ConversationSummary | null; nextCursor?: string | null; hasMore?: boolean }>(
+        `/api/messages/conversations/${conversationId}/messages?${params.toString()}`, { cache: 'no-store' });
       // The user switched conversations while this request was in flight —
       // applying it now would flash another thread's messages.
       if (selectedConversationRef.current !== conversationId) return;

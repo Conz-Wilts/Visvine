@@ -1,11 +1,42 @@
-node_modules
-.next
+# Only what `pnpm --filter @visvine/web build` needs reaches the build context.
 .git
+.github
+.claude
+.playwright-mcp
+**/node_modules
+**/.next
+**/.next-verify
+**/dist
+**/release
+**/coverage
+**/*.tsbuildinfo
+
+# other workspaces and their tooling
 apps/mobile
+apps/desktop/node_modules
+apps/desktop/src
+apps/desktop/tests
+apps/desktop/e2e
+apps/desktop/resources
+apps/desktop/assets
+apps/desktop/scripts
+
+# secrets and local data — never into an image layer
 **/.env
-**/.env.local
-**/.env.prod-backup
-**/.env.dev-backup
+**/.env.*
 !**/.env.example
-screenshots/
+!**/.env.*.example
+*.pem
+*.local.sql
+*.dump
+*.dump.sql
+supabase_data_dump.sql
 tmp/
+docs/*.credentials.md
+
+# scratch and docs (root-level patterns only; apps/web keeps its own files)
+screenshots/
+*.png
+*.md
+docs
+examples

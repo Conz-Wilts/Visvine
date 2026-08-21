@@ -58,8 +58,7 @@ function PaneShellBody({ children }: { children: ReactNode }) {
     // its scroll range.
     <div className="w-full">
       <PaneTabBar />
-      <PaneSurfaceHost />
-      {children}
+      <PaneSurfaceHost>{children}</PaneSurfaceHost>
     </div>
   );
 }

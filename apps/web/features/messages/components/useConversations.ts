@@ -10,6 +10,7 @@ import {
   type SetStateAction,
 } from 'react';
 import type { ConversationSummary } from '@/lib/messages/types';
+import { fetchJson } from '@/lib/fetchJson';
 
 interface UseConversationsArgs {
   /** Mirror of the selected conversation id owned by the orchestrator. */
@@ -38,9 +39,7 @@ export function useConversations({ selectedConversationRef, onSelectionLost, set
     try {
       const params = new URLSearchParams();
       if (query?.trim()) params.set('query', query.trim());
-      const response = await fetch(`/api/messages/conversations?${params.toString()}`, { cache: 'no-store' });
-      if (!response.ok) throw new Error('Failed to load conversations');
-      const payload = await response.json();
+      const payload = await fetchJson<{ conversations?: ConversationSummary[] }>(`/api/messages/conversations?${params.toString()}`, { cache: 'no-store' });
       const nextConversations: ConversationSummary[] = payload.conversations ?? [];
       setConversations(nextConversations);
       const currentId = selectedConversationRef.current;

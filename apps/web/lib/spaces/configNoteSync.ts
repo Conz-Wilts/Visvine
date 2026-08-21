@@ -40,6 +40,7 @@ import {
 } from './configNote'
 import type { SpaceConfig } from './spaceConfig'
 import { patchIsNoOp } from './configHook'
+import { logger } from '@/lib/logger'
 
 const SYSTEM_ACTOR: Actor = { id: 'system', name: 'Visvine' }
 
@@ -70,7 +71,7 @@ export async function syncConfigNotes(space: Space, config: SpaceConfig): Promis
       }
       await store.writeNote(context, path, serializeConfigNote(kind, config), SYSTEM_ACTOR, 'maintenance')
     } catch (err) {
-      console.error(`[configNote] failed to sync ${path} for ${space.id}:`, err)
+      logger.error('configNote.sync_failed', { path, spaceId: space.id, err })
     }
   }
 }

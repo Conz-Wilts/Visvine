@@ -14,6 +14,7 @@ import { chunkSourceText } from '../shared/chunking'
 import type { ContextSourceMeta, SourceKind } from '../shared/sourceTypes'
 import * as sourceStore from '../sourceStore'
 import { extractText } from './extract'
+import { logger } from '@/lib/logger'
 
 export interface IngestInput {
   path: string // sanitized context-relative destination (never .md)
@@ -117,7 +118,7 @@ export async function ingestSource(context: Context, input: IngestInput): Promis
       await uploadResourceFile(gcsPath, input.buffer, input.mimeType)
       await sourceStore.updateSourceGcsPath(created.id, gcsPath)
     } catch (err) {
-      console.error('[context-sources] original upload failed, indexing text only', err)
+      logger.error('notes.sources.upload_failed', { err, path: created.path })
     }
   }
   // An uploaded file is content in the context, not a node in the graph: it is

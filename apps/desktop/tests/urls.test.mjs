@@ -60,3 +60,11 @@ test("appPathUrl joins onto the app origin", () => {
   assert.equal(appPathUrl(APP, "/home"), "http://localhost:3000/home");
   assert.equal(appPathUrl("https://visvine.com", "/directory?x=1"), "https://visvine.com/directory?x=1");
 });
+
+test("deep links and appPathUrl cannot escape the app origin", () => {
+  assert.equal(deepLinkToPath("visvine-desktop://open/\\evil.com/x"), "/evil.com/x");
+  assert.equal(deepLinkToPath("visvine-desktop://open//evil.com/x"), "/evil.com/x");
+  assert.equal(appPathUrl(APP, "//evil.com/x"), APP);
+  assert.equal(appPathUrl(APP, "/\\evil.com/x"), APP);
+  assert.equal(appPathUrl(APP, "https://evil.com/"), APP);
+});

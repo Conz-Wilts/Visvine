@@ -19,6 +19,7 @@
 import { configNoteKindOf, ownerAliasDenial, parseConfigNote } from './configNote'
 import { readSpaceConfig, updateSpaceConfig, type SpaceConfig, type SpaceConfigPatch } from './spaceConfig'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
+import { logger } from '@/lib/logger'
 
 /** Stable-key JSON, so `{a:1,b:2}` and `{b:2,a:1}` compare equal. */
 function canonical(value: unknown): string {
@@ -52,7 +53,7 @@ export async function configNoteWritten(
 
   const { patch, errors } = parseConfigNote(kind, content)
   if (errors.length) {
-    console.error(`[configNote] ${path} in ${context.spaceId} does not parse; columns unchanged:`, errors)
+    logger.error('configNote.parse_failed', { path, spaceId: context.spaceId, errors })
     return
   }
   if (!Object.keys(patch).length) return
@@ -64,7 +65,7 @@ export async function configNoteWritten(
   // admin either.
   const denial = stored ? ownerAliasDenial(patch, stored) : null
   if (denial) {
-    console.error(`[configNote] ${path} in ${context.spaceId} refused: ${denial}`)
+    logger.error('configNote.refused', { path, spaceId: context.spaceId, denial })
     return
   }
 

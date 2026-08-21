@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, MenuItemConstructorOptions, shell } from "electron";
+import { appPathUrl } from "./urls";
 
 export function buildMenu(opts: { appUrl: string; getWindow: () => BrowserWindow | null }): Menu {
   const isMac = process.platform === "darwin";
@@ -29,7 +30,7 @@ export function buildMenu(opts: { appUrl: string; getWindow: () => BrowserWindow
         {
           label: "Home",
           accelerator: "CmdOrCtrl+Shift+H",
-          click: () => win()?.loadURL(new URL("/home", opts.appUrl).toString()),
+          click: () => win()?.loadURL(appPathUrl(opts.appUrl, "/home")),
         },
         {
           label: "Open in Browser",

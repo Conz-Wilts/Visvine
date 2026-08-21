@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { verifyTickCaller } from '@/lib/agents/internalAuth'
 import { tick } from '@/lib/agents/schedule'
 import { drainProjections } from '@/lib/notes/projections'
+import { logger } from '@/lib/logger'
 
 // The tick awaits the dispatches it fans out (each its own request to the run
 // endpoint), so it can last as long as the longest claimed run.
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   // available at /api/internal/projections/drain, so nothing here is load-bearing.
   // Never allowed to fail the tick: a stuck projection must not stop agent runs.
   const projections = await drainProjections().catch((err) => {
-    console.error('[tick] projection drain failed:', err)
+    logger.error('agents.tick.projection_drain_failed', { err })
     return null
   })
   return NextResponse.json({

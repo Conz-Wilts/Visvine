@@ -18,7 +18,8 @@
  * organisation id spellings.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, ChevronRightIcon, EarthIcon, MapPinIcon, Share2Icon, UsersIcon } from '@/features/shared/icons';
 import { useNodeProfile } from '@/features/shared/hooks/useNodeProfile';
@@ -31,12 +32,7 @@ import Chip from '@/components/ui/Chip';
 import PersonSilhouette from '@/components/ui/PersonSilhouette';
 import TypeSilhouette from '@/components/ui/TypeSilhouette';
 import ProfileSkeletonLoader from './ProfileSkeletonLoader';
-import { StatItem, SectionCard, RailCard } from './profileCards';
-
-const hostname = (url?: string | null) => {
-  if (!url) return '';
-  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
-};
+import { StatItem, SectionCard, RailCard, hostname } from './profileCards';
 
 /** Status tags are ambient badges elsewhere; keep them out of the tag chips. */
 const STATUS_TAGS = ['Building in Public', 'Open to Work', 'Hiring', 'Available', 'Busy'];
@@ -52,7 +48,7 @@ interface OrgPageContentProps {
 export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageContentProps) {
   const { currentSpace } = useSpace();
   const { data, loading, error } = useNodeProfile(nodeId);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
 
   const node = data?.node ?? null;
 
@@ -63,11 +59,7 @@ export default function OrgPageContent({ nodeId, onConnectionsClick }: OrgPageCo
     return hexToPalette(color);
   }, [currentSpace?.aliases, currentSpace?.nodeTypes, node?.alias, node?.type]);
 
-  const sharePage = () => {
-    navigator.clipboard?.writeText(window.location.href)
-      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })
-      .catch(() => {});
-  };
+  const sharePage = () => { void copy(window.location.href); };
 
   if (loading && !data) return <ProfileSkeletonLoader mode="fullpage" />;
   if (error || !node) {

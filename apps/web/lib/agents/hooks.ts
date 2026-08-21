@@ -93,6 +93,7 @@ export async function syncAgentState(
   const now = opts.now ?? new Date()
   let activation = opts.activation ?? null
   let invalid: string | null = null
+  const briefRead = readSharedNote(spaceId, agentBriefPath(name))
   if (activation === undefined || activation === null) {
     const live = await readSharedNote(spaceId, agentActivationPath(name))
     if (live) {
@@ -101,7 +102,7 @@ export async function syncAgentState(
       else invalid = parsed.error
     }
   }
-  const brief = await readSharedNote(spaceId, agentBriefPath(name))
+  const brief = await briefRead
   // Who the agent acts as. The brief's author by default — a member's agent
   // reaches exactly what that member reaches — but the ADMIN-ONLY live note may
   // repoint it with `runs_as`. That matters most for connectors with an `auth:`
@@ -162,8 +163,10 @@ export async function deactivateAgent(
   // Snapshot the row BEFORE touching the note: writing `active: false` below
   // runs the store hook, which re-derives the row inactive — read afterwards it
   // would always say "already off" and the notification would never send.
-  const state = await prisma.agentState.findFirst({ where: { spaceId, name }, select: { active: true, runAsUserId: true } })
-  const live = await readSharedNote(spaceId, path)
+  const [state, live] = await Promise.all([
+    prisma.agentState.findFirst({ where: { spaceId, name }, select: { active: true, runAsUserId: true } }),
+    readSharedNote(spaceId, path),
+  ])
   if (live) {
     const fm = parseFrontmatter(live.content)
     if (fm.active !== false) {
@@ -228,7 +231,7 @@ function agentOfStamp(origin: string | undefined, model: string | undefined): st
  * Two jobs: (1) every CHANGED shared-context write outside agents/ may be an
  * EVENT for agents whose `on.context` globs match it — except the agent whose
  * own run made the write (no self-loops); (2) writes under agents/ re-derive
- * the state row / auto-deactivate as before.
+ * the state row / auto-deactivate.
  */
 export async function agentNoteWritten(
   context: Context,

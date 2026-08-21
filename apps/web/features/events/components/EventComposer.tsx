@@ -11,9 +11,9 @@ import { Alert } from '@/components/ui';
  */
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { useRouter } from 'next/navigation';
 import { uploadImage, validateImageFile } from '@/lib/imageUpload';
-import { copyToClipboard } from '@/lib/utils';
 import type { NBEvent, EventVisibility, FormField } from '@/lib/types';
 import { CustomDateTimePicker } from './CustomDateTimePicker';
 import Select from '@/components/ui/Select';
@@ -643,7 +643,7 @@ function Toggle({ label, hint, value, onChange }: { label: string; hint: string;
 }
 
 function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: string; onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied(2000);
   const slug = event.slug ?? event.id.replace(/^event:/, '');
   // Only `public` events have a working /e/<slug> page; space/unlisted events
   // are shared via their in-app page (members only). Don't hand out a public link
@@ -652,12 +652,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
   const path = isPublic ? `/e/${slug}` : `/events/${event.id}`;
   const publicUrl = typeof window !== 'undefined' ? `${window.location.origin}${path}` : path;
 
-  const copy = async () => {
-    if (await copyToClipboard(publicUrl)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  const copyLink = () => { void copy(publicUrl); };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={onClose}>
@@ -675,7 +670,7 @@ function ShareSheet({ event, spaceId, onClose }: { event: NBEvent; spaceId: stri
         <div className="mt-5 flex items-center gap-2 p-3 rounded-xl border border-border-subtle bg-brand-light-bg/40">
           <span className="flex-1 text-sm text-brand-black truncate">{publicUrl}</span>
           <button
-            onClick={copy}
+            onClick={copyLink}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-brand-green rounded-lg hover:opacity-90 transition-all"
           >
             {copied ? <CheckIcon className="w-3.5 h-3.5" /> : <Link2Icon className="w-3.5 h-3.5" />}

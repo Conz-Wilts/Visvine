@@ -6,6 +6,7 @@ directories:
   buildResources: assets
 files:
   - dist/**
+  - "!dist/**/*.map"
   - resources/**
   - assets/icon.png
   - package.json

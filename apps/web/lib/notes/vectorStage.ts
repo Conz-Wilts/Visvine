@@ -12,6 +12,7 @@ import prisma from '@/lib/prisma'
 import type { Context } from './store'
 import type { VectorStage } from './shared/retrieval'
 import { embedTexts, embeddingsConfig } from './embeddings'
+import { logger } from '@/lib/logger'
 
 // Whole-note embedding: notes are short by convention; per-section chunking is v2.
 const EMBED_CHARS = 6000
@@ -66,15 +67,16 @@ export function createVectorStage(
           const staleVectors = await embedTexts(
             stale.map((d) => `${d.title}\n${d.body}`.slice(0, EMBED_CHARS)),
           )
-          for (let i = 0; i < stale.length; i++) {
-            const d = stale[i]
-            const literal = vectorLiteral(staleVectors[i])
-            await prisma.$executeRaw`
-              INSERT INTO context_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
-              VALUES ((gen_random_uuid())::text, ${context.spaceId}, ${context.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
-              ON CONFLICT (space_id, owner_key, path)
-              DO UPDATE SET model = ${config.model}, mtime = ${BigInt(d.mtime!)}, embedding = ${literal}::vector, updated_at = now()`
-          }
+          await Promise.all(
+            stale.map((d, i) => {
+              const literal = vectorLiteral(staleVectors[i])
+              return prisma.$executeRaw`
+                INSERT INTO context_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
+                VALUES ((gen_random_uuid())::text, ${context.spaceId}, ${context.ownerKey}, ${d.path}, ${config.model}, ${BigInt(d.mtime!)}, ${literal}::vector, now())
+                ON CONFLICT (space_id, owner_key, path)
+                DO UPDATE SET model = ${config.model}, mtime = ${BigInt(d.mtime!)}, embedding = ${literal}::vector, updated_at = now()`
+            }),
+          )
         }
 
         const paths = docs.map((d) => d.path)
@@ -94,7 +96,7 @@ export function createVectorStage(
         // Any failure just removes this stage from fusion for the call.
         const message = err instanceof Error ? err.message : String(err)
         report.error ??= message
-        console.error('[vector-stage]', message)
+        logger.error('notes.search.vector_stage_failed', { err })
         return []
       }
     },

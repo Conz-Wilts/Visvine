@@ -1,7 +1,6 @@
-// Sanity check for the build outputs electron-builder ships (`files` in
-// electron-builder.yml). resources/ and assets/ are referenced by path from
-// dist/main.js, so nothing is copied today; this is the one hook the build has
-// for growing that step later (e.g. generating platform icons).
+// Fails the build if anything electron-builder ships (`files` in
+// electron-builder.yml) is missing. resources/ and assets/ are referenced by
+// path from dist/main.js, so nothing is copied.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

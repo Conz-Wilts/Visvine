@@ -4,7 +4,7 @@
  */
 
 export const DEEP_LINK_SCHEME = "visvine-desktop";
-export const DESKTOP_UA_TOKEN = "VisvineDesktop";
+const DESKTOP_UA_TOKEN = "VisvineDesktop";
 
 /** Origins that the sign-in flow legitimately navigates through in-window. */
 const AUTH_PROVIDER_HOSTS = new Set([
@@ -15,7 +15,7 @@ const AUTH_PROVIDER_HOSTS = new Set([
 
 export type NavigationDecision = "allow" | "external" | "block";
 
-export function safeParse(url: string): URL | null {
+function safeParse(url: string): URL | null {
   try {
     return new URL(url);
   } catch {
@@ -79,14 +79,21 @@ export function deepLinkToPath(link: string): string | null {
   if (!target || target.protocol !== `${DEEP_LINK_SCHEME}:`) return null;
   // `visvine-desktop://open/directory` parses as host=open, pathname=/directory.
   const host = target.hostname;
-  let path = target.pathname || "/";
+  // Backslashes become slashes once resolved against an http(s) base, so
+  // `/\\evil.com` would otherwise turn into an authority; normalise them first.
+  let path = (target.pathname || "/").replace(/\\/g, "/");
   if (host && host !== "open") path = `/${host}${path === "/" ? "" : path}`;
   if (!path.startsWith("/")) path = `/${path}`;
   path = path.replace(/\/{2,}/g, "/");
   return `${path}${target.search}${target.hash}`;
 }
 
-/** Join an in-app path onto the configured app URL. */
+/**
+ * Join an in-app path onto the configured app URL. A path that resolves off the
+ * app origin (`//host`, an absolute URL) falls back to the app root — callers
+ * hand the result to `loadURL`, which no navigation guard sees.
+ */
 export function appPathUrl(appUrl: string, path: string): string {
-  return new URL(path, appUrl).toString();
+  const url = new URL(path, appUrl).toString();
+  return isSameApp(url, appUrl) ? url : appUrl;
 }

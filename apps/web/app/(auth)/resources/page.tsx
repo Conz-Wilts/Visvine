@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -390,7 +391,7 @@ export default function ResourcesPage() {
 
   async function handleDelete(r: Resource) {
     if (!confirm(`Delete "${r.name}"?`)) return;
-    await fetch(`/api/resources?id=${r.id}`, { method: 'DELETE' });
+    await fetchJson(`/api/resources?id=${encodeURIComponent(r.id)}`, { method: 'DELETE' });
     if (selected?.id === r.id) setSelected(null);
     refetch();
   }

@@ -21,17 +21,15 @@ export async function GET(
     if (session instanceof NextResponse) return session;
 
     const { spaceId } = await params;
-    const space = await prisma.space.findUnique({
-      where: { id: spaceId },
-      select: {
-        id: true, name: true, description: true, location: true, country: true,
-        tags: true, imageUrl: true, nodeTypes: true, createdAt: true,
-        aliases: true,
-      },
-    });
-    if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
-    const [membership, adminIds] = await Promise.all([
+    const [space, membership, adminIds] = await Promise.all([
+      prisma.space.findUnique({
+        where: { id: spaceId },
+        select: {
+          id: true, name: true, description: true, location: true, country: true,
+          tags: true, imageUrl: true, nodeTypes: true, createdAt: true,
+          aliases: true,
+        },
+      }),
       prisma.spaceMember.findUnique({
         where: { userId_spaceId: { userId: session.userId, spaceId } },
         select: { id: true },
@@ -39,6 +37,7 @@ export async function GET(
       // Who "organizes" this space = who holds a Person alias that owns it.
       prisma.userAlias.findMany({ where: { spaceId }, select: { userId: true, aliasId: true } }),
     ]);
+    if (!space) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const owning = new Set(
       personAliases((space.aliases ?? []) as unknown as SpaceAlias[])
         .filter((a) => a.owner === true || a.system === true)

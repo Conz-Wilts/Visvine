@@ -41,14 +41,17 @@ function install(slug: string, types: TypeClaims, overrides: Partial<InstalledTo
 }
 
 /** Swallow the one-page-per-type warning so a deliberate data fault stays quiet. */
+// lib/logger writes warn-level records to stderr; the context object rides as a
+// second argument in dev, so it is flattened to JSON to match against.
 function withoutWarnings<T>(run: () => T): { value: T; warnings: string[] } {
   const warnings: string[] = []
-  const original = console.warn
-  console.warn = (...args: unknown[]) => warnings.push(args.map(String).join(' '))
+  const original = console.error
+  console.error = (...args: unknown[]) =>
+    warnings.push(args.map((a) => (typeof a === 'string' ? a : JSON.stringify(a))).join(' '))
   try {
     return { value: run(), warnings }
   } finally {
-    console.warn = original
+    console.error = original
   }
 }
 
@@ -161,7 +164,7 @@ test('two page claims on one type is a data fault: first wins, and it is logged'
   assert.equal(value?.mode, 'page')
   assert.equal(warnings.length, 1)
   assert.match(warnings[0], /deal/)
-  assert.match(warnings[0], /one, two/)
+  assert.match(warnings[0], /"one","two"/)
 })
 
 // ── a disabled install draws nothing ─────────────────────────────────────────

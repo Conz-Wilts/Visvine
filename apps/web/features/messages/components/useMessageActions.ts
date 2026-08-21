@@ -11,7 +11,7 @@ import {
 } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import type { SerializedMessage } from '@/lib/messages/types';
-import { fetchJson } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 
 interface UseMessageActionsArgs {
   selectedConversationRef: MutableRefObject<string | null>;
@@ -35,11 +35,7 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
     try {
-      await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}/reactions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emoji }),
-      });
+      await fetchJsonBody(`/api/messages/conversations/${conversationId}/messages/${messageId}/reactions`, 'POST', { emoji });
     } catch { /* best-effort */ }
   }, [selectedConversationRef]);
 
@@ -63,15 +59,9 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     const conversationId = selectedConversationRef.current;
     if (!conversationId) return;
     try {
-      const res = await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      if (res.ok) {
-        const { message } = await res.json();
-        setMessages((prev) => prev.map((m) => m.id === messageId ? { ...message, isOwn: true } : m));
-      }
+      const { message } = await fetchJsonBody<{ message: SerializedMessage }>(
+        `/api/messages/conversations/${conversationId}/messages/${messageId}`, 'PATCH', { text });
+      setMessages((prev) => prev.map((m) => m.id === messageId ? { ...message, isOwn: true } : m));
     } catch { /* best-effort */ }
   }, [selectedConversationRef, setMessages]);
 
@@ -79,9 +69,7 @@ export function useMessageActions({ selectedConversationRef, virtuosoRef, messag
     const conversationId = selectedConversationRef.current;
     if (!conversationId || !window.confirm('Delete this message?')) return;
     try {
-      await fetch(`/api/messages/conversations/${conversationId}/messages/${messageId}`, {
-        method: 'DELETE',
-      });
+      await fetchJson(`/api/messages/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE' });
       setMessages((prev) => prev.map((m) =>
         m.id === messageId ? { ...m, deletedAt: new Date().toISOString(), text: '' } : m,
       ));

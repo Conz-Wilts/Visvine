@@ -242,6 +242,12 @@ async function makeNotePrivate(
 }
 
 /** Load a connector or throw a 404 that doesn't reveal whether it exists. */
+async function requireAgentsFeature(principal: ContextPrincipal, spaceId: string): Promise<void> {
+  if (await featureAccessForbidden(principal.userId, spaceId, 'agents', principal.email)) {
+    throw new McpError(403, 'The Agents tool is not available to you in this space')
+  }
+}
+
 async function loadConnectorOr404(principal: ContextPrincipal, context: Context, name: string) {
   let loaded
   try {
@@ -314,11 +320,6 @@ function describeNode(row: NodeRow) {
   }
 }
 
-/**
- * `list_spaces` is on BOTH servers: it is the entry point every other tool's
- * `space_id` comes from, and the creator server needs it as much as the
- * context server does.
- */
 /**
  * The parsed memory lifecycle of a note, returned alongside its markdown so a
  * reader is TOLD when what it is holding is no longer current, instead of
@@ -734,15 +735,17 @@ export function registerTools(server: McpServer): void {
         }
 
         const notePath = entityNotePath(nodeLike(row))
-        const note = notePath ? await readVisible(principal, context, subNotePath ?? notePath) : null
-
-        const linkRows = await prisma.link.findMany({
-          where: {
-            spaceId: args.space_id,
-            OR: [{ sourceId: row.id }, { targetId: row.id }],
-          },
-          select: { sourceId: true, targetId: true, relationship: true, origin: true, originRef: true, metadata: true },
-        })
+        const [note, linkRows, { metas }] = await Promise.all([
+          notePath ? readVisible(principal, context, subNotePath ?? notePath) : null,
+          prisma.link.findMany({
+            where: {
+              spaceId: args.space_id,
+              OR: [{ sourceId: row.id }, { targetId: row.id }],
+            },
+            select: { sourceId: true, targetId: true, relationship: true, origin: true, originRef: true, metadata: true },
+          }),
+          visibleVault(principal, context),
+        ])
         const otherIds = [...new Set(linkRows.map((l) => (l.sourceId === row!.id ? l.targetId : l.sourceId)))]
         const others = new Map(
           (
@@ -753,7 +756,6 @@ export function registerTools(server: McpServer): void {
           ).map((n) => [n.id, n]),
         )
 
-        const { metas } = await visibleVault(principal, context)
         // Both path forms are the entity, so a mention of either counts; the
         // entity's own notes (index + sub-notes) don't "mention" it.
         const selfPaths = new Set(entityNotePaths(nodeLike(row)))
@@ -870,7 +872,7 @@ export function registerTools(server: McpServer): void {
       withCtx(extra, 'read_file', async (ctx) => {
         const scope: ContextScope = args.scope ?? 'shared'
         const { principal, context } = await resolveTarget(ctx, args.space_id, scope)
-        // A '#<seq>' suffix is how search used to report a chunk; accept it.
+        // A trailing '#<seq>' chunk marker names the same file.
         const path = args.path.replace(/#\d+$/, '')
         const result = await readSourceVisible(principal, context, path, {
           offsetChars: args.offset_chars,
@@ -1434,9 +1436,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'list_agents', async (ctx) => {
         const { principal, context } = await resolveTarget(ctx, args.space_id, 'shared')
-        if (await featureAccessForbidden(principal.userId, args.space_id, 'agents', principal.email)) {
-          throw new McpError(403, 'The Agents tool is not available to you in this space')
-        }
+        await requireAgentsFeature(principal, args.space_id)
         const { agents, heartbeatAt } = await listAgents(principal, context)
         return {
           scheduler_last_tick_at: heartbeatAt,
@@ -1478,9 +1478,7 @@ export function registerTools(server: McpServer): void {
     (args, extra) =>
       withCtx(extra, 'run_agent', async (ctx) => {
         const { principal } = await resolveTarget(ctx, args.space_id, 'shared')
-        if (await featureAccessForbidden(principal.userId, args.space_id, 'agents', principal.email)) {
-          throw new McpError(403, 'The Agents tool is not available to you in this space')
-        }
+        await requireAgentsFeature(principal, args.space_id)
         if (!(await canTriggerRun(principal, args.space_id, args.agent))) {
           throw new McpError(403, "Only the agent's author or a space admin can run it")
         }

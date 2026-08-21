@@ -1,17 +1,17 @@
 /**
  * The single "this thing now exists — give it context" path.
  *
- * Everything a user can create (a space, a space, a channel, a person, an
+ * Everything a user can create (a space, a channel, a person, an
  * event, a note, an uploaded file) should be reachable in two places: the
  * context graph as a `Node`, and the context as a markdown note that records what
  * we know about it. Before this module every call site hand-wrote
  * `prisma.node.create` + `revalidateTag`, which is exactly why spaces,
- * spaces, channels, notes and files never made it into the graph at all.
+ * channels, notes and files never made it into the graph at all.
  *
  * Two kinds of thing go through here:
  *
- *  * **Records and containers** (person, resource, event, space,
- *    space, channel) get BOTH a node and a canonical note under their fixed
+ *  * **Records and containers** (person, resource, event, space, channel)
+ *    get BOTH a node and a canonical note under their fixed
  *    namespace — `spaces/general.md`, `channels/announcements.md`, and so on.
  *  * **Documents** (a note, an uploaded file) get ONLY a node: the artifact IS
  *    its own context, and writing a second `.md` about a `.md` is noise.
@@ -148,11 +148,6 @@ function bustContextCache(): void {
 }
 
 /**
- * The node id for an already-synced record, or null. Looked up by the record id
- * we stashed in metadata, so a renamed space keeps its node (and its note, and
- * its position on the canvas) instead of sprouting a second one.
- */
-/**
  * Pre-rename spellings that may still sit on stored rows until
  * scripts/rename-space-to-space.ts has run against that database. Matching
  * them here keeps the sync idempotent across the deploy→migrate window instead
@@ -160,7 +155,7 @@ function bustContextCache(): void {
  */
 const LEGACY_TYPE_SPELLINGS: Partial<Record<EntityNodeType, string[]>> = {
   section: ['space'],
-  space: ['space', 'group', 'organization', 'organisation', 'org', 'company'],
+  space: ['group', 'organization', 'organisation', 'org', 'company'],
 }
 
 function typeSpellings(type: EntityNodeType): string[] {
@@ -171,6 +166,11 @@ function sameEntityType(stored: string, type: EntityNodeType): boolean {
   return typeSpellings(type).includes(stored.toLowerCase())
 }
 
+/**
+ * The node id for an already-synced record, or null. Looked up by the record id
+ * stashed in metadata, so a renamed space keeps its node (and its note, and
+ * its position on the canvas) instead of sprouting a second one.
+ */
 async function findNodeIdByRecord(
   spaceId: string,
   type: EntityNodeType,

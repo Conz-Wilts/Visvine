@@ -221,9 +221,13 @@ const ENTITY_NS_RE = `${FLAT_ENTITY_NS_RE}|${FOLDER_ENTITY_NS_RE}`
 // a flat entity note, an entity folder's own index, a namespace root, a note
 // outside the entity namespaces. Pure path shape; whether 'people/connor' really
 // belongs to a node is the reverse map's question (resolveEntityOwner).
+const ENTITY_OWNER_PATH_RE = new RegExp(`^(${ENTITY_NS_RE})/([^/]+)/(.+\\.md)$`)
+const FLAT_ENTITY_HREF_RE = new RegExp(`^(${FLAT_ENTITY_NS_RE})/[^/]+(\\.md|/index\\.md)$`)
+const FOLDER_ENTITY_HREF_RE = new RegExp(`^(${FOLDER_ENTITY_NS_RE})/[^/]+/index\\.md$`)
+
 export function entityOwnerPathOf(path: string): string | null {
   const raw = path.startsWith('/') ? path.slice(1) : path
-  const m = new RegExp(`^(${ENTITY_NS_RE})/([^/]+)/(.+\\.md)$`).exec(raw)
+  const m = ENTITY_OWNER_PATH_RE.exec(raw)
   if (!m || m[2] === INDEX_BASENAME) return null
   if (m[3] === INDEX_BASENAME) return null
   return `${m[1]}/${m[2]}`
@@ -245,8 +249,8 @@ export function parseEntityHref(href: string): string | null {
   if (!href) return null
   const raw = href.startsWith('/') ? href.slice(1) : href
   if (
-    !new RegExp(`^(${FLAT_ENTITY_NS_RE})/[^/]+(\\.md|/index\\.md)$`).test(raw) &&
-    !new RegExp(`^(${FOLDER_ENTITY_NS_RE})/[^/]+/index\\.md$`).test(raw) &&
+    !FLAT_ENTITY_HREF_RE.test(raw) &&
+    !FOLDER_ENTITY_HREF_RE.test(raw) &&
     !/^agents\/[^/]+\.md$/.test(raw) // agents/live/… is config, not an entity
   ) {
     return null

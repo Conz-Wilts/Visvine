@@ -28,7 +28,7 @@ import { notify } from '@/lib/notifications/service'
 import { costMicros, perTurnStop, preRunStop, type BudgetState } from './budget'
 import { agentBriefPath, agentPageHref, parseAgentBrief, type AgentBrief } from './config'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
-import { deactivateAgent, type DeactivationReason } from './hooks'
+import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './hooks'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
 import { principalForUser } from './principal'
 import { resolveAgentChatConfig } from './providers'
@@ -249,7 +249,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     }
 
     // 5. The loop.
-    const tz = await prisma.space.findUnique({ where: { id: spaceId }, select: { timezone: true } }).then((s) => s?.timezone || 'UTC')
+    const tz = await effectiveTimezone(spaceId, null)
     const system = `${PREAMBLE}\n\n---\n\n${brief.body}`
     const user =
       `It is ${nowIso(now, tz)}. This is a ${run.trigger} run of the agent "${brief.title || name}". Carry out your brief now, then finish with a short summary.` +

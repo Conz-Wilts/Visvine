@@ -469,7 +469,18 @@ export function globProblem(glob: string): string | null {
 /** Does `path` match any of the globs? Paths under agents/ never match. */
 export function matchesAnyGlob(path: string, globs: string[]): boolean {
   if (path === 'agents' || path.startsWith('agents/')) return false
-  return globs.some((g) => globToRegExp(g).test(path))
+  return globs.some((g) => globRegExp(g).test(path))
+}
+
+const globCache = new Map<string, RegExp>()
+
+function globRegExp(glob: string): RegExp {
+  let re = globCache.get(glob)
+  if (!re) {
+    re = globToRegExp(glob)
+    globCache.set(glob, re)
+  }
+  return re
 }
 
 // ── Cron (5 fields, minimal: `*`, `*\/n`, lists, ranges, `a-b/n`) ────────────

@@ -154,7 +154,7 @@ export interface AppToolDeps {
   /**
    * A headless render of the preview page as the caller (lib/tools/screenshot.ts).
    * Answers `{ available: false }` wherever it cannot run; the handlers then
-   * fall back to links, which is what they returned before this existed.
+   * fall back to links.
    */
   capturePreview(req: ScreenshotRequest): Promise<ScreenshotResult>
 }

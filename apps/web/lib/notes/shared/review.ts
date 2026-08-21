@@ -293,8 +293,10 @@ function checkUnlinkedMentions(
   const issues: Issue[] = []
   const nameCount = new Map<string, number>()
   for (const m of metas)
-    for (const name of aliasesOf(m))
-      nameCount.set(normalizeKey(name), (nameCount.get(normalizeKey(name)) ?? 0) + 1)
+    for (const name of aliasesOf(m)) {
+      const key = normalizeKey(name)
+      nameCount.set(key, (nameCount.get(key) ?? 0) + 1)
+    }
 
   const seen = new Set<string>()
   for (const target of metas) {

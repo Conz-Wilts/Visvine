@@ -36,6 +36,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { build, type Plugin } from 'esbuild'
+import { logger } from '@/lib/logger'
 
 /** The four files the import map names. Nothing else is servable. */
 export const VENDOR_FILES = [
@@ -231,7 +232,7 @@ async function buildModule(opts: {
     logLevel: 'silent',
   })
   for (const warning of result.warnings) {
-    console.warn(`[tools] vendor build warning in ${opts.sourcefile}: ${warning.text}`)
+    logger.warn('tools.vendor_build.warning', { sourcefile: opts.sourcefile, text: warning.text })
   }
   const code = result.outputFiles[0]?.text
   if (!code) throw new Error(`esbuild produced no output for ${opts.sourcefile}`)

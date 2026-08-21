@@ -26,6 +26,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import Link from 'next/link';
 import { CheckIcon, CopyIcon, ExternalLinkIcon, TriangleAlertIcon, UploadIcon } from '@/features/shared/icons';
 import { Button, Modal, Skeleton, Textarea } from '@/components/ui';
@@ -312,7 +313,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
   const [error, setError] = useState<{ status: number; message: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied(2000);
 
   const reload = useCallback(async () => {
     if (!spaceId) return;
@@ -352,11 +353,7 @@ export default function ToolPageContent({ nodeId }: { nodeId: string }) {
       `Edit with write_tool (files: index.md, ${TOOL_SOURCE_FILES.ui.authorName}, ${TOOL_SOURCE_FILES.data.authorName}) — the fresh build comes back on every write.`,
       `Run check_tool before publishing. Preview: ${origin}/tools/preview/${name}`,
     ].join('\n');
-    try {
-      await navigator.clipboard.writeText(hint);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
+    if (!(await copy(hint))) {
       setNotice('Could not reach the clipboard — copy the preview URL from the address bar instead.');
     }
   };

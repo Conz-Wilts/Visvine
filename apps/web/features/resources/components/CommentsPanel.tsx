@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { fetchJsonBody } from '@/lib/fetchJson';
 import type { ResourceComment } from '@/lib/types';
 
 export default function CommentsPanel({
@@ -23,16 +24,11 @@ export default function CommentsPanel({
 
   async function addComment() {
     if (!newComment.trim()) return;
-    const res = await fetch(`/api/resources/${resourceId}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cellRef, author, content: newComment }),
-    });
-    if (res.ok) {
-      const c = await res.json();
+    try {
+      const c = await fetchJsonBody<ResourceComment>(`/api/resources/${resourceId}/comments`, 'POST', { cellRef, author, content: newComment });
       setComments(prev => [...prev, c]);
       setNewComment('');
-    }
+    } catch { /* the composer keeps the text for a retry */ }
   }
 
   return (

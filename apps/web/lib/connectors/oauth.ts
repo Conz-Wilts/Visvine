@@ -29,8 +29,7 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
-import { ConnectorError } from './config'
-import { allowPrivateHosts } from './config'
+import { allowPrivateHosts, ConnectorError } from './config'
 import type { ConnectorAuth } from './auth'
 
 /** Endpoints resolved for one authorization server. */

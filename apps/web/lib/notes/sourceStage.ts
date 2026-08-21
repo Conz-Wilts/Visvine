@@ -16,6 +16,7 @@ import type { Context } from './store'
 import type { SourceStage, SourceStageHit } from './shared/retrieval'
 import { embeddingsConfig } from './embeddings'
 import { aboveFloors, vectorLiteral, type SemanticReport } from './vectorStage'
+import { logger } from '@/lib/logger'
 
 const TOP_K = 20
 const SNIPPET_CHARS = 240
@@ -49,7 +50,7 @@ export function createSourceStage(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         report.error ??= message
-        console.error('[source-stage]', message)
+        logger.error('notes.search.source_stage_failed', { err })
         return []
       }
     },
@@ -77,7 +78,7 @@ export function createSourceStage(
         return rows.map(toHit)
       } catch (err) {
         // Keyword search over chunks is best-effort like every other stage.
-        console.error('[source-stage:keyword]', err instanceof Error ? err.message : String(err))
+        logger.error('notes.search.source_keyword_failed', { err })
         return []
       }
     },

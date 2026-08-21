@@ -13,6 +13,7 @@
 // what a person can do here.
 
 import { useEffect, useState } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { UserPlusIcon } from '@/features/shared/icons';
 import {
   Alert,
@@ -34,7 +35,7 @@ import { AliasToggle, type PeopleData } from './shared';
 function InviteLinkRow({ spaceId }: { spaceId: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const runAction = useConsoleAction();
 
@@ -50,14 +51,7 @@ function InviteLinkRow({ spaceId }: { spaceId: string }) {
     return () => { alive = false; };
   }, [spaceId]);
 
-  const copy = async () => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard unavailable */ }
-  };
+  const copyUrl = () => { if (url) void copy(url); };
 
   const regenerate = async () => {
     setConfirmRegenerate(false);
@@ -80,7 +74,7 @@ function InviteLinkRow({ spaceId }: { spaceId: string }) {
           aria-label="Invite link"
           className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 text-xs text-text-secondary"
         />
-        <Button variant="brand" onClick={copy} disabled={!url}>
+        <Button variant="brand" onClick={copyUrl} disabled={!url}>
           {copied ? 'Copied' : 'Copy'}
         </Button>
       </div>

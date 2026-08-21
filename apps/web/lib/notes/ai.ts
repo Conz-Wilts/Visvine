@@ -338,9 +338,9 @@ export async function reorganizeNotes(context: Context): Promise<ReorganizePlan>
     throw new Error('Reorganize needs an LLM: set GEMINI_API_KEY.')
   }
   const raw = await listRaw(context)
-  const index = buildNoteIndex(raw)
+  const index = new Map(buildNoteIndex(raw).map((m) => [m.path, m]))
   const notes: NoteSummary[] = raw.map((n) => {
-    const meta = index.find((m) => m.path === n.path)
+    const meta = index.get(n.path)
     const body = splitFrontmatter(n.content).body
     return {
       path: n.path,

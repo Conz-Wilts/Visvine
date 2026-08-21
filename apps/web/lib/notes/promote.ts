@@ -3,12 +3,9 @@
 // proposal and a folder admin approves it here, which creates the live
 // publication (lib/notes/publications.ts).
 //
-// Backed by the `context_move_proposals` table. It used to be a
-// "move-proposals.jsonl" sidecar blob, where resolving one proposal rewrote
-// every proposal in the space from an in-memory snapshot — so two admins
-// deciding at the same time lost one of the decisions. Resolution is now a
-// single conditional UPDATE, which is also what makes the pending→resolved
-// transition safe to race.
+// Backed by the `context_move_proposals` table. Resolution is a single
+// conditional UPDATE, which is what makes the pending→resolved transition safe
+// for two admins to race.
 
 import * as store from './store'
 import { SHARED_OWNER_KEY, type Context } from './store'

@@ -60,6 +60,7 @@ import { runDataHandler, type IsolateCapabilities } from './dataRun'
 import { getToolState, setToolState, STATE_MAX_BYTES, STATE_MAX_KEYS } from './state'
 import { acquireDataCall } from './limits'
 import { targetKey, type ResolvedTarget } from './target'
+import { logger } from '@/lib/logger'
 
 /**
  * Everything the handlers touch that isn't pure. Injectable as one object so a
@@ -723,7 +724,7 @@ export async function handleBridgeCall(
     // The message is deliberately not the exception's: it may name a table, a
     // column or an upstream host, and the Tool is untrusted code shown to a
     // viewer. The server log keeps the real one.
-    console.error(`[tools] bridge ${method} failed`, e)
+    logger.error('tools.bridge.failed', { method, err: e })
     return err('internal', 'Something went wrong on Visvine’s side.')
   }
 }

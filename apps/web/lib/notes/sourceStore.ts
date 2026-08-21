@@ -45,7 +45,7 @@ const META_SELECT = {
   updatedAt: true,
 } as const
 
-function toMeta(row: SourceRow): ContextSourceMeta {
+export function toMeta(row: SourceRow): ContextSourceMeta {
   return {
     id: row.id,
     path: row.path,
@@ -167,24 +167,25 @@ export async function replaceChunks(
   model: string | null,
 ): Promise<void> {
   await prisma.contextSourceChunk.deleteMany({ where: { sourceId: source.id } })
-  for (let seq = 0; seq < chunks.length; seq++) {
-    const v = vectors[seq] ?? null
-    if (v && model) {
-      await prisma.$executeRaw`
-        INSERT INTO context_source_chunks (id, source_id, space_id, owner_key, path, seq, text, model, embedding)
-        VALUES ((gen_random_uuid())::text, ${source.id}, ${source.spaceId}, ${source.ownerKey}, ${source.path}, ${seq}, ${chunks[seq]}, ${model}, ${vectorLiteral(v)}::vector)`
-    } else {
-      await prisma.contextSourceChunk.create({
+  await Promise.all(
+    chunks.map((text, seq) => {
+      const v = vectors[seq] ?? null
+      if (v && model) {
+        return prisma.$executeRaw`
+          INSERT INTO context_source_chunks (id, source_id, space_id, owner_key, path, seq, text, model, embedding)
+          VALUES ((gen_random_uuid())::text, ${source.id}, ${source.spaceId}, ${source.ownerKey}, ${source.path}, ${seq}, ${text}, ${model}, ${vectorLiteral(v)}::vector)`
+      }
+      return prisma.contextSourceChunk.create({
         data: {
           sourceId: source.id,
           spaceId: source.spaceId,
           ownerKey: source.ownerKey,
           path: source.path,
           seq,
-          text: chunks[seq],
+          text,
           model: null,
         },
       })
-    }
-  }
+    }),
+  )
 }

@@ -71,13 +71,9 @@ function hmac(algo: 'sha256' | 'sha1', secret: string, ...parts: (string | Uint8
   return h.digest()
 }
 
-function encode(digest: Buffer, encoding: WebhookEncoding): string {
-  return digest.toString(encoding)
-}
-
 /** Compare a presented digest against the expected one under the declared encoding. */
 function digestMatches(presented: string, expected: Buffer, encoding: WebhookEncoding): boolean {
-  const want = encode(expected, encoding)
+  const want = expected.toString(encoding)
   const got = encoding === 'hex' ? presented.trim().toLowerCase() : presented.trim()
   return safeEqual(got, want)
 }

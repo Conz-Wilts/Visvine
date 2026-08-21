@@ -11,8 +11,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import type { NBEvent, NBAttendee, RSVPStatus } from '@/lib/types';
-import { copyToClipboard } from '@/lib/utils';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { BanIcon, CheckIcon, ChevronUpIcon, CircleArrowUpIcon, CircleCheckIcon, ClockIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, RefreshCwIcon, UserCheckIcon, UsersIcon, XIcon } from '@/features/shared/icons';
 
 interface AttendeeRow extends NBAttendee {
@@ -67,16 +68,14 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied(2000);
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/events/${eventId}/attendees?spaceId=${encodeURIComponent(spaceId)}`);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await fetchJson<{ attendees?: AttendeeRow[] }>(`/api/events/${eventId}/attendees?spaceId=${encodeURIComponent(spaceId)}`);
       setAttendees(data.attendees ?? []);
-    } finally {
+    } catch { /* the next refresh retries */ } finally {
       setLoading(false);
     }
   }, [eventId, spaceId]);
@@ -113,36 +112,28 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
   );
 
   const act = async (id: string, action: string) => {
-    const res = await fetch(`/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
-    });
-    if (res.ok) {
-      const { attendee } = await res.json();
+    try {
+      const { attendee } = await fetchJsonBody<{ attendee: Partial<AttendeeRow> }>(
+        `/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, 'PATCH', { action });
       setAttendees((prev) => prev.map((a) => (a.id === id ? { ...a, ...attendee } : a)));
-    } else {
+    } catch {
       load();
     }
   };
 
   const remove = async (id: string) => {
     setAttendees((prev) => prev.filter((a) => a.id !== id)); // optimistic
-    const res = await fetch(`/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) load();
+    try {
+      await fetchJson(`/api/events/${eventId}/attendees/${id}?spaceId=${encodeURIComponent(spaceId)}`, { method: 'DELETE' });
+    } catch { load(); }
   };
 
   const bulk = async (action: string) => {
     if (selected.size === 0) return;
     setBusy(true);
     try {
-      await fetch(`/api/events/${eventId}/attendees/bulk?spaceId=${encodeURIComponent(spaceId)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, attendeeIds: [...selected] }),
-      });
+      await fetchJsonBody(`/api/events/${eventId}/attendees/bulk?spaceId=${encodeURIComponent(spaceId)}`, 'POST',
+        { action, attendeeIds: [...selected] });
       setSelected(new Set());
       await load();
     } finally {
@@ -191,10 +182,7 @@ export function GuestManager({ event, spaceId }: GuestManagerProps) {
 
   const copyLink = async () => {
     const slug = event.slug ?? eventId.replace(/^event:/, '');
-    if (await copyToClipboard(`${baseUrl}/e/${slug}`)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    void copy(`${baseUrl}/e/${slug}`);
   };
 
   return (

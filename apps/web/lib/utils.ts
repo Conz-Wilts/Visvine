@@ -1,3 +1,5 @@
+import { logger } from '@/lib/logger';
+
 /**
  * Copy text to clipboard using the Clipboard API
  */
@@ -15,7 +17,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       document.body.removeChild(textarea);
       return true;
     } catch (err) {
-      console.error('Failed to copy:', err);
+      logger.error('clipboard.copy_failed', { err });
       return false;
     }
   }
@@ -24,7 +26,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch (err) {
-    console.error('Failed to copy:', err);
+    logger.error('clipboard.copy_failed', { err });
     return false;
   }
 }

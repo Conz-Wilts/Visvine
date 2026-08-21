@@ -5,15 +5,9 @@
 //
 // This is a LEDGER in the sense of docs/data-architecture.md — one row per
 // event, first-hand, not derivable from anything — so it lives in its own table
-// (`context_audit_entries`). It used to be a single "audit.jsonl" text blob in
-// the ContextState sidecar, appended by reading the whole file, concatenating a
-// line and writing it all back. With 45 call sites, several fire-and-forget
-// inside loops (searchContext logs one entry per restricted hit), those appends
-// raced and silently lost entries. An audit log that quietly drops records is
-// worse than no audit log, because it is trusted.
-//
-// The signature is unchanged, so every caller is untouched: logAudit still
-// never throws, and listAudit still returns newest-first and capped.
+// (`context_audit_entries`), one INSERT per call, so fire-and-forget appends
+// inside loops (searchContext logs one entry per restricted hit) never race
+// each other. logAudit never throws; listAudit returns newest-first and capped.
 
 import prisma from '@/lib/prisma'
 import type { AuditEntry } from './shared/contextTypes'

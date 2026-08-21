@@ -186,8 +186,7 @@ function normaliseHeaders(raw: unknown, reserved?: ReadonlySet<string>): Record<
  *
  * A refusal is BOTH recorded on the run (so an operator sees why a connector
  * failed) and thrown into the isolate as a catchable error (so the model's own
- * `catch` gets the reason, instead of the bare connection failure the proxy
- * used to leave it with).
+ * `catch` gets the reason rather than a bare connection failure).
  */
 export async function hostFetch(
   ctx: HostContext,

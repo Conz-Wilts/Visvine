@@ -88,3 +88,7 @@ tmp/
 
 # stray root screenshots
 /*.png
+
+# build output (desktop: electron-builder; web: esbuild vendor bundles)
+**/dist/
+**/release/

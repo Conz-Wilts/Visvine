@@ -11,8 +11,14 @@
  * settings console already reads.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { PencilIcon, PlusIcon } from '@/features/shared/icons';
+
+/** A website's bare host for display — `https://www.acme.com/x` → `acme.com`. */
+export const hostname = (url?: string | null) => {
+  if (!url) return '';
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return url; }
+};
 
 /** Typed helper for inline CSS custom properties (CSSProperties rejects arbitrary keys). */
 export const cssVars = (vars: Record<`--${string}`, string>): React.CSSProperties => vars as React.CSSProperties;
@@ -75,3 +81,22 @@ export function RailCard({ title, children }: { title: string; children: React.R
   );
 }
 
+
+/** Long prose folded at `limit` characters behind a Read more toggle. */
+export function AboutText({ text, accent, limit = 280, className }: {
+  text: string; accent: string; limit?: number; className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > limit;
+  const shown = long && !open ? text.slice(0, limit).trimEnd() + '…' : text;
+  return (
+    <div>
+      <p className={`text-[15px] text-text-secondary leading-relaxed whitespace-pre-line ${className ?? ''}`}>{shown}</p>
+      {long && (
+        <button onClick={() => setOpen((v) => !v)} className="mt-2 text-[13px] font-bold hover:underline" style={{ color: accent }}>
+          {open ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  );
+}

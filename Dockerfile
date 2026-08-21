@@ -7,7 +7,10 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/config/package.json ./packages/config/
 COPY apps/web/package.json ./apps/web/
-RUN pnpm install --frozen-lockfile
+# Every workspace importer in the lockfile must be present for --frozen-lockfile
+# to validate; the filter keeps Electron and the rest of the desktop tree out.
+COPY apps/desktop/package.json ./apps/desktop/
+RUN pnpm install --frozen-lockfile --filter @visvine/web...
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 FROM base AS builder
@@ -23,7 +26,7 @@ COPY . .
 # Ops runbook for the matching deploy.yml build-arg.
 ARG TOOLS_ORIGIN=""
 ENV TOOLS_ORIGIN=$TOOLS_ORIGIN
-RUN pnpm --filter @visvine/web exec pnpm dlx prisma@7.4.0 generate
+RUN pnpm --filter @visvine/web exec prisma generate
 RUN pnpm --filter @visvine/web build
 
 # ── Runtime image ─────────────────────────────────────────────────────────────

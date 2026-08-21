@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
@@ -78,9 +79,8 @@ function EventsPageInner() {
       if (!currentSpace) return;
       try {
         setLoading(true);
-        const response = await fetch(`/api/events?spaceId=${currentSpace.id}`);
-        const data = await response.json();
-        setEvents(data.events || []);
+        const data = await fetchJson<{ events?: NBEvent[] }>(`/api/events?spaceId=${currentSpace.id}`);
+        setEvents(data.events ?? []);
       } catch (error) {
         console.error('Failed to load events:', error);
       } finally {

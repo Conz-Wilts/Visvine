@@ -146,7 +146,8 @@ export default function ToolFrame({
       // The slot's own height never feeds this: its top is fixed by whatever
       // sits above it (the degraded banner, the page's tab bar), so measuring
       // downward from there cannot chase its own tail.
-      const available = window.innerHeight - slot.getBoundingClientRect().top - PANE_BOTTOM_GUTTER;
+      const gutter = mode === 'page' ? 0 : PANE_BOTTOM_GUTTER;
+      const available = window.innerHeight - slot.getBoundingClientRect().top - gutter;
       setPaneHeight(Math.max(MIN_FRAME_HEIGHT, Math.floor(available)));
     };
     measure();
@@ -157,7 +158,7 @@ export default function ToolFrame({
       window.removeEventListener('resize', measure);
       observer.disconnect();
     };
-  }, []);
+  }, [mode]);
 
   // ── the bridge ──
 
@@ -246,8 +247,8 @@ export default function ToolFrame({
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
-  // A page-mode Tool owns the pane, so it takes all of it and scrolls inside
-  // itself. A tab or a preview grows to whatever the frame reported, floored so
+  // A page-mode Tool owns the pane — edge to edge, no frame, no gutter — and
+  // scrolls inside itself. A tab or a preview grows to whatever the frame reported, floored so
   // a Tool measuring itself mid-mount cannot collapse, and capped at the pane so
   // it can never grow past the content area.
   const frameHeight =
@@ -265,8 +266,11 @@ export default function ToolFrame({
       : `/tools?tab=installed&tool=${encodeURIComponent(install.key)}`;
 
   return (
-    <div ref={containerRef} className={clsx('flex w-full flex-col gap-3', className)}>
-      {mint?.degraded && <DegradedBanner degraded={mint.degraded} isAdmin={mint.viewer.isAdmin} />}
+    <div ref={containerRef} className={clsx('flex w-full flex-col', mode === 'page' ? 'gap-0' : 'gap-3', className)}>
+      {mint?.degraded && (
+        <DegradedBanner degraded={mint.degraded} isAdmin={mint.viewer.isAdmin}
+                        className={mode === 'page' ? 'mx-6 my-3' : undefined} />
+      )}
 
       <div ref={slotRef} className="relative w-full" style={{ height: error ? undefined : frameHeight }}>
         {error ? (
@@ -283,10 +287,10 @@ export default function ToolFrame({
                 referrerPolicy="no-referrer"
                 allow=""
                 onLoad={handleFrameLoad}
-                className="block h-full w-full rounded-xl border border-border-subtle bg-surface-1"
+                className={clsx('block h-full w-full bg-surface-1', mode !== 'page' && 'rounded-xl border border-border-subtle')}
               />
             )}
-            {status !== 'ready' && !frameLoaded && <ToolFrameSkeleton />}
+            {status !== 'ready' && !frameLoaded && <ToolFrameSkeleton framed={mode !== 'page'} />}
             {status !== 'ready' && timedOut && (
               <ToolFrameSlowNotice reportHref={reportHref} onReload={reload} />
             )}
@@ -302,11 +306,11 @@ export default function ToolFrame({
  * instead of the iframe, because the iframe has to be in the document to load at
  * all — swapping them would mean the Tool never starts.
  */
-function ToolFrameSkeleton() {
+function ToolFrameSkeleton({ framed }: { framed: boolean }) {
   return (
     <div
       aria-hidden
-      className="absolute inset-0 flex flex-col gap-3 rounded-xl border border-border-subtle bg-surface-1 p-5"
+      className={clsx('absolute inset-0 flex flex-col gap-3 bg-surface-1', framed ? 'rounded-xl border border-border-subtle p-5' : 'p-6')}
     >
       <Skeleton className="h-5 w-48" />
       <Skeleton className="h-3.5 w-72" />
@@ -327,7 +331,7 @@ function ToolFrameSkeleton() {
  */
 function ToolFrameSlowNotice({ reportHref, onReload }: { reportHref: string; onReload: () => void }) {
   return (
-    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 rounded-t-xl border-b border-border-subtle bg-surface-1/95 px-4 py-2 text-xs text-text-muted backdrop-blur">
+    <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 border-b border-border-subtle bg-surface-1/95 px-4 py-2 text-xs text-text-muted backdrop-blur">
       <span>This Tool is taking longer than usual to start.</span>
       <div className="flex items-center gap-1.5">
         <Button variant="ghost" size="sm" onClick={onReload} className="inline-flex items-center gap-1.5">

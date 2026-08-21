@@ -131,7 +131,6 @@ function summariseNote(path: string, content: string): ConnectorSummary | null {
     ...base,
     kind: 'http',
     model: null,
-    description: typeof fm.description === 'string' ? fm.description : null,
     hosts: parsed.ok ? [...parsed.perimeter.hosts] : [],
     allow: parsed.ok ? parsed.perimeter.allow.map(formatAllowRule) : [],
     invalid: parsed.ok ? null : parsed.error,
@@ -274,14 +273,14 @@ export async function runnableConnectorNames(
   context: Context,
   names: readonly string[],
 ): Promise<string[]> {
-  const out: string[] = []
-  for (const name of names) {
-    if (!NAME_RE.test(name)) continue
-    const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
-    if (content !== null && connectorKind(parseFrontmatter(content)) === 'model') continue
-    out.push(name)
-  }
-  return out
+  const kept = await Promise.all(
+    names.map(async (name) => {
+      if (!NAME_RE.test(name)) return false
+      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
+      return content === null || connectorKind(parseFrontmatter(content)) !== 'model'
+    }),
+  )
+  return names.filter((_, i) => kept[i])
 }
 
 /**
@@ -295,14 +294,16 @@ export async function connectorActionsFor(
   names: readonly string[],
 ): Promise<Record<string, ConnectorActionSummary[]>> {
   const out: Record<string, ConnectorActionSummary[]> = {}
-  for (const name of names) {
-    out[name] = []
-    if (!NAME_RE.test(name)) continue
-    const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
-    if (content === null) continue
-    const parsed = parseConnectorPerimeter(parseFrontmatter(content))
-    if (parsed.ok) out[name] = summariseActions(parsed.perimeter.actions)
-  }
+  await Promise.all(
+    names.map(async (name) => {
+      out[name] = []
+      if (!NAME_RE.test(name)) return
+      const content = await readVisible(p, context, `${CONNECTORS_DIR}${name}.md`)
+      if (content === null) return
+      const parsed = parseConnectorPerimeter(parseFrontmatter(content))
+      if (parsed.ok) out[name] = summariseActions(parsed.perimeter.actions)
+    }),
+  )
   return out
 }
 
@@ -342,8 +343,6 @@ async function resolveSecretValues(
   return values
 }
 
-// JavaScript says the same thing as a shell pipeline in more characters, so
-// the v2 command cap would now bite on ordinary connector code.
 const CODE_MAX_CHARS = 32_768
 const AUDIT_CODE_CHARS = 200
 /** Largest `args` payload an action call accepts, serialised. */

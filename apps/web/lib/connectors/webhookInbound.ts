@@ -32,6 +32,7 @@ import { takeToken } from '@/lib/messages/rateLimit'
 import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
 import { enqueueAgentEvent, webhookRecipients } from '@/lib/agents/events'
 import { parseConnectorPerimeter } from './config'
+import { appOrigin } from './connectUrl'
 import { connectorKind } from './model'
 import {
   extractEventField,
@@ -61,10 +62,6 @@ function clientKey(req: Request): string {
   const xff = req.headers.get('x-forwarded-for')
   const ip = (xff ? xff.split(',')[0] : '').trim() || 'local'
   return `webhook-ip:${ip.slice(0, 64)}`
-}
-
-function appOrigin(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '')
 }
 
 /** The full inbound address for a connector's current token. */
@@ -266,19 +263,12 @@ export async function handleInboundWebhook(
   }
 
   const recipients = await webhookRecipients(spaceId, connector)
-  let accepted = 0
-  for (const agentName of recipients) {
-    const result = await enqueueAgentEvent({
-      spaceId,
-      agentName,
-      kind: 'webhook',
-      source: connector,
-      summary,
-      payload,
-      dedupeKey,
-    })
-    if (result.ok) accepted += 1
-  }
+  const results = await Promise.all(
+    recipients.map((agentName) =>
+      enqueueAgentEvent({ spaceId, agentName, kind: 'webhook', source: connector, summary, payload, dedupeKey }),
+    ),
+  )
+  const accepted = results.filter((r) => r.ok).length
 
   void logAudit(spaceId, {
     userId: 'system',

@@ -20,7 +20,7 @@ const CONNECT_TIMEOUT_MS = 5_000
 const CELL_CAP_CHARS = 4_096
 const READ_KEYWORDS = new Set(['select', 'with', 'values', 'table', 'explain', 'show'])
 
-/** Per-query limits, passed in rather than read from a v1 connector config. */
+/** Per-query limits, passed in by the caller. */
 export interface SqlQueryOptions {
   /** Statement timeout — the caller passes the run's REMAINING wall clock. */
   timeoutMs: number

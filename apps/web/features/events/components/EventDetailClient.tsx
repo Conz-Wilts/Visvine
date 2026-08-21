@@ -37,7 +37,8 @@ import { RegistrationField } from '@/features/events/components/RegistrationFiel
 import type { SpaceFeatureConfig, NBEvent, RSVPResponse } from '@/lib/types';
 import { CalendarPlusIcon, CheckIcon, ClipboardListIcon, EarthIcon, FileDownIcon, Link2Icon, LoaderCircleIcon, LockIcon, MapPinIcon, PencilIcon, Trash2Icon, UsersIcon, VideoIcon } from '@/features/shared/icons';
 import Select from '@/components/ui/Select';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
+import { AboutText } from '@/features/profile/components/profileCards';
 
 // The Context tab pulls in Tiptap + the notes stack; load it only when a note
 // tab renders (same rationale as the directory profile's deferred panel).
@@ -109,8 +110,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
   const loadEvent = useCallback(async () => {
     if (!currentSpace) return;
     try {
-      const response = await fetch(`/api/events/${encodeURIComponent(eventId)}?spaceId=${currentSpace.id}`);
-      const data = await response.json();
+      const data = await fetchJson<{ event?: NBEvent | null; stats?: EventStats | null; occupied?: number; viewer?: ViewerRsvp | null; guests?: GuestPreview[] }>(`/api/events/${encodeURIComponent(eventId)}?spaceId=${currentSpace.id}`);
       setEvent(data.event ?? null);
       setStats(data.stats ?? null);
       setOccupied(data.occupied ?? 0);
@@ -426,7 +426,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
             {event.description && (
               <InfoCard>
                 <h2 className="text-[15px] font-bold font-title text-text-primary mb-2">About this event</h2>
-                <AboutText text={event.description} theme={theme} />
+                <AboutText text={event.description} accent={theme.dark} limit={480} />
               </InfoCard>
             )}
 
@@ -471,11 +471,7 @@ export default function EventDetailClient({ eventId, manage = false }: { eventId
         onConfirm={async () => {
           setDeleteError(null);
           try {
-            const response = await fetch(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
-            if (!response.ok) {
-              const data = await response.json();
-              throw new Error(data.error || 'Failed to delete event');
-            }
+            await fetchJson(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
             router.push('/events');
           } catch (err) {
             setDeleteError(err instanceof Error ? err.message : 'Failed to delete event');
@@ -851,22 +847,6 @@ function GuestChip({ guest }: { guest: GuestPreview }) {
   return guest.personId
     ? <Link href={`/directory/${encodeURIComponent(guest.personId)}`} className={`${cls} hover:border-border-default hover:-translate-y-0.5`}>{inner}</Link>
     : <span className={cls}>{inner}</span>;
-}
-
-function AboutText({ text, theme }: { text: string; theme: ThemePalette }) {
-  const [open, setOpen] = useState(false);
-  const long = text.length > 480;
-  const shown = long && !open ? text.slice(0, 480).trimEnd() + '…' : text;
-  return (
-    <div>
-      <p className="text-[15px] text-text-secondary leading-relaxed whitespace-pre-line">{shown}</p>
-      {long && (
-        <button onClick={() => setOpen((v) => !v)} className="mt-2 text-[13px] font-bold" style={{ color: theme.dark }}>
-          {open ? 'Show less' : 'Read more'}
-        </button>
-      )}
-    </div>
-  );
 }
 
 function CenteredNote({ text }: { text: string }) {

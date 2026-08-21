@@ -5,6 +5,7 @@
  */
 
 import { use, useEffect, useState } from 'react';
+import { fetchJson } from '@/lib/fetchJson';
 import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { EventComposer } from '@/features/events/components/EventComposer';
@@ -58,11 +59,7 @@ export default function EditEventPage({ params }: { params: Promise<{ eventId: s
         onConfirm={async () => {
           setDeleteError(null);
           try {
-            const response = await fetch(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
-            if (!response.ok) {
-              const data = await response.json();
-              throw new Error(data.error || 'Failed to delete event');
-            }
+            await fetchJson(`/api/events/${event.id}?spaceId=${currentSpace.id}`, { method: 'DELETE' });
             router.push('/events');
           } catch (err) {
             setDeleteError(err instanceof Error ? err.message : 'Failed to delete event');

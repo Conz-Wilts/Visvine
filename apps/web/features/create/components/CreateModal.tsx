@@ -39,7 +39,7 @@ import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/
 import { newConnectorNote } from '@/lib/connectors/config';
 import { newModelConnectorNote } from '@/lib/connectors/model';
 import { newAgentNote } from '@/lib/agents/config';
-import { fetchJsonBody } from '@/lib/fetchJson';
+import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
 import { createTool as createToolRequest } from '@/features/tools/lib/client';
@@ -588,8 +588,8 @@ export default function CreateModal() {
 
     const baseId = generateNodeId(type, name);
 
-    const existing = await fetch(`/api/data/nodes?space_id=${currentSpace.id}`).then(r => r.json());
-    const ids = new Set<string>((existing.nodes ?? []).map((n: { id: string }) => n.id));
+    const existing = await fetchJson<{ nodes?: { id: string }[] }>(`/api/data/nodes?space_id=${currentSpace.id}`);
+    const ids = new Set((existing.nodes ?? []).map((n) => n.id));
     let id = baseId;
     let counter = 2;
     while (ids.has(id)) id = `${baseId}-${counter++}`;
@@ -623,13 +623,9 @@ export default function CreateModal() {
 
       if (imageUrl) {
         try {
-          await fetch('/api/data/nodes', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              space_id: currentSpace.id,
-              node: { id, type, name, image_url: imageUrl },
-            }),
+          await fetchJsonBody('/api/data/nodes', 'PUT', {
+            space_id: currentSpace.id,
+            node: { id, type, name, image_url: imageUrl },
           });
         } catch {
           // Image failure is non-fatal

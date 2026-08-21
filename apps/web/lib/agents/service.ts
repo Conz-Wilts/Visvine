@@ -217,15 +217,14 @@ export async function listAgents(
   opts: { includeSpend?: boolean } = {},
 ): Promise<{ agents: AgentSummary[]; heartbeatAt: string | null }> {
   const now = new Date()
-  const heartbeatAt = await lastHeartbeat()
-  const { raws } = await visibleVault(p, context)
-  const out: AgentSummary[] = []
-  for (const raw of raws) {
-    if (!isAgentBriefPath(raw.path)) continue
-    const name = agentNameOfPath(raw.path)
-    if (!name) continue
-    out.push(await summarise(p, context, name, raw.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt }))
-  }
+  const [heartbeatAt, { raws }] = await Promise.all([lastHeartbeat(), visibleVault(p, context)])
+  const briefs = raws.flatMap((raw) => {
+    const name = isAgentBriefPath(raw.path) ? agentNameOfPath(raw.path) : null
+    return name ? [{ name, content: raw.content }] : []
+  })
+  const out = await Promise.all(
+    briefs.map((b) => summarise(p, context, b.name, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt })),
+  )
   return {
     agents: out.sort((a, b) => a.name.localeCompare(b.name)),
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
@@ -242,8 +241,10 @@ export async function describeAgent(
   const content = await readVisible(p, context, agentBriefPath(name))
   if (content === null) return null
   const heartbeatAt = await lastHeartbeat()
-  const summary = await summarise(p, context, name, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt })
-  const activationNote = await readVisible(p, context, agentActivationPath(name))
+  const [summary, activationNote] = await Promise.all([
+    summarise(p, context, name, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt }),
+    readVisible(p, context, agentActivationPath(name)),
+  ])
   return { ...summary, brief: content, activationNote, heartbeatAt: heartbeatAt?.toISOString() ?? null }
 }
 

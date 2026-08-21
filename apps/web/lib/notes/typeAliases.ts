@@ -395,12 +395,13 @@ export async function deleteTypeAlias(
   await updateAliases(spaceId, async (state, tx) => {
     const locked = resolveAliasType(state, nodeType)
     const existing = aliasesOfType(state, locked)
-    if (!existing.some((a) => a.name === name)) {
+    const removed = existing.find((a) => a.name === name)
+    if (!removed) {
       throw new Error(`Unknown alias "${name}" for ${locked.name}`)
     }
     // Clearing the chips commits with the removal, so a card can never be left
     // wearing an alias the space no longer has.
-    await recolourNodes(tx, spaceId, locked, existing.find((a) => a.name === name)?.id, null)
+    await recolourNodes(tx, spaceId, locked, removed.id, null)
     return [...othersOfType(state, locked), ...existing.filter((a) => a.name !== name)]
   })
 

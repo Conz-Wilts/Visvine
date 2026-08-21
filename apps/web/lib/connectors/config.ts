@@ -55,9 +55,8 @@ export interface AllowRule {
 
 /**
  * OAuth2 client-credentials auth for an http connector, from the frontmatter
- * `auth:` block. The executor exchanges these for a bearer token server-side
- * and caches it until expiry — the model never sees the client secret or the
- * token. `clientSecret` is always exactly one `{{secret:NAME}}` reference;
+ * `auth:` block, read only to collect its secret names and hosts.
+ * `clientSecret` is always exactly one `{{secret:NAME}}` reference;
  * `clientId` may be a literal or a single reference.
  */
 interface OAuth2Config {
@@ -545,7 +544,7 @@ export function allowPrivateHosts(): boolean {
 export interface ConnectorPerimeter {
   /** `host` or `host:port` entries the run may reach. Empty = no network. */
   hosts: string[]
-  /** Optional method+path rules, enforced on plain-HTTP forwards. */
+  /** Optional method+path rules, checked on every request. */
   allow: AllowRule[]
   /** Env var templates — values may hold `{{secret:NAME}}` refs, resolved at run time. */
   env: Record<string, string>
@@ -604,12 +603,9 @@ export const SANDBOX_LIMITS = {
  * Total size of a perimeter's env, so a note can't eat the isolate's memory
  * budget before a line of its code runs.
  *
- * There is deliberately no reserved-NAME list any more. v2 kept one because the
- * proxy environment variables WERE the perimeter enforcement, so a note setting
- * HTTP_PROXY was a note escaping itself. The isolate has no proxy and no shell:
- * egress is a host function, and no environment variable anywhere in the chain
- * influences it. `env` is also a namespace object, so a variable called `fetch`
- * is `env.fetch` and shadows nothing.
+ * There is no reserved-NAME list: egress is a host function that no environment
+ * variable influences, and `env` is a namespace object, so a variable called
+ * `fetch` is `env.fetch` and shadows nothing.
  */
 const ENV_MAX_BYTES = 64 * 1024
 

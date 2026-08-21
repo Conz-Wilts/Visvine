@@ -74,15 +74,19 @@ export function clipEventText(text: string): string {
 
 /** Keep the trace under the byte cap by dropping the OLDEST tool results first, then the head. */
 export function capEvents(events: AgentRunEvent[]): AgentRunEvent[] {
-  let out = events
-  const size = () => JSON.stringify(out).length
-  if (size() <= RUN_EVENTS_BYTES_CAP) return out
+  if (JSON.stringify(events).length <= RUN_EVENTS_BYTES_CAP) return events
   // Pass 1: shrink tool results from the front.
-  out = out.map((e) => (e.type === 'tool_result' ? { ...e, text: e.text.slice(0, 500) + '…[trimmed]' } : e))
-  while (size() > RUN_EVENTS_BYTES_CAP && out.length > 1) {
-    out = out.slice(1)
+  const out = events.map((e) => (e.type === 'tool_result' ? { ...e, text: e.text.slice(0, 500) + '…[trimmed]' } : e))
+  // Pass 2: drop from the head. The serialized array is `[a,b,…]`, so its
+  // length is the items' lengths plus one separator per gap plus the brackets.
+  const sizes = out.map((e) => JSON.stringify(e).length)
+  let total = sizes.reduce((n, s) => n + s, 0) + Math.max(0, out.length - 1) + 2
+  let drop = 0
+  while (total > RUN_EVENTS_BYTES_CAP && out.length - drop > 1) {
+    total -= sizes[drop] + 1
+    drop++
   }
-  return out
+  return drop ? out.slice(drop) : out
 }
 
 export async function createRun(input: {

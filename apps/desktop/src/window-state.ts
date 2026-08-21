@@ -10,7 +10,7 @@ export type WindowState = {
 };
 
 const FILE = "window-state.json";
-export const DEFAULT_WINDOW_STATE: WindowState = { width: 1360, height: 860 };
+const DEFAULT_WINDOW_STATE: WindowState = { width: 1360, height: 860 };
 
 export function loadWindowState(userDataDir: string): WindowState {
   try {

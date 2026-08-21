@@ -74,14 +74,16 @@ export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
       const vectors = await embedTexts(
         batch.map((m) => `${m.title}\n${bodyByPath.get(m.path) ?? ''}`.slice(0, EMBED_CHARS)),
       )
-      for (let j = 0; j < batch.length; j++) {
-        const literal = vectorLiteral(vectors[j])
-        await prisma.$executeRaw`
-          INSERT INTO context_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
-          VALUES ((gen_random_uuid())::text, ${context.spaceId}, ${context.ownerKey}, ${batch[j].path}, ${config.model}, ${BigInt(batch[j].mtime)}, ${literal}::vector, now())
-          ON CONFLICT (space_id, owner_key, path)
-          DO UPDATE SET model = ${config.model}, mtime = ${BigInt(batch[j].mtime)}, embedding = ${literal}::vector, updated_at = now()`
-      }
+      await Promise.all(
+        batch.map((m, j) => {
+          const literal = vectorLiteral(vectors[j])
+          return prisma.$executeRaw`
+            INSERT INTO context_note_embeddings (id, space_id, owner_key, path, model, mtime, embedding, updated_at)
+            VALUES ((gen_random_uuid())::text, ${context.spaceId}, ${context.ownerKey}, ${m.path}, ${config.model}, ${BigInt(m.mtime)}, ${literal}::vector, now())
+            ON CONFLICT (space_id, owner_key, path)
+            DO UPDATE SET model = ${config.model}, mtime = ${BigInt(m.mtime)}, embedding = ${literal}::vector, updated_at = now()`
+        }),
+      )
       notes += batch.length
     }
   }
@@ -96,12 +98,14 @@ export async function embedSweep(spaceId?: string): Promise<EmbedSweepResult> {
   for (let i = 0; i < chunks.length; i += BATCH) {
     const batch = chunks.slice(i, i + BATCH)
     const vectors = await embedTexts(batch.map((c) => c.text))
-    for (let j = 0; j < batch.length; j++) {
-      await prisma.$executeRaw`
-        UPDATE context_source_chunks
-        SET model = ${config.model}, embedding = ${vectorLiteral(vectors[j])}::vector
-        WHERE id = ${batch[j].id}`
-    }
+    await Promise.all(
+      batch.map(
+        (c, j) => prisma.$executeRaw`
+          UPDATE context_source_chunks
+          SET model = ${config.model}, embedding = ${vectorLiteral(vectors[j])}::vector
+          WHERE id = ${c.id}`,
+      ),
+    )
   }
 
   return { configured: true, notes, chunks: chunks.length, pruned }

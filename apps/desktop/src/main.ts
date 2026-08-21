@@ -8,6 +8,7 @@ import {
   deepLinkToPath,
   DEEP_LINK_SCHEME,
   desktopUserAgent,
+  isAuthProviderUrl,
   isSameApp,
   navigationDecision,
 } from "./urls";
@@ -16,6 +17,7 @@ import { loadWindowState, saveWindowState } from "./window-state";
 const APP_NAME = "Visvine";
 const OFFLINE_PAGE = path.join(__dirname, "..", "resources", "offline.html");
 const SERVER_POLL_MS = 2500;
+const ALLOWED_PERMISSIONS = new Set(["clipboard-read", "clipboard-sanitized-write", "fullscreen", "notifications"]);
 
 app.setName(APP_NAME);
 if (process.env.VISVINE_DESKTOP_USER_DATA) {
@@ -31,35 +33,10 @@ let pendingDeepLink: string | null = null;
 let offlinePoll: NodeJS.Timeout | null = null;
 
 // ---------------------------------------------------------------------------
-// Single instance + deep links (visvine-desktop://open/<path>)
+// Deep links (visvine-desktop://open/<path>)
 // ---------------------------------------------------------------------------
 
-// If another instance already owns this profile, hand it our argv (deep link)
-// and leave. Everything below is skipped so we never race it to a window.
-const gotLock = app.requestSingleInstanceLock();
-if (!gotLock) app.quit();
-
-if (gotLock) {
-  app.on("second-instance", (_event, argv) => {
-    const link = argv.find((a) => a.startsWith(`${DEEP_LINK_SCHEME}://`));
-    if (link) openDeepLink(link);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-
-  if (dev && process.platform === "win32" && process.defaultApp) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
-  } else {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
-  }
-
-  app.on("open-url", (event, url) => {
-    event.preventDefault();
-    openDeepLink(url);
-  });
-}
+const deepLinkIn = (argv: string[]) => argv.find((a) => a.startsWith(`${DEEP_LINK_SCHEME}://`));
 
 function openDeepLink(link: string) {
   const target = deepLinkToPath(link);
@@ -68,8 +45,14 @@ function openDeepLink(link: string) {
   else pendingDeepLink = target;
 }
 
+function startUrl(): string {
+  const target = pendingDeepLink;
+  pendingDeepLink = null;
+  return target ? appPathUrl(appUrl, target) : appUrl;
+}
+
 // ---------------------------------------------------------------------------
-// Server reachability + offline fallback
+// Offline fallback
 // ---------------------------------------------------------------------------
 
 async function serverReachable(): Promise<boolean> {
@@ -84,23 +67,21 @@ async function serverReachable(): Promise<boolean> {
   }
 }
 
+function stopOfflinePoll() {
+  if (offlinePoll) clearInterval(offlinePoll);
+  offlinePoll = null;
+}
+
 function showOffline(win: BrowserWindow) {
   void win.loadFile(OFFLINE_PAGE, { query: { url: appUrl } });
-  if (offlinePoll) clearInterval(offlinePoll);
+  stopOfflinePoll();
   offlinePoll = setInterval(() => {
     void serverReachable().then((up) => {
       if (!up || win.isDestroyed()) return;
-      if (offlinePoll) clearInterval(offlinePoll);
-      offlinePoll = null;
+      stopOfflinePoll();
       void win.loadURL(startUrl());
     });
   }, SERVER_POLL_MS);
-}
-
-function startUrl(): string {
-  const target = pendingDeepLink;
-  pendingDeepLink = null;
-  return target ? appPathUrl(appUrl, target) : appUrl;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,15 +106,11 @@ function applyNavigationPolicy(contents: WebContents) {
   contents.on("will-redirect", guard);
   contents.setWindowOpenHandler(({ url }) => {
     const decision = navigationDecision(url, appUrl);
-    if (decision === "allow" && isSameApp(url, appUrl)) {
-      void contents.loadURL(url);
-    } else if (decision === "external") {
-      void shell.openExternal(url);
-    } else if (decision === "allow") {
-      // Auth-provider popups (rare) may open as a child window; it inherits
-      // this same policy via did-create-window below.
-      return { action: "allow" };
-    }
+    if (decision === "external") void shell.openExternal(url);
+    else if (isSameApp(url, appUrl)) void contents.loadURL(url);
+    // Only an auth provider may open as a child window; it inherits this policy
+    // via did-create-window. about:/file: popups have no business in the shell.
+    else if (isAuthProviderUrl(url)) return { action: "allow" };
     return { action: "deny" };
   });
   contents.on("did-create-window", (child) => applyNavigationPolicy(child.webContents));
@@ -178,9 +155,7 @@ function createWindow(): BrowserWindow {
   win.once("ready-to-show", () => win.show());
 
   const persist = () => {
-    if (win.isDestroyed()) return;
-    const bounds = win.getNormalBounds();
-    saveWindowState(userData, { ...bounds, isMaximized: win.isMaximized() });
+    if (!win.isDestroyed()) saveWindowState(userData, { ...win.getNormalBounds(), isMaximized: win.isMaximized() });
   };
   // resize/move fire per pixel — coalesce; close persists synchronously.
   let persistTimer: NodeJS.Timeout | null = null;
@@ -197,15 +172,13 @@ function createWindow(): BrowserWindow {
 
   applyNavigationPolicy(win.webContents);
 
+  // The app is loaded optimistically; an unreachable server surfaces here.
   win.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
     // -3 = ERR_ABORTED (navigation superseded) — not a real failure.
-    if (!isMainFrame || code === -3) return;
-    if (isSameApp(url, appUrl)) showOffline(win);
+    if (isMainFrame && code !== -3 && isSameApp(url, appUrl)) showOffline(win);
   });
-
   win.on("closed", () => {
-    if (offlinePoll) clearInterval(offlinePoll);
-    offlinePoll = null;
+    stopOfflinePoll();
     mainWindow = null;
   });
   return win;
@@ -215,37 +188,65 @@ function createWindow(): BrowserWindow {
 // App lifecycle
 // ---------------------------------------------------------------------------
 
-app.userAgentFallback = desktopUserAgent(app.userAgentFallback, app.name, app.getVersion());
-
-if (gotLock) app.whenReady().then(async () => {
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    callback(["clipboard-read", "clipboard-sanitized-write", "fullscreen", "notifications"].includes(permission));
-  });
-
-  Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
-
-  const initialLink = process.argv.find((a) => a.startsWith(`${DEEP_LINK_SCHEME}://`));
-  if (initialLink) pendingDeepLink = deepLinkToPath(initialLink);
-
-  mainWindow = createWindow();
-  if (await serverReachable()) void mainWindow.loadURL(startUrl());
-  else showOffline(mainWindow);
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow();
-      void mainWindow.loadURL(startUrl());
+// If another instance already owns this profile, hand it our argv (deep link)
+// and leave. Everything below is skipped so we never race it to a window.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    const link = deepLinkIn(argv);
+    if (link) openDeepLink(link);
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
     }
   });
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
-});
-
-// Renderer crash → reload the shell rather than leaving a blank window.
-app.on("render-process-gone", (_e, _wc, details) => {
-  if (details.reason !== "clean-exit" && mainWindow && !mainWindow.isDestroyed()) {
-    void mainWindow.loadURL(appUrl);
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    openDeepLink(url);
+  });
+  if (dev && process.platform === "win32" && process.defaultApp) {
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
   }
-});
+
+  app.userAgentFallback = desktopUserAgent(app.userAgentFallback, app.name, app.getVersion());
+
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") app.quit();
+  });
+
+  // Renderer crash → reload the shell rather than leaving a blank window.
+  app.on("render-process-gone", (_e, _wc, details) => {
+    if (details.reason !== "clean-exit" && mainWindow && !mainWindow.isDestroyed()) {
+      void mainWindow.loadURL(appUrl);
+    }
+  });
+
+  void app.whenReady().then(() => {
+    // Only the app itself may hold a permission; auth-provider pages and the
+    // offline page get nothing. Checks and requests answer from the same list.
+    const permitted = (permission: string, origin: string) =>
+      ALLOWED_PERMISSIONS.has(permission) && isSameApp(origin, appUrl);
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+      callback(permitted(permission, details.requestingUrl));
+    });
+    session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => permitted(permission, origin));
+
+    Menu.setApplicationMenu(buildMenu({ appUrl, getWindow: () => mainWindow }));
+
+    const initialLink = deepLinkIn(process.argv);
+    if (initialLink) pendingDeepLink = deepLinkToPath(initialLink);
+
+    mainWindow = createWindow();
+    void mainWindow.loadURL(startUrl());
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow();
+        void mainWindow.loadURL(startUrl());
+      }
+    });
+  });
+}

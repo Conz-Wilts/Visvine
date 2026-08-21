@@ -155,14 +155,15 @@ export async function listAliases(spaceId: string): Promise<AliasInfo[]> {
       })
     : []
   const userById = new Map(users.map((u) => [u.id, u]))
+  const holdersByAlias = new Map<string, typeof holders>()
+  for (const h of holders) holdersByAlias.set(h.aliasId, [...(holdersByAlias.get(h.aliasId) ?? []), h])
   return aliases.map((a) => ({
     id: a.id ?? '',
     name: a.name,
     color: a.color,
     owner: a.owner === true || a.system === true,
     system: a.system === true,
-    holders: holders
-      .filter((h) => h.aliasId === a.id)
+    holders: (holdersByAlias.get(a.id ?? '') ?? [])
       .map((h) => {
         const user = userById.get(h.userId)
         return {
@@ -409,10 +410,3 @@ export async function assertMembersCanLeave(
 ): Promise<void> {
   await assertOwnerSurvives(spaceId, { kind: 'removeMember', userIds })
 }
-
-// `reconcilePersonAliases` used to live here: it took the Types page's whole
-// alias array as authoritative and deleted — with their holders and grants —
-// every alias missing from it. A page snapshot cannot know about an alias
-// created since it loaded, so that was a delete-by-omission from stale data.
-// Deleting an alias is now only ever `deleteAlias`, and the Types page's save
-// folds onto storage additively through `mergeAliasList`.

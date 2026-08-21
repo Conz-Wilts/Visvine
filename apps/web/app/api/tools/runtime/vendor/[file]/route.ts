@@ -2,6 +2,7 @@ import type { NextRequest } from 'next/server'
 import { bundleHeaders } from '@/lib/tools/csp'
 import { ifNoneMatchSatisfied } from '@/lib/tools/runtimeBundle'
 import { isVendorFileName, vendorFile } from '@/lib/tools/vendorBundle'
+import { logger } from '@/lib/logger'
 
 /**
  * The four vendor ESM modules the frame's import map points at: React, the JSX
@@ -42,7 +43,7 @@ export async function GET(
   try {
     built = await vendorFile(name)
   } catch (e) {
-    console.error('[tools] vendor build failed', name, e)
+    logger.error('tools.vendor_build.failed', { name, err: e })
     return textResponse(500, 'The Tool runtime could not be built.')
   }
 

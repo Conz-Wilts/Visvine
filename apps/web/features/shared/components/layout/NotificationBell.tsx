@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchJson, fetchJsonBody } from "@/lib/fetchJson";
 import { useRouter } from "next/navigation";
 import { BellIcon } from "@/features/shared/icons";
 import { useClickOutside } from "@/features/shared/hooks/useClickOutside";
@@ -30,9 +31,7 @@ export default function NotificationBell() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`/api/notifications?take=${TAKE}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { notifications: NotificationDTO[]; unread: number };
+      const data = await fetchJson<{ notifications: NotificationDTO[]; unread: number }>(`/api/notifications?take=${TAKE}`, { cache: "no-store" });
       setItems(data.notifications);
       setUnread(data.unread);
       setLoaded(true);
@@ -79,15 +78,8 @@ export default function NotificationBell() {
     );
     setUnread((c) => (target.all ? 0 : Math.max(0, c - (target.ids?.length ?? 0))));
     try {
-      const res = await fetch("/api/notifications/read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(target),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { unread: number };
-        setUnread(data.unread);
-      }
+      const data = await fetchJsonBody<{ unread: number }>("/api/notifications/read", "POST", target);
+      setUnread(data.unread);
     } catch {
       /* the next refresh reconciles */
     }
@@ -115,24 +107,14 @@ export default function NotificationBell() {
     setReplyBusy(true);
     setReplyError(null);
     try {
-      const res = await fetch(`/api/notifications/${encodeURIComponent(n.id)}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setReplyError(data.error ?? "Could not send the reply");
-        return;
-      }
-      const data = (await res.json()) as { unread: number };
+      const data = await fetchJsonBody<{ unread: number }>(`/api/notifications/${encodeURIComponent(n.id)}/reply`, "POST", { text });
       const now = new Date().toISOString();
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: x.readAt ?? now } : x)));
       setUnread(data.unread);
       setReplyFor(null);
       setReplyText("");
-    } catch {
-      setReplyError("Could not send the reply");
+    } catch (err) {
+      setReplyError(err instanceof Error ? err.message : "Could not send the reply");
     } finally {
       setReplyBusy(false);
     }

@@ -21,6 +21,7 @@
 // to Claude's own add-connector and consent screens, which say it there anyway.
 
 import { useEffect, useState } from 'react';
+import { useCopied } from '@/features/shared/hooks/useCopied';
 import { Alert, Button, SettingsSection } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
 
@@ -57,16 +58,9 @@ function useMcpConnectInfo() {
  * two "copy this and hand it over" affordances look the same.
  */
 function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | null; label?: string }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopied();
 
-  const copy = async () => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* clipboard unavailable */ }
-  };
+  const copyUrl = () => { if (url) void copy(url); };
 
   return (
     <div className="flex items-center gap-2">
@@ -76,7 +70,7 @@ function McpServerUrlRow({ url, label = 'MCP server address' }: { url: string | 
         aria-label={label}
         className="min-w-0 flex-1 truncate rounded-xl border border-transparent bg-surface-2 px-3.5 py-2.5 font-mono text-xs text-text-secondary"
       />
-      <Button variant="brand" onClick={copy} disabled={!url}>
+      <Button variant="brand" onClick={copyUrl} disabled={!url}>
         {copied ? 'Copied' : 'Copy'}
       </Button>
     </div>

@@ -34,6 +34,7 @@ import { appendNoteLogEntry, toDateString } from './shared/noteLog'
 import type { ContextPrincipal, WriteResult } from './shared/contextTypes'
 import type { NoteMeta, NoteRevisionOrigin, RawNote, References } from './shared/types'
 import type { ContextSourceMeta } from './shared/sourceTypes'
+import { logger } from '@/lib/logger'
 
 function isShared(context: Context): boolean {
   return context.ownerKey === SHARED_OWNER_KEY
@@ -200,7 +201,7 @@ export async function searchContext(
     .filter((s) => filters.folderId === undefined || folderIdOfPath(s.path) === filters.folderId)
     .map((s) => s.path)
 
-  // One query embed shared by both vector stages (they used to embed it twice).
+  // One query embed shared by both vector stages.
   const report: SemanticReport = {}
   const configured = semanticConfigured()
   let queryVector: number[] | null = null
@@ -209,7 +210,7 @@ export async function searchContext(
       ;[queryVector] = await embedTexts([query])
     } catch (err) {
       report.error = err instanceof Error ? err.message : String(err)
-      console.error('[search] query embed failed:', report.error)
+      logger.error('notes.search.embed_failed', { err })
     }
   }
 
@@ -523,8 +524,7 @@ export async function readSourceVisible(
   }
   const offset = Math.max(0, opts.offsetChars ?? 0)
   const max = Math.max(1, opts.maxChars ?? 20_000)
-  const meta = (await sourceStore.getSource(context, path))!
-  return { meta, text: full.slice(offset, offset + max), totalChars: full.length }
+  return { meta: sourceStore.toMeta(row), text: full.slice(offset, offset + max), totalChars: full.length }
 }
 
 /** Gated hard delete of a source (row, chunks, and the GCS object). */

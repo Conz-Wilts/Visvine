@@ -55,13 +55,14 @@ export async function GET() {
   `;
 
   const tableNames = tables.map((t) => t.table_name);
-  const rowCounts: Record<string, number> = {};
-  for (const tableName of tableNames) {
-    const result = await prisma.$queryRawUnsafe<{ count: bigint }[]>(
-      `SELECT COUNT(*) AS count FROM "${tableName}"`
-    );
-    rowCounts[tableName] = Number(result[0]?.count ?? 0);
-  }
+  const counts = await Promise.all(
+    tableNames.map((tableName) =>
+      prisma.$queryRawUnsafe<{ count: bigint }[]>(`SELECT COUNT(*) AS count FROM "${tableName}"`),
+    ),
+  );
+  const rowCounts = Object.fromEntries(
+    tableNames.map((tableName, i) => [tableName, Number(counts[i][0]?.count ?? 0)]),
+  );
 
   return NextResponse.json({ tables: tableNames, columns, foreignKeys, rowCounts });
 }
