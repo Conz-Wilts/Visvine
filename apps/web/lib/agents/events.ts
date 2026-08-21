@@ -23,6 +23,7 @@ import type { Actor } from '@/lib/notes/store'
 import { logAudit } from '@/lib/notes/audit'
 import { logger } from '@/lib/logger'
 import { agentBriefPath, matchesAnyGlob, type AgentTriggers } from './config'
+import { findAgentBrief } from './briefs'
 
 type AgentEventKind = 'note_written' | 'webhook' | 'reply'
 
@@ -179,7 +180,7 @@ async function auditLoopCut(spaceId: string, agentName: string, runId: string | 
     userId: 'system',
     name: 'Visvine',
     action: 'agent',
-    path: agentBriefPath(agentName),
+    path: (await findAgentBrief(spaceId, agentName))?.path ?? agentBriefPath(agentName),
     detail: `trigger loop cut at depth ${MAX_EVENT_CHAIN_DEPTH}: ${path} would wake another agent more than ${MAX_EVENT_CHAIN_DEPTH} hops from a human`,
   })
 }

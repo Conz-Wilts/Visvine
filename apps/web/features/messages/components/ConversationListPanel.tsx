@@ -464,7 +464,7 @@ export default function ConversationListPanel({
         // docked column itself carries no seam, so the line lives on the
         // channel panel — without it the list bleeds into the thread.
         <div
-          className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border-subtle bg-surface-1"
+          className="flex h-full min-h-0 flex-col overflow-hidden border-r border-border-subtle"
           style={{ animation: 'fadeIn 0.3s ease-out' }}
         >
           {inbox}
@@ -472,7 +472,7 @@ export default function ConversationListPanel({
         host as HTMLElement,
       )
     : (
-      <aside className="flex w-full min-h-0 flex-col overflow-hidden border-r border-border-subtle bg-surface-1 md:w-80 md:shrink-0">
+      <aside className="flex w-full min-h-0 flex-col overflow-hidden border-r border-border-subtle md:w-80 md:shrink-0">
         {inbox}
       </aside>
     );

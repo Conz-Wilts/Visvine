@@ -7,6 +7,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   agentNameOfHref,
   agentPageHref,
@@ -43,6 +44,21 @@ test('parseModelRef accepts provider/model and rejects the rest', () => {
   assert.ok(unknownModel.ok && unknownModel.ref.pricing === null, 'unknown ids under a known provider pass through')
   for (const bad of ['', 'gemini', '/x', 'gemini/', 'https://evil.example/v1', 'nope/model']) {
     assert.equal(parseModelRef(bad).ok, false, bad)
+  }
+})
+
+test('the mirrored Gemini literals in registry.ts and ai.ts stay identical', () => {
+  // lib/agents/registry.ts hand-copies these from lib/notes/ai.ts because it
+  // must stay pure; nothing else ties them together, so this does.
+  const literal = (source: string, name: string): string => {
+    const match = source.match(new RegExp(`const ${name} = '([^']+)'`))
+    assert.ok(match, `${name} not found`)
+    return match![1]
+  }
+  const ai = readFileSync(new URL('../lib/notes/ai.ts', import.meta.url), 'utf8')
+  const registry = readFileSync(new URL('../lib/agents/registry.ts', import.meta.url), 'utf8')
+  for (const name of ['GEMINI_BASE_URL', 'DEFAULT_GEMINI_MODEL']) {
+    assert.equal(literal(registry, name), literal(ai, name), name)
   }
 })
 

@@ -7,6 +7,7 @@ import prisma from '@/lib/prisma'
 import { logAudit } from '@/lib/notes/audit'
 import { readVisible, visibleVault, writeGated } from '@/lib/notes/contextService'
 import { agentNameOfPath, isAgentBriefPath } from '@/lib/notes/entities'
+import { folderOfIndexPath, humanizeFolderName, isIndexPath } from '@/lib/notes/shared/indexNote'
 import { parseFrontmatter, splitFrontmatter } from '@/lib/notes/shared/markdown'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
 import type { Context } from '@/lib/notes/store'
@@ -15,7 +16,7 @@ import { microsToCents } from './budget'
 import {
   AGENT_NAME_RE,
   agentActivationPath,
-  agentBriefPath,
+  agentFolderOfPath,
   DEFAULT_DEBOUNCE_MS,
   describeSchedule,
   describeTriggers,
@@ -27,6 +28,7 @@ import {
   type AgentSchedule,
   type AgentTriggers,
 } from './config'
+import { canonicalBriefOrder, findAgentBrief } from './briefs'
 import { deactivateAgent, effectiveTimezone, syncAgentState } from './hooks'
 import { DELAYED_AFTER_MS } from './limits'
 import { probeModelKey, resolveAgentChatConfig } from './providers'
@@ -49,6 +51,8 @@ export type AgentRowState =
 export interface AgentSummary {
   name: string
   path: string
+  /** The folder of agents the brief sits in, relative to `agents/` — '' at the top. */
+  folder: string
   title: string
   description: string | null
   model: string | null
@@ -144,8 +148,9 @@ async function summarise(
   p: ContextPrincipal,
   context: Context,
   name: string,
+  path: string,
   briefContent: string,
-  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null },
+  opts: { includeSpend: boolean; now: Date; heartbeatAt: Date | null; duplicateOf?: string | null },
 ): Promise<AgentSummary> {
   const spaceId = context.spaceId
   const fm = parseFrontmatter(briefContent)
@@ -161,7 +166,7 @@ async function summarise(
     latestRun(spaceId, name),
     keyStoredFor(spaceId, brief),
     prisma.contextNote.findFirst({
-      where: { spaceId, ownerKey: 'shared', path: agentBriefPath(name), deletedAt: null },
+      where: { spaceId, ownerKey: 'shared', path, deletedAt: null },
       select: { createdBy: true },
     }),
   ])
@@ -169,13 +174,18 @@ async function summarise(
   const tz = activation?.timezone ?? null
   const summary: AgentSummary = {
     name,
-    path: agentBriefPath(name),
+    path,
+    folder: agentFolderOfPath(path),
     title: brief?.title || (typeof fm.title === 'string' && fm.title) || name,
     description: brief?.description ?? (typeof fm.description === 'string' ? fm.description : null),
     model: brief?.model ?? (typeof fm.model === 'string' ? fm.model : null),
     connectors: brief?.connectors ?? [],
     tools: brief?.tools ?? [],
-    invalid: parsedBrief.ok ? null : parsedBrief.error,
+    invalid: opts.duplicateOf
+      ? `Another agent is already named "${name}" (${opts.duplicateOf}) — rename this one`
+      : parsedBrief.ok
+        ? null
+        : parsedBrief.error,
     authorUserId: briefRow?.createdBy ?? null,
     activation: {
       active: !!activation?.active,
@@ -210,23 +220,89 @@ async function summarise(
   return summary
 }
 
-/** Every agent brief the principal can see — valid or broken. */
+/**
+ * A folder of agents — `agents/<path>/index.md`, which is what makes the
+ * folder exist. `path` is relative to `agents/`; `title` is the index note's.
+ */
+export interface AgentFolder {
+  path: string
+  indexPath: string
+  title: string
+  description: string | null
+}
+
+export interface AgentRoster {
+  agents: AgentSummary[]
+  folders: AgentFolder[]
+  heartbeatAt: string | null
+}
+
+function folderOf(indexPath: string, content: string): AgentFolder | null {
+  const folder = folderOfIndexPath(indexPath)
+  if (!folder.startsWith('agents/')) return null
+  const rel = folder.slice('agents/'.length)
+  if (!rel || rel === 'live' || rel.startsWith('live/')) return null
+  const fm = parseFrontmatter(content)
+  return {
+    path: rel,
+    indexPath,
+    title: (typeof fm.title === 'string' && fm.title.trim()) || humanizeFolderName(rel.split('/').pop()!),
+    description: typeof fm.description === 'string' && fm.description.trim() ? fm.description.trim() : null,
+  }
+}
+
+/**
+ * Every agent brief the principal can see — valid or broken — and every
+ * folder of agents. Two briefs with one leaf name are one agent: the
+ * canonical path is summarised as it, the rest list as invalid duplicates.
+ */
 export async function listAgents(
   p: ContextPrincipal,
   context: Context,
   opts: { includeSpend?: boolean } = {},
-): Promise<{ agents: AgentSummary[]; heartbeatAt: string | null }> {
+): Promise<AgentRoster> {
   const now = new Date()
   const [heartbeatAt, { raws }] = await Promise.all([lastHeartbeat(), visibleVault(p, context)])
-  const briefs = raws.flatMap((raw) => {
+  const folders = new Map<string, AgentFolder>()
+  const briefs: { name: string; path: string; content: string }[] = []
+  for (const raw of raws) {
+    if (isIndexPath(raw.path)) {
+      const f = folderOf(raw.path, raw.content)
+      if (f) folders.set(f.path, f)
+      continue
+    }
     const name = isAgentBriefPath(raw.path) ? agentNameOfPath(raw.path) : null
-    return name ? [{ name, content: raw.content }] : []
-  })
+    if (name) briefs.push({ name, path: raw.path, content: raw.content })
+  }
+  // A brief in a folder whose index the viewer cannot see still needs a row
+  // to hang from.
+  for (const b of briefs) {
+    const rel = agentFolderOfPath(b.path)
+    const segments = rel ? rel.split('/') : []
+    for (let i = 1; i <= segments.length; i++) {
+      const path = segments.slice(0, i).join('/')
+      if (!folders.has(path)) {
+        folders.set(path, { path, indexPath: `agents/${path}/index.md`, title: humanizeFolderName(segments[i - 1]), description: null })
+      }
+    }
+  }
+  briefs.sort((a, b) => canonicalBriefOrder(a.path, b.path))
+  const canonical = new Map<string, string>()
+  for (const b of briefs) if (!canonical.has(b.name)) canonical.set(b.name, b.path)
   const out = await Promise.all(
-    briefs.map((b) => summarise(p, context, b.name, b.content, { includeSpend: !!opts.includeSpend, now, heartbeatAt })),
+    briefs.map((b) => {
+      const first = canonical.get(b.name)!
+      return summarise(p, context, b.name, b.path, b.content, {
+        includeSpend: !!opts.includeSpend,
+        now,
+        heartbeatAt,
+        duplicateOf: first === b.path ? null : first,
+      })
+    }),
   )
   return {
-    agents: out.sort((a, b) => a.name.localeCompare(b.name)),
+    agents: out.sort((a, b) => a.path.localeCompare(b.path)),
+    folders: [...folders.values()].sort((a, b) => a.path.localeCompare(b.path)),
     heartbeatAt: heartbeatAt?.toISOString() ?? null,
   }
 }
@@ -238,11 +314,12 @@ export async function describeAgent(
   opts: { includeSpend?: boolean } = {},
 ): Promise<(AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null }) | null> {
   if (!AGENT_NAME_RE.test(name)) return null
-  const content = await readVisible(p, context, agentBriefPath(name))
-  if (content === null) return null
+  const row = await findAgentBrief(context.spaceId, name)
+  const content = row ? await readVisible(p, context, row.path) : null
+  if (!row || content === null) return null
   const heartbeatAt = await lastHeartbeat()
   const [summary, activationNote] = await Promise.all([
-    summarise(p, context, name, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt }),
+    summarise(p, context, name, row.path, content, { includeSpend: !!opts.includeSpend, now: new Date(), heartbeatAt }),
     readVisible(p, context, agentActivationPath(name)),
   ])
   return { ...summary, brief: content, activationNote, heartbeatAt: heartbeatAt?.toISOString() ?? null }
@@ -268,8 +345,9 @@ export async function activateAgent(
   }
   if (!principalIsSuperAdmin(p)) return { ok: false, status: 403, error: 'Only space admins can activate an agent.' }
   if (!AGENT_NAME_RE.test(name)) return { ok: false, status: 400, error: 'Bad agent name.' }
-  const content = await readVisible(p, context, agentBriefPath(name))
-  if (content === null) return { ok: false, status: 404, error: 'No such agent.' }
+  const row = await findAgentBrief(context.spaceId, name)
+  const content = row ? await readVisible(p, context, row.path) : null
+  if (!row || content === null) return { ok: false, status: 404, error: 'No such agent.' }
   const parsed = parseAgentBrief(parseFrontmatter(content), splitFrontmatter(content).body)
   if (!parsed.ok) return { ok: false, status: 400, error: `The brief is invalid: ${parsed.error}` }
 
@@ -291,7 +369,7 @@ export async function activateAgent(
     userId: p.userId,
     name: p.name,
     action: 'agent',
-    path: agentBriefPath(name),
+    path: row.path,
     detail: `activated: ${[describeSchedule(input.schedule, input.timezone ?? (await effectiveTimezone(context.spaceId, null))), describeTriggers(input.on ?? null)].filter(Boolean).join('; ')}`,
   })
   return { ok: true, warning }
@@ -320,7 +398,7 @@ export async function setBudget(
     userId: p.userId,
     name: p.name,
     action: 'agent',
-    path: agentBriefPath(name),
+    path: (await findAgentBrief(context.spaceId, name))?.path ?? `agents/${name}.md`,
     detail: budgetMonthlyCents === null ? 'budget removed' : `budget set: ${budgetMonthlyCents} cents / month`,
   })
   return { ok: true, warning: null }
@@ -329,9 +407,6 @@ export async function setBudget(
 /** Author-or-admin: may this principal press "Run now" on this agent? */
 export async function canTriggerRun(p: ContextPrincipal, spaceId: string, name: string): Promise<boolean> {
   if (principalIsSuperAdmin(p)) return true
-  const row = await prisma.contextNote.findFirst({
-    where: { spaceId, ownerKey: 'shared', path: agentBriefPath(name), deletedAt: null },
-    select: { createdBy: true },
-  })
-  return row?.createdBy === p.userId
+  const row = await findAgentBrief(spaceId, name)
+  return row !== null && row.createdBy === p.userId
 }

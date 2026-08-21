@@ -68,8 +68,7 @@ export interface HostFetchInit {
  * non-streaming decode renders that tail as U+FFFD, which is the right trade
  * for a body that is already truncated.
  */
-async function readCapped(res: Response, cap: number): Promise<{ text: string; truncated: boolean }> {
-  if (!res.body) return { text: '', truncated: false }
+export async function readCapped(res: Response, cap: number): Promise<{ text: string; truncated: boolean }> {  if (!res.body) return { text: '', truncated: false }
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let text = ''

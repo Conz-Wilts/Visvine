@@ -45,6 +45,7 @@ import { ingestSource, reingestSourceFrom } from '@/lib/notes/sources/ingest'
 import * as sourceStore from '@/lib/notes/sourceStore'
 import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { normalizeSourcePath, sourceKindOf } from '@/lib/notes/shared/sourceTypes'
+import { requireFolderInSpace } from '@/lib/resources/folders'
 
 /** Per-file ceiling. Buffered whole before sharp runs, so this is a memory bound. */
 export const MAX_RESOURCE_BYTES = 25 * 1024 * 1024
@@ -73,6 +74,8 @@ export interface DriveFile {
   indexError: string | null
   /** Chunks this file contributed to retrieval — 0 until it is indexed. */
   chunkCount: number
+  /** The Drive folder it sits in; null is the root. */
+  folderId: string | null
   metadata: Record<string, unknown>
   createdAt: string
 }
@@ -146,6 +149,8 @@ export interface UploadInput {
   mimeType: string
   buffer: Buffer
   uploadedBy: string
+  /** The folder to land in; null (the default) is the root. */
+  folderId?: string | null
 }
 
 /**
@@ -160,6 +165,8 @@ export interface UploadInput {
  */
 export async function uploadResource(input: UploadInput): Promise<DriveFile> {
   const { spaceId, buffer, uploadedBy } = input
+  const folderId = input.folderId ?? null
+  await requireFolderInSpace(spaceId, folderId)
   if (buffer.length > MAX_RESOURCE_BYTES) {
     throw new Error(`File must be less than ${Math.floor(MAX_RESOURCE_BYTES / 1024 / 1024)}MB`)
   }
@@ -199,6 +206,7 @@ export async function uploadResource(input: UploadInput): Promise<DriveFile> {
       gcsPath,
       fileSize: bytes.length,
       uploadedBy,
+      folderId,
       indexState: kind ? 'pending' : 'unsupported',
       indexError: kind
         ? null
@@ -339,6 +347,7 @@ type ResourceRow = {
   sourcePath: string | null
   indexState: string
   indexError: string | null
+  folderId: string | null
   metadata: unknown
   createdAt: Date
 }
@@ -356,6 +365,7 @@ function toDriveFile(row: ResourceRow, chunkCount: number, fileUrl?: string | nu
     indexState: row.indexState as IndexState,
     indexError: row.indexError,
     chunkCount,
+    folderId: row.folderId,
     metadata: (row.metadata as Record<string, unknown> | null) ?? {},
     createdAt: row.createdAt.toISOString(),
   }

@@ -155,7 +155,7 @@ export default function Sidebar() {
   // Active is carried by weight and colour, not by a coloured pill: the current
   // surface is the dark, semibold row; everything else sits muted until hovered.
   const rowColor = (active: boolean) =>
-    active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #6b7280)";
+    active ? "var(--shell-fg-strong, #111827)" : "var(--shell-fg-muted, #111827)";
 
   const railInner = (
     <>
@@ -210,7 +210,7 @@ export default function Sidebar() {
                       <span
                         title={`${label} is missing something it needs in this space — it runs with those parts switched off.`}
                         className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
-                        style={{ background: "#f59e0b", boxShadow: "0 0 0 2px var(--shell-bg, #ffffff)" }}
+                        style={{ background: "#f59e0b", boxShadow: "0 0 0 2px rgba(255,255,255,0.9)" }}
                       />
                     )}
                   </span>
@@ -368,7 +368,6 @@ export default function Sidebar() {
         <div
           className="relative shrink-0 overflow-hidden"
           style={{
-            background: "var(--color-surface-1, #ffffff)",
             width: columnW,
             marginTop: dockTopInset + SHELL_FRAME_GAP,
             marginBottom: SHELL_FRAME_GAP + SHELL_FRAME_MARGIN,

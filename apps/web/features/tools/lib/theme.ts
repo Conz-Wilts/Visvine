@@ -40,7 +40,7 @@ const THEME_TOKENS: ReadonlyArray<readonly [source: string, alias: string, fallb
   // Text.
   ['--text-primary', '--vv-text', '#111827'],
   ['--text-secondary', '--vv-text-secondary', '#374151'],
-  ['--text-muted', '--vv-text-muted', '#6b7280'],
+  ['--text-muted', '--vv-text-muted', '#4b5563'],
   // Type. `--font-utility` is the product's body face; the brand face is
   // marketing-only (app/globals.css) and is deliberately not published.
   [

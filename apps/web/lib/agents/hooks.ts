@@ -47,6 +47,7 @@ import {
   type AgentActivation,
   DEFAULT_DEBOUNCE_MS,
 } from './config'
+import { findAgentBrief } from './briefs'
 import { fireNoteTriggers, hasPendingEvents } from './events'
 
 /** The actor for machine writes into the activation boundary. */
@@ -93,7 +94,7 @@ export async function syncAgentState(
   const now = opts.now ?? new Date()
   let activation = opts.activation ?? null
   let invalid: string | null = null
-  const briefRead = readSharedNote(spaceId, agentBriefPath(name))
+  const briefRead = findAgentBrief(spaceId, name)
   if (activation === undefined || activation === null) {
     const live = await readSharedNote(spaceId, agentActivationPath(name))
     if (live) {
@@ -186,7 +187,7 @@ export async function deactivateAgent(
     userId: by.userId,
     name: by.name,
     action: 'agent',
-    path: agentBriefPath(name),
+    path: (await findAgentBrief(spaceId, name))?.path ?? agentBriefPath(name),
     detail: `deactivated: ${reason}${detail ? ` — ${detail}` : ''}`,
   })
   // A MACHINE deactivation is news to the people who can fix it: the brief's
@@ -195,7 +196,7 @@ export async function deactivateAgent(
   // Only when it WAS active: re-deactivating an idle agent tells nobody anything.
   if (state?.active && reason !== 'admin' && reason !== 'renamed' && reason !== 'deleted') {
     void (async () => {
-      const brief = await readSharedNote(spaceId, agentBriefPath(name))
+      const brief = await findAgentBrief(spaceId, name)
       const recipients = [brief?.createdBy, state.runAsUserId, ...(await spaceAdminUserIds(spaceId))].filter((id): id is string => !!id)
       await notify(recipients, {
         spaceId,
@@ -299,8 +300,14 @@ export async function agentNoteRenamed(
   }
 
   if (fromName && isAgentBriefPath(from)) {
+    if (toName === fromName && isAgentBriefPath(to)) {
+      // Moved between folders of agents: same name, same agent. Nothing keyed
+      // on the name changes, so the activation (if any) stands.
+      await syncAgentState(spaceId, toName)
+      return
+    }
     // Deactivate under the old name, then move the row + activation note.
-    await deactivateAgent(spaceId, fromName, 'renamed', toName ? `now agents/${toName}.md` : `moved to ${to}`)
+    await deactivateAgent(spaceId, fromName, 'renamed', toName ? `now ${to}` : `moved to ${to}`)
     const store = await import('@/lib/notes/store')
     const liveFrom = agentActivationPath(fromName)
     if (toName && isAgentBriefPath(to)) {

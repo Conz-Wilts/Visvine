@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { PlugIcon } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
-import { Skeleton, Alert } from '@/components/ui';
+import { Skeleton, Alert, EmptyState } from '@/components/ui';
+import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { fetchJson } from '@/lib/fetchJson';
 import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
 
@@ -15,9 +16,8 @@ import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
  * connector's node page — where the Connector tab renders its config, its
  * secrets and a live test — rather than opening an editor of its own.
  *
- * Read-only: connectors are created by writing the note (in Context or over
- * MCP), never from here, so the page has no builder of its own to keep in step
- * with the note format.
+ * Connectors are created from the Create panel (the note format lives there,
+ * not here), so the page lists and never edits.
  *
  * Each card answers one question: can an agent use this right now? A connector
  * fails for three different reasons (frontmatter that doesn't parse, a secret
@@ -127,6 +127,7 @@ export default function ConnectorsPage() {
   // The space has to resolve before the fetch: its id is half the URL, and
   // a switch mid-flight has to re-run this against the space now on screen.
   const { currentSpace, loading: spaceLoading } = useSpace();
+  const { open: openCreate } = useCreateModal();
   const spaceId = currentSpace?.id;
 
   const [connectors, setConnectors] = useState<ConnectorRow[]>([]);
@@ -171,16 +172,12 @@ export default function ConnectorsPage() {
     }
     if (connectors.length === 0) {
       return (
-        <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-          <PlugIcon className="h-6 w-6 text-text-muted" />
-          <div>
-            <p className="text-sm font-semibold text-text-primary">No connectors yet</p>
-            <p className="mt-1 text-sm text-text-muted">
-              Add one by writing a <code className="font-mono text-[13px]">connectors/&lt;name&gt;.md</code> note
-              in Context, or over MCP.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={<PlugIcon />}
+          title="No connectors yet"
+          description="A connector is a gateway to an external API or a model provider your agents run on."
+          action={{ label: 'Create a connector', onClick: () => openCreate('connector') }}
+        />
       );
     }
     return (

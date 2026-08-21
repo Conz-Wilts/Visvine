@@ -124,12 +124,12 @@ export function FilterDropdown({ label, options, selected, onChange, selectedSub
       >
         <svg
           className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          style={{ opacity: 0.5 }}
+         
           fill="none" stroke="currentColor" viewBox="0 0 24 24"
         >
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
-        <span style={{ opacity: 0.65 }}>{label}:</span>
+        <span>{label}:</span>
         <span>{triggerLabel}</span>
       </button>
 
@@ -304,7 +304,7 @@ export function SortToggle({ value, onChange }: SortToggleProps) {
     >
       <ArrowDownIcon
         className={`h-4 w-4 transition-transform duration-200 ${az ? '' : 'rotate-180'}`}
-        style={{ opacity: 0.5 }}
+       
       />
       <span className="tabular-nums">{az ? 'A → Z' : 'Z → A'}</span>
     </button>

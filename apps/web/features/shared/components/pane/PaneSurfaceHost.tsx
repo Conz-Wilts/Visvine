@@ -88,6 +88,11 @@ function useRailInsetStyle(railVisible: boolean): React.CSSProperties {
  * which the route renders itself under a `tree-only` surface. It sits in the
  * content column beside the docked tree, where the note panel would otherwise
  * be, rather than under the whole row.
+ *
+ * Every branch must render it. The pages under this shell are what register
+ * chrome (usePaneChrome), so a branch that drops `children` unmounts the live
+ * page: the next navigation changes the URL, mounts nothing, re-registers
+ * nothing, and the shell keeps showing the note it was already showing.
  */
 export default function PaneSurfaceHost({ children }: { children?: React.ReactNode }) {
   const { chrome } = usePaneChromeState();
@@ -229,6 +234,7 @@ export default function PaneSurfaceHost({ children }: { children?: React.ReactNo
           </TabBarSlotGate>
         </div>
       )}
+      {children}
     </ContentReveal>
     </div>
   );

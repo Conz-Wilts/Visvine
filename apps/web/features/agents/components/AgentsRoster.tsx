@@ -1,25 +1,35 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { BotIcon, PlayIcon } from '@/features/shared/icons';
+import { BotIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon, PlayIcon, PlusIcon } from '@/features/shared/icons';
 import Toggle from '@/components/ui/Toggle';
+import { Button, EmptyState } from '@/components/ui';
+import { useCreateModal } from '@/features/shared/contexts/CreateModalContext';
 import { fetchJson } from '@/lib/fetchJson';
-import type { AgentSummary } from '@/lib/agents/service';
-import { fmtAgo, fmtCents, rowStateView, terminalLabel } from '../lib/rowState';
-import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
+import { noteHref } from '@/lib/notes/entities';
+import type { AgentFolder, AgentSummary } from '@/lib/agents/service';
+import { fmtCents, statusLine, terminalLabel } from '../lib/rowState';
+import { buildAgentTree, flattenAgentTree, type AgentTreeFolder, type AgentTreeLeaf } from '../lib/tree';
+import StatusDot from './StatusDot';
 import ActivateAgentDialog from './ActivateAgentDialog';
+import NewAgentFolderDialog from './NewAgentFolderDialog';
 
 /**
- * The control room: one row per agent — name, status, schedule, last run,
- * next run, spend (admins) — with the activation toggle (admins) and Run now
- * (author or admin). Members see the whole roster minus the money; the
- * toggle is visible but disabled for them so they can see their agent was
- * turned on and by whom.
+ * The roster as the `agents/` folder: folders of agents (each an index note)
+ * holding agents and further folders. A folder row folds; its dot is the
+ * loudest of what it holds. An agent row: a dot for the state, the name as the
+ * link, and the one line worth knowing beneath — the schedule when it is
+ * healthy, the problem when it is not. Admins get the switch and, on hover, a
+ * play control; members see the same rows with the switch read-only. Anyone
+ * may add a folder or an agent, on the row they are standing on.
  */
+const INDENT_PX = 22;
+
 export default function AgentsRoster({
   spaceId,
   agents,
+  folders,
   isAdmin,
   currentUserId,
   spaceTimezone,
@@ -28,6 +38,7 @@ export default function AgentsRoster({
 }: {
   spaceId: string;
   agents: AgentSummary[];
+  folders: AgentFolder[];
   isAdmin: boolean;
   currentUserId: string | null;
   spaceTimezone: string | null;
@@ -36,7 +47,21 @@ export default function AgentsRoster({
 }) {
   const [activating, setActivating] = useState<AgentSummary | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [newFolderIn, setNewFolderIn] = useState<string | null>(null);
   const now = Date.now();
+  const { open: openCreate } = useCreateModal();
+
+  const tree = useMemo(() => buildAgentTree(folders, agents, now), [folders, agents, now]);
+  const rows = useMemo(() => flattenAgentTree(tree, collapsed), [tree, collapsed]);
+
+  const toggleFolder = (path: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
 
   const deactivate = async (a: AgentSummary) => {
     setBusy(a.name);
@@ -48,7 +73,7 @@ export default function AgentsRoster({
       });
       onChanged();
     } catch (e) {
-      onNotice(e instanceof Error ? e.message : 'Could not deactivate', 'bad');
+      onNotice(e instanceof Error ? e.message : 'Could not turn off', 'bad');
     } finally {
       setBusy(null);
     }
@@ -59,13 +84,12 @@ export default function AgentsRoster({
     // The request holds until the run finishes; the roster refreshes as it goes.
     const refresh = setInterval(onChanged, 3000);
     try {
-      onNotice(`Running ${a.title || a.name}…`, 'ok');
       const res = await fetchJson<{ ok: true; outcome: { status: string; reason: string } | null; error: string | null }>(
         `/api/communities/${spaceId}/agents/${encodeURIComponent(a.name)}/run`,
         { method: 'POST' },
       );
       if (res.error) onNotice(res.error, 'bad');
-      else if (res.outcome) onNotice(`${a.title || a.name}: ${res.outcome.status} (${terminalLabel(res.outcome.reason)})`, res.outcome.status === 'succeeded' ? 'ok' : 'warn');
+      else if (res.outcome && res.outcome.status !== 'succeeded') onNotice(`${a.title || a.name}: ${terminalLabel(res.outcome.reason)}`, 'warn');
     } catch (e) {
       onNotice(e instanceof Error ? e.message : 'Run failed', 'bad');
     } finally {
@@ -75,107 +99,152 @@ export default function AgentsRoster({
     }
   };
 
-  if (agents.length === 0) {
+  const toolbar = (
+    <div className="flex items-center justify-end gap-1">
+      <Button variant="ghost" size="sm" onClick={() => setNewFolderIn('')}>
+        <FolderIcon className="h-3.5 w-3.5" />
+        New folder
+      </Button>
+      <Button variant="ghost" size="sm" onClick={() => openCreate('agent')}>
+        <PlusIcon className="h-3.5 w-3.5" />
+        New agent
+      </Button>
+    </div>
+  );
+
+  const folderDialog = newFolderIn !== null && (
+    <NewAgentFolderDialog
+      spaceId={spaceId}
+      parent={newFolderIn}
+      onClose={() => setNewFolderIn(null)}
+      onCreated={() => {
+        setNewFolderIn(null);
+        onChanged();
+      }}
+    />
+  );
+
+  if (agents.length === 0 && folders.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
-        <BotIcon className="h-6 w-6 text-text-muted" />
-        <div>
-          <p className="text-sm font-semibold text-text-primary">No agents yet</p>
-          <p className="mt-1 text-sm text-text-muted">
-            Create one from <span className="font-semibold">Create → Agent</span>, or write an{' '}
-            <code className="font-mono text-[13px]">agents/&lt;name&gt;.md</code> note in Context. An admin activates it here.
-          </p>
+      <>
+        <EmptyState
+          icon={<BotIcon />}
+          title="No agents yet"
+          description="Agents run on a schedule or a trigger, on the space's model connectors. Start with one, or a folder to keep them in."
+          action={{ label: 'Create an agent', onClick: () => openCreate('agent') }}
+        />
+        <div className="mt-2 flex justify-center">
+          <Button variant="ghost" size="sm" onClick={() => setNewFolderIn('')}>
+            <FolderIcon className="h-3.5 w-3.5" />
+            New folder
+          </Button>
         </div>
-      </div>
+        {folderDialog}
+      </>
     );
   }
 
+  const hoverControl =
+    'rounded-md p-1.5 text-text-muted opacity-0 transition-opacity hover:bg-surface-3 hover:text-text-primary focus-visible:opacity-100 group-hover:opacity-100';
+
+  const folderRow = (n: AgentTreeFolder) => {
+    const open = !collapsed.has(n.folder.path);
+    return (
+      <li
+        key={`f:${n.folder.path}`}
+        className="group -mx-3 flex items-center gap-2 rounded-lg px-3 py-2 transition-colors hover:bg-surface-2"
+        style={{ paddingLeft: 12 + n.depth * INDENT_PX }}
+      >
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${n.folder.title}`}
+          onClick={() => toggleFolder(n.folder.path)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronRightIcon className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${open ? 'rotate-90' : ''}`} />
+          {open ? <FolderOpenIcon className="h-4 w-4 shrink-0 text-text-muted" /> : <FolderIcon className="h-4 w-4 shrink-0 text-text-muted" />}
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <span className="truncate text-sm font-semibold text-text-primary">{n.folder.title}</span>
+              {!open && n.agentCount > 0 && <StatusDot tone={n.tone} />}
+            </span>
+            {n.folder.description && <span className="block truncate text-[13px] text-text-muted">{n.folder.description}</span>}
+          </span>
+        </button>
+        <span className="shrink-0 text-[13px] tabular-nums text-text-muted">{n.agentCount || ''}</span>
+        <Link href={noteHref(n.folder.indexPath)} className={hoverControl} title="Open the folder's index note">
+          <span className="block text-[11px] font-semibold leading-none">index</span>
+        </Link>
+        <button type="button" aria-label={`New folder in ${n.folder.title}`} title="New folder here" onClick={() => setNewFolderIn(n.folder.path)} className={hoverControl}>
+          <FolderIcon className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          aria-label={`New agent in ${n.folder.title}`}
+          title="New agent here"
+          onClick={() => openCreate('agent', { folder: n.folder.path })}
+          className={hoverControl}
+        >
+          <PlusIcon className="h-3.5 w-3.5" />
+        </button>
+      </li>
+    );
+  };
+
+  const agentRow = (n: AgentTreeLeaf) => {
+    const a = n.agent;
+    const line = statusLine(a, now);
+    const canRun = isAdmin || (currentUserId !== null && a.authorUserId === currentUserId);
+    const runnable = canRun && a.activation.active && a.state.status !== 'running' && !a.invalid;
+    const isBusy = busy === a.name;
+    return (
+      <li
+        key={`a:${a.path}`}
+        className="group -mx-3 flex items-center gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-surface-2"
+        style={{ paddingLeft: 12 + n.depth * INDENT_PX }}
+      >
+        <Link href={`/directory/${encodeURIComponent(`agent:${a.name}`)}`} className="flex min-w-0 flex-1 items-center gap-3">
+          <StatusDot tone={line.tone} />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-text-primary">{a.title || a.name}</span>
+            <span className={`block truncate text-[13px] ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-muted'}`}>
+              {line.text}
+            </span>
+          </span>
+        </Link>
+        {isAdmin && a.spend && (a.spend.monthCents != null || a.spend.budgetMonthlyCents != null) && (
+          <span className="hidden shrink-0 text-[13px] tabular-nums text-text-muted sm:block">
+            {fmtCents(a.spend.monthCents)}
+            {a.spend.budgetMonthlyCents != null && <span className="opacity-60"> / {fmtCents(a.spend.budgetMonthlyCents)}</span>}
+          </span>
+        )}
+        {canRun && (
+          <button
+            type="button"
+            aria-label="Run now"
+            title={a.activation.active ? 'Run now' : 'Turn it on first'}
+            disabled={!runnable || isBusy}
+            onClick={() => runNow(a)}
+            className={`${hoverControl} disabled:opacity-0 group-hover:disabled:opacity-30`}
+          >
+            <PlayIcon className="h-3.5 w-3.5" />
+          </button>
+        )}
+        <Toggle
+          checked={a.activation.active}
+          disabled={!isAdmin || isBusy || !!a.invalid}
+          aria-label={isAdmin ? `Turn ${a.title || a.name} ${a.activation.active ? 'off' : 'on'}` : 'An admin turns agents on'}
+          onChange={(next) => (next ? setActivating(a) : deactivate(a))}
+        />
+      </li>
+    );
+  };
+
   return (
     <>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
-          <thead>
-            <tr className="border-b border-border-subtle text-left text-[11px] uppercase tracking-wide text-text-muted">
-              <th className="px-4 py-2.5 font-medium">Agent</th>
-              <th className="px-3 py-2.5 font-medium">Status</th>
-              <th className="px-3 py-2.5 font-medium">Schedule</th>
-              <th className="px-3 py-2.5 font-medium">Last run</th>
-              {isAdmin && <th className="px-3 py-2.5 text-right font-medium">Spend / mo</th>}
-              <th className="px-3 py-2.5 font-medium">On</th>
-              <th className="px-3 py-2.5" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border-subtle">
-            {agents.map((a) => {
-              const view = rowStateView(a, now);
-              const canRun = isAdmin || (currentUserId !== null && a.authorUserId === currentUserId);
-              const runnable = canRun && a.activation.active && a.state.status !== 'running' && !a.invalid;
-              return (
-                <tr key={a.name} className="align-top">
-                  <td className="px-4 py-3">
-                    <Link href={`/directory/${encodeURIComponent(`agent:${a.name}`)}`} className="group block min-w-0">
-                      <p className="truncate font-semibold text-text-primary group-hover:text-brand-dark-green">{a.title || a.name}</p>
-                      <p className="truncate font-mono text-[11px] text-text-muted">
-                        {a.name} · {a.model ?? 'no model'}
-                        {a.connectors.length > 0 ? ` · ${a.connectors.join(', ')}` : ''}
-                      </p>
-                      {a.description && <p className="mt-0.5 line-clamp-1 text-[13px] text-text-muted">{a.description}</p>}
-                    </Link>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`${TONE_CHIP} ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
-                    {view.detail && <p className="mt-1 max-w-[220px] text-[12px] leading-snug text-text-muted">{view.detail}</p>}
-                  </td>
-                  <td className="px-3 py-3 text-[13px] text-text-muted">{[a.activation.schedule ? a.activation.scheduleLabel : null, a.activation.triggersLabel].filter(Boolean).join('; ') || '—'}</td>
-                  <td className="px-3 py-3 text-[13px] text-text-muted">
-                    {a.lastRun ? (
-                      <>
-                        <span className={a.lastRun.status === 'failed' ? 'text-red-700' : 'text-text-primary'}>{terminalLabel(a.lastRun.terminalReason) || a.lastRun.status}</span>
-                        <br />
-                        <span>{fmtAgo(a.lastRun.startedAt, now)}</span>
-                      </>
-                    ) : (
-                      'never'
-                    )}
-                  </td>
-                  {isAdmin && (
-                    <td className="px-3 py-3 text-right text-[13px] tabular-nums text-text-muted">
-                      {fmtCents(a.spend?.monthCents)}
-                      {a.spend?.budgetMonthlyCents != null && <span className="text-text-muted"> / {fmtCents(a.spend.budgetMonthlyCents)}</span>}
-                    </td>
-                  )}
-                  <td className="px-3 py-3">
-                    <Toggle
-                      checked={a.activation.active}
-                      disabled={!isAdmin || busy === a.name || !!a.invalid}
-                      aria-label={isAdmin ? `Toggle ${a.name}` : 'Admins only'}
-                      onChange={(next) => (next ? setActivating(a) : deactivate(a))}
-                    />
-                    {!isAdmin && <p className="mt-1 text-[10px] uppercase tracking-wide text-text-muted">admins only</p>}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={!runnable || busy === a.name}
-                      onClick={() => runNow(a)}
-                      title={
-                        !a.activation.active
-                          ? 'Activate the agent first — activation is the review point'
-                          : !canRun
-                            ? 'Only the author or an admin can run it'
-                            : 'Run now'
-                      }
-                    >
-                      <PlayIcon className="h-3 w-3" /> Run now
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {toolbar}
+      <ul className="divide-y divide-border-subtle">{rows.map((n) => (n.kind === 'folder' ? folderRow(n) : agentRow(n)))}</ul>
       {activating && (
         <ActivateAgentDialog
           spaceId={spaceId}
@@ -189,6 +258,7 @@ export default function AgentsRoster({
           }}
         />
       )}
+      {folderDialog}
     </>
   );
 }

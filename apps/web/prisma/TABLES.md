@@ -74,7 +74,8 @@ the entity notes in Context. They're the shared graph primitives.
 
 | Table | Controls |
 | --- | --- |
-| `resources` | An uploaded file in a Space — name, type, URL, size, uploader. |
+| `resources` | An uploaded file in a Space — name, type, object path, size, uploader, and the folder it sits in. |
+| `resource_folders` | A folder in a Space's Drive — name and parent. Organisational only; files index and search the same anywhere. |
 | `resource_comments` | Comments on a resource, optionally pinned to a specific cell. |
 | `resource_changes` | Proposed edits to a specific cell, with an approve/reject workflow (who proposed, who reviewed). |
 

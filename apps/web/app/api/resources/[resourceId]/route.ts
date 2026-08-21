@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 import { getSignedUrl, RESOURCES_BUCKET } from '@/lib/gcs';
 import { isSuperAdmin } from '@/lib/session';
-import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
-import { isAdmin } from '@/lib/auth';
+import { z } from 'zod';
+import { requireApiSession, forbiddenResponse, parseBody, handleApiError } from '@/lib/api/route';
+import { featureAccessForbidden, isAdmin } from '@/lib/auth';
+import { moveResource, renameResource } from '@/lib/resources/folders';
 
 /**
  * GET /api/resources/[resourceId] — single resource with a fresh signed URL,
@@ -69,4 +71,37 @@ export async function GET(
     counts: { comments: _count.comments, changes: _count.changes, pendingChanges },
     viewer: { canManage },
   });
+}
+
+const patchSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  /** The folder to move into; `null` is the Drive's root. */
+  folderId: z.string().min(1).nullable().optional(),
+});
+
+/**
+ * PATCH /api/resources/[resourceId] — rename and/or move a file between Drive
+ * folders. Neither touches the stored object or its index.
+ */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ resourceId: string }> },
+) {
+  const session = await requireApiSession();
+  if (session instanceof NextResponse) return session;
+  const { resourceId } = await params;
+  const resource = await prisma.resource.findUnique({ where: { id: resourceId }, select: { spaceId: true } });
+  if (!resource) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  if (await featureAccessForbidden(session.userId, resource.spaceId, 'resources', session.email)) {
+    return forbiddenResponse();
+  }
+  const body = await parseBody(req, patchSchema);
+  if (body instanceof NextResponse) return body;
+  try {
+    if (body.name !== undefined) await renameResource(resourceId, body.name);
+    if (body.folderId !== undefined) await moveResource(resourceId, body.folderId);
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    return handleApiError(err, 'resources.update');
+  }
 }

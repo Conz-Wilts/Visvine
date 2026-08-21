@@ -70,6 +70,7 @@ model Space {
   appToolInstalls AppToolInstall[]
   notifications   Notification[]
   resources       Resource[]
+  resourceFolders ResourceFolder[]
   projectionJobs  NoteProjectionJob[]
 
   @@index([personalOwnerId])
@@ -1128,12 +1129,37 @@ model Resource {
   indexError String?           @map("index_error")
   metadata   Json              @default("{}")
   createdAt  DateTime          @default(now()) @map("created_at")
+  /// The Drive folder it sits in; null is the Drive's root. Deleting a folder
+  /// moves its files to its parent (see lib/resources/folders.ts) — never to
+  /// the bin — so the FK only ever needs to SET NULL as a last resort.
+  folderId   String?           @map("folder_id")
   space      Space             @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  folder     ResourceFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
   changes    ResourceChange[]
   comments   ResourceComment[]
 
   @@index([spaceId, createdAt(sort: Desc)])
+  @@index([spaceId, folderId])
   @@map("resources")
+}
+
+/// A folder in a Space's Drive. Purely organisational: files index, search and
+/// preview the same wherever they sit. Nesting is by `parentId`; the root is the
+/// absence of a folder, not a row.
+model ResourceFolder {
+  id        String           @id @default(dbgenerated("(gen_random_uuid())::text"))
+  spaceId   String           @map("space_id")
+  name      String
+  parentId  String?          @map("parent_id")
+  createdBy String           @map("created_by")
+  createdAt DateTime         @default(now()) @map("created_at")
+  space     Space            @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  parent    ResourceFolder?  @relation("ResourceFolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  ResourceFolder[] @relation("ResourceFolderTree")
+  resources Resource[]
+
+  @@index([spaceId, parentId])
+  @@map("resource_folders")
 }
 
 model ResourceComment {

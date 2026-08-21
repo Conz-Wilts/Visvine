@@ -24,7 +24,7 @@ export const KIT_CSS = `
   --vv-border-strong: var(--border-default, #d1d5db);
   --vv-text: var(--text-primary, #111827);
   --vv-text-secondary: var(--text-secondary, #374151);
-  --vv-text-muted: var(--text-muted, #6b7280);
+  --vv-text-muted: var(--text-muted, #4b5563);
   --vv-danger: #dc2626;
   --vv-danger-soft: #fef2f2;
   --vv-warn: #b45309;

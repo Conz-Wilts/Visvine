@@ -13,9 +13,9 @@ type Kind = 'none' | 'hourly' | 'daily' | 'weekly' | 'every';
 /**
  * Turning an agent on is the one action that starts spending money on a
  * schedule with declared connector reach, so it is a dialog, not an optimistic
- * flip: the admin sees exactly what they are approving (brief, model, reach,
- * schedule, triggers), the key is checked before anything is written, and the
- * toggle only moves once the server says so.
+ * flip: the admin picks the clock, optionally the triggers, and the key is
+ * checked before anything is written. Triggers stay folded until wanted — most
+ * agents just run on a clock.
  */
 export default function ActivateAgentDialog({
   spaceId,
@@ -51,6 +51,7 @@ export default function ActivateAgentDialog({
         : `${Math.round(agent.activation.debounceMs / 1000)}s`
       : '',
   );
+  const [showTriggers, setShowTriggers] = useState(!!agent.activation.on);
   const [connectors, setConnectors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,6 @@ export default function ActivateAgentDialog({
     }
   }, []);
 
-  const effectiveTz = timezone || spaceTimezone || 'UTC';
   const globs = contextGlobs
     .split(/[\n,]/)
     .map((g) => g.trim())
@@ -98,27 +98,18 @@ export default function ActivateAgentDialog({
       });
       onDone(res.warning);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Activation failed');
+      setError(e instanceof Error ? e.message : 'Could not turn on');
     } finally {
       setBusy(false);
     }
   };
 
-  const clockHint =
-    kind === 'none'
-      ? 'No clock — runs only when a trigger below fires.'
-      : kind === 'hourly'
-        ? 'Fires at the top of every hour.'
-        : kind === 'every'
-          ? /^\d+\s*[mh]$/i.test(every.trim())
-            ? `Fires every ${every.trim()} (5m … 24h), aligned to the clock.`
-            : `Cron "${every.trim()}" in ${effectiveTz} — minute hour day-of-month month day-of-week.`
-          : `Fires at ${at} ${effectiveTz}${kind === 'weekly' ? ` on ${on}s` : ' every day'}. Missed runs are skipped, never replayed.`;
+  const reach = [agent.model ?? 'model', ...agent.connectors, ...(agent.tools.includes('web') ? ['public web'] : [])];
 
   return (
     <Modal
       onClose={onClose}
-      title={`Activate ${agent.title || agent.name}`}
+      title={agent.title || agent.name}
       size="sm"
       footer={
         <div className="flex items-center justify-end gap-2 px-5 py-3">
@@ -126,40 +117,28 @@ export default function ActivateAgentDialog({
             Cancel
           </Button>
           <Button variant="brand" size="sm" onClick={submit} loading={busy} loadingText="Checking key…" disabled={!canSubmit}>
-            Activate
+            Turn on
           </Button>
         </div>
       }
     >
       <div className="flex flex-col gap-4 px-5 py-4 text-sm">
-        <div className="rounded-xl border border-border-subtle bg-surface-2 px-3 py-2.5 text-[13px] leading-snug text-text-muted">
-          <p className="text-text-primary">
-            This agent will run <span className="font-semibold">unattended</span> on this space&apos;s{' '}
-            <span className="font-mono">{agent.model ?? 'model'}</span> key
-            {agent.connectors.length > 0 ? (
-              <>
-                {' '}with reach to <span className="font-mono">{agent.connectors.join(', ')}</span>
-              </>
-            ) : (
-              <> with no connectors</>
-            )}
-            {agent.tools.includes('web') ? ', and may fetch public web pages' : ''}.
-          </p>
-          <p className="mt-1">You are approving the brief exactly as it is now — a member&apos;s later edit switches it off again.</p>
-        </div>
+        <p className="text-[13px] text-text-muted">
+          Runs unattended with <span className="font-mono text-text-primary">{reach.join(' · ')}</span>. Editing the brief turns it off again.
+        </p>
 
-        <Field label="Schedule">
+        <Field label="Runs">
           <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
-            <option value="none">No clock (triggers only)</option>
             <option value="hourly">Every hour</option>
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
             <option value="every">Every N minutes / cron</option>
+            <option value="none">Only on triggers</option>
           </Select>
         </Field>
 
         {kind === 'every' && (
-          <Field label="Every" hint="15m, 2h, or a 5-field cron like */10 9-17 * * 1-5">
+          <Field label="Every" hint="15m, 2h, or a cron line">
             <Input value={every} onChange={(e) => setEvery(e.target.value)} placeholder="15m" className="font-mono" />
           </Field>
         )}
@@ -184,9 +163,9 @@ export default function ActivateAgentDialog({
         )}
 
         {(kind === 'daily' || kind === 'weekly' || kind === 'every') && (
-          <Field label="Timezone" hint={timezone ? undefined : `Using the space default: ${spaceTimezone ?? 'UTC'}`}>
+          <Field label="Timezone">
             <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-              <option value="">Space default ({spaceTimezone ?? 'UTC'})</option>
+              <option value="">{spaceTimezone ?? 'UTC'} (space default)</option>
               {zones.map((z) => (
                 <option key={z} value={z}>
                   {z}
@@ -196,41 +175,41 @@ export default function ActivateAgentDialog({
           </Field>
         )}
 
-        <p className="text-xs text-text-muted">{clockHint}</p>
-
-        <div className="flex flex-col gap-3 rounded-xl border border-border-subtle px-3 py-3">
-          <p className="text-[13px] font-semibold text-text-primary">Also run when…</p>
-          <Field label="A note changes under" hint="One glob per line. ** = any depth, * = one segment. Never agents/.">
-            <textarea
-              value={contextGlobs}
-              onChange={(e) => setContextGlobs(e.target.value)}
-              rows={2}
-              placeholder={'people/**\nupdates/*.md'}
-              className="w-full rounded-lg border border-border-subtle bg-surface-1 px-2.5 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:border-brand-green"
-            />
-          </Field>
-          <Field label="A webhook arrives for" hint="A connector with a webhook: block receives it (see the connector page for the URL).">
-            <Select value={webhook} onChange={(e) => setWebhook(e.target.value)}>
-              <option value="">No webhook</option>
-              {connectors.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-              {webhook && !connectors.includes(webhook) && <option value={webhook}>{webhook}</option>}
-            </Select>
-          </Field>
-          {hasTrigger && (
-            <Field label="Debounce" hint="Wait this long after the first event so a burst becomes one run. Default 60s, max 30m.">
-              <Input value={debounce} onChange={(e) => setDebounce(e.target.value)} placeholder="60s" className="font-mono" />
+        {!showTriggers ? (
+          <button type="button" className="self-start text-[13px] font-semibold text-brand-dark-green hover:underline" onClick={() => setShowTriggers(true)}>
+            + Also run on changes or webhooks
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 border-t border-border-subtle pt-4">
+            <Field label="When a note changes under" hint="One glob per line">
+              <textarea
+                value={contextGlobs}
+                onChange={(e) => setContextGlobs(e.target.value)}
+                rows={2}
+                placeholder={'people/**\nupdates/*.md'}
+                className="w-full rounded-lg bg-surface-2 px-2.5 py-1.5 font-mono text-[13px] text-text-primary outline-none focus:ring-1 focus:ring-border-default"
+              />
             </Field>
-          )}
-          <p className="text-xs text-text-muted">
-            The events (which note, who saved it, the webhook body) are handed to the run as data — the brief decides what to do with them.
-          </p>
-        </div>
+            <Field label="When a webhook arrives for">
+              <Select value={webhook} onChange={(e) => setWebhook(e.target.value)}>
+                <option value="">—</option>
+                {connectors.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {webhook && !connectors.includes(webhook) && <option value={webhook}>{webhook}</option>}
+              </Select>
+            </Field>
+            {hasTrigger && (
+              <Field label="Debounce" hint="Default 60s, max 30m">
+                <Input value={debounce} onChange={(e) => setDebounce(e.target.value)} placeholder="60s" className="font-mono" />
+              </Field>
+            )}
+          </div>
+        )}
 
-        {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">{error}</p>}
+        {error && <p className="border-l-2 border-red-500 pl-3 text-[13px] text-red-700">{error}</p>}
       </div>
     </Modal>
   );

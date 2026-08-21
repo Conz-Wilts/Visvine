@@ -4,7 +4,9 @@
  * An agent is TWO notes, because the write gate is path-only and the brief
  * must stay member-writable while activation is admin-only:
  *
- *   agents/<name>.md            the BRIEF — what the agent is
+ *   agents/<name>.md            the BRIEF — what the agent is; it may sit in a
+ *                               folder of agents (agents/ops/<name>.md) — the
+ *                               name is always the leaf, unique in the space
  *   ---
  *   type: agent
  *   title: Weekly digest
@@ -54,8 +56,46 @@ const MAX_MAX_TURNS = 40
 const AGENT_TOOL_EXTRAS = ['web', 'sandbox', 'messages', 'directory'] as const
 type AgentToolExtra = (typeof AGENT_TOOL_EXTRAS)[number]
 
-export function agentBriefPath(name: string): string {
-  return `agents/${name}.md`
+/**
+ * Where a NEW brief goes: `agents/<name>.md`, or inside a folder of agents
+ * when one is given (`ops` → `agents/ops/<name>.md`). Reading an existing
+ * brief by name is lib/agents/briefs.ts#findAgentBrief — the note may have
+ * been moved into any folder since it was written.
+ */
+export function agentBriefPath(name: string, folder: string | null = null): string {
+  const f = normaliseAgentFolder(folder)
+  return f ? `agents/${f}/${name}.md` : `agents/${name}.md`
+}
+
+/**
+ * A folder of agents, relative to `agents/`: one or more slug segments
+ * (`ops`, `ops/reports`). `live` is the activation folder and never one.
+ */
+const AGENT_FOLDER_SEGMENT_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
+
+/** `'/ops/reports/'`, `'agents/ops'` → `'ops/reports'`, `'ops'`; empty → null. */
+export function normaliseAgentFolder(folder: string | null | undefined): string | null {
+  if (!folder) return null
+  const trimmed = folder.trim().replace(/^\/+|\/+$/g, '').replace(/^agents(\/|$)/, '')
+  return trimmed || null
+}
+
+/** Why a folder string cannot hold agents, or null when it can. */
+export function agentFolderProblem(folder: string | null | undefined): string | null {
+  const f = normaliseAgentFolder(folder)
+  if (!f) return null
+  const segments = f.split('/')
+  if (segments[0] === 'live') return '`agents/live/` holds activations — pick another folder name'
+  for (const s of segments) {
+    if (!AGENT_FOLDER_SEGMENT_RE.test(s)) return `"${s}" is not a folder name — lower-case letters, digits, - and _`
+  }
+  return null
+}
+
+/** The folder a brief path sits in, relative to `agents/`: `agents/ops/x.md` → `ops`; flat → ''. */
+export function agentFolderOfPath(path: string): string {
+  const m = /^agents\/(?:(.+)\/)?[^/]+\.md$/.exec(path)
+  return m?.[1] ?? ''
 }
 
 /** The href of an agent's page — where notifications about it point. */

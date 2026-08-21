@@ -251,7 +251,7 @@ export function parseEntityHref(href: string): string | null {
   if (
     !FLAT_ENTITY_HREF_RE.test(raw) &&
     !FOLDER_ENTITY_HREF_RE.test(raw) &&
-    !/^agents\/[^/]+\.md$/.test(raw) // agents/live/… is config, not an entity
+    !isAgentBriefPath(raw) // agents/live/… is config, not an entity; nested briefs are
   ) {
     return null
   }
@@ -325,21 +325,26 @@ export function entityKindOfDir(path: string): EntityKind | null {
 // module still answers the generic entity-shape questions (entityKindOfPath,
 // isEntityFolderIndex, parseEntityHref) that every entity kind shares.
 
-/** True for `agents/<name>.md` — the brief; false for `agents/live/…` and indexes. */
+/**
+ * True for a brief — `agents/<name>.md` or, nested in a folder of agents,
+ * `agents/<folder>/…/<name>.md`. The agent's NAME is always the leaf, unique
+ * across the space; folders only organise. `agents/live/…` (activation) and
+ * every index note are not briefs.
+ */
 export function isAgentBriefPath(path: string): boolean {
-  return /^agents\/[^/]+\.md$/.test(path) && !isIndexPath(path)
+  return AGENT_BRIEF_RE.test(path) && !isIndexPath(path)
 }
+const AGENT_BRIEF_RE = /^agents\/(?!live\/)(?:[^/]+\/)*[^/]+\.md$/
 
 /** True for `agents/live/<name>.md` — an activation note. */
 export function isAgentActivationPath(path: string): boolean {
   return /^agents\/live\/[^/]+\.md$/.test(path) && !isIndexPath(path)
 }
 
-/** The agent name a brief or activation path names, or null. */
+/** The agent name a brief or activation path names — the leaf — or null. */
 export function agentNameOfPath(path: string): string | null {
-  const m = /^agents\/(?:live\/)?([^/]+)\.md$/.exec(path)
-  if (!m || isIndexPath(path)) return null
-  return m[1]
+  if (!isAgentBriefPath(path) && !isAgentActivationPath(path)) return null
+  return path.slice(path.lastIndexOf('/') + 1, -'.md'.length) || null
 }
 
 // True when `path` IS one of the entity namespaces itself ('people',

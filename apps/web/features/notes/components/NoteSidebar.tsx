@@ -382,7 +382,7 @@ export function NoteSidebar({
       className={`flex h-full flex-col overflow-hidden ${
         /* bare = docked into the Sidebar column, which draws its own seam;
            floating = the tree beside a note, divided from it by one hairline */
-        bare ? '' : 'border-r border-border-subtle bg-surface-1'
+        bare ? '' : 'border-r border-border-subtle'
       }`}
     >
       {/* overscroll-contain: hitting either end of the tree must not chain the

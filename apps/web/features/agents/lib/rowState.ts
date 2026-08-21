@@ -3,10 +3,15 @@ import type { AgentRowState, AgentSummary } from '@/lib/agents/service';
 // The status palette is shared with connectors and Tools — see statusTone.
 import type { Tone } from '@/features/shared/lib/statusTone';
 
-export interface RowStateView {
-  label: string;
-  detail: string;
+/**
+ * What one agent says about itself in a single line: its tone (drawn as a
+ * dot), the line, and whether the line is a problem that should read in the
+ * tone's colour rather than muted. A healthy agent's line is its schedule.
+ */
+export interface StatusLine {
   tone: Tone;
+  text: string;
+  problem: boolean;
 }
 
 function ago(iso: string | null, now: number): string {
@@ -61,47 +66,59 @@ export function terminalLabel(reason: string | null): string {
   return reason ? (TERMINAL_LABEL[reason] ?? reason) : '';
 }
 
-/** What the roster row says for each state, in the panel's own words. */
-export function rowStateView(a: AgentSummary, now = Date.now()): RowStateView {
+/** The schedule in plain words — "Daily at 07:00; on people/**" — or null. */
+function scheduleText(a: AgentSummary): string | null {
+  const parts = [a.activation.schedule ? a.activation.scheduleLabel : null, a.activation.triggersLabel].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** The one line a row shows under the agent's name. */
+export function statusLine(a: AgentSummary, now = Date.now()): StatusLine {
   const s: AgentRowState = a.rowState;
+  const next = a.state.nextRunAt ? `next ${until(a.state.nextRunAt, now)}` : null;
   switch (s) {
     case 'invalid':
-      return { label: 'Invalid config', detail: a.invalid ?? a.activation.invalid ?? '', tone: 'bad' };
+      return { tone: 'bad', text: `Invalid brief — ${a.invalid ?? a.activation.invalid ?? ''}`, problem: true };
     case 'running':
-      return { label: 'Running', detail: a.state.runningSince ? `since ${ago(a.state.runningSince, now)}` : '', tone: 'live' };
+      return { tone: 'live', text: a.state.runningSince ? `Running · started ${ago(a.state.runningSince, now)}` : 'Running', problem: false };
     case 'needs_reactivation':
-      return {
-        label: 'Needs re-activation',
-        detail: a.state.deactivatedDetail ? `${a.state.deactivatedDetail} — an admin must re-activate` : 'brief changed',
-        tone: 'warn',
-      };
+      return { tone: 'warn', text: 'Brief changed — needs re-activation', problem: true };
     case 'deactivated':
       return {
-        label: 'Deactivated',
-        detail: `${REASON_LABEL[a.state.deactivatedReason ?? ''] ?? a.state.deactivatedReason ?? ''}${a.state.deactivatedDetail ? ` — ${a.state.deactivatedDetail}` : ''}`,
         tone: 'bad',
+        text: `Turned off — ${REASON_LABEL[a.state.deactivatedReason ?? ''] ?? a.state.deactivatedReason ?? ''}${a.state.deactivatedDetail ? `: ${a.state.deactivatedDetail}` : ''}`,
+        problem: true,
       };
     case 'off':
-      return { label: 'Off', detail: 'not activated', tone: 'muted' };
+      return { tone: 'muted', text: scheduleText(a) ?? 'Off', problem: false };
     case 'needs_key':
-      return { label: 'Needs model key', detail: `no key stored for ${a.model?.split('/')[0] ?? 'this provider'}`, tone: 'warn' };
+      return { tone: 'warn', text: `No ${a.model?.split('/')[0] ?? 'model'} key — add it on the model connector`, problem: true };
     case 'budget':
-      return { label: 'Paused — budget', detail: 'monthly budget reached; resumes next month or when raised', tone: 'warn' };
+      return { tone: 'warn', text: 'Paused — monthly budget reached', problem: true };
     case 'due':
-      return { label: 'Due', detail: 'running shortly', tone: 'live' };
+      return { tone: 'live', text: 'Starting shortly', problem: false };
     case 'delayed':
-      return { label: 'Delayed', detail: 'due but not picked up — the scheduler may be down', tone: 'bad' };
+      return { tone: 'bad', text: 'Overdue — the scheduler has not picked it up', problem: true };
     case 'failed':
       return {
-        label: 'Failed',
-        detail: `last run: ${terminalLabel(a.lastRun?.terminalReason ?? null)}${a.state.nextRunAt ? ` · next ${until(a.state.nextRunAt, now)}` : ''}`,
         tone: 'warn',
+        text: [`Failed — ${terminalLabel(a.lastRun?.terminalReason ?? null) || 'error'}`, next].filter(Boolean).join(' · '),
+        problem: true,
       };
     case 'scheduled':
     default:
-      return { label: 'Scheduled', detail: a.state.nextRunAt ? `next ${until(a.state.nextRunAt, now)}` : a.activation.schedule ? a.activation.scheduleLabel : (a.activation.triggersLabel ?? 'waiting for a trigger'), tone: 'ok' };
+      return { tone: 'ok', text: [scheduleText(a) ?? 'Waiting for a trigger', next].filter(Boolean).join(' · '), problem: false };
   }
 }
+
+/** The dot that carries a tone. `live` breathes. */
+export const TONE_DOT: Record<Tone, string> = {
+  ok: 'bg-brand-green',
+  warn: 'bg-amber-500',
+  bad: 'bg-red-500',
+  muted: 'bg-border-default',
+  live: 'bg-sky-500 dot-pulse [--pulse-color:rgba(14,165,233,0.4)]',
+};
 
 export function fmtAgo(iso: string | null, now = Date.now()): string {
   return ago(iso, now);

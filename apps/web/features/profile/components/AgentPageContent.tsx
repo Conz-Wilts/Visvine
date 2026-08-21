@@ -1,24 +1,22 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { PlayIcon } from '@/features/shared/icons';
-import { Button, Input, Skeleton } from '@/components/ui';
+import { ChevronDownIcon, PlayIcon } from '@/features/shared/icons';
+import { Alert, Button, Input, Skeleton } from '@/components/ui';
 import Toggle from '@/components/ui/Toggle';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { fetchJson } from '@/lib/fetchJson';
 import type { AgentSummary, SerializedRun } from '@/lib/agents/service';
 import ActivateAgentDialog from '@/features/agents/components/ActivateAgentDialog';
 import RunTranscript from '@/features/agents/components/RunTranscript';
-import { fmtAgo, fmtCents, rowStateView, terminalLabel } from '@/features/agents/lib/rowState';
-import { TONE_CHIP, TONE_CLASSES } from '@/features/shared/lib/statusTone';
+import StatusDot from '@/features/agents/components/StatusDot';
+import { fmtAgo, fmtCents, statusLine, terminalLabel } from '@/features/agents/lib/rowState';
 
 /**
  * The first tab of an agent's node page: what the note alone can't say. The
- * brief itself is the note (Context / Raw tabs); this tab shows the state
- * row, the activation switch (admins), the run history with live transcripts,
- * and — for admins only — spend and the monthly budget. Mirrors
- * ConnectorPageContent in shape.
+ * brief itself is the note (Context / Raw tabs); this tab is the status line
+ * with its switch and play control, a line of facts, spend (admins), and the
+ * run history with live transcripts.
  */
 type AgentDetail = AgentSummary & { brief: string; activationNote: string | null; heartbeatAt: string | null };
 
@@ -29,16 +27,8 @@ interface DetailResponse {
   canRun: boolean;
 }
 
-function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
-  return (
-    <section className="border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
-        {aside}
-      </div>
-      {children}
-    </section>
-  );
+function runTone(r: SerializedRun): 'live' | 'bad' | 'ok' {
+  return r.status === 'running' ? 'live' : r.status === 'failed' ? 'bad' : 'ok';
 }
 
 export default function AgentPageContent({ nodeId }: { nodeId: string }) {
@@ -53,6 +43,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [openRun, setOpenRun] = useState<string | null>(null);
+  const [editingBudget, setEditingBudget] = useState(false);
   const [budgetInput, setBudgetInput] = useState<string>('');
   const [spaceTimezone, setSpaceTimezone] = useState<string | null>(null);
 
@@ -91,12 +82,13 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     return () => clearInterval(t);
   }, [data, reload]);
 
-  if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-2xl" />;
-  if (error || !data) return <div className="border-l-2 border-red-500 pl-3 py-1 text-sm text-red-700">{error ?? 'Not found'}</div>;
+  if (spaceLoading || loading) return <Skeleton className="h-40 w-full rounded-lg" />;
+  if (error || !data) return <Alert>{error ?? 'Not found'}</Alert>;
 
   const { agent, runs, isAdmin, canRun } = data;
-  const view = rowStateView(agent);
+  const line = statusLine(agent);
   const runnable = canRun && agent.activation.active && agent.state.status !== 'running' && !agent.invalid;
+  const facts = [agent.model, ...agent.connectors, ...agent.tools].filter(Boolean) as string[];
 
   const deactivate = async () => {
     if (!spaceId) return;
@@ -109,7 +101,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
       });
       await reload();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : 'Could not deactivate');
+      setNotice(e instanceof Error ? e.message : 'Could not turn off');
     } finally {
       setBusy(false);
     }
@@ -118,7 +110,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
   const runNow = async () => {
     if (!spaceId) return;
     setBusy(true);
-    setNotice(`Running…`);
+    setNotice(null);
     const t = setInterval(reload, 3000);
     try {
       const res = await fetchJson<{ ok: true; runId: string; outcome: { status: string; reason: string } | null; error: string | null }>(
@@ -126,7 +118,8 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         { method: 'POST' },
       );
       setOpenRun(res.runId);
-      setNotice(res.error ?? (res.outcome ? `Run ${res.outcome.status}: ${terminalLabel(res.outcome.reason)}` : null));
+      if (res.error) setNotice(res.error);
+      else if (res.outcome && res.outcome.status !== 'succeeded') setNotice(terminalLabel(res.outcome.reason));
     } catch (e) {
       setNotice(e instanceof Error ? e.message : 'Run failed');
     } finally {
@@ -140,7 +133,7 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
     if (!spaceId) return;
     const dollars = budgetInput.trim() === '' ? null : Number(budgetInput);
     if (dollars !== null && (!Number.isFinite(dollars) || dollars < 0)) {
-      setNotice('Budget must be a dollar amount, or empty for no cap.');
+      setNotice('The cap is a dollar amount, or empty for none.');
       return;
     }
     setBusy(true);
@@ -150,184 +143,128 @@ export default function AgentPageContent({ nodeId }: { nodeId: string }) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ budgetMonthlyCents: dollars === null ? null : Math.round(dollars * 100) }),
       });
-      setNotice('Budget saved.');
+      setEditingBudget(false);
       await reload();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : 'Could not save the budget');
+      setNotice(e instanceof Error ? e.message : 'Could not save the cap');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 pb-16">
-      {notice && <div className="rounded-2xl bg-surface-2 px-4 py-2.5 text-[13px] text-text-primary">{notice}</div>}
-
-      <Section
-        title="Status"
-        aside={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded-md border border-border-default px-2.5 py-1 text-[12px] font-medium text-text-primary hover:border-brand-green disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!runnable || busy}
-            onClick={runNow}
-            title={!agent.activation.active ? 'Activate the agent first' : !canRun ? 'Only the author or an admin can run it' : 'Run now'}
-          >
-            <PlayIcon className="h-3 w-3" /> Run now
-          </button>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <span className={`${TONE_CHIP} ${TONE_CLASSES[view.tone]}`}>{view.label}</span>
-          <span className="text-[13px] text-text-muted">{view.detail}</span>
-        </div>
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px] sm:grid-cols-3">
-          <div>
-            <dt className="text-text-muted">Model</dt>
-            <dd className="font-mono">{agent.model ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Connectors</dt>
-            <dd className="font-mono">{agent.connectors.length ? agent.connectors.join(', ') : 'none'}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Extras</dt>
-            <dd className="font-mono">{agent.tools.length ? agent.tools.join(', ') : 'none'}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Schedule</dt>
-            <dd>{agent.activation.schedule ? agent.activation.scheduleLabel : agent.activation.on ? 'triggers only' : 'not set'}</dd>
-          </div>
-          {agent.activation.on && (
-            <div>
-              <dt className="text-text-muted">Triggers</dt>
-              <dd className="font-mono text-[12px]">
-                {agent.activation.on.context.length ? `on ${agent.activation.on.context.join(', ')}` : null}
-                {agent.activation.on.context.length && agent.activation.on.webhook ? ' · ' : null}
-                {agent.activation.on.webhook ? `webhook ${agent.activation.on.webhook}` : null}
-                <span className="text-text-muted"> · debounce {Math.round(agent.activation.debounceMs / 1000)}s</span>
-              </dd>
-            </div>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 pb-16">
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <StatusDot tone={line.tone} />
+          <p className={`min-w-0 flex-1 truncate text-sm ${line.problem ? (line.tone === 'bad' ? 'text-red-600' : 'text-amber-700') : 'text-text-primary'}`}>
+            {line.text}
+          </p>
+          {canRun && (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] font-semibold text-text-secondary hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!runnable || busy}
+              onClick={runNow}
+              title={agent.activation.active ? 'Run now' : 'Turn it on first'}
+            >
+              <PlayIcon className="h-3 w-3" /> Run
+            </button>
           )}
-          <div>
-            <dt className="text-text-muted">Next run</dt>
-            <dd>{agent.state.nextRunAt ? new Date(agent.state.nextRunAt).toLocaleString() : '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-text-muted">Last run</dt>
-            <dd>{agent.lastRun ? `${terminalLabel(agent.lastRun.terminalReason) || agent.lastRun.status} · ${fmtAgo(agent.lastRun.startedAt)}` : 'never'}</dd>
-          </div>
-        </dl>
-        {agent.invalid && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">Brief: {agent.invalid}</p>}
-        {agent.activation.invalid && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-700">Activation note: {agent.activation.invalid}</p>}
-        <p className="mt-3 text-[12px] text-text-muted">
-          The brief is the note itself — edit it on the{' '}
-          <Link className="underline" href={`/directory/${encodeURIComponent(nodeId)}?tab=context`}>
-            Context
-          </Link>{' '}
-          tab. Anyone in the space may write it; turning it on is an admin&apos;s call.
-        </p>
-      </Section>
-
-      <Section
-        title="Activation"
-        aside={
           <Toggle
             checked={agent.activation.active}
             disabled={!isAdmin || busy || !!agent.invalid}
-            aria-label={isAdmin ? 'Toggle activation' : 'Admins only'}
+            aria-label={isAdmin ? (agent.activation.active ? 'Turn off' : 'Turn on') : 'An admin turns agents on'}
             onChange={(next) => (next ? setActivating(true) : deactivate())}
           />
-        }
-      >
-        <p className="text-[13px] text-text-muted">
-          {agent.activation.active
-            ? `Active — ${[agent.activation.schedule ? agent.activation.scheduleLabel : null, agent.activation.triggersLabel].filter(Boolean).join('; ')}${agent.activation.timezone ? '' : ` (space timezone${spaceTimezone ? `: ${spaceTimezone}` : ''})`}. A member's edit to the brief switches it off until an admin re-activates.`
-            : isAdmin
-              ? 'Off. Activating means: runs unattended on this space\'s model key, with the connector reach declared in the brief.'
-              : 'Off. A space admin activates agents.'}
-        </p>
-        {agent.state.deactivatedReason && !agent.activation.active && (
-          <p className="mt-2 text-[12px] text-amber-800">
-            Last deactivation: {agent.state.deactivatedReason}
-            {agent.state.deactivatedDetail ? ` — ${agent.state.deactivatedDetail}` : ''}
-          </p>
+        </div>
+        {facts.length > 0 && <p className="truncate pl-5 font-mono text-[12px] text-text-muted">{facts.join(' · ')}</p>}
+        {notice && (
+          <Alert inline variant="warning" className="ml-5">
+            {notice}
+          </Alert>
         )}
-      </Section>
+        {agent.invalid && (
+          <Alert inline className="ml-5">
+            {agent.invalid}
+          </Alert>
+        )}
+        {agent.activation.invalid && (
+          <Alert inline className="ml-5">
+            {agent.activation.invalid}
+          </Alert>
+        )}
+      </section>
 
       {isAdmin && (
-        <Section title="Spend">
-          <div className="flex flex-wrap items-end gap-4 text-[13px]">
-            <div>
-              <p className="text-text-muted">This month</p>
-              <p className="text-lg font-semibold tabular-nums">{fmtCents(agent.spend?.monthCents)}</p>
-              {agent.spend?.monthCents === null && <p className="text-[11px] text-text-muted">no list price for this model — tokens only</p>}
-            </div>
-            <div className="flex items-end gap-2">
-              <label className="text-text-muted">
-                Monthly cap (USD)
-                <Input
-                  className="mt-1 w-32"
-                  inputMode="decimal"
-                  placeholder="no cap"
-                  value={budgetInput}
-                  onChange={(e) => setBudgetInput(e.target.value)}
-                />
-              </label>
+        <section className="flex items-center gap-3 border-t border-border-subtle pt-5 text-[13px]">
+          <p className="text-text-primary">
+            <span className="font-semibold tabular-nums">{fmtCents(agent.spend?.monthCents)}</span>
+            <span className="text-text-muted"> this month</span>
+          </p>
+          <span className="text-border-default">·</span>
+          {editingBudget ? (
+            <div className="flex items-center gap-2">
+              <Input
+                className="w-28"
+                inputMode="decimal"
+                autoFocus
+                placeholder="no cap"
+                value={budgetInput}
+                onChange={(e) => setBudgetInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void saveBudget();
+                  if (e.key === 'Escape') setEditingBudget(false);
+                }}
+              />
               <Button variant="ghost" size="sm" onClick={saveBudget} disabled={busy}>
                 Save
               </Button>
             </div>
-          </div>
-          <p className="mt-2 text-[12px] text-text-muted">
-            At the cap the agent pauses (no deactivation) and resumes next month or when raised. Members never see spend.
-          </p>
-        </Section>
+          ) : (
+            <button type="button" className="text-text-muted hover:text-text-primary hover:underline" onClick={() => setEditingBudget(true)}>
+              {agent.spend?.budgetMonthlyCents != null ? `cap ${fmtCents(agent.spend.budgetMonthlyCents)}` : 'no cap'}
+            </button>
+          )}
+        </section>
       )}
 
-      <Section title="Runs">
+      <section className="border-t border-border-subtle pt-5">
         {runs.length === 0 ? (
           <p className="text-[13px] text-text-muted">No runs yet.</p>
         ) : (
           <ul className="divide-y divide-border-subtle">
-            {runs.map((r) => (
-              <li key={r.id} className="py-2">
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 text-left text-[13px]"
-                  onClick={() => setOpenRun(openRun === r.id ? null : r.id)}
-                >
-                  <span
-                    className={`w-24 shrink-0 font-medium ${
-                      r.status === 'running' ? 'text-sky-700' : r.status === 'failed' ? 'text-red-700' : 'text-brand-dark-green'
-                    }`}
-                  >
-                    {r.status === 'running' ? 'running' : terminalLabel(r.terminalReason) || r.status}
-                  </span>
-                  <span className="text-text-muted">{new Date(r.startedAt).toLocaleString()}</span>
-                  <span className="text-text-muted">{r.trigger}</span>
-                  {r.input?.dryRun && (
-                    <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">dry run</span>
-                  )}
-                  {r.input?.writes?.length ? (
-                    <span className="text-[11px] text-text-muted">
-                      {r.input.writes.length} note{r.input.writes.length === 1 ? '' : 's'}
+            {runs.map((r) => {
+              const open = openRun === r.id;
+              const seconds = r.endedAt ? Math.round((new Date(r.endedAt).getTime() - new Date(r.startedAt).getTime()) / 1000) : null;
+              return (
+                <li key={r.id} className="py-2.5">
+                  <button type="button" className="group flex w-full items-center gap-3 text-left text-[13px]" onClick={() => setOpenRun(open ? null : r.id)}>
+                    <StatusDot tone={runTone(r)} />
+                    <span className={`font-medium ${r.status === 'failed' ? 'text-red-600' : 'text-text-primary'}`}>
+                      {r.status === 'running' ? 'Running' : terminalLabel(r.terminalReason) || r.status}
                     </span>
-                  ) : null}
-                  <span className="ml-auto tabular-nums text-text-muted">
-                    {r.turns}t · {isAdmin ? fmtCents(r.costCents) : ''}
-                  </span>
-                </button>
-                {openRun === r.id && spaceId && (
-                  <div className="mt-2">
-                    <RunTranscript spaceId={spaceId} agentName={name} runId={r.id} />
-                  </div>
-                )}
-              </li>
-            ))}
+                    <span className="truncate text-text-muted">
+                      {fmtAgo(r.startedAt)} · {r.trigger}
+                      {r.input?.dryRun ? ' · dry run' : ''}
+                      {r.input?.writes?.length ? ` · ${r.input.writes.length} note${r.input.writes.length === 1 ? '' : 's'}` : ''}
+                    </span>
+                    <span className="ml-auto shrink-0 tabular-nums text-text-muted">
+                      {[seconds !== null ? `${seconds}s` : null, isAdmin && r.costCents !== null ? fmtCents(r.costCents) : null].filter(Boolean).join(' · ')}
+                    </span>
+                    <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 text-text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+                  </button>
+                  {open && spaceId && (
+                    <div className="mt-3">
+                      <RunTranscript spaceId={spaceId} agentName={name} runId={r.id} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
-      </Section>
+      </section>
 
       {activating && spaceId && (
         <ActivateAgentDialog

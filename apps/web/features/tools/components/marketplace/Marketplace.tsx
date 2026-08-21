@@ -153,7 +153,7 @@ export default function Marketplace() {
           <main>'s pt-4 so the bar pins flush under it. */}
       <div className="sticky -top-4 -mt-4 -ml-6 z-20">
         <PaneTopScrollbarMask />
-        <div className="flex w-full items-center bg-surface-1 px-1">
+        <div className="flex w-full items-center bg-glass px-1">
           <UnderlineTabs
             tabs={TABS}
             value={tab}

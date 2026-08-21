@@ -158,7 +158,7 @@ function EventsPageInner() {
           the rail edge so the sidebar's right border stays visible.
           UnderlineTabs draws its own bottom border, so the wrapper stays
           borderless. */}
-      <div ref={viewBarRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-surface-1">
+      <div ref={viewBarRef} className="sticky -top-4 -mt-4 z-[45] -ml-[23px] bg-glass">
         {/* Keeps the page scrollbar from running up beside the pinned bar. */}
         <PaneTopScrollbarMask />
         <EventsScopeSelector scope={scope} onScopeChange={setScope} className="w-full overflow-x-auto px-1" />

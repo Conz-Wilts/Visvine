@@ -38,7 +38,7 @@ import { contextKeys, invalidateContextCache } from '@/features/notes/lib/contex
 import { availableNotePath, composeNotePath, newNoteContent } from '@/lib/notes/shared/newContext';
 import { newConnectorNote } from '@/lib/connectors/config';
 import { newModelConnectorNote } from '@/lib/connectors/model';
-import { newAgentNote } from '@/lib/agents/config';
+import { agentBriefPath, newAgentNote } from '@/lib/agents/config';
 import { fetchJson, fetchJsonBody } from '@/lib/fetchJson';
 import { PROVIDERS } from '@/lib/agents/registry';
 import { noteHref, sourceHref } from '@/lib/notes/entities';
@@ -72,7 +72,7 @@ const EVENT_FINDER_ICON = (
 export default function CreateModal() {
   const router = useRouter();
   const pathname = usePathname();
-  const { isOpen, defaultType, close } = useCreateModal();
+  const { isOpen, defaultType, defaultFolder, close } = useCreateModal();
   const { currentSpace, isAdmin } = useSpace();
   const { reduced } = useSidebar();
 
@@ -114,7 +114,7 @@ export default function CreateModal() {
   const [spaceData, setSpaceData] = useState<SpaceFormData>({ name: '', context: '' });
   const [contextData, setContextData] = useState<ContextFormData>({ title: '', folder: '', tags: '', body: '' });
   const [connectorData, setConnectorData] = useState<ConnectorFormData>({ name: '', description: '', kind: 'http', provider: 'gemini', hosts: '', secretName: '' });
-  const [agentData, setAgentData] = useState<AgentFormData>({ name: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
+  const [agentData, setAgentData] = useState<AgentFormData>({ name: '', folder: '', description: '', model: 'gemini/gemma-4-31b-it', connectors: '', web: false, brief: '' });
   const [toolData, setToolData] = useState<ToolFormData>({ name: '', title: '', description: '', railLabel: '' });
   const [fileData, setFileData] = useState<FileFormData>({ files: [], folder: '' });
   // Where the just-created note/file lives, so the success screen can offer to
@@ -244,13 +244,14 @@ export default function CreateModal() {
       if (defaultType) {
         setSelectedType(defaultType);
         setStep(1);
+        if (defaultType === 'agent') setAgentData((d) => ({ ...d, folder: defaultFolder ?? '' }));
       } else {
         setStep(0);
         setSelectedType(null);
       }
       setError(null);
     }
-  }, [isOpen, defaultType]);
+  }, [isOpen, defaultType, defaultFolder]);
 
   // Auto-focus the name field when entering step 1
   useEffect(() => {
@@ -453,7 +454,7 @@ export default function CreateModal() {
   const createAgentNote = async () => {
     if (!currentSpace) throw new Error('Select a space first');
     const name = agentSlug(agentData.name);
-    const path = `agents/${name}.md`;
+    const path = agentBriefPath(name, agentData.folder);
     await notesApi.create(
       currentSpace.id,
       path,

@@ -78,13 +78,13 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-brand-bg">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Navbar />
 
       {/* Sidebar floats fixed over content — shadow not clipped */}
       <Sidebar />
 
-      {/* Main content: one flat white surface right of the rail (marginLeft:
+      {/* Main content: one flat surface right of the rail (marginLeft:
           railW) and below the navbar (marginTop: 64). <main> is the scroll
           container, so its scrollbar starts under the navbar rather than at
           the viewport top. Each page supplies its own 24px horizontal padding
@@ -105,7 +105,7 @@ function AuthLayoutInner({ children }: { children: React.ReactNode }) {
             // them overshoot the surface edge and clip (the Grid underline
             // lost its left inset).
             paddingLeft: fullBleed ? 0 : 24,
-            background: "var(--color-surface-1, #ffffff)",
+            // No background of its own: the body's backdrop shows through.
             // No horizontal scrolling: a sideways drag would slide content
             // under the fixed rail / docked panel, which read as broken.
             overflowX: "hidden",

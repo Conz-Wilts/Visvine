@@ -304,7 +304,7 @@ export default function ResourceDetailPage({ params }: { params: Promise<{ resou
         </div>
 
         {/* activity panel */}
-        <aside className="flex flex-col w-full lg:w-[360px] flex-none border-t lg:border-t-0 lg:border-l border-border-subtle bg-surface-1 lg:min-h-0">
+        <aside className="flex flex-col w-full lg:w-[360px] flex-none border-t lg:border-t-0 lg:border-l border-border-subtle lg:min-h-0">
           <div className="flex gap-1 px-3 pt-2 border-b border-border-subtle">
             <PanelTabBtn active={tab === 'comments'} onClick={() => setTab('comments')}
                          icon={<MessageSquareIcon className="w-3.5 h-3.5" />} label="Comments" count={comments.length} />

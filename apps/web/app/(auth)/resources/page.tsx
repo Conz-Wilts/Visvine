@@ -1,407 +1,244 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
-import { fetchJson } from '@/lib/fetchJson';
-import dynamic from 'next/dynamic';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { useResources } from '@/features/resources/hooks/useResources';
 import ResourceUploadDialog from '@/features/resources/components/ResourceUploadDialog';
-import PDFViewer from '@/features/resources/components/PDFViewer';
-import CommentsPanel from '@/features/resources/components/CommentsPanel';
-import ChangeProposalDialog from '@/features/resources/components/ChangeProposalDialog';
+import ResourceDetailDrawer from '@/features/resources/components/ResourceDetailDrawer';
+import { getPinned, togglePin } from '@/features/resources/components/resourceUi';
 import {
-  FileTypeIcon, FILE_BG, FILE_LABEL, INDEX_STATE_LABEL,
-  getPinned, togglePin, DocxViewer, FileUnavailable,
-} from '@/features/resources/components/resourceUi';
-import { EmptyState, SearchInput, UnderlineTabs } from '@/components/ui';
-import { formatBytes } from '@/lib/utils';
-import type { Resource } from '@/lib/types';
+  FileCard, FileRow, FolderRow, FolderTile, useDropTarget,
+  type DragItem, type MenuAction,
+} from '@/features/resources/components/driveItems';
+import { MoveDialog, NameDialog } from '@/features/resources/components/driveDialogs';
+import { driveApi } from '@/features/resources/lib/driveApi';
+import { childFolders, folderPathLabel, folderTrail, subtree } from '@/features/resources/lib/tree';
+import { ConfirmDialog, EmptyState, SearchInput, ViewToggle } from '@/components/ui';
+import Dropdown, { DROPDOWN_MENU_CLASS } from '@/components/ui/Dropdown';
+import { useClickOutside } from '@/features/shared/hooks/useClickOutside';
+import { ArrowUpIcon, ChevronRightIcon, FolderIcon, ListIcon, PlusIcon, ToolGridIcon, UploadIcon } from '@/features/shared/icons';
+import type { Resource, ResourceFolder } from '@/lib/types';
 
-// xlsx parser is heavy (~400KB gzipped) and only needed when a spreadsheet is opened
-const SpreadsheetViewer = dynamic(() => import('@/features/resources/components/SpreadsheetViewer'), { ssr: false });
-
-type ResourceTab = 'all' | 'pinned' | 'new';
+type View = 'grid' | 'list';
+type Show = 'all' | 'pinned' | 'new';
+type TypeFilter = 'all' | 'docs' | 'sheets' | 'pdf' | 'image' | 'other';
+type Sort = 'name' | 'modified';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-const RESOURCE_TABS: { id: ResourceTab; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'pinned', label: 'Pinned' },
-  { id: 'new', label: 'New' },
-];
+const TYPE_GROUP: Record<TypeFilter, (t: string) => boolean> = {
+  all: () => true,
+  docs: t => t === 'docx' || t === 'markdown' || t === 'text',
+  sheets: t => t === 'xlsx' || t === 'csv',
+  pdf: t => t === 'pdf',
+  image: t => t === 'image',
+  other: t => !['docx', 'markdown', 'text', 'xlsx', 'csv', 'pdf', 'image'].includes(t),
+};
 
-// ─── Resource grid card ───────────────────────────────────────────────────────
+type Dialog =
+  | { kind: 'newFolder' }
+  | { kind: 'upload' }
+  | { kind: 'renameFolder'; folder: ResourceFolder }
+  | { kind: 'renameFile'; file: Resource }
+  | { kind: 'moveFolder'; folder: ResourceFolder }
+  | { kind: 'moveFile'; file: Resource }
+  | { kind: 'deleteFolder'; folder: ResourceFolder }
+  | { kind: 'deleteFile'; file: Resource };
 
-function ResourceCard({
-  resource,
-  selected,
-  pinned,
-  visible,
-  onSelect,
-  onTogglePin,
-  onDelete,
+// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+
+function Crumb({
+  label, active, onClick, onDropItem,
 }: {
-  resource: Resource;
-  selected: boolean;
-  pinned: boolean;
-  visible: boolean;
-  onSelect: () => void;
-  onTogglePin: () => void;
-  onDelete: () => void;
+  label: string; active: boolean; onClick: () => void; onDropItem: (item: DragItem) => void;
 }) {
-  const bg = (FILE_BG[resource.fileType] ?? 'bg-surface-3 text-text-muted').split(' ')[0];
-  const date = new Date(resource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-  const facts = [resource.fileSize ? formatBytes(resource.fileSize) : null, date].filter(Boolean).join(' · ');
-  // Where the file got to in the RAG pipeline. Only the exceptions are said:
-  // "the AI can't find my document" is otherwise invisible, but a file that
-  // indexed fine needs no badge.
-  const state = resource.indexState !== 'indexed' ? INDEX_STATE_LABEL[resource.indexState] : undefined;
-
+  const { over, handlers } = useDropTarget(onDropItem, !active);
   return (
-    <div
-      className="transition-all duration-500 ease-out"
-      style={{ opacity: visible ? 1 : 0, transform: visible ? 'translateY(0)' : 'translateY(16px)' }}
+    <button
+      type="button"
+      onClick={onClick}
+      {...handlers}
+      className={`max-w-[220px] truncate rounded-lg px-2 py-1 text-[22px] font-semibold leading-tight transition-colors ${
+        active ? 'text-text-primary' : 'text-text-primary hover:bg-surface-3'
+      } ${over ? 'bg-brand-green/10 text-text-primary ring-2 ring-brand-green' : ''}`}
     >
-      <div onClick={onSelect} className="group relative cursor-pointer">
-        {/* Pin — floats over the tile's corner; always shown once pinned */}
-        <button
-          type="button"
-          onClick={e => { e.stopPropagation(); onTogglePin(); }}
-          title={pinned ? 'Unpin' : 'Pin'}
-          className={`absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full transition-all ${
-            pinned
-              ? 'bg-brand-green text-white'
-              : 'bg-surface-1/90 text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand-green'
-          }`}
-        >
-          <svg className="h-3.5 w-3.5" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
-        </button>
+      {label}
+    </button>
+  );
+}
 
-        {/* The tile IS the card: a square, selected = a ring around it */}
-        <div className={`aspect-square overflow-hidden rounded-lg transition-shadow ${selected ? 'ring-2 ring-brand-green ring-offset-2 ring-offset-surface-1' : ''}`}>
-          {resource.fileType === 'image' && resource.fileUrl ? (
-            <img src={resource.fileUrl} alt={resource.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-          ) : (
-            <div className={`flex h-full w-full items-center justify-center ${bg} transition-all group-hover:brightness-95`}>
-              <FileTypeIcon type={resource.fileType} className="h-14 w-14" />
-            </div>
-          )}
-        </div>
+// ─── "New" button ─────────────────────────────────────────────────────────────
 
-        {/* Caption — name, then one line of facts; the icon already said the type */}
-        <div className="flex items-start justify-between gap-2 pt-2.5">
-          <div className="min-w-0">
-            <h3 className="truncate text-[14px] font-semibold leading-snug text-text-primary">{resource.name}</h3>
-            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-text-muted">
-              {facts}
-              {state && (
-                <span title={resource.indexError ?? undefined} className={state.className.includes('red') ? 'text-red-600' : 'text-amber-700'}>
-                  · {state.label}
-                </span>
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onDelete(); }}
-            className="shrink-0 rounded-md p-1 text-text-muted/50 opacity-0 transition-all hover:text-red-500 group-hover:opacity-100"
-            title="Delete"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+function NewButton({ onFolder, onUpload }: { onFolder: () => void; onUpload: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false));
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="flex h-10 items-center gap-2 rounded-lg bg-brand-green pl-3 pr-4 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+      >
+        <PlusIcon className="h-4 w-4" />
+        New
+      </button>
+      {open && (
+        <div className={`${DROPDOWN_MENU_CLASS} min-w-[200px]`}>
+          <button type="button" onClick={() => { setOpen(false); onFolder(); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-surface-2">
+            <FolderIcon className="h-4 w-4 text-text-muted" /> New folder
+          </button>
+          <button type="button" onClick={() => { setOpen(false); onUpload(); }} className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-primary hover:bg-surface-2">
+            <UploadIcon className="h-4 w-4 text-text-muted" /> File upload
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Resource detail drawer ───────────────────────────────────────────────────
-
-function ResourceDetailDrawer({
-  resource,
-  pinned,
-  onClose,
-  onTogglePin,
-  onDelete,
-}: {
-  resource: Resource | null;
-  pinned: boolean;
-  onClose: () => void;
-  onTogglePin: () => void;
-  onDelete: () => void;
-}) {
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const isOpen = resource !== null;
-  const [displayResource, setDisplayResource] = useState<Resource | null>(resource);
-  const [isContentVisible, setIsContentVisible] = useState(true);
-  const [selectedCell, setSelectedCell] = useState<string | null>(null);
-  const [selectedCellValue, setSelectedCellValue] = useState('');
-  const [showPropose, setShowPropose] = useState(false);
-  const [changeKey, setChangeKey] = useState(0);
-
-  // Cross-fade content when switching resources
-  useEffect(() => {
-    if (resource?.id === displayResource?.id) return;
-    if (resource === null) {
-      setDisplayResource(null);
-      setIsContentVisible(true);
-    } else if (displayResource === null) {
-      setDisplayResource(resource);
-      setSelectedCell(null);
-      setIsContentVisible(true);
-    } else {
-      setIsContentVisible(false);
-      const t = setTimeout(() => {
-        setDisplayResource(resource);
-        setSelectedCell(null);
-        setIsContentVisible(true);
-      }, 180);
-      return () => clearTimeout(t);
-    }
-  }, [resource, displayResource]);
-
-  // Escape key
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && isOpen) onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isOpen, onClose]);
-
-  // Click-outside
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (drawerRef.current && !drawerRef.current.contains(e.target as Node)) onClose();
-    };
-    const id = setTimeout(() => document.addEventListener('mousedown', handler), 100);
-    return () => { clearTimeout(id); document.removeEventListener('mousedown', handler); };
-  }, [isOpen, onClose]);
-
-  const isSpreadsheet = displayResource?.fileType === 'xlsx' || displayResource?.fileType === 'csv';
-
-  return (
-    <>
-      <aside
-        ref={drawerRef}
-        className={`fixed top-0 right-0 h-full bg-surface-1 shadow-float z-50 transition-all duration-300 ease-in-out
-          flex flex-col overflow-hidden
-          w-full sm:w-[520px]
-          ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
-      >
-        {displayResource && (
-          <div className={`h-full flex flex-col transition-opacity duration-180 ${isContentVisible ? 'opacity-100' : 'opacity-0'}`}>
-
-            {/* Drawer header */}
-            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 bg-surface-1 border-b border-border-subtle">
-              <div className="flex min-w-0 items-center gap-3">
-                <FileTypeIcon type={displayResource.fileType} className="h-9 w-9 shrink-0" />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-text-primary leading-tight">{displayResource.name}</p>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    {FILE_LABEL[displayResource.fileType] ?? displayResource.fileType.toUpperCase()}
-                    {displayResource.fileSize ? ` · ${formatBytes(displayResource.fileSize)}` : ''}
-                    {` · ${new Date(displayResource.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                <Link
-                  href={`/resources/${encodeURIComponent(displayResource.id)}`}
-                  title="Open full page"
-                  className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                  </svg>
-                </Link>
-                {isSpreadsheet && selectedCell && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPropose(true)}
-                    className="flex items-center gap-1.5 rounded-md border border-brand-green/40 bg-brand-green/5 px-3 py-1.5 text-xs font-semibold text-brand-green hover:bg-brand-green/10 transition-colors"
-                  >
-                    Propose Change
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onTogglePin}
-                  title={pinned ? 'Unpin' : 'Pin'}
-                  className={`rounded-lg p-2 transition-colors ${pinned ? 'text-brand-green hover:bg-brand-green/10' : 'text-text-muted hover:bg-surface-3 hover:text-text-secondary'}`}
-                >
-                  <svg className="h-4 w-4" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  title="Delete"
-                  className="rounded-lg p-2 text-text-muted hover:bg-red-50 hover:text-red-500 transition-colors"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-lg p-2 text-text-muted hover:bg-surface-3 hover:text-text-secondary transition-colors"
-                  aria-label="Close"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-
-            {/* Drawer body */}
-            <div className="flex flex-1 overflow-hidden">
-              {displayResource.fileType === 'docx' ? (
-                <DocxViewer resourceId={displayResource.id} />
-              ) : !displayResource.fileUrl ? (
-                <FileUnavailable />
-              ) : displayResource.fileType === 'pdf' ? (
-                <PDFViewer fileUrl={displayResource.fileUrl} />
-              ) : displayResource.fileType === 'image' ? (
-                <div className="flex flex-1 items-center justify-center overflow-auto bg-surface-2 p-8">
-                  <img
-                    src={displayResource.fileUrl}
-                    alt={displayResource.name}
-                    className="max-w-full max-h-full object-contain rounded-xl shadow"
-                  />
-                </div>
-              ) : (
-                <>
-                  <div className="flex-1 overflow-hidden flex flex-col">
-                    <SpreadsheetViewer
-                      key={`${displayResource.id}-${changeKey}`}
-                      resourceId={displayResource.id}
-                      fileUrl={displayResource.fileUrl}
-                      onCellSelect={(ref: string, val: string) => { setSelectedCell(ref); setSelectedCellValue(val); }}
-                      selectedCell={selectedCell}
-                    />
-                  </div>
-                  <CommentsPanel
-                    resourceId={displayResource.id}
-                    cellRef={selectedCell}
-                    onProposeChange={() => setShowPropose(true)}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </aside>
-
-      {showPropose && selectedCell && displayResource && (
-        <ChangeProposalDialog
-          resourceId={displayResource.id}
-          cellRef={selectedCell}
-          originalValue={selectedCellValue}
-          onClose={() => setShowPropose(false)}
-          onProposed={() => setChangeKey(k => k + 1)}
-        />
       )}
-    </>
-  );
-}
-
-// ─── Staggered grid ───────────────────────────────────────────────────────────
-
-function ResourceGrid({
-  resources,
-  pinned,
-  selected,
-  onSelect,
-  onDelete,
-  onTogglePin,
-}: {
-  resources: Resource[];
-  pinned: string[];
-  selected: Resource | null;
-  onSelect: (r: Resource) => void;
-  onDelete: (r: Resource) => void;
-  onTogglePin: (id: string) => void;
-}) {
-  const [visibleCount, setVisibleCount] = useState(0);
-
-  // Depend on the id string, not the array identity: `resources` is a fresh
-  // array every parent render, and restarting (or worse, cancelling) the
-  // stagger on identity-only changes leaves cards stuck at opacity 0.
-  const staggerKey = resources.map(r => r.id).join(',');
-  useEffect(() => {
-    setVisibleCount(0);
-    const count = staggerKey ? staggerKey.split(',').length : 0;
-    const timeouts = Array.from({ length: count }, (_, i) =>
-      setTimeout(() => setVisibleCount(i + 1), i * 50),
-    );
-    return () => timeouts.forEach(clearTimeout);
-  }, [staggerKey]);
-
-  if (!resources.length) {
-    return (
-      <EmptyState title="No resources here" description="No resources here yet — upload a file to get started." />
-    );
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-      {resources.map((r, i) => (
-        <ResourceCard
-          key={r.id}
-          resource={r}
-          selected={selected?.id === r.id}
-          pinned={pinned.includes(r.id)}
-          visible={i < visibleCount}
-          onSelect={() => onSelect(r)}
-          onTogglePin={() => onTogglePin(r.id)}
-          onDelete={() => onDelete(r)}
-        />
-      ))}
     </div>
   );
 }
-
-// ─── Show filter ──────────────────────────────────────────────────────────────
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ResourcesPage() {
+  const router = useRouter();
   const { currentSpace } = useSpace();
-  const { resources, loading, refetch } = useResources(currentSpace?.id ?? null);
-  const [tab, setTab] = useState<ResourceTab>('all');
+  const spaceId = currentSpace?.id ?? null;
+  const { resources, folders, loading, refetch } = useResources(spaceId);
+
+  const [folderId, setFolderId] = useState<string | null>(null);
+  const [view, setView] = useState<View>('grid');
+  const [show, setShow] = useState<Show>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [sort, setSort] = useState<Sort>('name');
+  const [sortAsc, setSortAsc] = useState(true);
   const [search, setSearch] = useState('');
   const [pinned, setPinned] = useState<string[]>([]);
   const [selected, setSelected] = useState<Resource | null>(null);
-  const [showUpload, setShowUpload] = useState(false);
+  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [osDrop, setOsDrop] = useState(false);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => { setPinned(getPinned()); }, []);
+  // A new space starts at its root; a folder deleted under us falls back to it.
+  useEffect(() => { setFolderId(null); }, [spaceId]);
+  useEffect(() => {
+    if (folderId && !loading && !folders.some(f => f.id === folderId)) setFolderId(null);
+  }, [folderId, folders, loading]);
+
+  const act = useCallback(async (fn: () => Promise<unknown>) => {
+    setActionError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Something went wrong');
+      throw e;
+    } finally {
+      refetch();
+    }
+  }, [refetch]);
 
   function handleTogglePin(id: string) {
     togglePin(id);
     setPinned(getPinned());
   }
 
-  async function handleDelete(r: Resource) {
-    if (!confirm(`Delete "${r.name}"?`)) return;
-    await fetchJson(`/api/resources?id=${encodeURIComponent(r.id)}`, { method: 'DELETE' });
-    if (selected?.id === r.id) setSelected(null);
-    refetch();
-  }
+  // ── What's on screen ──────────────────────────────────────────────────────
 
-  const filteredResources = resources.filter(r => {
-    if (tab === 'pinned' && !pinned.includes(r.id)) return false;
-    if (tab === 'new' && Date.now() - new Date(r.createdAt).getTime() >= ONE_WEEK_MS) return false;
-    if (search.trim()) return r.name.toLowerCase().includes(search.toLowerCase());
-    return true;
-  });
+  const searching = search.trim().length > 0;
+  const needle = search.trim().toLowerCase();
+
+  const matchesFilters = useCallback((r: Resource) => {
+    if (show === 'pinned' && !pinned.includes(r.id)) return false;
+    if (show === 'new' && Date.now() - new Date(r.createdAt).getTime() >= ONE_WEEK_MS) return false;
+    return TYPE_GROUP[typeFilter](r.fileType);
+  }, [show, pinned, typeFilter]);
+
+  const compare = useCallback((a: Resource, b: Resource) => {
+    const v = sort === 'name'
+      ? a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      : new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return sortAsc ? v : -v;
+  }, [sort, sortAsc]);
+
+  const visibleFolders = useMemo(() => {
+    if (searching) return folders.filter(f => f.name.toLowerCase().includes(needle));
+    return childFolders(folders, folderId);
+  }, [folders, folderId, searching, needle]);
+
+  const visibleFiles = useMemo(() => {
+    const pool = searching
+      ? resources.filter(r => r.name.toLowerCase().includes(needle))
+      : resources.filter(r => r.folderId === folderId);
+    return pool.filter(matchesFilters).sort(compare);
+  }, [resources, folderId, searching, needle, matchesFilters, compare]);
+
+  const trail = folderTrail(folders, folderId);
+  const hereLabel = trail.length ? trail[trail.length - 1].name : 'Resources';
+
+  // ── Moves (drag-and-drop and the Move dialog share one path) ─────────────
+
+  const moveItem = useCallback((item: DragItem, targetFolderId: string | null) => {
+    if (item.kind === 'file') {
+      const file = resources.find(r => r.id === item.id);
+      if (!file || file.folderId === targetFolderId) return;
+      void act(() => driveApi.moveFile(item.id, targetFolderId)).catch(() => {});
+    } else {
+      const folder = folders.find(f => f.id === item.id);
+      if (!folder || folder.parentId === targetFolderId) return;
+      if (targetFolderId && subtree(folders, item.id).has(targetFolderId)) return;
+      void act(() => driveApi.moveFolder(item.id, targetFolderId)).catch(() => {});
+    }
+  }, [resources, folders, act]);
+
+  // ── Files dropped from the desktop land in the open folder ───────────────
+
+  const uploadFiles = useCallback(async (files: File[]) => {
+    if (!spaceId || !files.length) return;
+    setUploadingCount(files.length);
+    const failures: string[] = [];
+    for (const file of files) {
+      try {
+        await driveApi.upload(spaceId, file, folderId);
+      } catch (e) {
+        failures.push(`${file.name}: ${e instanceof Error ? e.message : 'upload failed'}`);
+      }
+      setUploadingCount(n => n - 1);
+    }
+    if (failures.length) setActionError(failures.join(' · '));
+    refetch();
+  }, [spaceId, folderId, refetch]);
+
+  const onPageDragOver = (e: DragEvent) => {
+    if (!Array.from(e.dataTransfer.types).includes('Files')) return;
+    e.preventDefault();
+    setOsDrop(true);
+  };
+  const onPageDrop = (e: DragEvent) => {
+    setOsDrop(false);
+    if (!e.dataTransfer.files.length) return;
+    e.preventDefault();
+    void uploadFiles(Array.from(e.dataTransfer.files));
+  };
+
+  // ── Menus ────────────────────────────────────────────────────────────────
+
+  const folderActions = (folder: ResourceFolder): MenuAction[] => [
+    { label: 'Open', onSelect: () => { setSearch(''); setFolderId(folder.id); } },
+    { label: 'Rename', onSelect: () => setDialog({ kind: 'renameFolder', folder }) },
+    { label: 'Move to…', onSelect: () => setDialog({ kind: 'moveFolder', folder }) },
+    { label: 'Delete', danger: true, separator: true, onSelect: () => setDialog({ kind: 'deleteFolder', folder }) },
+  ];
+
+  const fileActions = (file: Resource): MenuAction[] => [
+    { label: 'Preview', onSelect: () => setSelected(file) },
+    { label: 'Open full page', onSelect: () => router.push(`/resources/${encodeURIComponent(file.id)}`) },
+    ...(file.fileUrl ? [{ label: 'Download', onSelect: () => window.open(file.fileUrl!, '_blank', 'noopener') }] : []),
+    { label: pinned.includes(file.id) ? 'Unpin' : 'Pin', onSelect: () => handleTogglePin(file.id) },
+    { label: 'Rename', onSelect: () => setDialog({ kind: 'renameFile', file }) },
+    { label: 'Move to…', onSelect: () => setDialog({ kind: 'moveFile', file }) },
+    { label: 'Delete', danger: true, separator: true, onSelect: () => setDialog({ kind: 'deleteFile', file }) },
+  ];
 
   if (!currentSpace) {
     return (
@@ -411,70 +248,305 @@ export default function ResourcesPage() {
     );
   }
 
-  return (
-    <div className="relative w-full" style={{ minHeight: 'calc(100dvh - 56px)' }}>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
+  const empty = !loading && !visibleFolders.length && !visibleFiles.length;
 
-        {/* ── One toolbar row: the view tabs, the search, the count ───── */}
-        <div className="flex flex-wrap items-center gap-4 pt-2 pb-1">
-          <UnderlineTabs
-            tabs={RESOURCE_TABS}
-            value={tab}
-            onChange={setTab}
-            ariaLabel="Show"
+  return (
+    <div
+      className="relative w-full"
+      style={{ minHeight: 'calc(100dvh - 56px)' }}
+      onDragOver={onPageDragOver}
+      onDragLeave={e => { if (e.currentTarget === e.target) setOsDrop(false); }}
+      onDrop={onPageDrop}
+    >
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
+
+        {/* ── Title row: breadcrumb, New, view toggle ───────────────────── */}
+        <div className="flex flex-wrap items-center gap-3 pt-3">
+          <nav aria-label="Folder" className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+            <Crumb
+              label="Resources"
+              active={!trail.length && !searching}
+              onClick={() => { setSearch(''); setFolderId(null); }}
+              onDropItem={item => moveItem(item, null)}
+            />
+            {trail.map((f, i) => (
+              <span key={f.id} className="flex items-center gap-0.5">
+                <ChevronRightIcon className="h-4 w-4 text-text-muted" />
+                <Crumb
+                  label={f.name}
+                  active={i === trail.length - 1 && !searching}
+                  onClick={() => { setSearch(''); setFolderId(f.id); }}
+                  onDropItem={item => moveItem(item, f.id)}
+                />
+              </span>
+            ))}
+            {searching && (
+              <span className="flex items-center gap-0.5">
+                <ChevronRightIcon className="h-4 w-4 text-text-muted" />
+                <span className="px-2 text-[22px] font-semibold text-text-primary">Search results</span>
+              </span>
+            )}
+          </nav>
+          <NewButton
+            onFolder={() => setDialog({ kind: 'newFolder' })}
+            onUpload={() => setDialog({ kind: 'upload' })}
           />
-          <SearchInput value={search} onChange={setSearch} placeholder="Search resources…" className="w-full max-w-xs" />
+          <ViewToggle<View>
+            size="sm"
+            value={view}
+            onChange={setView}
+            options={[
+              { id: 'grid', label: 'Grid', icon: <ToolGridIcon className="h-3.5 w-3.5" /> },
+              { id: 'list', label: 'List', icon: <ListIcon className="h-3.5 w-3.5" /> },
+            ]}
+          />
+        </div>
+
+        {/* ── Filter row ────────────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-1 pt-2 pb-1">
+          <SearchInput value={search} onChange={setSearch} placeholder="Search all resources…" className="w-full max-w-xs" />
+          <Dropdown<TypeFilter>
+            label="Type"
+            value={typeFilter}
+            onChange={setTypeFilter}
+            active={typeFilter !== 'all'}
+            options={[
+              { value: 'all', label: 'Any' },
+              { value: 'docs', label: 'Documents' },
+              { value: 'sheets', label: 'Spreadsheets' },
+              { value: 'pdf', label: 'PDFs' },
+              { value: 'image', label: 'Images' },
+              { value: 'other', label: 'Other' },
+            ]}
+          />
+          <Dropdown<Show>
+            label="Show"
+            value={show}
+            onChange={setShow}
+            active={show !== 'all'}
+            options={[
+              { value: 'all', label: 'Everything' },
+              { value: 'pinned', label: 'Pinned' },
+              { value: 'new', label: 'New this week' },
+            ]}
+          />
+          <Dropdown<Sort>
+            label="Sort"
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: 'name', label: 'Name' },
+              { value: 'modified', label: 'Date added' },
+            ]}
+          />
+          <button
+            type="button"
+            onClick={() => setSortAsc(a => !a)}
+            title={sortAsc ? 'Ascending' : 'Descending'}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"
+          >
+            <ArrowUpIcon className={`h-4 w-4 transition-transform ${sortAsc ? '' : 'rotate-180'}`} />
+          </button>
           {!loading && (
             <span className="ml-auto text-xs text-text-muted">
-              {filteredResources.length} {filteredResources.length === 1 ? 'file' : 'files'}
+              {visibleFolders.length ? `${visibleFolders.length} ${visibleFolders.length === 1 ? 'folder' : 'folders'} · ` : ''}
+              {visibleFiles.length} {visibleFiles.length === 1 ? 'file' : 'files'}
+              {uploadingCount > 0 ? ` · uploading ${uploadingCount}…` : ''}
             </span>
           )}
         </div>
 
-        {/* ── Grid ───────────────────────────────────────────────────── */}
-        <div className="pt-4 pb-8">
+        {actionError && (
+          <p className="pb-2 text-xs text-red-600">{actionError}</p>
+        )}
+
+        {/* ── Contents ──────────────────────────────────────────────────── */}
+        <div className="pt-3 pb-10">
           {loading ? (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-7 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i}>
-                  <div className="aspect-square animate-pulse rounded-lg bg-surface-3" />
-                  <div className="space-y-2 pt-2.5">
-                    <div className="h-3.5 w-3/4 animate-pulse rounded bg-surface-3" />
-                    <div className="h-3 w-1/3 animate-pulse rounded bg-surface-3" />
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-surface-2" />)}
+              </div>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {Array.from({ length: 8 }).map((_, i) => <div key={i} className="aspect-[4/4.2] animate-pulse rounded-xl bg-surface-2" />)}
+              </div>
+            </div>
+          ) : empty ? (
+            <EmptyState
+              title={searching ? 'Nothing matches' : 'This folder is empty'}
+              description={searching ? 'Try another name or clear the filters.' : 'Drop files anywhere on this page, or use New.'}
+            />
+          ) : view === 'grid' ? (
+            <>
+              {visibleFolders.length > 0 && (
+                <section className="mb-6">
+                  <h2 className="mb-2 px-1 text-xs font-semibold text-text-muted">Folders</h2>
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {visibleFolders.map(f => (
+                      <FolderTile
+                        key={f.id}
+                        folder={f}
+                        actions={folderActions(f)}
+                        onOpen={() => { setSearch(''); setFolderId(f.id); }}
+                        onDropItem={item => moveItem(item, f.id)}
+                      />
+                    ))}
                   </div>
-                </div>
+                </section>
+              )}
+              {visibleFiles.length > 0 && (
+                <section>
+                  {visibleFolders.length > 0 && <h2 className="mb-2 px-1 text-xs font-semibold text-text-muted">Files</h2>}
+                  <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                    {visibleFiles.map(r => (
+                      <FileCard
+                        key={r.id}
+                        resource={r}
+                        selected={selected?.id === r.id}
+                        pinned={pinned.includes(r.id)}
+                        actions={fileActions(r)}
+                        onOpen={() => setSelected(r)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          ) : (
+            <div role="table">
+              <div className="grid h-9 grid-cols-[minmax(0,1fr)_140px_100px_40px] items-center gap-4 border-b border-border-subtle px-3 text-xs font-semibold text-text-muted">
+                <span>Name</span>
+                <span>{searching ? 'Location' : 'Added'}</span>
+                <span>Size</span>
+                <span />
+              </div>
+              {visibleFolders.map(f => (
+                <FolderRow
+                  key={f.id}
+                  folder={f}
+                  actions={folderActions(f)}
+                  onOpen={() => { setSearch(''); setFolderId(f.id); }}
+                  onDropItem={item => moveItem(item, f.id)}
+                />
+              ))}
+              {visibleFiles.map(r => (
+                <FileRow
+                  key={r.id}
+                  resource={r}
+                  selected={selected?.id === r.id}
+                  pinned={pinned.includes(r.id)}
+                  actions={fileActions(r)}
+                  onOpen={() => setSelected(r)}
+                  location={searching ? folderPathLabel(folders, r.folderId) : undefined}
+                />
               ))}
             </div>
-          ) : (
-            <ResourceGrid
-              resources={filteredResources}
-              pinned={pinned}
-              selected={selected}
-              onSelect={r => setSelected(r)}
-              onDelete={handleDelete}
-              onTogglePin={handleTogglePin}
-            />
           )}
         </div>
       </div>
 
-      {/* ── Detail drawer (slides in from right) ───────────────────── */}
+      {/* ── Desktop-drop overlay ─────────────────────────────────────────── */}
+      {osDrop && (
+        <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-green bg-brand-green/5">
+          <p className="rounded-lg bg-surface-1 px-4 py-2 text-sm font-semibold text-text-primary shadow-float">
+            Drop to upload to {hereLabel}
+          </p>
+        </div>
+      )}
+
+      {/* ── Detail drawer ───────────────────────────────────────────────── */}
       <ResourceDetailDrawer
         resource={selected}
         pinned={selected ? pinned.includes(selected.id) : false}
         onClose={() => setSelected(null)}
         onTogglePin={() => selected && handleTogglePin(selected.id)}
-        onDelete={() => selected && handleDelete(selected)}
+        onDelete={() => selected && setDialog({ kind: 'deleteFile', file: selected })}
       />
 
-      {/* ── Upload dialog ────────────────────────────────────────────── */}
-      {showUpload && (
+      {/* ── Dialogs ─────────────────────────────────────────────────────── */}
+      {dialog?.kind === 'upload' && (
         <ResourceUploadDialog
           spaceId={currentSpace.id}
-          onClose={() => setShowUpload(false)}
+          folderId={folderId}
+          folderName={hereLabel}
+          onClose={() => setDialog(null)}
           onUploaded={refetch}
         />
       )}
+      {dialog?.kind === 'newFolder' && (
+        <NameDialog
+          title={`New folder in ${hereLabel}`}
+          submitLabel="Create"
+          onSubmit={name => act(() => driveApi.createFolder(currentSpace.id, name, folderId))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'renameFolder' && (
+        <NameDialog
+          title="Rename folder"
+          initial={dialog.folder.name}
+          submitLabel="Rename"
+          onSubmit={name => act(() => driveApi.renameFolder(dialog.folder.id, name))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'renameFile' && (
+        <NameDialog
+          title="Rename file"
+          initial={dialog.file.name}
+          submitLabel="Rename"
+          onSubmit={name => act(() => driveApi.renameFile(dialog.file.id, name))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'moveFolder' && (
+        <MoveDialog
+          folders={folders}
+          itemName={dialog.folder.name}
+          currentFolderId={dialog.folder.parentId}
+          movingFolderId={dialog.folder.id}
+          onMove={target => act(() => driveApi.moveFolder(dialog.folder.id, target))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === 'moveFile' && (
+        <MoveDialog
+          folders={folders}
+          itemName={dialog.file.name}
+          currentFolderId={dialog.file.folderId}
+          onMove={target => act(() => driveApi.moveFile(dialog.file.id, target))}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      <ConfirmDialog
+        open={dialog?.kind === 'deleteFolder'}
+        title={dialog?.kind === 'deleteFolder' ? `Delete “${dialog.folder.name}”?` : ''}
+        body="Subfolders inside it are deleted too. Files inside are kept and moved up a level."
+        confirmLabel="Delete folder"
+        destructive
+        onConfirm={async () => {
+          if (dialog?.kind !== 'deleteFolder') return;
+          const id = dialog.folder.id;
+          setDialog(null);
+          await act(() => driveApi.deleteFolder(id)).catch(() => {});
+        }}
+        onClose={() => setDialog(null)}
+      />
+      <ConfirmDialog
+        open={dialog?.kind === 'deleteFile'}
+        title={dialog?.kind === 'deleteFile' ? `Delete “${dialog.file.name}”?` : ''}
+        body="The file, its comments and its search index are removed. This cannot be undone."
+        confirmLabel="Delete file"
+        destructive
+        onConfirm={async () => {
+          if (dialog?.kind !== 'deleteFile') return;
+          const id = dialog.file.id;
+          setDialog(null);
+          if (selected?.id === id) setSelected(null);
+          await act(() => driveApi.deleteFile(id)).catch(() => {});
+        }}
+        onClose={() => setDialog(null)}
+      />
     </div>
   );
 }

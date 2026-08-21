@@ -26,7 +26,8 @@ import { SHARED_OWNER_KEY, type Context } from '@/lib/notes/store'
 import { runToolLoop, type ChatFn } from '@/lib/notes/toolLoop'
 import { notify } from '@/lib/notifications/service'
 import { costMicros, perTurnStop, preRunStop, type BudgetState } from './budget'
-import { agentBriefPath, agentPageHref, parseAgentBrief, type AgentBrief } from './config'
+import { agentPageHref, parseAgentBrief, type AgentBrief } from './config'
+import { findAgentBrief } from './briefs'
 import { eventsForRun, rearmIfPending, type ClaimedEvent } from './events'
 import { deactivateAgent, effectiveTimezone, type DeactivationReason } from './hooks'
 import { FLUSH_EVERY_EVENTS, FLUSH_EVERY_MS, MAX_CONSECUTIVE_FAILURES, MAX_RUN_MS } from './limits'
@@ -200,10 +201,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
 
   try {
     // 1. The brief — read raw (not through a principal yet; the author may be gone).
-    const briefRow = await prisma.contextNote.findFirst({
-      where: { spaceId, ownerKey: SHARED_OWNER_KEY, path: agentBriefPath(name), deletedAt: null },
-      select: { content: true, createdBy: true },
-    })
+    const briefRow = await findAgentBrief(spaceId, name)
     if (!briefRow) return fail('config', 'The agent brief no longer exists.', { deactivate: { reason: 'deleted', detail: 'brief missing at run time' } })
     authorUserId = briefRow.createdBy ?? null
     const parsed = parseAgentBrief(parseFrontmatter(briefRow.content), splitFrontmatter(briefRow.content).body)
@@ -216,7 +214,7 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const principal = await principalForUser(spaceId, state.runAsUserId)
     if (!principal) return fail('author_gone', 'The brief\'s author is no longer a member of this space.', { deactivate: { reason: 'author_gone', detail: null } })
     // Sanity: the author must still be able to see their own brief.
-    if ((await readVisible(principal, context, agentBriefPath(name))) === null) {
+    if ((await readVisible(principal, context, briefRow.path)) === null) {
       return fail('author_gone', 'The brief\'s author can no longer read the brief.', { deactivate: { reason: 'author_gone', detail: null } })
     }
 
@@ -363,6 +361,4 @@ export async function executeRun(runId: string, opts: ExecuteRunOptions = {}): P
     const message = e instanceof Error ? e.message : 'The run crashed.'
     return fail('crashed', message)
   }
-  // Unreachable, but the type system wants a tail.
-  return { status: 'failed', reason: 'error', deactivated: null }
 }

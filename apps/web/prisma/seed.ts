@@ -210,6 +210,7 @@ async function wipeData() {
     prisma.resourceComment.deleteMany({}),
     prisma.resourceChange.deleteMany({}),
     prisma.resource.deleteMany({}),
+    prisma.resourceFolder.deleteMany({}),
     prisma.spaceMember.deleteMany({}),
     prisma.person.deleteMany({}),
     prisma.identityResolution.deleteMany({}),

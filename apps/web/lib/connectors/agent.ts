@@ -16,12 +16,12 @@ import prisma from '@/lib/prisma'
 import { aiConfigured, chatWithTools, type ToolSpec } from '@/lib/notes/ai'
 import { runToolLoop, type ChatFn, type ToolHandler } from '@/lib/notes/toolLoop'
 import { readVisible, writeGated } from '@/lib/notes/contextService'
-import { assertPubliclyRoutable, SsrfError } from '@/lib/net/ssrf'
 import { parseFrontmatter } from '@/lib/notes/shared/markdown'
 import type { Context } from '@/lib/notes/store'
 import type { ContextPrincipal } from '@/lib/notes/shared/contextTypes'
-import { allowPrivateHosts, ConnectorError, parseConnectorPerimeter, perimeterSecretRefs } from './config'
+import { ConnectorError, parseConnectorPerimeter, perimeterSecretRefs } from './config'
 import { executeConnectorScript, loadConnector } from './service'
+import { fetchPublicText } from './publicFetch'
 
 export type AgentEvent =
   | { type: 'assistant'; text: string }
@@ -30,7 +30,6 @@ export type AgentEvent =
   | { type: 'error'; message: string }
 
 const MAX_TURNS = 16
-const FETCH_CAP_CHARS = 60_000
 export const RUN_OUTPUT_CAP_CHARS = 12_000
 const NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/
 
@@ -149,31 +148,12 @@ interface AgentContext {
 }
 
 /**
- * Fetch a public https page for an agent — SSRF-gated, capped. Shared with
- * Space agents' `fetch_url` tool (lib/agents/tools.ts).
+ * Fetch a public https page for an agent — SSRF-gated per hop, capped. Shared
+ * with Space agents' `fetch_url` tool (lib/agents/tools.ts). The gate itself
+ * lives in ./publicFetch so tests can run it without this module's DB imports.
  */
 export async function toolFetchUrl(rawUrl: string): Promise<string> {
-  let url: URL
-  try {
-    url = new URL(rawUrl)
-  } catch {
-    return 'error: not an absolute URL'
-  }
-  const devHttpOk = url.protocol === 'http:' && process.env.NODE_ENV === 'development'
-  if (url.protocol !== 'https:' && !devHttpOk) return 'error: only https URLs can be fetched'
-  try {
-    await assertPubliclyRoutable(url.hostname, { allowPrivate: allowPrivateHosts() })
-  } catch (e) {
-    return e instanceof SsrfError ? `error: ${e.message}` : 'error: host check failed'
-  }
-  try {
-    const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(15_000), cache: 'no-store' })
-    const text = await res.text()
-    const body = text.length > FETCH_CAP_CHARS ? text.slice(0, FETCH_CAP_CHARS) + '\n…[truncated]' : text
-    return `status ${res.status}\n${body}`
-  } catch (e) {
-    return `error: ${e instanceof Error ? e.message : 'fetch failed'}`
-  }
+  return fetchPublicText(rawUrl)
 }
 
 async function toolWriteConnector(ctx: AgentContext, name: string, content: string): Promise<string> {

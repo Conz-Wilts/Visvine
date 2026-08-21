@@ -11,6 +11,7 @@ import { validateImageFile } from '@/lib/imageUpload';
 import { formatBytes } from '@/lib/utils';
 import { slugify } from '@/lib/eventUtils';
 import { PROVIDERS } from '@/lib/agents/registry';
+import { agentBriefPath, agentFolderProblem } from '@/lib/agents/config';
 import { searchLocations } from '@/lib/locationData';
 import { ChannelIcon, ChannelIconPicker } from '@/features/messages/components/ChannelIcon';
 import {
@@ -1020,6 +1021,8 @@ export function ConnectorForm({
 
 export interface AgentFormData {
   name: string;
+  /** The folder of agents it lands in, relative to `agents/` — '' for the top. */
+  folder: string;
   description: string;
   /** `<provider>/<model-id>` from the registry. */
   model: string;
@@ -1041,6 +1044,8 @@ function agentFormError(data: AgentFormData): string | null {
   const name = data.name.trim();
   if (!name) return null;
   if (!agentSlug(name)) return 'Use letters and numbers — that name has none.';
+  const folderProblem = agentFolderProblem(data.folder);
+  if (folderProblem) return folderProblem;
   if (!/^[a-z0-9]+\/[A-Za-z0-9._:-]+$/.test(data.model.trim())) return 'Model must be <provider>/<model-id>, e.g. gemini/gemma-4-31b-it.';
   for (const c of data.connectors.split(/[\n,]/).map((l) => l.trim()).filter(Boolean)) {
     if (!CONNECTOR_NAME_RE.test(c)) return `Bad connector name "${c}".`;
@@ -1081,6 +1086,15 @@ export function AgentForm({
           maxLength={64}
           value={data.name}
           onChange={(e) => onChange({ ...data, name: e.target.value })}
+        />
+      </Field>
+
+      <Field label="Folder">
+        <input
+          className={`${inputClass} font-mono`}
+          placeholder="ops/reports — a folder of agents, optional"
+          value={data.folder}
+          onChange={(e) => onChange({ ...data, folder: e.target.value })}
         />
       </Field>
 
@@ -1134,7 +1148,7 @@ export function AgentForm({
         />
       </Field>
 
-      {slug && <EntityNotePreview dir="agents" name={slug} />}
+      {slug && <EntityNotePreview dir={agentBriefPath('x', data.folder).replace(/\/x\.md$/, '')} name={slug} />}
       {error && <p className="text-xs text-red-600">{error}</p>}
       <p className="text-xs text-text-muted">
         Anyone in the space can write an agent. It only runs once a space admin activates it — on the space&apos;s own model

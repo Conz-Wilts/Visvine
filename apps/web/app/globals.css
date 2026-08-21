@@ -63,7 +63,7 @@
 @theme {
   /* Visvine Brand Colors */
   --color-brand-black: #111827;
-  --color-brand-grey: #6B7280;
+  --color-brand-grey: #4b5563;
   --color-brand-white: #F9FAFB;
   --color-brand-light-bg: #eaf9ec;
   --color-brand-green: #78d870;
@@ -76,13 +76,13 @@
 
   /* ── Semantic surface tokens (runtime-swapped by ThemeContext) ── */
   --color-surface-1: var(--surface-1, #ffffff);        /* main card / panel bg */
-  --color-surface-2: var(--surface-2, #f9fafb);        /* secondary surface */
-  --color-surface-3: var(--surface-3, #f3f4f6);        /* hover / tertiary */
+  --color-surface-2: var(--surface-2, rgba(17, 24, 39, 0.025));        /* secondary surface */
+  --color-surface-3: var(--surface-3, rgba(17, 24, 39, 0.05));        /* hover / tertiary */
   --color-border-subtle: var(--border-subtle, #e5e7eb); /* hairline borders */
   --color-border-default: var(--border-default, #d1d5db);/* standard borders */
   --color-text-primary: var(--text-primary, #111827);
   --color-text-secondary: var(--text-secondary, #374151);
-  --color-text-muted: var(--text-muted, #6b7280);
+  --color-text-muted: var(--text-muted, #4b5563);
 }
 
 /* Explicit font-family utility classes — use CSS vars so CommunityDesignContext
@@ -108,6 +108,10 @@
 html, body {
   height: 100%;
   font-family: var(--font-utility);
+  /* The page backdrop (Settings → Appearance → Background). Body never scrolls
+     — <main> does — so one paint covers the viewport and the transparent shell
+     chrome (navbar, rail, <main>) lets it run unbroken underneath. */
+  background: var(--app-backdrop, #ffffff);
   accent-color: var(--theme-accent-color, #78d870);
   /* No horizontal rubber-band: macOS Chrome elastically bounces the viewport on
      a sideways trackpad swipe even with zero horizontal overflow. Fixed chrome
@@ -130,6 +134,24 @@ html, body {
      toolbar strip. Enough lift to read as its own surface, none of the wide
      cast a menu needs to clear the content under it. */
   --shadow-strip: 0 1px 2px rgba(16,24,40,0.05), 0 2px 6px -2px rgba(16,24,40,0.08);
+}
+
+/* Chrome that pins over scrolling content (pane tab rows, sticky toolbars,
+   the scrollbar mask) paints the page backdrop itself, fixed to the viewport:
+   the strip shows exactly the slice of gradient (or white) that sits behind
+   it, so it hides what scrolls beneath without ever reading as a block. Needs
+   no transformed ancestor — a transform re-anchors a fixed background. */
+.bg-glass {
+  background: var(--app-backdrop, #ffffff);
+  background-attachment: fixed;
+}
+
+/* Same idea for chrome that slides in with a transform (ConnectionsRail),
+   where a fixed background can't anchor: translucent white over a blur. */
+.bg-glass-float {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 /* Plain classes (not @utility): read the var at paint time */

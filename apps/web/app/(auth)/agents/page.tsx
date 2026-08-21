@@ -1,30 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { } from '@/features/shared/icons';
 import { useSpace } from '@/features/shared/contexts/SpaceContext';
 import { Skeleton, Alert } from '@/components/ui';
 import { fetchJson } from '@/lib/fetchJson';
-import type { AgentSummary } from '@/lib/agents/service';
+import Link from 'next/link';
+import type { AgentFolder, AgentSummary } from '@/lib/agents/service';
 import AgentsRoster from '@/features/agents/components/AgentsRoster';
-import ModelKeysCard, { type ProviderInfo } from '@/features/agents/components/ModelKeysCard';
 import { DELAYED_AFTER_MS } from '@/lib/agents/limits';
 
 /**
- * The Agents tool: the roster of every agents/<name>.md brief in the space
- * with its activation, last run and next run; admins additionally see spend
- * and manage the space's model keys. Clicking an agent opens its node page
- * (brief, activation, runs). Sits beside /connectors as a plain page — the
- * pane shell belongs to /directory/*.
+ * The Agents tool: the `agents/` folder as a tree — folders of agents (index
+ * notes) holding briefs — each agent with its activation, last run and next
+ * run; admins additionally see spend. Clicking an agent opens its node page
+ * (brief, activation, runs). Model keys are not here: a model is a connector
+ * note, keyed on its own page under /connectors. Sits beside /connectors as a
+ * plain page — the pane shell belongs to /directory/*.
  */
 interface RosterResponse {
   agents: AgentSummary[];
+  folders: AgentFolder[];
   heartbeatAt: string | null;
   isAdmin: boolean;
   currentUserId: string;
   spaceTimezone: string | null;
-  providers: ProviderInfo[];
-  modelKeys: { name: string; updatedAt: string }[];
 }
 
 export default function AgentsPage() {
@@ -81,11 +80,10 @@ export default function AgentsPage() {
       return <Alert>{error}</Alert>;
     }
     return (
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-10">
         {schedulerDelayed && (
           <Alert variant="warning">
-            The scheduler hasn&apos;t ticked{data.heartbeatAt ? ` since ${new Date(data.heartbeatAt).toLocaleString()}` : ' yet'} — active agents will not fire
-            until it does. (In production this is the Cloud Scheduler job; in dev, POST /api/internal/agents/tick.)
+            The scheduler hasn&apos;t ticked{data.heartbeatAt ? ` since ${new Date(data.heartbeatAt).toLocaleString()}` : ' yet'}, so nothing will run until it does.
           </Alert>
         )}
         {notice && (
@@ -96,13 +94,20 @@ export default function AgentsPage() {
         <AgentsRoster
           spaceId={spaceId!}
           agents={data.agents}
+          folders={data.folders}
           isAdmin={data.isAdmin}
           currentUserId={data.currentUserId}
           spaceTimezone={data.spaceTimezone}
           onChanged={load}
           onNotice={(message, tone) => setNotice({ message, tone })}
         />
-        {data.isAdmin && <ModelKeysCard spaceId={spaceId!} providers={data.providers} stored={data.modelKeys} onChanged={load} />}
+        <p className="text-[13px] text-text-muted">
+          Agents run on the space&apos;s model connectors — add a provider and its key under{' '}
+          <Link href="/connectors" className="text-text-secondary underline-offset-2 hover:underline">
+            Connectors
+          </Link>
+          .
+        </p>
       </div>
     );
   };

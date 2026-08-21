@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiSession, forbiddenResponse } from '@/lib/api/route';
+import { ApiError, requireApiSession, forbiddenResponse } from '@/lib/api/route';
 import { featureAccessForbidden } from '@/lib/auth';
 import { MAX_RESOURCE_BYTES, uploadResource } from '@/lib/resources/service';
 
@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get('file') as File | null;
   const spaceId = formData.get('spaceId') as string | null;
+  const folderIdRaw = formData.get('folderId');
+  const folderId = typeof folderIdRaw === 'string' && folderIdRaw ? folderIdRaw : null;
 
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
   if (!spaceId) return NextResponse.json({ error: 'spaceId is required' }, { status: 400 });
@@ -47,9 +49,11 @@ export async function POST(req: NextRequest) {
       mimeType: file.type,
       buffer: Buffer.from(await file.arrayBuffer()),
       uploadedBy: session.userId,
+      folderId,
     });
     return NextResponse.json(resource);
   } catch (err) {
+    if (err instanceof ApiError) return NextResponse.json({ error: err.message }, { status: err.status });
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: message }, { status: 400 });
   }

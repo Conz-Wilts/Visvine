@@ -909,7 +909,7 @@ export default function MessagesClient({ currentUser, initialConversationId }: M
 
       {/* ╭── Details box — the open channel's members and settings ────────╮ */}
       {showProfile && selectedConversation && (
-        <aside className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle bg-surface-1 xl:flex">
+        <aside className="hidden w-80 shrink-0 flex-col overflow-hidden border-l border-border-subtle xl:flex">
           <ProfilePanel
             conversation={selectedConversation}
             currentUserId={currentUser.id}

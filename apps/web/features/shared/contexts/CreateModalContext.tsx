@@ -57,16 +57,24 @@ const NOTE_FIRST: Partial<Record<CreateableType, string>> = {
   space: 'space',
   resource: 'resource',
   connector: 'connector',
-  agent: 'agent',
+  // An agent stays in the docked panel: its form asks for the model, the
+  // connectors and the folder of agents it lands in — the draft surface has no
+  // agent type.
   channel: 'channel',
   section: 'section',
   file: 'file',
 };
 
+export interface CreateOpenOptions {
+  /** The folder the new note should land in — for an agent, relative to `agents/`. */
+  folder?: string;
+}
+
 interface CreateModalContextValue {
   isOpen: boolean;
   defaultType: CreateableType | null;
-  open: (type?: CreateableType) => void;
+  defaultFolder: string | null;
+  open: (type?: CreateableType, opts?: CreateOpenOptions) => void;
   close: () => void;
 }
 
@@ -76,19 +84,22 @@ export { useCreateModal };
 export function CreateModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [defaultType, setDefaultType] = useState<CreateableType | null>(null);
+  const [defaultFolder, setDefaultFolder] = useState<string | null>(null);
 
-  const open = (type?: CreateableType) => {
+  const open = (type?: CreateableType, opts?: CreateOpenOptions) => {
     setDefaultType(type ?? null);
+    setDefaultFolder(opts?.folder ?? null);
     setIsOpen(true);
   };
 
   const close = () => {
     setIsOpen(false);
     setDefaultType(null);
+    setDefaultFolder(null);
   };
 
   return (
-    <CreateModalContext.Provider value={{ isOpen, defaultType, open, close }}>
+    <CreateModalContext.Provider value={{ isOpen, defaultType, defaultFolder, open, close }}>
       {children}
     </CreateModalContext.Provider>
   );
@@ -115,7 +126,7 @@ export function useCreateSurface() {
       const implied = type ?? suggestedCreateType(pathname)?.types.find((t) => t in NOTE_FIRST);
       const draftType = implied ? NOTE_FIRST[implied] : null;
       if (type && !draftType) {
-        open(type);
+        open(type, opts);
         return;
       }
       const params = new URLSearchParams();

@@ -130,7 +130,7 @@ export default function PageTabBar({
           its toolbar tray over that column, NoteEditor). The tablist keeps
           flex-1 so it spans the row —
           a shrink-to-fit box with overflow-x-auto grows a stray scrollbar. */}
-      <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
+      <div className="flex w-full items-center border-b border-border-subtle bg-glass px-1">
         <div
           role="tablist"
           aria-label={ariaLabel}
@@ -148,11 +148,7 @@ export default function PageTabBar({
               onKeyDown={(e) => handleKeyDown(e, idx)}
               className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
                 handoff ? 'tabbar-label-enter' : ''
-              } ${
-                activeTab === tab.id
-                  ? 'text-brand-black'
-                  : 'text-brand-grey hover:text-brand-black'
-              }`}
+              } text-brand-black`}
             >
               {tab.label}
             </button>

@@ -126,7 +126,7 @@ export default function ConsoleShell({
         <div className="sticky -top-4 -mt-4 -ml-6 z-20">
           {/* Keeps the page scrollbar from running up beside the pinned bar. */}
           <PaneTopScrollbarMask />
-          <div className="flex w-full items-center border-b border-border-subtle bg-surface-1 px-1">
+          <div className="flex w-full items-center border-b border-border-subtle bg-glass px-1">
             <div
               role="tablist"
               aria-label={ariaLabel}

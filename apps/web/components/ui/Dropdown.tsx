@@ -23,7 +23,7 @@ export const DROPDOWN_TRIGGER_ACTIVE_STYLE: React.CSSProperties = {
   color: 'var(--color-brand-dark-green)',
 };
 export const DROPDOWN_TRIGGER_IDLE_STYLE: React.CSSProperties = {
-  color: 'var(--text-secondary, #374151)',
+  color: 'var(--text-primary, #111827)',
 };
 
 interface DropdownOption<T extends string = string> {
@@ -73,9 +73,9 @@ export default function Dropdown<T extends string>({
       >
         <ChevronDownIcon
           className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-          style={{ opacity: 0.5 }}
+         
         />
-        {label && <span style={{ opacity: 0.65 }}>{label}:</span>}
+        {label && <span>{label}:</span>}
         <span>{activeLabel}</span>
       </button>
 

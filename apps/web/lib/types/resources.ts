@@ -32,12 +32,24 @@ export interface Resource {
   indexError?: string | null;
   /** Chunks this file contributed to retrieval — 0 until it is indexed. */
   chunkCount?: number;
+  /** The Drive folder it sits in; null is the root. */
+  folderId: string | null;
   createdAt: string;
   metadata: {
     originalFilename?: string;
     sheetNames?: string[];
     mimeType?: string;
   };
+}
+
+/** A folder in a Space's Drive. The root is `parentId: null`'s absence, not a row. */
+export interface ResourceFolder {
+  id: string;
+  spaceId: string;
+  name: string;
+  parentId: string | null;
+  createdBy: string;
+  createdAt: string;
 }
 
 export interface ResourceComment {

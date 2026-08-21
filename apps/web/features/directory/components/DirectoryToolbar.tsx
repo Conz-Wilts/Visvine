@@ -73,7 +73,7 @@ export default function DirectoryToolbar({ browse }: DirectoryToolbarProps) {
     // gutter so the opaque white runs edge to edge. That background is
     // load-bearing (cards scroll under it), and nothing here may get
     // overflow-hidden or the filter menus clip.
-    <div className="sticky top-8 z-10 -ml-6 bg-surface-1 py-3 pl-12 pr-6">
+    <div className="sticky top-8 z-10 -ml-6 bg-glass py-3 pl-12 pr-6">
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput
           value={searchTerm}

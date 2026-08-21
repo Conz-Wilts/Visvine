@@ -151,7 +151,7 @@ export default function ThreadPanel({
   const isFeed = selectedConversation?.viewMode === 'FEED';
 
   return (
-    <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden bg-surface-1">
+    <section className="flex w-full min-w-0 flex-1 flex-col overflow-hidden">
 
       {/* ── Empty state when no channel is open ── */}
       {!selectedConversation && (

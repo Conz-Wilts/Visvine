@@ -1,10 +1,15 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Resource } from '@/lib/types';
+import type { Resource, ResourceFolder } from '@/lib/types';
 import { fetchJson } from '@/lib/fetchJson';
 
+/**
+ * A space's Drive: every file and every folder, fetched together so the tree
+ * and its contents never disagree on screen.
+ */
 export function useResources(spaceId: string | null) {
   const [resources, setResources] = useState<Resource[]>([]);
+  const [folders, setFolders] = useState<ResourceFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Monotonic request id so a slow earlier fetch can't overwrite a newer one
@@ -12,13 +17,16 @@ export function useResources(spaceId: string | null) {
   const reqId = useRef(0);
 
   const refetch = useCallback(async () => {
-    if (!spaceId) { setResources([]); return; }
+    if (!spaceId) { setResources([]); setFolders([]); return; }
     const myReq = ++reqId.current;
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchJson<Resource[]>(`/api/resources?space_id=${spaceId}`);
-      if (myReq === reqId.current) setResources(data);
+      const [files, dirs] = await Promise.all([
+        fetchJson<Resource[]>(`/api/resources?space_id=${spaceId}`),
+        fetchJson<ResourceFolder[]>(`/api/resources/folders?space_id=${spaceId}`),
+      ]);
+      if (myReq === reqId.current) { setResources(files); setFolders(dirs); }
     } catch (e: unknown) {
       if (myReq === reqId.current) setError(e instanceof Error ? e.message : 'Unknown error');
     } finally {
@@ -28,5 +36,5 @@ export function useResources(spaceId: string | null) {
 
   useEffect(() => { refetch(); }, [refetch]);
 
-  return { resources, loading, error, refetch };
+  return { resources, folders, loading, error, refetch };
 }

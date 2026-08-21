@@ -262,7 +262,7 @@ function PaneTabBarInner({
       {/* pr-1 only: with a left inset the first tab's underline stopped 4px
           short of the pane's left edge, reading as a chopped line against the
           colour frame. Flush left, the underline meets the edge cleanly. */}
-      <div className="pointer-events-auto flex w-full items-center bg-surface-1 pr-1">
+      <div className="pointer-events-auto flex w-full items-center bg-glass pr-1">
         <div
           role="tablist"
           aria-label={chrome.ariaLabel ?? 'Sections'}
@@ -280,11 +280,7 @@ function PaneTabBarInner({
               onKeyDown={(e) => handleKeyDown(e, idx)}
               className={`px-4 h-12 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none ${
                 handoff ? 'tabbar-label-enter' : ''
-              } ${
-                activeId === tab.id
-                  ? 'text-brand-black'
-                  : 'text-brand-grey hover:text-brand-black'
-              }`}
+              } text-brand-black`}
             >
               {tab.label}
             </button>
@@ -296,7 +292,7 @@ function PaneTabBarInner({
             <span
               key={g.label}
               aria-hidden
-              className="tabbar-label-exit pointer-events-none absolute top-0 flex h-12 items-center px-4 text-sm font-medium whitespace-nowrap text-brand-grey"
+              className="tabbar-label-exit pointer-events-none absolute top-0 flex h-12 items-center px-4 text-sm font-medium whitespace-nowrap text-brand-black"
               style={{ left: g.left, animationDuration: `${TAB_SET_MOTION_MS}ms` }}
             >
               {g.label}
@@ -327,9 +323,7 @@ function PaneTabBarInner({
             onClick={() => setConnectionsOpen(!connectionsOpen)}
             aria-pressed={connectionsOpen}
             title="What this note connects to"
-            className={`relative hidden h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none xl:flex ${
-              connectionsOpen ? 'text-brand-black' : 'text-brand-grey hover:text-brand-black'
-            }`}
+            className={`relative hidden h-12 shrink-0 items-center gap-1.5 px-4 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none xl:flex text-brand-black`}
           >
             <WaypointsIcon className="h-4 w-4" />
             Connections

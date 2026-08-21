@@ -57,8 +57,8 @@ export default function SearchInput({
   return (
     <div
       className={clsx(
-        'flex items-center bg-surface-2 transition-colors',
-        'focus-within:bg-surface-1 focus-within:ring-1 focus-within:ring-border-default',
+        'flex items-center bg-surface-1 ring-1 ring-border-subtle transition-[box-shadow,background-color]',
+        'focus-within:ring-border-default',
         s.frame,
         className,
       )}
